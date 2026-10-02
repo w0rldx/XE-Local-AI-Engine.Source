@@ -20,7 +20,7 @@ public sealed class WorkSessionOptions
 
     /// <summary>Steps one start or resume may take before the session parks with a checkpoint. Not a lifetime budget.</summary>
     [Range(1, 1000)]
-    public int MaxStepsPerRun { get; init; } = 25;
+    public int MaxStepsPerRun { get; set; } = 25;
 
     [Range(1, 1000)]
     public int CheckpointEveryNSteps { get; init; } = 5;
@@ -30,7 +30,7 @@ public sealed class WorkSessionOptions
     ///     buys nothing; the value exists so the cap is configurable rather than compiled in.
     /// </summary>
     [Range(1, 64)]
-    public int MaxConcurrentSessions { get; init; } = 1;
+    public int MaxConcurrentSessions { get; set; } = 1;
 
     /// <summary>
     ///     How long a session may sit waiting on an approval or a question before it is demoted to <c>Paused</c>: an

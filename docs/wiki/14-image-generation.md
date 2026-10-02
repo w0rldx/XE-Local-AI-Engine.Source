@@ -81,7 +81,7 @@ The process-wide activity gate (`IImageRuntimeActivityGate` → `ImageRuntimeAct
 - **Loopback port allocation** with collision-retry from the range **18200–18299** — distinct from the llama.cpp range (18100–18199) so the two runtimes never contend for a port.
 - **Idle-TTL eviction** via a background reaper (`IdleTimeToLive`, default 15 min) to free VRAM; a reuse-path liveness probe (throttled, timeout-bounded) tears down and respawns a wedged daemon after `MaxReuseLivenessFailures` (default 3) consecutive failures.
 - **Per-OS tree-kill teardown** on eviction, abort, and shutdown (Linux process group / Windows Job Object), so no `sd-server` survives a supervisor stop.
-- `MaxLoadedProcesses` defaults to **1** — sd-server is VRAM-heavy and typically co-resident with a chat model, so a spawn for a new model evicts an idle LRU daemon first.
+- `MaxLoadedProcesses` defaults to **1** (node setting `ImageMaxLoadedProcesses`, applied on restart, like `TextEncoderOnGpu`) — sd-server is VRAM-heavy and typically co-resident with a chat model, so a spawn for a new model evicts an idle LRU daemon first.
 
 Like the text runtime, a `StaleProcessReaper` instance runs at startup to reap `sd-server` orphans left by a previous run of **this** app — matched strictly against the app's own binaries root (`{LocalApplicationData}/XE-Local-AI-Engine/stable-diffusion.cpp`) so an unrelated install is never touched. See [Local Runtime & Providers](03-local-runtime-and-providers.md) for the shared supervisor pattern and [Hosting & Deployment](11-hosting-and-deployment.md) for process reaping.
 

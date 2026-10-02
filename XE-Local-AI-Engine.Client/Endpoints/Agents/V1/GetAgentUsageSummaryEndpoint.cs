@@ -1,12 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 
 using FastEndpoints;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
@@ -24,18 +22,18 @@ public sealed class GetAgentUsageSummaryEndpoint : Endpoint<AgentUsageSummaryReq
 {
     private readonly AgentExecutionLogQueryService _executionLogs;
     private readonly IUsageRateResolver _rateResolver;
-    private readonly IOptions<AgentExecutionLogRetentionOptions> _retentionOptions;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     public GetAgentUsageSummaryEndpoint(AgentExecutionLogQueryService executionLogs,
         IUsageRateResolver rateResolver,
-        IOptions<AgentExecutionLogRetentionOptions> retentionOptions)
+        INodeRuntimeSettings runtimeSettings)
     {
         ArgumentNullException.ThrowIfNull(executionLogs);
         ArgumentNullException.ThrowIfNull(rateResolver);
-        ArgumentNullException.ThrowIfNull(retentionOptions);
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
         _executionLogs = executionLogs;
         _rateResolver = rateResolver;
-        _retentionOptions = retentionOptions;
+        _runtimeSettings = runtimeSettings;
     }
 
     public override void Configure()
@@ -53,7 +51,7 @@ public sealed class GetAgentUsageSummaryEndpoint : Endpoint<AgentUsageSummaryReq
                 Items = [.. buckets.Select(bucket => bucket.ToResponse(_rateResolver))],
                 Totals = buckets.ToTotals(_rateResolver),
                 ByProvider = buckets.ToByProvider(_rateResolver),
-                RetentionDays = _retentionOptions.Value.RetentionDays
+                RetentionDays = await _runtimeSettings.GetAgentExecutionLogRetentionDaysAsync(ct)
             },
             ct);
     }

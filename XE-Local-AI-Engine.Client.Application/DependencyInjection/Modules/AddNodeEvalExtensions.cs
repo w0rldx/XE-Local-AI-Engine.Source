@@ -17,18 +17,9 @@ internal static class AddNodeEvalExtensions
         builder.Services.AddScoped<IGoldenConversationStore, GoldenConversationStore>();
         // Golden conversation CRUD service: validates manual authoring and ownership-guards deletes.
         builder.Services.AddScoped<IGoldenConversationService, GoldenConversationService>();
-        // Eval model options. Defaults to the node-local chat model so golden text and agent output stay on-node.
+        // Eval options. The model name is the PlaybookEvalModelName node setting, read per run; blank inherits the default model.
         builder.Services.AddOptions<PlaybookEvalOptions>()
-               .Bind(builder.Configuration.GetSection(PlaybookEvalOptions.Section))
-               .PostConfigure(evalOptions =>
-               {
-                   if (string.IsNullOrWhiteSpace(evalOptions.ModelName))
-                   {
-                       evalOptions.ModelName = builder.Configuration.GetValue<string>("Ollama:ChatModel")
-                                               ?? builder.Configuration.GetValue<string>("Agent:LocalChat:DefaultModel")
-                                               ?? string.Empty;
-                   }
-               });
+               .Bind(builder.Configuration.GetSection(PlaybookEvalOptions.Section));
         // Eval-model weight-identity resolver: folds a model digest into the eval fingerprint, so a same-name weight swap (Ollama
         // re-pull, GGUF re-download) invalidates a recorded pass. Scoped like its digest cache; PlaybookEvalService and PlaybookActionService share this one seam.
         builder.Services.AddScoped<IEvalModelIdentityResolver, EvalModelIdentityResolver>();

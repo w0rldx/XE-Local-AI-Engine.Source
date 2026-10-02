@@ -9,7 +9,9 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     A maintenance dispatcher and worker over an in-memory container: a substituted persistence read, an estimator
@@ -20,7 +22,7 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
     private readonly ServiceProvider _provider;
 
     public ConversationMaintenanceHarness(ConversationCompactionOptions? options = null, int projectedTokens = 100_000, double observedCorrection = 1.0,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null, INodeRuntimeSettings? runtimeSettings = null)
     {
         var accessor = Options.Create(options ?? new ConversationCompactionOptions());
         Estimator = new FixedTokenEstimator(projectedTokens, observedCorrection);
@@ -30,6 +32,8 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
         var services = new ServiceCollection();
         _ = services.AddSingleton(Persistence);
         _ = services.AddSingleton<ITokenEstimator>(Estimator);
+        // The worker reads its auto-compact and distill switches from the accessor per job, through the job's scope.
+        _ = services.AddSingleton(runtimeSettings ?? StubNodeRuntimeSettings.Create().Build());
         _ = services.AddScoped<IConversationCompactionService>(_ => new RecordingCompactionService(this));
         _ = services.AddScoped<IConversationStateDistillationService>(_ => new RecordingDistillationService(this));
         _provider = services.BuildServiceProvider(new ServiceProviderOptions

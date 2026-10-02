@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -665,7 +666,8 @@ public sealed class NodeSettingsAdministrationServiceTests
         INodeRuntimeSettings? runtimeSettings = null,
         IModelTrustResolver? modelTrustResolver = null,
         ILocalModelProviderResolver? localModelProviderResolver = null,
-        bool fastModelInstalled = true)
+        bool fastModelInstalled = true,
+        IOllamaModelService? ollamaModelService = null)
     {
         var runtime = runtimeSettings ?? Substitute.For<INodeRuntimeSettings>();
         runtime.GetLlamaMaxLoadedProcessesAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(StoredNodeSettings.DefaultLlamaMaxLoadedProcesses));
@@ -705,6 +707,8 @@ public sealed class NodeSettingsAdministrationServiceTests
             ggufModelStore,
             modelTrustResolver,
             localModelProviderResolver,
+            // Default: nothing is installed on Ollama, so only the GGUF registry admits a background model.
+            ollamaModelService ?? Substitute.For<IOllamaModelService>(),
             NullLogger<NodeSettingsAdministrationService>.Instance);
     }
 
@@ -715,6 +719,101 @@ public sealed class NodeSettingsAdministrationServiceTests
     /// </summary>
     private static StoredNodeSettings Persisted(Func<StoredNodeSettings, StoredNodeSettings> mutate, StoredNodeSettings? latest = null) =>
         mutate(latest ?? new StoredNodeSettings());
+
+    [Test]
+    public async Task Save_WhenABackgroundModelIsAnInstalledGguf_IsAccepted()
+    {
+        var store = NewSubstituteStore(new StoredNodeSettings());
+        var service = CreateService(store);
+
+        var result = await service.SaveTrustedMergedAsync(static record => record with
+        {
+            PlaybookAnalysisModelName = "bartowski/Qwen2.5-3B-Instruct-GGUF:Q4_K_M"
+        });
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal("bartowski/Qwen2.5-3B-Instruct-GGUF:Q4_K_M", result.Settings.PlaybookAnalysisModelName);
+    }
+
+    [Test]
+    public async Task Save_WhenABackgroundModelIsAnInstalledOllamaModel_IsAccepted()
+    {
+        // Unlike the fast model, a background model may be served by Ollama: what matters is that it stays on the node.
+        var store = NewSubstituteStore(new StoredNodeSettings());
+        var ollama = Substitute.For<IOllamaModelService>();
+        ollama.IsLoopbackModelInstalledAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns(Task.FromResult(true));
+        var service = CreateService(store, fastModelInstalled: false, ollamaModelService: ollama);
+
+        var result = await service.SaveTrustedMergedAsync(static record => record with
+        {
+            MemoryExtractionModelName = "qwen3:8b"
+        });
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal("qwen3:8b", result.Settings.MemoryExtractionModelName);
+    }
+
+    [Test]
+    public async Task Save_WhenABackgroundModelIsInstalledNowhere_IsRejectedOnItsField()
+    {
+        // Both resolvers call an unknown id local, so membership is what refuses a typo or a cloud id saved by name.
+        var store = NewSubstituteStore(new StoredNodeSettings());
+        var service = CreateService(store, fastModelInstalled: false);
+
+        var result = await service.SaveTrustedMergedAsync(static record => record with
+        {
+            PlaybookEvalModelName = "gpt-4o-mini"
+        });
+
+        AssertEx.False(result.Updated);
+        AssertEx.Equal(1, result.ValidationErrors.Count);
+        AssertEx.Equal(NodeSettingsField.PlaybookEvalModelName, result.ValidationErrors[0].Field);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Save_WhenABackgroundModelIsCloudOrExternal_IsRejected()
+    {
+        var store = NewSubstituteStore(new StoredNodeSettings());
+        var trustResolver = Substitute.For<IModelTrustResolver>();
+        trustResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(ModelTrustLocality.Cloud));
+        var cloudService = CreateService(store, modelTrustResolver: trustResolver);
+
+        var cloud = await cloudService.SaveTrustedMergedAsync(static record => record with
+        {
+            MemoryExtractionModelName = "gpt-5.6-terra"
+        });
+
+        // An `ext:` id is refused by its scheme even when its connection is declared Local and the registry says installed.
+        var external = await CreateService(store).SaveTrustedMergedAsync(static record => record with
+        {
+            PlaybookAnalysisModelName = "ext:lab-box/llama-70b"
+        });
+
+        AssertEx.Equal(NodeSettingsField.MemoryExtractionModelName, cloud.ValidationErrors[0].Field);
+        AssertEx.Equal(NodeSettingsField.PlaybookAnalysisModelName, external.ValidationErrors[0].Field);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Save_WhenABackgroundModelIsUnchangedOrBlank_IsNotJudged()
+    {
+        // A stored model that was later uninstalled must not block an unrelated save, and blank means inherit.
+        var store = NewSubstituteStore(new StoredNodeSettings
+        {
+            PlaybookEvalModelName = "since-uninstalled:7b"
+        });
+        var service = CreateService(store, fastModelInstalled: false);
+
+        var result = await service.SaveTrustedMergedAsync(static record => record with
+        {
+            MemoryExtractionModelName = null,
+            ChatRetentionDays = 7
+        });
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal("since-uninstalled:7b", result.Settings.PlaybookEvalModelName);
+    }
 
     /// <summary>
     ///     A substitute store holding <paramref name="current" />, wired to honour

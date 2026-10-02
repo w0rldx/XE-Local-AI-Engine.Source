@@ -36,6 +36,10 @@ internal static class AddNodeExternalProvidersExtensions
         // per-request state of its own.
         builder.Services.AddSingleton<IModelTrustResolver, ModelTrustResolver>();
 
+        // Lazy for NodeRuntimeSettings: it is resolved at composition time, and building the resolver eagerly would open the
+        // data-protected external-provider store (and demand the node operator secret) before anything needs it.
+        builder.Services.AddSingleton(static sp => new Lazy<IModelTrustResolver>(sp.GetRequiredService<IModelTrustResolver>));
+
         // Scoped: the reconciliation pass reads the provider map through the scoped coordinated store, exactly like
         // the Ollama backfill coordinator it mirrors.
         builder.Services.AddScoped<IExternalProviderReconciler, ExternalProviderReconciler>();

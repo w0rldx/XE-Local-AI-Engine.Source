@@ -311,12 +311,13 @@ public sealed partial class InvocationRunner
     internal static ConversationBudgetResult BudgetFirstRound(IConversationContextBudgeter budgeter,
         RuntimePackage package,
         ConversationContextBudgetOptions budgetOptions,
+        int defaultContextTokens,
         string resolvedModel)
     {
         ArgumentNullException.ThrowIfNull(budgeter);
         ArgumentNullException.ThrowIfNull(package);
         ArgumentNullException.ThrowIfNull(budgetOptions);
-        var (_, capacity, reserved) = TurnPolicy.ResolveContextBudget(package, budgetOptions);
+        var (_, capacity, reserved) = TurnPolicy.ResolveContextBudget(package, budgetOptions, defaultContextTokens);
         var seed = InvocationAgentFactory.BuildSeedMessages(BuildInvocationDefinition(package, resolvedModel, BuildChatMessages(package), effectiveContextTokens: null));
         return budgeter.Budget(seed, capacity, reserved, package.ResolvedSystemPrompt, BuildToolBudgetDefinitions(package.AllowedTools), resolvedModel);
     }

@@ -33,9 +33,13 @@ internal static class AddNodeImagesExtensions
         // StableDiffusionRuntime config section (port range, TTL, cap, TextEncoderOnGpu, ...) reaches the supervisor.
         builder.Services.AddSingleton(sp =>
         {
-            // The idle TTL is a node setting (stored > this section's value > 15 min), seeded here because the provider cannot read it.
+            // The idle TTL, process cap and text-encoder placement are node settings (stored > this section's value > default), seeded
+            // here because the provider cannot read them. Read once, so an edit applies on the next node restart.
+            var runtimeSettings = sp.GetRequiredService<INodeRuntimeSettings>();
             var options = BindStableDiffusionRuntimeOptions(configuration);
-            options.IdleTimeToLive = sp.GetRequiredService<INodeRuntimeSettings>().GetImageIdleTimeToLive();
+            options.IdleTimeToLive = runtimeSettings.GetImageIdleTimeToLive();
+            options.MaxLoadedProcesses = runtimeSettings.GetImageMaxLoadedProcesses();
+            options.TextEncoderOnGpu = runtimeSettings.GetImageTextEncoderOnGpu();
             return options;
         });
         builder.Services.AddStableDiffusionCppImageProvider();

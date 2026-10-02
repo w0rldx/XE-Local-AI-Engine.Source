@@ -15,7 +15,6 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -1579,7 +1578,7 @@ public sealed class AgentDefinitionResolverTests
             new FakeAgentInstructionProvider(),
             Substitute.For<IModelCapabilityResolver>(),
             new PermissiveToolApprovalPolicy(),
-            Options.Create(new KnowledgeBaseOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -1639,10 +1638,9 @@ public sealed class AgentDefinitionResolverTests
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
-            StubNodeRuntimeSettings.Create().WithToolCapableModels(CloudPinnedModel).Build(),
+            StubNodeRuntimeSettings.Create().WithToolCapableModels(CloudPinnedModel).WithAllowCloudModelAccess(allowCloudKnowledgeAccess).Build(),
             NullCustomToolScopeFactory.Instance,
-            new FakeModelTrustResolver(),
-            allowCloudKnowledgeAccess);
+            new FakeModelTrustResolver());
         return new AgentDefinitionResolver(store,
             playbookStore,
             CreateEmptySkillStore(),
@@ -1653,7 +1651,7 @@ public sealed class AgentDefinitionResolverTests
             new FakeAgentInstructionProvider(),
             capabilityResolver,
             new PermissiveToolApprovalPolicy(),
-            Options.Create(new KnowledgeBaseOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -1701,10 +1699,7 @@ public sealed class AgentDefinitionResolverTests
             instructionProvider ?? new FakeAgentInstructionProvider(),
             capabilityResolver ?? Substitute.For<IModelCapabilityResolver>(),
             toolApprovalPolicy ?? new PermissiveToolApprovalPolicy(),
-            Options.Create(new KnowledgeBaseOptions
-            {
-                AllowCloudModelAccess = allowCloudModelAccess
-            }),
+            StubNodeRuntimeSettings.Create().WithAllowCloudModelAccess(allowCloudModelAccess).Build(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -1778,7 +1773,7 @@ public sealed class AgentDefinitionResolverTests
             new FakeAgentInstructionProvider(),
             Substitute.For<IModelCapabilityResolver>(),
             new PermissiveToolApprovalPolicy(),
-            Options.Create(new KnowledgeBaseOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 

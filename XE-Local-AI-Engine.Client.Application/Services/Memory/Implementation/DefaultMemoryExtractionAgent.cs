@@ -6,6 +6,9 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
@@ -21,12 +24,16 @@ internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly ILogger<DefaultMemoryExtractionAgent> _logger;
+    private readonly IModelTrustResolver _modelTrustResolver;
     private readonly MemoryExtractionOptions _options;
 
     private readonly ILocalModelProviderResolver _providerResolver;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     public DefaultMemoryExtractionAgent(ILocalModelProviderResolver providerResolver,
         IOptions<MemoryExtractionOptions> options,
+        INodeRuntimeSettings runtimeSettings,
+        IModelTrustResolver modelTrustResolver,
         ILogger<DefaultMemoryExtractionAgent> logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
@@ -34,6 +41,8 @@ internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
         ArgumentNullException.ThrowIfNull(providerResolver);
         _providerResolver = providerResolver;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
     }
 
     public async Task<IReadOnlyList<ProposedMemory>> ProposeAsync(MemoryExtractionRunInput run, CancellationToken cancellationToken = default)
@@ -42,17 +51,19 @@ internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
 
         // Disabled gate: with no node-local extraction model there is no model call and no candidate. The service
         // checks this too, but the agent owns the privacy-critical call, so it guards independently.
-        if (string.IsNullOrWhiteSpace(_options.ExtractionModelName))
+        var modelName = await _runtimeSettings.GetMemoryExtractionModelNameAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(modelName)
+            || !await BackgroundModelLocalityGuard.AllowAsync(modelName, "MemoryExtractionModelName", _modelTrustResolver, _logger, cancellationToken))
         {
             return [];
         }
 
         // Route the extraction model to the runtime that serves it, node-local only and never the cloud singleton.
         // THIS resolution IS the privacy invariant: conversation content only ever reaches a per-provider client.
-        var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ExtractionModelName, cancellationToken);
+        var provider = await _providerResolver.ResolveProviderForModelAsync(modelName, cancellationToken);
         var selection = new LocalModelSelection
         {
-            ModelName = _options.ExtractionModelName,
+            ModelName = modelName,
             ProviderName = provider.ProviderName
         };
 

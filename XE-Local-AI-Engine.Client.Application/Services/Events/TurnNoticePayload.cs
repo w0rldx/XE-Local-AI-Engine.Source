@@ -42,7 +42,7 @@ public enum TurnNoticeKind
     /// </summary>
     /// <remarks>
     ///     The operator has not opted in to exposing node-local private data to cloud providers
-    ///     (<c>KnowledgeBase:AllowCloudModelAccess</c>). <see cref="TurnNoticePayload.Detail" /> names the effective model.
+    ///     (the <c>AllowCloudModelAccess</c> node setting). <see cref="TurnNoticePayload.Detail" /> names the effective model.
     /// </remarks>
     AttachmentsWithheld = 3,
 
@@ -52,7 +52,7 @@ public enum TurnNoticeKind
     /// </summary>
     /// <remarks>
     ///     The operator has not opted in to exposing node-local private data to cloud providers
-    ///     (<c>KnowledgeBase:AllowCloudModelAccess</c>) — the same egress gate as attachments. The turn still runs, just
+    ///     (the <c>AllowCloudModelAccess</c> node setting) — the same egress gate as attachments. The turn still runs, just
     ///     without knowledge-base context. <see cref="TurnNoticePayload.Detail" /> names the effective model.
     /// </remarks>
     KnowledgeWithheld = 4,
@@ -94,7 +94,7 @@ public enum TurnNoticeKind
     ///     The agent's enabled playbook memory was withheld from a CLOUD-hosted effective model.
     /// </summary>
     /// <remarks>
-    ///     The same <c>KnowledgeBase:AllowCloudModelAccess</c> egress gate as knowledge and attachments; silent when the
+    ///     The same <c>AllowCloudModelAccess</c> egress gate as knowledge and attachments; silent when the
     ///     playbook is off or empty. <see cref="TurnNoticePayload.Detail" /> names the effective model, or for an
     ///     orchestration the affected participants' names — never memory content.
     /// </remarks>
@@ -111,7 +111,7 @@ public enum TurnNoticeKind
     /// </summary>
     /// <remarks>
     ///     Plain chat replays excerpts of earlier tool exchanges, which are node-local data, so they ride the same
-    ///     <c>KnowledgeBase:AllowCloudModelAccess</c> egress gate as attachments. <see cref="TurnNoticePayload.Detail" />
+    ///     <c>AllowCloudModelAccess</c> egress gate as attachments. <see cref="TurnNoticePayload.Detail" />
     ///     names the model.
     /// </remarks>
     ToolHistoryWithheld = 10

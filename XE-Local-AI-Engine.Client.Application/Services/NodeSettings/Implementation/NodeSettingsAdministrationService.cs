@@ -5,12 +5,17 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Models.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministrationService
 {
     private const string AutoEffortFastModelNotLocalMessage =
         "The fast model for automatic reasoning effort must be an installed node-local model.";
+
+    private const string BackgroundModelNotLocalMessage =
+        "The model must be an installed node-local model (a GGUF model or an Ollama model on this machine), or blank to use the default model.";
 
     /// <summary>
     ///     How many times a save re-validates against a record that changed under it before it gives up and refuses.
@@ -28,6 +33,7 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
     private readonly ILocalModelProviderResolver _localModelProviderResolver;
     private readonly IModelTrustResolver _modelTrustResolver;
     private readonly ILogger<NodeSettingsAdministrationService> _logger;
+    private readonly IOllamaModelService _ollamaModelService;
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly INodeSettingsStore _store;
 
@@ -37,8 +43,11 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         IGgufModelStore ggufModelStore,
         IModelTrustResolver modelTrustResolver,
         ILocalModelProviderResolver localModelProviderResolver,
+        IOllamaModelService ollamaModelService,
         ILogger<NodeSettingsAdministrationService> logger)
     {
+        ArgumentNullException.ThrowIfNull(ollamaModelService);
+        _ollamaModelService = ollamaModelService;
         ArgumentNullException.ThrowIfNull(defaultModelSelectionPolicy);
         ArgumentNullException.ThrowIfNull(ggufModelStore);
         ArgumentNullException.ThrowIfNull(localModelProviderResolver);
@@ -185,6 +194,18 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
                 ]);
             }
 
+            if (await FindNonLocalBackgroundModelAsync(settings, validatedAgainst, cancellationToken) is { } backgroundModelField)
+            {
+                return NodeSettingsAdministrationResult.Rejected(settings,
+                [
+                    new NodeSettingsValidationError
+                    {
+                        Field = backgroundModelField,
+                        Message = BackgroundModelNotLocalMessage
+                    }
+                ]);
+            }
+
             var errors = await NodeSettingsPolicy.ValidateMergedAsync(settings, _runtimeSettings, cancellationToken);
             if (errors.Count > 0)
             {
@@ -257,6 +278,48 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
             _modelTrustResolver,
             _localModelProviderResolver,
             cancellationToken);
+
+    /// <summary>The first background-model field whose CHANGED, non-blank value is not node-local, or null.</summary>
+    /// <remarks>
+    ///     These models read conversations, feedback and golden text, so a cloud id or an <c>ext:</c> id would carry that data off the
+    ///     node. Unlike the fast-model gate an Ollama model on this machine is accepted. Only a change is judged, so a later uninstall
+    ///     never blocks an unrelated save; the run then fails at call time.
+    /// </remarks>
+    private async Task<NodeSettingsField?> FindNonLocalBackgroundModelAsync(StoredNodeSettings settings,
+        StoredNodeSettings previous,
+        CancellationToken cancellationToken)
+    {
+        (NodeSettingsField Field, string? Value, string? Previous)[] fields =
+        [
+            (NodeSettingsField.PlaybookAnalysisModelName, settings.PlaybookAnalysisModelName, previous.PlaybookAnalysisModelName),
+            (NodeSettingsField.PlaybookEvalModelName, settings.PlaybookEvalModelName, previous.PlaybookEvalModelName),
+            (NodeSettingsField.MemoryExtractionModelName, settings.MemoryExtractionModelName, previous.MemoryExtractionModelName)
+        ];
+        foreach (var (field, value, previousValue) in fields)
+        {
+            if (!string.IsNullOrWhiteSpace(value)
+                && !string.Equals(value, previousValue, StringComparison.Ordinal)
+                && !await IsNodeLocalModelAsync(value.Trim(), cancellationToken))
+            {
+                return field;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<bool> IsNodeLocalModelAsync(string modelName, CancellationToken cancellationToken)
+    {
+        if (ExternalModelId.HasExternalScheme(modelName)
+            || await _modelTrustResolver.ResolveAsync(modelName, cancellationToken) != ModelTrustLocality.Local)
+        {
+            return false;
+        }
+
+        // Membership is the load-bearing check: both resolvers call an unknown id local, so only an installed model passes.
+        return await _ggufModelStore.ExistsAsync(modelName, cancellationToken)
+               || await _ollamaModelService.IsLoopbackModelInstalledAsync(modelName, cancellationToken);
+    }
 
     private static string? TrimWhenProvided(string? value, string? current) =>
         value is null ? current : value.Trim();

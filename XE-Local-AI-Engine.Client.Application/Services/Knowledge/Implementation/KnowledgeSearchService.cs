@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using static Chat.Implementation.NodeChatPersistenceSql;
@@ -56,6 +57,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
     private readonly IContextExpansionService _contextExpansion;
     private readonly IKnowledgeQueryEmbeddingCache _queryEmbeddingCache;
     private readonly KnowledgeBaseOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly ILogger<KnowledgeSearchService> _logger;
     private readonly IKnowledgeModelPrewarmer? _prewarmer;
 
@@ -70,6 +72,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         IContextExpansionService contextExpansion,
         IKnowledgeQueryEmbeddingCache queryEmbeddingCache,
         IOptions<KnowledgeBaseOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<KnowledgeSearchService> logger,
         IKnowledgeModelPrewarmer? prewarmer = null)
     {
@@ -85,6 +88,7 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         _queryEmbeddingCache = queryEmbeddingCache ?? throw new ArgumentNullException(nameof(queryEmbeddingCache));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _prewarmer = prewarmer;
     }
@@ -159,17 +163,18 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         var pool = await HydratePoolAsync(connection, fused, candidatePool, collectionId, cancellationToken);
         var deduped = DeduplicateByContent(pool);
 
-        // Optional rerank: a configured reranker rescores the deduped pool and reorders BEFORE the top-`limit` cut, so a
-        // strong but lexically weak chunk can surface. Off or failed, the order stays RRF; it scores pre-expansion content.
-        var rerankDecision = AdaptiveRetrievalPolicy.DecideRerank(_options.AdaptiveRerankingEnabled,
+        // Optional rerank: a configured reranker reorders the deduped pool BEFORE the top-`limit` cut; off or failed, the order
+        // stays RRF. Both knobs are read once per search, so the gate and the deadline it arms agree.
+        var latencyBudget = TimeSpan.FromMilliseconds(Math.Max(1, await _runtimeSettings.GetKnowledgeRetrievalLatencyBudgetMsAsync(cancellationToken)));
+        var rerankDecision = AdaptiveRetrievalPolicy.DecideRerank(await _runtimeSettings.GetKnowledgeAdaptiveRerankingEnabledAsync(cancellationToken),
             !string.IsNullOrWhiteSpace(_options.RerankerModelName),
             ftsRanked,
             vectorRanked,
             deduped.Count,
             Stopwatch.GetElapsedTime(searchStart),
-            TimeSpan.FromMilliseconds(Math.Max(1, _options.RetrievalLatencyBudgetMilliseconds)));
+            latencyBudget);
         var selections = rerankDecision.ShouldRerank
-            ? await RerankWithinBudgetAsync(request.Query, deduped, limit, searchStart, cancellationToken)
+            ? await RerankWithinBudgetAsync(request.Query, deduped, limit, searchStart, latencyBudget, cancellationToken)
             : deduped.Take(limit).ToList();
 
         // Neighbor expansion (when requested) is resolved for the whole final top-k in one batched call rather than one
@@ -376,9 +381,9 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
         IReadOnlyList<ChunkSelection> pool,
         int limit,
         long searchStart,
+        TimeSpan totalBudget,
         CancellationToken cancellationToken)
     {
-        var totalBudget = TimeSpan.FromMilliseconds(Math.Max(1, _options.RetrievalLatencyBudgetMilliseconds));
         var remaining = totalBudget - Stopwatch.GetElapsedTime(searchStart);
         if (remaining <= TimeSpan.Zero)
         {

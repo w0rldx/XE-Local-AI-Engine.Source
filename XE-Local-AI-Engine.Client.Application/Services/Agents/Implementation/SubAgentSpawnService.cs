@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using System.ClientModel;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -69,7 +68,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
     private readonly IModelTrustResolver _modelTrustResolver;
     private readonly INodeSettingsStore _nodeSettingsStore;
-    private readonly SpawnOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly ISpawnSerializer _spawnSerializer;
     private readonly IAgentToolRegistry _toolRegistry;
 
@@ -82,7 +81,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         IMcpToolRegistry mcpToolRegistry,
         ICustomToolCatalog customToolCatalog,
         IChatClient chatClient,
-        IOptions<SpawnOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         IAgentInstructionProvider instructionProvider,
         IModelCapabilityResolver modelCapabilityResolver,
         IModelTrustResolver modelTrustResolver,
@@ -103,8 +102,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
         _customToolCatalog = customToolCatalog ?? throw new ArgumentNullException(nameof(customToolCatalog));
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
-        ArgumentNullException.ThrowIfNull(options);
-        _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
         _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
         _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
@@ -323,7 +321,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         SpawnOutcome? outcome = null;
         _ = await _spawnSerializer.RunSerializedAsync(binding.ModelName,
             role,
-            TimeSpan.FromSeconds(_options.QueueWaitSeconds),
+            TimeSpan.FromSeconds(await _runtimeSettings.GetSpawnQueueWaitSecondsAsync(ct)),
             async innerCt =>
             {
                 outcome = await RunSubAgentForMcpAsync(binding, context, task, innerCt);
@@ -527,7 +525,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     {
         return await _spawnSerializer.RunSerializedAsync(binding.ModelName,
             role,
-            TimeSpan.FromSeconds(_options.QueueWaitSeconds),
+            TimeSpan.FromSeconds(await _runtimeSettings.GetSpawnQueueWaitSecondsAsync(ct)),
             innerCt => RunSubAgentAsync(binding, context, task, innerCt),
             static () => ReasonQueueBusy,
             ct);

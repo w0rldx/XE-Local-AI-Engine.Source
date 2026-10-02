@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Decisions;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 internal static class AddNodeGraphWorkflowsExtensions
 {
@@ -28,6 +29,14 @@ internal static class AddNodeGraphWorkflowsExtensions
 
         builder.Services.AddOptions<GraphWorkflowOptions>()
                .Bind(configuration.GetSection(GraphWorkflowOptions.Section))
+#pragma warning disable MA0045 // Options Configure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
+               // Node settings, restart-gated: the lanes size their semaphores once. Appended after Bind so stored wins.
+               .Configure<INodeRuntimeSettings>(static (options, runtimeSettings) =>
+               {
+                   options.MaxConcurrentRuns = runtimeSettings.GetGraphWorkflowMaxConcurrentRuns();
+                   options.DefaultNodeTimeoutSeconds = runtimeSettings.GetGraphWorkflowDefaultNodeTimeoutSeconds();
+               })
+#pragma warning restore MA0045
                .ValidateDataAnnotations()
                .ValidateOnStart();
 

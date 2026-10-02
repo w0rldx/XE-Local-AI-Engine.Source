@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class NodeAgentMcpToolsTests
@@ -1048,11 +1049,10 @@ public sealed class NodeAgentMcpToolsTests
                 Substitute.For<IAgentDefinitionStore>(),
                 GgufModelStore,
                 NodeSettingsAdministration,
-                Options.Create(new SpawnOptions
-                {
-                    MaxConcurrentSpawns = 2,
-                    MaxCloudSpawns = 1
-                }),
+                StubNodeRuntimeSettings.Create()
+                                       .WithSpawnMaxConcurrent(2)
+                                       .WithSpawnMaxCloud(1)
+                                       .Build(),
                 RunCoordinator,
                 WorkspaceResolver,
                 Options.Create(new McpAgentRunOptions

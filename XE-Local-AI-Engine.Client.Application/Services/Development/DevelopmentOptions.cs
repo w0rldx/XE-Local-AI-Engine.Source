@@ -12,10 +12,10 @@ public sealed class DevelopmentOptions
     public int MaxArtifactBytes { get; init; } = 16 * 1024 * 1024;
 
     [Range(1, 24 * 60 * 60)]
-    public int MaxAttemptDurationSeconds { get; init; } = 30 * 60;
+    public int MaxAttemptDurationSeconds { get; set; } = 30 * 60;
 
     [Range(1, 1024)]
-    public int MaxToolCalls { get; init; } = 64;
+    public int MaxToolCalls { get; set; } = 64;
 
     [Range(1, 10_000)]
     public int MaxChangedFiles { get; init; } = 256;
@@ -30,7 +30,7 @@ public sealed class DevelopmentOptions
     public int MaxCommandOutputBytes { get; init; } = 256 * 1024;
 
     [Range(1, 1_000_000)]
-    public int MaxOutputTokens { get; init; } = 32_768;
+    public int MaxOutputTokens { get; set; } = 32_768;
 
     [Range(1, 1024)]
     public int LiveChannelCapacity { get; init; } = 64;

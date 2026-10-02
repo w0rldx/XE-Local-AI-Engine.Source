@@ -103,7 +103,7 @@ opt-in an operator must never leave running unnoticed. FICC's recovery, privacy 
 policies (`MaximumConsecutiveErrorsPerRequest = 3`, `IncludeDetailedErrors = false`,
 `AllowConcurrentInvocation = false`, `TerminateOnUnknownCalls = false`) are pinned in code against
 upgrade drift rather than made operator-tunable; only `MaximumToolIterationsPerRequest` comes from
-`AgentToolPipelineOptions`.
+`AgentToolPipelineOptions`, overlaid from the `ToolPipelineMaxIterationsPerRequest` node setting.
 
 A background job that builds its own chat client — one from `ILocalModelProvider.CreateChatClient(...)`
 or from a transient llama-server endpoint — bypasses this pipeline on purpose, because for those paths
@@ -1026,7 +1026,8 @@ and `DevelopmentArtifactSanitizer` — see [Security & Privacy](12-security-and-
 
 **What bounds the loop.** Four budgets, separate from the sandbox's own per-command timeout and jail-disk
 ceiling, all on `AgentHomeOptions`: `MaxRunSeconds` (the whole loop's wall clock — it matters most, because an
-inner loop holds the node's single inference slot for as long as it runs), `MaxInnerToolCalls`,
+inner loop holds the node's single inference slot for as long as it runs), `MaxInnerToolCalls` (both are node settings read
+once per run; the options only seed them),
 `MaxWriteFileBytes` / `MaxTotalWriteBytes`, and `MaxCommandOutputBytes` for how much command output re-enters
 the model's context. A budget that fires **cuts the run off and says so** in the tool result; it never discards
 the partial work, which still exports as a patch. The shipped `MaxRunSeconds` default is a conservative starting
@@ -2045,9 +2046,9 @@ is refused until an operator adds that id under **Node Settings → Tools**, and
 | Key | Default | Note |
 |---|---|---|
 | `WorkSessions:Enabled` | `true` | Shipped in `appsettings.json`; gates behaviour, never registration |
-| `WorkSessions:MaxStepsPerRun` | `25` | Per start/resume, not per lifetime |
+| `WorkSessions:MaxStepsPerRun` | `25` | Per start/resume, not per lifetime. Seeds the node setting (**Node Settings → Workspaces**, restart) |
 | `WorkSessions:CheckpointEveryNSteps` | `5` | |
-| `WorkSessions:MaxConcurrentSessions` | `1` | Admission cap — see §5.2 |
+| `WorkSessions:MaxConcurrentSessions` | `1` | Admission cap — see §5.2. Seeds the node setting (restart) |
 | `WorkSessions:MaxParkedSeconds` | `300` | Startup validation checks the configured tool-age seed; every park is also capped below the approval coordinator's effective age, including stored overrides and elapsed time for registered approvals |
 | `WorkSessions:MaxArtifactBytes` | `1048576` | 1 MiB |
 | `WorkSessions:StepTimeoutSeconds` | `0` | 0 inherits the node's maximum message request timeout |
@@ -2137,7 +2138,8 @@ member, never that the step called no tools — `ToolCallsCompleted` answers tha
   (`list_files`/`read_file`/`search_text`) and conversation attachments are gated the **same way**: for a
   cloud effective model without the opt-in, the file tools are withheld from the offer, attachments are
   neither staged nor inlined, and the user gets a visible turn notice naming the effective model. The
-  single opt-in `KnowledgeBase:AllowCloudModelAccess` covers knowledge tools, file tools, and attachments.
+  single opt-in `AllowCloudModelAccess` covers knowledge tools, file tools, and attachments. It is a node setting
+  (**Node Settings → Privacy**), read per turn; `KnowledgeBase:AllowCloudModelAccess` only seeds it.
   Attachment content that does reach a model is fenced as untrusted data with a server-secret-derived
   nonce (client cannot forge the fence). See [Knowledge Base](15-knowledge-base.md) and [Security & Privacy](12-security-and-privacy.md).
 - **Privacy-sensitive ops are node-local only.** Playbook analysis (P3), the eval gate (P4), and memory

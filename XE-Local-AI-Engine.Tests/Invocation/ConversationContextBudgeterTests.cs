@@ -602,7 +602,7 @@ public sealed class ConversationContextBudgeterTests
             ParameterSchema = schema
         };
         var executable = AIFunctionFactory.CreateDeclaration("calculate", description, JsonDocument.Parse(schema).RootElement);
-        var sut = new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(new ConversationContextBudgetOptions()));
+        var sut = new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(new ConversationContextBudgetOptions()), StubNodeRuntimeSettings.Create().Build());
 
         var outer = sut.Budget([User("hello")], contextTokenCapacity: 8192, reservedOutputTokens: 0, toolDefinitions: InvocationRunner.BuildToolBudgetDefinitions([offer]));
 
@@ -615,7 +615,7 @@ public sealed class ConversationContextBudgeterTests
     {
         var calibrations = new TokenEstimatorCalibrationStore();
         calibrations.SetToolTemplatePreamble("model-a", preambleTokens: 150);
-        var sut = new ConversationContextBudgeter(new HeuristicTokenEstimator(calibrations), Options.Create(new ConversationContextBudgetOptions()));
+        var sut = new ConversationContextBudgeter(new HeuristicTokenEstimator(calibrations), Options.Create(new ConversationContextBudgetOptions()), StubNodeRuntimeSettings.Create().Build());
         string[] tools = [new string('t', 40), new string('u', 80)];
         var perTools = (40 / 4) + 4 + (80 / 4) + 4 + (2 * TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens);
 
@@ -647,7 +647,7 @@ public sealed class ConversationContextBudgeterTests
         var executable = AIFunctionFactory.CreateDeclaration("calculate", offer.Description, JsonDocument.Parse(schema).RootElement);
         var calibrations = new TokenEstimatorCalibrationStore();
         calibrations.SetToolTemplatePreamble("model-a", preambleTokens: 198);
-        var sut = new ConversationContextBudgeter(new HeuristicTokenEstimator(calibrations), Options.Create(new ConversationContextBudgetOptions()));
+        var sut = new ConversationContextBudgeter(new HeuristicTokenEstimator(calibrations), Options.Create(new ConversationContextBudgetOptions()), StubNodeRuntimeSettings.Create().Build());
 
         var outer = sut.Budget([User("hello")], contextTokenCapacity: 8192, reservedOutputTokens: 0, toolDefinitions: InvocationRunner.BuildToolBudgetDefinitions([offer]), modelName: "model-a");
 
@@ -1097,12 +1097,13 @@ public sealed class ConversationContextBudgeterTests
     {
         var options = Options.Create(new ConversationContextBudgetOptions
         {
-            RecentTurnKeepCount = recentTurnKeepCount,
             HistoricalToolResultExcerptChars = historicalToolResultExcerptChars,
             StripProtectedReasoning = stripProtectedReasoning,
             ExcerptProtectedToolResults = excerptProtectedToolResults
         });
-        return new ConversationContextBudgeter(estimator, options);
+        return new ConversationContextBudgeter(estimator,
+            options,
+            StubNodeRuntimeSettings.Create().WithContextBudgetRecentTurnKeepCount(recentTurnKeepCount).Build());
     }
 
     private static ITokenEstimator FixedEstimator(int perMessage,

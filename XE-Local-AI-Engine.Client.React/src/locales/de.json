@@ -2449,6 +2449,212 @@
 				"transcriptionInferenceTimeoutMinutes": {
 					"label": "Transkriptions-Timeout",
 					"description": "So lange darf ein einzelner Transkriptionsauftrag höchstens laufen."
+				},
+				"toolPipelineMaxIterationsPerRequest": {
+					"label": "Tool-Runden pro Anfrage",
+					"description": "Wie oft das Modell Tools aufrufen darf, bevor es antworten muss."
+				},
+				"toolPipelineMaxToolResultChars": {
+					"label": "Größe eines Tool-Ergebnisses",
+					"description": "Die meisten Zeichen, die ein Tool-Ergebnis an das Modell weitergeben darf."
+				},
+				"toolPipelineMaxConsecutiveInvalidToolCalls": {
+					"label": "Ungültige Tool-Aufrufe in Folge",
+					"description": "Wie viele fehlerhafte Aufrufe eines Tools in Folge erlaubt sind, bevor es abgelehnt wird."
+				},
+				"providerBudgetMaxCumulativeInputTokens": {
+					"label": "Eingabe-Tokens pro Agentenlauf",
+					"description": "Stoppt einen Agentenlauf, sobald er insgesamt so viele Eingabe-Tokens gesendet hat."
+				},
+				"providerRetryEnabled": {
+					"label": "Fehlgeschlagene Modellanfragen wiederholen",
+					"description": "Eine Modellanfrage wiederholen, die vor dem ersten Token fehlschlägt."
+				},
+				"providerMaxRetries": {
+					"label": "Wiederholungen pro Modellanfrage",
+					"description": "Wie oft eine fehlgeschlagene Modellanfrage wiederholt wird."
+				},
+				"spawnMaxConcurrent": {
+					"label": "Gleichzeitige Sub-Agenten",
+					"description": "Wie viele Sub-Agenten ein Lauf gleichzeitig arbeiten lassen darf."
+				},
+				"spawnMaxCloud": {
+					"label": "Cloud-Sub-Agenten pro Lauf",
+					"description": "Wie viele Sub-Agenten auf einem Cloud-Modell ein Lauf starten darf. 0 erlaubt keine."
+				},
+				"spawnQueueWaitSeconds": {
+					"label": "Wartezeit für Sub-Agenten",
+					"description": "Wie lange ein Sub-Agent auf sein belegtes Modell wartet. 0 lehnt ihn sofort ab."
+				},
+				"defaultContextTokens": {
+					"label": "Standard-Kontextfenster",
+					"description": "Die Kontextgröße, die gilt, wenn weder der Chat noch das Modell eine festlegt."
+				},
+				"providerBudgetRecentMessagesToKeep": {
+					"label": "Behaltene Nachrichten pro Modellaufruf",
+					"description": "Die neuesten Nachrichten, die ein Modellaufruf beim Kürzen des Verlaufs immer behält."
+				},
+				"contextBudgetRecentTurnKeepCount": {
+					"label": "Beim Kürzen behaltene Runden",
+					"description": "Die neuesten Runden, die in einem langen Chat nie gekürzt werden."
+				},
+				"compactionAutoEnabled": {
+					"label": "Lange Chats automatisch verdichten",
+					"description": "Den älteren Teil eines Chats zusammenfassen, sobald er den Großteil des Kontextfensters füllt."
+				},
+				"compactionAutoCompactPercent": {
+					"label": "Schwelle für die Verdichtung",
+					"description": "Verdichten, sobald der Verlauf diesen Anteil des nutzbaren Kontextfensters füllt."
+				},
+				"compactionRecentMessagesVerbatim": {
+					"label": "Wörtlich behaltene Nachrichten",
+					"description": "Die neuesten Nachrichten, die eine Verdichtung unverändert lässt."
+				},
+				"compactionDistillEnabled": {
+					"label": "Laufende Chat-Zusammenfassung führen",
+					"description": "Fakten und Entscheidungen eines Chats im Hintergrund festhalten."
+				},
+				"maxInlinedAttachmentChars": {
+					"label": "Anhangstext pro Runde",
+					"description": "Die meisten Zeichen angehängter Dokumente, die in eine Chat-Runde einfließen."
+				},
+				"knowledgeChatTopK": {
+					"label": "Wissenspassagen pro Runde",
+					"description": "Wie viele Passagen aus der Wissensdatenbank eine Chat-Runde stützen."
+				},
+				"agentRunLimits": {
+					"title": "Agentenlimits"
+				},
+				"contextCompaction": {
+					"title": "Kontext & Verdichtung"
+				},
+				"tokens": "Tokens",
+				"percent": "%",
+				"milliseconds": "Millisekunden",
+				"knowledgeRetrieval": {
+					"title": "Abruf und Wissenswerkzeuge"
+				},
+				"knowledgeAgentToolsEnabled": {
+					"label": "Wissenswerkzeuge für Agenten",
+					"description": "Agenten dürfen die Wissensdatenbank durchsuchen und lesen. Aus entzieht die Werkzeuge jedem Modell."
+				},
+				"knowledgeAdaptiveRerankingEnabled": {
+					"label": "Nur bei unklaren Treffern neu bewerten",
+					"description": "Den Reranker überspringen, wenn Stichwort- und Bedeutungssuche übereinstimmen oder das Latenzbudget fast verbraucht ist."
+				},
+				"knowledgeRetrievalLatencyBudgetMs": {
+					"label": "Latenzbudget für den Abruf",
+					"description": "Eine Neubewertung, die danach noch läuft, wird verworfen, und die Suche liefert ihre erste Reihenfolge."
+				},
+				"knowledgeScheduledReindexEnabled": {
+					"label": "Nach Wechsel des Embedding-Modells neu indizieren",
+					"description": "Dokumente, deren Vektoren von einem älteren Embedding-Modell stammen, regelmäßig neu einreihen."
+				},
+				"knowledgeScheduledReindexIntervalMinutes": {
+					"label": "Prüfintervall für die Neuindizierung"
+				},
+				"cloudModelAccess": {
+					"title": "Cloud-Modelle und lokale Daten"
+				},
+				"allowCloudModelAccess": {
+					"label": "Cloud-Modellen lokale Daten erlauben",
+					"description": "Standardmäßig aus. Eingeschaltet erhalten auch Cloud-Modelle die Wissens- und Arbeitsbereichswerkzeuge, Anhänge und Playbook-Erinnerungen, die diesen Rechner dann verlassen."
+				},
+				"retention": {
+					"title": "Aufbewahrung und Speicher"
+				},
+				"chatRetentionEnabled": {
+					"label": "Alte Unterhaltungen löschen",
+					"description": "Unterhaltungen samt Uploads und Nachrichten endgültig löschen, sobald sie länger als der Zeitraum unten inaktiv sind."
+				},
+				"chatRetentionDays": {
+					"label": "Aufbewahrung von Unterhaltungen"
+				},
+				"agentExecutionLogRetentionEnabled": {
+					"label": "Alte Agenten-Laufprotokolle löschen",
+					"description": "Agenten-Laufprotokolle, aus denen die Nutzungsseite liest, löschen, sobald sie älter als der Zeitraum unten sind."
+				},
+				"agentExecutionLogRetentionDays": {
+					"label": "Aufbewahrung der Agenten-Laufprotokolle"
+				},
+				"schedulerHistoryRetentionDays": {
+					"label": "Verlauf geplanter Aufgaben"
+				},
+				"nodeDbBackupRetainCount": {
+					"label": "Aufbewahrte Datenbanksicherungen",
+					"description": "Vor jedem Datenbank-Update wird eine Sicherung angelegt; ältere über diese Anzahl hinaus werden entfernt."
+				},
+				"benchmarkKldCacheMaxBytes": {
+					"label": "Größe des Benchmark-Caches",
+					"description": "Speicherplatz für die Basismodell-Dateien, mit denen Qualitäts-Benchmarks vergleichen; die am längsten ungenutzten werden zuerst entfernt."
+				},
+				"backgroundModels": {
+					"title": "Lernmodelle",
+					"inherit": "Standardmodell verwenden",
+					"empty": "Keine installierten lokalen Chat-Modelle"
+				},
+				"playbookAnalysisModelName": {
+					"label": "Modell für die Playbook-Analyse",
+					"description": "Liest Feedback und schlägt Playbook-Aktionen zur Prüfung vor."
+				},
+				"playbookEvalModelName": {
+					"label": "Modell für die Playbook-Bewertung",
+					"description": "Führt Referenzgespräche erneut aus, um eine vorgeschlagene Aktion vor der Übernahme zu prüfen."
+				},
+				"memoryExtractionModelName": {
+					"label": "Modell für die Erinnerungsextraktion",
+					"description": "Gewinnt aus abgeschlossenen Agentenläufen Erkenntnisse als Erinnerungskandidaten zur Prüfung."
+				},
+				"imageMaxLoadedProcesses": {
+					"label": "Max. geladene Bildserver",
+					"description": "Wie viele Bildmodelle gleichzeitig geladen bleiben; ein weiteres entlädt das am längsten ungenutzte."
+				},
+				"imageTextEncoderOnGpu": {
+					"label": "Bild-Textencoder auf der GPU",
+					"description": "Schnellere Prompts auf Kosten von Grafikspeicher; aus lässt den Textencoder auf der CPU."
+				},
+				"workspaceLimits": {
+					"title": "Workflows, Sitzungen und Entwicklung"
+				},
+				"graphWorkflowMaxConcurrentRuns": {
+					"label": "Gleichzeitige Graph-Workflow-Läufe",
+					"description": "Läufe darüber warten auf einen freien Platz; sie werden nicht abgelehnt."
+				},
+				"graphWorkflowDefaultNodeTimeoutSeconds": {
+					"label": "Zeitlimit pro Graph-Workflow-Schritt",
+					"description": "Wie lange ein Workflow-Schritt laufen darf, wenn er selbst kein Zeitlimit festlegt."
+				},
+				"workSessionMaxStepsPerRun": {
+					"label": "Arbeitssitzungsschritte pro Lauf",
+					"description": "Schritte, die ein Start oder eine Fortsetzung machen darf, bevor die Sitzung mit einem Checkpoint pausiert."
+				},
+				"workSessionMaxConcurrentSessions": {
+					"label": "Gleichzeitige Arbeitssitzungen"
+				},
+				"developmentMaxAttemptDurationSeconds": {
+					"label": "Zeitlimit pro Entwicklungsversuch"
+				},
+				"developmentMaxToolCalls": {
+					"label": "Tool-Aufrufe pro Entwicklungsversuch"
+				},
+				"developmentMaxOutputTokens": {
+					"label": "Ausgabe-Tokens pro Entwicklungsversuch"
+				},
+				"agentHomeRunRetentionMaxRuns": {
+					"label": "Behaltene AgentHome-Läufe",
+					"description": "Ältere Läufe über diese Anzahl hinaus werden gelöscht; 0 behält beliebig viele. Gilt ab dem nächsten Durchlauf."
+				},
+				"agentHomeRunRetentionMaxTotalBytes": {
+					"label": "Speichergrenze für AgentHome-Läufe",
+					"description": "Die ältesten Läufe werden gelöscht, bis alle hineinpassen; 0 setzt keine Grenze. Gilt ab dem nächsten Durchlauf."
+				},
+				"agentHomeMaxInnerToolCalls": {
+					"label": "AgentHome-Tool-Aufrufe pro Lauf",
+					"description": "Wie viele Tool-Aufrufe ein Lauf machen darf, bevor er gestoppt wird. Gilt ab dem nächsten Lauf."
+				},
+				"agentHomePatchApplyTimeoutSeconds": {
+					"label": "Zeitlimit für das Anwenden von AgentHome-Patches",
+					"description": "Wie lange ein Git-Schritt beim Anwenden des Patches eines Laufs auf deine Ordner dauern darf. Gilt ab der nächsten Anwendung."
 				}
 			},
 			"title": "Node-Einstellungen",
@@ -2512,7 +2718,7 @@
 				}
 			},
 			"browserOnly": "Nur dieser Browser",
-			"developerOnlyNote": "Diese Limits sind Entwicklereinstellungen. Aktiviere den Entwicklermodus unter Allgemein, um sie zu ändern.",
+			"developerOnlyNote": "Die AgentHome-Limits sind Entwicklereinstellungen. Aktiviere den Entwicklermodus unter Allgemein, um sie zu ändern.",
 			"browserPreferences": {
 				"title": "Dieser Browser",
 				"languageLabel": "Sprache"

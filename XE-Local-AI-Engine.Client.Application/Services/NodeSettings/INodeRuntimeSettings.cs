@@ -174,6 +174,130 @@ public interface INodeRuntimeSettings
     /// <summary>The AgentHome whole-run wall clock in seconds (stored &gt; <c>AgentHome:MaxRunSeconds</c> &gt; 600).</summary>
     Task<int> GetAgentHomeMaxRunSecondsAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>The context window assumed when a send names none (stored &gt; <c>Agent:ProviderCallBudget:DefaultContextTokens</c> &gt; 8192).</summary>
+    /// <remarks>
+    ///     The <c>Agent:ConversationContextBudget</c> key of the same name is the second seed. One value feeds both the turn budget and
+    ///     the provider-round budget; read once per turn.
+    /// </remarks>
+    Task<int> GetDefaultContextTokensAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The recent messages a provider-round trim keeps (stored &gt; <c>Agent:ProviderCallBudget:RecentMessagesToKeep</c> &gt; 6).</summary>
+    Task<int> GetProviderBudgetRecentMessagesToKeepAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The total input tokens one run may send (stored &gt; <c>Agent:ProviderCallBudget:MaxCumulativeInputTokens</c> &gt; 4000000).</summary>
+    Task<int> GetProviderBudgetMaxCumulativeInputTokensAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether a long chat is compacted after a turn (stored &gt; <c>Agent:ConversationCompaction:AutoCompactEnabled</c> &gt; on).</summary>
+    Task<bool> GetCompactionAutoEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The auto-compact threshold in PERCENT of the usable window (stored &gt; <c>Agent:ConversationCompaction:AutoCompactFraction</c>
+    ///     × 100 &gt; 75); the consumer divides by 100.
+    /// </summary>
+    Task<int> GetCompactionAutoCompactPercentAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The recent messages a compaction keeps verbatim (stored &gt; <c>Agent:ConversationCompaction:RecentMessagesToKeepVerbatim</c> &gt; 8).</summary>
+    Task<int> GetCompactionRecentMessagesVerbatimAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether conversation state is distilled (stored &gt; <c>Agent:ConversationCompaction:DistillEnabled</c> &gt; on).</summary>
+    Task<bool> GetCompactionDistillEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The attachment text inlined into one chat turn (stored &gt; <c>Agent:LocalChat:MaxInlinedAttachmentChars</c> &gt; 48000).</summary>
+    Task<int> GetMaxInlinedAttachmentCharsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The knowledge passages grounded into one chat turn (stored &gt; <c>Agent:LocalChat:KnowledgeChatTopK</c> &gt; 5).</summary>
+    Task<int> GetKnowledgeChatTopKAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether a failed model send is retried (stored &gt; <c>Agent:ProviderResilience:RetryEnabled</c> &gt; on).</summary>
+    Task<bool> GetProviderRetryEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The retries of a failed model send (stored &gt; <c>Agent:ProviderResilience:MaxRetries</c> &gt; 2).</summary>
+    Task<int> GetProviderMaxRetriesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The sub-agents one root run may have in flight (stored &gt; <c>Spawn:MaxConcurrentSpawns</c> &gt; 3).</summary>
+    Task<int> GetSpawnMaxConcurrentAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The cloud sub-agents one root run may start (stored &gt; <c>Spawn:MaxCloudSpawns</c> &gt; 3).</summary>
+    Task<int> GetSpawnMaxCloudAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The wait for a busy sub-agent model, in seconds (stored &gt; <c>Spawn:QueueWaitSeconds</c> &gt; 120).</summary>
+    Task<int> GetSpawnQueueWaitSecondsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether reranking runs only for ambiguous candidate sets (stored &gt; <c>KnowledgeBase:AdaptiveRerankingEnabled</c> &gt; on).</summary>
+    Task<bool> GetKnowledgeAdaptiveRerankingEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The retrieval latency budget in milliseconds (stored &gt; <c>KnowledgeBase:RetrievalLatencyBudgetMilliseconds</c> &gt; 500).</summary>
+    Task<int> GetKnowledgeRetrievalLatencyBudgetMsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether the knowledge-base agent tools are offered and run (stored &gt; <c>KnowledgeBase:AgentToolsEnabled</c> &gt; on).</summary>
+    Task<bool> GetKnowledgeAgentToolsEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Whether a cloud-hosted model may receive node-local data (stored &gt; <c>KnowledgeBase:AllowCloudModelAccess</c> &gt; off). The
+    ///     single privacy gate every egress path reads; read per turn.
+    /// </summary>
+    Task<bool> GetAllowCloudModelAccessAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The playbook analysis model (stored &gt; <c>PlaybookAnalysis:ModelName</c> &gt; <c>Ollama:ChatModel</c> &gt; the default model, inherited only when node-local, else <c>Agent:LocalChat:DefaultModel</c>). Read
+    ///     once per run.
+    /// </summary>
+    Task<string> GetPlaybookAnalysisModelNameAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The playbook eval model (stored &gt; <c>PlaybookEval:ModelName</c> &gt; <c>Ollama:ChatModel</c> &gt; the default model, inherited only when node-local, else <c>Agent:LocalChat:DefaultModel</c>). Read once
+    ///     per run, so a run's fingerprint and its calls agree.
+    /// </summary>
+    Task<string> GetPlaybookEvalModelNameAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The memory extraction model (stored &gt; <c>MemoryExtraction:ExtractionModelName</c> &gt; <c>Ollama:ChatModel</c> &gt; the default
+    ///     model, inherited only when node-local, else <c>Agent:LocalChat:DefaultModel</c>). Read once per run.
+    /// </summary>
+    Task<string> GetMemoryExtractionModelNameAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The effective value of every migrated switch and retention window for <paramref name="stored" /> (stored, else the configuration seed). Pure over
+    ///     the record passed in, so a save response reports the record it just wrote.
+    /// </summary>
+    NodeSettingsEffectiveValues ResolveEffectiveValues(StoredNodeSettings stored);
+
+    /// <summary>Whether old conversations are deleted (stored &gt; <c>ChatRetention:Enabled</c> &gt; off). Read per sweep.</summary>
+    Task<bool> GetChatRetentionEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The conversation retention window in days (stored &gt; <c>ChatRetention:RetentionDays</c> &gt; 30).</summary>
+    Task<int> GetChatRetentionDaysAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether old agent execution logs are deleted (stored &gt; <c>AgentExecutionLogRetention:Enabled</c> &gt; on). Read per sweep.</summary>
+    Task<bool> GetAgentExecutionLogRetentionEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The agent execution-log retention window in days (stored &gt; <c>AgentExecutionLogRetention:RetentionDays</c> &gt; 30).</summary>
+    Task<int> GetAgentExecutionLogRetentionDaysAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The node database snapshots kept (stored &gt; <c>NodeDbBackup:RetainCount</c> &gt; 3).</summary>
+    Task<int> GetNodeDbBackupRetainCountAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The benchmark KL-divergence base cache ceiling in bytes (stored &gt; <c>Benchmarks:KldCacheMaxBytes</c> &gt; 64 GiB).</summary>
+    Task<long> GetBenchmarkKldCacheMaxBytesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The scheduled-job run history window in days (stored &gt; <c>Scheduler:HistoryRetentionDays</c> &gt; 30).</summary>
+    Task<int> GetSchedulerHistoryRetentionDaysAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The AgentHome inner tool calls per run (stored &gt; <c>AgentHome:MaxInnerToolCalls</c> &gt; 24). Read once per run.</summary>
+    Task<int> GetAgentHomeMaxInnerToolCallsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The AgentHome patch-apply git timeout in seconds (stored &gt; <c>AgentHome:PatchApplyTimeoutSeconds</c> &gt; 120).</summary>
+    Task<int> GetAgentHomePatchApplyTimeoutSecondsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The AgentHome run-folder retention in days, 0 = off (stored &gt; <c>AgentHome:RunRetention:RetentionDays</c> &gt; 30).</summary>
+    Task<int> GetAgentHomeRunRetentionDaysAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The AgentHome runs kept, 0 = off (stored &gt; <c>AgentHome:RunRetention:MaxRuns</c> &gt; 200). Read per sweep.</summary>
+    Task<int> GetAgentHomeRunRetentionMaxRunsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The AgentHome runs byte ceiling, 0 = off (stored &gt; <c>AgentHome:RunRetention:MaxTotalBytes</c> &gt; 2 GiB). Read per sweep.</summary>
+    Task<long> GetAgentHomeRunRetentionMaxTotalBytesAsync(CancellationToken cancellationToken = default);
+
     // Synchronous twins for the composition/startup path and for structurally synchronous request-time call sites. Prefer the async getters:
     // a sync twin on a per-TOKEN path, or a captured result in a singleton field, is NOT acceptable. Rules and reasons: docs/wiki/08-data-and-persistence.md.
 
@@ -274,12 +398,70 @@ public interface INodeRuntimeSettings
     /// <summary>The whisper.cpp per-request inference timeout (stored &gt; 30 minutes).</summary>
     TimeSpan GetTranscriptionInferenceTimeout();
 
-    /// <summary>The AgentHome run-folder retention in days (stored &gt; <c>AgentHome:RunRetention:RetentionDays</c> &gt; 30).</summary>
-    int GetAgentHomeRunRetentionDays();
-
     /// <summary>
     ///     The model-fit safety margin as a fraction of weights + KV (stored percent / 100 &gt; 0.12). Synchronous
     ///     because the estimator it feeds is synchronous; it is read per estimate, so a save applies to the next fit.
     /// </summary>
     double GetModelFitSafetyMarginFraction();
+
+    /// <summary>The tool-loop iterations per request (stored &gt; <c>Agent:ToolPipeline:MaximumToolIterationsPerRequest</c> &gt; 40).</summary>
+    int GetToolPipelineMaxIterationsPerRequest();
+
+    /// <summary>The characters one tool result may hand the model (stored &gt; <c>Agent:ToolPipeline:MaxToolResultCharacters</c> &gt; 65536).</summary>
+    int GetToolPipelineMaxToolResultChars();
+
+    /// <summary>The invalid calls to one tool in a row before it is refused (stored &gt; <c>Agent:ToolPipeline:MaxConsecutiveInvalidToolCallsPerTool</c> &gt; 3).</summary>
+    int GetToolPipelineMaxConsecutiveInvalidToolCalls();
+
+    /// <summary>The recent turns the history budget never trims (stored &gt; <c>Agent:ConversationContextBudget:RecentTurnKeepCount</c> &gt; 4).</summary>
+    /// <remarks>
+    ///     Synchronous because <c>IConversationContextBudgeter.Budget</c> is synchronous by design; it is read per budget pass, never
+    ///     captured, so a save applies to the next turn.
+    /// </remarks>
+    int GetContextBudgetRecentTurnKeepCount();
+
+    /// <summary>Whether stale-vector documents are re-queued (stored &gt; <c>KnowledgeBase:ScheduledModelReindexEnabled</c> &gt; on).</summary>
+    bool GetKnowledgeScheduledReindexEnabled();
+
+    /// <summary>The stale-vector polling interval in minutes (stored &gt; <c>KnowledgeBase:ScheduledModelReindexIntervalMinutes</c> &gt; 60).</summary>
+    int GetKnowledgeScheduledReindexIntervalMinutes();
+
+    /// <summary>
+    ///     Synchronous twin of <see cref="GetKnowledgeAgentToolsEnabledAsync" /> for the synchronous tool-offer seam; read per offer,
+    ///     never captured.
+    /// </summary>
+    bool GetKnowledgeAgentToolsEnabled();
+
+    /// <summary>
+    ///     Synchronous twin of <see cref="GetAllowCloudModelAccessAsync" /> for the synchronous tool-offer seam; read per offer, never
+    ///     captured.
+    /// </summary>
+    bool GetAllowCloudModelAccess();
+
+    /// <summary>The sd-server processes kept loaded (stored &gt; <c>StableDiffusionRuntime:MaxLoadedProcesses</c> &gt; 1).</summary>
+    int GetImageMaxLoadedProcesses();
+
+    /// <summary>Whether sd-server keeps the text encoder on the GPU (stored &gt; <c>StableDiffusionRuntime:TextEncoderOnGpu</c> &gt; off).</summary>
+    bool GetImageTextEncoderOnGpu();
+
+    /// <summary>The graph-workflow runs live at once (stored &gt; <c>GraphWorkflows:MaxConcurrentRuns</c> &gt; 4).</summary>
+    int GetGraphWorkflowMaxConcurrentRuns();
+
+    /// <summary>The graph-workflow default node timeout in seconds (stored &gt; <c>GraphWorkflows:DefaultNodeTimeoutSeconds</c> &gt; 600).</summary>
+    int GetGraphWorkflowDefaultNodeTimeoutSeconds();
+
+    /// <summary>The work-session steps per start or resume (stored &gt; <c>WorkSessions:MaxStepsPerRun</c> &gt; 25).</summary>
+    int GetWorkSessionMaxStepsPerRun();
+
+    /// <summary>The work sessions running at once (stored &gt; <c>WorkSessions:MaxConcurrentSessions</c> &gt; 1).</summary>
+    int GetWorkSessionMaxConcurrentSessions();
+
+    /// <summary>The development attempt wall clock in seconds (stored &gt; <c>Development:MaxAttemptDurationSeconds</c> &gt; 1800).</summary>
+    int GetDevelopmentMaxAttemptDurationSeconds();
+
+    /// <summary>The tool calls per development attempt (stored &gt; <c>Development:MaxToolCalls</c> &gt; 64).</summary>
+    int GetDevelopmentMaxToolCalls();
+
+    /// <summary>The output tokens per development attempt (stored &gt; <c>Development:MaxOutputTokens</c> &gt; 32768).</summary>
+    int GetDevelopmentMaxOutputTokens();
 }

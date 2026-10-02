@@ -22,7 +22,7 @@ public interface ILocalToolOfferProvider
     ///     runtime package only for the config hash and client display. Capability-gated tools are omitted when
     ///     <paramref name="activeModelId" /> is not in the tool-capable allow-list, and <c>spawn_subagent</c> is absent
     ///     entirely (see <see cref="GetOfferedToolsForProfile" />). The knowledge-base read tools are withheld from a
-    ///     cloud model unless <c>KnowledgeBase:AllowCloudModelAccess</c> is set.
+    ///     cloud model unless the <c>AllowCloudModelAccess</c> node setting is set.
     /// </remarks>
     /// <param name="isCloudModel">
     ///     The per-turn locality the caller already resolved; this seam performs no lookup of its own.

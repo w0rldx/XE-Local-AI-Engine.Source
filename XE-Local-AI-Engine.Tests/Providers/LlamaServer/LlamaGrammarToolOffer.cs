@@ -44,8 +44,7 @@ internal static class LlamaGrammarToolOffer
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
             NullCustomToolScopeFactory.Instance,
-            new FakeModelTrustResolver(),
-            allowCloudKnowledgeAccess: false);
+            new FakeModelTrustResolver());
 
         // The profile pool is the widest offer (it adds spawn_subagent, whose 8000-char bounds are the largest we ship),
         // PLUS emit_output. The profile offer excludes emit_output by design — only an integration execution is offered

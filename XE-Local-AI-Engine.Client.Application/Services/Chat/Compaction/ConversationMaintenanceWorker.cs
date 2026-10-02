@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
@@ -124,8 +125,8 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
     }
 
     /// <summary>
-    ///     Compacts when the history the next turn would replay exceeds <see cref="ConversationCompactionOptions.AutoCompactFraction" />
-    ///     of the turn's usable window.
+    ///     Compacts when the history the next turn would replay exceeds the auto-compact percent node setting of the turn's
+    ///     usable window.
     /// </summary>
     /// <remarks>
     ///     The projection is <see cref="ConversationStepContextBound.Project" /> and the observed correction is applied to
@@ -133,8 +134,8 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
     /// </remarks>
     private async Task CompactWhenOverThresholdAsync(IServiceProvider services, ConversationMaintenanceJob job, CancellationToken cancellationToken)
     {
-        var options = _options.Value;
-        if (!options.AutoCompactEnabled)
+        var runtimeSettings = services.GetRequiredService<INodeRuntimeSettings>();
+        if (!await runtimeSettings.GetCompactionAutoEnabledAsync(cancellationToken))
         {
             _logger.LogDebug("Automatic compaction is disabled; conversation {ConversationId} was not checked.", job.ConversationId);
             return;
@@ -154,7 +155,9 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
 
         var estimator = services.GetRequiredService<ITokenEstimator>();
         var projected = ConversationStepContextBound.Project(conversation, estimator, job.ModelName);
-        var threshold = TokenEstimatorCalibrationStore.ApplyObservedCorrection((int)(usableTokens * options.AutoCompactFraction),
+        // The node setting is a percent (30..95); the arithmetic wants the fraction the options class used to carry.
+        var autoCompactFraction = await runtimeSettings.GetCompactionAutoCompactPercentAsync(cancellationToken) / 100d;
+        var threshold = TokenEstimatorCalibrationStore.ApplyObservedCorrection((int)(usableTokens * autoCompactFraction),
             estimator.ResolveObservedCorrection(job.ModelName));
         if (projected <= threshold)
         {
@@ -183,7 +186,7 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
     private async Task DistillWhenDueAsync(IServiceProvider services, ConversationMaintenanceJob job, CancellationToken cancellationToken)
     {
         var options = _options.Value;
-        if (!options.DistillEnabled)
+        if (!await services.GetRequiredService<INodeRuntimeSettings>().GetCompactionDistillEnabledAsync(cancellationToken))
         {
             _logger.LogDebug("Distillation is disabled; conversation {ConversationId} was not checked.", job.ConversationId);
             return;

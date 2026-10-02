@@ -70,7 +70,27 @@ public sealed class NodeInfoService : INodeInfoService
         nameof(StoredNodeSettings.WebFetchMaxContentChars), nameof(StoredNodeSettings.KnowledgeSearchDefaultResults),
         nameof(StoredNodeSettings.KnowledgeSearchMaxResults), nameof(StoredNodeSettings.HuggingFaceDownloadConnections),
         nameof(StoredNodeSettings.TranscriptionInferenceTimeoutMinutes), nameof(StoredNodeSettings.AgentHomeMaxRunSeconds),
-        nameof(StoredNodeSettings.AgentHomeRunRetentionDays), nameof(StoredNodeSettings.ContainerRuntimeSelection)
+        nameof(StoredNodeSettings.AgentHomeRunRetentionDays), nameof(StoredNodeSettings.ContainerRuntimeSelection),
+        nameof(StoredNodeSettings.ToolPipelineMaxIterationsPerRequest), nameof(StoredNodeSettings.ToolPipelineMaxToolResultChars),
+        nameof(StoredNodeSettings.ToolPipelineMaxConsecutiveInvalidToolCalls), nameof(StoredNodeSettings.DefaultContextTokens),
+        nameof(StoredNodeSettings.ProviderBudgetRecentMessagesToKeep), nameof(StoredNodeSettings.ProviderBudgetMaxCumulativeInputTokens),
+        nameof(StoredNodeSettings.ContextBudgetRecentTurnKeepCount), nameof(StoredNodeSettings.CompactionAutoEnabled),
+        nameof(StoredNodeSettings.CompactionAutoCompactPercent), nameof(StoredNodeSettings.CompactionRecentMessagesVerbatim),
+        nameof(StoredNodeSettings.CompactionDistillEnabled), nameof(StoredNodeSettings.MaxInlinedAttachmentChars), nameof(StoredNodeSettings.KnowledgeChatTopK),
+        nameof(StoredNodeSettings.ProviderRetryEnabled), nameof(StoredNodeSettings.ProviderMaxRetries), nameof(StoredNodeSettings.SpawnMaxConcurrent),
+        nameof(StoredNodeSettings.SpawnMaxCloud), nameof(StoredNodeSettings.SpawnQueueWaitSeconds), nameof(StoredNodeSettings.KnowledgeAdaptiveRerankingEnabled),
+        nameof(StoredNodeSettings.KnowledgeRetrievalLatencyBudgetMs), nameof(StoredNodeSettings.KnowledgeScheduledReindexEnabled),
+        nameof(StoredNodeSettings.KnowledgeScheduledReindexIntervalMinutes), nameof(StoredNodeSettings.KnowledgeAgentToolsEnabled),
+        nameof(StoredNodeSettings.AllowCloudModelAccess), nameof(StoredNodeSettings.PlaybookAnalysisModelName), nameof(StoredNodeSettings.PlaybookEvalModelName),
+        nameof(StoredNodeSettings.MemoryExtractionModelName), nameof(StoredNodeSettings.ChatRetentionEnabled), nameof(StoredNodeSettings.ChatRetentionDays),
+        nameof(StoredNodeSettings.AgentExecutionLogRetentionEnabled), nameof(StoredNodeSettings.AgentExecutionLogRetentionDays),
+        nameof(StoredNodeSettings.NodeDbBackupRetainCount), nameof(StoredNodeSettings.BenchmarkKldCacheMaxBytes), nameof(StoredNodeSettings.SchedulerHistoryRetentionDays),
+        nameof(StoredNodeSettings.ImageMaxLoadedProcesses), nameof(StoredNodeSettings.ImageTextEncoderOnGpu), nameof(StoredNodeSettings.GraphWorkflowMaxConcurrentRuns),
+        nameof(StoredNodeSettings.GraphWorkflowDefaultNodeTimeoutSeconds), nameof(StoredNodeSettings.WorkSessionMaxStepsPerRun),
+        nameof(StoredNodeSettings.WorkSessionMaxConcurrentSessions), nameof(StoredNodeSettings.DevelopmentMaxAttemptDurationSeconds),
+        nameof(StoredNodeSettings.DevelopmentMaxToolCalls), nameof(StoredNodeSettings.DevelopmentMaxOutputTokens), nameof(StoredNodeSettings.AgentHomeMaxInnerToolCalls),
+        nameof(StoredNodeSettings.AgentHomePatchApplyTimeoutSeconds), nameof(StoredNodeSettings.AgentHomeRunRetentionMaxRuns),
+        nameof(StoredNodeSettings.AgentHomeRunRetentionMaxTotalBytes)
     };
 
     /// <summary>The settings fields the report never carries; a test fails when a new field is in neither set.</summary>

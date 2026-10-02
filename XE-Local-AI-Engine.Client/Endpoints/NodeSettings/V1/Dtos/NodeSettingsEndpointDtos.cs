@@ -382,12 +382,283 @@ public sealed record NodeSettingsResponse
 
     public int MaxAllowedAgentHomeMaxRunSeconds { get; init; }
 
-    /// <summary>Days an AgentHome run folder is kept. Applies after a node restart.</summary>
-    public int? AgentHomeRunRetentionDays { get; init; }
+    /// <summary>Days an AgentHome run folder is kept. Applies after a node restart. Effective value: stored, else the configuration seed.</summary>
+    public int AgentHomeRunRetentionDays { get; init; }
 
     public int MinAgentHomeRunRetentionDays { get; init; }
 
     public int MaxAllowedAgentHomeRunRetentionDays { get; init; }
+
+    /// <summary>Tool-loop iterations per request. Applies after a node restart.</summary>
+    public int? ToolPipelineMaxIterationsPerRequest { get; init; }
+
+    public int MinToolPipelineMaxIterationsPerRequest { get; init; }
+
+    public int MaxAllowedToolPipelineMaxIterationsPerRequest { get; init; }
+
+    /// <summary>Characters one tool result may hand the model. Applies after a node restart.</summary>
+    public int? ToolPipelineMaxToolResultChars { get; init; }
+
+    public int MinToolPipelineMaxToolResultChars { get; init; }
+
+    public int MaxAllowedToolPipelineMaxToolResultChars { get; init; }
+
+    /// <summary>Invalid calls to one tool in a row before it is refused. Applies after a node restart.</summary>
+    public int? ToolPipelineMaxConsecutiveInvalidToolCalls { get; init; }
+
+    public int MinToolPipelineMaxConsecutiveInvalidToolCalls { get; init; }
+
+    public int MaxAllowedToolPipelineMaxConsecutiveInvalidToolCalls { get; init; }
+
+    /// <summary>Context window, in tokens, assumed when a send names none. Applies to the next turn.</summary>
+    public int? DefaultContextTokens { get; init; }
+
+    public int MinDefaultContextTokens { get; init; }
+
+    public int MaxAllowedDefaultContextTokens { get; init; }
+
+    /// <summary>Recent messages a provider-round trim always keeps. Applies to the next turn.</summary>
+    public int? ProviderBudgetRecentMessagesToKeep { get; init; }
+
+    public int MinProviderBudgetRecentMessagesToKeep { get; init; }
+
+    public int MaxAllowedProviderBudgetRecentMessagesToKeep { get; init; }
+
+    /// <summary>Input tokens one agent run may send in total. Applies to the next turn.</summary>
+    public int? ProviderBudgetMaxCumulativeInputTokens { get; init; }
+
+    public int MinProviderBudgetMaxCumulativeInputTokens { get; init; }
+
+    public int MaxAllowedProviderBudgetMaxCumulativeInputTokens { get; init; }
+
+    /// <summary>Recent turns the history budget never trims. Applies to the next turn.</summary>
+    public int? ContextBudgetRecentTurnKeepCount { get; init; }
+
+    public int MinContextBudgetRecentTurnKeepCount { get; init; }
+
+    public int MaxAllowedContextBudgetRecentTurnKeepCount { get; init; }
+
+    /// <summary>Share of the usable window, in percent, above which a chat is compacted. Applies to the next compaction check.</summary>
+    public int? CompactionAutoCompactPercent { get; init; }
+
+    public int MinCompactionAutoCompactPercent { get; init; }
+
+    public int MaxAllowedCompactionAutoCompactPercent { get; init; }
+
+    /// <summary>Recent messages a compaction keeps word for word. Applies to the next compaction.</summary>
+    public int? CompactionRecentMessagesVerbatim { get; init; }
+
+    public int MinCompactionRecentMessagesVerbatim { get; init; }
+
+    public int MaxAllowedCompactionRecentMessagesVerbatim { get; init; }
+
+    /// <summary>Attachment text inlined into one chat turn, in characters. Applies to the next turn.</summary>
+    public int? MaxInlinedAttachmentChars { get; init; }
+
+    public int MinMaxInlinedAttachmentChars { get; init; }
+
+    public int MaxAllowedMaxInlinedAttachmentChars { get; init; }
+
+    /// <summary>Knowledge-base passages grounded into one chat turn. Applies to the next turn.</summary>
+    public int? KnowledgeChatTopK { get; init; }
+
+    public int MinKnowledgeChatTopK { get; init; }
+
+    public int MaxAllowedKnowledgeChatTopK { get; init; }
+
+    /// <summary>Retries of a model send that failed before its first token. Applies to the next send.</summary>
+    public int? ProviderMaxRetries { get; init; }
+
+    public int MinProviderMaxRetries { get; init; }
+
+    public int MaxAllowedProviderMaxRetries { get; init; }
+
+    /// <summary>Sub-agents one run may have in flight at once. Applies to the next run.</summary>
+    public int? SpawnMaxConcurrent { get; init; }
+
+    public int MinSpawnMaxConcurrent { get; init; }
+
+    public int MaxAllowedSpawnMaxConcurrent { get; init; }
+
+    /// <summary>Cloud sub-agents one run may start; 0 forbids them. Applies to the next run.</summary>
+    public int? SpawnMaxCloud { get; init; }
+
+    public int MinSpawnMaxCloud { get; init; }
+
+    public int MaxAllowedSpawnMaxCloud { get; init; }
+
+    /// <summary>Seconds a sub-agent waits for its busy model; 0 rejects at once. Applies to the next spawn.</summary>
+    public int? SpawnQueueWaitSeconds { get; init; }
+
+    public int MinSpawnQueueWaitSeconds { get; init; }
+
+    public int MaxAllowedSpawnQueueWaitSeconds { get; init; }
+
+    /// <summary>Whether a long chat is compacted automatically. Applies to the next turn. Effective value: stored, else the configuration seed.</summary>
+    public bool CompactionAutoEnabled { get; init; }
+
+    /// <summary>Whether conversation state is distilled in the background. Applies to the next turn. Effective value: stored, else the configuration seed.</summary>
+    public bool CompactionDistillEnabled { get; init; }
+
+    /// <summary>Whether a failed model send is retried before its first token. Applies to the next send. Effective value: stored, else the configuration seed.</summary>
+    public bool ProviderRetryEnabled { get; init; }
+
+    /// <summary>Whether a configured reranker runs only for ambiguous candidate sets. Applies to the next search. Effective value: stored, else the configuration seed.</summary>
+    public bool KnowledgeAdaptiveRerankingEnabled { get; init; }
+
+    /// <summary>Retrieval latency budget in milliseconds. Applies to the next search.</summary>
+    public int? KnowledgeRetrievalLatencyBudgetMs { get; init; }
+
+    public int MinKnowledgeRetrievalLatencyBudgetMs { get; init; }
+
+    public int MaxAllowedKnowledgeRetrievalLatencyBudgetMs { get; init; }
+
+    /// <summary>Whether stale-vector documents are re-queued after an embedding-model change. Applies after a node restart. Effective value: stored, else the configuration seed.</summary>
+    public bool KnowledgeScheduledReindexEnabled { get; init; }
+
+    /// <summary>Stale-vector polling interval in minutes. Applies after a node restart.</summary>
+    public int? KnowledgeScheduledReindexIntervalMinutes { get; init; }
+
+    public int MinKnowledgeScheduledReindexIntervalMinutes { get; init; }
+
+    public int MaxAllowedKnowledgeScheduledReindexIntervalMinutes { get; init; }
+
+    /// <summary>Whether the knowledge-base agent tools are offered and run. Applies to the next turn. Effective value: stored, else the configuration seed.</summary>
+    public bool KnowledgeAgentToolsEnabled { get; init; }
+
+    /// <summary>Whether a cloud-hosted model may receive node-local data. Applies to the next turn. Effective value: stored, else the configuration seed.</summary>
+    public bool AllowCloudModelAccess { get; init; }
+
+    /// <summary>Model that proposes playbook actions; blank or absent inherits the default model. Applies to the next run.</summary>
+    public string? PlaybookAnalysisModelName { get; init; }
+
+    /// <summary>Model that runs playbook evals; blank or absent inherits the default model. Applies to the next run.</summary>
+    public string? PlaybookEvalModelName { get; init; }
+
+    /// <summary>Model that mines lessons from completed runs; blank or absent inherits the default model. Applies to the next run.</summary>
+    public string? MemoryExtractionModelName { get; init; }
+
+    /// <summary>Whether old conversations are deleted. Applies to the next sweep. Effective value: stored, else the configuration seed.</summary>
+    public bool ChatRetentionEnabled { get; init; }
+
+    /// <summary>Conversation retention window in days. Applies to the next sweep. Effective value: stored, else the configuration seed.</summary>
+    public int ChatRetentionDays { get; init; }
+
+    /// <summary>Shared lower bound of the three retention windows, in days.</summary>
+    public int MinRetentionDays { get; init; }
+
+    /// <summary>Shared upper bound of the three retention windows, in days.</summary>
+    public int MaxAllowedRetentionDays { get; init; }
+
+    /// <summary>Whether old agent execution logs are deleted. Applies to the next sweep. Effective value: stored, else the configuration seed.</summary>
+    public bool AgentExecutionLogRetentionEnabled { get; init; }
+
+    /// <summary>Agent execution-log retention window in days. Applies to the next sweep. Effective value: stored, else the configuration seed.</summary>
+    public int AgentExecutionLogRetentionDays { get; init; }
+
+    /// <summary>Node database snapshots kept. Applies to the next backup.</summary>
+    public int? NodeDbBackupRetainCount { get; init; }
+
+    public int MinNodeDbBackupRetainCount { get; init; }
+
+    public int MaxAllowedNodeDbBackupRetainCount { get; init; }
+
+    /// <summary>Benchmark KL-divergence base cache ceiling in bytes. Applies to the next trim.</summary>
+    public long? BenchmarkKldCacheMaxBytes { get; init; }
+
+    public long MinBenchmarkKldCacheMaxBytes { get; init; }
+
+    public long MaxAllowedBenchmarkKldCacheMaxBytes { get; init; }
+
+    /// <summary>Scheduled-job run history window in days. Applies to the next sweep. Effective value: stored, else the configuration seed.</summary>
+    public int SchedulerHistoryRetentionDays { get; init; }
+
+    /// <summary>sd-server processes kept loaded at once. Applies after a node restart.</summary>
+    public int? ImageMaxLoadedProcesses { get; init; }
+
+    public int MinImageMaxLoadedProcesses { get; init; }
+
+    public int MaxAllowedImageMaxLoadedProcesses { get; init; }
+
+    /// <summary>Whether sd-server keeps the text encoder on the GPU. Applies after a node restart. Effective value: stored, else the configuration seed.</summary>
+    public bool ImageTextEncoderOnGpu { get; init; }
+
+    /// <summary>Graph-workflow runs live at once. Applies after a node restart.</summary>
+    public int? GraphWorkflowMaxConcurrentRuns { get; init; }
+
+    public int MinGraphWorkflowMaxConcurrentRuns { get; init; }
+
+    public int MaxAllowedGraphWorkflowMaxConcurrentRuns { get; init; }
+
+    /// <summary>Graph-workflow node timeout in seconds when a node names none. Applies after a node restart.</summary>
+    public int? GraphWorkflowDefaultNodeTimeoutSeconds { get; init; }
+
+    public int MinGraphWorkflowDefaultNodeTimeoutSeconds { get; init; }
+
+    public int MaxAllowedGraphWorkflowDefaultNodeTimeoutSeconds { get; init; }
+
+    /// <summary>Work-session steps per start or resume. Applies after a node restart.</summary>
+    public int? WorkSessionMaxStepsPerRun { get; init; }
+
+    public int MinWorkSessionMaxStepsPerRun { get; init; }
+
+    public int MaxAllowedWorkSessionMaxStepsPerRun { get; init; }
+
+    /// <summary>Work sessions running at once. Applies after a node restart.</summary>
+    public int? WorkSessionMaxConcurrentSessions { get; init; }
+
+    public int MinWorkSessionMaxConcurrentSessions { get; init; }
+
+    public int MaxAllowedWorkSessionMaxConcurrentSessions { get; init; }
+
+    /// <summary>Development attempt wall clock in seconds. Applies after a node restart.</summary>
+    public int? DevelopmentMaxAttemptDurationSeconds { get; init; }
+
+    public int MinDevelopmentMaxAttemptDurationSeconds { get; init; }
+
+    public int MaxAllowedDevelopmentMaxAttemptDurationSeconds { get; init; }
+
+    /// <summary>Tool calls per development attempt. Applies after a node restart.</summary>
+    public int? DevelopmentMaxToolCalls { get; init; }
+
+    public int MinDevelopmentMaxToolCalls { get; init; }
+
+    public int MaxAllowedDevelopmentMaxToolCalls { get; init; }
+
+    /// <summary>Output tokens per development attempt. Applies after a node restart.</summary>
+    public int? DevelopmentMaxOutputTokens { get; init; }
+
+    public int MinDevelopmentMaxOutputTokens { get; init; }
+
+    public int MaxAllowedDevelopmentMaxOutputTokens { get; init; }
+
+    /// <summary>AgentHome inner tool calls per run (developer-only). Applies to the next run.</summary>
+    public int? AgentHomeMaxInnerToolCalls { get; init; }
+
+    public int MinAgentHomeMaxInnerToolCalls { get; init; }
+
+    public int MaxAllowedAgentHomeMaxInnerToolCalls { get; init; }
+
+    /// <summary>AgentHome patch-apply git timeout in seconds (developer-only). Applies to the next apply.</summary>
+    public int? AgentHomePatchApplyTimeoutSeconds { get; init; }
+
+    public int MinAgentHomePatchApplyTimeoutSeconds { get; init; }
+
+    public int MaxAllowedAgentHomePatchApplyTimeoutSeconds { get; init; }
+
+    /// <summary>AgentHome runs kept, 0 = no count limit (developer-only). Applies to the next sweep.</summary>
+    public int? AgentHomeRunRetentionMaxRuns { get; init; }
+
+    public int MinAgentHomeRunRetentionMaxRuns { get; init; }
+
+    public int MaxAllowedAgentHomeRunRetentionMaxRuns { get; init; }
+
+    /// <summary>AgentHome runs byte ceiling, 0 = no byte limit (developer-only). Applies to the next sweep.</summary>
+    public long? AgentHomeRunRetentionMaxTotalBytes { get; init; }
+
+    public long MinAgentHomeRunRetentionMaxTotalBytes { get; init; }
+
+    public long MaxAllowedAgentHomeRunRetentionMaxTotalBytes { get; init; }
 }
 
 /// <summary>
@@ -636,6 +907,147 @@ public sealed record SaveNodeSettingsRequest
 
     /// <summary>Days an AgentHome run folder is kept. Applies after a node restart.</summary>
     public int? AgentHomeRunRetentionDays { get; init; }
+
+    /// <summary>Tool-loop iterations per request. Applies after a node restart.</summary>
+    public int? ToolPipelineMaxIterationsPerRequest { get; init; }
+
+    /// <summary>Characters one tool result may hand the model. Applies after a node restart.</summary>
+    public int? ToolPipelineMaxToolResultChars { get; init; }
+
+    /// <summary>Invalid calls to one tool in a row before it is refused. Applies after a node restart.</summary>
+    public int? ToolPipelineMaxConsecutiveInvalidToolCalls { get; init; }
+
+    /// <summary>Context window, in tokens, assumed when a send names none. Applies to the next turn.</summary>
+    public int? DefaultContextTokens { get; init; }
+
+    /// <summary>Recent messages a provider-round trim always keeps. Applies to the next turn.</summary>
+    public int? ProviderBudgetRecentMessagesToKeep { get; init; }
+
+    /// <summary>Input tokens one agent run may send in total. Applies to the next turn.</summary>
+    public int? ProviderBudgetMaxCumulativeInputTokens { get; init; }
+
+    /// <summary>Recent turns the history budget never trims. Applies to the next turn.</summary>
+    public int? ContextBudgetRecentTurnKeepCount { get; init; }
+
+    /// <summary>Share of the usable window, in percent, above which a chat is compacted. Applies to the next compaction check.</summary>
+    public int? CompactionAutoCompactPercent { get; init; }
+
+    /// <summary>Recent messages a compaction keeps word for word. Applies to the next compaction.</summary>
+    public int? CompactionRecentMessagesVerbatim { get; init; }
+
+    /// <summary>Attachment text inlined into one chat turn, in characters. Applies to the next turn.</summary>
+    public int? MaxInlinedAttachmentChars { get; init; }
+
+    /// <summary>Knowledge-base passages grounded into one chat turn. Applies to the next turn.</summary>
+    public int? KnowledgeChatTopK { get; init; }
+
+    /// <summary>Retries of a model send that failed before its first token. Applies to the next send.</summary>
+    public int? ProviderMaxRetries { get; init; }
+
+    /// <summary>Sub-agents one run may have in flight at once. Applies to the next run.</summary>
+    public int? SpawnMaxConcurrent { get; init; }
+
+    /// <summary>Cloud sub-agents one run may start; 0 forbids them. Applies to the next run.</summary>
+    public int? SpawnMaxCloud { get; init; }
+
+    /// <summary>Seconds a sub-agent waits for its busy model; 0 rejects at once. Applies to the next spawn.</summary>
+    public int? SpawnQueueWaitSeconds { get; init; }
+
+    /// <summary>Whether a long chat is compacted automatically. Applies to the next turn.</summary>
+    public bool? CompactionAutoEnabled { get; init; }
+
+    /// <summary>Whether conversation state is distilled in the background. Applies to the next turn.</summary>
+    public bool? CompactionDistillEnabled { get; init; }
+
+    /// <summary>Whether a failed model send is retried before its first token. Applies to the next send.</summary>
+    public bool? ProviderRetryEnabled { get; init; }
+
+    /// <summary>Whether a configured reranker runs only for ambiguous candidate sets. Applies to the next search.</summary>
+    public bool? KnowledgeAdaptiveRerankingEnabled { get; init; }
+
+    /// <summary>Retrieval latency budget in milliseconds. Applies to the next search.</summary>
+    public int? KnowledgeRetrievalLatencyBudgetMs { get; init; }
+
+    /// <summary>Whether stale-vector documents are re-queued after an embedding-model change. Applies after a node restart.</summary>
+    public bool? KnowledgeScheduledReindexEnabled { get; init; }
+
+    /// <summary>Stale-vector polling interval in minutes. Applies after a node restart.</summary>
+    public int? KnowledgeScheduledReindexIntervalMinutes { get; init; }
+
+    /// <summary>Whether the knowledge-base agent tools are offered and run. Applies to the next turn.</summary>
+    public bool? KnowledgeAgentToolsEnabled { get; init; }
+
+    /// <summary>Whether a cloud-hosted model may receive node-local data. Applies to the next turn.</summary>
+    public bool? AllowCloudModelAccess { get; init; }
+
+    /// <summary>Model that proposes playbook actions; blank or absent inherits the default model. Applies to the next run.</summary>
+    public string? PlaybookAnalysisModelName { get; init; }
+
+    /// <summary>Model that runs playbook evals; blank or absent inherits the default model. Applies to the next run.</summary>
+    public string? PlaybookEvalModelName { get; init; }
+
+    /// <summary>Model that mines lessons from completed runs; blank or absent inherits the default model. Applies to the next run.</summary>
+    public string? MemoryExtractionModelName { get; init; }
+
+    /// <summary>Whether old conversations are deleted. Applies to the next sweep.</summary>
+    public bool? ChatRetentionEnabled { get; init; }
+
+    /// <summary>Conversation retention window in days. Applies to the next sweep.</summary>
+    public int? ChatRetentionDays { get; init; }
+
+    /// <summary>Whether old agent execution logs are deleted. Applies to the next sweep.</summary>
+    public bool? AgentExecutionLogRetentionEnabled { get; init; }
+
+    /// <summary>Agent execution-log retention window in days. Applies to the next sweep.</summary>
+    public int? AgentExecutionLogRetentionDays { get; init; }
+
+    /// <summary>Node database snapshots kept. Applies to the next backup.</summary>
+    public int? NodeDbBackupRetainCount { get; init; }
+
+    /// <summary>Benchmark KL-divergence base cache ceiling in bytes. Applies to the next trim.</summary>
+    public long? BenchmarkKldCacheMaxBytes { get; init; }
+
+    /// <summary>Scheduled-job run history window in days. Applies to the next sweep.</summary>
+    public int? SchedulerHistoryRetentionDays { get; init; }
+
+    /// <summary>sd-server processes kept loaded at once. Applies after a node restart.</summary>
+    public int? ImageMaxLoadedProcesses { get; init; }
+
+    /// <summary>Whether sd-server keeps the text encoder on the GPU. Applies after a node restart.</summary>
+    public bool? ImageTextEncoderOnGpu { get; init; }
+
+    /// <summary>Graph-workflow runs live at once. Applies after a node restart.</summary>
+    public int? GraphWorkflowMaxConcurrentRuns { get; init; }
+
+    /// <summary>Graph-workflow node timeout in seconds when a node names none. Applies after a node restart.</summary>
+    public int? GraphWorkflowDefaultNodeTimeoutSeconds { get; init; }
+
+    /// <summary>Work-session steps per start or resume. Applies after a node restart.</summary>
+    public int? WorkSessionMaxStepsPerRun { get; init; }
+
+    /// <summary>Work sessions running at once. Applies after a node restart.</summary>
+    public int? WorkSessionMaxConcurrentSessions { get; init; }
+
+    /// <summary>Development attempt wall clock in seconds. Applies after a node restart.</summary>
+    public int? DevelopmentMaxAttemptDurationSeconds { get; init; }
+
+    /// <summary>Tool calls per development attempt. Applies after a node restart.</summary>
+    public int? DevelopmentMaxToolCalls { get; init; }
+
+    /// <summary>Output tokens per development attempt. Applies after a node restart.</summary>
+    public int? DevelopmentMaxOutputTokens { get; init; }
+
+    /// <summary>AgentHome inner tool calls per run (developer-only). Applies to the next run.</summary>
+    public int? AgentHomeMaxInnerToolCalls { get; init; }
+
+    /// <summary>AgentHome patch-apply git timeout in seconds (developer-only). Applies to the next apply.</summary>
+    public int? AgentHomePatchApplyTimeoutSeconds { get; init; }
+
+    /// <summary>AgentHome runs kept, 0 = no count limit (developer-only). Applies to the next sweep.</summary>
+    public int? AgentHomeRunRetentionMaxRuns { get; init; }
+
+    /// <summary>AgentHome runs byte ceiling, 0 = no byte limit (developer-only). Applies to the next sweep.</summary>
+    public long? AgentHomeRunRetentionMaxTotalBytes { get; init; }
 }
 
 /// <summary>

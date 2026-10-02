@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Development.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 internal static class AddNodeDevelopmentExtensions
 {
@@ -17,6 +18,15 @@ internal static class AddNodeDevelopmentExtensions
 
         builder.Services.AddOptions<DevelopmentOptions>()
                .Bind(configuration.GetSection(DevelopmentOptions.Section))
+#pragma warning disable MA0045 // Options Configure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
+               // Node settings, restart-gated: the attempt runners capture these. Appended after Bind so stored wins.
+               .Configure<INodeRuntimeSettings>(static (options, runtimeSettings) =>
+               {
+                   options.MaxAttemptDurationSeconds = runtimeSettings.GetDevelopmentMaxAttemptDurationSeconds();
+                   options.MaxToolCalls = runtimeSettings.GetDevelopmentMaxToolCalls();
+                   options.MaxOutputTokens = runtimeSettings.GetDevelopmentMaxOutputTokens();
+               })
+#pragma warning restore MA0045
                .ValidateDataAnnotations()
                .ValidateOnStart();
         // Before the early return: the capability endpoint answers while Development Mode is off.

@@ -59,7 +59,7 @@ public sealed class NodeAgentMcpTools
     private readonly IMcpAgentRunCoordinator _runCoordinator;
     private readonly McpAgentRunOptions _runOptions;
     private readonly ISelectedFolderResolver _selectedFolderResolver;
-    private readonly SpawnOptions _spawnOptions;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly TimeProvider _timeProvider;
     private readonly IMcpAgentExecutionService _mcpAgentExecutionService;
 
@@ -67,7 +67,7 @@ public sealed class NodeAgentMcpTools
         IAgentDefinitionStore agentDefinitionStore,
         IGgufModelStore ggufModelStore,
         INodeSettingsAdministrationService nodeSettingsAdministrationService,
-        IOptions<SpawnOptions> spawnOptions,
+        INodeRuntimeSettings runtimeSettings,
         IMcpAgentRunCoordinator runCoordinator,
         ISelectedFolderResolver selectedFolderResolver,
         IOptions<McpAgentRunOptions> runOptions,
@@ -79,8 +79,7 @@ public sealed class NodeAgentMcpTools
         _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
         _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
         _nodeSettingsAdministrationService = nodeSettingsAdministrationService ?? throw new ArgumentNullException(nameof(nodeSettingsAdministrationService));
-        ArgumentNullException.ThrowIfNull(spawnOptions);
-        _spawnOptions = spawnOptions.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _runCoordinator = runCoordinator ?? throw new ArgumentNullException(nameof(runCoordinator));
         _selectedFolderResolver = selectedFolderResolver ?? throw new ArgumentNullException(nameof(selectedFolderResolver));
         ArgumentNullException.ThrowIfNull(runOptions);
@@ -407,7 +406,8 @@ public sealed class NodeAgentMcpTools
 
         // The fan-out and cloud-spawn caps hang off a per-root-invocation SpawnContext that a chat turn seeds and an MCP call has no
         // equivalent of, so one synthetic root per call bounds an MCP-driven run by exactly the caps an operator-driven one has.
-        using var spawnRoot = SpawnContext.BeginRoot(_spawnOptions.MaxConcurrentSpawns, _spawnOptions.MaxCloudSpawns);
+        using var spawnRoot = SpawnContext.BeginRoot(await _runtimeSettings.GetSpawnMaxConcurrentAsync(cancellationToken),
+            await _runtimeSettings.GetSpawnMaxCloudAsync(cancellationToken));
 
         var request = new McpExecutionBindingRequest
         {

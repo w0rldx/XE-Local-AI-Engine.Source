@@ -34,7 +34,9 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     // The whole capable offer with the knowledge-base tools removed. Returned to a cloud model (unless the operator
     // opted in) so node-local document/chunk/query text is never handed to a third-party provider through a tool call.
     private readonly IReadOnlyList<AllowedToolDto> _builtinAllToolsNoLocalData;
-    private readonly bool _allowCloudKnowledgeAccess;
+
+    // The whole capable offer minus the knowledge-base tools, returned while the node switch turns those tools off.
+    private readonly IReadOnlyList<AllowedToolDto> _builtinAllToolsNoKnowledge;
     private readonly IReadOnlyList<LocalToolCatalogEntry> _builtinCatalogEntries;
     private readonly IReadOnlyList<string> _builtinNames;
 
@@ -70,7 +72,6 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         INodeRuntimeSettings runtimeSettings,
         IServiceScopeFactory scopeFactory,
         IModelTrustResolver modelTrustResolver,
-        bool allowCloudKnowledgeAccess,
         ILogger<LocalToolOfferProvider>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(toolRegistry);
@@ -79,7 +80,6 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
-        _allowCloudKnowledgeAccess = allowCloudKnowledgeAccess;
 
         var builtinDescriptors = toolRegistry.GetLocalChatToolDescriptors();
 
@@ -120,6 +120,11 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         _builtinAllToolsNoLocalData =
         [
             .. _builtinAllTools.Where(tool => !localDataToolNames.Contains(tool.Name))
+        ];
+        var knowledgeToolNames = knowledgeDescriptors.Select(static descriptor => descriptor.Name).ToHashSet(StringComparer.Ordinal);
+        _builtinAllToolsNoKnowledge =
+        [
+            .. _builtinAllTools.Where(tool => !knowledgeToolNames.Contains(tool.Name))
         ];
 
         // spawn_subagent is offered ONLY to an agent profile that opts in via AllowedToolNames, so it is held out of the
@@ -306,10 +311,13 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             return _builtinAllToolsNonCapable;
         }
 
-        // Provider-locality gate: the node-local-data tools are withheld from a cloud model unless the operator opted
-        // in. The Codex-catalog and external-trust checks catch a pinned cloud id even on a locally-routed turn.
-        var gateLocalDataTools = !_allowCloudKnowledgeAccess && IsOutsideTrustBoundary(activeModelId, isCloudModel);
-        var baseOffer = gateLocalDataTools ? _builtinAllToolsNoLocalData : _builtinAllTools;
+        // Provider-locality gate: node-local-data tools are withheld from a cloud model unless opted in; the trust checks catch
+        // a pinned cloud id on a locally-routed turn. Both node switches are read per offer, so a save applies to the next turn.
+        var baseOffer = _runtimeSettings.GetKnowledgeAgentToolsEnabled() ? _builtinAllTools : _builtinAllToolsNoKnowledge;
+        if (!_runtimeSettings.GetAllowCloudModelAccess() && IsOutsideTrustBoundary(activeModelId, isCloudModel))
+        {
+            baseOffer = _builtinAllToolsNoLocalData;
+        }
 
         var mcpDescriptors = _mcpToolRegistry.GetDescriptors();
         if (mcpDescriptors.Count == 0)

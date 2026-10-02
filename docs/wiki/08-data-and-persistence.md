@@ -432,6 +432,29 @@ configuration because their options are registered by modules that **not every h
 this accessor is constructed in all of them. For knobs with no config section at all (the llama.cpp supervisor
 cap/TTL) the seed IS the hardcoded default.
 
+**The appsettings keys that became node settings in the second round.** Forty-seven former appsettings-only
+knobs are stored fields now; each keeps its old configuration key as the seed, so a node that never saves one behaves
+exactly as before, and the UI shows the shipped default for an unset numeric knob. The ten migrated switches report
+their effective value (stored, else the configuration seed), so a switch an appsettings seed turned on shows on and
+can be turned off. The four retention windows (conversations, agent execution logs, scheduler history, AgentHome
+runs) report their effective value the same way, so a seeded window shows what the next sweep actually uses. A blank background model (playbook analysis, playbook eval, memory extraction) inherits the
+default chat model only when it is node-local; a cloud or `ext:` default falls back to `Agent:LocalChat:DefaultModel`.
+
+| Area | Stored fields (seed section) | When an edit applies |
+|---|---|---|
+| Chat and agent runs | the three tool-pipeline limits (`Agent:ToolPipeline`) | restart: `Configure<AgentToolPipelineOptions>` after the bind |
+| | `DefaultContextTokens` (one knob for `Agent:ProviderCallBudget` and `Agent:ConversationContextBudget`), the provider-budget, turn-keep, compaction and distill knobs, `MaxInlinedAttachmentChars`, `KnowledgeChatTopK`, the provider retry pair, the three `Spawn` caps | next turn, job, send or root run |
+| Knowledge | the scheduled reindex pair (`KnowledgeBase`) | restart: `Configure<KnowledgeBaseOptions>` |
+| | adaptive reranking, the retrieval latency budget, the agent-tools switch, the playbook analysis, playbook eval and memory extraction models (blank inherits a node-local default model) | next search, offer, turn or run |
+| Privacy | `AllowCloudModelAccess` (`KnowledgeBase`), independent of the external-access preset | next turn, at all six egress readers |
+| Usage | chat and agent-execution-log retention switches and windows, `NodeDbBackupRetainCount`, `BenchmarkKldCacheMaxBytes`, `SchedulerHistoryRetentionDays` | next sweep, backup or trim |
+| Runtime | `ImageMaxLoadedProcesses`, `ImageTextEncoderOnGpu` (`StableDiffusionRuntime`) | restart: the `AddNodeImagesExtensions` host-build factory |
+| Workspaces | the graph-workflow run cap and default node timeout, the work-session step and concurrency caps, the development attempt duration, tool-call and output-token budgets | restart: `Configure<T>` after each section's bind |
+| | AgentHome inner tool calls, patch-apply timeout, and the run-retention window, count cap and byte cap (0 turns a cap off) | next run, apply or sweep |
+
+A migrated consumer reads the accessor, never `IOptions<T>` of a migrated field. Live knobs are read once per run,
+turn or sweep into a local, so one run never sees two values.
+
 ### The tool-capable model allow-list is fed, never replaced
 
 `AgentHome:ToolCapableModels` in `node-settings.json` gates tool calling on exact membership

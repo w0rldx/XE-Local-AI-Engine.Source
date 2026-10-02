@@ -74,6 +74,7 @@ interface RenderOverrides {
 	keepWarmModelOptions?: NodeSettingsFieldsCardProps["keepWarmModelOptions"];
 	ollamaRuntimeDisabled?: boolean;
 	autoEffortFastModelOptions?: NodeSettingsFieldsCardProps["autoEffortFastModelOptions"];
+	backgroundModelOptions?: NodeSettingsFieldsCardProps["backgroundModelOptions"];
 }
 
 function renderCard(overrides: RenderOverrides = {}): {
@@ -97,6 +98,7 @@ function renderCard(overrides: RenderOverrides = {}): {
 				draftModelOptions={[]}
 				keepWarmModelOptions={overrides.keepWarmModelOptions ?? []}
 				autoEffortFastModelOptions={overrides.autoEffortFastModelOptions ?? []}
+				backgroundModelOptions={overrides.backgroundModelOptions ?? []}
 				rerankerModelOptions={[]}
 				onDownloadRecommendedReranker={onDownload}
 				isDownloadRecommendedRerankerPending={overrides.isDownloadRecommendedRerankerPending ?? false}
@@ -496,6 +498,9 @@ describe("NodeSettingsFieldsCard — section split", () => {
 
 		expect(screen.getByTestId("node-settings-developer-only-note")).toBeTruthy();
 		expect(screen.queryByTestId("node-settings-agent-workspaces-card")).toBeNull();
+		// The workflow, session and development limits are not developer settings.
+		expect(screen.getByTestId("node-settings-workspace-limits-card")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-restart-badge-workSessionMaxConcurrentSessions")).toBeTruthy();
 	});
 });
 
@@ -543,6 +548,8 @@ describe("NodeSettingsFieldsCard — curated tunables", () => {
 				"node-settings-llama-gpu-reserve",
 				"node-settings-llama-ram-reserve",
 				"node-settings-image-idle-ttl",
+				"node-settings-image-max-processes",
+				"node-settings-image-text-encoder-gpu",
 				"node-settings-model-fit-safety-margin",
 				"node-settings-chat-cache-ram-mode",
 			],
@@ -559,6 +566,18 @@ describe("NodeSettingsFieldsCard — curated tunables", () => {
 			],
 		],
 		["voice", ["node-settings-transcription-idle-timeout", "node-settings-transcription-inference-timeout"]],
+		[
+			"workspaces",
+			[
+				"node-settings-graph-workflow-max-runs",
+				"node-settings-graph-workflow-node-timeout",
+				"node-settings-work-session-max-steps",
+				"node-settings-work-session-max-concurrent",
+				"node-settings-development-max-duration",
+				"node-settings-development-max-tool-calls",
+				"node-settings-development-max-output-tokens",
+			],
+		],
 	] as const)("renders the %s section's tunables", (section, testIds) => {
 		renderCard({ section });
 
@@ -617,5 +636,151 @@ describe("NodeSettingsFieldsCard — curated tunables", () => {
 			"Gilt nur, wenn ein Modell auf der CPU-Laufzeit läuft. Auf einer GPU-Laufzeit wählt llama.cpp die Thread-Anzahl selbst.",
 		);
 		expect(screen.getByText(`Allowed range: 0–64. ${cpuReserveEn}`)).toBeTruthy();
+	});
+});
+
+describe("NodeSettingsFieldsCard — chat knobs", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => cleanup());
+
+	it("places the agent-limit and context cards in the chat section only", () => {
+		renderCard({ section: "chat" });
+		const agentCard = screen.getByTestId("node-settings-agent-run-limits-card");
+		const contextCard = screen.getByTestId("node-settings-context-compaction-card");
+		expect(within(agentCard).getByText("Agent limits")).toBeTruthy();
+		expect(within(contextCard).getByText("Context & compaction")).toBeTruthy();
+		expect(within(agentCard).getByTestId("node-settings-spawn-max-concurrent")).toBeTruthy();
+		expect(within(contextCard).getByTestId("node-settings-default-context-tokens")).toBeTruthy();
+		cleanup();
+
+		renderCard({ section: "runtime" });
+		expect(screen.queryByTestId("node-settings-agent-run-limits-card")).toBeNull();
+		expect(screen.queryByTestId("node-settings-context-compaction-card")).toBeNull();
+	});
+
+	it("renders the switches on by default and reports a click through the generic onChange", () => {
+		const { onChange } = renderCard({ section: "chat" });
+
+		for (const testId of [
+			"node-settings-compaction-auto-enabled",
+			"node-settings-compaction-distill-enabled",
+			"node-settings-provider-retry-enabled",
+		]) {
+			expect((screen.getByTestId(testId) as HTMLInputElement).checked).toBe(true);
+		}
+		fireEvent.click(screen.getByTestId("node-settings-provider-retry-enabled"));
+
+		expect(onChange).toHaveBeenCalledWith("providerRetryEnabled", false);
+	});
+
+	it("shows the stored number and edits it through the generic onChange", () => {
+		const { onChange } = renderCard({ section: "chat", form: { ...toNodeSettingsFieldsForm(undefined), knowledgeChatTopK: 7 } });
+		const input = screen.getByTestId("node-settings-knowledge-chat-top-k") as HTMLInputElement;
+		expect(input.value).toBe("7");
+
+		fireEvent.change(input, { target: { value: "9" } });
+
+		expect(onChange).toHaveBeenCalledWith("knowledgeChatTopK", 9);
+	});
+
+	it("badges only the restart-gated tool-pipeline limits", () => {
+		renderCard({ section: "chat" });
+
+		expect(screen.getByTestId("node-settings-restart-badge-toolPipelineMaxIterationsPerRequest")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-restart-badge-toolPipelineMaxToolResultChars")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-restart-badge-toolPipelineMaxConsecutiveInvalidToolCalls")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-restart-badge-spawnMaxConcurrent")).toBeNull();
+		expect(screen.queryByTestId("node-settings-restart-badge-defaultContextTokens")).toBeNull();
+	});
+});
+
+describe("NodeSettingsFieldsCard — knowledge, privacy and usage knobs", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => cleanup());
+
+	it("places each card in its own section", () => {
+		renderCard({ section: "knowledge" });
+		expect(
+			within(screen.getByTestId("node-settings-knowledge-retrieval-card")).getByText("Retrieval and knowledge tools"),
+		).toBeTruthy();
+		expect(within(screen.getByTestId("node-settings-background-models-card")).getByText("Learning models")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-cloud-access-card")).toBeNull();
+		cleanup();
+
+		renderCard({ section: "privacy" });
+		const cloudCard = screen.getByTestId("node-settings-cloud-access-card");
+		expect(within(cloudCard).getByTestId("node-settings-allow-cloud-model-access")).toBeTruthy();
+		cleanup();
+
+		renderCard({ section: "usage" });
+		const retentionCard = screen.getByTestId("node-settings-retention-card");
+		expect(within(retentionCard).getByTestId("node-settings-chat-retention-days")).toBeTruthy();
+		expect(within(retentionCard).getByTestId("node-settings-benchmark-kld-cache")).toBeTruthy();
+	});
+
+	it("renders the cloud opt-in and chat retention off by default and reports a click through onChange", () => {
+		const { onChange } = renderCard({ section: "privacy" });
+		const cloud = screen.getByTestId("node-settings-allow-cloud-model-access") as HTMLInputElement;
+		expect(cloud.checked).toBe(false);
+
+		fireEvent.click(cloud);
+
+		expect(onChange).toHaveBeenCalledWith("allowCloudModelAccess", true);
+		cleanup();
+
+		renderCard({ section: "usage" });
+		expect((screen.getByTestId("node-settings-chat-retention-enabled") as HTMLInputElement).checked).toBe(false);
+		expect((screen.getByTestId("node-settings-agent-log-retention-enabled") as HTMLInputElement).checked).toBe(true);
+	});
+
+	it("shows the benchmark cache in GB and edits it through onChange", () => {
+		const { onChange } = renderCard({ section: "usage" });
+		const input = screen.getByTestId("node-settings-benchmark-kld-cache") as HTMLInputElement;
+		expect(input.value).toBe("64 GB");
+
+		fireEvent.change(input, { target: { value: "32" } });
+
+		expect(onChange).toHaveBeenCalledWith("benchmarkKldCacheMaxBytes", 32);
+	});
+
+	it("badges only the restart-gated scheduled reindex pair", () => {
+		renderCard({ section: "knowledge" });
+
+		expect(screen.getByTestId("node-settings-restart-badge-knowledgeScheduledReindexEnabled")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-restart-badge-knowledgeScheduledReindexIntervalMinutes")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-restart-badge-knowledgeRetrievalLatencyBudgetMs")).toBeNull();
+	});
+
+	it("defaults each learning model to the inherit option and offers the local models it was given", () => {
+		const { onChange } = renderCard({
+			section: "knowledge",
+			backgroundModelOptions: [{ value: "qwen3:8b", label: "qwen3:8b" }],
+		});
+
+		const select = screen.getByTestId("node-settings-playbook-eval-model") as HTMLInputElement;
+		expect(select.value).toBe("Use the default model");
+
+		fireEvent.click(select);
+		const listbox = screen.getByRole("listbox", { name: "Playbook eval model", hidden: true });
+		fireEvent.click(within(listbox).getByRole("option", { name: "qwen3:8b", hidden: true }));
+
+		expect(onChange).toHaveBeenCalledWith("playbookEvalModelName", "qwen3:8b");
+	});
+
+	it("keeps a stored learning model selectable after it was uninstalled", () => {
+		renderCard({
+			section: "knowledge",
+			form: { ...toNodeSettingsFieldsForm(undefined), memoryExtractionModelName: "deleted-model" },
+		});
+
+		expect((screen.getByTestId("node-settings-memory-extraction-model") as HTMLInputElement).value).toBe("deleted-model");
 	});
 });

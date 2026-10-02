@@ -60,6 +60,40 @@ const nodeSettingsFieldBounds = {
 	agentHomeMaxRunSeconds: { min: 60, max: 86400 },
 	agentHomeRunRetentionDays: { min: 1, max: 365 },
 	huggingFaceDiskMarginBytes: { min: 1, max: 1024 ** 4 },
+	toolPipelineMaxIterationsPerRequest: { min: 1, max: 200 },
+	toolPipelineMaxToolResultChars: { min: 1024, max: 1000000 },
+	toolPipelineMaxConsecutiveInvalidToolCalls: { min: 1, max: 20 },
+	defaultContextTokens: { min: 1024, max: 1048576 },
+	providerBudgetRecentMessagesToKeep: { min: 2, max: 100 },
+	providerBudgetMaxCumulativeInputTokens: { min: 100000, max: 100000000 },
+	contextBudgetRecentTurnKeepCount: { min: 2, max: 50 },
+	compactionAutoCompactPercent: { min: 30, max: 95 },
+	compactionRecentMessagesVerbatim: { min: 2, max: 100 },
+	maxInlinedAttachmentChars: { min: 1000, max: 2000000 },
+	knowledgeChatTopK: { min: 1, max: 20 },
+	providerMaxRetries: { min: 0, max: 10 },
+	spawnMaxConcurrent: { min: 1, max: 32 },
+	spawnMaxCloud: { min: 0, max: 32 },
+	spawnQueueWaitSeconds: { min: 0, max: 3600 },
+	knowledgeRetrievalLatencyBudgetMs: { min: 50, max: 60000 },
+	knowledgeScheduledReindexIntervalMinutes: { min: 5, max: 10080 },
+	chatRetentionDays: { min: 1, max: 3650 },
+	agentExecutionLogRetentionDays: { min: 1, max: 3650 },
+	nodeDbBackupRetainCount: { min: 1, max: 100 },
+	benchmarkKldCacheMaxBytes: { min: 1024 ** 3, max: 4 * 1024 ** 4 },
+	schedulerHistoryRetentionDays: { min: 1, max: 3650 },
+	imageMaxLoadedProcesses: { min: 1, max: 4 },
+	graphWorkflowMaxConcurrentRuns: { min: 1, max: 64 },
+	graphWorkflowDefaultNodeTimeoutSeconds: { min: 30, max: 86400 },
+	workSessionMaxStepsPerRun: { min: 1, max: 1000 },
+	workSessionMaxConcurrentSessions: { min: 1, max: 64 },
+	developmentMaxAttemptDurationSeconds: { min: 60, max: 86400 },
+	developmentMaxToolCalls: { min: 1, max: 1024 },
+	developmentMaxOutputTokens: { min: 256, max: 1000000 },
+	agentHomeMaxInnerToolCalls: { min: 1, max: 1000 },
+	agentHomePatchApplyTimeoutSeconds: { min: 10, max: 3600 },
+	agentHomeRunRetentionMaxRuns: { min: 0, max: 100000 },
+	agentHomeRunRetentionMaxTotalBytes: { min: 0, max: 1024 ** 4 },
 } as const satisfies Record<string, NumericBounds>;
 
 // Speculative-decoding modes, each mapped to its capability class — mirrors the backend SpeculativeModeClass, and the
@@ -276,6 +310,60 @@ export interface NodeSettingsFieldsForm {
 	// Developer-only, like the other AgentHome limits.
 	agentHomeMaxRunSeconds: number | string;
 	agentHomeRunRetentionDays: number | string;
+	// Chat and agent-run knobs (section "chat"). The three tool-pipeline limits apply after a restart, the rest per turn.
+	toolPipelineMaxIterationsPerRequest: number | string;
+	toolPipelineMaxToolResultChars: number | string;
+	toolPipelineMaxConsecutiveInvalidToolCalls: number | string;
+	defaultContextTokens: number | string;
+	providerBudgetRecentMessagesToKeep: number | string;
+	providerBudgetMaxCumulativeInputTokens: number | string;
+	contextBudgetRecentTurnKeepCount: number | string;
+	compactionAutoCompactPercent: number | string;
+	compactionRecentMessagesVerbatim: number | string;
+	maxInlinedAttachmentChars: number | string;
+	knowledgeChatTopK: number | string;
+	providerMaxRetries: number | string;
+	spawnMaxConcurrent: number | string;
+	spawnMaxCloud: number | string;
+	spawnQueueWaitSeconds: number | string;
+	compactionAutoEnabled: boolean;
+	compactionDistillEnabled: boolean;
+	providerRetryEnabled: boolean;
+	// Knowledge, privacy and usage knobs. The scheduled-reindex pair applies after a restart, the rest per search, turn,
+	// run or sweep. The three background models are blank for "inherit the default model".
+	knowledgeAdaptiveRerankingEnabled: boolean;
+	knowledgeRetrievalLatencyBudgetMs: number | string;
+	knowledgeScheduledReindexEnabled: boolean;
+	knowledgeScheduledReindexIntervalMinutes: number | string;
+	knowledgeAgentToolsEnabled: boolean;
+	allowCloudModelAccess: boolean;
+	playbookAnalysisModelName: string;
+	playbookEvalModelName: string;
+	memoryExtractionModelName: string;
+	chatRetentionEnabled: boolean;
+	chatRetentionDays: number | string;
+	agentExecutionLogRetentionEnabled: boolean;
+	agentExecutionLogRetentionDays: number | string;
+	nodeDbBackupRetainCount: number | string;
+	// Shown and edited in GB (see nodeSettingsDisplayScale).
+	benchmarkKldCacheMaxBytes: number | string;
+	schedulerHistoryRetentionDays: number | string;
+	// Runtime and workspace knobs. The image pair and the seven workspace limits apply after a restart; the AgentHome four
+	// are developer-only and read per run, apply or sweep (0 turns a retention cap off).
+	imageMaxLoadedProcesses: number | string;
+	imageTextEncoderOnGpu: boolean;
+	graphWorkflowMaxConcurrentRuns: number | string;
+	graphWorkflowDefaultNodeTimeoutSeconds: number | string;
+	workSessionMaxStepsPerRun: number | string;
+	workSessionMaxConcurrentSessions: number | string;
+	developmentMaxAttemptDurationSeconds: number | string;
+	developmentMaxToolCalls: number | string;
+	developmentMaxOutputTokens: number | string;
+	agentHomeMaxInnerToolCalls: number | string;
+	agentHomePatchApplyTimeoutSeconds: number | string;
+	agentHomeRunRetentionMaxRuns: number | string;
+	// Shown and edited in GB (see nodeSettingsDisplayScale).
+	agentHomeRunRetentionMaxTotalBytes: number | string;
 }
 
 export type ChatCacheRamMode = "auto" | "off" | "custom";
@@ -304,6 +392,36 @@ const tunableFields = [
 	"huggingFaceDownloadConnections",
 	"transcriptionIdleTimeoutMinutes",
 	"transcriptionInferenceTimeoutMinutes",
+	"toolPipelineMaxIterationsPerRequest",
+	"toolPipelineMaxToolResultChars",
+	"toolPipelineMaxConsecutiveInvalidToolCalls",
+	"defaultContextTokens",
+	"providerBudgetRecentMessagesToKeep",
+	"providerBudgetMaxCumulativeInputTokens",
+	"contextBudgetRecentTurnKeepCount",
+	"compactionAutoCompactPercent",
+	"compactionRecentMessagesVerbatim",
+	"maxInlinedAttachmentChars",
+	"knowledgeChatTopK",
+	"providerMaxRetries",
+	"spawnMaxConcurrent",
+	"spawnMaxCloud",
+	"spawnQueueWaitSeconds",
+	"knowledgeRetrievalLatencyBudgetMs",
+	"knowledgeScheduledReindexIntervalMinutes",
+	"chatRetentionDays",
+	"agentExecutionLogRetentionDays",
+	"nodeDbBackupRetainCount",
+	"benchmarkKldCacheMaxBytes",
+	"schedulerHistoryRetentionDays",
+	"imageMaxLoadedProcesses",
+	"graphWorkflowMaxConcurrentRuns",
+	"graphWorkflowDefaultNodeTimeoutSeconds",
+	"workSessionMaxStepsPerRun",
+	"workSessionMaxConcurrentSessions",
+	"developmentMaxAttemptDurationSeconds",
+	"developmentMaxToolCalls",
+	"developmentMaxOutputTokens",
 ] as const;
 
 type TunableField = (typeof tunableFields)[number];
@@ -324,6 +442,8 @@ export const nodeSettingsDisplayScale = {
 	imageIdleTimeToLiveSeconds: SECONDS_PER_MINUTE,
 	agentHomeMaxRunSeconds: SECONDS_PER_MINUTE,
 	huggingFaceDiskMarginBytes: BYTES_PER_GB,
+	benchmarkKldCacheMaxBytes: BYTES_PER_GB,
+	agentHomeRunRetentionMaxTotalBytes: BYTES_PER_GB,
 } as const satisfies Partial<Record<keyof NodeSettingsFieldsForm, number>>;
 
 // The display scale of any field; 1 for a field shown in its wire unit.
@@ -413,6 +533,53 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	containerRuntimeSelection: "auto",
 	agentHomeMaxRunSeconds: 10,
 	agentHomeRunRetentionDays: 30,
+	toolPipelineMaxIterationsPerRequest: 40,
+	toolPipelineMaxToolResultChars: 65536,
+	toolPipelineMaxConsecutiveInvalidToolCalls: 3,
+	defaultContextTokens: 8192,
+	providerBudgetRecentMessagesToKeep: 6,
+	providerBudgetMaxCumulativeInputTokens: 4000000,
+	contextBudgetRecentTurnKeepCount: 4,
+	compactionAutoCompactPercent: 75,
+	compactionRecentMessagesVerbatim: 8,
+	maxInlinedAttachmentChars: 48000,
+	knowledgeChatTopK: 5,
+	providerMaxRetries: 2,
+	spawnMaxConcurrent: 3,
+	spawnMaxCloud: 3,
+	spawnQueueWaitSeconds: 120,
+	compactionAutoEnabled: true,
+	compactionDistillEnabled: true,
+	providerRetryEnabled: true,
+	knowledgeAdaptiveRerankingEnabled: true,
+	knowledgeRetrievalLatencyBudgetMs: 500,
+	knowledgeScheduledReindexEnabled: true,
+	knowledgeScheduledReindexIntervalMinutes: 60,
+	knowledgeAgentToolsEnabled: true,
+	allowCloudModelAccess: false,
+	playbookAnalysisModelName: "",
+	playbookEvalModelName: "",
+	memoryExtractionModelName: "",
+	chatRetentionEnabled: false,
+	chatRetentionDays: 30,
+	agentExecutionLogRetentionEnabled: true,
+	agentExecutionLogRetentionDays: 30,
+	nodeDbBackupRetainCount: 3,
+	benchmarkKldCacheMaxBytes: 64,
+	schedulerHistoryRetentionDays: 30,
+	imageMaxLoadedProcesses: 1,
+	imageTextEncoderOnGpu: false,
+	graphWorkflowMaxConcurrentRuns: 4,
+	graphWorkflowDefaultNodeTimeoutSeconds: 600,
+	workSessionMaxStepsPerRun: 25,
+	workSessionMaxConcurrentSessions: 1,
+	developmentMaxAttemptDurationSeconds: 1800,
+	developmentMaxToolCalls: 64,
+	developmentMaxOutputTokens: 32768,
+	agentHomeMaxInnerToolCalls: 24,
+	agentHomePatchApplyTimeoutSeconds: 120,
+	agentHomeRunRetentionMaxRuns: 200,
+	agentHomeRunRetentionMaxTotalBytes: 2,
 };
 
 // Coalesces a nullable numeric response field into a form value, falling back to the provided default when absent.
@@ -503,6 +670,38 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		containerRuntimeSelection: response.containerRuntimeSelection ?? nodeSettingsFieldDefaults.containerRuntimeSelection,
 		agentHomeMaxRunSeconds: scaledOr(response.agentHomeMaxRunSeconds, "agentHomeMaxRunSeconds"),
 		agentHomeRunRetentionDays: numberOr(response.agentHomeRunRetentionDays, nodeSettingsFieldDefaults.agentHomeRunRetentionDays),
+		agentHomeMaxInnerToolCalls: numberOr(
+			response.agentHomeMaxInnerToolCalls,
+			nodeSettingsFieldDefaults.agentHomeMaxInnerToolCalls,
+		),
+		agentHomePatchApplyTimeoutSeconds: numberOr(
+			response.agentHomePatchApplyTimeoutSeconds,
+			nodeSettingsFieldDefaults.agentHomePatchApplyTimeoutSeconds,
+		),
+		agentHomeRunRetentionMaxRuns: numberOr(
+			response.agentHomeRunRetentionMaxRuns,
+			nodeSettingsFieldDefaults.agentHomeRunRetentionMaxRuns,
+		),
+		agentHomeRunRetentionMaxTotalBytes: scaledOr(
+			response.agentHomeRunRetentionMaxTotalBytes,
+			"agentHomeRunRetentionMaxTotalBytes",
+		),
+		compactionAutoEnabled: response.compactionAutoEnabled ?? nodeSettingsFieldDefaults.compactionAutoEnabled,
+		compactionDistillEnabled: response.compactionDistillEnabled ?? nodeSettingsFieldDefaults.compactionDistillEnabled,
+		providerRetryEnabled: response.providerRetryEnabled ?? nodeSettingsFieldDefaults.providerRetryEnabled,
+		knowledgeAdaptiveRerankingEnabled:
+			response.knowledgeAdaptiveRerankingEnabled ?? nodeSettingsFieldDefaults.knowledgeAdaptiveRerankingEnabled,
+		knowledgeScheduledReindexEnabled:
+			response.knowledgeScheduledReindexEnabled ?? nodeSettingsFieldDefaults.knowledgeScheduledReindexEnabled,
+		knowledgeAgentToolsEnabled: response.knowledgeAgentToolsEnabled ?? nodeSettingsFieldDefaults.knowledgeAgentToolsEnabled,
+		allowCloudModelAccess: response.allowCloudModelAccess ?? nodeSettingsFieldDefaults.allowCloudModelAccess,
+		playbookAnalysisModelName: response.playbookAnalysisModelName ?? "",
+		playbookEvalModelName: response.playbookEvalModelName ?? "",
+		memoryExtractionModelName: response.memoryExtractionModelName ?? "",
+		chatRetentionEnabled: response.chatRetentionEnabled ?? nodeSettingsFieldDefaults.chatRetentionEnabled,
+		agentExecutionLogRetentionEnabled:
+			response.agentExecutionLogRetentionEnabled ?? nodeSettingsFieldDefaults.agentExecutionLogRetentionEnabled,
+		imageTextEncoderOnGpu: response.imageTextEncoderOnGpu ?? nodeSettingsFieldDefaults.imageTextEncoderOnGpu,
 	};
 }
 
@@ -553,6 +752,10 @@ export interface NodeSettingsFieldBounds {
 	readonly llamaChatCacheRamMiB: NumericBounds;
 	readonly agentHomeMaxRunSeconds: NumericBounds;
 	readonly agentHomeRunRetentionDays: NumericBounds;
+	readonly agentHomeMaxInnerToolCalls: NumericBounds;
+	readonly agentHomePatchApplyTimeoutSeconds: NumericBounds;
+	readonly agentHomeRunRetentionMaxRuns: NumericBounds;
+	readonly agentHomeRunRetentionMaxTotalBytes: NumericBounds;
 	readonly huggingFaceDiskMarginBytes: NumericBounds;
 	readonly tunables: Readonly<Record<TunableField, NumericBounds>>;
 }
@@ -564,6 +767,24 @@ const responseBoundKeys = {
 	llamaChatCacheRamMiB: ["minLlamaChatCacheRamMiB", "maxAllowedLlamaChatCacheRamMiB"],
 	agentHomeMaxRunSeconds: ["minAgentHomeMaxRunSeconds", "maxAllowedAgentHomeMaxRunSeconds"],
 	agentHomeRunRetentionDays: ["minAgentHomeRunRetentionDays", "maxAllowedAgentHomeRunRetentionDays"],
+	agentHomeMaxInnerToolCalls: ["minAgentHomeMaxInnerToolCalls", "maxAllowedAgentHomeMaxInnerToolCalls"],
+	agentHomePatchApplyTimeoutSeconds: ["minAgentHomePatchApplyTimeoutSeconds", "maxAllowedAgentHomePatchApplyTimeoutSeconds"],
+	agentHomeRunRetentionMaxRuns: ["minAgentHomeRunRetentionMaxRuns", "maxAllowedAgentHomeRunRetentionMaxRuns"],
+	agentHomeRunRetentionMaxTotalBytes: ["minAgentHomeRunRetentionMaxTotalBytes", "maxAllowedAgentHomeRunRetentionMaxTotalBytes"],
+	imageMaxLoadedProcesses: ["minImageMaxLoadedProcesses", "maxAllowedImageMaxLoadedProcesses"],
+	graphWorkflowMaxConcurrentRuns: ["minGraphWorkflowMaxConcurrentRuns", "maxAllowedGraphWorkflowMaxConcurrentRuns"],
+	graphWorkflowDefaultNodeTimeoutSeconds: [
+		"minGraphWorkflowDefaultNodeTimeoutSeconds",
+		"maxAllowedGraphWorkflowDefaultNodeTimeoutSeconds",
+	],
+	workSessionMaxStepsPerRun: ["minWorkSessionMaxStepsPerRun", "maxAllowedWorkSessionMaxStepsPerRun"],
+	workSessionMaxConcurrentSessions: ["minWorkSessionMaxConcurrentSessions", "maxAllowedWorkSessionMaxConcurrentSessions"],
+	developmentMaxAttemptDurationSeconds: [
+		"minDevelopmentMaxAttemptDurationSeconds",
+		"maxAllowedDevelopmentMaxAttemptDurationSeconds",
+	],
+	developmentMaxToolCalls: ["minDevelopmentMaxToolCalls", "maxAllowedDevelopmentMaxToolCalls"],
+	developmentMaxOutputTokens: ["minDevelopmentMaxOutputTokens", "maxAllowedDevelopmentMaxOutputTokens"],
 	huggingFaceDiskMarginBytes: ["minHuggingFaceDiskMarginBytes", "maxAllowedHuggingFaceDiskMarginBytes"],
 	llamaReadinessTimeoutCapSeconds: ["minLlamaReadinessTimeoutCapSeconds", "maxAllowedLlamaReadinessTimeoutCapSeconds"],
 	llamaChatHttpTimeoutSeconds: ["minLlamaChatHttpTimeoutSeconds", "maxAllowedLlamaChatHttpTimeoutSeconds"],
@@ -585,6 +806,40 @@ const responseBoundKeys = {
 		"minTranscriptionInferenceTimeoutMinutes",
 		"maxAllowedTranscriptionInferenceTimeoutMinutes",
 	],
+	toolPipelineMaxIterationsPerRequest: [
+		"minToolPipelineMaxIterationsPerRequest",
+		"maxAllowedToolPipelineMaxIterationsPerRequest",
+	],
+	toolPipelineMaxToolResultChars: ["minToolPipelineMaxToolResultChars", "maxAllowedToolPipelineMaxToolResultChars"],
+	toolPipelineMaxConsecutiveInvalidToolCalls: [
+		"minToolPipelineMaxConsecutiveInvalidToolCalls",
+		"maxAllowedToolPipelineMaxConsecutiveInvalidToolCalls",
+	],
+	defaultContextTokens: ["minDefaultContextTokens", "maxAllowedDefaultContextTokens"],
+	providerBudgetRecentMessagesToKeep: ["minProviderBudgetRecentMessagesToKeep", "maxAllowedProviderBudgetRecentMessagesToKeep"],
+	providerBudgetMaxCumulativeInputTokens: [
+		"minProviderBudgetMaxCumulativeInputTokens",
+		"maxAllowedProviderBudgetMaxCumulativeInputTokens",
+	],
+	contextBudgetRecentTurnKeepCount: ["minContextBudgetRecentTurnKeepCount", "maxAllowedContextBudgetRecentTurnKeepCount"],
+	compactionAutoCompactPercent: ["minCompactionAutoCompactPercent", "maxAllowedCompactionAutoCompactPercent"],
+	compactionRecentMessagesVerbatim: ["minCompactionRecentMessagesVerbatim", "maxAllowedCompactionRecentMessagesVerbatim"],
+	maxInlinedAttachmentChars: ["minMaxInlinedAttachmentChars", "maxAllowedMaxInlinedAttachmentChars"],
+	knowledgeChatTopK: ["minKnowledgeChatTopK", "maxAllowedKnowledgeChatTopK"],
+	providerMaxRetries: ["minProviderMaxRetries", "maxAllowedProviderMaxRetries"],
+	spawnMaxConcurrent: ["minSpawnMaxConcurrent", "maxAllowedSpawnMaxConcurrent"],
+	spawnMaxCloud: ["minSpawnMaxCloud", "maxAllowedSpawnMaxCloud"],
+	spawnQueueWaitSeconds: ["minSpawnQueueWaitSeconds", "maxAllowedSpawnQueueWaitSeconds"],
+	knowledgeRetrievalLatencyBudgetMs: ["minKnowledgeRetrievalLatencyBudgetMs", "maxAllowedKnowledgeRetrievalLatencyBudgetMs"],
+	knowledgeScheduledReindexIntervalMinutes: [
+		"minKnowledgeScheduledReindexIntervalMinutes",
+		"maxAllowedKnowledgeScheduledReindexIntervalMinutes",
+	],
+	chatRetentionDays: ["minRetentionDays", "maxAllowedRetentionDays"],
+	agentExecutionLogRetentionDays: ["minRetentionDays", "maxAllowedRetentionDays"],
+	nodeDbBackupRetainCount: ["minNodeDbBackupRetainCount", "maxAllowedNodeDbBackupRetainCount"],
+	benchmarkKldCacheMaxBytes: ["minBenchmarkKldCacheMaxBytes", "maxAllowedBenchmarkKldCacheMaxBytes"],
+	schedulerHistoryRetentionDays: ["minRetentionDays", "maxAllowedRetentionDays"],
 } as const satisfies Record<string, readonly [keyof NodeSettingsResponse, keyof NodeSettingsResponse]>;
 
 function responseBounds(response: NodeSettingsResponse | undefined, field: keyof typeof responseBoundKeys): NumericBounds {
@@ -652,6 +907,10 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 		llamaChatCacheRamMiB: responseBounds(response, "llamaChatCacheRamMiB"),
 		agentHomeMaxRunSeconds: responseBounds(response, "agentHomeMaxRunSeconds"),
 		agentHomeRunRetentionDays: responseBounds(response, "agentHomeRunRetentionDays"),
+		agentHomeMaxInnerToolCalls: responseBounds(response, "agentHomeMaxInnerToolCalls"),
+		agentHomePatchApplyTimeoutSeconds: responseBounds(response, "agentHomePatchApplyTimeoutSeconds"),
+		agentHomeRunRetentionMaxRuns: responseBounds(response, "agentHomeRunRetentionMaxRuns"),
+		agentHomeRunRetentionMaxTotalBytes: responseBounds(response, "agentHomeRunRetentionMaxTotalBytes"),
 		huggingFaceDiskMarginBytes: responseBounds(response, "huggingFaceDiskMarginBytes"),
 		tunables: Object.fromEntries(tunableFields.map((field) => [field, responseBounds(response, field)])) as Record<
 			TunableField,
@@ -685,10 +944,32 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 //   huggingFaceDiskMarginBytes      — BuildSeededHuggingFaceOptions
 //   llamaReadinessTimeoutCap / llamaChatHttp / llamaEmbeddingHttp / llamaChatCacheRamMiB / llamaCpuThreadReserve /
 //   llamaGpu+RamReservePercent / imageIdleTimeToLive / maxProviderCallsPerInvocation / huggingFaceDownloadConnections /
-//   transcriptionIdle+InferenceTimeoutMinutes / agentHomeRunRetentionDays
+//   transcriptionIdle+InferenceTimeoutMinutes
 //                                   — the synchronous INodeRuntimeSettings getters, each read once by a seed factory.
+//   imageMaxLoadedProcesses / imageTextEncoderOnGpu
+//                                   — AddNodeImagesExtensions host-build factory for StableDiffusionRuntimeOptions.
+//   graphWorkflowMaxConcurrentRuns / graphWorkflowDefaultNodeTimeoutSeconds
+//                                   — AddNodeGraphWorkflowsExtensions Configure<GraphWorkflowOptions>: the in-flight lanes
+//                                     size their semaphores once.
+//   workSessionMaxStepsPerRun / workSessionMaxConcurrentSessions
+//                                   — AddNodeWorkSessionsExtensions Configure<WorkSessionOptions>: the supervisor sizes its
+//                                     admission once.
+//   developmentMaxAttemptDurationSeconds / developmentMaxToolCalls / developmentMaxOutputTokens
+//                                   — AddNodeDevelopmentExtensions Configure<DevelopmentOptions>.
+//   toolPipelineMaxIterationsPerRequest / toolPipelineMaxToolResultChars / toolPipelineMaxConsecutiveInvalidToolCalls
+//                                   — AddNodeModelRuntimeExtensions Configure<AgentToolPipelineOptions>: the chat-client
+//                                     pipeline and the tool wrappers are built once.
+//   knowledgeScheduledReindexEnabled / knowledgeScheduledReindexIntervalMinutes
+//                                   — AddNodeKnowledgeBaseExtensions Configure<KnowledgeBaseOptions>: the hosted reindex
+//                                     worker reads both once at start.
 // Live and NOT listed: modelFitSafetyMarginPercent, customToolMaxTimeoutSeconds, webFetch*, knowledgeSearch*,
-// agentHomeMaxRunSeconds and containerRuntimeSelection (read per call).
+// agentHomeMaxRunSeconds, agentHomeMaxInnerToolCalls, agentHomePatchApplyTimeoutSeconds, every agentHomeRunRetention* field
+// (read per sweep) and containerRuntimeSelection (read per call); and the other chat knobs — defaultContextTokens,
+// providerBudget*, contextBudgetRecentTurnKeepCount, compaction*, maxInlinedAttachmentChars, knowledgeChatTopK,
+// providerRetryEnabled / providerMaxRetries and spawn* — each read per turn, job, send or root run; and the knowledge,
+// privacy and usage knobs — knowledgeAdaptiveRerankingEnabled, knowledgeRetrievalLatencyBudgetMs, knowledgeAgentToolsEnabled,
+// allowCloudModelAccess, the three background models, the two retention switches, every retention window,
+// nodeDbBackupRetainCount and benchmarkKldCacheMaxBytes — each read per search, offer, turn, run, sweep or backup.
 // Every other form field is read live on each call and must NOT be listed here: agentHome*, keepModelWarm*,
 // toolCapableModels, enableTools, customToolsEnabled, toolRelevanceEnabled, webAccessEnabled, webSearchSearxngUrl,
 // detachedGraceSeconds, usageRates, uiMode, voiceFeatureEnabled, defaultVoiceProfile, and the message-request timeout.
@@ -721,7 +1002,20 @@ export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsField
 	"huggingFaceDownloadConnections",
 	"transcriptionIdleTimeoutMinutes",
 	"transcriptionInferenceTimeoutMinutes",
-	"agentHomeRunRetentionDays",
+	"toolPipelineMaxIterationsPerRequest",
+	"toolPipelineMaxToolResultChars",
+	"toolPipelineMaxConsecutiveInvalidToolCalls",
+	"knowledgeScheduledReindexEnabled",
+	"knowledgeScheduledReindexIntervalMinutes",
+	"imageMaxLoadedProcesses",
+	"imageTextEncoderOnGpu",
+	"graphWorkflowMaxConcurrentRuns",
+	"graphWorkflowDefaultNodeTimeoutSeconds",
+	"workSessionMaxStepsPerRun",
+	"workSessionMaxConcurrentSessions",
+	"developmentMaxAttemptDurationSeconds",
+	"developmentMaxToolCalls",
+	"developmentMaxOutputTokens",
 ]);
 
 // True when a built save body carries at least one restart-gated field, so the page can tell the operator a restart is
@@ -986,6 +1280,42 @@ export function buildNodeSettingsRequest(
 		body.uiMode = form.uiMode;
 	}
 
+	// The chat switches: explicit false is meaningful (it turns compaction, distillation or retries off).
+	if (form.compactionAutoEnabled !== baseline.compactionAutoEnabled) {
+		body.compactionAutoEnabled = form.compactionAutoEnabled;
+	}
+	if (form.compactionDistillEnabled !== baseline.compactionDistillEnabled) {
+		body.compactionDistillEnabled = form.compactionDistillEnabled;
+	}
+	if (form.providerRetryEnabled !== baseline.providerRetryEnabled) {
+		body.providerRetryEnabled = form.providerRetryEnabled;
+	}
+
+	// Knowledge, privacy, usage and image switches: explicit false is meaningful. The cloud opt-in is deliberately NOT one of the
+	// external-access preset switches, so a hand edit here never clears a pending preset.
+	const roundTwoSwitches = [
+		"knowledgeAdaptiveRerankingEnabled",
+		"knowledgeScheduledReindexEnabled",
+		"knowledgeAgentToolsEnabled",
+		"allowCloudModelAccess",
+		"chatRetentionEnabled",
+		"agentExecutionLogRetentionEnabled",
+		"imageTextEncoderOnGpu",
+	] as const;
+	for (const field of roundTwoSwitches) {
+		if (form[field] !== baseline[field]) {
+			body[field] = form[field];
+		}
+	}
+
+	// The background models: the empty string is the "inherit the default model" signal (the server stores null).
+	const backgroundModelFields = ["playbookAnalysisModelName", "playbookEvalModelName", "memoryExtractionModelName"] as const;
+	for (const field of backgroundModelFields) {
+		if (form[field] !== baseline[field]) {
+			body[field] = form[field].trim();
+		}
+	}
+
 	if (form.voiceFeatureEnabled !== baseline.voiceFeatureEnabled) {
 		// Explicit false is meaningful: it turns voice off for every user on the node.
 		body.voiceFeatureEnabled = form.voiceFeatureEnabled;
@@ -1078,6 +1408,51 @@ export function buildNodeSettingsRequest(
 			errors,
 			(v) => {
 				body.agentHomeRunRetentionDays = v;
+			},
+		);
+		collectBoundedInt(
+			form.agentHomeRunRetentionMaxRuns,
+			baseline.agentHomeRunRetentionMaxRuns,
+			bounds.agentHomeRunRetentionMaxRuns,
+			"agentHomeRunRetentionMaxRuns",
+			body,
+			errors,
+			(v) => {
+				body.agentHomeRunRetentionMaxRuns = v;
+			},
+		);
+		collectBoundedInt(
+			form.agentHomeRunRetentionMaxTotalBytes,
+			baseline.agentHomeRunRetentionMaxTotalBytes,
+			bounds.agentHomeRunRetentionMaxTotalBytes,
+			"agentHomeRunRetentionMaxTotalBytes",
+			body,
+			errors,
+			(v) => {
+				body.agentHomeRunRetentionMaxTotalBytes = v;
+			},
+			nodeSettingsDisplayScale.agentHomeRunRetentionMaxTotalBytes,
+		);
+		collectBoundedInt(
+			form.agentHomeMaxInnerToolCalls,
+			baseline.agentHomeMaxInnerToolCalls,
+			bounds.agentHomeMaxInnerToolCalls,
+			"agentHomeMaxInnerToolCalls",
+			body,
+			errors,
+			(v) => {
+				body.agentHomeMaxInnerToolCalls = v;
+			},
+		);
+		collectBoundedInt(
+			form.agentHomePatchApplyTimeoutSeconds,
+			baseline.agentHomePatchApplyTimeoutSeconds,
+			bounds.agentHomePatchApplyTimeoutSeconds,
+			"agentHomePatchApplyTimeoutSeconds",
+			body,
+			errors,
+			(v) => {
+				body.agentHomePatchApplyTimeoutSeconds = v;
 			},
 		);
 		// A whole run must be allowed at least one full command; the server enforces the same on the merged values.

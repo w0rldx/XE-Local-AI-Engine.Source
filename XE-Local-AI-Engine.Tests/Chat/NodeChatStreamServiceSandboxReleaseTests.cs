@@ -23,7 +23,6 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
@@ -158,9 +157,9 @@ public sealed class NodeChatStreamServiceSandboxReleaseTests
                 new UntrustedContentFenceSeedProvider(CreateFenceKeyHolder()),
                 Substitute.For<IServiceScopeFactory>(),
                 Options.Create(new LocalChatAgentOptions()),
+                StubNodeRuntimeSettings.Create().Build(),
                 NullLogger<ChatTurnContextBuilder>.Instance),
             stager,
-            Options.Create(new KnowledgeBaseOptions()),
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),

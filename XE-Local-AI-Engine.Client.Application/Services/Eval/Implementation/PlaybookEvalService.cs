@@ -9,6 +9,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
@@ -38,9 +41,11 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
     private readonly PlaybookEvalOptions _options;
 
     private readonly IEvalModelIdentityResolver _modelIdentityResolver;
+    private readonly IModelTrustResolver _modelTrustResolver;
     private readonly IPlaybookActionService _playbookActionService;
     private readonly IPlaybookActionStore _playbookActionStore;
     private readonly ILocalModelProviderResolver _providerResolver;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly TimeProvider _timeProvider;
 
     public PlaybookEvalService(IPlaybookActionService playbookActionService,
@@ -53,6 +58,8 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         IEvalModelIdentityResolver modelIdentityResolver,
         TimeProvider timeProvider,
         IOptions<PlaybookEvalOptions> options,
+        INodeRuntimeSettings runtimeSettings,
+        IModelTrustResolver modelTrustResolver,
         ILogger<PlaybookEvalService> logger)
     {
         ArgumentNullException.ThrowIfNull(agentDefinitionStore);
@@ -76,6 +83,8 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         _providerResolver = providerResolver;
         ArgumentNullException.ThrowIfNull(timeProvider);
         _timeProvider = timeProvider;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
     }
 
     public async Task<PlaybookEvalOutcome> RunEvalAsync(Guid agentId, Guid actionId, CancellationToken cancellationToken = default)
@@ -119,15 +128,16 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         var goldenCases = await _goldenConversationStore.ListEnabledByAgentAsync(agentId, cancellationToken);
         var goldenCaseTotal = goldenCases.Count;
 
-        // Fingerprint the behaviour-affecting inputs over the FULL golden set, before any per-run cap, so the promote
-        // gate detects a later change. The model IDENTITY folds in beside the name, so a same-name swap invalidates it.
-        var modelIdentity = await _modelIdentityResolver.ResolveAsync(_options.ModelName, cancellationToken);
+        // Fingerprint the FULL golden set before any per-run cap; the model IDENTITY folds in beside the name, so a same-name swap
+        // invalidates it. The name is read ONCE per run, so the fingerprint, the client and the recorded result agree.
+        var modelName = await _runtimeSettings.GetPlaybookEvalModelNameAsync(cancellationToken);
+        var modelIdentity = await _modelIdentityResolver.ResolveAsync(modelName, cancellationToken);
         var fingerprint = PlaybookEvalFingerprint.Compute(suggested.Id,
             suggested.Version,
             agent.Instructions,
             enabled,
             goldenCases,
-            _options.ModelName,
+            modelName,
             modelIdentity.Token);
 
         // Empty golden set never passes (no-regression is unprovable with zero cases) — persist a failing result so the
@@ -135,7 +145,7 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         if (goldenCases.Count == 0)
         {
             _logger.LogWarning("Eval for agent {AgentId} action {ActionId} has no golden cases; recording a failing result (needs golden cases).", agentId, actionId);
-            return await PersistAsync(agentId, actionId, BuildEmptyResult(suggested.Version, fingerprint), cancellationToken);
+            return await PersistAsync(agentId, actionId, BuildEmptyResult(suggested.Version, fingerprint, modelName), cancellationToken);
         }
 
         if (goldenCases.Count > _options.MaxGoldenCases)
@@ -147,12 +157,18 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
             goldenCases = [.. goldenCases.Take(_options.MaxGoldenCases)];
         }
 
+        // A non-node-local eval model runs nothing: an incomplete, failing result (zero cases evaluated) keeps promote blocked.
+        if (!await BackgroundModelLocalityGuard.AllowAsync(modelName, "PlaybookEvalModelName", _modelTrustResolver, _logger, cancellationToken))
+        {
+            return await PersistAsync(agentId, actionId, BuildResult(suggested.Version, goldenCaseTotal, [], fingerprint, modelName), cancellationToken);
+        }
+
         // Route the configured eval model to the runtime that serves it, node-local only and never the shared cloud
         // singleton, so golden text reaches a per-provider client alone.
-        var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ModelName, cancellationToken);
+        var provider = await _providerResolver.ResolveProviderForModelAsync(modelName, cancellationToken);
         var selection = new LocalModelSelection
         {
-            ModelName = _options.ModelName,
+            ModelName = modelName,
             ProviderName = provider.ProviderName
         };
 
@@ -165,7 +181,7 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
             caseResults.Add(await ScoreCaseAsync(goldenCase, baselinePrompt, candidatePrompt, chatClient, cancellationToken));
         }
 
-        var result = BuildResult(suggested.Version, goldenCaseTotal, caseResults, fingerprint);
+        var result = BuildResult(suggested.Version, goldenCaseTotal, caseResults, fingerprint, modelName);
         return await PersistAsync(agentId, actionId, result, cancellationToken);
     }
 
@@ -199,7 +215,7 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         return new PlaybookEvalCaseResult(goldenCase.Id, candidateScore.ScoredBy, baselineScore.Pass, candidateScore.Pass, regressed);
     }
 
-    private PlaybookEvalResult BuildResult(int actionVersion, int goldenCaseTotal, IReadOnlyList<PlaybookEvalCaseResult> caseResults, string fingerprint)
+    private PlaybookEvalResult BuildResult(int actionVersion, int goldenCaseTotal, IReadOnlyList<PlaybookEvalCaseResult> caseResults, string fingerprint, string modelName)
     {
         var baselinePass = caseResults.Count(static caseResult => caseResult.BaselinePass);
         var candidatePass = caseResults.Count(static caseResult => caseResult.CandidatePass);
@@ -213,7 +229,7 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
         return new PlaybookEvalResult(passed,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
             actionVersion,
-            _options.ModelName,
+            modelName,
             caseResults.Count,
             goldenCaseTotal,
             baselinePass,
@@ -224,12 +240,12 @@ internal sealed class PlaybookEvalService : IPlaybookEvalService
             fingerprint);
     }
 
-    private PlaybookEvalResult BuildEmptyResult(int actionVersion, string fingerprint)
+    private PlaybookEvalResult BuildEmptyResult(int actionVersion, string fingerprint, string modelName)
     {
         return new PlaybookEvalResult(Passed: false,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
             actionVersion,
-            _options.ModelName,
+            modelName,
             GoldenCaseCount: 0,
             GoldenCaseTotal: 0,
             BaselinePassCount: 0,

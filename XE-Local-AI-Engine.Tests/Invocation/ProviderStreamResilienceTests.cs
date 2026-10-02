@@ -5,10 +5,13 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class ProviderStreamResilienceTests
@@ -19,11 +22,10 @@ public sealed class ProviderStreamResilienceTests
         var callCount = new StrongBox<int>(value: 0);
         var options = new ProviderResilienceOptions
         {
-            MaxRetries = 2,
             BaseDelayMilliseconds = 0,
             CircuitBreakerEnabled = false
         };
-        var sut = CreateSut(options);
+        var sut = CreateSut(options, maxRetries: 2);
 
         var factory = FactoryFailing(failures: 2, callCount, () => Yield(1, 2, 3));
         var result = await CollectAsync(sut.ExecuteStreamingAsync("endpoint", factory, CancellationToken.None));
@@ -39,11 +41,11 @@ public sealed class ProviderStreamResilienceTests
     {
         var callCount = new StrongBox<int>(value: 0);
         var sut = CreateSut(new ProviderResilienceOptions
-        {
-            MaxRetries = 2,
-            BaseDelayMilliseconds = 0,
-            CircuitBreakerEnabled = false
-        });
+            {
+                BaseDelayMilliseconds = 0,
+                CircuitBreakerEnabled = false
+            },
+            maxRetries: 2);
         ProviderCallEfficiencySnapshot snapshot;
 
         using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
@@ -61,11 +63,10 @@ public sealed class ProviderStreamResilienceTests
         var callCount = new StrongBox<int>(value: 0);
         var options = new ProviderResilienceOptions
         {
-            MaxRetries = 2,
             BaseDelayMilliseconds = 0,
             CircuitBreakerEnabled = false
         };
-        var sut = CreateSut(options);
+        var sut = CreateSut(options, maxRetries: 2);
 
         var factory = FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1));
 
@@ -83,11 +84,10 @@ public sealed class ProviderStreamResilienceTests
         var callCount = new StrongBox<int>(value: 0);
         var options = new ProviderResilienceOptions
         {
-            MaxRetries = 5,
             BaseDelayMilliseconds = 0,
             CircuitBreakerEnabled = false
         };
-        var sut = CreateSut(options);
+        var sut = CreateSut(options, maxRetries: 5);
 
         // A transient-throwing factory that must never even be invoked once the caller's token is cancelled.
         var factory = FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1));
@@ -104,11 +104,10 @@ public sealed class ProviderStreamResilienceTests
         var callCount = new StrongBox<int>(value: 0);
         var options = new ProviderResilienceOptions
         {
-            MaxRetries = 2,
             BaseDelayMilliseconds = 0,
             CircuitBreakerEnabled = false
         };
-        var sut = CreateSut(options);
+        var sut = CreateSut(options, maxRetries: 2);
 
         var factory = FactoryFailing(failures: 2, callCount, () => Yield(9), () => ThrowHttp(HttpStatusCode.InternalServerError));
         var result = await CollectAsync(sut.ExecuteStreamingAsync("endpoint", factory, CancellationToken.None));
@@ -123,11 +122,10 @@ public sealed class ProviderStreamResilienceTests
         var callCount = new StrongBox<int>(value: 0);
         var options = new ProviderResilienceOptions
         {
-            MaxRetries = 2,
             BaseDelayMilliseconds = 0,
             CircuitBreakerEnabled = false
         };
-        var sut = CreateSut(options);
+        var sut = CreateSut(options, maxRetries: 2);
 
         var factory = FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1), () => ThrowHttp(HttpStatusCode.BadRequest));
 
@@ -143,13 +141,12 @@ public sealed class ProviderStreamResilienceTests
         var callCount = new StrongBox<int>(value: 0);
         var options = new ProviderResilienceOptions
         {
-            MaxRetries = 0,
             BaseDelayMilliseconds = 0,
             CircuitBreakerEnabled = true,
             CircuitBreakerFailureThreshold = 2,
             CircuitBreakerBreakDurationSeconds = 30
         };
-        var sut = CreateSut(options, time);
+        var sut = CreateSut(options, time, maxRetries: 0);
 
         var factory = FactoryFailing(failures: int.MaxValue, callCount, () => Yield(1));
 
@@ -171,13 +168,12 @@ public sealed class ProviderStreamResilienceTests
         var succeed = new StrongBox<bool>(value: false);
         var options = new ProviderResilienceOptions
         {
-            MaxRetries = 0,
             BaseDelayMilliseconds = 0,
             CircuitBreakerEnabled = true,
             CircuitBreakerFailureThreshold = 2,
             CircuitBreakerBreakDurationSeconds = 30
         };
-        var sut = CreateSut(options, time);
+        var sut = CreateSut(options, time, maxRetries: 0);
 
         IAsyncEnumerable<int> Factory(CancellationToken _)
         {
@@ -202,9 +198,57 @@ public sealed class ProviderStreamResilienceTests
         AssertEx.Equal(expected: 2, followUp.Count);
     }
 
-    private static ProviderStreamResilience CreateSut(ProviderResilienceOptions options, TimeProvider? timeProvider = null)
+    [Test]
+    public async Task ExecuteStreamingAsync_WhenTheNodeSettingSwitchesRetryOff_FailsOnTheFirstTransientError()
+    {
+        var callCount = new StrongBox<int>(value: 0);
+        var sut = new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions
+            {
+                BaseDelayMilliseconds = 0,
+                CircuitBreakerEnabled = false
+            }),
+            StubNodeRuntimeSettings.Create().WithProviderRetryEnabled(false).WithProviderMaxRetries(5).Build(),
+            TimeProvider.System,
+            NullLogger<ProviderStreamResilience>.Instance);
+
+        await AssertEx.ThrowsAsync<SocketException>(() =>
+            CollectAsync(sut.ExecuteStreamingAsync("endpoint", FactoryFailing(failures: 1, callCount, () => Yield(1)), CancellationToken.None)));
+
+        AssertEx.Equal(expected: 1, callCount.Value, "retry off means one attempt, whatever the retry count says");
+    }
+
+    [Test]
+    public async Task ExecuteStreamingAsync_ReadsTheRetrySettingsPerSend_SoASaveAppliesWithoutARestart()
+    {
+        // One singleton serves every send; the second send must see the switch flipped after the first.
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+        runtimeSettings.GetProviderRetryEnabledAsync(Arg.Any<CancellationToken>()).Returns(false, true);
+        runtimeSettings.GetProviderMaxRetriesAsync(Arg.Any<CancellationToken>()).Returns(2);
+        var sut = new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions
+            {
+                BaseDelayMilliseconds = 0,
+                CircuitBreakerEnabled = false
+            }),
+            runtimeSettings,
+            TimeProvider.System,
+            NullLogger<ProviderStreamResilience>.Instance);
+
+        var firstCalls = new StrongBox<int>(value: 0);
+        await AssertEx.ThrowsAsync<SocketException>(() =>
+            CollectAsync(sut.ExecuteStreamingAsync("endpoint", FactoryFailing(failures: 1, firstCalls, () => Yield(1)), CancellationToken.None)));
+        var secondCalls = new StrongBox<int>(value: 0);
+        var result = await CollectAsync(sut.ExecuteStreamingAsync("endpoint", FactoryFailing(failures: 1, secondCalls, () => Yield(1)), CancellationToken.None));
+
+        AssertEx.Equal(expected: 1, firstCalls.Value);
+        AssertEx.Equal(expected: 2, secondCalls.Value);
+        AssertEx.Equal(expected: 1, result.Count);
+    }
+
+    // The retry count is a node setting read per send, so it rides the accessor; the backoff and breaker stay on the options.
+    private static ProviderStreamResilience CreateSut(ProviderResilienceOptions options, TimeProvider? timeProvider = null, int maxRetries = StoredNodeSettings.DefaultProviderMaxRetries)
     {
         return new ProviderStreamResilience(Options.Create(options),
+            StubNodeRuntimeSettings.Create().WithProviderMaxRetries(maxRetries).Build(),
             timeProvider ?? TimeProvider.System,
             NullLogger<ProviderStreamResilience>.Instance);
     }

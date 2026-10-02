@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Default <see cref="IMemoryExtractionService" />: it asks the node-local agent for candidate memories, drops
@@ -22,12 +23,14 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
     private readonly ILogger<MemoryExtractionService> _logger;
     private readonly MemoryExtractionOptions _options;
     private readonly IPlaybookActionStore _playbookActionStore;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IMemorySemanticDeduplicator _semanticDeduplicator;
 
     public MemoryExtractionService(IMemoryExtractionAgent extractionAgent,
         IPlaybookActionStore playbookActionStore,
         IMemorySemanticDeduplicator semanticDeduplicator,
         IOptions<MemoryExtractionOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<MemoryExtractionService> logger)
     {
         ArgumentNullException.ThrowIfNull(extractionAgent);
@@ -39,6 +42,7 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
         _playbookActionStore = playbookActionStore;
         ArgumentNullException.ThrowIfNull(semanticDeduplicator);
         _semanticDeduplicator = semanticDeduplicator;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public async Task<MemoryExtractionOutcome> ExtractAsync(MemoryExtractionRunInput run, CancellationToken cancellationToken = default)
@@ -54,7 +58,7 @@ internal sealed class MemoryExtractionService : IMemoryExtractionService
 
         // Disabled gate: no node-local extraction model configured => clean no-op (CI-safe, mirrors the embedding
         // ranker). The agent guards this too, but short-circuiting here also avoids the existing-actions read.
-        if (string.IsNullOrWhiteSpace(_options.ExtractionModelName))
+        if (string.IsNullOrWhiteSpace(await _runtimeSettings.GetMemoryExtractionModelNameAsync(cancellationToken)))
         {
             return MemoryExtractionOutcome.NoModelConfigured();
         }

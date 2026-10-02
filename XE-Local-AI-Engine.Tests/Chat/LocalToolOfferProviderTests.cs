@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
@@ -97,8 +98,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
             NullCustomToolScopeFactory.Instance,
-            new FakeModelTrustResolver(),
-            allowCloudKnowledgeAccess: false);
+            new FakeModelTrustResolver());
 
         var beforeEdit = provider.GetOfferedTools("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
         AssertEx.False(beforeEdit.Any(tool => tool.Name == AskUserTool.ToolName),
@@ -140,8 +140,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
             NullCustomToolScopeFactory.Instance,
-            new FakeModelTrustResolver(),
-            allowCloudKnowledgeAccess: false);
+            new FakeModelTrustResolver());
 
         AssertEx.False(provider.GetOfferedToolsForProfile("some-model").Any(tool => tool.Name == SpawnSubAgentToolDefinition.ToolName),
             "A non-capable model must not reach the profile-only spawn tool.");
@@ -261,6 +260,32 @@ public sealed class LocalToolOfferProviderTests
 
         AssertEx.False(pool.Any(tool => tool.Name == ComputeToolDefinition.ToolName),
             "run_python must be withheld from a model that is not tool-capable, even in the profile pool");
+    }
+
+    [Test]
+    public void GetOfferedTools_FollowsTheKnowledgeToolsAndCloudAccessSwitchesLive()
+    {
+        // Both node switches are read per offer on the one singleton provider: a flip applies to the next turn, and the
+        // offer never lists a knowledge tool the handler would refuse.
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").WithKnowledgeAgentToolsEnabled(false).Build();
+        var provider = new LocalToolOfferProvider(new FakeAgentToolRegistry([]),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            runtimeSettings,
+            NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver());
+
+        AssertEx.False(provider.GetOfferedTools("qwen3:8b").Any(static tool => tool.Name == SearchKnowledgeBaseToolDefinition.ToolName),
+            "A disabled knowledge-tools switch withholds the tools from the offer.");
+
+        runtimeSettings.GetKnowledgeAgentToolsEnabled().Returns(true);
+        AssertEx.True(provider.GetOfferedTools("qwen3:8b").Any(static tool => tool.Name == SearchKnowledgeBaseToolDefinition.ToolName),
+            "Turning the switch on offers the tools on the next call, without a restart.");
+        AssertEx.False(provider.GetOfferedTools("qwen3:8b", isCloudModel: true).Any(static tool => tool.Name == SearchKnowledgeBaseToolDefinition.ToolName),
+            "A cloud model gets no node-local data tools while the cloud opt-in is off.");
+
+        runtimeSettings.GetAllowCloudModelAccess().Returns(true);
+        AssertEx.True(provider.GetOfferedTools("qwen3:8b", isCloudModel: true).Any(static tool => tool.Name == SearchKnowledgeBaseToolDefinition.ToolName),
+            "The cloud opt-in applies to the next offer, without a restart.");
     }
 
     [Test]
@@ -567,8 +592,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
             NullCustomToolScopeFactory.Instance,
-            new FakeModelTrustResolver(),
-            allowCloudKnowledgeAccess: false);
+            new FakeModelTrustResolver());
 
         var offered = provider.GetOfferedTools("some-other-model");
 
@@ -635,8 +659,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
             NullCustomToolScopeFactory.Instance,
-            new FakeModelTrustResolver(),
-            allowCloudKnowledgeAccess: false);
+            new FakeModelTrustResolver());
 
         var offered = provider.GetOfferedToolsForProfile("qwen3:8b");
 
@@ -767,8 +790,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").WithWebAccessEnabled(webAccessEnabled).Build(),
             NullCustomToolScopeFactory.Instance,
-            new FakeModelTrustResolver(),
-            allowCloudKnowledgeAccess: false);
+            new FakeModelTrustResolver());
     }
 
     private static readonly LocalChatToolDescriptor CustomWeatherDescriptor =
@@ -802,8 +824,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").WithCustomToolsEnabled(customToolsEnabled).Build(),
             scopeFactory,
-            new FakeModelTrustResolver(),
-            allowCloudKnowledgeAccess: false);
+            new FakeModelTrustResolver());
     }
 
     private sealed class StubCustomToolCatalog : ICustomToolCatalog
@@ -862,10 +883,9 @@ public sealed class LocalToolOfferProviderTests
 
         return new LocalToolOfferProvider(registry,
             mcpToolRegistry,
-            StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels).Build(),
+            StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels).WithAllowCloudModelAccess(allowCloudKnowledgeAccess).Build(),
             NullCustomToolScopeFactory.Instance,
-            trustResolver,
-            allowCloudKnowledgeAccess);
+            trustResolver);
     }
 
     private sealed class FakeAgentToolRegistry : IAgentToolRegistry

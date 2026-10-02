@@ -10,8 +10,10 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Pins the synthetic turn-context composition the send and regenerate paths share: the attachment-presence probe
@@ -119,6 +121,40 @@ public sealed class ChatTurnContextBuilderTests
     }
 
     [Test]
+    public async Task BuildKnowledgeContextAsync_AsksForTheStoredPassageCount()
+    {
+        var searchService = Substitute.For<IKnowledgeSearchService>();
+        searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
+                     .Returns(new KnowledgeSearchResult
+                     {
+                         Results = [Hit("Runbook", "restart the service with the eject command")]
+                     });
+        var builder = CreateBuilder(scopeFactory: ScopeFactoryFor(searchService),
+            runtimeSettings: StubNodeRuntimeSettings.Create().WithKnowledgeChatTopK(3).Build());
+
+        _ = await builder.BuildKnowledgeContextAsync("how do I restart it?");
+
+        await searchService.Received(1).SearchAsync(Arg.Is<KnowledgeSearchRequest>(static request => request.Limit == 3), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task BuildAttachmentContextAsync_CapsTheInlinedTextAtTheStoredCharacterBudget()
+    {
+        var conversationId = Guid.NewGuid();
+        var store = Substitute.For<IConversationUploadedFileStore>();
+        var file = File(conversationId, "runbook.md", "text/markdown", ".md", DocumentExtractionStatus.Extracted);
+        store.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns([file]);
+        store.ReadExtractedMarkdownAsync(conversationId, file.FileId, Arg.Any<CancellationToken>()).Returns(new string('x', 5000));
+        var builder = CreateBuilder(store, runtimeSettings: StubNodeRuntimeSettings.Create().WithMaxInlinedAttachmentChars(1000).Build());
+
+        var message = await builder.BuildAttachmentContextAsync(conversationId, [file.FileId]);
+
+        AssertEx.NotNull(message);
+        AssertEx.True(message!.Content.Contains('x', StringComparison.Ordinal), "some of the attachment is inlined");
+        AssertEx.False(message.Content.Contains(new string('x', 1001), StringComparison.Ordinal), "no more than the stored budget is inlined");
+    }
+
+    [Test]
     public async Task BuildKnowledgeContextAsync_WhenRetrievalThrows_ReturnsNull()
     {
         var searchService = Substitute.For<IKnowledgeSearchService>();
@@ -183,12 +219,14 @@ public sealed class ChatTurnContextBuilderTests
     private static ChatTurnContextBuilder CreateBuilder(IConversationUploadedFileStore? uploadedFileStore = null,
         LocalChatAgentOptions? options = null,
         IServiceScopeFactory? scopeFactory = null,
-        ILogger<ChatTurnContextBuilder>? logger = null)
+        ILogger<ChatTurnContextBuilder>? logger = null,
+        INodeRuntimeSettings? runtimeSettings = null)
     {
         return new ChatTurnContextBuilder(uploadedFileStore ?? Substitute.For<IConversationUploadedFileStore>(),
             CreateFenceSeedProvider(),
             scopeFactory ?? Substitute.For<IServiceScopeFactory>(),
             Options.Create(options ?? new LocalChatAgentOptions()),
+            runtimeSettings ?? StubNodeRuntimeSettings.Create().Build(),
             logger ?? NullLogger<ChatTurnContextBuilder>.Instance);
     }
 

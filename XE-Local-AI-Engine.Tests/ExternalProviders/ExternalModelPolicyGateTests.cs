@@ -297,8 +297,7 @@ public sealed class ExternalModelPolicyGateTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(LocalExternalModel, CloudExternalModel, DeletedExternalModel).Build(),
             NullCustomToolScopeFactory.Instance,
-            trust ?? Trust(),
-            allowCloudKnowledgeAccess: false);
+            trust ?? Trust());
     }
 
     /// <summary>Options carrying only the Development PURPOSE marker — the minimum that trips the local backstop.</summary>

@@ -9,11 +9,13 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 public sealed class GetNodeSettingsEndpoint : EndpointWithoutRequest<NodeSettingsResponse>
 {
     private readonly INodeSettingsAdministrationService _administrationService;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public GetNodeSettingsEndpoint(INodeSettingsAdministrationService administrationService)
+    public GetNodeSettingsEndpoint(INodeSettingsAdministrationService administrationService, INodeRuntimeSettings runtimeSettings)
     {
         ArgumentNullException.ThrowIfNull(administrationService);
         _administrationService = administrationService;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public override void Configure()
@@ -25,6 +27,6 @@ public sealed class GetNodeSettingsEndpoint : EndpointWithoutRequest<NodeSetting
     public override async Task HandleAsync(CancellationToken ct)
     {
         var settings = await _administrationService.GetTrustedSettingsAsync(ct);
-        await Send.OkAsync(settings.ToResponse(), ct);
+        await Send.OkAsync(settings.ToResponse(_runtimeSettings.ResolveEffectiveValues(settings)), ct);
     }
 }

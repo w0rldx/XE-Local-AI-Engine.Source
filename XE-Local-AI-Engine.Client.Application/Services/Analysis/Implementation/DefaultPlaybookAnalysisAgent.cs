@@ -5,7 +5,10 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Insights;
+using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
@@ -21,12 +24,16 @@ internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly ILogger<DefaultPlaybookAnalysisAgent> _logger;
+    private readonly IModelTrustResolver _modelTrustResolver;
     private readonly PlaybookAnalysisOptions _options;
 
     private readonly ILocalModelProviderResolver _providerResolver;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     public DefaultPlaybookAnalysisAgent(ILocalModelProviderResolver providerResolver,
         IOptions<PlaybookAnalysisOptions> options,
+        INodeRuntimeSettings runtimeSettings,
+        IModelTrustResolver modelTrustResolver,
         ILogger<DefaultPlaybookAnalysisAgent> logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
@@ -34,6 +41,8 @@ internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
         ArgumentNullException.ThrowIfNull(providerResolver);
         _providerResolver = providerResolver;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
     }
 
     public async Task<IReadOnlyList<ProposedPlaybookAction>> ProposeAsync(FeedbackInsightsResult aggregate, CancellationToken cancellationToken = default)
@@ -42,10 +51,17 @@ internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
 
         // Route the configured analysis model to the runtime that serves it (persisted map, else the configured default provider, ollama, so an
         // un-repointed model behaves exactly as before). Node-local only — never the cloud singleton.
-        var provider = await _providerResolver.ResolveProviderForModelAsync(_options.ModelName, cancellationToken);
+        var modelName = await _runtimeSettings.GetPlaybookAnalysisModelNameAsync(cancellationToken);
+        if (!await BackgroundModelLocalityGuard.AllowAsync(modelName, "PlaybookAnalysisModelName", _modelTrustResolver, _logger, cancellationToken))
+        {
+            return [];
+        }
+
+        _logger.LogInformation("Playbook analysis for agent {AgentName} runs on model {ModelName}.", aggregate.AgentName, modelName);
+        var provider = await _providerResolver.ResolveProviderForModelAsync(modelName, cancellationToken);
         var selection = new LocalModelSelection
         {
-            ModelName = _options.ModelName,
+            ModelName = modelName,
             ProviderName = provider.ProviderName
         };
 

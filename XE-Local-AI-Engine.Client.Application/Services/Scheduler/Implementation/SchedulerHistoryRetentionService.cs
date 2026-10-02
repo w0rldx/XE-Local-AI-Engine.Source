@@ -2,10 +2,11 @@ namespace XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Scheduler-specific retention sweeper: deletes <c>scheduled_job_runs</c> rows, and their cascaded events, older
-///     than <see cref="SchedulerOptions.HistoryRetentionDays" />.
+///     than the <c>SchedulerHistoryRetentionDays</c> node setting, read per sweep.
 /// </summary>
 /// <remarks>
 ///     It sweeps on the <see cref="SchedulerOptions.RetentionSweepIntervalMinutes" /> cadence and is kept separate from
@@ -16,18 +17,21 @@ public sealed class SchedulerHistoryRetentionService : BackgroundService
 {
     private readonly ILogger<SchedulerHistoryRetentionService> _logger;
     private readonly SchedulerOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly TimeProvider _timeProvider;
 
     public SchedulerHistoryRetentionService(IServiceScopeFactory serviceScopeFactory,
         TimeProvider timeProvider,
         IOptions<SchedulerOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<SchedulerHistoryRetentionService> logger)
     {
         _serviceScopeFactory = serviceScopeFactory ?? throw new ArgumentNullException(nameof(serviceScopeFactory));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value ?? throw new ArgumentNullException(nameof(options));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -75,9 +79,10 @@ public sealed class SchedulerHistoryRetentionService : BackgroundService
     {
         await using var scope = _serviceScopeFactory.CreateAsyncScope();
         var runStore = scope.ServiceProvider.GetRequiredService<IScheduledJobRunStore>();
+        var retentionDays = await _runtimeSettings.GetSchedulerHistoryRetentionDaysAsync(cancellationToken);
 
         var cutoffUtc = _timeProvider.GetUtcNow()
-                                     .AddDays(-_options.HistoryRetentionDays)
+                                     .AddDays(-retentionDays)
                                      .ToUnixTimeMilliseconds();
 
         var deletedRunCount = await runStore.SweepOlderThanAsync(cutoffUtc, cancellationToken);
@@ -86,7 +91,7 @@ public sealed class SchedulerHistoryRetentionService : BackgroundService
         {
             _logger.LogInformation("Scheduler history retention sweep deleted {DeletedRunCount} run(s) older than {RetentionDays} day(s).",
                 deletedRunCount,
-                _options.HistoryRetentionDays);
+                retentionDays);
         }
     }
 }

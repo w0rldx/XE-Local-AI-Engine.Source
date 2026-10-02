@@ -227,6 +227,16 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddOptions<ProviderCallBudgetOptions>()
                .Configure<INodeRuntimeSettings>((options, runtimeSettings) =>
                    options.MaxProviderCallsPerInvocation = runtimeSettings.GetMaxProviderCallsPerInvocation());
+
+        // And for the AI.Agent tool pipeline: the iteration ceiling is set once on the singleton chat-client pipeline and the
+        // result/invalid-call caps are baked into tool wrappers at construction, so these three are restart-gated by shape.
+        builder.Services.AddOptions<AgentToolPipelineOptions>()
+               .Configure<INodeRuntimeSettings>((options, runtimeSettings) =>
+               {
+                   options.MaximumToolIterationsPerRequest = runtimeSettings.GetToolPipelineMaxIterationsPerRequest();
+                   options.MaxToolResultCharacters = runtimeSettings.GetToolPipelineMaxToolResultChars();
+                   options.MaxConsecutiveInvalidToolCallsPerTool = runtimeSettings.GetToolPipelineMaxConsecutiveInvalidToolCalls();
+               });
 #pragma warning restore MA0045
 
         AddExternalOpenAiRuntime(builder);

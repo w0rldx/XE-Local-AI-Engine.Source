@@ -7,7 +7,6 @@ using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
-using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
@@ -119,9 +118,7 @@ internal static class AddNodeAgentHomeExtensions
         // is a filesystem walk, which must not start ahead of the orphan reaper's process gates.
         builder.Services.AddOptions<AgentHomeRunRetentionOptions>()
                .Bind(configuration.GetSection(AgentHomeRunRetentionOptions.SectionName))
-               // RetentionDays is the node setting seeded from this section; a stored value (1-365) always passes the validator.
-               .Configure<INodeRuntimeSettings>((options, runtimeSettings) =>
-                   options.RetentionDays = runtimeSettings.GetAgentHomeRunRetentionDays())
+               // The three limits are node settings the sweep reads per sweep; this section only seeds them, Enabled and the interval.
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<AgentHomeRunRetentionOptions>, AgentHomeRunRetentionOptionsValidator>();
         builder.Services.AddHostedService<AgentHomeRunRetentionService>();

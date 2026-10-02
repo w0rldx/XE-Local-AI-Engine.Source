@@ -5,7 +5,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The run-retention sweep against a real filesystem the test owns: which runs each limit takes, which runs it
@@ -39,6 +41,42 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         AssertEx.False(Directory.Exists(old), "a run older than the age limit must be deleted.");
         AssertEx.True(Directory.Exists(recent), "a run inside the age window must survive.");
         AssertEx.True(Directory.Exists(newest), "the newest run is never deleted.");
+    }
+
+    [Test]
+    public async Task Sweep_TakesItsLimitsFromTheNodeSettings_NotTheOptionsSection()
+    {
+        var oldest = SeedRun(Now.AddDays(-5));
+        var middle = SeedRun(Now.AddDays(-4));
+        SeedRun(Now.AddDays(-3));
+
+        // The section turns every limit off; the stored run cap of 2 must still apply on this sweep.
+        using var service = new AgentHomeRunRetentionService(Options.Create(new AgentHomeRunRetentionOptions
+            {
+                RetentionDays = 0,
+                MaxRuns = 0,
+                MaxTotalBytes = 0
+            }),
+            Options.Create(new AgentHomeOptions
+            {
+                Enabled = true,
+                RootPath = Path.Combine(_dataRoot.Path, "agent-home-state")
+            }),
+            new FakeNodeDataDirectory(_dataRoot.Path),
+            new AgentHomeRunExecutionRegistry(),
+            new AgentHomeRunApplyGuard(),
+            StubNodeRuntimeSettings.Create()
+                                   .WithAgentHomeRunRetentionDays(0)
+                                   .WithAgentHomeRunRetentionMaxRuns(2)
+                                   .WithAgentHomeRunRetentionMaxTotalBytes(0)
+                                   .Build(),
+            new ManualTimeProvider(Now),
+            new RecordingLogger<AgentHomeRunRetentionService>());
+
+        await service.SweepAsync(CancellationToken.None);
+
+        AssertEx.False(Directory.Exists(oldest), "the stored run cap evicts the oldest run.");
+        AssertEx.True(Directory.Exists(middle));
     }
 
     [Test]
@@ -371,6 +409,7 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
             new FakeNodeDataDirectory(_dataRoot.Path),
             new AgentHomeRunExecutionRegistry(),
             new AgentHomeRunApplyGuard(),
+            LimitsOf(new AgentHomeRunRetentionOptions { RetentionDays = 30 }),
             new ThrowOnceClock(clock),
             logger);
 
@@ -427,8 +466,17 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
             new FakeNodeDataDirectory(_dataRoot.Path),
             executingRuns ?? new AgentHomeRunExecutionRegistry(),
             applyGuard ?? new AgentHomeRunApplyGuard(),
+            LimitsOf(options),
             timeProvider,
             logger);
+
+    // The three limits are node settings the sweep reads per sweep; the tests state them on the options object they used to live on.
+    private static INodeRuntimeSettings LimitsOf(AgentHomeRunRetentionOptions options) =>
+        StubNodeRuntimeSettings.Create()
+                               .WithAgentHomeRunRetentionDays(options.RetentionDays)
+                               .WithAgentHomeRunRetentionMaxRuns(options.MaxRuns)
+                               .WithAgentHomeRunRetentionMaxTotalBytes(options.MaxTotalBytes)
+                               .Build();
 
     private string RunsRoot()
     {

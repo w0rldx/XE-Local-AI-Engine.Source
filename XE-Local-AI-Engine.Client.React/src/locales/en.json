@@ -2449,6 +2449,212 @@
 				"transcriptionInferenceTimeoutMinutes": {
 					"label": "Transcription timeout",
 					"description": "The longest one transcription job may run."
+				},
+				"toolPipelineMaxIterationsPerRequest": {
+					"label": "Tool rounds per request",
+					"description": "How many times the model may call tools before it must answer."
+				},
+				"toolPipelineMaxToolResultChars": {
+					"label": "Tool result size",
+					"description": "The most characters one tool result may hand the model."
+				},
+				"toolPipelineMaxConsecutiveInvalidToolCalls": {
+					"label": "Invalid tool calls in a row",
+					"description": "How many malformed calls to one tool in a row before the tool is refused."
+				},
+				"providerBudgetMaxCumulativeInputTokens": {
+					"label": "Input tokens per agent run",
+					"description": "Stops an agent run once it has sent this many input tokens in total."
+				},
+				"providerRetryEnabled": {
+					"label": "Retry failed model requests",
+					"description": "Retry a model request that fails before its first token arrives."
+				},
+				"providerMaxRetries": {
+					"label": "Retries per model request",
+					"description": "How often a failed model request is retried."
+				},
+				"spawnMaxConcurrent": {
+					"label": "Sub-agents at once",
+					"description": "How many sub-agents one run may have working at the same time."
+				},
+				"spawnMaxCloud": {
+					"label": "Cloud sub-agents per run",
+					"description": "How many sub-agents on a cloud model one run may start. 0 allows none."
+				},
+				"spawnQueueWaitSeconds": {
+					"label": "Sub-agent queue wait",
+					"description": "How long a sub-agent waits for its busy model. 0 rejects it at once."
+				},
+				"defaultContextTokens": {
+					"label": "Default context window",
+					"description": "The context size assumed when neither the chat nor the model sets one."
+				},
+				"providerBudgetRecentMessagesToKeep": {
+					"label": "Messages kept per model call",
+					"description": "The most recent messages a model call always keeps when history is trimmed."
+				},
+				"contextBudgetRecentTurnKeepCount": {
+					"label": "Turns kept when trimming",
+					"description": "The most recent turns that are never trimmed from a long chat."
+				},
+				"compactionAutoEnabled": {
+					"label": "Compact long chats automatically",
+					"description": "Summarise the older part of a chat once it fills most of the context window."
+				},
+				"compactionAutoCompactPercent": {
+					"label": "Compaction threshold",
+					"description": "Compact once the history fills this share of the usable context window."
+				},
+				"compactionRecentMessagesVerbatim": {
+					"label": "Messages kept word for word",
+					"description": "The most recent messages a compaction leaves unchanged."
+				},
+				"compactionDistillEnabled": {
+					"label": "Keep a running chat summary",
+					"description": "Distil facts and decisions from a chat in the background."
+				},
+				"maxInlinedAttachmentChars": {
+					"label": "Attachment text per turn",
+					"description": "The most characters of attached documents included in one chat turn."
+				},
+				"knowledgeChatTopK": {
+					"label": "Knowledge passages per turn",
+					"description": "How many knowledge-base passages ground one chat turn."
+				},
+				"agentRunLimits": {
+					"title": "Agent limits"
+				},
+				"contextCompaction": {
+					"title": "Context & compaction"
+				},
+				"tokens": "tokens",
+				"percent": "%",
+				"milliseconds": "milliseconds",
+				"knowledgeRetrieval": {
+					"title": "Retrieval and knowledge tools"
+				},
+				"knowledgeAgentToolsEnabled": {
+					"label": "Knowledge tools for agents",
+					"description": "Let agents search and read the knowledge base. Off withholds the tools from every model."
+				},
+				"knowledgeAdaptiveRerankingEnabled": {
+					"label": "Rerank only when results are unclear",
+					"description": "Skip the reranker when keyword and meaning search agree, or when the latency budget is nearly spent."
+				},
+				"knowledgeRetrievalLatencyBudgetMs": {
+					"label": "Retrieval latency budget",
+					"description": "A rerank still running after this long is dropped and the search returns its first order."
+				},
+				"knowledgeScheduledReindexEnabled": {
+					"label": "Reindex after an embedding model change",
+					"description": "Periodically re-queue documents whose vectors came from an older embedding model."
+				},
+				"knowledgeScheduledReindexIntervalMinutes": {
+					"label": "Reindex check interval"
+				},
+				"cloudModelAccess": {
+					"title": "Cloud models and local data"
+				},
+				"allowCloudModelAccess": {
+					"label": "Let cloud models read local data",
+					"description": "Off by default. When on, cloud-hosted models also get the knowledge-base and workspace tools, attachments and playbook memory, which then leave this machine."
+				},
+				"retention": {
+					"title": "Retention and storage"
+				},
+				"chatRetentionEnabled": {
+					"label": "Delete old conversations",
+					"description": "Permanently delete conversations, with their uploads and messages, once they are inactive for the window below."
+				},
+				"chatRetentionDays": {
+					"label": "Conversation retention"
+				},
+				"agentExecutionLogRetentionEnabled": {
+					"label": "Delete old agent run logs",
+					"description": "Delete agent run records, which feed the usage page, once they are older than the window below."
+				},
+				"agentExecutionLogRetentionDays": {
+					"label": "Agent run log retention"
+				},
+				"schedulerHistoryRetentionDays": {
+					"label": "Scheduled job history"
+				},
+				"nodeDbBackupRetainCount": {
+					"label": "Database backups kept",
+					"description": "A backup is taken before each database update; older ones beyond this count are removed."
+				},
+				"benchmarkKldCacheMaxBytes": {
+					"label": "Benchmark cache size",
+					"description": "Disk space for the base-model files quality benchmarks compare against; the least recently used are removed first."
+				},
+				"backgroundModels": {
+					"title": "Learning models",
+					"inherit": "Use the default model",
+					"empty": "No installed local chat models"
+				},
+				"playbookAnalysisModelName": {
+					"label": "Playbook analysis model",
+					"description": "Reads feedback and proposes playbook actions for review."
+				},
+				"playbookEvalModelName": {
+					"label": "Playbook eval model",
+					"description": "Re-runs golden conversations to check a suggested action before it is promoted."
+				},
+				"memoryExtractionModelName": {
+					"label": "Memory extraction model",
+					"description": "Mines lessons from finished agent runs as memory candidates for review."
+				},
+				"imageMaxLoadedProcesses": {
+					"label": "Max loaded image servers",
+					"description": "How many image models stay loaded at once; loading one more unloads the least recently used."
+				},
+				"imageTextEncoderOnGpu": {
+					"label": "Image text encoder on the GPU",
+					"description": "Faster prompts at the cost of video memory; off keeps the text encoder on the CPU."
+				},
+				"workspaceLimits": {
+					"title": "Workflows, sessions and development"
+				},
+				"graphWorkflowMaxConcurrentRuns": {
+					"label": "Graph workflow runs at once",
+					"description": "Runs above this wait for a slot; they are not refused."
+				},
+				"graphWorkflowDefaultNodeTimeoutSeconds": {
+					"label": "Graph workflow step timeout",
+					"description": "How long a workflow step may run when the step sets no timeout of its own."
+				},
+				"workSessionMaxStepsPerRun": {
+					"label": "Work session steps per run",
+					"description": "Steps one start or resume may take before the session pauses with a checkpoint."
+				},
+				"workSessionMaxConcurrentSessions": {
+					"label": "Work sessions at once"
+				},
+				"developmentMaxAttemptDurationSeconds": {
+					"label": "Development attempt time limit"
+				},
+				"developmentMaxToolCalls": {
+					"label": "Development tool calls per attempt"
+				},
+				"developmentMaxOutputTokens": {
+					"label": "Development output tokens per attempt"
+				},
+				"agentHomeRunRetentionMaxRuns": {
+					"label": "AgentHome runs kept",
+					"description": "Older runs beyond this many are deleted; 0 keeps any number. Applies to the next sweep."
+				},
+				"agentHomeRunRetentionMaxTotalBytes": {
+					"label": "AgentHome run storage limit",
+					"description": "Oldest runs are deleted until all runs fit; 0 sets no limit. Applies to the next sweep."
+				},
+				"agentHomeMaxInnerToolCalls": {
+					"label": "AgentHome tool calls per run",
+					"description": "How many tool calls one run may make before it is stopped. Applies to the next run."
+				},
+				"agentHomePatchApplyTimeoutSeconds": {
+					"label": "AgentHome patch apply timeout",
+					"description": "The longest one git step of applying a run's patch to your folders may take. Applies to the next apply."
 				}
 			},
 			"title": "Node settings",
@@ -2512,7 +2718,7 @@
 				}
 			},
 			"browserOnly": "This browser only",
-			"developerOnlyNote": "These limits are developer settings. Turn on developer mode under General to change them.",
+			"developerOnlyNote": "The AgentHome limits are developer settings. Turn on developer mode under General to change them.",
 			"browserPreferences": {
 				"title": "This browser",
 				"languageLabel": "Language"

@@ -27,6 +27,7 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The coordinator under test with every collaborator around it: a real <see cref="LocalChatRuntimePackageBuilder" />
@@ -215,10 +216,9 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         // per-invocation session is closed are the assertions, not the fact that a mock was called.
         services.AddSingleton<IConversationCompactionService>(Compaction);
         services.AddSingleton<ITokenEstimator>(new HeuristicTokenEstimator(new TokenEstimatorCalibrationStore()));
-        services.AddSingleton<IOptions<ConversationCompactionOptions>>(_ => Options.Create(new ConversationCompactionOptions
-        {
-            RecentMessagesToKeepVerbatim = ChatKeepVerbatim
-        }));
+        services.AddSingleton<IOptions<ConversationCompactionOptions>>(_ => Options.Create(new ConversationCompactionOptions()));
+        // The chat keep window is a node setting the coordinator reads from its run scope, so it rides the accessor.
+        services.AddSingleton(StubNodeRuntimeSettings.Create().WithCompactionRecentMessagesVerbatim(ChatKeepVerbatim).Build());
         // The historical tool-result excerpt cap a caller-managed continuation replays under, read from the SAME options
         // the context budgeter measures with so one result truncated twice reads as one result.
         services.AddSingleton<IOptions<ConversationContextBudgetOptions>>(_ => Options.Create(new ConversationContextBudgetOptions()));
@@ -254,8 +254,11 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
 
     public IntegrationExecutionCoordinator Coordinator { get; }
 
-    /// <summary>The chat keep window the integration path must pass, rather than the work-session floor of two.</summary>
-    public const int ChatKeepVerbatim = 8;
+    /// <summary>
+    ///     The chat keep window the integration path must pass, rather than the work-session floor of two. Distinct from the
+    ///     shipped default of eight too, so the assertion proves the node-setting value flows.
+    /// </summary>
+    public const int ChatKeepVerbatim = 11;
 
     /// <summary>Records every fold the per-turn bound asked for, including the keep window it carried.</summary>
     public RecordingCompactionService Compaction { get; } = new();

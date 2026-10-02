@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The automatic post-turn compaction trigger: the pump hook enqueues on a Completed turn with the window the runner
@@ -75,10 +76,7 @@ public sealed class ChatCompactionTriggerTests
     [Test]
     public async Task DistillJob_WhenDisabled_NeitherReadsNorDistils()
     {
-        await using var harness = new ConversationMaintenanceHarness(new ConversationCompactionOptions
-        {
-            DistillEnabled = false
-        });
+        await using var harness = new ConversationMaintenanceHarness(runtimeSettings: StubNodeRuntimeSettings.Create().WithCompactionDistillEnabled(false).Build());
 
         await harness.Worker.ProcessJobAsync(ConversationMaintenanceHarness.Job(Guid.NewGuid(), kind: ConversationMaintenanceKind.Distill), CancellationToken.None);
 
@@ -163,6 +161,18 @@ public sealed class ChatCompactionTriggerTests
     }
 
     [Test]
+    public async Task Job_UsesTheStoredAutoCompactPercent_ConvertedToAFraction()
+    {
+        // 5,000 is inside the default 75 % threshold (5,376) but above a stored 50 % one: 7,168 × 0.5 = 3,584.
+        await using var harness = new ConversationMaintenanceHarness(projectedTokens: 5_000,
+            runtimeSettings: StubNodeRuntimeSettings.Create().WithCompactionAutoCompactPercent(50).Build());
+
+        await harness.Worker.ProcessJobAsync(ConversationMaintenanceHarness.Job(Guid.NewGuid()), CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, harness.Compactions.Count);
+    }
+
+    [Test]
     public async Task Job_AppliesTheModelsObservedCorrectionToTheThreshold()
     {
         // 5,000 is under the 5,376 threshold, but a model known to count 1.5× more tokens than estimated tightens it to 3,584.
@@ -179,10 +189,7 @@ public sealed class ChatCompactionTriggerTests
     [Test]
     public async Task Job_WhenAutoCompactIsDisabled_NeitherReadsNorCompacts()
     {
-        await using var harness = new ConversationMaintenanceHarness(new ConversationCompactionOptions
-        {
-            AutoCompactEnabled = false
-        });
+        await using var harness = new ConversationMaintenanceHarness(runtimeSettings: StubNodeRuntimeSettings.Create().WithCompactionAutoEnabled(false).Build());
 
         await harness.Worker.ProcessJobAsync(ConversationMaintenanceHarness.Job(Guid.NewGuid()), CancellationToken.None);
 

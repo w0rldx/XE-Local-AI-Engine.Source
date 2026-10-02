@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
@@ -22,11 +22,11 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     private readonly IAgentSkillStore _agentSkillStore;
     private readonly ICustomToolStore _customToolStore;
     private readonly IAgentInstructionProvider _instructionProvider;
-    private readonly KnowledgeBaseOptions _knowledgeOptions;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
     private readonly ILogger<AgentDefinitionResolver> _logger;
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
     private readonly IPlaybookActionStore _playbookActionStore;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly PlaybookRetrievalOptions _retrievalOptions;
     private readonly IPlaybookRetrievalRanker _retrievalRanker;
     private readonly IAgentDefinitionStore _store;
@@ -42,7 +42,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         IAgentInstructionProvider instructionProvider,
         IModelCapabilityResolver modelCapabilityResolver,
         IToolApprovalPolicy toolApprovalPolicy,
-        IOptions<KnowledgeBaseOptions> knowledgeOptions,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<AgentDefinitionResolver> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -56,8 +56,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
         _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
         _toolApprovalPolicy = toolApprovalPolicy ?? throw new ArgumentNullException(nameof(toolApprovalPolicy));
-        ArgumentNullException.ThrowIfNull(knowledgeOptions);
-        _knowledgeOptions = knowledgeOptions.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -325,7 +324,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     ///     Folds the definition's enabled playbook actions into its prompt when the playbook is enabled.
     /// </summary>
     /// <remarks>
-    ///     Disabled, or withheld from a cloud effective model without <c>KnowledgeBase:AllowCloudModelAccess</c>
+    ///     Disabled, or withheld from a cloud effective model without the <c>AllowCloudModelAccess</c> node setting
     ///     (playbook memory is node-local data learned from conversations, gated like knowledge), the query is skipped
     ///     entirely and the base Instructions flow through unchanged, keeping prompt and config hash byte-identical. Above the retrieval threshold with a non-blank
     ///     <paramref name="retrievalQuery" /> only the top-k most relevant actions are injected; at or below it, or
@@ -339,13 +338,13 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             return (definition.Instructions, false);
         }
 
-        if (effectiveModelIsCloud && !_knowledgeOptions.AllowCloudModelAccess)
+        if (effectiveModelIsCloud && !await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken))
         {
             // Withheld only when there IS enabled memory to withhold, so an empty playbook raises no PlaybookWithheld notice.
             var withheld = (await _playbookActionStore.ListEnabledByAgentAsync(definition.Id, cancellationToken)).Count > 0;
             if (withheld)
             {
-                _logger.LogInformation("Playbook memory for agent {AgentDefinitionId} was withheld: its effective model is cloud-hosted and KnowledgeBase:AllowCloudModelAccess is off.",
+                _logger.LogInformation("Playbook memory for agent {AgentDefinitionId} was withheld: its effective model is cloud-hosted and AllowCloudModelAccess is off.",
                     definition.Id);
             }
 

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Retention sweeper for the metadata-only <c>agent_execution_logs</c> table, which is append-only and so grows
@@ -17,31 +18,28 @@ public sealed class AgentExecutionLogRetentionService : BackgroundService
 {
     private readonly ILogger<AgentExecutionLogRetentionService> _logger;
     private readonly AgentExecutionLogRetentionOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly TimeProvider _timeProvider;
 
     public AgentExecutionLogRetentionService(IServiceScopeFactory serviceScopeFactory,
         TimeProvider timeProvider,
         IOptions<AgentExecutionLogRetentionOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<AgentExecutionLogRetentionService> logger)
     {
         _serviceScopeFactory = serviceScopeFactory ?? throw new ArgumentNullException(nameof(serviceScopeFactory));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value ?? throw new ArgumentNullException(nameof(options));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.Enabled)
-        {
-            // Retention disabled → leave telemetry untouched; nothing to sweep.
-            return;
-        }
-
-        // Sweep once at startup rather than waiting a full interval, or a node down past a row's retention window
-        // keeps it until the first tick. Best-effort: a failure is logged and the periodic loop still runs.
+        // SweepAsync re-reads the node setting each pass, so a toggle applies without a restart. Sweep once at startup too, or a node
+        // down past a row's retention window keeps it until the first tick; a failure is logged and the periodic loop still runs.
         try
         {
             await SweepAsync(stoppingToken);
@@ -88,11 +86,17 @@ public sealed class AgentExecutionLogRetentionService : BackgroundService
 
     private async Task SweepAsync(CancellationToken cancellationToken)
     {
+        if (!await _runtimeSettings.GetAgentExecutionLogRetentionEnabledAsync(cancellationToken))
+        {
+            return;
+        }
+
+        var retentionDays = await _runtimeSettings.GetAgentExecutionLogRetentionDaysAsync(cancellationToken);
         await using var scope = _serviceScopeFactory.CreateAsyncScope();
         var executionLogStore = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
 
         var cutoffEpochMs = _timeProvider.GetUtcNow()
-                                         .AddDays(-_options.RetentionDays)
+                                         .AddDays(-retentionDays)
                                          .ToUnixTimeMilliseconds();
 
         var deletedByAge = await executionLogStore.DeleteOlderThanAsync(cutoffEpochMs, cancellationToken);
@@ -107,7 +111,7 @@ public sealed class AgentExecutionLogRetentionService : BackgroundService
         {
             _logger.LogInformation("Agent execution-log retention sweep deleted {DeletedByAge} log(s) older than {RetentionDays} day(s) and {DeletedByCap} over the per-agent cap.",
                 deletedByAge,
-                _options.RetentionDays,
+                retentionDays,
                 deletedByCap);
         }
     }

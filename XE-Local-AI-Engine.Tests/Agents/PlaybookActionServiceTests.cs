@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class PlaybookActionServiceTests
@@ -1175,10 +1176,7 @@ public sealed class PlaybookActionServiceTests
         {
             MaxEnabledActions = maxEnabledActions
         });
-        var evalOptions = Options.Create(new PlaybookEvalOptions
-        {
-            ModelName = EvalModelName
-        });
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithPlaybookEvalModelName(EvalModelName).Build();
         // The promote gate folds the eval model's weight identity into the fingerprint. A fixed verified token models a
         // stable, unchanged model; the fingerprint helpers below pass the same token so a fabricated pass matches.
         var identityResolver = Substitute.For<IEvalModelIdentityResolver>();
@@ -1188,7 +1186,7 @@ public sealed class PlaybookActionServiceTests
                             Token = EvalModelIdentityToken,
                             IsVerified = true
                         });
-        return new PlaybookActionService(store, agentStore, goldenStore, identityResolver, actionOptions, evalOptions);
+        return new PlaybookActionService(store, agentStore, goldenStore, identityResolver, actionOptions, runtimeSettings);
     }
 
     private static PlaybookActionInput CreateInput(Guid? agentDefinitionId = null,

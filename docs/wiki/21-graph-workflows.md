@@ -1156,7 +1156,8 @@ graphs. On the client, `test/GraphWorkflowFixtures.ts` is the one fixture file, 
 
 `GraphWorkflowOptions`, bound from the `GraphWorkflows` configuration section. No `appsettings*.json` carries the
 section — the defaults below are the shipped values, and an operator overrides one through configuration or an
-environment variable such as `GraphWorkflows__MaxConcurrentRuns`.
+environment variable such as `GraphWorkflows__MaxTotalAttempts`. `MaxConcurrentRuns` and `DefaultNodeTimeoutSeconds` are
+node settings (**Node Settings → Workspaces**, applied on restart); their keys only seed them.
 
 | Option | Default | What it bounds |
 |---|---|---|

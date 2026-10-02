@@ -4,6 +4,8 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
@@ -37,16 +39,68 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     private readonly int _orchestrationIdleTimeoutSeed;
     private readonly int _transcriptionIdleTimeoutMinutesSeed;
     private readonly string _ollamaEndpointSeed;
+    private readonly Lazy<IModelTrustResolver> _modelTrustResolver;
     private readonly INodeSettingsStore _store;
     private readonly IReadOnlyList<string> _toolCapableModelsSeed;
+    private readonly int _toolPipelineMaxIterationsSeed;
+    private readonly int _toolPipelineMaxToolResultCharsSeed;
+    private readonly int _toolPipelineMaxConsecutiveInvalidToolCallsSeed;
+    private readonly int _defaultContextTokensSeed;
+    private readonly int _providerBudgetRecentMessagesToKeepSeed;
+    private readonly int _providerBudgetMaxCumulativeInputTokensSeed;
+    private readonly int _contextBudgetRecentTurnKeepCountSeed;
+    private readonly bool _compactionAutoEnabledSeed;
+    private readonly int _compactionAutoCompactPercentSeed;
+    private readonly int _compactionRecentMessagesVerbatimSeed;
+    private readonly bool _compactionDistillEnabledSeed;
+    private readonly int _maxInlinedAttachmentCharsSeed;
+    private readonly int _knowledgeChatTopKSeed;
+    private readonly bool _providerRetryEnabledSeed;
+    private readonly int _providerMaxRetriesSeed;
+    private readonly int _spawnMaxConcurrentSeed;
+    private readonly int _spawnMaxCloudSeed;
+    private readonly int _spawnQueueWaitSecondsSeed;
+    private readonly bool _knowledgeAdaptiveRerankingEnabledSeed;
+    private readonly int _knowledgeRetrievalLatencyBudgetMsSeed;
+    private readonly bool _knowledgeScheduledReindexEnabledSeed;
+    private readonly int _knowledgeScheduledReindexIntervalMinutesSeed;
+    private readonly bool _knowledgeAgentToolsEnabledSeed;
+    private readonly bool _allowCloudModelAccessSeed;
+    private readonly string? _playbookAnalysisModelNameSeed;
+    private readonly string? _playbookEvalModelNameSeed;
+    private readonly string? _memoryExtractionModelNameSeed;
+    private readonly bool _chatRetentionEnabledSeed;
+    private readonly int _chatRetentionDaysSeed;
+    private readonly bool _agentExecutionLogRetentionEnabledSeed;
+    private readonly int _agentExecutionLogRetentionDaysSeed;
+    private readonly int _nodeDbBackupRetainCountSeed;
+    private readonly long _benchmarkKldCacheMaxBytesSeed;
+    private readonly int _schedulerHistoryRetentionDaysSeed;
+    private readonly int _imageMaxLoadedProcessesSeed;
+    private readonly bool _imageTextEncoderOnGpuSeed;
+    private readonly int _graphWorkflowMaxConcurrentRunsSeed;
+    private readonly int _graphWorkflowDefaultNodeTimeoutSecondsSeed;
+    private readonly int _workSessionMaxStepsPerRunSeed;
+    private readonly int _workSessionMaxConcurrentSessionsSeed;
+    private readonly int _developmentMaxAttemptDurationSecondsSeed;
+    private readonly int _developmentMaxToolCallsSeed;
+    private readonly int _developmentMaxOutputTokensSeed;
+    private readonly int _agentHomeMaxInnerToolCallsSeed;
+    private readonly int _agentHomePatchApplyTimeoutSecondsSeed;
+    private readonly int _agentHomeRunRetentionMaxRunsSeed;
+    private readonly long _agentHomeRunRetentionMaxTotalBytesSeed;
 
     public NodeRuntimeSettings(INodeSettingsStore store,
         IConfiguration configuration,
         IOptions<LocalChatAgentOptions> localChatOptions,
         IOptions<AgentHomeOptions> agentHomeOptions,
-        IOptions<WorkerNodeOptions> workerNodeOptions)
+        IOptions<WorkerNodeOptions> workerNodeOptions,
+        Lazy<IModelTrustResolver> modelTrustResolver)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        // No DI cycle (the resolver's graph reads INodeSettingsStore, never INodeRuntimeSettings); Lazy only defers its
+        // data-protected stores past composition time, when this accessor is first resolved.
+        _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(localChatOptions);
         ArgumentNullException.ThrowIfNull(agentHomeOptions);
@@ -67,6 +121,97 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         _maxResponseSizeMbSeed = workerNode.MaxResponseSizeMb;
         _maxPendingToolCallAgeMinutesSeed = workerNode.MaxPendingToolCallAgeMinutes;
         _detachedGraceSecondsSeed = workerNode.DetachedGraceSeconds;
+        _maxInlinedAttachmentCharsSeed = localChat.MaxInlinedAttachmentChars;
+        _knowledgeChatTopKSeed = localChat.KnowledgeChatTopK;
+
+        // Chat/agent-run seeds come from configuration for both reasons above (a Configure-d-from-this cycle, or modules not every context
+        // runs). A value below its options validator's floor is ignored, so the seed is never one the bound options would refuse.
+        _toolPipelineMaxIterationsSeed = IntSeed(configuration, "Agent:ToolPipeline:MaximumToolIterationsPerRequest", 1,
+            StoredNodeSettings.DefaultToolPipelineMaxIterationsPerRequest);
+        _toolPipelineMaxToolResultCharsSeed = IntSeed(configuration, "Agent:ToolPipeline:MaxToolResultCharacters", 1024,
+            StoredNodeSettings.DefaultToolPipelineMaxToolResultChars);
+        _toolPipelineMaxConsecutiveInvalidToolCallsSeed = IntSeed(configuration, "Agent:ToolPipeline:MaxConsecutiveInvalidToolCallsPerTool", 1,
+            StoredNodeSettings.DefaultToolPipelineMaxConsecutiveInvalidToolCalls);
+        // One stored knob replaces two config keys of the same meaning: the provider-round key wins, then the turn-budget key.
+        _defaultContextTokensSeed = IntSeed(configuration, "Agent:ProviderCallBudget:DefaultContextTokens", 1,
+            IntSeed(configuration, "Agent:ConversationContextBudget:DefaultContextTokens", 1, StoredNodeSettings.DefaultDefaultContextTokens));
+        _providerBudgetRecentMessagesToKeepSeed = IntSeed(configuration, "Agent:ProviderCallBudget:RecentMessagesToKeep", 2,
+            StoredNodeSettings.DefaultProviderBudgetRecentMessagesToKeep);
+        _providerBudgetMaxCumulativeInputTokensSeed = IntSeed(configuration, "Agent:ProviderCallBudget:MaxCumulativeInputTokens", 1024,
+            StoredNodeSettings.DefaultProviderBudgetMaxCumulativeInputTokens);
+        _contextBudgetRecentTurnKeepCountSeed = IntSeed(configuration, "Agent:ConversationContextBudget:RecentTurnKeepCount", 2,
+            StoredNodeSettings.DefaultContextBudgetRecentTurnKeepCount);
+        _compactionAutoEnabledSeed = configuration.GetValue<bool?>("Agent:ConversationCompaction:AutoCompactEnabled")
+                                     ?? StoredNodeSettings.DefaultCompactionAutoEnabled;
+        var configuredAutoCompactFraction = configuration.GetValue<double?>("Agent:ConversationCompaction:AutoCompactFraction");
+        _compactionAutoCompactPercentSeed = configuredAutoCompactFraction is >= 0.3 and <= 0.95
+            ? (int)Math.Round(configuredAutoCompactFraction.Value * 100, MidpointRounding.AwayFromZero)
+            : StoredNodeSettings.DefaultCompactionAutoCompactPercent;
+        _compactionRecentMessagesVerbatimSeed = IntSeed(configuration, "Agent:ConversationCompaction:RecentMessagesToKeepVerbatim", 2,
+            StoredNodeSettings.DefaultCompactionRecentMessagesVerbatim);
+        _compactionDistillEnabledSeed = configuration.GetValue<bool?>("Agent:ConversationCompaction:DistillEnabled")
+                                        ?? StoredNodeSettings.DefaultCompactionDistillEnabled;
+        _providerRetryEnabledSeed = configuration.GetValue<bool?>("Agent:ProviderResilience:RetryEnabled")
+                                    ?? StoredNodeSettings.DefaultProviderRetryEnabled;
+        _providerMaxRetriesSeed = IntSeed(configuration, "Agent:ProviderResilience:MaxRetries", 0, StoredNodeSettings.DefaultProviderMaxRetries);
+        _spawnMaxConcurrentSeed = IntSeed(configuration, "Spawn:MaxConcurrentSpawns", 1, StoredNodeSettings.DefaultSpawnMaxConcurrent);
+        _spawnMaxCloudSeed = IntSeed(configuration, "Spawn:MaxCloudSpawns", 0, StoredNodeSettings.DefaultSpawnMaxCloud);
+        _spawnQueueWaitSecondsSeed = IntSeed(configuration, "Spawn:QueueWaitSeconds", 0, StoredNodeSettings.DefaultSpawnQueueWaitSeconds);
+
+        // Knowledge, privacy and usage seeds come from configuration too: KnowledgeBaseOptions is Configure-d FROM this accessor, and the
+        // retention, backup, benchmark and scheduler options are registered by modules not every context runs.
+        _knowledgeAdaptiveRerankingEnabledSeed = BoolSeed(configuration, "KnowledgeBase:AdaptiveRerankingEnabled",
+            StoredNodeSettings.DefaultKnowledgeAdaptiveRerankingEnabled);
+        _knowledgeRetrievalLatencyBudgetMsSeed = IntSeed(configuration, "KnowledgeBase:RetrievalLatencyBudgetMilliseconds", 1,
+            StoredNodeSettings.DefaultKnowledgeRetrievalLatencyBudgetMs);
+        _knowledgeScheduledReindexEnabledSeed = BoolSeed(configuration, "KnowledgeBase:ScheduledModelReindexEnabled",
+            StoredNodeSettings.DefaultKnowledgeScheduledReindexEnabled);
+        _knowledgeScheduledReindexIntervalMinutesSeed = IntSeed(configuration, "KnowledgeBase:ScheduledModelReindexIntervalMinutes", 1,
+            StoredNodeSettings.DefaultKnowledgeScheduledReindexIntervalMinutes);
+        _knowledgeAgentToolsEnabledSeed = BoolSeed(configuration, "KnowledgeBase:AgentToolsEnabled", StoredNodeSettings.DefaultKnowledgeAgentToolsEnabled);
+        _allowCloudModelAccessSeed = BoolSeed(configuration, "KnowledgeBase:AllowCloudModelAccess", StoredNodeSettings.DefaultAllowCloudModelAccess);
+        // The background-model seeds keep the Ollama:ChatModel override the invocation runner also honours; blank falls to the default model.
+        var ollamaChatModel = NonBlank(configuration.GetValue<string>("Ollama:ChatModel"));
+        _playbookAnalysisModelNameSeed = NonBlank(configuration.GetValue<string>("PlaybookAnalysis:ModelName")) ?? ollamaChatModel;
+        _playbookEvalModelNameSeed = NonBlank(configuration.GetValue<string>("PlaybookEval:ModelName")) ?? ollamaChatModel;
+        _memoryExtractionModelNameSeed = NonBlank(configuration.GetValue<string>("MemoryExtraction:ExtractionModelName")) ?? ollamaChatModel;
+        _chatRetentionEnabledSeed = BoolSeed(configuration, "ChatRetention:Enabled", StoredNodeSettings.DefaultChatRetentionEnabled);
+        _chatRetentionDaysSeed = IntSeed(configuration, "ChatRetention:RetentionDays", 1, StoredNodeSettings.DefaultChatRetentionDays);
+        _agentExecutionLogRetentionEnabledSeed = BoolSeed(configuration, "AgentExecutionLogRetention:Enabled",
+            StoredNodeSettings.DefaultAgentExecutionLogRetentionEnabled);
+        _agentExecutionLogRetentionDaysSeed = IntSeed(configuration, "AgentExecutionLogRetention:RetentionDays", 1,
+            StoredNodeSettings.DefaultAgentExecutionLogRetentionDays);
+        _nodeDbBackupRetainCountSeed = IntSeed(configuration, "NodeDbBackup:RetainCount", 1, StoredNodeSettings.DefaultNodeDbBackupRetainCount);
+        var configuredKldBytes = configuration.GetValue<long?>("Benchmarks:KldCacheMaxBytes");
+        _benchmarkKldCacheMaxBytesSeed = configuredKldBytes is > 0 ? configuredKldBytes.Value : StoredNodeSettings.DefaultBenchmarkKldCacheMaxBytes;
+        _schedulerHistoryRetentionDaysSeed = IntSeed(configuration, "Scheduler:HistoryRetentionDays", 1,
+            StoredNodeSettings.DefaultSchedulerHistoryRetentionDays);
+
+        // Runtime and workspace seeds come from configuration too: the graph-workflow, work-session and development options are
+        // Configure-d FROM this accessor, and the image options are seeded from it in a host-build factory.
+        _imageMaxLoadedProcessesSeed = IntSeed(configuration, "StableDiffusionRuntime:MaxLoadedProcesses", 1,
+            StoredNodeSettings.DefaultImageMaxLoadedProcesses);
+        _imageTextEncoderOnGpuSeed = BoolSeed(configuration, "StableDiffusionRuntime:TextEncoderOnGpu", StoredNodeSettings.DefaultImageTextEncoderOnGpu);
+        _graphWorkflowMaxConcurrentRunsSeed = IntSeed(configuration, "GraphWorkflows:MaxConcurrentRuns", 1,
+            StoredNodeSettings.DefaultGraphWorkflowMaxConcurrentRuns);
+        _graphWorkflowDefaultNodeTimeoutSecondsSeed = IntSeed(configuration, "GraphWorkflows:DefaultNodeTimeoutSeconds", 1,
+            StoredNodeSettings.DefaultGraphWorkflowDefaultNodeTimeoutSeconds);
+        _workSessionMaxStepsPerRunSeed = IntSeed(configuration, "WorkSessions:MaxStepsPerRun", 1, StoredNodeSettings.DefaultWorkSessionMaxStepsPerRun);
+        _workSessionMaxConcurrentSessionsSeed = IntSeed(configuration, "WorkSessions:MaxConcurrentSessions", 1,
+            StoredNodeSettings.DefaultWorkSessionMaxConcurrentSessions);
+        _developmentMaxAttemptDurationSecondsSeed = IntSeed(configuration, "Development:MaxAttemptDurationSeconds", 1,
+            StoredNodeSettings.DefaultDevelopmentMaxAttemptDurationSeconds);
+        _developmentMaxToolCallsSeed = IntSeed(configuration, "Development:MaxToolCalls", 1, StoredNodeSettings.DefaultDevelopmentMaxToolCalls);
+        _developmentMaxOutputTokensSeed = IntSeed(configuration, "Development:MaxOutputTokens", 1, StoredNodeSettings.DefaultDevelopmentMaxOutputTokens);
+        _agentHomeMaxInnerToolCallsSeed = agentHome.MaxInnerToolCalls;
+        _agentHomePatchApplyTimeoutSecondsSeed = agentHome.PatchApplyTimeoutSeconds;
+        // 0 is a valid retention seed: it turns that limit off.
+        _agentHomeRunRetentionMaxRunsSeed = IntSeed(configuration, "AgentHome:RunRetention:MaxRuns", 0,
+            StoredNodeSettings.DefaultAgentHomeRunRetentionMaxRuns);
+        var configuredRetentionBytes = configuration.GetValue<long?>("AgentHome:RunRetention:MaxTotalBytes");
+        _agentHomeRunRetentionMaxTotalBytesSeed = configuredRetentionBytes is >= 0
+            ? configuredRetentionBytes.Value
+            : StoredNodeSettings.DefaultAgentHomeRunRetentionMaxTotalBytes;
 
         // From configuration, not IOptions<OrchestrationAgentOptions>, to avoid a DI cycle: OrchestrationAgentOptions is itself Configure-d FROM
         // this accessor at the composition root, so taking IOptions<OrchestrationAgentOptions> here would depend on the option it configures.
@@ -311,6 +456,137 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         return stored.AgentHomeMaxRunSeconds ?? _agentHomeMaxRunSecondsSeed;
     }
 
+    public async Task<int> GetDefaultContextTokensAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).DefaultContextTokens ?? _defaultContextTokensSeed;
+
+    public async Task<int> GetProviderBudgetRecentMessagesToKeepAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).ProviderBudgetRecentMessagesToKeep ?? _providerBudgetRecentMessagesToKeepSeed;
+
+    public async Task<int> GetProviderBudgetMaxCumulativeInputTokensAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).ProviderBudgetMaxCumulativeInputTokens ?? _providerBudgetMaxCumulativeInputTokensSeed;
+
+    public async Task<bool> GetCompactionAutoEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).CompactionAutoEnabled ?? _compactionAutoEnabledSeed;
+
+    public async Task<int> GetCompactionAutoCompactPercentAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).CompactionAutoCompactPercent ?? _compactionAutoCompactPercentSeed;
+
+    public async Task<int> GetCompactionRecentMessagesVerbatimAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).CompactionRecentMessagesVerbatim ?? _compactionRecentMessagesVerbatimSeed;
+
+    public async Task<bool> GetCompactionDistillEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).CompactionDistillEnabled ?? _compactionDistillEnabledSeed;
+
+    public async Task<int> GetMaxInlinedAttachmentCharsAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).MaxInlinedAttachmentChars ?? _maxInlinedAttachmentCharsSeed;
+
+    public async Task<int> GetKnowledgeChatTopKAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).KnowledgeChatTopK ?? _knowledgeChatTopKSeed;
+
+    public async Task<bool> GetProviderRetryEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).ProviderRetryEnabled ?? _providerRetryEnabledSeed;
+
+    public async Task<int> GetProviderMaxRetriesAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).ProviderMaxRetries ?? _providerMaxRetriesSeed;
+
+    public async Task<int> GetSpawnMaxConcurrentAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).SpawnMaxConcurrent ?? _spawnMaxConcurrentSeed;
+
+    public async Task<int> GetSpawnMaxCloudAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).SpawnMaxCloud ?? _spawnMaxCloudSeed;
+
+    public async Task<int> GetSpawnQueueWaitSecondsAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).SpawnQueueWaitSeconds ?? _spawnQueueWaitSecondsSeed;
+
+    public async Task<bool> GetKnowledgeAdaptiveRerankingEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).KnowledgeAdaptiveRerankingEnabled ?? _knowledgeAdaptiveRerankingEnabledSeed;
+
+    public async Task<int> GetKnowledgeRetrievalLatencyBudgetMsAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).KnowledgeRetrievalLatencyBudgetMs ?? _knowledgeRetrievalLatencyBudgetMsSeed;
+
+    public async Task<bool> GetKnowledgeAgentToolsEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).KnowledgeAgentToolsEnabled ?? _knowledgeAgentToolsEnabledSeed;
+
+    public async Task<bool> GetAllowCloudModelAccessAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).AllowCloudModelAccess ?? _allowCloudModelAccessSeed;
+
+    public async Task<string> GetPlaybookAnalysisModelNameAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken);
+        return NonBlank(stored.PlaybookAnalysisModelName) ?? _playbookAnalysisModelNameSeed ?? await ResolveNodeLocalDefaultModelNameAsync(stored, cancellationToken);
+    }
+
+    public async Task<string> GetPlaybookEvalModelNameAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken);
+        return NonBlank(stored.PlaybookEvalModelName) ?? _playbookEvalModelNameSeed ?? await ResolveNodeLocalDefaultModelNameAsync(stored, cancellationToken);
+    }
+
+    public async Task<string> GetMemoryExtractionModelNameAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken);
+        return NonBlank(stored.MemoryExtractionModelName) ?? _memoryExtractionModelNameSeed ?? await ResolveNodeLocalDefaultModelNameAsync(stored, cancellationToken);
+    }
+
+    public NodeSettingsEffectiveValues ResolveEffectiveValues(StoredNodeSettings stored)
+    {
+        ArgumentNullException.ThrowIfNull(stored);
+
+        return new NodeSettingsEffectiveValues
+        {
+            CompactionAutoEnabled = stored.CompactionAutoEnabled ?? _compactionAutoEnabledSeed,
+            CompactionDistillEnabled = stored.CompactionDistillEnabled ?? _compactionDistillEnabledSeed,
+            ProviderRetryEnabled = stored.ProviderRetryEnabled ?? _providerRetryEnabledSeed,
+            KnowledgeAdaptiveRerankingEnabled = stored.KnowledgeAdaptiveRerankingEnabled ?? _knowledgeAdaptiveRerankingEnabledSeed,
+            KnowledgeScheduledReindexEnabled = stored.KnowledgeScheduledReindexEnabled ?? _knowledgeScheduledReindexEnabledSeed,
+            KnowledgeAgentToolsEnabled = stored.KnowledgeAgentToolsEnabled ?? _knowledgeAgentToolsEnabledSeed,
+            AllowCloudModelAccess = stored.AllowCloudModelAccess ?? _allowCloudModelAccessSeed,
+            ChatRetentionEnabled = stored.ChatRetentionEnabled ?? _chatRetentionEnabledSeed,
+            AgentExecutionLogRetentionEnabled = stored.AgentExecutionLogRetentionEnabled ?? _agentExecutionLogRetentionEnabledSeed,
+            ImageTextEncoderOnGpu = stored.ImageTextEncoderOnGpu ?? _imageTextEncoderOnGpuSeed,
+            ChatRetentionDays = stored.ChatRetentionDays ?? _chatRetentionDaysSeed,
+            AgentExecutionLogRetentionDays = stored.AgentExecutionLogRetentionDays ?? _agentExecutionLogRetentionDaysSeed,
+            SchedulerHistoryRetentionDays = stored.SchedulerHistoryRetentionDays ?? _schedulerHistoryRetentionDaysSeed,
+            AgentHomeRunRetentionDays = stored.AgentHomeRunRetentionDays ?? _agentHomeRunRetentionDaysSeed
+        };
+    }
+
+    public async Task<bool> GetChatRetentionEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).ChatRetentionEnabled ?? _chatRetentionEnabledSeed;
+
+    public async Task<int> GetChatRetentionDaysAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).ChatRetentionDays ?? _chatRetentionDaysSeed;
+
+    public async Task<bool> GetAgentExecutionLogRetentionEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).AgentExecutionLogRetentionEnabled ?? _agentExecutionLogRetentionEnabledSeed;
+
+    public async Task<int> GetAgentExecutionLogRetentionDaysAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).AgentExecutionLogRetentionDays ?? _agentExecutionLogRetentionDaysSeed;
+
+    public async Task<int> GetNodeDbBackupRetainCountAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).NodeDbBackupRetainCount ?? _nodeDbBackupRetainCountSeed;
+
+    public async Task<long> GetBenchmarkKldCacheMaxBytesAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).BenchmarkKldCacheMaxBytes ?? _benchmarkKldCacheMaxBytesSeed;
+
+    public async Task<int> GetSchedulerHistoryRetentionDaysAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).SchedulerHistoryRetentionDays ?? _schedulerHistoryRetentionDaysSeed;
+
+    public async Task<int> GetAgentHomeMaxInnerToolCallsAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).AgentHomeMaxInnerToolCalls ?? _agentHomeMaxInnerToolCallsSeed;
+
+    public async Task<int> GetAgentHomePatchApplyTimeoutSecondsAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).AgentHomePatchApplyTimeoutSeconds ?? _agentHomePatchApplyTimeoutSecondsSeed;
+
+    public async Task<int> GetAgentHomeRunRetentionDaysAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).AgentHomeRunRetentionDays ?? _agentHomeRunRetentionDaysSeed;
+
+    public async Task<int> GetAgentHomeRunRetentionMaxRunsAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).AgentHomeRunRetentionMaxRuns ?? _agentHomeRunRetentionMaxRunsSeed;
+
+    public async Task<long> GetAgentHomeRunRetentionMaxTotalBytesAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).AgentHomeRunRetentionMaxTotalBytes ?? _agentHomeRunRetentionMaxTotalBytesSeed;
+
     public string GetDefaultModelName() =>
         ResolveDefaultModelName(LoadStored());
 
@@ -403,14 +679,79 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public TimeSpan GetTranscriptionInferenceTimeout() =>
         TimeSpan.FromMinutes(LoadStored().TranscriptionInferenceTimeoutMinutes ?? StoredNodeSettings.DefaultTranscriptionInferenceTimeoutMinutes);
 
-    public int GetAgentHomeRunRetentionDays() =>
-        LoadStored().AgentHomeRunRetentionDays ?? _agentHomeRunRetentionDaysSeed;
-
     public double GetModelFitSafetyMarginFraction() =>
         (LoadStored().ModelFitSafetyMarginPercent ?? StoredNodeSettings.DefaultModelFitSafetyMarginPercent) / 100d;
 
+    public int GetToolPipelineMaxIterationsPerRequest() =>
+        LoadStored().ToolPipelineMaxIterationsPerRequest ?? _toolPipelineMaxIterationsSeed;
+
+    public int GetToolPipelineMaxToolResultChars() =>
+        LoadStored().ToolPipelineMaxToolResultChars ?? _toolPipelineMaxToolResultCharsSeed;
+
+    public int GetToolPipelineMaxConsecutiveInvalidToolCalls() =>
+        LoadStored().ToolPipelineMaxConsecutiveInvalidToolCalls ?? _toolPipelineMaxConsecutiveInvalidToolCallsSeed;
+
+    public int GetContextBudgetRecentTurnKeepCount() =>
+        LoadStored().ContextBudgetRecentTurnKeepCount ?? _contextBudgetRecentTurnKeepCountSeed;
+
+    public bool GetKnowledgeScheduledReindexEnabled() =>
+        LoadStored().KnowledgeScheduledReindexEnabled ?? _knowledgeScheduledReindexEnabledSeed;
+
+    public int GetKnowledgeScheduledReindexIntervalMinutes() =>
+        LoadStored().KnowledgeScheduledReindexIntervalMinutes ?? _knowledgeScheduledReindexIntervalMinutesSeed;
+
+    public bool GetKnowledgeAgentToolsEnabled() =>
+        LoadStored().KnowledgeAgentToolsEnabled ?? _knowledgeAgentToolsEnabledSeed;
+
+    public bool GetAllowCloudModelAccess() =>
+        LoadStored().AllowCloudModelAccess ?? _allowCloudModelAccessSeed;
+
+    public int GetImageMaxLoadedProcesses() =>
+        LoadStored().ImageMaxLoadedProcesses ?? _imageMaxLoadedProcessesSeed;
+
+    public bool GetImageTextEncoderOnGpu() =>
+        LoadStored().ImageTextEncoderOnGpu ?? _imageTextEncoderOnGpuSeed;
+
+    public int GetGraphWorkflowMaxConcurrentRuns() =>
+        LoadStored().GraphWorkflowMaxConcurrentRuns ?? _graphWorkflowMaxConcurrentRunsSeed;
+
+    public int GetGraphWorkflowDefaultNodeTimeoutSeconds() =>
+        LoadStored().GraphWorkflowDefaultNodeTimeoutSeconds ?? _graphWorkflowDefaultNodeTimeoutSecondsSeed;
+
+    public int GetWorkSessionMaxStepsPerRun() =>
+        LoadStored().WorkSessionMaxStepsPerRun ?? _workSessionMaxStepsPerRunSeed;
+
+    public int GetWorkSessionMaxConcurrentSessions() =>
+        LoadStored().WorkSessionMaxConcurrentSessions ?? _workSessionMaxConcurrentSessionsSeed;
+
+    public int GetDevelopmentMaxAttemptDurationSeconds() =>
+        LoadStored().DevelopmentMaxAttemptDurationSeconds ?? _developmentMaxAttemptDurationSecondsSeed;
+
+    public int GetDevelopmentMaxToolCalls() =>
+        LoadStored().DevelopmentMaxToolCalls ?? _developmentMaxToolCallsSeed;
+
+    public int GetDevelopmentMaxOutputTokens() =>
+        LoadStored().DevelopmentMaxOutputTokens ?? _developmentMaxOutputTokensSeed;
+
+    private static int IntSeed(IConfiguration configuration, string key, int floor, int fallback) =>
+        configuration.GetValue<int?>(key) is { } configured && configured >= floor ? configured : fallback;
+
+    private static bool BoolSeed(IConfiguration configuration, string key, bool fallback) =>
+        configuration.GetValue<bool?>(key) ?? fallback;
+
+    private static string? NonBlank(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
     private string ResolveDefaultModelName(StoredNodeSettings stored) =>
         string.IsNullOrWhiteSpace(stored.DefaultModelName) ? _defaultModelSeed : stored.DefaultModelName;
+
+    // A background picker inherits the stored default chat model only when it is node-local: the default may be a cloud or `ext:` id
+    // (the chat policy admits those), and a background step must never send conversation content off-node. Else the appsettings seed.
+    private async Task<string> ResolveNodeLocalDefaultModelNameAsync(StoredNodeSettings stored, CancellationToken cancellationToken)
+    {
+        var inherited = ResolveDefaultModelName(stored);
+        return await BackgroundModelLocalityGuard.IsNodeLocalAsync(inherited, _modelTrustResolver.Value, cancellationToken) ? inherited : _defaultModelSeed;
+    }
 
     private IReadOnlyList<string> ResolveToolCapableModels(StoredNodeSettings stored) =>
         stored.ToolCapableModels is { Count: > 0 } models ? models : _toolCapableModelsSeed;

@@ -97,7 +97,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ToolApprovalCoordinator _toolApprovalCoordinator;
 
-    private readonly SpawnOptions _spawnOptions;
     private readonly AgentToolPipelineOptions _toolPipelineOptions;
     private readonly IToolRelevanceCoreSet _toolRelevanceCoreSet;
 
@@ -107,7 +106,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     // Warms the reranker/embedder once per turn that offers knowledge search, since search itself never spawns the reranker.
     private readonly IKnowledgeModelPrewarmer _knowledgeModelPrewarmer;
-    private readonly bool _knowledgeToolsEnabled;
 
     public InvocationRunner(Lazy<IWorkerEventDispatcher> eventDispatcher,
         IInvocationAgentFactory invocationAgentFactory,
@@ -125,14 +123,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IToolRelevanceCoreSet toolRelevanceCoreSet,
         IConfiguration configuration,
         INodeRuntimeSettings runtimeSettings,
-        IOptions<SpawnOptions> spawnOptions,
         ToolApprovalCoordinator toolApprovalCoordinator,
         ApiToolCallBridge apiToolCallBridge,
         InvocationLifecycleTracker lifecycleTracker,
         IExternalProviderRegistry externalProviderRegistry,
         IServiceScopeFactory scopeFactory,
         IKnowledgeModelPrewarmer knowledgeModelPrewarmer,
-        IOptions<KnowledgeBaseOptions> knowledgeOptions,
         ILogger<InvocationRunner> logger,
         TimeProvider timeProvider)
     {
@@ -159,13 +155,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _toolRelevanceCoreSet = toolRelevanceCoreSet ?? throw new ArgumentNullException(nameof(toolRelevanceCoreSet));
         ArgumentNullException.ThrowIfNull(configuration);
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        ArgumentNullException.ThrowIfNull(spawnOptions);
-        _spawnOptions = spawnOptions.Value;
         _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _knowledgeModelPrewarmer = knowledgeModelPrewarmer ?? throw new ArgumentNullException(nameof(knowledgeModelPrewarmer));
-        ArgumentNullException.ThrowIfNull(knowledgeOptions);
-        _knowledgeToolsEnabled = knowledgeOptions.Value.AgentToolsEnabled;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -206,10 +198,16 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         var dispatcher = _eventDispatcher.Value;
 
+        // The node's default window, read ONCE so the turn budget and the provider-round budget below cannot disagree after a mid-turn save.
+        var defaultContextTokens = await _runtimeSettings.GetDefaultContextTokensAsync(cancellationToken);
+
         // Resolved ONCE per turn from the package's TimeoutSettings plus the node-level operational options, then flowed unchanged through both the
         // single-agent and orchestration paths so the two enforce identical policy. TurnPolicy's XML doc holds the composite budget (which timeout fires when).
-        var turnPolicy = TurnPolicy.Resolve(package, _contextBudgetOptions, _resilienceOptions, _toolPipelineOptions, _maxPendingToolCallAge);
+        var turnPolicy = TurnPolicy.Resolve(package, _contextBudgetOptions, _resilienceOptions, _toolPipelineOptions, _maxPendingToolCallAge, defaultContextTokens);
 
+        // Resolved BEFORE the invocation is registered: an await that observes cancellation here must not leave a registered
+        // invocation behind, because the cleanup try/finally below has not started yet.
+        var providerCallBudgetOptions = await ResolveProviderCallBudgetOptionsAsync(package, defaultContextTokens, cancellationToken);
         _lifecycleTracker.RegisterActiveInvocation(package.InvocationId, turnPolicy.InvocationTimeout, turnPolicy.StreamIdleTimeout, cancellationToken);
         var activeInvocationCompletion = _lifecycleTracker.RegisterActiveInvocationCompletion(package.InvocationId);
         if (activeInvocationCompletion is null)
@@ -224,7 +222,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         _apiToolCallBridge.SetToolResultTimeout(package.InvocationId, turnPolicy.ToolResultTimeout);
 
-        using var providerBudgetScope = ProviderCallBudget.BeginScope(ResolveProviderCallBudgetOptions(package), harnessStartedTimestamp);
+        using var providerBudgetScope = ProviderCallBudget.BeginScope(providerCallBudgetOptions, harnessStartedTimestamp);
         var providerBudget = ProviderCallBudget.Current!;
 
         // Declared ahead of the terminal-telemetry local function below, which reads the readiness duration off it: a
@@ -365,7 +363,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             // Seed the per-root spawn context (Depth 0) so spawn_subagent enforces the fan-out and cloud-spawn caps against ONE shared root. It flows as an
             // AsyncLocal into the function-invocation pipeline running the tool body; disposal restores the prior ambient value, and a turn that never spawns pays one struct.
-            using var spawnRoot = SpawnContext.BeginRoot(_spawnOptions.MaxConcurrentSpawns, _spawnOptions.MaxCloudSpawns, resolvedModel);
+            using var spawnRoot = SpawnContext.BeginRoot(await _runtimeSettings.GetSpawnMaxConcurrentAsync(invocationToken),
+                await _runtimeSettings.GetSpawnMaxCloudAsync(invocationToken),
+                resolvedModel);
 
             // BOTH models, not just the dispatched one: the send-boundary retry switches `resolvedModel` back to the original inside this scope, and a pin it
             // never resolved drops that fallback send onto the transport's weaker unpinned check. Identical ids de-duplicate, so the pin set is unchanged.
@@ -388,7 +388,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             // Once per turn, AFTER the chat model is ready so the companions never race its launch for admission or VRAM.
             // Fire-and-forget: the first knowledge search may still find them cold and fall back to fusion order.
-            if (_knowledgeToolsEnabled && package.AllowedTools.Any(static tool => string.Equals(tool.Name, SearchKnowledgeBaseToolDefinition.ToolName, StringComparison.Ordinal)))
+            if (package.AllowedTools.Any(static tool => string.Equals(tool.Name, SearchKnowledgeBaseToolDefinition.ToolName, StringComparison.Ordinal))
+                && await _runtimeSettings.GetKnowledgeAgentToolsEnabledAsync(invocationToken))
             {
                 _knowledgeModelPrewarmer.RequestWarm();
             }
@@ -629,25 +630,28 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _toolApprovalCoordinator.ResolveUserQuestionResult(evt);
     }
 
-    /// <summary>The provider-boundary budget for this invocation: the node options, with a package's exact output reservation as the floor.</summary>
+    /// <summary>
+    ///     The provider-boundary budget for this invocation: the node options with the live node-settings knobs read once, and a
+    ///     package's exact output reservation as the floor.
+    /// </summary>
     /// <remarks>
-    ///     The same seam the Development coder uses. Without it the inner round keeps the node floor and refuses the window the outer
-    ///     budget (<see cref="TurnPolicy.ReservedOutputTokens" />) just accepted.
+    ///     The same seam the Development coder uses. Without the reservation the inner round keeps the node floor and refuses the
+    ///     window the outer budget (<see cref="TurnPolicy.ReservedOutputTokens" />) just accepted. <paramref name="defaultContextTokens" />
+    ///     is the value <see cref="TurnPolicy.Resolve" /> received, so both budgets assume the same window.
     /// </remarks>
-    private ProviderCallBudgetOptions ResolveProviderCallBudgetOptions(RuntimePackage package)
+    private async Task<ProviderCallBudgetOptions> ResolveProviderCallBudgetOptionsAsync(RuntimePackage package,
+        int defaultContextTokens,
+        CancellationToken cancellationToken)
     {
-        if (package.ReservedOutputTokensOverride is not { } reserved || reserved < 0)
-        {
-            return _providerCallBudgetOptions;
-        }
-
         return new ProviderCallBudgetOptions
         {
             MaxProviderCallsPerInvocation = _providerCallBudgetOptions.MaxProviderCallsPerInvocation,
-            MaxCumulativeInputTokens = _providerCallBudgetOptions.MaxCumulativeInputTokens,
-            DefaultContextTokens = _providerCallBudgetOptions.DefaultContextTokens,
-            ReservedOutputTokenFloor = reserved,
-            RecentMessagesToKeep = _providerCallBudgetOptions.RecentMessagesToKeep,
+            MaxCumulativeInputTokens = await _runtimeSettings.GetProviderBudgetMaxCumulativeInputTokensAsync(cancellationToken),
+            DefaultContextTokens = defaultContextTokens,
+            ReservedOutputTokenFloor = package.ReservedOutputTokensOverride is { } reserved && reserved >= 0
+                ? reserved
+                : _providerCallBudgetOptions.ReservedOutputTokenFloor,
+            RecentMessagesToKeep = await _runtimeSettings.GetProviderBudgetRecentMessagesToKeepAsync(cancellationToken),
             OversizedToolResultExcerptChars = _providerCallBudgetOptions.OversizedToolResultExcerptChars
         };
     }

@@ -200,7 +200,6 @@ public sealed class AgentHomeOfferSeamTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels).Build(),
             NullCustomToolScopeFactory.Instance,
-            trustResolver,
-            allowCloudKnowledgeAccess: false);
+            trustResolver);
     }
 }

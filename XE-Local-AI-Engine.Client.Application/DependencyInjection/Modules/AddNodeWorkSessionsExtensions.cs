@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
@@ -29,6 +30,14 @@ internal static class AddNodeWorkSessionsExtensions
 
         builder.Services.AddOptions<WorkSessionOptions>()
                .Bind(configuration.GetSection(WorkSessionOptions.Section))
+#pragma warning disable MA0045 // Options Configure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
+               // Node settings, restart-gated: the supervisor sizes its admission once. Appended after Bind so stored wins.
+               .Configure<INodeRuntimeSettings>(static (options, runtimeSettings) =>
+               {
+                   options.MaxStepsPerRun = runtimeSettings.GetWorkSessionMaxStepsPerRun();
+                   options.MaxConcurrentSessions = runtimeSettings.GetWorkSessionMaxConcurrentSessions();
+               })
+#pragma warning restore MA0045
                .ValidateDataAnnotations()
                .ValidateOnStart();
 

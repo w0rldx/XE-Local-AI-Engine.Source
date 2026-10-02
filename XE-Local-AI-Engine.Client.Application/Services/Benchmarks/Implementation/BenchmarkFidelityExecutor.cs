@@ -3,10 +3,10 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -56,7 +56,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
     private readonly ILlamaCppBinaryManager _binaries;
     private readonly ILlamaPerplexityRunner _perplexity;
     private readonly BenchmarkKldBaseCache _cache;
-    private readonly IOptions<BenchmarkKldCacheOptions> _cacheOptions;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IRuntimeEnvironmentFactsProvider _environmentFacts;
     private readonly IBenchmarkCancellationRegistry _cancellations;
     private readonly BenchmarkAdmissionRetry _admissionRetry;
@@ -70,7 +70,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         ILlamaCppBinaryManager binaries,
         ILlamaPerplexityRunner perplexity,
         BenchmarkKldBaseCache cache,
-        IOptions<BenchmarkKldCacheOptions> cacheOptions,
+        INodeRuntimeSettings runtimeSettings,
         IRuntimeEnvironmentFactsProvider environmentFacts,
         IBenchmarkCancellationRegistry cancellations,
         BenchmarkAdmissionRetry admissionRetry,
@@ -85,7 +85,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
         _binaries = binaries;
         _perplexity = perplexity;
         _cache = cache;
-        _cacheOptions = cacheOptions;
+        _runtimeSettings = runtimeSettings;
         _environmentFacts = environmentFacts;
         _cancellations = cancellations;
         _admissionRetry = admissionRetry;
@@ -341,7 +341,7 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
             BenchmarkKldBaseCache.DeleteBestEffort(tempPath);
         }
 
-        _ = _cache.Trim(_cacheOptions.Value.KldCacheMaxBytes, await _store.ListLiveFidelityDigestsAsync(token));
+        _ = _cache.Trim(await _runtimeSettings.GetBenchmarkKldCacheMaxBytesAsync(token), await _store.ListLiveFidelityDigestsAsync(token));
         return new KldPreparation
         {
             Key = key,

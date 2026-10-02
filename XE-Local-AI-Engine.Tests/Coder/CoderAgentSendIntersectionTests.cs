@@ -12,7 +12,6 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -129,8 +128,7 @@ public sealed class CoderAgentSendIntersectionTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(capableModel).Build(),
             NullCustomToolScopeFactory.Instance,
-            new FakeModelTrustResolver(),
-            allowCloudKnowledgeAccess: false);
+            new FakeModelTrustResolver());
 
         store = Substitute.For<IAgentDefinitionStore>();
         var playbookStore = Substitute.For<IPlaybookActionStore>();
@@ -150,7 +148,7 @@ public sealed class CoderAgentSendIntersectionTests
             new FakeAgentInstructionProvider(),
             Substitute.For<IModelCapabilityResolver>(),
             new PermissiveToolApprovalPolicy(),
-            Options.Create(new KnowledgeBaseOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 }

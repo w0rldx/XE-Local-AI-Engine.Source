@@ -14,7 +14,6 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -181,7 +180,6 @@ public sealed class OrchestrationResolverTests
             capabilityResolver,
             new FakeAgentInstructionProvider(),
             new PermissiveToolApprovalPolicy(),
-            Options.Create(new KnowledgeBaseOptions()),
             NullLogger<OrchestrationResolver>.Instance);
         SeedParticipants(store, triage, specialist);
 
@@ -312,11 +310,11 @@ public sealed class OrchestrationResolverTests
         // knowledge tools WOULD be offered but for the per-participant locality gate.
         var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
-            StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).Build(),
+            StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).WithAllowCloudModelAccess(allowCloudKnowledgeAccess).Build(),
             NullCustomToolScopeFactory.Instance,
-            new FakeModelTrustResolver(),
-            allowCloudKnowledgeAccess);
-        var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).Build();
+            new FakeModelTrustResolver());
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel)
+                                                      .WithAllowCloudModelAccess(allowCloudKnowledgeAccess).Build();
 
         var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
         capabilityResolver.ResolveAsync(ToolCapableModel, Arg.Any<CancellationToken>())
@@ -333,10 +331,6 @@ public sealed class OrchestrationResolverTests
             capabilityResolver,
             new FakeAgentInstructionProvider(),
             new PermissiveToolApprovalPolicy(),
-            Options.Create(new KnowledgeBaseOptions
-            {
-                AllowCloudModelAccess = allowCloudKnowledgeAccess
-            }),
             NullLogger<OrchestrationResolver>.Instance);
         SeedParticipants(store, triage, specialist);
 
@@ -694,7 +688,6 @@ public sealed class OrchestrationResolverTests
                 BaseScaffold = scaffold
             },
             new PermissiveToolApprovalPolicy(),
-            Options.Create(new KnowledgeBaseOptions()),
             NullLogger<OrchestrationResolver>.Instance);
     }
 
@@ -741,7 +734,6 @@ public sealed class OrchestrationResolverTests
             capabilityResolver ?? NonThinkingCapabilityResolver(),
             new FakeAgentInstructionProvider(),
             new PermissiveToolApprovalPolicy(),
-            Options.Create(new KnowledgeBaseOptions()),
             NullLogger<OrchestrationResolver>.Instance);
     }
 
@@ -785,7 +777,7 @@ public sealed class OrchestrationResolverTests
             TopK = topK
         });
         return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, runtimeSettings, NonThinkingCapabilityResolver(), new FakeAgentInstructionProvider(),
-            new PermissiveToolApprovalPolicy(), Options.Create(new KnowledgeBaseOptions()), NullLogger<OrchestrationResolver>.Instance);
+            new PermissiveToolApprovalPolicy(), NullLogger<OrchestrationResolver>.Instance);
     }
 
     private static void SeedParticipants(IAgentDefinitionStore store, params AgentDefinitionRecord[] participants)
@@ -909,7 +901,6 @@ public sealed class OrchestrationResolverTests
             NonThinkingCapabilityResolver(),
             new FakeAgentInstructionProvider(),
             toolApprovalPolicy,
-            Options.Create(new KnowledgeBaseOptions()),
             NullLogger<OrchestrationResolver>.Instance);
     }
 

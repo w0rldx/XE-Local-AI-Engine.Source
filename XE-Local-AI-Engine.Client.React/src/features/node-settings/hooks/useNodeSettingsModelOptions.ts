@@ -48,6 +48,15 @@ export function useNodeSettingsModelOptions(form: NodeSettingsFieldsForm, errors
 				: installedKeepWarmModelOptions,
 		[installedKeepWarmModelOptions, keepWarmModelUnavailable, selectedKeepWarmModel, t],
 	);
+	// Every installed node-local chat model, llama.cpp and Ollama alike; cloud and external entries are excluded.
+	const backgroundModelOptions = useMemo(
+		() =>
+			toChatModelOptions(localModels?.items ?? [], localModels?.isAvailable ?? false).map((option) => ({
+				value: option.value,
+				label: option.label,
+			})),
+		[localModels],
+	);
 	const rerankerModelOptions = useMemo(
 		() =>
 			(localModels?.items ?? [])
@@ -63,6 +72,7 @@ export function useNodeSettingsModelOptions(form: NodeSettingsFieldsForm, errors
 		// model, never a cloud id, an external id or an Ollama name. The backend refuses anything else at save.
 		autoEffortFastModelOptions: installedKeepWarmModelOptions,
 		rerankerModelOptions,
+		backgroundModelOptions,
 		keepWarmModelUnavailable,
 		visibleErrors: keepWarmModelUnavailable ? { ...errors, keepModelWarmModelName: "unavailableKeepWarmModel" } : errors,
 	};

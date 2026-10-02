@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Common;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     The work-session surface the REST layer sits on. Owns the rules that need more than one store to decide: which
@@ -22,10 +22,10 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
     private readonly IWorkSessionArtifactBlobStore _blobStore;
     private readonly IModelCapabilityResolver _capabilityResolver;
-    private readonly KnowledgeBaseOptions _knowledgeOptions;
     private readonly ILogger<WorkSessionService> _logger;
     private readonly WorkSessionOptions _options;
     private readonly INodeChatPersistenceService _persistence;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly SecurityOptions _securityOptions;
     private readonly IAgentWorkSessionStore _store;
     private readonly IWorkSessionEventPublisher _publisher;
@@ -42,13 +42,12 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         IWorkSessionEventPublisher publisher,
         IOptions<WorkSessionOptions> options,
         IOptions<SecurityOptions> securityOptions,
-        IOptions<KnowledgeBaseOptions> knowledgeOptions,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<WorkSessionService> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(securityOptions);
-        ArgumentNullException.ThrowIfNull(knowledgeOptions);
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
         _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
@@ -60,7 +59,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
         _securityOptions = securityOptions.Value;
-        _knowledgeOptions = knowledgeOptions.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public async Task<IReadOnlyList<WorkSessionSummary>> ListAsync(CancellationToken cancellationToken = default)
@@ -531,7 +530,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     /// </remarks>
     private async Task EnsureNoCloudEgressAsync(AgentWorkSessionSnapshot session, string? effectiveModel, CancellationToken cancellationToken)
     {
-        if (_knowledgeOptions.AllowCloudModelAccess)
+        if (await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken))
         {
             return;
         }
@@ -546,7 +545,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         if (findings.Count > 0)
         {
             throw new WorkSessionValidationException("This work session already holds findings taken on a node-local model. Moving it to a cloud model would send them off the node; "
-                                                     + "start a new session, or enable KnowledgeBase:AllowCloudModelAccess if that is what you want.");
+                                                     + "start a new session, or allow cloud model access in Node Settings if that is what you want.");
         }
     }
 

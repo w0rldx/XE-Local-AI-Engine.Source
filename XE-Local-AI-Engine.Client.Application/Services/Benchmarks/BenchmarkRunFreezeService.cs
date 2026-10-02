@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 public interface IBenchmarkRunFreezeService
@@ -75,6 +76,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
     private readonly IConversationContextBudgeter _contextBudgeter;
     private readonly ILocalChatRuntimePackageBuilder _packageBuilder;
     private readonly ConversationContextBudgetOptions _contextBudgetOptions;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly TimeProvider _timeProvider;
     private readonly IBenchmarkQueueSignal? _queueSignal;
 
@@ -122,6 +124,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         IConversationContextBudgeter contextBudgeter,
         ILocalChatRuntimePackageBuilder packageBuilder,
         IOptions<ConversationContextBudgetOptions> contextBudgetOptions,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<BenchmarkRunFreezeService> logger,
         IBenchmarkQueueSignal? queueSignal = null)
@@ -139,6 +142,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         ArgumentNullException.ThrowIfNull(contextBudgeter);
         ArgumentNullException.ThrowIfNull(packageBuilder);
         ArgumentNullException.ThrowIfNull(contextBudgetOptions);
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(timeProvider);
         _logger = logger;
         _benchmarkStore = benchmarkStore;
@@ -153,6 +157,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         _contextBudgeter = contextBudgeter;
         _packageBuilder = packageBuilder;
         _contextBudgetOptions = contextBudgetOptions.Value;
+        _runtimeSettings = runtimeSettings;
         _timeProvider = timeProvider;
         _queueSignal = queueSignal;
     }
@@ -320,6 +325,8 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         // ONE resolution per LEAF ITEM: the task text is the resolver's retrieval query, so the system prompt and skills
         // may legitimately differ per item, and the dependency set guarding the commit derives from that resolution.
         var frozenItems = new List<FrozenTaskItem>(leafItems.Length);
+        // Read once per request, the value InvocationRunner would read for the same turn, so the refusal cannot drift from the run.
+        var defaultContextTokens = await _runtimeSettings.GetDefaultContextTokensAsync(cancellationToken);
         foreach (var item in leafItems)
         {
             var itemCoreTask = BenchmarkTaskItemService.DecodePrompt(item.PromptJson.Span);
@@ -332,7 +339,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
                                cancellationToken)
                            ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
             var eligible = _eligibilityPolicy.Apply(resolved);
-            EnsureTaskFitsContext(project, eligible, item.Index, itemCoreTask, primary.ModelName, primarySampling);
+            EnsureTaskFitsContext(project, eligible, item.Index, itemCoreTask, primary.ModelName, primarySampling, defaultContextTokens);
             var dependencySet = await _dependencies.CaptureAsync(project.AgentDefinitionId,
                 eligible,
                 primaryModelName,
@@ -452,16 +459,17 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         int itemIndex,
         string coreTask,
         string modelName,
-        BenchmarkSamplingSnapshotV1 sampling)
+        BenchmarkSamplingSnapshotV1 sampling,
+        int defaultContextTokens)
     {
         var package = BenchmarkRunExecutor.BuildPrimaryPackage(_packageBuilder, runtime, coreTask, modelName, sampling, project.ContextTokens, project.InvocationTimeoutSeconds);
-        var budget = InvocationRunner.BudgetFirstRound(_contextBudgeter, package, _contextBudgetOptions, modelName);
+        var budget = InvocationRunner.BudgetFirstRound(_contextBudgeter, package, _contextBudgetOptions, defaultContextTokens, modelName);
         if (!budget.ExceedsBudget)
         {
             return;
         }
 
-        var (_, capacity, reserved) = TurnPolicy.ResolveContextBudget(package, _contextBudgetOptions);
+        var (_, capacity, reserved) = TurnPolicy.ResolveContextBudget(package, _contextBudgetOptions, defaultContextTokens);
         _logger.LogInformation(
             "Benchmark freeze refused project {ProjectId} item {ItemIndex}: estimated tokens {Estimated} over an effective budget of {Effective} (capacity {Capacity}, reserving {Reserved}, fixed overhead {FixedOverhead}).",
             project.Id,

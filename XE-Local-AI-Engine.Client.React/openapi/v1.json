@@ -42709,8 +42709,7 @@
           },
           "agentHomeRunRetentionDays": {
             "type": "integer",
-            "format": "int32",
-            "nullable": true
+            "format": "int32"
           },
           "minAgentHomeRunRetentionDays": {
             "type": "integer",
@@ -42719,6 +42718,465 @@
           "maxAllowedAgentHomeRunRetentionDays": {
             "type": "integer",
             "format": "int32"
+          },
+          "toolPipelineMaxIterationsPerRequest": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minToolPipelineMaxIterationsPerRequest": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedToolPipelineMaxIterationsPerRequest": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "toolPipelineMaxToolResultChars": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minToolPipelineMaxToolResultChars": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedToolPipelineMaxToolResultChars": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "toolPipelineMaxConsecutiveInvalidToolCalls": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minToolPipelineMaxConsecutiveInvalidToolCalls": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedToolPipelineMaxConsecutiveInvalidToolCalls": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "defaultContextTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minDefaultContextTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedDefaultContextTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "providerBudgetRecentMessagesToKeep": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minProviderBudgetRecentMessagesToKeep": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedProviderBudgetRecentMessagesToKeep": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "providerBudgetMaxCumulativeInputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minProviderBudgetMaxCumulativeInputTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedProviderBudgetMaxCumulativeInputTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "contextBudgetRecentTurnKeepCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minContextBudgetRecentTurnKeepCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedContextBudgetRecentTurnKeepCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "compactionAutoCompactPercent": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minCompactionAutoCompactPercent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedCompactionAutoCompactPercent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "compactionRecentMessagesVerbatim": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minCompactionRecentMessagesVerbatim": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedCompactionRecentMessagesVerbatim": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxInlinedAttachmentChars": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minMaxInlinedAttachmentChars": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedMaxInlinedAttachmentChars": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "knowledgeChatTopK": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minKnowledgeChatTopK": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedKnowledgeChatTopK": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "providerMaxRetries": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minProviderMaxRetries": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedProviderMaxRetries": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "spawnMaxConcurrent": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minSpawnMaxConcurrent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedSpawnMaxConcurrent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "spawnMaxCloud": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minSpawnMaxCloud": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedSpawnMaxCloud": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "spawnQueueWaitSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minSpawnQueueWaitSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedSpawnQueueWaitSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "compactionAutoEnabled": {
+            "type": "boolean"
+          },
+          "compactionDistillEnabled": {
+            "type": "boolean"
+          },
+          "providerRetryEnabled": {
+            "type": "boolean"
+          },
+          "knowledgeAdaptiveRerankingEnabled": {
+            "type": "boolean"
+          },
+          "knowledgeRetrievalLatencyBudgetMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minKnowledgeRetrievalLatencyBudgetMs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedKnowledgeRetrievalLatencyBudgetMs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "knowledgeScheduledReindexEnabled": {
+            "type": "boolean"
+          },
+          "knowledgeScheduledReindexIntervalMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minKnowledgeScheduledReindexIntervalMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedKnowledgeScheduledReindexIntervalMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "knowledgeAgentToolsEnabled": {
+            "type": "boolean"
+          },
+          "allowCloudModelAccess": {
+            "type": "boolean"
+          },
+          "playbookAnalysisModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "playbookEvalModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "memoryExtractionModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "chatRetentionEnabled": {
+            "type": "boolean"
+          },
+          "chatRetentionDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "minRetentionDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedRetentionDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "agentExecutionLogRetentionEnabled": {
+            "type": "boolean"
+          },
+          "agentExecutionLogRetentionDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nodeDbBackupRetainCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minNodeDbBackupRetainCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedNodeDbBackupRetainCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "benchmarkKldCacheMaxBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "minBenchmarkKldCacheMaxBytes": {
+            "type": "integer"
+          },
+          "maxAllowedBenchmarkKldCacheMaxBytes": {
+            "type": "integer"
+          },
+          "schedulerHistoryRetentionDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "imageMaxLoadedProcesses": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minImageMaxLoadedProcesses": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedImageMaxLoadedProcesses": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "imageTextEncoderOnGpu": {
+            "type": "boolean"
+          },
+          "graphWorkflowMaxConcurrentRuns": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minGraphWorkflowMaxConcurrentRuns": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedGraphWorkflowMaxConcurrentRuns": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "graphWorkflowDefaultNodeTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minGraphWorkflowDefaultNodeTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedGraphWorkflowDefaultNodeTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "workSessionMaxStepsPerRun": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minWorkSessionMaxStepsPerRun": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedWorkSessionMaxStepsPerRun": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "workSessionMaxConcurrentSessions": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minWorkSessionMaxConcurrentSessions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedWorkSessionMaxConcurrentSessions": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "developmentMaxAttemptDurationSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minDevelopmentMaxAttemptDurationSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedDevelopmentMaxAttemptDurationSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "developmentMaxToolCalls": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minDevelopmentMaxToolCalls": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedDevelopmentMaxToolCalls": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "developmentMaxOutputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minDevelopmentMaxOutputTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedDevelopmentMaxOutputTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "agentHomeMaxInnerToolCalls": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minAgentHomeMaxInnerToolCalls": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedAgentHomeMaxInnerToolCalls": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "agentHomePatchApplyTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minAgentHomePatchApplyTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedAgentHomePatchApplyTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "agentHomeRunRetentionMaxRuns": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minAgentHomeRunRetentionMaxRuns": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedAgentHomeRunRetentionMaxRuns": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "agentHomeRunRetentionMaxTotalBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "minAgentHomeRunRetentionMaxTotalBytes": {
+            "type": "integer"
+          },
+          "maxAllowedAgentHomeRunRetentionMaxTotalBytes": {
+            "type": "integer"
           }
         }
       },
@@ -43087,6 +43545,294 @@
             "format": "int32",
             "maximum": 365,
             "minimum": 1,
+            "nullable": true
+          },
+          "toolPipelineMaxIterationsPerRequest": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 200,
+            "minimum": 1,
+            "nullable": true
+          },
+          "toolPipelineMaxToolResultChars": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1000000,
+            "minimum": 1024,
+            "nullable": true
+          },
+          "toolPipelineMaxConsecutiveInvalidToolCalls": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 20,
+            "minimum": 1,
+            "nullable": true
+          },
+          "defaultContextTokens": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1048576,
+            "minimum": 1024,
+            "nullable": true
+          },
+          "providerBudgetRecentMessagesToKeep": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100,
+            "minimum": 2,
+            "nullable": true
+          },
+          "providerBudgetMaxCumulativeInputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100000000,
+            "minimum": 100000,
+            "nullable": true
+          },
+          "contextBudgetRecentTurnKeepCount": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 50,
+            "minimum": 2,
+            "nullable": true
+          },
+          "compactionAutoCompactPercent": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 95,
+            "minimum": 30,
+            "nullable": true
+          },
+          "compactionRecentMessagesVerbatim": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100,
+            "minimum": 2,
+            "nullable": true
+          },
+          "maxInlinedAttachmentChars": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 2000000,
+            "minimum": 1000,
+            "nullable": true
+          },
+          "knowledgeChatTopK": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 20,
+            "minimum": 1,
+            "nullable": true
+          },
+          "providerMaxRetries": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 10,
+            "minimum": 0,
+            "nullable": true
+          },
+          "spawnMaxConcurrent": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 32,
+            "minimum": 1,
+            "nullable": true
+          },
+          "spawnMaxCloud": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 32,
+            "minimum": 0,
+            "nullable": true
+          },
+          "spawnQueueWaitSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 3600,
+            "minimum": 0,
+            "nullable": true
+          },
+          "compactionAutoEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "compactionDistillEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "providerRetryEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "knowledgeAdaptiveRerankingEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "knowledgeRetrievalLatencyBudgetMs": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 60000,
+            "minimum": 50,
+            "nullable": true
+          },
+          "knowledgeScheduledReindexEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "knowledgeScheduledReindexIntervalMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 10080,
+            "minimum": 5,
+            "nullable": true
+          },
+          "knowledgeAgentToolsEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "allowCloudModelAccess": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "playbookAnalysisModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "playbookEvalModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "memoryExtractionModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "chatRetentionEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "chatRetentionDays": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 3650,
+            "minimum": 1,
+            "nullable": true
+          },
+          "agentExecutionLogRetentionEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "agentExecutionLogRetentionDays": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 3650,
+            "minimum": 1,
+            "nullable": true
+          },
+          "nodeDbBackupRetainCount": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100,
+            "minimum": 1,
+            "nullable": true
+          },
+          "benchmarkKldCacheMaxBytes": {
+            "type": "integer",
+            "maximum": 4398046511104,
+            "minimum": 1073741824,
+            "nullable": true
+          },
+          "schedulerHistoryRetentionDays": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 3650,
+            "minimum": 1,
+            "nullable": true
+          },
+          "imageMaxLoadedProcesses": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 4,
+            "minimum": 1,
+            "nullable": true
+          },
+          "imageTextEncoderOnGpu": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "graphWorkflowMaxConcurrentRuns": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 64,
+            "minimum": 1,
+            "nullable": true
+          },
+          "graphWorkflowDefaultNodeTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 86400,
+            "minimum": 30,
+            "nullable": true
+          },
+          "workSessionMaxStepsPerRun": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1000,
+            "minimum": 1,
+            "nullable": true
+          },
+          "workSessionMaxConcurrentSessions": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 64,
+            "minimum": 1,
+            "nullable": true
+          },
+          "developmentMaxAttemptDurationSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 86400,
+            "minimum": 60,
+            "nullable": true
+          },
+          "developmentMaxToolCalls": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1024,
+            "minimum": 1,
+            "nullable": true
+          },
+          "developmentMaxOutputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1000000,
+            "minimum": 256,
+            "nullable": true
+          },
+          "agentHomeMaxInnerToolCalls": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1000,
+            "minimum": 1,
+            "nullable": true
+          },
+          "agentHomePatchApplyTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 3600,
+            "minimum": 10,
+            "nullable": true
+          },
+          "agentHomeRunRetentionMaxRuns": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100000,
+            "minimum": 0,
+            "nullable": true
+          },
+          "agentHomeRunRetentionMaxTotalBytes": {
+            "type": "integer",
+            "maximum": 1099511627776,
+            "minimum": 0,
             "nullable": true
           }
         }

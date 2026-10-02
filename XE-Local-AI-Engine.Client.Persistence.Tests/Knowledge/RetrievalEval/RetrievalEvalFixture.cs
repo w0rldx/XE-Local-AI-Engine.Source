@@ -309,6 +309,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
             Substitute.For<IContextExpansionService>(),
             new NoOpQueryEmbeddingCache(),
             optionsWrapper,
+            KnowledgeSearchRuntimeSettings.From(optionsWrapper),
             logger ?? NullLogger<KnowledgeSearchService>.Instance);
     }
 

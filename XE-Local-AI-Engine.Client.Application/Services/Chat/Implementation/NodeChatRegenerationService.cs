@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
@@ -50,7 +49,6 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
     private readonly IMemoryExtractionDispatcher _memoryExtractionDispatcher;
     private readonly IConversationMaintenanceDispatcher _conversationMaintenanceDispatcher;
     private readonly IChatTurnContextBuilder _turnContextBuilder;
-    private readonly IOptions<KnowledgeBaseOptions> _knowledgeOptions;
     private readonly IOptions<ChatStreamBudgetOptions> _streamBudgetOptions;
     private readonly TimeProvider _timeProvider;
     private readonly IToolApprovalPolicy _toolApprovalPolicy;
@@ -73,7 +71,6 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         IMemoryExtractionDispatcher memoryExtractionDispatcher,
         IConversationMaintenanceDispatcher conversationMaintenanceDispatcher,
         IChatTurnContextBuilder turnContextBuilder,
-        IOptions<KnowledgeBaseOptions> knowledgeOptions,
         IOptions<ChatStreamBudgetOptions> streamBudgetOptions,
         TimeProvider timeProvider,
         IToolApprovalPolicy toolApprovalPolicy,
@@ -96,7 +93,6 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         _memoryExtractionDispatcher = memoryExtractionDispatcher;
         _conversationMaintenanceDispatcher = conversationMaintenanceDispatcher;
         _turnContextBuilder = turnContextBuilder;
-        _knowledgeOptions = knowledgeOptions;
         _streamBudgetOptions = streamBudgetOptions;
         _timeProvider = timeProvider;
         _toolApprovalPolicy = toolApprovalPolicy;
@@ -467,7 +463,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         // participant, so a single cloud participant — even under a local root — forces the withhold too.
         var anyCloudParticipant = resolution.Orchestration?.AnyParticipantIsCloud ?? false;
         var turnReachesCloud = resolution.EffectiveModelIsCloud || anyCloudParticipant;
-        var knowledgeAllowed = !turnReachesCloud || _knowledgeOptions.Value.AllowCloudModelAccess;
+        var knowledgeAllowed = !turnReachesCloud || await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken);
         if (!knowledgeAllowed)
         {
             // Name the model the notice is about: the effective cloud model when that is what reaches the cloud,

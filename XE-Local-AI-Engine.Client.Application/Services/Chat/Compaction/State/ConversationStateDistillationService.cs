@@ -27,6 +27,7 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
     private readonly LocalRuntimeWarmer _localRuntimeWarmer;
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly ConversationCompactionOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ConversationStateDistillationService> _logger;
 
@@ -37,6 +38,7 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
         LocalRuntimeWarmer localRuntimeWarmer,
         INodeSettingsStore nodeSettingsStore,
         IOptions<ConversationCompactionOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<ConversationStateDistillationService> logger)
     {
@@ -47,6 +49,7 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
         _localRuntimeWarmer = localRuntimeWarmer ?? throw new ArgumentNullException(nameof(localRuntimeWarmer));
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -74,7 +77,7 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
         int? upToAnchorSequence,
         CancellationToken cancellationToken = default)
     {
-        if (!_options.DistillEnabled)
+        if (!await _runtimeSettings.GetCompactionDistillEnabledAsync(cancellationToken))
         {
             return new ConversationStateDistillationOutcome
             {

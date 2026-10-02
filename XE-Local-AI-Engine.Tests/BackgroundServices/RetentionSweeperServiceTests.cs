@@ -19,10 +19,12 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.WorkSessions;
 
 [Category(TestCategories.Integration)]
@@ -158,6 +160,34 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         AssertEx.Equal(expected: 1, await CountRowsAsync(provider, "message_feedback", conversationId));
         AssertEx.Equal(expected: 1, await CountRowsAsync(provider, "conversation_uploaded_files", conversationId));
         AssertEx.True(Directory.Exists(UploadDirectory(conversationId)), "The upload directory must survive when retention is disabled.");
+    }
+
+    [Test]
+    public async Task Sweep_WhenRetentionIsTurnedOnWhileRunning_DeletesWithoutARestart()
+    {
+        await using var provider = await BuildProviderAsync("live-toggle.sqlite");
+        var service = CreateService(provider);
+        var conversationId = await SeedConversationWithFootprintAsync(provider, service);
+
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithChatRetentionEnabled(false).WithChatRetentionDays(30).Build();
+        using var sweeper = CreateSweeper(provider, enabled: false, runtimeSettings: runtimeSettings, sweepInterval: TimeSpan.FromMilliseconds(50));
+        await sweeper.StartAsync(CancellationToken.None);
+
+        // Two ticks have read the switch as off, so a sweep that ignored it would already have deleted the conversation.
+        await AssertEx.EventuallyAsync(() => runtimeSettings.ReceivedCalls()
+                                                             .Count(static call => string.Equals(call.GetMethodInfo().Name,
+                                                                 nameof(INodeRuntimeSettings.GetChatRetentionEnabledAsync),
+                                                                 StringComparison.Ordinal)) >= 2,
+            TimeSpan.FromSeconds(5),
+            "The sweeper should keep re-reading the retention switch while it is off.");
+        AssertEx.NotNull(await service.GetConversationAsync(conversationId));
+
+        // The operator turns retention on in Node Settings: the next tick sweeps, with no restart of the hosted service.
+        runtimeSettings.GetChatRetentionEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        await AssertEx.EventuallyAsync(async () => await service.GetConversationAsync(conversationId) is null,
+            TimeSpan.FromSeconds(5),
+            "The next tick after the switch flips on should delete the expired conversation.");
+        await sweeper.StopAsync(CancellationToken.None);
     }
 
     [Test]
@@ -651,17 +681,21 @@ public sealed class RetentionSweeperServiceTests : IDisposable
             provider.GetRequiredService<IConversationUploadedFileStore>());
     }
 
-    private static RetentionSweeperService CreateSweeper(IServiceProvider provider, bool enabled, TimeProvider? timeProvider = null)
+    private static RetentionSweeperService CreateSweeper(IServiceProvider provider,
+        bool enabled,
+        TimeProvider? timeProvider = null,
+        INodeRuntimeSettings? runtimeSettings = null,
+        TimeSpan? sweepInterval = null)
     {
+        // The switch and the window are node settings, read per tick; the options only carry the cadence.
         return new RetentionSweeperService(provider.GetRequiredService<IServiceScopeFactory>(),
             timeProvider ?? TimeProvider.System,
             provider.GetRequiredService<NodeChatPersistenceWriter>(),
             Options.Create(new ChatRetentionOptions
             {
-                Enabled = enabled,
-                RetentionDays = 30,
-                SweepInterval = TimeSpan.FromMinutes(10)
+                SweepInterval = sweepInterval ?? TimeSpan.FromMinutes(10)
             }),
+            runtimeSettings ?? StubNodeRuntimeSettings.Create().WithChatRetentionEnabled(enabled).WithChatRetentionDays(30).Build(),
             NullLogger<RetentionSweeperService>.Instance);
     }
 

@@ -85,7 +85,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         }
 
         var rejections = new List<PatchApplyRejection>(plan.Rejections);
-        var runner = new HostGitRunner(_options.PatchApplyTimeoutSeconds);
+        var runner = new HostGitRunner(await _runtimeSettings.GetAgentHomePatchApplyTimeoutSecondsAsync(cancellationToken));
         var numstat = new Dictionary<string, LineStat>(StringComparer.Ordinal);
         foreach (var alias in plan.Aliases)
         {
@@ -161,7 +161,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         // Re-run the full validation + dry-run check (TOCTOU defense; never blind-apply).
         var plan = await BuildPlanAsync(request, cancellationToken);
         var rejections = new List<PatchApplyRejection>(plan.Rejections);
-        var runner = new HostGitRunner(_options.PatchApplyTimeoutSeconds);
+        var runner = new HostGitRunner(await _runtimeSettings.GetAgentHomePatchApplyTimeoutSecondsAsync(cancellationToken));
 
         // Line counts are read here, before anything is written, because the same read is what proves git will write
         // every planned file; the counts shown for the applied files are the ones that cleared the check.

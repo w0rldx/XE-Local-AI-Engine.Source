@@ -3,17 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 using System.Globalization;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
-public sealed class BenchmarkKldCacheOptions
-{
-    public const string SectionName = "Benchmarks";
-
-    /// <summary>
-    ///     How much the base-logit cache may hold before whole files are evicted, least recently used first. A single
-    ///     base model at 200 chunks is ~25 GB, so this is "two of them and a little room", not a generous allowance.
-    /// </summary>
-    public long KldCacheMaxBytes { get; init; } = 64L * 1024 * 1024 * 1024;
-}
-
 /// <summary>
 ///     The base-model logit files KL-divergence is measured against: how they are named, how one process avoids
 ///     writing over another's, how a partial write is never mistaken for a finished one, and when the disk says no.

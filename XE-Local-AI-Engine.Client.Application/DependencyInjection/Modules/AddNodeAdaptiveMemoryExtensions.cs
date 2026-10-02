@@ -21,19 +21,12 @@ internal static class AddNodeAdaptiveMemoryExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // Extraction model options default to the node-local chat model, so a configured node extracts by default and run content
-        // never reaches the cloud chat client by fallback; an empty value disables extraction entirely, which is the CI-safe gate.
+        // Extraction options. The model name is the MemoryExtractionModelName node setting, read per run; blank inherits the default
+        // model, so a configured node extracts by default and run content never reaches the cloud chat client by fallback.
         builder.Services.AddOptions<MemoryExtractionOptions>()
                .Bind(builder.Configuration.GetSection(MemoryExtractionOptions.Section))
                .PostConfigure(memoryOptions =>
                {
-                   if (string.IsNullOrWhiteSpace(memoryOptions.ExtractionModelName))
-                   {
-                       memoryOptions.ExtractionModelName = builder.Configuration.GetValue<string>("Ollama:ChatModel")
-                                                           ?? builder.Configuration.GetValue<string>("Agent:LocalChat:DefaultModel")
-                                                           ?? string.Empty;
-                   }
-
                    // Semantic-dedup threshold must stay in the open-closed cosine interval (0, 1]; a non-positive or >1
                    // value is nonsensical (would drop everything / nothing) so reset to the conservative default.
                    if (memoryOptions.SemanticDedupSimilarityThreshold is <= 0d or > 1d)

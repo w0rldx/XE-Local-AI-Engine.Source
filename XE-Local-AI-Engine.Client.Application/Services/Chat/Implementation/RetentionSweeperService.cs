@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
@@ -33,6 +34,7 @@ public sealed class RetentionSweeperService : BackgroundService
 
     private readonly ILogger<RetentionSweeperService> _logger;
     private readonly ChatRetentionOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly TimeProvider _timeProvider;
     private readonly NodeChatPersistenceWriter _writer;
@@ -41,6 +43,7 @@ public sealed class RetentionSweeperService : BackgroundService
         TimeProvider timeProvider,
         NodeChatPersistenceWriter writer,
         IOptions<ChatRetentionOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<RetentionSweeperService> logger)
     {
         _serviceScopeFactory = serviceScopeFactory ?? throw new ArgumentNullException(nameof(serviceScopeFactory));
@@ -48,28 +51,20 @@ public sealed class RetentionSweeperService : BackgroundService
         _writer = writer ?? throw new ArgumentNullException(nameof(writer));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value ?? throw new ArgumentNullException(nameof(options));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.Enabled)
-        {
-            _logger.LogInformation("Chat retention is disabled; conversations are never auto-deleted. Set {Section}:Enabled=true to enable it.", ChatRetentionOptions.Section);
-
-            // Inactivity-based deletion stays gated on Enabled, but the orphaned-upload resweep runs regardless: a
-            // failed interactive purge can strand a directory that nothing else would reconcile while disabled.
-            await RunOrphanResweepOnceAsync(stoppingToken);
-            return;
-        }
-
-        _logger.LogInformation("Chat retention is enabled; conversations older than {RetentionDays} day(s) are auto-deleted every {SweepInterval}.",
-            _options.RetentionDays,
-            _options.SweepInterval);
-
-        // Reconcile any stranded upload directory at startup, before the first timer tick (each subsequent full sweep
-        // also runs the orphan resweep).
+        // Reconcile any stranded upload directory at startup, enabled or not: a failed interactive purge can strand a
+        // directory nothing else would reconcile. Each later full sweep also runs the orphan resweep.
         await RunOrphanResweepOnceAsync(stoppingToken);
+
+        // The loop always runs and re-reads the node setting on every tick, so turning retention on or off applies
+        // without a restart; a disabled tick deletes nothing.
+        _logger.LogInformation("Chat retention checks its node setting every {SweepInterval}; conversations are deleted only while it is enabled.",
+            _options.SweepInterval);
 
         using var timer = new PeriodicTimer(_options.SweepInterval, _timeProvider);
 
@@ -89,7 +84,10 @@ public sealed class RetentionSweeperService : BackgroundService
 
             try
             {
-                await RunSweepOnceAsync(stoppingToken);
+                if (await _runtimeSettings.GetChatRetentionEnabledAsync(stoppingToken))
+                {
+                    await RunSweepOnceAsync(stoppingToken);
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -114,7 +112,8 @@ public sealed class RetentionSweeperService : BackgroundService
 
         // Production timestamps are Unix MILLISECONDS, so the cutoff must be too: a seconds cutoff is a thousandfold
         // smaller than any real last_seen and the age predicate would never fire.
-        var cutoffUtc = _timeProvider.GetUtcNow().Subtract(TimeSpan.FromDays(_options.RetentionDays)).ToUnixTimeMilliseconds();
+        var retentionDays = await _runtimeSettings.GetChatRetentionDaysAsync(cancellationToken);
+        var cutoffUtc = _timeProvider.GetUtcNow().Subtract(TimeSpan.FromDays(retentionDays)).ToUnixTimeMilliseconds();
 
         // Candidates are selected lock-free, then deleted under the conversation's exclusive write lock with
         // eligibility re-checked inside the transaction, so a conversation touched after selection survives.

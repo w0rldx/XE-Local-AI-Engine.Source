@@ -101,8 +101,6 @@ public sealed class ExternalModelContextBudgetTests
             // Everything below is required by the policy but irrelevant to the context fold under test.
             MaxToolIterationsPerRequest = 8,
             MaxConsecutiveInvalidToolCallsPerTool = 3,
-            RetryEnabled = false,
-            MaxRetries = 0,
             BaseRetryDelay = TimeSpan.Zero,
             MaxRetryDelay = TimeSpan.Zero,
             CircuitBreakerEnabled = false,

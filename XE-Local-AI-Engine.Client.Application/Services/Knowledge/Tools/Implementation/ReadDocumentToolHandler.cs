@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
 
 using System.Text.Json;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     <see cref="IClientLocalToolHandler" /> for <c>read_document</c> (ClientLocal): JSON-in, JSON-out, reading one
@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 ///     The scoped <see cref="IKnowledgeDocumentCatalogService" /> is resolved from a FRESH DI scope per call. Returned
 ///     content is bounded by <see cref="MaxContentChars" />, so a huge document cannot be dumped unbounded into the
 ///     model context, and truncation is flagged in the payload. Read-only, so it auto-runs; gated by
-///     <c>KnowledgeBase:AgentToolsEnabled</c>.
+///     the live <c>KnowledgeAgentToolsEnabled</c> node setting.
 /// </remarks>
 internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
 {
@@ -22,13 +22,12 @@ internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
     private const int MaxContentChars = 50_000;
 
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly bool _toolsEnabled;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public ReadDocumentToolHandler(IServiceScopeFactory scopeFactory, IOptions<KnowledgeBaseOptions> options)
+    public ReadDocumentToolHandler(IServiceScopeFactory scopeFactory, INodeRuntimeSettings runtimeSettings)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        ArgumentNullException.ThrowIfNull(options);
-        _toolsEnabled = options.Value.AgentToolsEnabled;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public string ToolName => ReadDocumentToolDefinition.ToolName;
@@ -43,9 +42,9 @@ internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
     {
         ArgumentNullException.ThrowIfNull(jsonArguments);
 
-        if (!_toolsEnabled)
+        if (!await _runtimeSettings.GetKnowledgeAgentToolsEnabledAsync(cancellationToken))
         {
-            return "The knowledge-base tools are disabled on this node (KnowledgeBase:AgentToolsEnabled=false).";
+            return "The knowledge-base tools are disabled on this node (Node Settings, Knowledge section).";
         }
 
         cancellationToken.ThrowIfCancellationRequested();

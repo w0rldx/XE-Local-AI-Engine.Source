@@ -6,9 +6,22 @@ using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
+using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
+using XE_Local_AI_Engine.Client.Services.Persistence;
+using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -359,7 +372,7 @@ public sealed class NodeRuntimeSettingsTests
         AssertEx.Equal(new WhisperRuntimeOptions().InferenceTimeout, sut.GetTranscriptionInferenceTimeout());
         AssertEx.Equal(new ProviderCallBudgetOptions().MaxProviderCallsPerInvocation, sut.GetMaxProviderCallsPerInvocation());
         AssertEx.Equal(new HuggingFaceOptions().DownloadConnections, sut.GetHuggingFaceDownloadConnections());
-        AssertEx.Equal(new AgentHomeRunRetentionOptions().RetentionDays, sut.GetAgentHomeRunRetentionDays());
+        AssertEx.Equal(new AgentHomeRunRetentionOptions().RetentionDays, await sut.GetAgentHomeRunRetentionDaysAsync());
         AssertEx.Equal(MemoryFitEstimator.DefaultSafetyMarginFraction, sut.GetModelFitSafetyMarginFraction());
         AssertEx.Equal(new AgentHomeOptions().MaxRunSeconds, await sut.GetAgentHomeMaxRunSecondsAsync());
         AssertEx.Equal(expected: 300, await sut.GetCustomToolMaxTimeoutSecondsAsync());
@@ -388,7 +401,7 @@ public sealed class NodeRuntimeSettingsTests
         AssertEx.Equal(expected: 8, sut.GetHuggingFaceDownloadConnections());
         AssertEx.Equal(TimeSpan.FromMinutes(5), sut.GetImageIdleTimeToLive());
         AssertEx.Equal(expected: 150, sut.GetMaxProviderCallsPerInvocation());
-        AssertEx.Equal(expected: 0, sut.GetAgentHomeRunRetentionDays(), "0 turns the age limit off and must survive as a seed.");
+        AssertEx.Equal(expected: 0, await sut.GetAgentHomeRunRetentionDaysAsync(), "0 turns the age limit off and must survive as a seed.");
         AssertEx.Equal(expected: 1200, await sut.GetAgentHomeMaxRunSecondsAsync());
     }
 
@@ -441,14 +454,539 @@ public sealed class NodeRuntimeSettingsTests
         AssertEx.Equal(expected: 2, sut.GetHuggingFaceDownloadConnections());
         AssertEx.Equal(TimeSpan.FromMinutes(90), sut.GetTranscriptionInferenceTimeout());
         AssertEx.Equal(expected: 1800, await sut.GetAgentHomeMaxRunSecondsAsync());
-        AssertEx.Equal(expected: 7, sut.GetAgentHomeRunRetentionDays());
+        AssertEx.Equal(expected: 7, await sut.GetAgentHomeRunRetentionDaysAsync());
+    }
+
+    [Test]
+    public async Task ChatKnobs_UnsetAndUnseeded_EqualTheOptionsDefaultsTheyReplaced()
+    {
+        var sut = CreateSut(new StoredNodeSettings(), new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        var toolPipeline = new AgentToolPipelineOptions();
+        AssertEx.Equal(toolPipeline.MaximumToolIterationsPerRequest, sut.GetToolPipelineMaxIterationsPerRequest());
+        AssertEx.Equal(toolPipeline.MaxToolResultCharacters, sut.GetToolPipelineMaxToolResultChars());
+        AssertEx.Equal(toolPipeline.MaxConsecutiveInvalidToolCallsPerTool, sut.GetToolPipelineMaxConsecutiveInvalidToolCalls());
+        var providerBudget = new ProviderCallBudgetOptions();
+        AssertEx.Equal(providerBudget.DefaultContextTokens, await sut.GetDefaultContextTokensAsync());
+        AssertEx.Equal(new ConversationContextBudgetOptions().DefaultContextTokens, await sut.GetDefaultContextTokensAsync());
+        AssertEx.Equal(providerBudget.RecentMessagesToKeep, await sut.GetProviderBudgetRecentMessagesToKeepAsync());
+        AssertEx.Equal(providerBudget.MaxCumulativeInputTokens, await sut.GetProviderBudgetMaxCumulativeInputTokensAsync());
+        AssertEx.Equal(new ConversationContextBudgetOptions().RecentTurnKeepCount, sut.GetContextBudgetRecentTurnKeepCount());
+        var compaction = new ConversationCompactionOptions();
+        AssertEx.Equal(compaction.AutoCompactEnabled, await sut.GetCompactionAutoEnabledAsync());
+        AssertEx.Equal((int)Math.Round(compaction.AutoCompactFraction * 100), await sut.GetCompactionAutoCompactPercentAsync());
+        AssertEx.Equal(compaction.RecentMessagesToKeepVerbatim, await sut.GetCompactionRecentMessagesVerbatimAsync());
+        AssertEx.Equal(compaction.DistillEnabled, await sut.GetCompactionDistillEnabledAsync());
+        var localChat = new LocalChatAgentOptions();
+        AssertEx.Equal(localChat.MaxInlinedAttachmentChars, await sut.GetMaxInlinedAttachmentCharsAsync());
+        AssertEx.Equal(localChat.KnowledgeChatTopK, await sut.GetKnowledgeChatTopKAsync());
+        var resilience = new ProviderResilienceOptions();
+        AssertEx.Equal(resilience.RetryEnabled, await sut.GetProviderRetryEnabledAsync());
+        AssertEx.Equal(resilience.MaxRetries, await sut.GetProviderMaxRetriesAsync());
+        var spawn = new SpawnOptions();
+        AssertEx.Equal(spawn.MaxConcurrentSpawns, await sut.GetSpawnMaxConcurrentAsync());
+        AssertEx.Equal(spawn.MaxCloudSpawns, await sut.GetSpawnMaxCloudAsync());
+        AssertEx.Equal(spawn.QueueWaitSeconds, await sut.GetSpawnQueueWaitSecondsAsync());
+    }
+
+    [Test]
+    public async Task ChatKnobs_StoredAbsent_UseTheAppsettingsSeed()
+    {
+        var sut = CreateSut(new StoredNodeSettings(),
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["Agent:ToolPipeline:MaximumToolIterationsPerRequest"] = "60",
+                ["Agent:ToolPipeline:MaxToolResultCharacters"] = "20000",
+                ["Agent:ToolPipeline:MaxConsecutiveInvalidToolCallsPerTool"] = "5",
+                ["Agent:ProviderCallBudget:DefaultContextTokens"] = "16384",
+                ["Agent:ProviderCallBudget:RecentMessagesToKeep"] = "10",
+                ["Agent:ProviderCallBudget:MaxCumulativeInputTokens"] = "2000000",
+                ["Agent:ConversationContextBudget:RecentTurnKeepCount"] = "6",
+                ["Agent:ConversationCompaction:AutoCompactEnabled"] = "false",
+                ["Agent:ConversationCompaction:AutoCompactFraction"] = "0.6",
+                ["Agent:ConversationCompaction:RecentMessagesToKeepVerbatim"] = "12",
+                ["Agent:ConversationCompaction:DistillEnabled"] = "false",
+                ["Agent:ProviderResilience:RetryEnabled"] = "false",
+                ["Agent:ProviderResilience:MaxRetries"] = "4",
+                ["Spawn:MaxConcurrentSpawns"] = "5",
+                ["Spawn:MaxCloudSpawns"] = "0",
+                ["Spawn:QueueWaitSeconds"] = "0"
+            },
+            localChat: new LocalChatAgentOptions
+            {
+                MaxInlinedAttachmentChars = 90_000,
+                KnowledgeChatTopK = 8
+            });
+
+        AssertEx.Equal(expected: 60, sut.GetToolPipelineMaxIterationsPerRequest());
+        AssertEx.Equal(expected: 20_000, sut.GetToolPipelineMaxToolResultChars());
+        AssertEx.Equal(expected: 5, sut.GetToolPipelineMaxConsecutiveInvalidToolCalls());
+        AssertEx.Equal(expected: 16_384, await sut.GetDefaultContextTokensAsync());
+        AssertEx.Equal(expected: 10, await sut.GetProviderBudgetRecentMessagesToKeepAsync());
+        AssertEx.Equal(expected: 2_000_000, await sut.GetProviderBudgetMaxCumulativeInputTokensAsync());
+        AssertEx.Equal(expected: 6, sut.GetContextBudgetRecentTurnKeepCount());
+        AssertEx.False(await sut.GetCompactionAutoEnabledAsync());
+        AssertEx.Equal(expected: 60, await sut.GetCompactionAutoCompactPercentAsync(), "the 0.6 fraction seeds the stored percent");
+        AssertEx.Equal(expected: 12, await sut.GetCompactionRecentMessagesVerbatimAsync());
+        AssertEx.False(await sut.GetCompactionDistillEnabledAsync());
+        AssertEx.Equal(expected: 90_000, await sut.GetMaxInlinedAttachmentCharsAsync());
+        AssertEx.Equal(expected: 8, await sut.GetKnowledgeChatTopKAsync());
+        AssertEx.False(await sut.GetProviderRetryEnabledAsync());
+        AssertEx.Equal(expected: 4, await sut.GetProviderMaxRetriesAsync());
+        AssertEx.Equal(expected: 5, await sut.GetSpawnMaxConcurrentAsync());
+        AssertEx.Equal(expected: 0, await sut.GetSpawnMaxCloudAsync(), "0 forbids cloud sub-agents and must survive as a seed.");
+        AssertEx.Equal(expected: 0, await sut.GetSpawnQueueWaitSecondsAsync(), "0 rejects at once and must survive as a seed.");
+    }
+
+    [Test]
+    public async Task DefaultContextTokens_FallsBackToTheTurnBudgetKey_WhenOnlyThatIsConfigured()
+    {
+        // One stored knob replaced two config keys of the same meaning; a node that only ever set the turn-budget one keeps it.
+        var sut = CreateSut(new StoredNodeSettings(),
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["Agent:ConversationContextBudget:DefaultContextTokens"] = "32768"
+            });
+
+        AssertEx.Equal(expected: 32_768, await sut.GetDefaultContextTokensAsync());
+    }
+
+    [Test]
+    public async Task ChatKnobs_SeedBelowTheOptionsFloor_FallsBackToTheDefault()
+    {
+        // A seed the bound options validator would refuse is never handed to a consumer as the effective value.
+        var sut = CreateSut(new StoredNodeSettings(),
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["Spawn:MaxConcurrentSpawns"] = "0",
+                ["Agent:ConversationCompaction:AutoCompactFraction"] = "0.1"
+            });
+
+        AssertEx.Equal(StoredNodeSettings.DefaultSpawnMaxConcurrent, await sut.GetSpawnMaxConcurrentAsync());
+        AssertEx.Equal(StoredNodeSettings.DefaultCompactionAutoCompactPercent, await sut.GetCompactionAutoCompactPercentAsync());
+    }
+
+    [Test]
+    public async Task ChatKnobs_Stored_WinOverSeedAndDefault()
+    {
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                ToolPipelineMaxIterationsPerRequest = 80,
+                ToolPipelineMaxToolResultChars = 100_000,
+                ToolPipelineMaxConsecutiveInvalidToolCalls = 7,
+                DefaultContextTokens = 65_536,
+                ProviderBudgetRecentMessagesToKeep = 20,
+                ProviderBudgetMaxCumulativeInputTokens = 8_000_000,
+                ContextBudgetRecentTurnKeepCount = 9,
+                CompactionAutoEnabled = true,
+                CompactionAutoCompactPercent = 90,
+                CompactionRecentMessagesVerbatim = 16,
+                CompactionDistillEnabled = true,
+                MaxInlinedAttachmentChars = 200_000,
+                KnowledgeChatTopK = 12,
+                ProviderRetryEnabled = true,
+                ProviderMaxRetries = 7,
+                SpawnMaxConcurrent = 1,
+                SpawnMaxCloud = 2,
+                SpawnQueueWaitSeconds = 30
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["Agent:ToolPipeline:MaximumToolIterationsPerRequest"] = "60",
+                ["Agent:ProviderCallBudget:DefaultContextTokens"] = "16384",
+                ["Agent:ConversationContextBudget:RecentTurnKeepCount"] = "6",
+                ["Agent:ConversationCompaction:AutoCompactEnabled"] = "false",
+                ["Agent:ConversationCompaction:AutoCompactFraction"] = "0.6",
+                ["Agent:ConversationCompaction:DistillEnabled"] = "false",
+                ["Agent:ProviderResilience:RetryEnabled"] = "false",
+                ["Spawn:MaxConcurrentSpawns"] = "5"
+            },
+            localChat: new LocalChatAgentOptions
+            {
+                MaxInlinedAttachmentChars = 90_000,
+                KnowledgeChatTopK = 8
+            });
+
+        AssertEx.Equal(expected: 80, sut.GetToolPipelineMaxIterationsPerRequest());
+        AssertEx.Equal(expected: 100_000, sut.GetToolPipelineMaxToolResultChars());
+        AssertEx.Equal(expected: 7, sut.GetToolPipelineMaxConsecutiveInvalidToolCalls());
+        AssertEx.Equal(expected: 65_536, await sut.GetDefaultContextTokensAsync());
+        AssertEx.Equal(expected: 20, await sut.GetProviderBudgetRecentMessagesToKeepAsync());
+        AssertEx.Equal(expected: 8_000_000, await sut.GetProviderBudgetMaxCumulativeInputTokensAsync());
+        AssertEx.Equal(expected: 9, sut.GetContextBudgetRecentTurnKeepCount());
+        AssertEx.True(await sut.GetCompactionAutoEnabledAsync());
+        AssertEx.Equal(expected: 90, await sut.GetCompactionAutoCompactPercentAsync());
+        AssertEx.Equal(expected: 16, await sut.GetCompactionRecentMessagesVerbatimAsync());
+        AssertEx.True(await sut.GetCompactionDistillEnabledAsync());
+        AssertEx.Equal(expected: 200_000, await sut.GetMaxInlinedAttachmentCharsAsync());
+        AssertEx.Equal(expected: 12, await sut.GetKnowledgeChatTopKAsync());
+        AssertEx.True(await sut.GetProviderRetryEnabledAsync());
+        AssertEx.Equal(expected: 7, await sut.GetProviderMaxRetriesAsync());
+        AssertEx.Equal(expected: 1, await sut.GetSpawnMaxConcurrentAsync());
+        AssertEx.Equal(expected: 2, await sut.GetSpawnMaxCloudAsync());
+        AssertEx.Equal(expected: 30, await sut.GetSpawnQueueWaitSecondsAsync());
+    }
+
+    [Test]
+    public async Task KnowledgeAndUsageKnobs_UnsetAndUnseeded_EqualTheOptionsDefaultsTheyReplaced()
+    {
+        var sut = CreateSut(new StoredNodeSettings(), new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        var knowledge = new KnowledgeBaseOptions();
+        AssertEx.Equal(knowledge.AdaptiveRerankingEnabled, await sut.GetKnowledgeAdaptiveRerankingEnabledAsync());
+        AssertEx.Equal(knowledge.RetrievalLatencyBudgetMilliseconds, await sut.GetKnowledgeRetrievalLatencyBudgetMsAsync());
+        AssertEx.Equal(knowledge.ScheduledModelReindexEnabled, sut.GetKnowledgeScheduledReindexEnabled());
+        AssertEx.Equal(knowledge.ScheduledModelReindexIntervalMinutes, sut.GetKnowledgeScheduledReindexIntervalMinutes());
+        AssertEx.Equal(knowledge.AgentToolsEnabled, await sut.GetKnowledgeAgentToolsEnabledAsync());
+        AssertEx.False(await sut.GetAllowCloudModelAccessAsync(), "Node-local data must never reach a cloud model by default.");
+        var chatRetention = new ChatRetentionOptions();
+        AssertEx.Equal(chatRetention.Enabled, await sut.GetChatRetentionEnabledAsync());
+        AssertEx.Equal(chatRetention.RetentionDays, await sut.GetChatRetentionDaysAsync());
+        var logRetention = new AgentExecutionLogRetentionOptions();
+        AssertEx.Equal(logRetention.Enabled, await sut.GetAgentExecutionLogRetentionEnabledAsync());
+        AssertEx.Equal(logRetention.RetentionDays, await sut.GetAgentExecutionLogRetentionDaysAsync());
+        AssertEx.Equal(new NodeDbBackupOptions().RetainCount, await sut.GetNodeDbBackupRetainCountAsync());
+        AssertEx.Equal(64L * 1024 * 1024 * 1024, await sut.GetBenchmarkKldCacheMaxBytesAsync());
+        AssertEx.Equal(new SchedulerOptions().HistoryRetentionDays, await sut.GetSchedulerHistoryRetentionDaysAsync());
+    }
+
+    [Test]
+    public async Task KnowledgeAndUsageKnobs_StoredAbsent_UseTheAppsettingsSeed()
+    {
+        var sut = CreateSut(new StoredNodeSettings(),
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["KnowledgeBase:AdaptiveRerankingEnabled"] = "false",
+                ["KnowledgeBase:RetrievalLatencyBudgetMilliseconds"] = "900",
+                ["KnowledgeBase:ScheduledModelReindexEnabled"] = "false",
+                ["KnowledgeBase:ScheduledModelReindexIntervalMinutes"] = "15",
+                ["KnowledgeBase:AgentToolsEnabled"] = "false",
+                ["KnowledgeBase:AllowCloudModelAccess"] = "true",
+                ["ChatRetention:Enabled"] = "true",
+                ["ChatRetention:RetentionDays"] = "90",
+                ["AgentExecutionLogRetention:Enabled"] = "false",
+                ["AgentExecutionLogRetention:RetentionDays"] = "14",
+                ["NodeDbBackup:RetainCount"] = "7",
+                ["Benchmarks:KldCacheMaxBytes"] = "2147483648",
+                ["Scheduler:HistoryRetentionDays"] = "60"
+            });
+
+        AssertEx.False(await sut.GetKnowledgeAdaptiveRerankingEnabledAsync());
+        AssertEx.Equal(expected: 900, await sut.GetKnowledgeRetrievalLatencyBudgetMsAsync());
+        AssertEx.False(sut.GetKnowledgeScheduledReindexEnabled());
+        AssertEx.Equal(expected: 15, sut.GetKnowledgeScheduledReindexIntervalMinutes());
+        AssertEx.False(await sut.GetKnowledgeAgentToolsEnabledAsync());
+        AssertEx.True(await sut.GetAllowCloudModelAccessAsync(), "An existing opt-in in appsettings must survive the migration.");
+        AssertEx.True(await sut.GetChatRetentionEnabledAsync());
+        AssertEx.Equal(expected: 90, await sut.GetChatRetentionDaysAsync());
+        AssertEx.False(await sut.GetAgentExecutionLogRetentionEnabledAsync());
+        AssertEx.Equal(expected: 14, await sut.GetAgentExecutionLogRetentionDaysAsync());
+        AssertEx.Equal(expected: 7, await sut.GetNodeDbBackupRetainCountAsync());
+        AssertEx.Equal(expected: 2_147_483_648L, await sut.GetBenchmarkKldCacheMaxBytesAsync());
+        AssertEx.Equal(expected: 60, await sut.GetSchedulerHistoryRetentionDaysAsync());
+    }
+
+    [Test]
+    public async Task RetentionSeeds_BelowOneDay_FallBackToTheDefault()
+    {
+        // A zero or negative window puts the cutoff at or past now and would purge everything, so such a seed is never used.
+        var sut = CreateSut(new StoredNodeSettings(),
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["ChatRetention:RetentionDays"] = "0",
+                ["AgentExecutionLogRetention:RetentionDays"] = "-3"
+            });
+
+        AssertEx.Equal(StoredNodeSettings.DefaultChatRetentionDays, await sut.GetChatRetentionDaysAsync());
+        AssertEx.Equal(StoredNodeSettings.DefaultAgentExecutionLogRetentionDays, await sut.GetAgentExecutionLogRetentionDaysAsync());
+    }
+
+    [Test]
+    public async Task KnowledgeAndUsageKnobs_Stored_WinOverSeedAndDefault()
+    {
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                KnowledgeAdaptiveRerankingEnabled = true,
+                KnowledgeRetrievalLatencyBudgetMs = 2000,
+                KnowledgeScheduledReindexEnabled = true,
+                KnowledgeScheduledReindexIntervalMinutes = 240,
+                KnowledgeAgentToolsEnabled = true,
+                AllowCloudModelAccess = false,
+                ChatRetentionEnabled = false,
+                ChatRetentionDays = 365,
+                AgentExecutionLogRetentionEnabled = true,
+                AgentExecutionLogRetentionDays = 120,
+                NodeDbBackupRetainCount = 10,
+                BenchmarkKldCacheMaxBytes = 8L * 1024 * 1024 * 1024,
+                SchedulerHistoryRetentionDays = 5
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["KnowledgeBase:AdaptiveRerankingEnabled"] = "false",
+                ["KnowledgeBase:RetrievalLatencyBudgetMilliseconds"] = "900",
+                ["KnowledgeBase:ScheduledModelReindexEnabled"] = "false",
+                ["KnowledgeBase:ScheduledModelReindexIntervalMinutes"] = "15",
+                ["KnowledgeBase:AgentToolsEnabled"] = "false",
+                ["KnowledgeBase:AllowCloudModelAccess"] = "true",
+                ["ChatRetention:Enabled"] = "true",
+                ["ChatRetention:RetentionDays"] = "90",
+                ["AgentExecutionLogRetention:Enabled"] = "false",
+                ["NodeDbBackup:RetainCount"] = "7",
+                ["Scheduler:HistoryRetentionDays"] = "60"
+            });
+
+        AssertEx.True(await sut.GetKnowledgeAdaptiveRerankingEnabledAsync());
+        AssertEx.Equal(expected: 2000, await sut.GetKnowledgeRetrievalLatencyBudgetMsAsync());
+        AssertEx.True(sut.GetKnowledgeScheduledReindexEnabled());
+        AssertEx.Equal(expected: 240, sut.GetKnowledgeScheduledReindexIntervalMinutes());
+        AssertEx.True(await sut.GetKnowledgeAgentToolsEnabledAsync());
+        AssertEx.False(await sut.GetAllowCloudModelAccessAsync(), "A stored opt-out beats an appsettings opt-in.");
+        AssertEx.False(await sut.GetChatRetentionEnabledAsync());
+        AssertEx.Equal(expected: 365, await sut.GetChatRetentionDaysAsync());
+        AssertEx.True(await sut.GetAgentExecutionLogRetentionEnabledAsync());
+        AssertEx.Equal(expected: 120, await sut.GetAgentExecutionLogRetentionDaysAsync());
+        AssertEx.Equal(expected: 10, await sut.GetNodeDbBackupRetainCountAsync());
+        AssertEx.Equal(8L * 1024 * 1024 * 1024, await sut.GetBenchmarkKldCacheMaxBytesAsync());
+        AssertEx.Equal(expected: 5, await sut.GetSchedulerHistoryRetentionDaysAsync());
+    }
+
+    [Test]
+    public void OfferSwitchTwins_FollowStoredOverSeedOverDefault()
+    {
+        // The synchronous twins the tool-offer seam reads must resolve exactly like their async getters.
+        var unset = CreateSut(new StoredNodeSettings(), new Dictionary<string, string?>(StringComparer.Ordinal));
+        var seeded = CreateSut(new StoredNodeSettings(),
+            new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["KnowledgeBase:AgentToolsEnabled"] = "false",
+                ["KnowledgeBase:AllowCloudModelAccess"] = "true"
+            });
+        var stored = CreateSut(new StoredNodeSettings
+            {
+                KnowledgeAgentToolsEnabled = true,
+                AllowCloudModelAccess = false
+            },
+            new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["KnowledgeBase:AgentToolsEnabled"] = "false",
+                ["KnowledgeBase:AllowCloudModelAccess"] = "true"
+            });
+
+        AssertEx.True(unset.GetKnowledgeAgentToolsEnabled());
+        AssertEx.False(unset.GetAllowCloudModelAccess());
+        AssertEx.False(seeded.GetKnowledgeAgentToolsEnabled());
+        AssertEx.True(seeded.GetAllowCloudModelAccess());
+        AssertEx.True(stored.GetKnowledgeAgentToolsEnabled());
+        AssertEx.False(stored.GetAllowCloudModelAccess());
+    }
+
+    [Test]
+    public async Task BackgroundModels_InheritTheStoredDefaultModel_WhenNothingNamesThem()
+    {
+        // The gap this closes: the old composition seed read appsettings only, so a default model chosen in Node Settings
+        // never reached the analysis, eval and extraction agents.
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                DefaultModelName = "stored-default:7b"
+            },
+            new Dictionary<string, string?>(StringComparer.Ordinal),
+            localChat: new LocalChatAgentOptions
+            {
+                DefaultModel = "appsettings-default:1b"
+            });
+
+        AssertEx.Equal("stored-default:7b", await sut.GetPlaybookAnalysisModelNameAsync());
+        AssertEx.Equal("stored-default:7b", await sut.GetPlaybookEvalModelNameAsync());
+        AssertEx.Equal("stored-default:7b", await sut.GetMemoryExtractionModelNameAsync());
+    }
+
+    [Test]
+    [Arguments("ext:remote-connection/gpt-x", ModelTrustLocality.Local)]
+    [Arguments("gpt-5-codex", ModelTrustLocality.Cloud)]
+    [Arguments("ext:unknown/model", ModelTrustLocality.Unresolved)]
+    public async Task BackgroundModels_NeverInheritANonLocalStoredDefault_FallToTheAppsettingsSeed(string storedDefault, ModelTrustLocality locality)
+    {
+        // The stored default may be a cloud or ext: id (the chat policy admits them); a background step must not follow it off-node.
+        var trust = Substitute.For<IModelTrustResolver>();
+        trust.ResolveAsync(storedDefault, Arg.Any<CancellationToken>()).Returns(locality);
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                DefaultModelName = storedDefault
+            },
+            new Dictionary<string, string?>(StringComparer.Ordinal),
+            localChat: new LocalChatAgentOptions
+            {
+                DefaultModel = "appsettings-default:1b"
+            },
+            modelTrustResolver: trust);
+
+        AssertEx.Equal(storedDefault, await sut.GetDefaultModelNameAsync());
+        AssertEx.Equal("appsettings-default:1b", await sut.GetPlaybookAnalysisModelNameAsync());
+        AssertEx.Equal("appsettings-default:1b", await sut.GetPlaybookEvalModelNameAsync());
+        AssertEx.Equal("appsettings-default:1b", await sut.GetMemoryExtractionModelNameAsync());
+    }
+
+    [Test]
+    public async Task BackgroundModels_ExplicitLocalOverride_WinsOverANonLocalStoredDefault()
+    {
+        var trust = Substitute.For<IModelTrustResolver>();
+        trust.ResolveAsync("gpt-5-codex", Arg.Any<CancellationToken>()).Returns(ModelTrustLocality.Cloud);
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                DefaultModelName = "gpt-5-codex",
+                PlaybookAnalysisModelName = "local-analysis:4b"
+            },
+            new Dictionary<string, string?>(StringComparer.Ordinal),
+            localChat: new LocalChatAgentOptions
+            {
+                DefaultModel = "appsettings-default:1b"
+            },
+            modelTrustResolver: trust);
+
+        AssertEx.Equal("local-analysis:4b", await sut.GetPlaybookAnalysisModelNameAsync());
+        AssertEx.Equal("appsettings-default:1b", await sut.GetMemoryExtractionModelNameAsync());
+    }
+
+    [Test]
+    public async Task BackgroundModels_FollowStoredOverSectionSeedOverOllamaChatModel()
+    {
+        var seeds = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["Ollama:ChatModel"] = "ollama-override:1b",
+            ["PlaybookEval:ModelName"] = "eval-seed:3b"
+        };
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                DefaultModelName = "stored-default:7b",
+                MemoryExtractionModelName = "stored-extraction:8b"
+            },
+            seeds);
+
+        // Analysis names nothing of its own, so the out-of-band Ollama override the runner also honours wins over the default.
+        AssertEx.Equal("ollama-override:1b", await sut.GetPlaybookAnalysisModelNameAsync());
+        AssertEx.Equal("eval-seed:3b", await sut.GetPlaybookEvalModelNameAsync());
+        AssertEx.Equal("stored-extraction:8b", await sut.GetMemoryExtractionModelNameAsync());
+    }
+
+    [Test]
+    public async Task RuntimeAndWorkspaceKnobs_UnsetAndUnseeded_EqualTheOptionsDefaultsTheyReplaced()
+    {
+        var sut = CreateSut(new StoredNodeSettings(), new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        var image = new StableDiffusionRuntimeOptions();
+        AssertEx.Equal(image.MaxLoadedProcesses, sut.GetImageMaxLoadedProcesses());
+        AssertEx.Equal(image.TextEncoderOnGpu, sut.GetImageTextEncoderOnGpu());
+        var graph = new GraphWorkflowOptions();
+        AssertEx.Equal(graph.MaxConcurrentRuns, sut.GetGraphWorkflowMaxConcurrentRuns());
+        AssertEx.Equal(graph.DefaultNodeTimeoutSeconds, sut.GetGraphWorkflowDefaultNodeTimeoutSeconds());
+        var sessions = new WorkSessionOptions();
+        AssertEx.Equal(sessions.MaxStepsPerRun, sut.GetWorkSessionMaxStepsPerRun());
+        AssertEx.Equal(sessions.MaxConcurrentSessions, sut.GetWorkSessionMaxConcurrentSessions());
+        var development = new DevelopmentOptions();
+        AssertEx.Equal(development.MaxAttemptDurationSeconds, sut.GetDevelopmentMaxAttemptDurationSeconds());
+        AssertEx.Equal(development.MaxToolCalls, sut.GetDevelopmentMaxToolCalls());
+        AssertEx.Equal(development.MaxOutputTokens, sut.GetDevelopmentMaxOutputTokens());
+        var agentHome = new AgentHomeOptions();
+        AssertEx.Equal(agentHome.MaxInnerToolCalls, await sut.GetAgentHomeMaxInnerToolCallsAsync());
+        AssertEx.Equal(agentHome.PatchApplyTimeoutSeconds, await sut.GetAgentHomePatchApplyTimeoutSecondsAsync());
+        var retention = new AgentHomeRunRetentionOptions();
+        AssertEx.Equal(retention.MaxRuns, await sut.GetAgentHomeRunRetentionMaxRunsAsync());
+        AssertEx.Equal(retention.MaxTotalBytes, await sut.GetAgentHomeRunRetentionMaxTotalBytesAsync());
+    }
+
+    [Test]
+    public async Task RuntimeAndWorkspaceKnobs_StoredAbsent_UseTheAppsettingsSeed()
+    {
+        var sut = CreateSut(new StoredNodeSettings(),
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["StableDiffusionRuntime:MaxLoadedProcesses"] = "2",
+                ["StableDiffusionRuntime:TextEncoderOnGpu"] = "true",
+                ["GraphWorkflows:MaxConcurrentRuns"] = "8",
+                ["GraphWorkflows:DefaultNodeTimeoutSeconds"] = "900",
+                ["WorkSessions:MaxStepsPerRun"] = "50",
+                ["WorkSessions:MaxConcurrentSessions"] = "2",
+                ["Development:MaxAttemptDurationSeconds"] = "3600",
+                ["Development:MaxToolCalls"] = "128",
+                ["Development:MaxOutputTokens"] = "65536",
+                ["AgentHome:RunRetention:MaxRuns"] = "0",
+                ["AgentHome:RunRetention:MaxTotalBytes"] = "0"
+            },
+            agentHome: new AgentHomeOptions
+            {
+                MaxInnerToolCalls = 48,
+                PatchApplyTimeoutSeconds = 300
+            });
+
+        AssertEx.Equal(expected: 2, sut.GetImageMaxLoadedProcesses());
+        AssertEx.True(sut.GetImageTextEncoderOnGpu());
+        AssertEx.Equal(expected: 8, sut.GetGraphWorkflowMaxConcurrentRuns());
+        AssertEx.Equal(expected: 900, sut.GetGraphWorkflowDefaultNodeTimeoutSeconds());
+        AssertEx.Equal(expected: 50, sut.GetWorkSessionMaxStepsPerRun());
+        AssertEx.Equal(expected: 2, sut.GetWorkSessionMaxConcurrentSessions());
+        AssertEx.Equal(expected: 3600, sut.GetDevelopmentMaxAttemptDurationSeconds());
+        AssertEx.Equal(expected: 128, sut.GetDevelopmentMaxToolCalls());
+        AssertEx.Equal(expected: 65536, sut.GetDevelopmentMaxOutputTokens());
+        AssertEx.Equal(expected: 48, await sut.GetAgentHomeMaxInnerToolCallsAsync());
+        AssertEx.Equal(expected: 300, await sut.GetAgentHomePatchApplyTimeoutSecondsAsync());
+        AssertEx.Equal(expected: 0, await sut.GetAgentHomeRunRetentionMaxRunsAsync(), "0 turns the count limit off and must survive as a seed.");
+        AssertEx.Equal(expected: 0L, await sut.GetAgentHomeRunRetentionMaxTotalBytesAsync(), "0 turns the byte limit off and must survive as a seed.");
+    }
+
+    [Test]
+    public async Task RuntimeAndWorkspaceKnobs_Stored_WinOverSeedAndDefault()
+    {
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                ImageMaxLoadedProcesses = 3,
+                ImageTextEncoderOnGpu = false,
+                GraphWorkflowMaxConcurrentRuns = 16,
+                GraphWorkflowDefaultNodeTimeoutSeconds = 120,
+                WorkSessionMaxStepsPerRun = 10,
+                WorkSessionMaxConcurrentSessions = 4,
+                DevelopmentMaxAttemptDurationSeconds = 600,
+                DevelopmentMaxToolCalls = 32,
+                DevelopmentMaxOutputTokens = 4096,
+                AgentHomeMaxInnerToolCalls = 12,
+                AgentHomePatchApplyTimeoutSeconds = 60,
+                AgentHomeRunRetentionMaxRuns = 50,
+                AgentHomeRunRetentionMaxTotalBytes = 1024L * 1024 * 1024
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["StableDiffusionRuntime:MaxLoadedProcesses"] = "2",
+                ["StableDiffusionRuntime:TextEncoderOnGpu"] = "true",
+                ["GraphWorkflows:MaxConcurrentRuns"] = "8",
+                ["WorkSessions:MaxStepsPerRun"] = "50",
+                ["Development:MaxToolCalls"] = "128",
+                ["AgentHome:RunRetention:MaxRuns"] = "0"
+            },
+            agentHome: new AgentHomeOptions
+            {
+                MaxInnerToolCalls = 48
+            });
+
+        AssertEx.Equal(expected: 3, sut.GetImageMaxLoadedProcesses());
+        AssertEx.False(sut.GetImageTextEncoderOnGpu(), "A stored off beats an appsettings on.");
+        AssertEx.Equal(expected: 16, sut.GetGraphWorkflowMaxConcurrentRuns());
+        AssertEx.Equal(expected: 120, sut.GetGraphWorkflowDefaultNodeTimeoutSeconds());
+        AssertEx.Equal(expected: 10, sut.GetWorkSessionMaxStepsPerRun());
+        AssertEx.Equal(expected: 4, sut.GetWorkSessionMaxConcurrentSessions());
+        AssertEx.Equal(expected: 600, sut.GetDevelopmentMaxAttemptDurationSeconds());
+        AssertEx.Equal(expected: 32, sut.GetDevelopmentMaxToolCalls());
+        AssertEx.Equal(expected: 4096, sut.GetDevelopmentMaxOutputTokens());
+        AssertEx.Equal(expected: 12, await sut.GetAgentHomeMaxInnerToolCallsAsync());
+        AssertEx.Equal(expected: 60, await sut.GetAgentHomePatchApplyTimeoutSecondsAsync());
+        AssertEx.Equal(expected: 50, await sut.GetAgentHomeRunRetentionMaxRunsAsync());
+        AssertEx.Equal(1024L * 1024 * 1024, await sut.GetAgentHomeRunRetentionMaxTotalBytesAsync());
     }
 
     private static NodeRuntimeSettings CreateSut(StoredNodeSettings stored,
         IDictionary<string, string?> seedConfiguration,
         LocalChatAgentOptions? localChat = null,
         AgentHomeOptions? agentHome = null,
-        WorkerNodeOptions? workerNode = null)
+        WorkerNodeOptions? workerNode = null,
+        IModelTrustResolver? modelTrustResolver = null)
     {
         var store = Substitute.For<INodeSettingsStore>();
         store.LoadAsync(Arg.Any<CancellationToken>()).Returns(stored);
@@ -463,6 +1001,7 @@ public sealed class NodeRuntimeSettingsTests
             Options.Create(workerNode ?? new WorkerNodeOptions
             {
                 NodeName = "test-node"
-            }));
+            }),
+            new Lazy<IModelTrustResolver>(modelTrustResolver ?? Substitute.For<IModelTrustResolver>()));
     }
 }

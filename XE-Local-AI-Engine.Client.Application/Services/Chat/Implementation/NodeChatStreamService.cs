@@ -17,7 +17,6 @@ using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Invocation;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
@@ -58,7 +57,6 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     private readonly IConversationMaintenanceDispatcher _conversationMaintenanceDispatcher;
     private readonly IChatTurnContextBuilder _turnContextBuilder;
     private readonly IConversationSandboxStager _conversationSandboxStager;
-    private readonly IOptions<KnowledgeBaseOptions> _knowledgeOptions;
     private readonly IOptions<ChatStreamBudgetOptions> _streamBudgetOptions;
     private readonly TimeProvider _timeProvider;
     private readonly IToolApprovalPolicy _toolApprovalPolicy;
@@ -83,7 +81,6 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         IConversationMaintenanceDispatcher conversationMaintenanceDispatcher,
         IChatTurnContextBuilder turnContextBuilder,
         IConversationSandboxStager conversationSandboxStager,
-        IOptions<KnowledgeBaseOptions> knowledgeOptions,
         IOptions<ChatStreamBudgetOptions> streamBudgetOptions,
         TimeProvider timeProvider,
         IToolApprovalPolicy toolApprovalPolicy,
@@ -108,7 +105,6 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         _conversationMaintenanceDispatcher = conversationMaintenanceDispatcher;
         _turnContextBuilder = turnContextBuilder;
         _conversationSandboxStager = conversationSandboxStager;
-        _knowledgeOptions = knowledgeOptions;
         _streamBudgetOptions = streamBudgetOptions;
         _timeProvider = timeProvider;
         _toolApprovalPolicy = toolApprovalPolicy;
@@ -245,7 +241,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         // Orchestration participants' own lists ride the compiled spec instead and are filtered where it is built.
         var allowedTools = request.SuppressOperatorTools ? AskUserToolOffer.WithdrawOperatorTools(toolOffer.AllowedTools) : toolOffer.AllowedTools;
 
-        var attachmentsAllowed = AreAttachmentsAllowed(resolution);
+        var attachmentsAllowed = await AreAttachmentsAllowedAsync(resolution, cancellationToken);
         await ReportPreRunNoticesAsync(request, resolution, offerTools, attachmentsAllowed, requestId, cancellationToken);
         if (!attachmentsAllowed &&
             conversation.Messages.Any(static message => message.Parts?.Any(static part => string.Equals(part.Kind, NodeChatMessagePartKinds.Tool, StringComparison.Ordinal)) == true))
@@ -610,16 +606,16 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     /// </summary>
     /// <remarks>
     ///     Node-local attachments are private data and reach a cloud model only under
-    ///     <c>KnowledgeBase:AllowCloudModelAccess</c>. An orchestration broadcasts ONE shared seed to every
+    ///     the <c>AllowCloudModelAccess</c> node setting. An orchestration broadcasts ONE shared seed to every
     ///     participant, so a single cloud PARTICIPANT under a local root withholds the shared attachment context too —
     ///     per-participant tool stripping cannot redact a seed. The offer provider additionally withholds the file and
     ///     knowledge tools for a cloud model.
     /// </remarks>
-    private bool AreAttachmentsAllowed(ChatTurnResolution resolution)
+    private async Task<bool> AreAttachmentsAllowedAsync(ChatTurnResolution resolution, CancellationToken cancellationToken)
     {
         var anyCloudParticipant = resolution.Orchestration?.AnyParticipantIsCloud ?? false;
         var turnReachesCloud = resolution.EffectiveModelIsCloud || anyCloudParticipant;
-        return !turnReachesCloud || _knowledgeOptions.Value.AllowCloudModelAccess;
+        return !turnReachesCloud || await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken);
     }
 
     // The notices produced before the invocation starts, in wire order: the orchestration-degraded notice, then the

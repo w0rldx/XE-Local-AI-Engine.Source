@@ -52,7 +52,6 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddScoped<IBenchmarkComparisonExecutor, BenchmarkComparisonExecutor>();
         builder.Services.AddScoped<IBenchmarkPairwiseFitter, BenchmarkPairwiseFitter>();
         builder.Services.AddScoped<IBenchmarkPairwisePlanner, BenchmarkPairwisePlanner>();
-        builder.Services.AddOptions<BenchmarkKldCacheOptions>().BindConfiguration(BenchmarkKldCacheOptions.SectionName);
         builder.Services.AddSingleton(static services => new BenchmarkKldBaseCache(services.GetRequiredService<IFreeSpaceProbe>()));
         builder.Services.AddHostedService<BenchmarkQueueHostedService>();
         return builder;

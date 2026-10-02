@@ -5,18 +5,14 @@ namespace XE_Local_AI_Engine.Client.Services.Memory;
 ///     a single run may propose.
 /// </summary>
 /// <remarks>
-///     <see cref="ExtractionModelName" /> names the node-local model that mines lessons from a completed run and is
-///     defaulted in composition to the node's configured chat model, so extraction never silently picks a cloud one.
-///     An empty value makes extraction a clean no-op, the disabled gate that keeps CI deterministic without Ollama.
+///     <see cref="ExtractionModelName" /> only seeds the <c>MemoryExtractionModelName</c> node setting, which consumers read; blank
+///     inherits the default model, so extraction never silently picks a cloud one. A blank effective name makes extraction a no-op.
 /// </remarks>
 public sealed class MemoryExtractionOptions
 {
     public const string Section = "MemoryExtraction";
 
-    /// <summary>
-    ///     The node-local model used for extraction. Defaulted from the node chat model at composition time. Empty
-    ///     disables extraction (no model call, no candidate) — the CI-safe gate.
-    /// </summary>
+    /// <summary>Appsettings seed of the <c>MemoryExtractionModelName</c> node setting.</summary>
     public string ExtractionModelName { get; set; } = string.Empty;
 
     /// <summary>Upper bound on candidate memories per run (prompt-bloat / review-load / candidate-spam guard).</summary>

@@ -187,13 +187,23 @@ their own mutations against their own endpoints — the save bar has no opinion 
 A handful of stored fields are edited in a friendlier unit than the wire: `nodeSettingsDisplayScale`
 (`models/NodeSettingsFieldsModel.ts`) holds the wire-field → divisor map (minutes instead of seconds for the llama.cpp
 idle TTL and HTTP timeout, the AgentHome prepare/command/max-run timeouts and the image idle TTL; MB instead of bytes
-for the AgentHome folder/patch byte caps; GB for the Hugging Face disk margin) — the wire value and its stored bounds
+for the AgentHome folder/patch byte caps; GB for the Hugging Face disk margin, the benchmark KL-divergence cache and the
+AgentHome run byte cap) — the wire value and its stored bounds
 never change, `nodeSettingsScaleOf`/`toDisplayBounds` only affect what the `NumberInput` shows and
 `buildNodeSettingsRequest` multiplies the display value back before it is sent. Simple UI mode collapses the five
 sections classified `runtime`/`runtimes`/`integrations`/`workspaces`/`usage` behind a "Show advanced sections" toggle
 in the nav (`isAdvancedNodeSettingsSection`), but every one of them stays reachable by its own `?section=` link even
 with the toggle off — a validation error naming a field in a section the operator is not looking at, or a linked
 advanced section, both force it into the visible list.
+
+The former appsettings knobs (see `08-data-and-persistence.md`) sit in small cards from
+`components/NodeSettingsTunableCards.tsx`: **chat** holds Agent limits (tool pipeline, cumulative input budget, retries,
+spawn caps) and Context & compaction; **knowledge** holds Retrieval and knowledge tools and the Learning models pickers;
+**privacy** holds Cloud models and local data, apart from the external-access presets; **usage** holds Retention and
+storage; **runtime** adds the image process cap and text-encoder switch to the Process pool card; **workspaces** holds
+Workflows, sessions and development for every operator, while the AgentHome limits, including the inner tool-call
+budget, patch-apply timeout and run-retention caps, stay in the developer-only AgentHome workspaces card. A field read
+once at startup carries the restart badge; the restart list names the backend consumer of each entry.
 
 ---
 

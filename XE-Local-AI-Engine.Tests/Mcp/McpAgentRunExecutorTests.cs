@@ -1,13 +1,14 @@
 namespace XE_Local_AI_Engine.Tests.Mcp;
 
 using System.Security.Cryptography;
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class McpAgentRunExecutorTests
@@ -17,6 +18,7 @@ public sealed class McpAgentRunExecutorTests
     {
         var execution = Substitute.For<IMcpAgentExecutionService>();
         SpawnContext? observedContext = null;
+        var cloudSpawnsGranted = 0;
         execution.SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
                      Arg.Any<string>(),
                      Arg.Any<string?>(),
@@ -24,19 +26,21 @@ public sealed class McpAgentRunExecutorTests
                  .Returns(callInfo =>
                  {
                      observedContext = SpawnContext.Current;
+                     cloudSpawnsGranted = Enumerable.Range(0, 3).Count(_ => observedContext!.TryConsumeCloudSpawn());
                      return Task.FromResult(SpawnOutcome.Success("complete"));
                  });
+        // The caps come from the node settings, read per run, never from the bound SpawnOptions.
         var executor = CreateExecutor(execution,
-            new SpawnOptions
-            {
-                MaxConcurrentSpawns = 2,
-                MaxCloudSpawns = 1
-            });
+            StubNodeRuntimeSettings.Create()
+                                   .WithSpawnMaxConcurrent(2)
+                                   .WithSpawnMaxCloud(1)
+                                   .Build());
 
         _ = await executor.ExecuteAsync(CreateRun(), CancellationToken.None);
 
         AssertEx.NotNull(observedContext);
         AssertEx.Equal(expected: 0, observedContext!.Depth);
+        AssertEx.Equal(expected: 1, cloudSpawnsGranted, "the stored cloud-spawn cap bounds the root");
     }
 
     [Test]
@@ -199,11 +203,11 @@ public sealed class McpAgentRunExecutorTests
         AssertEx.Equal(workspaceId, capturedWorkspaceId!.Value);
     }
 
-    private static McpAgentRunExecutor CreateExecutor(IMcpAgentExecutionService execution, SpawnOptions? spawnOptions = null)
+    private static McpAgentRunExecutor CreateExecutor(IMcpAgentExecutionService execution, INodeRuntimeSettings? runtimeSettings = null)
     {
         // No node-settings store here on purpose: the whole-turn deadline lives inside SpawnForMcpAsync so both inbound
-        // MCP front doors are bounded once (SubAgentSpawnServiceTests covers it).
-        return new McpAgentRunExecutor(execution, Options.Create(spawnOptions ?? new SpawnOptions()));
+        // MCP front doors are bounded once (SubAgentSpawnServiceTests covers it). The accessor only supplies the spawn caps.
+        return new McpAgentRunExecutor(execution, runtimeSettings ?? StubNodeRuntimeSettings.Create().Build());
     }
 
     private static McpAgentRunRecord CreateRun() =>

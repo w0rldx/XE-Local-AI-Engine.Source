@@ -12,7 +12,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -492,7 +491,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                           _options.ContextBudgetTokens,
                           effectiveModel,
                           runToken,
-                          services.GetRequiredService<IOptions<ConversationCompactionOptions>>().Value.RecentMessagesToKeepVerbatim,
+                          await services.GetRequiredService<INodeRuntimeSettings>().GetCompactionRecentMessagesVerbatimAsync(runToken),
                           replaysToolHistory,
                           toolResultExcerptChars);
 

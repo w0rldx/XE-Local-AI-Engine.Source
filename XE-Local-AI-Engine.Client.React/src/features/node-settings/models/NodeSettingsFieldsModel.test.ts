@@ -4,10 +4,12 @@ import type { XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse a
 import {
 	applyExternalAccessPreset,
 	buildNodeSettingsRequest,
+	isExternalAccessBooleanField,
 	newUsageRateRow,
 	nodeSettingsFieldDefaults,
 	kvCacheTypeSelectValues,
 	nodeSettingsDisplayScale,
+	nodeSettingsScaleOf,
 	restartGatedNodeSettingsFields,
 	speculativeModeSelectValues,
 	summarizePendingChanges,
@@ -798,6 +800,8 @@ describe("display units", () => {
 			imageIdleTimeToLiveSeconds: 900,
 			agentHomeMaxRunSeconds: 610,
 			huggingFaceDiskMarginBytes: 1_500_000_000,
+			benchmarkKldCacheMaxBytes: 3_000_000_000,
+			agentHomeRunRetentionMaxTotalBytes: 5_000_000_000,
 		} satisfies NodeSettingsResponse;
 		const form = toNodeSettingsFieldsForm(response);
 
@@ -1013,5 +1017,424 @@ describe("curated tunables", () => {
 				"huggingFaceDiskMarginBytes"
 			],
 		).toBe("range");
+	});
+});
+
+describe("chat knobs", () => {
+	const bounds = toNodeSettingsFieldBounds(undefined);
+	const baseline = toNodeSettingsFieldsForm(undefined);
+	const restartGated = [
+		"toolPipelineMaxIterationsPerRequest",
+		"toolPipelineMaxToolResultChars",
+		"toolPipelineMaxConsecutiveInvalidToolCalls",
+	] as const;
+	const live = [
+		"defaultContextTokens",
+		"providerBudgetRecentMessagesToKeep",
+		"providerBudgetMaxCumulativeInputTokens",
+		"contextBudgetRecentTurnKeepCount",
+		"compactionAutoEnabled",
+		"compactionAutoCompactPercent",
+		"compactionRecentMessagesVerbatim",
+		"compactionDistillEnabled",
+		"maxInlinedAttachmentChars",
+		"knowledgeChatTopK",
+		"providerRetryEnabled",
+		"providerMaxRetries",
+		"spawnMaxConcurrent",
+		"spawnMaxCloud",
+		"spawnQueueWaitSeconds",
+	] as const;
+
+	it("seed defaults mirror the backend StoredNodeSettings Default* consts", () => {
+		expect(nodeSettingsFieldDefaults).toMatchObject({
+			toolPipelineMaxIterationsPerRequest: 40,
+			toolPipelineMaxToolResultChars: 65536,
+			toolPipelineMaxConsecutiveInvalidToolCalls: 3,
+			defaultContextTokens: 8192,
+			providerBudgetRecentMessagesToKeep: 6,
+			providerBudgetMaxCumulativeInputTokens: 4_000_000,
+			contextBudgetRecentTurnKeepCount: 4,
+			compactionAutoEnabled: true,
+			compactionAutoCompactPercent: 75,
+			compactionRecentMessagesVerbatim: 8,
+			compactionDistillEnabled: true,
+			maxInlinedAttachmentChars: 48000,
+			knowledgeChatTopK: 5,
+			providerRetryEnabled: true,
+			providerMaxRetries: 2,
+			spawnMaxConcurrent: 3,
+			spawnMaxCloud: 3,
+			spawnQueueWaitSeconds: 120,
+		});
+	});
+
+	it("maps stored values, and absent switches to their on default rather than a spurious off", () => {
+		const form = toNodeSettingsFieldsForm({
+			spawnMaxConcurrent: 1,
+			compactionAutoCompactPercent: 60,
+			providerRetryEnabled: false,
+		});
+		expect(form.spawnMaxConcurrent).toBe(1);
+		expect(form.compactionAutoCompactPercent).toBe(60);
+		expect(form.providerRetryEnabled).toBe(false);
+		expect(form.compactionAutoEnabled).toBe(true);
+		expect(form.compactionDistillEnabled).toBe(true);
+	});
+
+	it("sends changed knobs in wire units, an explicit false switch, and 0 where 0 is meaningful", () => {
+		const form = {
+			...baseline,
+			defaultContextTokens: 16384,
+			compactionAutoCompactPercent: 50,
+			spawnMaxCloud: 0,
+			spawnQueueWaitSeconds: 0,
+			providerMaxRetries: 0,
+			compactionAutoEnabled: false,
+			providerRetryEnabled: false,
+		};
+
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+
+		expect(errors).toEqual({});
+		expect(body).toEqual({
+			defaultContextTokens: 16384,
+			compactionAutoCompactPercent: 50,
+			spawnMaxCloud: 0,
+			spawnQueueWaitSeconds: 0,
+			providerMaxRetries: 0,
+			compactionAutoEnabled: false,
+			providerRetryEnabled: false,
+		});
+		// No developer gate: the same body goes out with developer mode on.
+		expect(buildNodeSettingsRequest(form, baseline, bounds, true).body).toEqual(body);
+	});
+
+	it("rejects an out-of-range knob with a range error and never sends it", () => {
+		const { body, errors } = buildNodeSettingsRequest(
+			{ ...baseline, compactionAutoCompactPercent: 96, spawnMaxConcurrent: 0 },
+			baseline,
+			bounds,
+			false,
+		);
+		expect(errors).toMatchObject({ compactionAutoCompactPercent: "range", spawnMaxConcurrent: "range" });
+		expect(body).toEqual({});
+	});
+
+	it("takes the bounds from the response and falls back to the backend ranges", () => {
+		expect(bounds.tunables.defaultContextTokens).toEqual({ min: 1024, max: 1048576 });
+		expect(bounds.tunables.compactionAutoCompactPercent).toEqual({ min: 30, max: 95 });
+		expect(bounds.tunables.spawnMaxCloud).toEqual({ min: 0, max: 32 });
+		expect(
+			toNodeSettingsFieldBounds({ minKnowledgeChatTopK: 2, maxAllowedKnowledgeChatTopK: 9 }).tunables.knowledgeChatTopK,
+		).toEqual({ min: 2, max: 9 });
+	});
+
+	it("restart-gates only the three tool-pipeline limits", () => {
+		for (const field of restartGated) {
+			expect(restartGatedNodeSettingsFields.has(field)).toBe(true);
+		}
+		for (const field of live) {
+			expect(restartGatedNodeSettingsFields.has(field)).toBe(false);
+		}
+		expect(touchesRestartGatedField({ toolPipelineMaxIterationsPerRequest: 80 })).toBe(true);
+		expect(touchesRestartGatedField({ spawnMaxConcurrent: 1, compactionAutoEnabled: false })).toBe(false);
+	});
+
+	it("shows every knob in its own unit, so none is display-scaled", () => {
+		for (const field of [...restartGated, ...live]) {
+			expect(nodeSettingsScaleOf(field)).toBe(1);
+		}
+	});
+});
+
+describe("knowledge, privacy and usage knobs", () => {
+	const bounds = toNodeSettingsFieldBounds(undefined);
+	const baseline = toNodeSettingsFieldsForm(undefined);
+	const restartGated = ["knowledgeScheduledReindexEnabled", "knowledgeScheduledReindexIntervalMinutes"] as const;
+	const live = [
+		"knowledgeAdaptiveRerankingEnabled",
+		"knowledgeRetrievalLatencyBudgetMs",
+		"knowledgeAgentToolsEnabled",
+		"allowCloudModelAccess",
+		"playbookAnalysisModelName",
+		"playbookEvalModelName",
+		"memoryExtractionModelName",
+		"chatRetentionEnabled",
+		"chatRetentionDays",
+		"agentExecutionLogRetentionEnabled",
+		"agentExecutionLogRetentionDays",
+		"nodeDbBackupRetainCount",
+		"benchmarkKldCacheMaxBytes",
+		"schedulerHistoryRetentionDays",
+	] as const;
+
+	it("seed defaults mirror the backend StoredNodeSettings Default* consts", () => {
+		expect(nodeSettingsFieldDefaults).toMatchObject({
+			knowledgeAdaptiveRerankingEnabled: true,
+			knowledgeRetrievalLatencyBudgetMs: 500,
+			knowledgeScheduledReindexEnabled: true,
+			knowledgeScheduledReindexIntervalMinutes: 60,
+			knowledgeAgentToolsEnabled: true,
+			allowCloudModelAccess: false,
+			playbookAnalysisModelName: "",
+			playbookEvalModelName: "",
+			memoryExtractionModelName: "",
+			chatRetentionEnabled: false,
+			chatRetentionDays: 30,
+			agentExecutionLogRetentionEnabled: true,
+			agentExecutionLogRetentionDays: 30,
+			nodeDbBackupRetainCount: 3,
+			// 64 GiB, shown in GB.
+			benchmarkKldCacheMaxBytes: 64,
+			schedulerHistoryRetentionDays: 30,
+		});
+	});
+
+	it("maps stored values, and absent switches to their defaults rather than a spurious value", () => {
+		const form = toNodeSettingsFieldsForm({
+			allowCloudModelAccess: true,
+			chatRetentionDays: 7,
+			benchmarkKldCacheMaxBytes: 8 * 1024 ** 3,
+			memoryExtractionModelName: "qwen3:8b",
+		});
+		expect(form.allowCloudModelAccess).toBe(true);
+		expect(form.chatRetentionDays).toBe(7);
+		expect(form.benchmarkKldCacheMaxBytes).toBe(8);
+		expect(form.memoryExtractionModelName).toBe("qwen3:8b");
+		expect(form.playbookEvalModelName).toBe("");
+		expect(form.chatRetentionEnabled).toBe(false);
+		expect(form.knowledgeAgentToolsEnabled).toBe(true);
+		expect(form.agentExecutionLogRetentionEnabled).toBe(true);
+	});
+
+	it("sends changed knobs in wire units, explicit false switches, and a cleared model as an empty string", () => {
+		const stored = toNodeSettingsFieldsForm({ playbookEvalModelName: "qwen3:8b" });
+		const form = {
+			...stored,
+			knowledgeAgentToolsEnabled: false,
+			allowCloudModelAccess: true,
+			chatRetentionEnabled: true,
+			chatRetentionDays: 90,
+			benchmarkKldCacheMaxBytes: 2,
+			playbookAnalysisModelName: "  repo/model:Q4_K_M ",
+			playbookEvalModelName: "",
+		};
+
+		const { body, errors } = buildNodeSettingsRequest(form, stored, bounds, false);
+
+		expect(errors).toEqual({});
+		expect(body).toEqual({
+			knowledgeAgentToolsEnabled: false,
+			allowCloudModelAccess: true,
+			chatRetentionEnabled: true,
+			chatRetentionDays: 90,
+			benchmarkKldCacheMaxBytes: 2 * 1024 ** 3,
+			playbookAnalysisModelName: "repo/model:Q4_K_M",
+			playbookEvalModelName: "",
+		});
+	});
+
+	it("takes a seeded-true switch the server reports as the baseline, so turning it off sends an explicit false", () => {
+		// The server reports the effective value (stored, else the appsettings seed) for an unsaved switch.
+		const stored = toNodeSettingsFieldsForm({ allowCloudModelAccess: true, chatRetentionEnabled: true });
+		expect(stored.allowCloudModelAccess).toBe(true);
+		expect(stored.chatRetentionEnabled).toBe(true);
+
+		const { body, errors } = buildNodeSettingsRequest(
+			{ ...stored, allowCloudModelAccess: false, chatRetentionEnabled: false },
+			stored,
+			bounds,
+			false,
+		);
+
+		expect(errors).toEqual({});
+		expect(body).toEqual({ allowCloudModelAccess: false, chatRetentionEnabled: false });
+	});
+
+	it("takes a seeded retention window the server reports as the baseline, so only a real change is sent", () => {
+		// The server reports the effective value (stored, else the appsettings seed) for an unsaved window.
+		const seeded = toNodeSettingsFieldsForm({ chatRetentionDays: 1, agentHomeRunRetentionDays: 3 });
+		expect(seeded.chatRetentionDays).toBe(1);
+		expect(seeded.agentHomeRunRetentionDays).toBe(3);
+
+		expect(buildNodeSettingsRequest(seeded, seeded, bounds, false).body).toEqual({});
+
+		const { body, errors } = buildNodeSettingsRequest({ ...seeded, chatRetentionDays: 7 }, seeded, bounds, false);
+		expect(errors).toEqual({});
+		expect(body).toEqual({ chatRetentionDays: 7 });
+	});
+
+	it("keeps the cloud opt-in out of the external-access preset", () => {
+		expect(isExternalAccessBooleanField("allowCloudModelAccess")).toBe(false);
+		const preset = applyExternalAccessPreset({ ...baseline, allowCloudModelAccess: true }, "offline");
+		expect(preset.allowCloudModelAccess).toBe(true);
+	});
+
+	it("rejects an out-of-range knob with a range error and never sends it", () => {
+		const { body, errors } = buildNodeSettingsRequest(
+			{ ...baseline, chatRetentionDays: 0, knowledgeRetrievalLatencyBudgetMs: 49, benchmarkKldCacheMaxBytes: 0.5 },
+			baseline,
+			bounds,
+			false,
+		);
+		expect(errors).toMatchObject({
+			chatRetentionDays: "range",
+			knowledgeRetrievalLatencyBudgetMs: "range",
+			benchmarkKldCacheMaxBytes: "range",
+		});
+		expect(body).toEqual({});
+	});
+
+	it("takes the bounds from the response, the three retention windows sharing one pair", () => {
+		expect(bounds.tunables.knowledgeScheduledReindexIntervalMinutes).toEqual({ min: 5, max: 10080 });
+		expect(bounds.tunables.benchmarkKldCacheMaxBytes).toEqual({ min: 1024 ** 3, max: 4 * 1024 ** 4 });
+		const shared = toNodeSettingsFieldBounds({ minRetentionDays: 2, maxAllowedRetentionDays: 400 }).tunables;
+		expect(shared.chatRetentionDays).toEqual({ min: 2, max: 400 });
+		expect(shared.agentExecutionLogRetentionDays).toEqual({ min: 2, max: 400 });
+		expect(shared.schedulerHistoryRetentionDays).toEqual({ min: 2, max: 400 });
+	});
+
+	it("restart-gates only the scheduled reindex pair", () => {
+		for (const field of restartGated) {
+			expect(restartGatedNodeSettingsFields.has(field)).toBe(true);
+		}
+		for (const field of live) {
+			expect(restartGatedNodeSettingsFields.has(field)).toBe(false);
+		}
+		expect(touchesRestartGatedField({ knowledgeScheduledReindexIntervalMinutes: 30 })).toBe(true);
+		expect(touchesRestartGatedField({ allowCloudModelAccess: true, chatRetentionEnabled: true })).toBe(false);
+	});
+
+	it("shows only the benchmark cache in a scaled unit", () => {
+		expect(nodeSettingsScaleOf("benchmarkKldCacheMaxBytes")).toBe(1024 ** 3);
+		for (const field of [...restartGated, ...live].filter((field) => field !== "benchmarkKldCacheMaxBytes")) {
+			expect(nodeSettingsScaleOf(field)).toBe(1);
+		}
+	});
+});
+
+describe("runtime and workspace knobs", () => {
+	const bounds = toNodeSettingsFieldBounds(undefined);
+	const baseline = toNodeSettingsFieldsForm(undefined);
+	const restartGated = [
+		"imageMaxLoadedProcesses",
+		"imageTextEncoderOnGpu",
+		"graphWorkflowMaxConcurrentRuns",
+		"graphWorkflowDefaultNodeTimeoutSeconds",
+		"workSessionMaxStepsPerRun",
+		"workSessionMaxConcurrentSessions",
+		"developmentMaxAttemptDurationSeconds",
+		"developmentMaxToolCalls",
+		"developmentMaxOutputTokens",
+	] as const;
+	const live = [
+		"agentHomeMaxInnerToolCalls",
+		"agentHomePatchApplyTimeoutSeconds",
+		"agentHomeRunRetentionDays",
+		"agentHomeRunRetentionMaxRuns",
+		"agentHomeRunRetentionMaxTotalBytes",
+	] as const;
+
+	it("seed defaults mirror the backend StoredNodeSettings Default* consts", () => {
+		expect(nodeSettingsFieldDefaults).toMatchObject({
+			imageMaxLoadedProcesses: 1,
+			imageTextEncoderOnGpu: false,
+			graphWorkflowMaxConcurrentRuns: 4,
+			graphWorkflowDefaultNodeTimeoutSeconds: 600,
+			workSessionMaxStepsPerRun: 25,
+			workSessionMaxConcurrentSessions: 1,
+			developmentMaxAttemptDurationSeconds: 1800,
+			developmentMaxToolCalls: 64,
+			developmentMaxOutputTokens: 32768,
+			agentHomeMaxInnerToolCalls: 24,
+			agentHomePatchApplyTimeoutSeconds: 120,
+			agentHomeRunRetentionMaxRuns: 200,
+			// 2 GiB, shown in GB.
+			agentHomeRunRetentionMaxTotalBytes: 2,
+		});
+	});
+
+	it("sends the changed workspace limits and the image switch for every user, in wire units", () => {
+		const form = {
+			...baseline,
+			imageMaxLoadedProcesses: 2,
+			imageTextEncoderOnGpu: true,
+			graphWorkflowDefaultNodeTimeoutSeconds: 900,
+			developmentMaxOutputTokens: 65536,
+		};
+
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+
+		expect(errors).toEqual({});
+		expect(body).toEqual({
+			imageMaxLoadedProcesses: 2,
+			imageTextEncoderOnGpu: true,
+			graphWorkflowDefaultNodeTimeoutSeconds: 900,
+			developmentMaxOutputTokens: 65536,
+		});
+	});
+
+	it("sends the AgentHome knobs only with developer fields, the byte cap in wire units and 0 as a real value", () => {
+		const form = {
+			...baseline,
+			agentHomeMaxInnerToolCalls: 12,
+			agentHomePatchApplyTimeoutSeconds: 300,
+			agentHomeRunRetentionMaxRuns: 0,
+			agentHomeRunRetentionMaxTotalBytes: 4,
+		};
+
+		expect(buildNodeSettingsRequest(form, baseline, bounds, false).body).toEqual({});
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, true);
+		expect(errors).toEqual({});
+		expect(body).toEqual({
+			agentHomeMaxInnerToolCalls: 12,
+			agentHomePatchApplyTimeoutSeconds: 300,
+			agentHomeRunRetentionMaxRuns: 0,
+			agentHomeRunRetentionMaxTotalBytes: 4 * 1024 ** 3,
+		});
+	});
+
+	it("rejects an out-of-range knob with a range error and never sends it", () => {
+		const { body, errors } = buildNodeSettingsRequest(
+			{ ...baseline, imageMaxLoadedProcesses: 5, developmentMaxOutputTokens: 255, agentHomeRunRetentionMaxTotalBytes: 1025 },
+			baseline,
+			bounds,
+			true,
+		);
+		expect(errors).toMatchObject({
+			imageMaxLoadedProcesses: "range",
+			developmentMaxOutputTokens: "range",
+			agentHomeRunRetentionMaxTotalBytes: "range",
+		});
+		expect(body).toEqual({});
+	});
+
+	it("takes the AgentHome bounds from the response", () => {
+		const fromResponse = toNodeSettingsFieldBounds({
+			minAgentHomeRunRetentionMaxRuns: 0,
+			maxAllowedAgentHomeRunRetentionMaxRuns: 500,
+		});
+		expect(fromResponse.agentHomeRunRetentionMaxRuns).toEqual({ min: 0, max: 500 });
+		expect(bounds.agentHomeRunRetentionMaxTotalBytes).toEqual({ min: 0, max: 1024 ** 4 });
+		expect(bounds.tunables.graphWorkflowDefaultNodeTimeoutSeconds).toEqual({ min: 30, max: 86400 });
+	});
+
+	it("restart-gates the image pair and the workspace limits, and the AgentHome retention window is live now", () => {
+		for (const field of restartGated) {
+			expect(restartGatedNodeSettingsFields.has(field)).toBe(true);
+		}
+		for (const field of live) {
+			expect(restartGatedNodeSettingsFields.has(field)).toBe(false);
+		}
+		expect(touchesRestartGatedField({ workSessionMaxConcurrentSessions: 2 })).toBe(true);
+		expect(touchesRestartGatedField({ agentHomeRunRetentionDays: 7, agentHomeMaxInnerToolCalls: 12 })).toBe(false);
+	});
+
+	it("shows only the AgentHome byte cap in a scaled unit", () => {
+		expect(nodeSettingsScaleOf("agentHomeRunRetentionMaxTotalBytes")).toBe(1024 ** 3);
+		for (const field of [...restartGated, ...live].filter((field) => field !== "agentHomeRunRetentionMaxTotalBytes")) {
+			expect(nodeSettingsScaleOf(field)).toBe(1);
+		}
 	});
 });

@@ -16,11 +16,13 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 public sealed class SaveNodeSettingsEndpoint : Endpoint<SaveNodeSettingsRequest, NodeSettingsResponse>
 {
     private readonly INodeSettingsAdministrationService _administrationService;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public SaveNodeSettingsEndpoint(INodeSettingsAdministrationService administrationService)
+    public SaveNodeSettingsEndpoint(INodeSettingsAdministrationService administrationService, INodeRuntimeSettings runtimeSettings)
     {
         ArgumentNullException.ThrowIfNull(administrationService);
         _administrationService = administrationService;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public override void Configure()
@@ -59,7 +61,7 @@ public sealed class SaveNodeSettingsEndpoint : Endpoint<SaveNodeSettingsRequest,
             return;
         }
 
-        await Send.OkAsync(result.Settings.ToResponse(), ct);
+        await Send.OkAsync(result.Settings.ToResponse(_runtimeSettings.ResolveEffectiveValues(result.Settings)), ct);
     }
 
     // Maps a policy violation back onto the request property it belongs to, so the 400 body keeps naming the same
@@ -88,6 +90,15 @@ public sealed class SaveNodeSettingsEndpoint : Endpoint<SaveNodeSettingsRequest,
                 break;
             case NodeSettingsField.AgentHomeMaxRunSeconds:
                 AddError(r => r.AgentHomeMaxRunSeconds, error.Message);
+                break;
+            case NodeSettingsField.PlaybookAnalysisModelName:
+                AddError(r => r.PlaybookAnalysisModelName, error.Message);
+                break;
+            case NodeSettingsField.PlaybookEvalModelName:
+                AddError(r => r.PlaybookEvalModelName, error.Message);
+                break;
+            case NodeSettingsField.MemoryExtractionModelName:
+                AddError(r => r.MemoryExtractionModelName, error.Message);
                 break;
             default:
                 AddError(error.Message);

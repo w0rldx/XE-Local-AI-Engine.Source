@@ -301,9 +301,311 @@ public sealed partial record StoredNodeSettings
     /// <summary>Hardcoded fallback for the run-folder retention; mirrors <c>AgentHomeRunRetentionOptions.RetentionDays</c>.</summary>
     public const int DefaultAgentHomeRunRetentionDays = 30;
 
+    /// <summary>
+    ///     A stored window is never 0, so the retention validator's "all three limits 0 while enabled" refusal stays unreachable from
+    ///     node settings; only an appsettings seed of 0 with both stored caps at 0 can sweep nothing.
+    /// </summary>
     public const int MinAgentHomeRunRetentionDays = 1;
 
     public const int MaxAgentHomeRunRetentionDays = 365;
+
+    // Chat and agent-run knobs (round 2). Each Default mirrors its options class default, which the shipped appsettings.json does not
+    // override; each Min/Max pair sits inside that options class's own validator bounds.
+
+    /// <summary>Hardcoded fallback for the tool-loop ceiling; mirrors <c>AgentToolPipelineOptions.MaximumToolIterationsPerRequest</c>.</summary>
+    public const int DefaultToolPipelineMaxIterationsPerRequest = 40;
+
+    public const int MinToolPipelineMaxIterationsPerRequest = 1;
+
+    public const int MaxToolPipelineMaxIterationsPerRequest = 200;
+
+    /// <summary>Hardcoded fallback for the per-tool-result cap; mirrors <c>AgentToolPipelineOptions.MaxToolResultCharacters</c>.</summary>
+    public const int DefaultToolPipelineMaxToolResultChars = 65_536;
+
+    /// <summary>The <c>AgentToolPipelineOptionsValidator</c> floor.</summary>
+    public const int MinToolPipelineMaxToolResultChars = 1024;
+
+    public const int MaxToolPipelineMaxToolResultChars = 1_000_000;
+
+    /// <summary>Hardcoded fallback; mirrors <c>AgentToolPipelineOptions.MaxConsecutiveInvalidToolCallsPerTool</c>.</summary>
+    public const int DefaultToolPipelineMaxConsecutiveInvalidToolCalls = 3;
+
+    public const int MinToolPipelineMaxConsecutiveInvalidToolCalls = 1;
+
+    public const int MaxToolPipelineMaxConsecutiveInvalidToolCalls = 20;
+
+    /// <summary>
+    ///     Hardcoded fallback for the context window assumed when a send names none; mirrors both
+    ///     <c>ProviderCallBudgetOptions.DefaultContextTokens</c> and <c>ConversationContextBudgetOptions.DefaultContextTokens</c>.
+    /// </summary>
+    public const int DefaultDefaultContextTokens = 8192;
+
+    public const int MinDefaultContextTokens = 1024;
+
+    public const int MaxDefaultContextTokens = 1_048_576;
+
+    /// <summary>Hardcoded fallback; mirrors <c>ProviderCallBudgetOptions.RecentMessagesToKeep</c>.</summary>
+    public const int DefaultProviderBudgetRecentMessagesToKeep = 6;
+
+    /// <summary>The <c>ProviderCallBudgeter</c> floor: the last exchange always survives a trim.</summary>
+    public const int MinProviderBudgetRecentMessagesToKeep = 2;
+
+    public const int MaxProviderBudgetRecentMessagesToKeep = 100;
+
+    /// <summary>Hardcoded fallback; mirrors <c>ProviderCallBudgetOptions.MaxCumulativeInputTokens</c>.</summary>
+    public const int DefaultProviderBudgetMaxCumulativeInputTokens = 4_000_000;
+
+    public const int MinProviderBudgetMaxCumulativeInputTokens = 100_000;
+
+    public const int MaxProviderBudgetMaxCumulativeInputTokens = 100_000_000;
+
+    /// <summary>Hardcoded fallback; mirrors <c>ConversationContextBudgetOptions.RecentTurnKeepCount</c>.</summary>
+    public const int DefaultContextBudgetRecentTurnKeepCount = 4;
+
+    /// <summary>The budgeter floor: an approval replay splits one round across two turns.</summary>
+    public const int MinContextBudgetRecentTurnKeepCount = 2;
+
+    public const int MaxContextBudgetRecentTurnKeepCount = 50;
+
+    /// <summary>Mirrors <c>ConversationCompactionOptions.AutoCompactEnabled</c>.</summary>
+    public const bool DefaultCompactionAutoEnabled = true;
+
+    /// <summary>Hardcoded fallback, in percent; mirrors <c>ConversationCompactionOptions.AutoCompactFraction</c> (0.75).</summary>
+    public const int DefaultCompactionAutoCompactPercent = 75;
+
+    /// <summary>The <c>ConversationCompactionOptions.AutoCompactFraction</c> range 0.3..0.95, in percent.</summary>
+    public const int MinCompactionAutoCompactPercent = 30;
+
+    public const int MaxCompactionAutoCompactPercent = 95;
+
+    /// <summary>Hardcoded fallback; mirrors <c>ConversationCompactionOptions.RecentMessagesToKeepVerbatim</c>.</summary>
+    public const int DefaultCompactionRecentMessagesVerbatim = 8;
+
+    public const int MinCompactionRecentMessagesVerbatim = 2;
+
+    public const int MaxCompactionRecentMessagesVerbatim = 100;
+
+    /// <summary>Mirrors <c>ConversationCompactionOptions.DistillEnabled</c>.</summary>
+    public const bool DefaultCompactionDistillEnabled = true;
+
+    /// <summary>Hardcoded fallback; mirrors <c>LocalChatAgentOptions.MaxInlinedAttachmentChars</c>.</summary>
+    public const int DefaultMaxInlinedAttachmentChars = 48_000;
+
+    public const int MinMaxInlinedAttachmentChars = 1000;
+
+    public const int MaxMaxInlinedAttachmentChars = 2_000_000;
+
+    /// <summary>Hardcoded fallback; mirrors <c>LocalChatAgentOptions.KnowledgeChatTopK</c>.</summary>
+    public const int DefaultKnowledgeChatTopK = 5;
+
+    public const int MinKnowledgeChatTopK = 1;
+
+    public const int MaxKnowledgeChatTopK = 20;
+
+    /// <summary>Mirrors <c>ProviderResilienceOptions.RetryEnabled</c>.</summary>
+    public const bool DefaultProviderRetryEnabled = true;
+
+    /// <summary>Hardcoded fallback; mirrors <c>ProviderResilienceOptions.MaxRetries</c>.</summary>
+    public const int DefaultProviderMaxRetries = 2;
+
+    public const int MinProviderMaxRetries = 0;
+
+    public const int MaxProviderMaxRetries = 10;
+
+    /// <summary>Hardcoded fallback; mirrors <c>SpawnOptions.MaxConcurrentSpawns</c>.</summary>
+    public const int DefaultSpawnMaxConcurrent = 3;
+
+    /// <summary><c>SpawnContext.BeginRoot</c> rejects a fan-out cap below one.</summary>
+    public const int MinSpawnMaxConcurrent = 1;
+
+    public const int MaxSpawnMaxConcurrent = 32;
+
+    /// <summary>Hardcoded fallback; mirrors <c>SpawnOptions.MaxCloudSpawns</c>.</summary>
+    public const int DefaultSpawnMaxCloud = 3;
+
+    /// <summary><c>0</c> forbids cloud sub-agents for the run.</summary>
+    public const int MinSpawnMaxCloud = 0;
+
+    public const int MaxSpawnMaxCloud = 32;
+
+    /// <summary>Hardcoded fallback; mirrors <c>SpawnOptions.QueueWaitSeconds</c>.</summary>
+    public const int DefaultSpawnQueueWaitSeconds = 120;
+
+    /// <summary><c>0</c> rejects a same-model sub-agent at once instead of queueing it.</summary>
+    public const int MinSpawnQueueWaitSeconds = 0;
+
+    public const int MaxSpawnQueueWaitSeconds = 3600;
+
+    // Knowledge, privacy and usage knobs (round 2). Each Default mirrors its options class default, which the shipped appsettings.json
+    // does not override.
+
+    /// <summary>Mirrors <c>KnowledgeBaseOptions.AdaptiveRerankingEnabled</c>.</summary>
+    public const bool DefaultKnowledgeAdaptiveRerankingEnabled = true;
+
+    /// <summary>Hardcoded fallback; mirrors <c>KnowledgeBaseOptions.RetrievalLatencyBudgetMilliseconds</c>.</summary>
+    public const int DefaultKnowledgeRetrievalLatencyBudgetMs = 500;
+
+    public const int MinKnowledgeRetrievalLatencyBudgetMs = 50;
+
+    public const int MaxKnowledgeRetrievalLatencyBudgetMs = 60_000;
+
+    /// <summary>Mirrors <c>KnowledgeBaseOptions.ScheduledModelReindexEnabled</c>.</summary>
+    public const bool DefaultKnowledgeScheduledReindexEnabled = true;
+
+    /// <summary>Hardcoded fallback; mirrors <c>KnowledgeBaseOptions.ScheduledModelReindexIntervalMinutes</c>.</summary>
+    public const int DefaultKnowledgeScheduledReindexIntervalMinutes = 60;
+
+    public const int MinKnowledgeScheduledReindexIntervalMinutes = 5;
+
+    /// <summary>One week.</summary>
+    public const int MaxKnowledgeScheduledReindexIntervalMinutes = 10_080;
+
+    /// <summary>Mirrors <c>KnowledgeBaseOptions.AgentToolsEnabled</c>.</summary>
+    public const bool DefaultKnowledgeAgentToolsEnabled = true;
+
+    /// <summary>Mirrors <c>KnowledgeBaseOptions.AllowCloudModelAccess</c>: node-local data never reaches a cloud model unless opted in.</summary>
+    public const bool DefaultAllowCloudModelAccess = false;
+
+    /// <summary>Mirrors <c>ChatRetentionOptions.Enabled</c>: retention deletes chat history, so it is off unless opted in.</summary>
+    public const bool DefaultChatRetentionEnabled = false;
+
+    /// <summary>Hardcoded fallback; mirrors <c>ChatRetentionOptions.RetentionDays</c>.</summary>
+    public const int DefaultChatRetentionDays = 30;
+
+    /// <summary>Hardcoded fallback; mirrors <c>AgentExecutionLogRetentionOptions.Enabled</c>.</summary>
+    public const bool DefaultAgentExecutionLogRetentionEnabled = true;
+
+    /// <summary>Hardcoded fallback; mirrors <c>AgentExecutionLogRetentionOptions.RetentionDays</c>.</summary>
+    public const int DefaultAgentExecutionLogRetentionDays = 30;
+
+    /// <summary>Hardcoded fallback; mirrors <c>SchedulerOptions.HistoryRetentionDays</c>.</summary>
+    public const int DefaultSchedulerHistoryRetentionDays = 30;
+
+    /// <summary>
+    ///     Shared bounds of the three day-count retention windows. The floor of one day keeps the <c>now - days</c> cutoff in the past,
+    ///     so a window can never purge everything at once.
+    /// </summary>
+    public const int MinRetentionDays = 1;
+
+    /// <summary>Ten years.</summary>
+    public const int MaxRetentionDays = 3650;
+
+    /// <summary>Hardcoded fallback; mirrors <c>NodeDbBackupOptions.RetainCount</c>.</summary>
+    public const int DefaultNodeDbBackupRetainCount = 3;
+
+    /// <summary>The <c>NodeDbBackupOptions</c> validator floor: the newest snapshot always survives a prune.</summary>
+    public const int MinNodeDbBackupRetainCount = 1;
+
+    public const int MaxNodeDbBackupRetainCount = 100;
+
+    /// <summary>
+    ///     Hardcoded fallback, 64 GiB, for the base-logit cache that evicts whole files least recently used first. A single base model
+    ///     at 200 chunks is ~25 GB, so this is "two of them and a little room", not a generous allowance.
+    /// </summary>
+    public const long DefaultBenchmarkKldCacheMaxBytes = 64L * 1024 * 1024 * 1024;
+
+    /// <summary>1 GiB.</summary>
+    public const long MinBenchmarkKldCacheMaxBytes = 1L * 1024 * 1024 * 1024;
+
+    /// <summary>4 TiB.</summary>
+    public const long MaxBenchmarkKldCacheMaxBytes = 4L * 1024 * 1024 * 1024 * 1024;
+
+    // Runtime and workspace knobs (round 2). Each Default mirrors its options class default, which the shipped appsettings.json does
+    // not override; each Min/Max pair sits inside that options class's own validator bounds.
+
+    /// <summary>Mirrors <c>StableDiffusionRuntimeOptions.MaxLoadedProcesses</c>.</summary>
+    public const int DefaultImageMaxLoadedProcesses = 1;
+
+    /// <summary>At least one, or every image load would evict itself.</summary>
+    public const int MinImageMaxLoadedProcesses = 1;
+
+    public const int MaxImageMaxLoadedProcesses = 4;
+
+    /// <summary>Mirrors <c>StableDiffusionRuntimeOptions.TextEncoderOnGpu</c>.</summary>
+    public const bool DefaultImageTextEncoderOnGpu = false;
+
+    /// <summary>Mirrors <c>GraphWorkflowOptions.MaxConcurrentRuns</c>.</summary>
+    public const int DefaultGraphWorkflowMaxConcurrentRuns = 4;
+
+    public const int MinGraphWorkflowMaxConcurrentRuns = 1;
+
+    public const int MaxGraphWorkflowMaxConcurrentRuns = 64;
+
+    /// <summary>Mirrors <c>GraphWorkflowOptions.DefaultNodeTimeoutSeconds</c>.</summary>
+    public const int DefaultGraphWorkflowDefaultNodeTimeoutSeconds = 600;
+
+    public const int MinGraphWorkflowDefaultNodeTimeoutSeconds = 30;
+
+    /// <summary>One day.</summary>
+    public const int MaxGraphWorkflowDefaultNodeTimeoutSeconds = 86_400;
+
+    /// <summary>Mirrors <c>WorkSessionOptions.MaxStepsPerRun</c>.</summary>
+    public const int DefaultWorkSessionMaxStepsPerRun = 25;
+
+    public const int MinWorkSessionMaxStepsPerRun = 1;
+
+    public const int MaxWorkSessionMaxStepsPerRun = 1000;
+
+    /// <summary>Mirrors <c>WorkSessionOptions.MaxConcurrentSessions</c>.</summary>
+    public const int DefaultWorkSessionMaxConcurrentSessions = 1;
+
+    public const int MinWorkSessionMaxConcurrentSessions = 1;
+
+    public const int MaxWorkSessionMaxConcurrentSessions = 64;
+
+    /// <summary>Mirrors <c>DevelopmentOptions.MaxAttemptDurationSeconds</c> (30 minutes).</summary>
+    public const int DefaultDevelopmentMaxAttemptDurationSeconds = 1800;
+
+    public const int MinDevelopmentMaxAttemptDurationSeconds = 60;
+
+    /// <summary>One day.</summary>
+    public const int MaxDevelopmentMaxAttemptDurationSeconds = 86_400;
+
+    /// <summary>Mirrors <c>DevelopmentOptions.MaxToolCalls</c>.</summary>
+    public const int DefaultDevelopmentMaxToolCalls = 64;
+
+    public const int MinDevelopmentMaxToolCalls = 1;
+
+    public const int MaxDevelopmentMaxToolCalls = 1024;
+
+    /// <summary>Mirrors <c>DevelopmentOptions.MaxOutputTokens</c>.</summary>
+    public const int DefaultDevelopmentMaxOutputTokens = 32_768;
+
+    public const int MinDevelopmentMaxOutputTokens = 256;
+
+    public const int MaxDevelopmentMaxOutputTokens = 1_000_000;
+
+    /// <summary>Mirrors <c>AgentHomeOptions.MaxInnerToolCalls</c>.</summary>
+    public const int DefaultAgentHomeMaxInnerToolCalls = 24;
+
+    public const int MinAgentHomeMaxInnerToolCalls = 1;
+
+    public const int MaxAgentHomeMaxInnerToolCalls = 1000;
+
+    /// <summary>Mirrors <c>AgentHomeOptions.PatchApplyTimeoutSeconds</c> and the shipped appsettings.json.</summary>
+    public const int DefaultAgentHomePatchApplyTimeoutSeconds = 120;
+
+    public const int MinAgentHomePatchApplyTimeoutSeconds = 10;
+
+    /// <summary>One hour.</summary>
+    public const int MaxAgentHomePatchApplyTimeoutSeconds = 3600;
+
+    /// <summary>Mirrors <c>AgentHomeRunRetentionOptions.MaxRuns</c>.</summary>
+    public const int DefaultAgentHomeRunRetentionMaxRuns = 200;
+
+    /// <summary>0 turns the run-count limit off.</summary>
+    public const int MinAgentHomeRunRetentionMaxRuns = 0;
+
+    public const int MaxAgentHomeRunRetentionMaxRuns = 100_000;
+
+    /// <summary>Mirrors <c>AgentHomeRunRetentionOptions.MaxTotalBytes</c> (2 GiB).</summary>
+    public const long DefaultAgentHomeRunRetentionMaxTotalBytes = 2L * 1024 * 1024 * 1024;
+
+    /// <summary>0 turns the byte limit off.</summary>
+    public const long MinAgentHomeRunRetentionMaxTotalBytes = 0;
+
+    /// <summary>1 TiB, the retention validator's ceiling.</summary>
+    public const long MaxAgentHomeRunRetentionMaxTotalBytes = 1024L * 1024 * 1024 * 1024;
 
     /// <summary>Node-level master flag for the client voice (TTS) feature. Default (absent) is off.</summary>
     public const bool DefaultVoiceFeatureEnabled = false;
@@ -849,6 +1151,194 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>AgentHome run-folder retention in days. Seed: <c>AgentHome:RunRetention:RetentionDays</c> (30). Read per sweep.</summary>
     public int? AgentHomeRunRetentionDays { get; init; }
+
+    /// <summary>
+    ///     Tool-loop iterations per request. Seed: <c>Agent:ToolPipeline:MaximumToolIterationsPerRequest</c> (40). Applies on
+    ///     the next node restart (the chat-client pipeline is built once).
+    /// </summary>
+    public int? ToolPipelineMaxIterationsPerRequest { get; init; }
+
+    /// <summary>
+    ///     Characters one tool result may hand the model. Seed: <c>Agent:ToolPipeline:MaxToolResultCharacters</c> (65536).
+    ///     Applies on the next node restart.
+    /// </summary>
+    public int? ToolPipelineMaxToolResultChars { get; init; }
+
+    /// <summary>
+    ///     Invalid calls to one tool in a row before the loop gives up on it. Seed:
+    ///     <c>Agent:ToolPipeline:MaxConsecutiveInvalidToolCallsPerTool</c> (3). Applies on the next node restart.
+    /// </summary>
+    public int? ToolPipelineMaxConsecutiveInvalidToolCalls { get; init; }
+
+    /// <summary>
+    ///     Context window assumed when a send names none, for both the turn budget and the provider-round budget. Seed:
+    ///     <c>Agent:ProviderCallBudget:DefaultContextTokens</c> (8192). Read per turn.
+    /// </summary>
+    public int? DefaultContextTokens { get; init; }
+
+    /// <summary>Recent messages a provider-round trim always keeps. Seed: <c>Agent:ProviderCallBudget:RecentMessagesToKeep</c> (6). Read per turn.</summary>
+    public int? ProviderBudgetRecentMessagesToKeep { get; init; }
+
+    /// <summary>Input tokens one agent run may send in total. Seed: <c>Agent:ProviderCallBudget:MaxCumulativeInputTokens</c> (4000000). Read per turn.</summary>
+    public int? ProviderBudgetMaxCumulativeInputTokens { get; init; }
+
+    /// <summary>Recent turns the history budget never trims. Seed: <c>Agent:ConversationContextBudget:RecentTurnKeepCount</c> (4). Read per budget pass.</summary>
+    public int? ContextBudgetRecentTurnKeepCount { get; init; }
+
+    /// <summary>Whether a long chat is compacted automatically after a turn. Seed: <c>Agent:ConversationCompaction:AutoCompactEnabled</c> (on). Read per job.</summary>
+    public bool? CompactionAutoEnabled { get; init; }
+
+    /// <summary>
+    ///     Share of the usable window, in percent, above which a chat is compacted. Seed:
+    ///     <c>Agent:ConversationCompaction:AutoCompactFraction</c> (0.75, stored as 75). Read per job.
+    /// </summary>
+    public int? CompactionAutoCompactPercent { get; init; }
+
+    /// <summary>Recent messages a compaction keeps word for word. Seed: <c>Agent:ConversationCompaction:RecentMessagesToKeepVerbatim</c> (8). Read per compaction.</summary>
+    public int? CompactionRecentMessagesVerbatim { get; init; }
+
+    /// <summary>Whether conversation state is distilled in the background. Seed: <c>Agent:ConversationCompaction:DistillEnabled</c> (on). Read per job.</summary>
+    public bool? CompactionDistillEnabled { get; init; }
+
+    /// <summary>Attachment text inlined into one chat turn, in characters. Seed: <c>Agent:LocalChat:MaxInlinedAttachmentChars</c> (48000). Read per turn.</summary>
+    public int? MaxInlinedAttachmentChars { get; init; }
+
+    /// <summary>Knowledge-base passages grounded into one chat turn. Seed: <c>Agent:LocalChat:KnowledgeChatTopK</c> (5). Read per turn.</summary>
+    public int? KnowledgeChatTopK { get; init; }
+
+    /// <summary>Whether a failed model send is retried before its first token. Seed: <c>Agent:ProviderResilience:RetryEnabled</c> (on). Read per send.</summary>
+    public bool? ProviderRetryEnabled { get; init; }
+
+    /// <summary>Retries of a failed model send. Seed: <c>Agent:ProviderResilience:MaxRetries</c> (2). Read per send.</summary>
+    public int? ProviderMaxRetries { get; init; }
+
+    /// <summary>Sub-agents one run may have in flight at once. Seed: <c>Spawn:MaxConcurrentSpawns</c> (3). Read per root run.</summary>
+    public int? SpawnMaxConcurrent { get; init; }
+
+    /// <summary>Cloud sub-agents one run may start. Seed: <c>Spawn:MaxCloudSpawns</c> (3). Read per root run.</summary>
+    public int? SpawnMaxCloud { get; init; }
+
+    /// <summary>How long a sub-agent waits for its busy model, in seconds. Seed: <c>Spawn:QueueWaitSeconds</c> (120). Read per spawn.</summary>
+    public int? SpawnQueueWaitSeconds { get; init; }
+
+    /// <summary>
+    ///     Whether a configured reranker runs only for ambiguous candidate sets. Seed: <c>KnowledgeBase:AdaptiveRerankingEnabled</c> (on).
+    ///     Read per search.
+    /// </summary>
+    public bool? KnowledgeAdaptiveRerankingEnabled { get; init; }
+
+    /// <summary>
+    ///     Retrieval latency budget in milliseconds. Seed: <c>KnowledgeBase:RetrievalLatencyBudgetMilliseconds</c> (500). Read per search.
+    /// </summary>
+    public int? KnowledgeRetrievalLatencyBudgetMs { get; init; }
+
+    /// <summary>
+    ///     Whether stale-vector documents are re-queued after an embedding-model change. Seed:
+    ///     <c>KnowledgeBase:ScheduledModelReindexEnabled</c> (on). Applies on the next node restart.
+    /// </summary>
+    public bool? KnowledgeScheduledReindexEnabled { get; init; }
+
+    /// <summary>
+    ///     Stale-vector polling interval in minutes. Seed: <c>KnowledgeBase:ScheduledModelReindexIntervalMinutes</c> (60). Applies on
+    ///     the next node restart.
+    /// </summary>
+    public int? KnowledgeScheduledReindexIntervalMinutes { get; init; }
+
+    /// <summary>
+    ///     Whether the knowledge-base agent tools are offered and run. Seed: <c>KnowledgeBase:AgentToolsEnabled</c> (on). Read per offer,
+    ///     turn and tool call.
+    /// </summary>
+    public bool? KnowledgeAgentToolsEnabled { get; init; }
+
+    /// <summary>
+    ///     Whether a cloud-hosted model may receive node-local data (knowledge tools, workspace files, attachments, playbook memory).
+    ///     Seed: <c>KnowledgeBase:AllowCloudModelAccess</c> (off). Read per turn. Not part of the external-access preset.
+    /// </summary>
+    public bool? AllowCloudModelAccess { get; init; }
+
+    /// <summary>
+    ///     Model that proposes playbook actions; blank inherits. Seed: <c>PlaybookAnalysis:ModelName</c>, then the default model. Read
+    ///     per run.
+    /// </summary>
+    public string? PlaybookAnalysisModelName { get; init; }
+
+    /// <summary>Model that runs playbook evals; blank inherits. Seed: <c>PlaybookEval:ModelName</c>, then the default model. Read per run.</summary>
+    public string? PlaybookEvalModelName { get; init; }
+
+    /// <summary>
+    ///     Model that mines lessons from completed runs; blank inherits. Seed: <c>MemoryExtraction:ExtractionModelName</c>, then the
+    ///     default model. Read per run.
+    /// </summary>
+    public string? MemoryExtractionModelName { get; init; }
+
+    /// <summary>Whether old conversations are deleted. Seed: <c>ChatRetention:Enabled</c> (off). Read per sweep.</summary>
+    public bool? ChatRetentionEnabled { get; init; }
+
+    /// <summary>Conversation retention window in days. Seed: <c>ChatRetention:RetentionDays</c> (30). Read per sweep.</summary>
+    public int? ChatRetentionDays { get; init; }
+
+    /// <summary>Whether old agent execution logs are deleted. Seed: <c>AgentExecutionLogRetention:Enabled</c> (on). Read per sweep.</summary>
+    public bool? AgentExecutionLogRetentionEnabled { get; init; }
+
+    /// <summary>
+    ///     Agent execution-log retention window in days. Seed: <c>AgentExecutionLogRetention:RetentionDays</c> (30). Read per sweep and
+    ///     per usage-summary request.
+    /// </summary>
+    public int? AgentExecutionLogRetentionDays { get; init; }
+
+    /// <summary>Node database snapshots kept. Seed: <c>NodeDbBackup:RetainCount</c> (3). Read per backup.</summary>
+    public int? NodeDbBackupRetainCount { get; init; }
+
+    /// <summary>Benchmark KL-divergence base cache ceiling in bytes. Seed: <c>Benchmarks:KldCacheMaxBytes</c> (64 GiB). Read per trim.</summary>
+    public long? BenchmarkKldCacheMaxBytes { get; init; }
+
+    /// <summary>Scheduled-job run history window in days. Seed: <c>Scheduler:HistoryRetentionDays</c> (30). Read per sweep.</summary>
+    public int? SchedulerHistoryRetentionDays { get; init; }
+
+    /// <summary>sd-server processes kept loaded at once. Seed: <c>StableDiffusionRuntime:MaxLoadedProcesses</c> (1). Applies on the next node restart.</summary>
+    public int? ImageMaxLoadedProcesses { get; init; }
+
+    /// <summary>Whether sd-server keeps the text encoder on the GPU. Seed: <c>StableDiffusionRuntime:TextEncoderOnGpu</c> (off). Applies on the next node restart.</summary>
+    public bool? ImageTextEncoderOnGpu { get; init; }
+
+    /// <summary>Graph-workflow runs live at once. Seed: <c>GraphWorkflows:MaxConcurrentRuns</c> (4). Applies on the next node restart.</summary>
+    public int? GraphWorkflowMaxConcurrentRuns { get; init; }
+
+    /// <summary>
+    ///     Graph-workflow node timeout in seconds when a node names none. Seed: <c>GraphWorkflows:DefaultNodeTimeoutSeconds</c> (600).
+    ///     Applies on the next node restart.
+    /// </summary>
+    public int? GraphWorkflowDefaultNodeTimeoutSeconds { get; init; }
+
+    /// <summary>Work-session steps per start or resume. Seed: <c>WorkSessions:MaxStepsPerRun</c> (25). Applies on the next node restart.</summary>
+    public int? WorkSessionMaxStepsPerRun { get; init; }
+
+    /// <summary>Work sessions running at once. Seed: <c>WorkSessions:MaxConcurrentSessions</c> (1). Applies on the next node restart.</summary>
+    public int? WorkSessionMaxConcurrentSessions { get; init; }
+
+    /// <summary>
+    ///     Development attempt wall clock in seconds. Seed: <c>Development:MaxAttemptDurationSeconds</c> (1800). Applies on the next node
+    ///     restart.
+    /// </summary>
+    public int? DevelopmentMaxAttemptDurationSeconds { get; init; }
+
+    /// <summary>Tool calls per development attempt. Seed: <c>Development:MaxToolCalls</c> (64). Applies on the next node restart.</summary>
+    public int? DevelopmentMaxToolCalls { get; init; }
+
+    /// <summary>Output tokens per development attempt. Seed: <c>Development:MaxOutputTokens</c> (32768). Applies on the next node restart.</summary>
+    public int? DevelopmentMaxOutputTokens { get; init; }
+
+    /// <summary>AgentHome inner tool calls per run (developer-only). Seed: <c>AgentHome:MaxInnerToolCalls</c> (24). Read per run.</summary>
+    public int? AgentHomeMaxInnerToolCalls { get; init; }
+
+    /// <summary>AgentHome patch-apply git timeout in seconds (developer-only). Seed: <c>AgentHome:PatchApplyTimeoutSeconds</c> (120). Read per apply.</summary>
+    public int? AgentHomePatchApplyTimeoutSeconds { get; init; }
+
+    /// <summary>AgentHome runs kept, 0 = no count limit. Seed: <c>AgentHome:RunRetention:MaxRuns</c> (200). Read per sweep.</summary>
+    public int? AgentHomeRunRetentionMaxRuns { get; init; }
+
+    /// <summary>AgentHome runs byte ceiling, 0 = no byte limit. Seed: <c>AgentHome:RunRetention:MaxTotalBytes</c> (2 GiB). Read per sweep.</summary>
+    public long? AgentHomeRunRetentionMaxTotalBytes { get; init; }
 
     /// <summary>
     ///     Which container runtime application containers use: <c>auto</c> (the default) or <c>docker</c>.

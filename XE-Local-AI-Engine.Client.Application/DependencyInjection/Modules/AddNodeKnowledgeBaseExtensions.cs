@@ -21,6 +21,14 @@ internal static class AddNodeKnowledgeBaseExtensions
         // cap/TTL ones: PostConfigure reads the stored node setting (sync twin, startup path) and overrides config, giving stored > config > off.
         _ = builder.Services.AddOptions<KnowledgeBaseOptions>()
                    .Bind(configuration.GetSection(KnowledgeBaseOptions.Section))
+#pragma warning disable MA0045 // Options Configure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
+                   // The scheduled reindex pair is restart-gated: the hosted worker captures both once. Appended after Bind so stored wins.
+                   .Configure<INodeRuntimeSettings>(static (options, runtimeSettings) =>
+                   {
+                       options.ScheduledModelReindexEnabled = runtimeSettings.GetKnowledgeScheduledReindexEnabled();
+                       options.ScheduledModelReindexIntervalMinutes = runtimeSettings.GetKnowledgeScheduledReindexIntervalMinutes();
+                   })
+#pragma warning restore MA0045
                    .PostConfigure<INodeRuntimeSettings>(static (options, runtimeSettings) =>
                    {
 #pragma warning disable MA0045 // Options PostConfigure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
@@ -102,7 +110,7 @@ internal static class AddNodeKnowledgeBaseExtensions
         builder.Services.AddHostedService<KnowledgeBlobOrphanSweeper>();
 
         // Read-only knowledge-base agent tools (search_knowledge_base / read_document / read_surrounding_chunks). All Singleton, since
-        // ClientLocalToolRegistry captures its handlers at construction; gated by KnowledgeBase:AgentToolsEnabled, merged by LocalToolOfferProvider.
+        // ClientLocalToolRegistry captures its handlers at construction; gated live by the KnowledgeAgentToolsEnabled node setting, merged by LocalToolOfferProvider.
         builder.Services.AddSingleton<IClientLocalToolHandler, SearchKnowledgeBaseToolHandler>();
         builder.Services.AddSingleton<IClientLocalToolHandler, ReadDocumentToolHandler>();
         builder.Services.AddSingleton<IClientLocalToolHandler, ReadSurroundingChunksToolHandler>();

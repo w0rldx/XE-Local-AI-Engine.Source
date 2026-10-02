@@ -5,8 +5,10 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -142,11 +144,11 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         services.AddSingleton(timeProvider ?? TimeProvider.System);
         services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite(connectionString));
         services.AddOptions<NodeDbBackupOptions>()
-                .Configure(options =>
-                {
-                    options.RetainCount = retainCount;
-                    options.BackupDirectory = backupDirectoryOverride;
-                });
+                .Configure(options => options.BackupDirectory = backupDirectoryOverride);
+        // The retain count is a node setting now, read per backup.
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+        runtimeSettings.GetNodeDbBackupRetainCountAsync(Arg.Any<CancellationToken>()).Returns(retainCount);
+        services.AddSingleton(runtimeSettings);
         services.AddSingleton<INodeDbBackupService, NodeDbBackupService>();
 
         return services.BuildServiceProvider(true);

@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
 
 using System.Globalization;
 using System.Text.Json;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
@@ -14,7 +13,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     JSON-in, JSON-out, with no client round-trip. It resolves the scoped <see cref="IKnowledgeSearchService" /> from a
 ///     FRESH DI scope per call, because the handler is a Singleton captured by the tool registry and cannot hold a scoped
 ///     dependency directly. Read-only, so it auto-runs without approval; gated by
-///     <c>KnowledgeBase:AgentToolsEnabled</c>.
+///     the live <c>KnowledgeAgentToolsEnabled</c> node setting.
 /// </remarks>
 internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
 {
@@ -34,16 +33,11 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
 
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly bool _toolsEnabled;
 
-    public SearchKnowledgeBaseToolHandler(IServiceScopeFactory scopeFactory,
-        IOptions<KnowledgeBaseOptions> options,
-        INodeRuntimeSettings runtimeSettings)
+    public SearchKnowledgeBaseToolHandler(IServiceScopeFactory scopeFactory, INodeRuntimeSettings runtimeSettings)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
-        ArgumentNullException.ThrowIfNull(options);
-        _toolsEnabled = options.Value.AgentToolsEnabled;
     }
 
     public string ToolName => SearchKnowledgeBaseToolDefinition.ToolName;
@@ -58,9 +52,9 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
     {
         ArgumentNullException.ThrowIfNull(jsonArguments);
 
-        if (!_toolsEnabled)
+        if (!await _runtimeSettings.GetKnowledgeAgentToolsEnabledAsync(cancellationToken))
         {
-            return "The knowledge-base tools are disabled on this node (KnowledgeBase:AgentToolsEnabled=false).";
+            return "The knowledge-base tools are disabled on this node (Node Settings, Knowledge section).";
         }
 
         cancellationToken.ThrowIfCancellationRequested();

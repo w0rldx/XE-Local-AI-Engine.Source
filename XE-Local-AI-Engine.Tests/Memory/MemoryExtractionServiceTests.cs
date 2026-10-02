@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Behavioral tests for <see cref="MemoryExtractionService" />: the temp-chat write-only gate, the no-model disabled
@@ -168,11 +169,8 @@ public sealed class MemoryExtractionServiceTests
     {
         var agentId = Guid.NewGuid();
         var agent = new FakeExtractionAgent(_ => [Candidate("Never reached.", MemoryScope.Procedural)]);
-        // Empty ExtractionModelName = the CI-safe disabled gate (mirrors the embedding ranker).
-        var service = CreateService(out var store, agent, new MemoryExtractionOptions
-        {
-            ExtractionModelName = string.Empty
-        });
+        // A blank effective extraction model = the CI-safe disabled gate (mirrors the embedding ranker).
+        var service = CreateService(out var store, agent, extractionModelName: string.Empty);
 
         var outcome = await service.ExtractAsync(SuccessfulRun(agentId));
 
@@ -283,7 +281,7 @@ public sealed class MemoryExtractionServiceTests
 
     private static MemoryExtractionService CreateService(out IPlaybookActionStore store,
         IMemoryExtractionAgent agent,
-        MemoryExtractionOptions? options = null,
+        string extractionModelName = "qwen3:8b",
         IMemorySemanticDeduplicator? semanticDeduplicator = null,
         ILogger<MemoryExtractionService>? logger = null)
     {
@@ -294,10 +292,8 @@ public sealed class MemoryExtractionServiceTests
             // before (the no-confident-embedding-model / outage fallback). Semantic behaviour is covered by the
             // semantic-specific tests below and by MemorySemanticDeduplicatorTests.
             semanticDeduplicator ?? StubSemanticDeduplicator.NotApplied(),
-            Options.Create(options ?? new MemoryExtractionOptions
-            {
-                ExtractionModelName = "qwen3:8b"
-            }),
+            Options.Create(new MemoryExtractionOptions()),
+            StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName(extractionModelName).Build(),
             logger ?? NullLogger<MemoryExtractionService>.Instance);
     }
 

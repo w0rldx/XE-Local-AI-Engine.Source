@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
@@ -29,12 +30,14 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 
     private readonly ITokenEstimator _estimator;
     private readonly ConversationContextBudgetOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public ConversationContextBudgeter(ITokenEstimator estimator, IOptions<ConversationContextBudgetOptions> options)
+    public ConversationContextBudgeter(ITokenEstimator estimator, IOptions<ConversationContextBudgetOptions> options, INodeRuntimeSettings runtimeSettings)
     {
         _estimator = estimator ?? throw new ArgumentNullException(nameof(estimator));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public ConversationBudgetResult Budget(IReadOnlyList<ChatMessage> messages,
@@ -101,8 +104,8 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         var pinned = approvals.Pinned;
 
         // Floor of 2 even against a mis-set config: the approval-replay path splits one in-flight round across two turns, the assistant tool-call and its request
-        // in turn M and the replayed User decision in turn M+1, so protecting one turn could drop M and orphan the response. Options validation also enforces it.
-        var keepCount = Math.Max(2, _options.RecentTurnKeepCount);
+        // in turn M and the replayed User decision in turn M+1, so protecting one turn could drop M; the setting is read per pass, never captured.
+        var keepCount = Math.Max(2, _runtimeSettings.GetContextBudgetRecentTurnKeepCount());
 
         // Turns with an index at or above this threshold are the protected recent window: always kept, never modified.
         // A non-positive threshold means every turn is within the keep window (nothing is droppable).

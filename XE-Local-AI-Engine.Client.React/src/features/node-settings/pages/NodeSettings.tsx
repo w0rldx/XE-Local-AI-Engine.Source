@@ -318,6 +318,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector }
 			draftModelOptions={modelOptions.draftModelOptions}
 			keepWarmModelOptions={modelOptions.keepWarmModelOptions}
 			autoEffortFastModelOptions={modelOptions.autoEffortFastModelOptions}
+			backgroundModelOptions={modelOptions.backgroundModelOptions}
 			rerankerModelOptions={modelOptions.rerankerModelOptions}
 			onDownloadRecommendedReranker={recommendedDownloads.reranker.start}
 			isDownloadRecommendedRerankerPending={recommendedDownloads.reranker.isPending}

@@ -20,6 +20,10 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 [Category(TestCategories.Integration)]
 public sealed class NodeSettingsEndpointTests
 {
+    // The mapper tests below exercise the non-switch fields; the switches' effective values have their own endpoint test.
+    private static readonly NodeSettingsEffectiveValues DefaultEffectiveValues =
+        StubNodeRuntimeSettings.Create().Build().ResolveEffectiveValues(new StoredNodeSettings());
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     [Test]
@@ -373,6 +377,100 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public async Task SaveNodeSettings_WithTheChatKnobs_RoundTripsThroughGetWithTheirBounds()
+    {
+        var saved = new StoredNodeSettings();
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => saved);
+        nodeSettingsStore.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             saved = call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(saved);
+                             return Task.FromResult(saved);
+                         });
+
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            ToolPipelineMaxIterationsPerRequest = 80,
+            ToolPipelineMaxToolResultChars = 100_000,
+            ToolPipelineMaxConsecutiveInvalidToolCalls = 7,
+            DefaultContextTokens = 65_536,
+            ProviderBudgetRecentMessagesToKeep = 20,
+            ProviderBudgetMaxCumulativeInputTokens = 8_000_000,
+            ContextBudgetRecentTurnKeepCount = 9,
+            CompactionAutoEnabled = false,
+            CompactionAutoCompactPercent = 90,
+            CompactionRecentMessagesVerbatim = 16,
+            CompactionDistillEnabled = false,
+            MaxInlinedAttachmentChars = 200_000,
+            KnowledgeChatTopK = 12,
+            ProviderRetryEnabled = false,
+            ProviderMaxRetries = 0,
+            SpawnMaxConcurrent = 1,
+            SpawnMaxCloud = 0,
+            SpawnQueueWaitSeconds = 0
+        });
+        using var putResponse = await client.SendAsync(putRequest);
+        AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+
+        using var getRequest = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var getResponse = await client.SendAsync(getRequest);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(getResponse);
+
+        AssertEx.Equal(expected: 80, settings.ToolPipelineMaxIterationsPerRequest);
+        AssertEx.Equal(expected: 100_000, settings.ToolPipelineMaxToolResultChars);
+        AssertEx.Equal(expected: 7, settings.ToolPipelineMaxConsecutiveInvalidToolCalls);
+        AssertEx.Equal(expected: 65_536, settings.DefaultContextTokens);
+        AssertEx.Equal(expected: 20, settings.ProviderBudgetRecentMessagesToKeep);
+        AssertEx.Equal(expected: 8_000_000, settings.ProviderBudgetMaxCumulativeInputTokens);
+        AssertEx.Equal(expected: 9, settings.ContextBudgetRecentTurnKeepCount);
+        AssertEx.Equal(expected: false, settings.CompactionAutoEnabled);
+        AssertEx.Equal(expected: 90, settings.CompactionAutoCompactPercent);
+        AssertEx.Equal(expected: 16, settings.CompactionRecentMessagesVerbatim);
+        AssertEx.Equal(expected: false, settings.CompactionDistillEnabled);
+        AssertEx.Equal(expected: 200_000, settings.MaxInlinedAttachmentChars);
+        AssertEx.Equal(expected: 12, settings.KnowledgeChatTopK);
+        AssertEx.Equal(expected: false, settings.ProviderRetryEnabled);
+        AssertEx.Equal(expected: 0, settings.ProviderMaxRetries);
+        AssertEx.Equal(expected: 1, settings.SpawnMaxConcurrent);
+        AssertEx.Equal(expected: 0, settings.SpawnMaxCloud);
+        AssertEx.Equal(expected: 0, settings.SpawnQueueWaitSeconds);
+        // Bounds are server-authoritative for the React form.
+        AssertEx.Equal(StoredNodeSettings.MinToolPipelineMaxToolResultChars, settings.MinToolPipelineMaxToolResultChars);
+        AssertEx.Equal(StoredNodeSettings.MaxDefaultContextTokens, settings.MaxAllowedDefaultContextTokens);
+        AssertEx.Equal(StoredNodeSettings.MinCompactionAutoCompactPercent, settings.MinCompactionAutoCompactPercent);
+        AssertEx.Equal(StoredNodeSettings.MaxCompactionAutoCompactPercent, settings.MaxAllowedCompactionAutoCompactPercent);
+        AssertEx.Equal(StoredNodeSettings.MinSpawnMaxConcurrent, settings.MinSpawnMaxConcurrent);
+        AssertEx.Equal(StoredNodeSettings.MaxSpawnQueueWaitSeconds, settings.MaxAllowedSpawnQueueWaitSeconds);
+    }
+
+    [Test]
+    [Arguments(StoredNodeSettings.MinSpawnMaxConcurrent - 1)]
+    [Arguments(StoredNodeSettings.MaxSpawnMaxConcurrent + 1)]
+    public async Task SaveNodeSettings_WhenTheSpawnCapIsOutOfRange_BindsTheErrorToTheWireField(int spawnMaxConcurrent)
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            SpawnMaxConcurrent = spawnMaxConcurrent
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal("spawnMaxConcurrent", document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     [Arguments(-2)]
     [Arguments(131073)]
     public async Task SaveNodeSettings_WhenTheCacheRamIsOutOfRange_ReturnsValidationProblem(int cacheRamMiB)
@@ -686,7 +784,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal("repo/model:Q5_K_M", stored.KeepModelWarmModelName);
         AssertEx.Equal(expected: 240, stored.KeepModelWarmIntervalSeconds);
 
-        var response = stored.ToResponse();
+        var response = stored.ToResponse(DefaultEffectiveValues);
         AssertEx.Equal(expected: false, response.KeepModelWarmEnabled);
         AssertEx.Equal("repo/model:Q5_K_M", response.KeepModelWarmModelName);
         AssertEx.Equal(expected: 240, response.KeepModelWarmIntervalSeconds);
@@ -831,7 +929,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(expected: true, stored.VoiceFeatureEnabled);
         AssertEx.Equal("af_heart", stored.DefaultVoiceProfile);
 
-        var response = stored.ToResponse();
+        var response = stored.ToResponse(DefaultEffectiveValues);
 
         AssertEx.Equal(expected: true, response.VoiceFeatureEnabled);
         AssertEx.Equal("af_heart", response.DefaultVoiceProfile);
@@ -855,7 +953,7 @@ public sealed class NodeSettingsEndpointTests
         var stored = request.ToStoredSettings(new StoredNodeSettings());
         AssertEx.Equal("bge-reranker-v2-m3", stored.RerankerModelName);
 
-        var response = stored.ToResponse();
+        var response = stored.ToResponse(DefaultEffectiveValues);
         AssertEx.Equal("bge-reranker-v2-m3", response.RerankerModelName);
 
         // Omitting the field on a later save keeps the current stored value (additive merge).
@@ -883,7 +981,7 @@ public sealed class NodeSettingsEndpointTests
         var stored = request.ToStoredSettings(new StoredNodeSettings());
         AssertEx.Equal("qwen3-1.7b", stored.AutoEffortFastModelName);
 
-        var response = stored.ToResponse();
+        var response = stored.ToResponse(DefaultEffectiveValues);
         AssertEx.Equal("qwen3-1.7b", response.AutoEffortFastModelName);
 
         var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
@@ -894,6 +992,331 @@ public sealed class NodeSettingsEndpointTests
             AutoEffortFastModelName = string.Empty
         }.ToStoredSettings(stored);
         AssertEx.Equal(string.Empty, cleared.AutoEffortFastModelName);
+    }
+
+    [Test]
+    public async Task UnsavedSwitch_WithASeededTrue_ReadsBackTrue_AndSavingFalsePersistsFalse()
+    {
+        var saved = new StoredNodeSettings();
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => saved);
+        nodeSettingsStore.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             saved = call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(saved);
+                             return Task.FromResult(saved);
+                         });
+
+        // The real accessor over appsettings seeds that turn both switches on; nothing was ever saved.
+        await using var factory = CreateFactory(nodeSettingsStore,
+            configuration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["KnowledgeBase:AllowCloudModelAccess"] = "true",
+                ["ChatRetention:Enabled"] = "true"
+            });
+        using var client = factory.CreateClient();
+
+        using var firstGet = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var firstGetResponse = await client.SendAsync(firstGet);
+        var unsaved = await ReadJsonAsync<NodeSettingsResponse>(firstGetResponse);
+        AssertEx.True(unsaved.AllowCloudModelAccess, "An unsaved switch must report its seeded effective value.");
+        AssertEx.True(unsaved.ChatRetentionEnabled, "An unsaved switch must report its seeded effective value.");
+
+        using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            AllowCloudModelAccess = false,
+            ChatRetentionEnabled = false
+        });
+        using var putResponse = await client.SendAsync(putRequest);
+        AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+        var putBody = await ReadJsonAsync<NodeSettingsResponse>(putResponse);
+        AssertEx.False(putBody.AllowCloudModelAccess);
+        AssertEx.False(putBody.ChatRetentionEnabled);
+        AssertEx.Equal(expected: false, saved.AllowCloudModelAccess);
+        AssertEx.Equal(expected: false, saved.ChatRetentionEnabled);
+
+        using var secondGet = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var secondGetResponse = await client.SendAsync(secondGet);
+        var reread = await ReadJsonAsync<NodeSettingsResponse>(secondGetResponse);
+        AssertEx.False(reread.AllowCloudModelAccess, "A saved false must override the seeded true.");
+        AssertEx.False(reread.ChatRetentionEnabled, "A saved false must override the seeded true.");
+    }
+
+    [Test]
+    public async Task UnsavedRetentionWindow_WithASeededNonDefaultValue_ReadsBackTheSeed_AndSavingAnotherValuePersistsIt()
+    {
+        var saved = new StoredNodeSettings();
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => saved);
+        nodeSettingsStore.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             saved = call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(saved);
+                             return Task.FromResult(saved);
+                         });
+
+        // The real accessor over an appsettings seed of one day; nothing was ever saved.
+        await using var factory = CreateFactory(nodeSettingsStore,
+            configuration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["ChatRetention:RetentionDays"] = "1"
+            });
+        using var client = factory.CreateClient();
+
+        using var firstGet = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var firstGetResponse = await client.SendAsync(firstGet);
+        var unsaved = await ReadJsonAsync<NodeSettingsResponse>(firstGetResponse);
+        AssertEx.Equal(expected: 1, unsaved.ChatRetentionDays, "An unsaved retention window must report its seeded effective value.");
+        AssertEx.Equal(StoredNodeSettings.DefaultAgentExecutionLogRetentionDays, unsaved.AgentExecutionLogRetentionDays);
+
+        using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            ChatRetentionDays = 7
+        });
+        using var putResponse = await client.SendAsync(putRequest);
+        AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+        var putBody = await ReadJsonAsync<NodeSettingsResponse>(putResponse);
+        AssertEx.Equal(expected: 7, putBody.ChatRetentionDays);
+        AssertEx.Equal(expected: 7, saved.ChatRetentionDays);
+
+        using var secondGet = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var secondGetResponse = await client.SendAsync(secondGet);
+        var reread = await ReadJsonAsync<NodeSettingsResponse>(secondGetResponse);
+        AssertEx.Equal(expected: 7, reread.ChatRetentionDays, "A saved window must override the seed.");
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WithTheKnowledgeAndUsageKnobs_RoundTripsThroughGetWithTheirBounds()
+    {
+        var saved = new StoredNodeSettings();
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => saved);
+        nodeSettingsStore.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             saved = call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(saved);
+                             return Task.FromResult(saved);
+                         });
+
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            KnowledgeAdaptiveRerankingEnabled = false,
+            KnowledgeRetrievalLatencyBudgetMs = 1500,
+            KnowledgeScheduledReindexEnabled = false,
+            KnowledgeScheduledReindexIntervalMinutes = 120,
+            KnowledgeAgentToolsEnabled = false,
+            AllowCloudModelAccess = true,
+            ChatRetentionEnabled = true,
+            ChatRetentionDays = 90,
+            AgentExecutionLogRetentionEnabled = false,
+            AgentExecutionLogRetentionDays = 14,
+            NodeDbBackupRetainCount = 5,
+            BenchmarkKldCacheMaxBytes = 8L * 1024 * 1024 * 1024,
+            SchedulerHistoryRetentionDays = 45
+        });
+        using var putResponse = await client.SendAsync(putRequest);
+        AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+
+        using var getRequest = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var getResponse = await client.SendAsync(getRequest);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(getResponse);
+
+        AssertEx.Equal(expected: false, settings.KnowledgeAdaptiveRerankingEnabled);
+        AssertEx.Equal(expected: 1500, settings.KnowledgeRetrievalLatencyBudgetMs);
+        AssertEx.Equal(expected: false, settings.KnowledgeScheduledReindexEnabled);
+        AssertEx.Equal(expected: 120, settings.KnowledgeScheduledReindexIntervalMinutes);
+        AssertEx.Equal(expected: false, settings.KnowledgeAgentToolsEnabled);
+        AssertEx.Equal(expected: true, settings.AllowCloudModelAccess);
+        AssertEx.Equal(expected: true, settings.ChatRetentionEnabled);
+        AssertEx.Equal(expected: 90, settings.ChatRetentionDays);
+        AssertEx.Equal(expected: false, settings.AgentExecutionLogRetentionEnabled);
+        AssertEx.Equal(expected: 14, settings.AgentExecutionLogRetentionDays);
+        AssertEx.Equal(expected: 5, settings.NodeDbBackupRetainCount);
+        AssertEx.Equal(8L * 1024 * 1024 * 1024, settings.BenchmarkKldCacheMaxBytes);
+        AssertEx.Equal(expected: 45, settings.SchedulerHistoryRetentionDays);
+        // The cloud opt-in is its own switch: saving it must not re-stamp the external-access preset.
+        AssertEx.Null(saved.ExternalAccessProfile);
+        // Bounds are server-authoritative for the React form.
+        AssertEx.Equal(StoredNodeSettings.MinKnowledgeRetrievalLatencyBudgetMs, settings.MinKnowledgeRetrievalLatencyBudgetMs);
+        AssertEx.Equal(StoredNodeSettings.MaxKnowledgeScheduledReindexIntervalMinutes, settings.MaxAllowedKnowledgeScheduledReindexIntervalMinutes);
+        AssertEx.Equal(StoredNodeSettings.MinRetentionDays, settings.MinRetentionDays);
+        AssertEx.Equal(StoredNodeSettings.MaxRetentionDays, settings.MaxAllowedRetentionDays);
+        AssertEx.Equal(StoredNodeSettings.MaxNodeDbBackupRetainCount, settings.MaxAllowedNodeDbBackupRetainCount);
+        AssertEx.Equal(StoredNodeSettings.MinBenchmarkKldCacheMaxBytes, settings.MinBenchmarkKldCacheMaxBytes);
+        AssertEx.Equal(StoredNodeSettings.MaxBenchmarkKldCacheMaxBytes, settings.MaxAllowedBenchmarkKldCacheMaxBytes);
+    }
+
+    [Test]
+    [Arguments("chatRetentionDays")]
+    [Arguments("benchmarkKldCacheMaxBytes")]
+    public async Task SaveNodeSettings_WhenAUsageKnobIsOutOfRange_BindsTheErrorToTheWireField(string field)
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(field == "chatRetentionDays"
+            ? new SaveNodeSettingsRequest
+            {
+                ChatRetentionDays = StoredNodeSettings.MinRetentionDays - 1
+            }
+            : new SaveNodeSettingsRequest
+            {
+                BenchmarkKldCacheMaxBytes = StoredNodeSettings.MaxBenchmarkKldCacheMaxBytes + 1
+            });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal(field, document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WithTheRuntimeAndWorkspaceKnobs_RoundTripsThroughGetWithTheirBounds()
+    {
+        var saved = new StoredNodeSettings();
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => saved);
+        nodeSettingsStore.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             saved = call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(saved);
+                             return Task.FromResult(saved);
+                         });
+
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            ImageMaxLoadedProcesses = 2,
+            ImageTextEncoderOnGpu = true,
+            GraphWorkflowMaxConcurrentRuns = 8,
+            GraphWorkflowDefaultNodeTimeoutSeconds = 900,
+            WorkSessionMaxStepsPerRun = 50,
+            WorkSessionMaxConcurrentSessions = 2,
+            DevelopmentMaxAttemptDurationSeconds = 3600,
+            DevelopmentMaxToolCalls = 128,
+            DevelopmentMaxOutputTokens = 65536,
+            AgentHomeMaxInnerToolCalls = 12,
+            AgentHomePatchApplyTimeoutSeconds = 300,
+            AgentHomeRunRetentionMaxRuns = 0,
+            AgentHomeRunRetentionMaxTotalBytes = 4L * 1024 * 1024 * 1024
+        });
+        using var putResponse = await client.SendAsync(putRequest);
+        AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+
+        using var getRequest = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var getResponse = await client.SendAsync(getRequest);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(getResponse);
+
+        AssertEx.Equal(expected: 2, settings.ImageMaxLoadedProcesses);
+        AssertEx.Equal(expected: true, settings.ImageTextEncoderOnGpu);
+        AssertEx.Equal(expected: 8, settings.GraphWorkflowMaxConcurrentRuns);
+        AssertEx.Equal(expected: 900, settings.GraphWorkflowDefaultNodeTimeoutSeconds);
+        AssertEx.Equal(expected: 50, settings.WorkSessionMaxStepsPerRun);
+        AssertEx.Equal(expected: 2, settings.WorkSessionMaxConcurrentSessions);
+        AssertEx.Equal(expected: 3600, settings.DevelopmentMaxAttemptDurationSeconds);
+        AssertEx.Equal(expected: 128, settings.DevelopmentMaxToolCalls);
+        AssertEx.Equal(expected: 65536, settings.DevelopmentMaxOutputTokens);
+        AssertEx.Equal(expected: 12, settings.AgentHomeMaxInnerToolCalls);
+        AssertEx.Equal(expected: 300, settings.AgentHomePatchApplyTimeoutSeconds);
+        AssertEx.Equal(expected: 0, settings.AgentHomeRunRetentionMaxRuns, "0 turns the count limit off and is a valid value.");
+        AssertEx.Equal(4L * 1024 * 1024 * 1024, settings.AgentHomeRunRetentionMaxTotalBytes);
+        // Bounds are server-authoritative for the React form.
+        AssertEx.Equal(StoredNodeSettings.MaxImageMaxLoadedProcesses, settings.MaxAllowedImageMaxLoadedProcesses);
+        AssertEx.Equal(StoredNodeSettings.MinGraphWorkflowDefaultNodeTimeoutSeconds, settings.MinGraphWorkflowDefaultNodeTimeoutSeconds);
+        AssertEx.Equal(StoredNodeSettings.MaxWorkSessionMaxConcurrentSessions, settings.MaxAllowedWorkSessionMaxConcurrentSessions);
+        AssertEx.Equal(StoredNodeSettings.MinDevelopmentMaxOutputTokens, settings.MinDevelopmentMaxOutputTokens);
+        AssertEx.Equal(StoredNodeSettings.MaxAgentHomeMaxInnerToolCalls, settings.MaxAllowedAgentHomeMaxInnerToolCalls);
+        AssertEx.Equal(StoredNodeSettings.MinAgentHomeRunRetentionMaxRuns, settings.MinAgentHomeRunRetentionMaxRuns);
+        AssertEx.Equal(StoredNodeSettings.MaxAgentHomeRunRetentionMaxTotalBytes, settings.MaxAllowedAgentHomeRunRetentionMaxTotalBytes);
+    }
+
+    [Test]
+    [Arguments("imageMaxLoadedProcesses")]
+    [Arguments("agentHomeRunRetentionMaxTotalBytes")]
+    public async Task SaveNodeSettings_WhenARuntimeKnobIsOutOfRange_BindsTheErrorToTheWireField(string field)
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(field == "imageMaxLoadedProcesses"
+            ? new SaveNodeSettingsRequest
+            {
+                ImageMaxLoadedProcesses = StoredNodeSettings.MaxImageMaxLoadedProcesses + 1
+            }
+            : new SaveNodeSettingsRequest
+            {
+                AgentHomeRunRetentionMaxTotalBytes = StoredNodeSettings.MinAgentHomeRunRetentionMaxTotalBytes - 1
+            });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal(field, document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenABackgroundModelIsNotNodeLocal_BindsTheErrorToTheField()
+    {
+        // An `ext:` id would carry golden text off the node; the rejection must name the request property so the
+        // React select can show it under the right picker.
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings());
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            PlaybookEvalModelName = "ext:studio/qwen3-8b"
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal("playbookEvalModelName", document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void NodeSettings_BackgroundModelNames_RoundTripThroughMapper()
+    {
+        // A trimmed value round-trips, omitting the field keeps the stored value, and the "Inherit" option sends an
+        // empty string that clears it (Normalize then stores null).
+        var stored = new SaveNodeSettingsRequest
+        {
+            PlaybookAnalysisModelName = "  qwen3:8b  ",
+            PlaybookEvalModelName = "repo/model:Q4_K_M",
+            MemoryExtractionModelName = "qwen3:1.7b"
+        }.ToStoredSettings(new StoredNodeSettings());
+        AssertEx.Equal("qwen3:8b", stored.PlaybookAnalysisModelName);
+
+        var response = stored.ToResponse(DefaultEffectiveValues);
+        AssertEx.Equal("qwen3:8b", response.PlaybookAnalysisModelName);
+        AssertEx.Equal("repo/model:Q4_K_M", response.PlaybookEvalModelName);
+        AssertEx.Equal("qwen3:1.7b", response.MemoryExtractionModelName);
+
+        var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
+        AssertEx.Equal("repo/model:Q4_K_M", merged.PlaybookEvalModelName);
+
+        var cleared = new SaveNodeSettingsRequest
+        {
+            MemoryExtractionModelName = string.Empty
+        }.ToStoredSettings(stored);
+        AssertEx.Equal(string.Empty, cleared.MemoryExtractionModelName);
     }
 
     [Test]
@@ -920,7 +1343,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(expected: 1.25d, stored.UsageRates.Models!["gpt-5"].InputPer1M);
         AssertEx.Equal(expected: 10d, stored.UsageRates.Models["gpt-5"].OutputPer1M);
 
-        var response = stored.ToResponse();
+        var response = stored.ToResponse(DefaultEffectiveValues);
         AssertEx.NotNull(response.UsageRates);
         AssertEx.Equal(expected: 1.25d, response.UsageRates!["gpt-5"].InputPer1M);
 
@@ -945,7 +1368,7 @@ public sealed class NodeSettingsEndpointTests
 
         AssertEx.Equal(expected: true, stored.WebAccessEnabled);
         AssertEx.Equal("https://searx.example.org/", stored.WebSearchSearxngUrl);
-        var response = stored.ToResponse();
+        var response = stored.ToResponse(DefaultEffectiveValues);
         AssertEx.Equal(expected: true, response.WebAccessEnabled);
         AssertEx.Equal("https://searx.example.org/", response.WebSearchSearxngUrl);
 
@@ -1039,7 +1462,7 @@ public sealed class NodeSettingsEndpointTests
         }.ToStoredSettings(new StoredNodeSettings());
         AssertEx.Equal(ContainerRuntimeSelectionParser.Docker, stored.ContainerRuntimeSelection);
 
-        AssertEx.Equal(ContainerRuntimeSelectionParser.Docker, stored.ToResponse().ContainerRuntimeSelection);
+        AssertEx.Equal(ContainerRuntimeSelectionParser.Docker, stored.ToResponse(DefaultEffectiveValues).ContainerRuntimeSelection);
 
         var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
         AssertEx.Equal(ContainerRuntimeSelectionParser.Docker, merged.ContainerRuntimeSelection);
@@ -1047,10 +1470,10 @@ public sealed class NodeSettingsEndpointTests
         var junk = new StoredNodeSettings
         {
             ContainerRuntimeSelection = "podman"
-        }.ToResponse();
+        }.ToResponse(DefaultEffectiveValues);
         AssertEx.Equal(ContainerRuntimeSelectionParser.Auto, junk.ContainerRuntimeSelection);
 
-        AssertEx.Equal(ContainerRuntimeSelectionParser.Auto, new StoredNodeSettings().ToResponse().ContainerRuntimeSelection);
+        AssertEx.Equal(ContainerRuntimeSelectionParser.Auto, new StoredNodeSettings().ToResponse(DefaultEffectiveValues).ContainerRuntimeSelection);
     }
 
     [Test]
@@ -1519,10 +1942,12 @@ public sealed class NodeSettingsEndpointTests
     }
 
     private static TestServerWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore,
-        INodeRuntimeSettings? runtimeSettings = null)
+        INodeRuntimeSettings? runtimeSettings = null,
+        IReadOnlyDictionary<string, string?>? configuration = null)
     {
         return new TestServerWebAppFactory
         {
+            AdditionalConfiguration = configuration,
             ConfigureAdditionalTestServices = services =>
             {
                 services.RemoveAll<INodeSettingsStore>();

@@ -24,6 +24,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
     private readonly LocalRuntimeWarmer _localRuntimeWarmer;
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly ConversationCompactionOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ConversationCompactionService> _logger;
 
@@ -36,6 +37,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         LocalRuntimeWarmer localRuntimeWarmer,
         INodeSettingsStore nodeSettingsStore,
         IOptions<ConversationCompactionOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<ConversationCompactionService> logger)
     {
@@ -56,6 +58,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         ArgumentNullException.ThrowIfNull(nodeSettingsStore);
         _nodeSettingsStore = nodeSettingsStore;
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         ArgumentNullException.ThrowIfNull(timeProvider);
         _timeProvider = timeProvider;
         ArgumentNullException.ThrowIfNull(logger);
@@ -156,7 +159,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
 
         // The per-call override wins when present, otherwise the configured window. The floor of 2 applies to both, so a
         // caller can shrink the window but never below the last exchange.
-        var keep = Math.Max(2, recentMessagesToKeepVerbatim ?? _options.RecentMessagesToKeepVerbatim);
+        var keep = Math.Max(2, recentMessagesToKeepVerbatim ?? await _runtimeSettings.GetCompactionRecentMessagesVerbatimAsync(cancellationToken));
         if (completed.Count <= keep)
         {
             return new ConversationCompactionResult

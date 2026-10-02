@@ -4,7 +4,6 @@ using System.ClientModel;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
@@ -24,6 +23,7 @@ using XE_Local_AI_Engine.Tests.Capacity;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
@@ -1875,10 +1875,7 @@ public sealed class SubAgentSpawnServiceTests
                 new EmptyMcpToolRegistry(),
                 _customToolCatalog,
                 _chatClient,
-                Options.Create(new SpawnOptions
-                {
-                    QueueWaitSeconds = 5
-                }),
+                StubNodeRuntimeSettings.Create().WithSpawnQueueWaitSeconds(5).Build(),
                 _instructionProvider,
                 _modelCapabilityResolver,
                 TrustResolver,

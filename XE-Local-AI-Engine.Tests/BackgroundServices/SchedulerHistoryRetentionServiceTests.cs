@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Unit tests for the scheduler-history retention sweeper. Its cadence is expressed in whole minutes, so the loop is
@@ -20,7 +21,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class SchedulerHistoryRetentionServiceTests
 {
-    private const int RetentionDays = 30;
+    // Deliberately not the options default (30): the cutoff proves the window comes from the node setting.
+    private const int RetentionDays = 12;
 
     [Test]
     public async Task ExecuteAsync_WhenTheSchedulerIsDisabled_ReturnsWithoutEverSweeping()
@@ -113,7 +115,6 @@ public sealed class SchedulerHistoryRetentionServiceTests
             _options = new SchedulerOptions
             {
                 Enabled = enabled,
-                HistoryRetentionDays = RetentionDays,
                 RetentionSweepIntervalMinutes = 1
             };
 
@@ -131,7 +132,11 @@ public sealed class SchedulerHistoryRetentionServiceTests
         public ConcurrentQueue<long> Cutoffs { get; } = new();
 
         public SchedulerHistoryRetentionService CreateService() =>
-            new(_provider.GetRequiredService<IServiceScopeFactory>(), Time, Options.Create(_options), Logger);
+            new(_provider.GetRequiredService<IServiceScopeFactory>(),
+                Time,
+                Options.Create(_options),
+                StubNodeRuntimeSettings.Create().WithSchedulerHistoryRetentionDays(RetentionDays).Build(),
+                Logger);
 
         public void Dispose()
         {

@@ -490,7 +490,6 @@ XE-Local-AI-Engine.Tests/Auth/NodeAuthRefreshRotationGraceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Auth/NodeAuthorizationPolicyTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Auth/NodeChangePasswordEndpointTests.cs|summary|2
 XE-Local-AI-Engine.Tests/Auth/TokenStoreTests.cs|summary|1
-XE-Local-AI-Engine.Tests/BackgroundServices/AgentExecutionLogRetentionServiceTests.cs|run|1
 XE-Local-AI-Engine.Tests/BackgroundServices/BenchmarkQueueHostedServiceTests.cs|summary|6
 XE-Local-AI-Engine.Tests/BackgroundServices/DatasetGenerationHostedServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/BackgroundServices/RetentionSweeperServiceTests.cs|run|3

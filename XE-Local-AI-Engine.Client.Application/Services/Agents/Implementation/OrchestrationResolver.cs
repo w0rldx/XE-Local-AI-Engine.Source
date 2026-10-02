@@ -7,7 +7,6 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 
@@ -26,7 +25,6 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     private const int MinimumCapableParticipants = 2;
     private const int DefaultMaxTurnsPerAgent = 8;
     private readonly IAgentInstructionProvider _instructionProvider;
-    private readonly KnowledgeBaseOptions _knowledgeOptions;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
     private readonly ILogger<OrchestrationResolver> _logger;
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
@@ -47,7 +45,6 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         IModelCapabilityResolver modelCapabilityResolver,
         IAgentInstructionProvider instructionProvider,
         IToolApprovalPolicy toolApprovalPolicy,
-        IOptions<KnowledgeBaseOptions> knowledgeOptions,
         ILogger<OrchestrationResolver> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -60,8 +57,6 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
         _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
         _toolApprovalPolicy = toolApprovalPolicy ?? throw new ArgumentNullException(nameof(toolApprovalPolicy));
-        ArgumentNullException.ThrowIfNull(knowledgeOptions);
-        _knowledgeOptions = knowledgeOptions.Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -270,12 +265,12 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
         // The same egress gate as the single-agent path, keyed on THIS participant's effective model only, and
         // reported as withheld only when there IS enabled memory to withhold.
-        if (participantIsCloud && !_knowledgeOptions.AllowCloudModelAccess)
+        if (participantIsCloud && !await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken))
         {
             var withheld = (await _playbookActionStore.ListEnabledByAgentAsync(participant.Id, cancellationToken)).Count > 0;
             if (withheld)
             {
-                _logger.LogInformation("Playbook memory for participant {ParticipantId} was withheld: its effective model is cloud-hosted and KnowledgeBase:AllowCloudModelAccess is off.",
+                _logger.LogInformation("Playbook memory for participant {ParticipantId} was withheld: its effective model is cloud-hosted and AllowCloudModelAccess is off.",
                     participant.Id);
             }
 

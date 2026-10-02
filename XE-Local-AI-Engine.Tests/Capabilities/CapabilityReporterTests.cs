@@ -3,11 +3,13 @@ namespace XE_Local_AI_Engine.Tests.Capabilities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using OllamaSharp;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
@@ -153,7 +155,8 @@ public sealed class CapabilityReporterTests
             Options.Create(new WorkerNodeOptions
             {
                 NodeName = "test-node"
-            }));
+            }),
+            new Lazy<IModelTrustResolver>(Substitute.For<IModelTrustResolver>()));
         var reporter = new CapabilityReporter(prober, runtimeSettings, NullLogger<CapabilityReporter>.Instance);
         return new CapabilityReporterTestContext(server, chatClient, reporter, timeProvider);
     }

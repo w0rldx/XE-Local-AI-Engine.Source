@@ -7849,7 +7849,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
+		.optional(),
 	minAgentHomeRunRetentionDays: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -7860,6 +7860,485 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
+	toolPipelineMaxIterationsPerRequest: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minToolPipelineMaxIterationsPerRequest: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedToolPipelineMaxIterationsPerRequest: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	toolPipelineMaxToolResultChars: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minToolPipelineMaxToolResultChars: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedToolPipelineMaxToolResultChars: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	toolPipelineMaxConsecutiveInvalidToolCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minToolPipelineMaxConsecutiveInvalidToolCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedToolPipelineMaxConsecutiveInvalidToolCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	defaultContextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minDefaultContextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedDefaultContextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	providerBudgetRecentMessagesToKeep: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minProviderBudgetRecentMessagesToKeep: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedProviderBudgetRecentMessagesToKeep: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	providerBudgetMaxCumulativeInputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minProviderBudgetMaxCumulativeInputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedProviderBudgetMaxCumulativeInputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	contextBudgetRecentTurnKeepCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minContextBudgetRecentTurnKeepCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedContextBudgetRecentTurnKeepCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	compactionAutoCompactPercent: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minCompactionAutoCompactPercent: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedCompactionAutoCompactPercent: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	compactionRecentMessagesVerbatim: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minCompactionRecentMessagesVerbatim: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedCompactionRecentMessagesVerbatim: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxInlinedAttachmentChars: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minMaxInlinedAttachmentChars: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedMaxInlinedAttachmentChars: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	knowledgeChatTopK: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minKnowledgeChatTopK: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedKnowledgeChatTopK: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	providerMaxRetries: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minProviderMaxRetries: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedProviderMaxRetries: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	spawnMaxConcurrent: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minSpawnMaxConcurrent: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedSpawnMaxConcurrent: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	spawnMaxCloud: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minSpawnMaxCloud: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedSpawnMaxCloud: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	spawnQueueWaitSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minSpawnQueueWaitSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedSpawnQueueWaitSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	compactionAutoEnabled: z.boolean().optional(),
+	compactionDistillEnabled: z.boolean().optional(),
+	providerRetryEnabled: z.boolean().optional(),
+	knowledgeAdaptiveRerankingEnabled: z.boolean().optional(),
+	knowledgeRetrievalLatencyBudgetMs: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minKnowledgeRetrievalLatencyBudgetMs: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedKnowledgeRetrievalLatencyBudgetMs: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	knowledgeScheduledReindexEnabled: z.boolean().optional(),
+	knowledgeScheduledReindexIntervalMinutes: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minKnowledgeScheduledReindexIntervalMinutes: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedKnowledgeScheduledReindexIntervalMinutes: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	knowledgeAgentToolsEnabled: z.boolean().optional(),
+	allowCloudModelAccess: z.boolean().optional(),
+	playbookAnalysisModelName: z.string().nullish(),
+	playbookEvalModelName: z.string().nullish(),
+	memoryExtractionModelName: z.string().nullish(),
+	chatRetentionEnabled: z.boolean().optional(),
+	chatRetentionDays: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	minRetentionDays: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedRetentionDays: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	agentExecutionLogRetentionEnabled: z.boolean().optional(),
+	agentExecutionLogRetentionDays: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	nodeDbBackupRetainCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minNodeDbBackupRetainCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedNodeDbBackupRetainCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	benchmarkKldCacheMaxBytes: z.int().nullish(),
+	minBenchmarkKldCacheMaxBytes: z.int().optional(),
+	maxAllowedBenchmarkKldCacheMaxBytes: z.int().optional(),
+	schedulerHistoryRetentionDays: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	imageMaxLoadedProcesses: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minImageMaxLoadedProcesses: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedImageMaxLoadedProcesses: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	imageTextEncoderOnGpu: z.boolean().optional(),
+	graphWorkflowMaxConcurrentRuns: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minGraphWorkflowMaxConcurrentRuns: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedGraphWorkflowMaxConcurrentRuns: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	graphWorkflowDefaultNodeTimeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minGraphWorkflowDefaultNodeTimeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedGraphWorkflowDefaultNodeTimeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	workSessionMaxStepsPerRun: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minWorkSessionMaxStepsPerRun: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedWorkSessionMaxStepsPerRun: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	workSessionMaxConcurrentSessions: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minWorkSessionMaxConcurrentSessions: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedWorkSessionMaxConcurrentSessions: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	developmentMaxAttemptDurationSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minDevelopmentMaxAttemptDurationSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedDevelopmentMaxAttemptDurationSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	developmentMaxToolCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minDevelopmentMaxToolCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedDevelopmentMaxToolCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	developmentMaxOutputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minDevelopmentMaxOutputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedDevelopmentMaxOutputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	agentHomeMaxInnerToolCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minAgentHomeMaxInnerToolCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedAgentHomeMaxInnerToolCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	agentHomePatchApplyTimeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minAgentHomePatchApplyTimeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedAgentHomePatchApplyTimeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	agentHomeRunRetentionMaxRuns: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minAgentHomeRunRetentionMaxRuns: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedAgentHomeRunRetentionMaxRuns: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	agentHomeRunRetentionMaxTotalBytes: z.int().nullish(),
+	minAgentHomeRunRetentionMaxTotalBytes: z.int().optional(),
+	maxAllowedAgentHomeRunRetentionMaxTotalBytes: z.int().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest = z.object({
@@ -7926,6 +8405,53 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	transcriptionInferenceTimeoutMinutes: z.int().gte(1).lte(480).nullish(),
 	agentHomeMaxRunSeconds: z.int().gte(60).lte(86400).nullish(),
 	agentHomeRunRetentionDays: z.int().gte(1).lte(365).nullish(),
+	toolPipelineMaxIterationsPerRequest: z.int().gte(1).lte(200).nullish(),
+	toolPipelineMaxToolResultChars: z.int().gte(1024).lte(1000000).nullish(),
+	toolPipelineMaxConsecutiveInvalidToolCalls: z.int().gte(1).lte(20).nullish(),
+	defaultContextTokens: z.int().gte(1024).lte(1048576).nullish(),
+	providerBudgetRecentMessagesToKeep: z.int().gte(2).lte(100).nullish(),
+	providerBudgetMaxCumulativeInputTokens: z.int().gte(100000).lte(100000000).nullish(),
+	contextBudgetRecentTurnKeepCount: z.int().gte(2).lte(50).nullish(),
+	compactionAutoCompactPercent: z.int().gte(30).lte(95).nullish(),
+	compactionRecentMessagesVerbatim: z.int().gte(2).lte(100).nullish(),
+	maxInlinedAttachmentChars: z.int().gte(1000).lte(2000000).nullish(),
+	knowledgeChatTopK: z.int().gte(1).lte(20).nullish(),
+	providerMaxRetries: z.int().gte(0).lte(10).nullish(),
+	spawnMaxConcurrent: z.int().gte(1).lte(32).nullish(),
+	spawnMaxCloud: z.int().gte(0).lte(32).nullish(),
+	spawnQueueWaitSeconds: z.int().gte(0).lte(3600).nullish(),
+	compactionAutoEnabled: z.boolean().nullish(),
+	compactionDistillEnabled: z.boolean().nullish(),
+	providerRetryEnabled: z.boolean().nullish(),
+	knowledgeAdaptiveRerankingEnabled: z.boolean().nullish(),
+	knowledgeRetrievalLatencyBudgetMs: z.int().gte(50).lte(60000).nullish(),
+	knowledgeScheduledReindexEnabled: z.boolean().nullish(),
+	knowledgeScheduledReindexIntervalMinutes: z.int().gte(5).lte(10080).nullish(),
+	knowledgeAgentToolsEnabled: z.boolean().nullish(),
+	allowCloudModelAccess: z.boolean().nullish(),
+	playbookAnalysisModelName: z.string().nullish(),
+	playbookEvalModelName: z.string().nullish(),
+	memoryExtractionModelName: z.string().nullish(),
+	chatRetentionEnabled: z.boolean().nullish(),
+	chatRetentionDays: z.int().gte(1).lte(3650).nullish(),
+	agentExecutionLogRetentionEnabled: z.boolean().nullish(),
+	agentExecutionLogRetentionDays: z.int().gte(1).lte(3650).nullish(),
+	nodeDbBackupRetainCount: z.int().gte(1).lte(100).nullish(),
+	benchmarkKldCacheMaxBytes: z.int().gte(1073741824).lte(4398046511104).nullish(),
+	schedulerHistoryRetentionDays: z.int().gte(1).lte(3650).nullish(),
+	imageMaxLoadedProcesses: z.int().gte(1).lte(4).nullish(),
+	imageTextEncoderOnGpu: z.boolean().nullish(),
+	graphWorkflowMaxConcurrentRuns: z.int().gte(1).lte(64).nullish(),
+	graphWorkflowDefaultNodeTimeoutSeconds: z.int().gte(30).lte(86400).nullish(),
+	workSessionMaxStepsPerRun: z.int().gte(1).lte(1000).nullish(),
+	workSessionMaxConcurrentSessions: z.int().gte(1).lte(64).nullish(),
+	developmentMaxAttemptDurationSeconds: z.int().gte(60).lte(86400).nullish(),
+	developmentMaxToolCalls: z.int().gte(1).lte(1024).nullish(),
+	developmentMaxOutputTokens: z.int().gte(256).lte(1000000).nullish(),
+	agentHomeMaxInnerToolCalls: z.int().gte(1).lte(1000).nullish(),
+	agentHomePatchApplyTimeoutSeconds: z.int().gte(10).lte(3600).nullish(),
+	agentHomeRunRetentionMaxRuns: z.int().gte(0).lte(100000).nullish(),
+	agentHomeRunRetentionMaxTotalBytes: z.int().gte(0).lte(1099511627776).nullish(),
 });
 
 export const zXeLocalAiEngineClientServicesTrainingDatasetsDatasetExportFormat = z.enum(["Jsonl", "Hermes"]);

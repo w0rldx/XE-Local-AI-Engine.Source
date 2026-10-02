@@ -786,6 +786,21 @@ public sealed class AgentHomeGoalExecutorTests : IDisposable
         AssertEx.False(instructions.Contains(Owner, StringComparison.Ordinal), "the inner prompt must not name the owner");
     }
 
+    [Test]
+    public async Task Execute_QuotesTheNodeSettingToolCallBudgetInTheInnerPrompt()
+    {
+        SkipUnlessProcessJailIsUsable();
+
+        using var provider = CreateProvider();
+        var handle = await SeedWorkspaceAsync(provider, isolated: true, ("README.md", "x"));
+        using var client = new ScriptedChatClient();
+
+        // The helper feeds this through the INodeRuntimeSettings stub, the executor's only source for the budget.
+        _ = await ExecuteAsync(provider, handle, client, AllActions, options => options.MaxInnerToolCalls = 7);
+
+        AssertEx.Contains(AssertEx.NotNull(client.Instructions), "at most 7 tool calls");
+    }
+
     // ---------------------------------------------------------------- llama.cpp grammar compatibility
 
     /// <summary>
@@ -971,7 +986,7 @@ public sealed class AgentHomeGoalExecutorTests : IDisposable
             reader,
             trust ?? new FakeModelTrustResolver(),
             Options.Create(options),
-            StubNodeRuntimeSettings.Create().WithAgentHomeMaxRunSeconds(options.MaxRunSeconds).Build(),
+            StubNodeRuntimeSettings.Create().WithAgentHomeMaxRunSeconds(options.MaxRunSeconds).WithAgentHomeMaxInnerToolCalls(options.MaxInnerToolCalls).Build(),
             clock ?? TimeProvider.System,
             NullLoggerFactory.Instance,
             NullLogger<AgentHomeGoalExecutor>.Instance);

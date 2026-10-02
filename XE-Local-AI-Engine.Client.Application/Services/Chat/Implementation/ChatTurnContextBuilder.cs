@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <inheritdoc />
 public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
@@ -14,18 +15,21 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
     private readonly IUntrustedContentFenceSeedProvider _fenceSeedProvider;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IOptions<LocalChatAgentOptions> _localChatOptions;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly ILogger<ChatTurnContextBuilder> _logger;
 
     public ChatTurnContextBuilder(IConversationUploadedFileStore uploadedFileStore,
         IUntrustedContentFenceSeedProvider fenceSeedProvider,
         IServiceScopeFactory scopeFactory,
         IOptions<LocalChatAgentOptions> localChatOptions,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<ChatTurnContextBuilder> logger)
     {
         _uploadedFileStore = uploadedFileStore;
         _fenceSeedProvider = fenceSeedProvider;
         _scopeFactory = scopeFactory;
         _localChatOptions = localChatOptions;
+        _runtimeSettings = runtimeSettings;
         _logger = logger;
     }
 
@@ -72,7 +76,7 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
             }
         }
 
-        var content = ConversationAttachmentContextComposer.Compose(parts, _localChatOptions.Value.MaxInlinedAttachmentChars, _fenceSeedProvider.DeriveSeed(conversationId));
+        var content = ConversationAttachmentContextComposer.Compose(parts, await _runtimeSettings.GetMaxInlinedAttachmentCharsAsync(cancellationToken), _fenceSeedProvider.DeriveSeed(conversationId));
         if (content is null)
         {
             return null;
@@ -175,7 +179,7 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
 
         try
         {
-            var limit = _localChatOptions.Value.KnowledgeChatTopK;
+            var limit = await _runtimeSettings.GetKnowledgeChatTopKAsync(cancellationToken);
             var searchRequest = new KnowledgeSearchRequest
             {
                 Query = normalizedQuery,

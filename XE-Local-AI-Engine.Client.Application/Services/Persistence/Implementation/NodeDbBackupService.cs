@@ -4,6 +4,7 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
@@ -26,6 +27,7 @@ public sealed class NodeDbBackupService : INodeDbBackupService
     private readonly ILogger<NodeDbBackupService> _logger;
     private readonly INodeDataDirectory _nodeDataDirectory;
     private readonly NodeDbBackupOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
 
@@ -33,12 +35,14 @@ public sealed class NodeDbBackupService : INodeDbBackupService
         INodeDataDirectory nodeDataDirectory,
         TimeProvider timeProvider,
         IOptions<NodeDbBackupOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<NodeDbBackupService> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _nodeDataDirectory = nodeDataDirectory ?? throw new ArgumentNullException(nameof(nodeDataDirectory));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -71,7 +75,7 @@ public sealed class NodeDbBackupService : INodeDbBackupService
                 snapshotBytes,
                 pendingMigrations.Count());
 
-            PruneOldSnapshots(backupDirectory);
+            PruneOldSnapshots(backupDirectory, await _runtimeSettings.GetNodeDbBackupRetainCountAsync(cancellationToken));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -123,13 +127,13 @@ public sealed class NodeDbBackupService : INodeDbBackupService
         }
     }
 
-    private void PruneOldSnapshots(string backupDirectory)
+    private void PruneOldSnapshots(string backupDirectory, int retainCount)
     {
         var snapshots = Directory.EnumerateFiles(backupDirectory, $"{BackupFilePrefix}*{BackupFileExtension}")
                                  .OrderByDescending(static path => Path.GetFileName(path), StringComparer.Ordinal)
                                  .ToList();
 
-        var retain = Math.Max(1, _options.RetainCount);
+        var retain = Math.Max(1, retainCount);
         if (snapshots.Count <= retain)
         {
             return;

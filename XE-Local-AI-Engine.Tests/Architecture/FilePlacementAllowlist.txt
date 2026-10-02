@@ -44,7 +44,6 @@ XE-Local-AI-Engine.Client.Application/Services/AppUpdate/AppUpdateChannelOptions
 XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkBradleyTerry.cs|4
 XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkCapacityAdmission.cs|5
 XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkJudgeExecutionIdentity.cs|3
-XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkKldBaseCache.cs|2
 XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkKvCacheType.cs|2
 XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkLaunchEvidence.cs|2
 XE-Local-AI-Engine.Client.Application/Services/Benchmarks/BenchmarkNiahGenerator.cs|4

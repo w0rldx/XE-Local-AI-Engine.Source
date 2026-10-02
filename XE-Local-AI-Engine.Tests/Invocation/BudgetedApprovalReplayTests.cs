@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The combined replay gate for the outer budgeter's two last-resort passes. The budgeter's own unit tests grade its
@@ -268,12 +269,12 @@ public sealed class BudgetedApprovalReplayTests
         var budgeter = new ConversationContextBudgeter(new HeuristicTokenEstimator(),
             Options.Create(new ConversationContextBudgetOptions
             {
-                RecentTurnKeepCount = 4,
                 HistoricalToolResultExcerptChars = OuterExcerptChars,
                 ReservedOutputTokenFloor = 0,
                 StripProtectedReasoning = true,
                 ExcerptProtectedToolResults = true
-            }));
+            }),
+            StubNodeRuntimeSettings.Create().WithContextBudgetRecentTurnKeepCount(4).Build());
 
         var reasoningStripped = 0;
         var protectedResultsExcerpted = 0;

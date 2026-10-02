@@ -40,7 +40,7 @@ public sealed class GraphWorkflowOptions
 
     /// <summary>How long a node run may take when its node names no timeout of its own.</summary>
     [Range(1, 86_400)]
-    public int DefaultNodeTimeoutSeconds { get; init; } = 600;
+    public int DefaultNodeTimeoutSeconds { get; set; } = 600;
 
     /// <summary>The cap on one node run's output document, checked before it is encrypted and stored.</summary>
     [Range(1, 64 * 1024 * 1024)]
@@ -58,7 +58,7 @@ public sealed class GraphWorkflowOptions
 
     /// <summary>How many runs may be live at once. Runs above the cap wait; they are not refused.</summary>
     [Range(1, 64)]
-    public int MaxConcurrentRuns { get; init; } = 4;
+    public int MaxConcurrentRuns { get; set; } = 4;
 
     /// <summary>The cap on a run-start input document, checked at the endpoint so an oversized body never reaches the store.</summary>
     [Range(1, 64 * 1024 * 1024)]

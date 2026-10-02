@@ -235,7 +235,7 @@ Quartz's fluent config exposes **no per-connection PRAGMA hook**. If evidence of
 |---|---|---|
 | `Enabled` | `true` | false → hosted service not started |
 | `MaxConcurrency` | `4` | Quartz thread-pool max; must be > 0 |
-| `HistoryRetentionDays` | `30` | retention sweep cutoff |
+| `HistoryRetentionDays` | `30` | retention sweep cutoff; seeds the `SchedulerHistoryRetentionDays` node setting, read per sweep |
 | `RetentionSweepIntervalMinutes` | `60` | sweep cadence |
 | `DefaultTimeZoneId` | `"UTC"` | IANA id; non-blank |
 | `DefaultMaxRuntimeMinutes` | `5` | auto-interrupt default budget |

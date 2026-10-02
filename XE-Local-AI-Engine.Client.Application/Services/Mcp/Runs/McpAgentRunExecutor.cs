@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Seeds the root spawn budget missing from a detached worker before invoking the execution boundary.
@@ -15,14 +15,14 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 internal sealed class McpAgentRunExecutor : IMcpAgentRunExecutor
 {
     private readonly IMcpAgentExecutionService _executionService;
-    private readonly SpawnOptions _spawnOptions;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     public McpAgentRunExecutor(IMcpAgentExecutionService executionService,
-        IOptions<SpawnOptions> spawnOptions)
+        INodeRuntimeSettings runtimeSettings)
     {
         ArgumentNullException.ThrowIfNull(executionService);
         _executionService = executionService;
-        _spawnOptions = (spawnOptions ?? throw new ArgumentNullException(nameof(spawnOptions))).Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public async Task<SpawnOutcome> ExecuteAsync(McpAgentRunRecord run, CancellationToken cancellationToken)
@@ -54,7 +54,8 @@ internal sealed class McpAgentRunExecutor : IMcpAgentRunExecutor
                 ExecutionRequestId = run.RequestId
             };
 
-        using var root = SpawnContext.BeginRoot(_spawnOptions.MaxConcurrentSpawns, _spawnOptions.MaxCloudSpawns);
+        using var root = SpawnContext.BeginRoot(await _runtimeSettings.GetSpawnMaxConcurrentAsync(cancellationToken),
+            await _runtimeSettings.GetSpawnMaxCloudAsync(cancellationToken));
         return await _executionService.SpawnForMcpAsync(bindingRequest,
             run.Task,
             Convert.ToHexString(run.BindingFingerprint.Value.Span),

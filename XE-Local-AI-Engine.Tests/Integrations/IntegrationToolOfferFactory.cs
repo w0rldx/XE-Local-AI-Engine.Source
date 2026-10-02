@@ -30,8 +30,7 @@ internal static class IntegrationToolOfferFactory
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels.Length == 0 ? [CapableModel] : toolCapableModels).Build(),
             NullCustomToolScopeFactory.Instance,
-            new FakeModelTrustResolver(),
-            allowCloudKnowledgeAccess: false);
+            new FakeModelTrustResolver());
 
     private sealed class FakeAgentToolRegistry : IAgentToolRegistry
     {

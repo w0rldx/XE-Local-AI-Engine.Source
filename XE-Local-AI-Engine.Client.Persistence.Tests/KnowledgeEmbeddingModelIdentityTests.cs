@@ -604,6 +604,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             Substitute.For<IContextExpansionService>(),
             queryEmbeddingCache ?? Substitute.For<IKnowledgeQueryEmbeddingCache>(),
             options,
+            KnowledgeSearchRuntimeSettings.From(options),
             NullLogger<KnowledgeSearchService>.Instance);
     }
 

@@ -293,8 +293,7 @@ public sealed class RunSavedAgentHandlerTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
             NullCustomToolScopeFactory.Instance,
-            new FakeModelTrustResolver(),
-            allowCloudKnowledgeAccess: false);
+            new FakeModelTrustResolver());
         var agentHome = (await offerProvider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: false))
             .Single(tool => tool.Name == AgentHomeToolDefinition.ToolName);
 
@@ -317,8 +316,7 @@ public sealed class RunSavedAgentHandlerTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").WithWebAccessEnabled(true).Build(),
             NullCustomToolScopeFactory.Instance,
-            new FakeModelTrustResolver(),
-            allowCloudKnowledgeAccess: false);
+            new FakeModelTrustResolver());
         var webTools = (await offerProvider.GetOfferedToolsAsync("qwen3:8b", isCloudModel: false))
                        .Where(static tool => WebAccessToolCatalog.IsWebTool(tool.Name))
                        .ToList();

@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Knowledge;
 
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
@@ -50,6 +49,28 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         AssertEx.True(returned < 5, "some low-scored hits must be trimmed");
         AssertEx.True(returned >= 1, "at least the top hit must be returned");
         AssertEx.Equal(returned, root.GetProperty("results").GetArrayLength());
+    }
+
+    [Test]
+    public async Task ExecuteAsync_FollowsTheKnowledgeToolsSwitchLive()
+    {
+        var searchService = new CapturingKnowledgeSearchService(new KnowledgeSearchResult
+        {
+            Results = []
+        });
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithKnowledgeAgentToolsEnabled(false).Build();
+        var handler = CreateHandler(searchService, runtimeSettings);
+
+        var refused = await handler.ExecuteAsync("""{"query":"anything"}""");
+
+        AssertEx.Contains(refused, "disabled", StringComparison.Ordinal);
+        AssertEx.Null(searchService.LastRequest, "A disabled tool must not search.");
+
+        // The same singleton handler honours the switch once it flips on: no restart, no re-registration.
+        runtimeSettings.GetKnowledgeAgentToolsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        _ = await handler.ExecuteAsync("""{"query":"anything"}""");
+
+        AssertEx.NotNull(searchService.LastRequest);
     }
 
     [Test]
@@ -376,10 +397,7 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         services.AddScoped(_ => searchService);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        return new SearchKnowledgeBaseToolHandler(scopeFactory, Options.Create(new KnowledgeBaseOptions
-        {
-            AgentToolsEnabled = true
-        }), runtimeSettings ?? StubNodeRuntimeSettings.Create().Build());
+        return new SearchKnowledgeBaseToolHandler(scopeFactory, runtimeSettings ?? StubNodeRuntimeSettings.Create().Build());
     }
 
     private sealed class FakeKnowledgeSearchService : IKnowledgeSearchService

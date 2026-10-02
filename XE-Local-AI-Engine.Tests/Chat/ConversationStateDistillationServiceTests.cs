@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The distillation loop: one persisted state write per distiller call with an advancing watermark, a failed call
@@ -154,10 +155,7 @@ public sealed class ConversationStateDistillationServiceTests
     [Test]
     public async Task DistillPendingAsync_WhenDisabled_ReadsNothing()
     {
-        var harness = new Harness(Conversation(CompletedMessages(count: 4)), options: new ConversationCompactionOptions
-        {
-            DistillEnabled = false
-        });
+        var harness = new Harness(Conversation(CompletedMessages(count: 4)), runtimeSettings: StubNodeRuntimeSettings.Create().WithCompactionDistillEnabled(false).Build());
 
         var outcome = await harness.Service.DistillPendingAsync(ConversationId, requestedModel: null, upToAnchorSequence: null);
 
@@ -255,7 +253,10 @@ public sealed class ConversationStateDistillationServiceTests
     /// <summary>The service over a substituted store and distiller; inputs are snapshotted because the loop reuses its list.</summary>
     private sealed class Harness
     {
-        public Harness(NodeChatConversationDto conversation, string? localModel = "local-model", ConversationCompactionOptions? options = null)
+        public Harness(NodeChatConversationDto conversation,
+            string? localModel = "local-model",
+            ConversationCompactionOptions? options = null,
+            INodeRuntimeSettings? runtimeSettings = null)
         {
             Persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
             // A null write result means the guard rejected it (the row was restamped); the default accepts every write.
@@ -286,6 +287,7 @@ public sealed class ConversationStateDistillationServiceTests
                 CreateWarmer(),
                 settings,
                 Options.Create(options ?? new ConversationCompactionOptions()),
+                runtimeSettings ?? StubNodeRuntimeSettings.Create().Build(),
                 TimeProvider.System,
                 NullLogger<ConversationStateDistillationService>.Instance);
         }

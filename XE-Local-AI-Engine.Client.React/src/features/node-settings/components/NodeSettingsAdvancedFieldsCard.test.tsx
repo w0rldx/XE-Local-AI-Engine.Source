@@ -117,4 +117,16 @@ describe("NodeSettingsAdvancedFieldsCard guidance", () => {
 			),
 		).toBeTruthy();
 	});
+
+	it("adds the inner tool-call budget, the patch-apply timeout and the run caps, the byte cap in GB", () => {
+		renderCards();
+
+		expect((screen.getByTestId("node-settings-agenthome-max-inner-tool-calls") as HTMLInputElement).value).toBe("24");
+		expect((screen.getByTestId("node-settings-agenthome-patch-apply-timeout") as HTMLInputElement).value).toBe("120 seconds");
+		expect((screen.getByTestId("node-settings-agenthome-run-retention-max-runs") as HTMLInputElement).value).toBe("200");
+		expect((screen.getByTestId("node-settings-agenthome-run-retention-max-bytes") as HTMLInputElement).value).toBe("2 GB");
+		// All four, and the retention window, are read per run, apply or sweep, so none carries the restart badge.
+		expect(screen.queryByTestId("node-settings-restart-badge-agentHomeRunRetentionDays")).toBeNull();
+		expect(screen.queryByTestId("node-settings-restart-badge-agentHomeMaxInnerToolCalls")).toBeNull();
+	});
 });

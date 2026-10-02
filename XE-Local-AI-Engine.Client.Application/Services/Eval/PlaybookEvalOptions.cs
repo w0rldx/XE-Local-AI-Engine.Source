@@ -4,15 +4,15 @@ namespace XE_Local_AI_Engine.Client.Services.Eval;
 ///     Options for golden-conversation evaluation.
 /// </summary>
 /// <remarks>
-///     <see cref="ModelName" /> names the node-local model that re-runs the agent loop and scores judge-path cases,
-///     defaulted in composition to the node's configured chat model so the eval never silently picks a cloud one.
+///     <see cref="ModelName" /> only seeds the <c>PlaybookEvalModelName</c> node setting, which consumers read; blank inherits the
+///     default model, so the eval never silently picks a cloud one.
 ///     <see cref="MaxGoldenCases" /> caps how many cases one run evaluates, so a large set cannot unbound the cost.
 /// </remarks>
 public sealed class PlaybookEvalOptions
 {
     public const string Section = "PlaybookEval";
 
-    /// <summary>The node-local model used for the eval run + judge. Defaulted from the node chat model at composition time.</summary>
+    /// <summary>Appsettings seed of the <c>PlaybookEvalModelName</c> node setting.</summary>
     public string ModelName { get; set; } = string.Empty;
 
     /// <summary>Upper bound on golden cases evaluated per run (batch-cost guard; truncation is logged, never silent).</summary>

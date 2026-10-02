@@ -189,6 +189,123 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    [Arguments(StoredNodeSettings.MinBenchmarkKldCacheMaxBytes - 1)]
+    [Arguments(StoredNodeSettings.MaxBenchmarkKldCacheMaxBytes + 1)]
+    public async Task KldCacheMaxBytes_OutOfRange_FallsBackToNull(long value)
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            BenchmarkKldCacheMaxBytes = value
+        });
+        AssertEx.Null(loaded.BenchmarkKldCacheMaxBytes);
+    }
+
+    [Test]
+    [Arguments(StoredNodeSettings.MinAgentHomeRunRetentionMaxTotalBytes - 1)]
+    [Arguments(StoredNodeSettings.MaxAgentHomeRunRetentionMaxTotalBytes + 1)]
+    public async Task AgentHomeRunRetentionMaxTotalBytes_OutOfRange_FallsBackToNull(long value)
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            AgentHomeRunRetentionMaxTotalBytes = value
+        });
+        AssertEx.Null(loaded.AgentHomeRunRetentionMaxTotalBytes);
+    }
+
+    [Test]
+    public async Task AgentHomeRunRetentionMaxTotalBytes_AtItsBounds_RoundTrips()
+    {
+        // 0 is the lower bound on purpose: it turns the byte limit off.
+        var atMin = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            AgentHomeRunRetentionMaxTotalBytes = StoredNodeSettings.MinAgentHomeRunRetentionMaxTotalBytes
+        });
+        var atMax = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            AgentHomeRunRetentionMaxTotalBytes = StoredNodeSettings.MaxAgentHomeRunRetentionMaxTotalBytes
+        });
+
+        AssertEx.Equal(StoredNodeSettings.MinAgentHomeRunRetentionMaxTotalBytes, atMin.AgentHomeRunRetentionMaxTotalBytes);
+        AssertEx.Equal(StoredNodeSettings.MaxAgentHomeRunRetentionMaxTotalBytes, atMax.AgentHomeRunRetentionMaxTotalBytes);
+    }
+
+    [Test]
+    public async Task ImageTextEncoderOnGpu_RoundTripsThroughTheStore_AndAnOldFileLoadsItAsNull()
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            ImageTextEncoderOnGpu = true
+        });
+
+        AssertEx.Equal(expected: true, loaded.ImageTextEncoderOnGpu);
+
+        await WriteSettingsJsonAsync("{ \"maxMessageRequestTimeoutSeconds\": 120 }");
+        AssertEx.Null((await LoadAsync()).ImageTextEncoderOnGpu);
+    }
+
+    [Test]
+    public async Task KldCacheMaxBytes_AtItsBounds_RoundTrips()
+    {
+        var atMin = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            BenchmarkKldCacheMaxBytes = StoredNodeSettings.MinBenchmarkKldCacheMaxBytes
+        });
+        var atMax = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            BenchmarkKldCacheMaxBytes = StoredNodeSettings.MaxBenchmarkKldCacheMaxBytes
+        });
+
+        AssertEx.Equal(StoredNodeSettings.MinBenchmarkKldCacheMaxBytes, atMin.BenchmarkKldCacheMaxBytes);
+        AssertEx.Equal(StoredNodeSettings.MaxBenchmarkKldCacheMaxBytes, atMax.BenchmarkKldCacheMaxBytes);
+    }
+
+    [Test]
+    public async Task Normalize_TrimsBackgroundModelNames_AndBlankIsNull()
+    {
+        // Blank means "inherit the default model", so whitespace must not survive as a model name nothing can resolve.
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            PlaybookAnalysisModelName = "   ",
+            PlaybookEvalModelName = "  qwen3:8b  ",
+            MemoryExtractionModelName = string.Empty
+        });
+
+        AssertEx.Null(loaded.PlaybookAnalysisModelName);
+        AssertEx.Equal("qwen3:8b", loaded.PlaybookEvalModelName);
+        AssertEx.Null(loaded.MemoryExtractionModelName);
+    }
+
+    [Test]
+    public async Task KnowledgeAndUsageSwitches_RoundTripThroughTheStore_AndAnOldFileLoadsThemAsNull()
+    {
+        // An explicit false must survive (it turns a feature off), and an absent member must stay null so it is re-seeded.
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            KnowledgeAdaptiveRerankingEnabled = false,
+            KnowledgeScheduledReindexEnabled = false,
+            KnowledgeAgentToolsEnabled = false,
+            AllowCloudModelAccess = false,
+            ChatRetentionEnabled = false,
+            AgentExecutionLogRetentionEnabled = false
+        });
+
+        AssertEx.Equal(expected: false, loaded.KnowledgeAdaptiveRerankingEnabled);
+        AssertEx.Equal(expected: false, loaded.KnowledgeScheduledReindexEnabled);
+        AssertEx.Equal(expected: false, loaded.KnowledgeAgentToolsEnabled);
+        AssertEx.Equal(expected: false, loaded.AllowCloudModelAccess);
+        AssertEx.Equal(expected: false, loaded.ChatRetentionEnabled);
+        AssertEx.Equal(expected: false, loaded.AgentExecutionLogRetentionEnabled);
+
+        await WriteSettingsJsonAsync("{ \"maxMessageRequestTimeoutSeconds\": 120 }");
+        var old = await LoadAsync();
+
+        AssertEx.Null(old.KnowledgeAgentToolsEnabled);
+        AssertEx.Null(old.AllowCloudModelAccess);
+        AssertEx.Null(old.ChatRetentionEnabled);
+        AssertEx.Null(old.AgentExecutionLogRetentionEnabled);
+    }
+
+    [Test]
     public async Task DiskMarginBytes_AtTheUpperBound_RoundTrips()
     {
         var loaded = await SaveAndReloadAsync(new StoredNodeSettings
@@ -606,6 +723,30 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    public async Task ChatSwitches_RoundTripThroughTheStore_AndAnOldFileLoadsThemAsNull()
+    {
+        // A bool needs no clamp, so Normalize passes each through; an explicit false must survive, and an absent member must
+        // stay null (re-seeded) rather than become a spurious false that would silently disable compaction or retries.
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            CompactionAutoEnabled = false,
+            CompactionDistillEnabled = false,
+            ProviderRetryEnabled = false
+        });
+
+        AssertEx.Equal(expected: false, loaded.CompactionAutoEnabled);
+        AssertEx.Equal(expected: false, loaded.CompactionDistillEnabled);
+        AssertEx.Equal(expected: false, loaded.ProviderRetryEnabled);
+
+        await WriteSettingsJsonAsync("{ \"maxMessageRequestTimeoutSeconds\": 120 }");
+        var old = await LoadAsync();
+
+        AssertEx.Null(old.CompactionAutoEnabled);
+        AssertEx.Null(old.CompactionDistillEnabled);
+        AssertEx.Null(old.ProviderRetryEnabled);
+    }
+
+    [Test]
     public async Task ExternalAccessSwitches_RoundTripThroughTheStore()
     {
         var loaded = await SaveAndReloadAsync(new StoredNodeSettings
@@ -1010,7 +1151,71 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         (nameof(StoredNodeSettings.AgentHomeMaxRunSeconds), static s => s.AgentHomeMaxRunSeconds,
             (StoredNodeSettings.MinAgentHomeMaxRunSeconds, StoredNodeSettings.MaxAgentHomeMaxRunSeconds)),
         (nameof(StoredNodeSettings.AgentHomeRunRetentionDays), static s => s.AgentHomeRunRetentionDays,
-            (StoredNodeSettings.MinAgentHomeRunRetentionDays, StoredNodeSettings.MaxAgentHomeRunRetentionDays))
+            (StoredNodeSettings.MinAgentHomeRunRetentionDays, StoredNodeSettings.MaxAgentHomeRunRetentionDays)),
+        (nameof(StoredNodeSettings.ToolPipelineMaxIterationsPerRequest), static s => s.ToolPipelineMaxIterationsPerRequest,
+            (StoredNodeSettings.MinToolPipelineMaxIterationsPerRequest, StoredNodeSettings.MaxToolPipelineMaxIterationsPerRequest)),
+        (nameof(StoredNodeSettings.ToolPipelineMaxToolResultChars), static s => s.ToolPipelineMaxToolResultChars,
+            (StoredNodeSettings.MinToolPipelineMaxToolResultChars, StoredNodeSettings.MaxToolPipelineMaxToolResultChars)),
+        (nameof(StoredNodeSettings.ToolPipelineMaxConsecutiveInvalidToolCalls), static s => s.ToolPipelineMaxConsecutiveInvalidToolCalls,
+            (StoredNodeSettings.MinToolPipelineMaxConsecutiveInvalidToolCalls, StoredNodeSettings.MaxToolPipelineMaxConsecutiveInvalidToolCalls)),
+        (nameof(StoredNodeSettings.DefaultContextTokens), static s => s.DefaultContextTokens,
+            (StoredNodeSettings.MinDefaultContextTokens, StoredNodeSettings.MaxDefaultContextTokens)),
+        (nameof(StoredNodeSettings.ProviderBudgetRecentMessagesToKeep), static s => s.ProviderBudgetRecentMessagesToKeep,
+            (StoredNodeSettings.MinProviderBudgetRecentMessagesToKeep, StoredNodeSettings.MaxProviderBudgetRecentMessagesToKeep)),
+        (nameof(StoredNodeSettings.ProviderBudgetMaxCumulativeInputTokens), static s => s.ProviderBudgetMaxCumulativeInputTokens,
+            (StoredNodeSettings.MinProviderBudgetMaxCumulativeInputTokens, StoredNodeSettings.MaxProviderBudgetMaxCumulativeInputTokens)),
+        (nameof(StoredNodeSettings.ContextBudgetRecentTurnKeepCount), static s => s.ContextBudgetRecentTurnKeepCount,
+            (StoredNodeSettings.MinContextBudgetRecentTurnKeepCount, StoredNodeSettings.MaxContextBudgetRecentTurnKeepCount)),
+        (nameof(StoredNodeSettings.CompactionAutoCompactPercent), static s => s.CompactionAutoCompactPercent,
+            (StoredNodeSettings.MinCompactionAutoCompactPercent, StoredNodeSettings.MaxCompactionAutoCompactPercent)),
+        (nameof(StoredNodeSettings.CompactionRecentMessagesVerbatim), static s => s.CompactionRecentMessagesVerbatim,
+            (StoredNodeSettings.MinCompactionRecentMessagesVerbatim, StoredNodeSettings.MaxCompactionRecentMessagesVerbatim)),
+        (nameof(StoredNodeSettings.MaxInlinedAttachmentChars), static s => s.MaxInlinedAttachmentChars,
+            (StoredNodeSettings.MinMaxInlinedAttachmentChars, StoredNodeSettings.MaxMaxInlinedAttachmentChars)),
+        (nameof(StoredNodeSettings.KnowledgeChatTopK), static s => s.KnowledgeChatTopK,
+            (StoredNodeSettings.MinKnowledgeChatTopK, StoredNodeSettings.MaxKnowledgeChatTopK)),
+        (nameof(StoredNodeSettings.ProviderMaxRetries), static s => s.ProviderMaxRetries,
+            (StoredNodeSettings.MinProviderMaxRetries, StoredNodeSettings.MaxProviderMaxRetries)),
+        (nameof(StoredNodeSettings.SpawnMaxConcurrent), static s => s.SpawnMaxConcurrent,
+            (StoredNodeSettings.MinSpawnMaxConcurrent, StoredNodeSettings.MaxSpawnMaxConcurrent)),
+        (nameof(StoredNodeSettings.SpawnMaxCloud), static s => s.SpawnMaxCloud,
+            (StoredNodeSettings.MinSpawnMaxCloud, StoredNodeSettings.MaxSpawnMaxCloud)),
+        (nameof(StoredNodeSettings.SpawnQueueWaitSeconds), static s => s.SpawnQueueWaitSeconds,
+            (StoredNodeSettings.MinSpawnQueueWaitSeconds, StoredNodeSettings.MaxSpawnQueueWaitSeconds)),
+        (nameof(StoredNodeSettings.KnowledgeRetrievalLatencyBudgetMs), static s => s.KnowledgeRetrievalLatencyBudgetMs,
+            (StoredNodeSettings.MinKnowledgeRetrievalLatencyBudgetMs, StoredNodeSettings.MaxKnowledgeRetrievalLatencyBudgetMs)),
+        (nameof(StoredNodeSettings.KnowledgeScheduledReindexIntervalMinutes), static s => s.KnowledgeScheduledReindexIntervalMinutes,
+            (StoredNodeSettings.MinKnowledgeScheduledReindexIntervalMinutes, StoredNodeSettings.MaxKnowledgeScheduledReindexIntervalMinutes)),
+        (nameof(StoredNodeSettings.ChatRetentionDays), static s => s.ChatRetentionDays,
+            (StoredNodeSettings.MinRetentionDays, StoredNodeSettings.MaxRetentionDays)),
+        (nameof(StoredNodeSettings.AgentExecutionLogRetentionDays), static s => s.AgentExecutionLogRetentionDays,
+            (StoredNodeSettings.MinRetentionDays, StoredNodeSettings.MaxRetentionDays)),
+        (nameof(StoredNodeSettings.NodeDbBackupRetainCount), static s => s.NodeDbBackupRetainCount,
+            (StoredNodeSettings.MinNodeDbBackupRetainCount, StoredNodeSettings.MaxNodeDbBackupRetainCount)),
+        (nameof(StoredNodeSettings.SchedulerHistoryRetentionDays), static s => s.SchedulerHistoryRetentionDays,
+            (StoredNodeSettings.MinRetentionDays, StoredNodeSettings.MaxRetentionDays)),
+        (nameof(StoredNodeSettings.ImageMaxLoadedProcesses), static s => s.ImageMaxLoadedProcesses,
+            (StoredNodeSettings.MinImageMaxLoadedProcesses, StoredNodeSettings.MaxImageMaxLoadedProcesses)),
+        (nameof(StoredNodeSettings.GraphWorkflowMaxConcurrentRuns), static s => s.GraphWorkflowMaxConcurrentRuns,
+            (StoredNodeSettings.MinGraphWorkflowMaxConcurrentRuns, StoredNodeSettings.MaxGraphWorkflowMaxConcurrentRuns)),
+        (nameof(StoredNodeSettings.GraphWorkflowDefaultNodeTimeoutSeconds), static s => s.GraphWorkflowDefaultNodeTimeoutSeconds,
+            (StoredNodeSettings.MinGraphWorkflowDefaultNodeTimeoutSeconds, StoredNodeSettings.MaxGraphWorkflowDefaultNodeTimeoutSeconds)),
+        (nameof(StoredNodeSettings.WorkSessionMaxStepsPerRun), static s => s.WorkSessionMaxStepsPerRun,
+            (StoredNodeSettings.MinWorkSessionMaxStepsPerRun, StoredNodeSettings.MaxWorkSessionMaxStepsPerRun)),
+        (nameof(StoredNodeSettings.WorkSessionMaxConcurrentSessions), static s => s.WorkSessionMaxConcurrentSessions,
+            (StoredNodeSettings.MinWorkSessionMaxConcurrentSessions, StoredNodeSettings.MaxWorkSessionMaxConcurrentSessions)),
+        (nameof(StoredNodeSettings.DevelopmentMaxAttemptDurationSeconds), static s => s.DevelopmentMaxAttemptDurationSeconds,
+            (StoredNodeSettings.MinDevelopmentMaxAttemptDurationSeconds, StoredNodeSettings.MaxDevelopmentMaxAttemptDurationSeconds)),
+        (nameof(StoredNodeSettings.DevelopmentMaxToolCalls), static s => s.DevelopmentMaxToolCalls,
+            (StoredNodeSettings.MinDevelopmentMaxToolCalls, StoredNodeSettings.MaxDevelopmentMaxToolCalls)),
+        (nameof(StoredNodeSettings.DevelopmentMaxOutputTokens), static s => s.DevelopmentMaxOutputTokens,
+            (StoredNodeSettings.MinDevelopmentMaxOutputTokens, StoredNodeSettings.MaxDevelopmentMaxOutputTokens)),
+        (nameof(StoredNodeSettings.AgentHomeMaxInnerToolCalls), static s => s.AgentHomeMaxInnerToolCalls,
+            (StoredNodeSettings.MinAgentHomeMaxInnerToolCalls, StoredNodeSettings.MaxAgentHomeMaxInnerToolCalls)),
+        (nameof(StoredNodeSettings.AgentHomePatchApplyTimeoutSeconds), static s => s.AgentHomePatchApplyTimeoutSeconds,
+            (StoredNodeSettings.MinAgentHomePatchApplyTimeoutSeconds, StoredNodeSettings.MaxAgentHomePatchApplyTimeoutSeconds)),
+        (nameof(StoredNodeSettings.AgentHomeRunRetentionMaxRuns), static s => s.AgentHomeRunRetentionMaxRuns,
+            (StoredNodeSettings.MinAgentHomeRunRetentionMaxRuns, StoredNodeSettings.MaxAgentHomeRunRetentionMaxRuns))
     ];
 
     private static StoredNodeSettings TunablesAt(Func<(int Min, int Max), int> pick)
@@ -1038,7 +1243,39 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
             HuggingFaceDownloadConnections = Value(15),
             TranscriptionInferenceTimeoutMinutes = Value(16),
             AgentHomeMaxRunSeconds = Value(17),
-            AgentHomeRunRetentionDays = Value(18)
+            AgentHomeRunRetentionDays = Value(18),
+            ToolPipelineMaxIterationsPerRequest = Value(19),
+            ToolPipelineMaxToolResultChars = Value(20),
+            ToolPipelineMaxConsecutiveInvalidToolCalls = Value(21),
+            DefaultContextTokens = Value(22),
+            ProviderBudgetRecentMessagesToKeep = Value(23),
+            ProviderBudgetMaxCumulativeInputTokens = Value(24),
+            ContextBudgetRecentTurnKeepCount = Value(25),
+            CompactionAutoCompactPercent = Value(26),
+            CompactionRecentMessagesVerbatim = Value(27),
+            MaxInlinedAttachmentChars = Value(28),
+            KnowledgeChatTopK = Value(29),
+            ProviderMaxRetries = Value(30),
+            SpawnMaxConcurrent = Value(31),
+            SpawnMaxCloud = Value(32),
+            SpawnQueueWaitSeconds = Value(33),
+            KnowledgeRetrievalLatencyBudgetMs = Value(34),
+            KnowledgeScheduledReindexIntervalMinutes = Value(35),
+            ChatRetentionDays = Value(36),
+            AgentExecutionLogRetentionDays = Value(37),
+            NodeDbBackupRetainCount = Value(38),
+            SchedulerHistoryRetentionDays = Value(39),
+            ImageMaxLoadedProcesses = Value(40),
+            GraphWorkflowMaxConcurrentRuns = Value(41),
+            GraphWorkflowDefaultNodeTimeoutSeconds = Value(42),
+            WorkSessionMaxStepsPerRun = Value(43),
+            WorkSessionMaxConcurrentSessions = Value(44),
+            DevelopmentMaxAttemptDurationSeconds = Value(45),
+            DevelopmentMaxToolCalls = Value(46),
+            DevelopmentMaxOutputTokens = Value(47),
+            AgentHomeMaxInnerToolCalls = Value(48),
+            AgentHomePatchApplyTimeoutSeconds = Value(49),
+            AgentHomeRunRetentionMaxRuns = Value(50)
         };
     }
 

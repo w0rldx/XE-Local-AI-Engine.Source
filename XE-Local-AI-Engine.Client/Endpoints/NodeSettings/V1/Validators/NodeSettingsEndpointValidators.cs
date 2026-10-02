@@ -191,6 +191,108 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
         RuleFor(static request => request.AgentHomeRunRetentionDays)
             .InclusiveBetween(StoredNodeSettings.MinAgentHomeRunRetentionDays, StoredNodeSettings.MaxAgentHomeRunRetentionDays);
 
+        RuleFor(static request => request.ToolPipelineMaxIterationsPerRequest)
+            .InclusiveBetween(StoredNodeSettings.MinToolPipelineMaxIterationsPerRequest, StoredNodeSettings.MaxToolPipelineMaxIterationsPerRequest);
+
+        RuleFor(static request => request.ToolPipelineMaxToolResultChars)
+            .InclusiveBetween(StoredNodeSettings.MinToolPipelineMaxToolResultChars, StoredNodeSettings.MaxToolPipelineMaxToolResultChars);
+
+        RuleFor(static request => request.ToolPipelineMaxConsecutiveInvalidToolCalls)
+            .InclusiveBetween(StoredNodeSettings.MinToolPipelineMaxConsecutiveInvalidToolCalls, StoredNodeSettings.MaxToolPipelineMaxConsecutiveInvalidToolCalls);
+
+        RuleFor(static request => request.DefaultContextTokens)
+            .InclusiveBetween(StoredNodeSettings.MinDefaultContextTokens, StoredNodeSettings.MaxDefaultContextTokens);
+
+        RuleFor(static request => request.ProviderBudgetRecentMessagesToKeep)
+            .InclusiveBetween(StoredNodeSettings.MinProviderBudgetRecentMessagesToKeep, StoredNodeSettings.MaxProviderBudgetRecentMessagesToKeep);
+
+        RuleFor(static request => request.ProviderBudgetMaxCumulativeInputTokens)
+            .InclusiveBetween(StoredNodeSettings.MinProviderBudgetMaxCumulativeInputTokens, StoredNodeSettings.MaxProviderBudgetMaxCumulativeInputTokens);
+
+        RuleFor(static request => request.ContextBudgetRecentTurnKeepCount)
+            .InclusiveBetween(StoredNodeSettings.MinContextBudgetRecentTurnKeepCount, StoredNodeSettings.MaxContextBudgetRecentTurnKeepCount);
+
+        RuleFor(static request => request.CompactionAutoCompactPercent)
+            .InclusiveBetween(StoredNodeSettings.MinCompactionAutoCompactPercent, StoredNodeSettings.MaxCompactionAutoCompactPercent);
+
+        RuleFor(static request => request.CompactionRecentMessagesVerbatim)
+            .InclusiveBetween(StoredNodeSettings.MinCompactionRecentMessagesVerbatim, StoredNodeSettings.MaxCompactionRecentMessagesVerbatim);
+
+        RuleFor(static request => request.MaxInlinedAttachmentChars)
+            .InclusiveBetween(StoredNodeSettings.MinMaxInlinedAttachmentChars, StoredNodeSettings.MaxMaxInlinedAttachmentChars);
+
+        RuleFor(static request => request.KnowledgeChatTopK)
+            .InclusiveBetween(StoredNodeSettings.MinKnowledgeChatTopK, StoredNodeSettings.MaxKnowledgeChatTopK);
+
+        RuleFor(static request => request.ProviderMaxRetries)
+            .InclusiveBetween(StoredNodeSettings.MinProviderMaxRetries, StoredNodeSettings.MaxProviderMaxRetries);
+
+        RuleFor(static request => request.SpawnMaxConcurrent)
+            .InclusiveBetween(StoredNodeSettings.MinSpawnMaxConcurrent, StoredNodeSettings.MaxSpawnMaxConcurrent);
+
+        RuleFor(static request => request.SpawnMaxCloud)
+            .InclusiveBetween(StoredNodeSettings.MinSpawnMaxCloud, StoredNodeSettings.MaxSpawnMaxCloud);
+
+        RuleFor(static request => request.SpawnQueueWaitSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinSpawnQueueWaitSeconds, StoredNodeSettings.MaxSpawnQueueWaitSeconds);
+
+        RuleFor(static request => request.KnowledgeRetrievalLatencyBudgetMs)
+            .InclusiveBetween(StoredNodeSettings.MinKnowledgeRetrievalLatencyBudgetMs, StoredNodeSettings.MaxKnowledgeRetrievalLatencyBudgetMs);
+
+        RuleFor(static request => request.KnowledgeScheduledReindexIntervalMinutes)
+            .InclusiveBetween(StoredNodeSettings.MinKnowledgeScheduledReindexIntervalMinutes, StoredNodeSettings.MaxKnowledgeScheduledReindexIntervalMinutes);
+
+        RuleFor(static request => request.ChatRetentionDays)
+            .InclusiveBetween(StoredNodeSettings.MinRetentionDays, StoredNodeSettings.MaxRetentionDays);
+
+        RuleFor(static request => request.AgentExecutionLogRetentionDays)
+            .InclusiveBetween(StoredNodeSettings.MinRetentionDays, StoredNodeSettings.MaxRetentionDays);
+
+        RuleFor(static request => request.NodeDbBackupRetainCount)
+            .InclusiveBetween(StoredNodeSettings.MinNodeDbBackupRetainCount, StoredNodeSettings.MaxNodeDbBackupRetainCount);
+
+        RuleFor(static request => request.BenchmarkKldCacheMaxBytes)
+            .InclusiveBetween(StoredNodeSettings.MinBenchmarkKldCacheMaxBytes, StoredNodeSettings.MaxBenchmarkKldCacheMaxBytes);
+
+        RuleFor(static request => request.SchedulerHistoryRetentionDays)
+            .InclusiveBetween(StoredNodeSettings.MinRetentionDays, StoredNodeSettings.MaxRetentionDays);
+
+        RuleFor(static request => request.ImageMaxLoadedProcesses)
+            .InclusiveBetween(StoredNodeSettings.MinImageMaxLoadedProcesses, StoredNodeSettings.MaxImageMaxLoadedProcesses);
+
+        RuleFor(static request => request.GraphWorkflowMaxConcurrentRuns)
+            .InclusiveBetween(StoredNodeSettings.MinGraphWorkflowMaxConcurrentRuns, StoredNodeSettings.MaxGraphWorkflowMaxConcurrentRuns);
+
+        RuleFor(static request => request.GraphWorkflowDefaultNodeTimeoutSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinGraphWorkflowDefaultNodeTimeoutSeconds, StoredNodeSettings.MaxGraphWorkflowDefaultNodeTimeoutSeconds);
+
+        RuleFor(static request => request.WorkSessionMaxStepsPerRun)
+            .InclusiveBetween(StoredNodeSettings.MinWorkSessionMaxStepsPerRun, StoredNodeSettings.MaxWorkSessionMaxStepsPerRun);
+
+        RuleFor(static request => request.WorkSessionMaxConcurrentSessions)
+            .InclusiveBetween(StoredNodeSettings.MinWorkSessionMaxConcurrentSessions, StoredNodeSettings.MaxWorkSessionMaxConcurrentSessions);
+
+        RuleFor(static request => request.DevelopmentMaxAttemptDurationSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinDevelopmentMaxAttemptDurationSeconds, StoredNodeSettings.MaxDevelopmentMaxAttemptDurationSeconds);
+
+        RuleFor(static request => request.DevelopmentMaxToolCalls)
+            .InclusiveBetween(StoredNodeSettings.MinDevelopmentMaxToolCalls, StoredNodeSettings.MaxDevelopmentMaxToolCalls);
+
+        RuleFor(static request => request.DevelopmentMaxOutputTokens)
+            .InclusiveBetween(StoredNodeSettings.MinDevelopmentMaxOutputTokens, StoredNodeSettings.MaxDevelopmentMaxOutputTokens);
+
+        RuleFor(static request => request.AgentHomeMaxInnerToolCalls)
+            .InclusiveBetween(StoredNodeSettings.MinAgentHomeMaxInnerToolCalls, StoredNodeSettings.MaxAgentHomeMaxInnerToolCalls);
+
+        RuleFor(static request => request.AgentHomePatchApplyTimeoutSeconds)
+            .InclusiveBetween(StoredNodeSettings.MinAgentHomePatchApplyTimeoutSeconds, StoredNodeSettings.MaxAgentHomePatchApplyTimeoutSeconds);
+
+        RuleFor(static request => request.AgentHomeRunRetentionMaxRuns)
+            .InclusiveBetween(StoredNodeSettings.MinAgentHomeRunRetentionMaxRuns, StoredNodeSettings.MaxAgentHomeRunRetentionMaxRuns);
+
+        RuleFor(static request => request.AgentHomeRunRetentionMaxTotalBytes)
+            .InclusiveBetween(StoredNodeSettings.MinAgentHomeRunRetentionMaxTotalBytes, StoredNodeSettings.MaxAgentHomeRunRetentionMaxTotalBytes);
+
         // Every override entry must have a non-blank model name and finite, non-negative rates (HasValidRates is the one shared predicate with the store's Normalize). Junk is
         // rejected with an immediate 400; Normalize remains the defense-in-depth second pass that also drops any entry slipping through.
         RuleFor(static request => request.UsageRates!)

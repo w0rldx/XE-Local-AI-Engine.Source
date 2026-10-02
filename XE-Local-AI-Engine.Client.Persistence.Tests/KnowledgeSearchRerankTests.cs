@@ -470,6 +470,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
             Substitute.For<IContextExpansionService>(),
             Substitute.For<IKnowledgeQueryEmbeddingCache>(),
             options,
+            KnowledgeSearchRuntimeSettings.From(options),
             NullLogger<KnowledgeSearchService>.Instance,
             prewarmer);
     }

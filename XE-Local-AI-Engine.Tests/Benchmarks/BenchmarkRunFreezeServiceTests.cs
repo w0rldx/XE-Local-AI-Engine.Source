@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class BenchmarkRunFreezeServiceTests
@@ -853,9 +854,10 @@ public sealed class BenchmarkRunFreezeServiceTests
                     FallbackStore(optimizedConfigDisabled),
                     LaunchPolicy(),
                     new LlamaServerLaunchPolicyOptions()),
-                new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(new ConversationContextBudgetOptions())),
+                new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(new ConversationContextBudgetOptions()), StubNodeRuntimeSettings.Create().Build()),
                 new LocalChatRuntimePackageBuilder(),
                 Options.Create(new ConversationContextBudgetOptions()),
+                StubNodeRuntimeSettings.Create().Build(),
                 TimeProvider.System,
                 NullLogger<BenchmarkRunFreezeService>.Instance);
         }

@@ -1,5 +1,5 @@
 import { Card, Group, NumberInput, Select, Stack, Switch, TagsInput, Text, TextInput, Title } from "@mantine/core";
-import { IconRobot, IconServer, IconTool } from "@tabler/icons-react";
+import { IconBrain, IconRobot, IconServer, IconTool } from "@tabler/icons-react";
 import { type ReactNode, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -18,12 +18,18 @@ import { NodeSettingsRuntimeCard } from "@/features/node-settings/components/Nod
 import { NodeSettingsUiModeCard } from "@/features/node-settings/components/NodeSettingsUiModeCard";
 import { NodeSettingsUsageRatesCard } from "@/features/node-settings/components/NodeSettingsUsageRatesCard";
 import {
+	NodeSettingsAgentRunLimitsCard,
+	NodeSettingsCloudAccessCard,
 	NodeSettingsContainerRuntimeCard,
+	NodeSettingsContextCompactionCard,
 	NodeSettingsDownloadLimitsCard,
+	NodeSettingsKnowledgeRetrievalCard,
 	NodeSettingsKnowledgeSearchCard,
+	NodeSettingsRetentionCard,
 	NodeSettingsToolLimitsCard,
 	NodeSettingsTranscriptionCard,
 	NodeSettingsWebFetchLimitsCard,
+	NodeSettingsWorkspaceLimitsCard,
 } from "@/features/node-settings/components/NodeSettingsTunableCards";
 import { NodeSettingsWebAccessCard } from "@/features/node-settings/components/NodeSettingsWebAccessCard";
 import type {
@@ -53,6 +59,8 @@ export interface NodeSettingsFieldsCardProps {
 	// Installed llama.cpp chat models eligible for the supervised keep-warm loop.
 	readonly keepWarmModelOptions: readonly NodeSettingsModelOption[];
 	readonly autoEffortFastModelOptions: readonly NodeSettingsModelOption[];
+	// Installed node-local chat models (GGUF and Ollama) offered to the playbook analysis, eval and memory extraction runs.
+	readonly backgroundModelOptions: readonly NodeSettingsModelOption[];
 	// All installed models offered as the knowledge-base reranker (reranker GGUFs are not a chat kind, so this list is
 	// not filtered to chat-capable models).
 	readonly rerankerModelOptions: readonly NodeSettingsModelOption[];
@@ -86,6 +94,8 @@ export function NodeSettingsFieldsCard(props: NodeSettingsFieldsCardProps) {
 				<>
 					<LocalChatCard {...props} />
 					<NodeSettingsToolLimitsCard {...tunable} />
+					<NodeSettingsAgentRunLimitsCard {...tunable} />
+					<NodeSettingsContextCompactionCard {...tunable} />
 					{showDeveloperFields ? (
 						<NodeSettingsAgentLimitsCard form={form} bounds={bounds} errors={errors} onChange={onChange} />
 					) : null}
@@ -164,29 +174,39 @@ export function NodeSettingsFieldsCard(props: NodeSettingsFieldsCardProps) {
 						}}
 					/>
 					<NodeSettingsKnowledgeSearchCard {...tunable} />
+					<NodeSettingsKnowledgeRetrievalCard {...tunable} />
+					<BackgroundModelsCard {...props} />
 					<NodeSettingsWebAccessCard form={form} errors={errors} onChange={onChange} />
 					<NodeSettingsWebFetchLimitsCard {...tunable} />
 				</>
 			);
 		case "privacy":
 			return (
-				<NodeSettingsExternalAccessCard
-					form={form}
-					onChange={onChange}
-					onApplyPreset={props.onApplyPreset}
-					updateChannelSelector={props.updateChannelSelector}
-				/>
+				<>
+					<NodeSettingsExternalAccessCard
+						form={form}
+						onChange={onChange}
+						onApplyPreset={props.onApplyPreset}
+						updateChannelSelector={props.updateChannelSelector}
+					/>
+					<NodeSettingsCloudAccessCard {...tunable} />
+				</>
 			);
 		case "workspaces":
-			return showDeveloperFields ? (
-				<NodeSettingsAgentWorkspacesCard form={form} bounds={bounds} errors={errors} onChange={onChange} />
-			) : (
-				<Text c="dimmed" data-testid="node-settings-developer-only-note">
-					{t(
-						"pages.nodeSettings.developerOnlyNote",
-						"These limits are developer settings. Turn on developer mode under General to change them.",
+			return (
+				<>
+					<NodeSettingsWorkspaceLimitsCard {...tunable} />
+					{showDeveloperFields ? (
+						<NodeSettingsAgentWorkspacesCard form={form} bounds={bounds} errors={errors} onChange={onChange} />
+					) : (
+						<Text c="dimmed" data-testid="node-settings-developer-only-note">
+							{t(
+								"pages.nodeSettings.developerOnlyNote",
+								"The AgentHome limits are developer settings. Turn on developer mode under General to change them.",
+							)}
+						</Text>
 					)}
-				</Text>
+				</>
 			);
 		case "usage":
 			return (
@@ -196,6 +216,7 @@ export function NodeSettingsFieldsCard(props: NodeSettingsFieldsCardProps) {
 						error={nodeSettingsFieldError(t, errors, "usageRates")}
 						onChange={(usageRates) => onChange("usageRates", usageRates)}
 					/>
+					<NodeSettingsRetentionCard {...tunable} />
 					<Card withBorder={true} radius="md" p="lg" data-testid="node-settings-worker-card">
 						<Stack gap="md">
 							<Group justify="space-between" align="center">
@@ -328,6 +349,81 @@ function LocalChatCard({ form, errors, onChange, autoEffortFastModelOptions }: N
 					error={nodeSettingsFieldError(t, errors, "autoEffortFastModelName")}
 					data-testid="node-settings-auto-effort-fast-model"
 				/>
+			</Stack>
+		</Card>
+	);
+}
+
+const backgroundModelFields = [
+	{
+		field: "playbookAnalysisModelName",
+		label: ["pages.nodeSettings.fields.playbookAnalysisModelName.label", "Playbook analysis model"],
+		description: [
+			"pages.nodeSettings.fields.playbookAnalysisModelName.description",
+			"Reads feedback and proposes playbook actions for review.",
+		],
+		testId: "node-settings-playbook-analysis-model",
+	},
+	{
+		field: "playbookEvalModelName",
+		label: ["pages.nodeSettings.fields.playbookEvalModelName.label", "Playbook eval model"],
+		description: [
+			"pages.nodeSettings.fields.playbookEvalModelName.description",
+			"Re-runs golden conversations to check a suggested action before it is promoted.",
+		],
+		testId: "node-settings-playbook-eval-model",
+	},
+	{
+		field: "memoryExtractionModelName",
+		label: ["pages.nodeSettings.fields.memoryExtractionModelName.label", "Memory extraction model"],
+		description: [
+			"pages.nodeSettings.fields.memoryExtractionModelName.description",
+			"Mines lessons from finished agent runs as memory candidates for review.",
+		],
+		testId: "node-settings-memory-extraction-model",
+	},
+] as const;
+
+// The node-local models behind the adaptive-memory background runs. Blank inherits the default model; the server refuses
+// anything that is not an installed GGUF or Ollama model on this machine.
+function BackgroundModelsCard({ form, errors, onChange, backgroundModelOptions }: NodeSettingsFieldsCardProps) {
+	const { t } = useTranslation();
+	const inheritLabel = t("pages.nodeSettings.fields.backgroundModels.inherit", "Use the default model");
+	return (
+		<Card withBorder={true} radius="md" p="lg" data-testid="node-settings-background-models-card">
+			<Stack gap="md">
+				<Group justify="space-between" align="center">
+					<Title order={2} size="h4">
+						{t("pages.nodeSettings.fields.backgroundModels.title", "Learning models")}
+					</Title>
+					<IconBrain size={20} />
+				</Group>
+				{backgroundModelFields.map(({ field, label, description, testId }) => {
+					const value = form[field];
+					// A model uninstalled after it was saved stays selectable, or the select would silently show "inherit".
+					const data = [
+						{ value: "", label: inheritLabel },
+						...backgroundModelOptions,
+						...(value !== "" && !backgroundModelOptions.some((option) => option.value === value)
+							? [{ value, label: value }]
+							: []),
+					];
+					return (
+						<Select
+							key={field}
+							label={t(label[0], label[1])}
+							description={t(description[0], description[1])}
+							data={data}
+							value={value}
+							onChange={(next) => onChange(field, next ?? "")}
+							allowDeselect={false}
+							searchable={true}
+							nothingFoundMessage={t("pages.nodeSettings.fields.backgroundModels.empty", "No installed local chat models")}
+							error={nodeSettingsFieldError(t, errors, field)}
+							data-testid={testId}
+						/>
+					);
+				})}
 			</Stack>
 		</Card>
 	);

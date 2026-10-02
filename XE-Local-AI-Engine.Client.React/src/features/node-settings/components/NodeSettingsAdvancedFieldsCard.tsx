@@ -237,6 +237,61 @@ export function NodeSettingsAgentWorkspacesCard(props: NodeSettingsAdvancedField
 				onChange={props.onChange}
 				testId="node-settings-agenthome-run-retention"
 			/>
+			<NodeSettingsNumberField
+				field="agentHomeRunRetentionMaxRuns"
+				label={t("pages.nodeSettings.fields.agentHomeRunRetentionMaxRuns.label", "AgentHome runs kept")}
+				description={t(
+					"pages.nodeSettings.fields.agentHomeRunRetentionMaxRuns.description",
+					"Older runs beyond this many are deleted; 0 keeps any number. Applies to the next sweep.",
+				)}
+				bounds={props.bounds.agentHomeRunRetentionMaxRuns}
+				form={props.form}
+				errors={props.errors}
+				onChange={props.onChange}
+				testId="node-settings-agenthome-run-retention-max-runs"
+			/>
+			<NodeSettingsNumberField
+				field="agentHomeRunRetentionMaxTotalBytes"
+				label={t("pages.nodeSettings.fields.agentHomeRunRetentionMaxTotalBytes.label", "AgentHome run storage limit")}
+				description={t(
+					"pages.nodeSettings.fields.agentHomeRunRetentionMaxTotalBytes.description",
+					"Oldest runs are deleted until all runs fit; 0 sets no limit. Applies to the next sweep.",
+				)}
+				bounds={props.bounds.agentHomeRunRetentionMaxTotalBytes}
+				unit="GB"
+				wireUnit={t("pages.nodeSettings.fields.bytesShort", "B")}
+				form={props.form}
+				errors={props.errors}
+				onChange={props.onChange}
+				testId="node-settings-agenthome-run-retention-max-bytes"
+			/>
+			<NodeSettingsNumberField
+				field="agentHomeMaxInnerToolCalls"
+				label={t("pages.nodeSettings.fields.agentHomeMaxInnerToolCalls.label", "AgentHome tool calls per run")}
+				description={t(
+					"pages.nodeSettings.fields.agentHomeMaxInnerToolCalls.description",
+					"How many tool calls one run may make before it is stopped. Applies to the next run.",
+				)}
+				bounds={props.bounds.agentHomeMaxInnerToolCalls}
+				form={props.form}
+				errors={props.errors}
+				onChange={props.onChange}
+				testId="node-settings-agenthome-max-inner-tool-calls"
+			/>
+			<NodeSettingsNumberField
+				field="agentHomePatchApplyTimeoutSeconds"
+				label={t("pages.nodeSettings.fields.agentHomePatchApplyTimeoutSeconds.label", "AgentHome patch apply timeout")}
+				description={t(
+					"pages.nodeSettings.fields.agentHomePatchApplyTimeoutSeconds.description",
+					"The longest one git step of applying a run's patch to your folders may take. Applies to the next apply.",
+				)}
+				bounds={props.bounds.agentHomePatchApplyTimeoutSeconds}
+				unit={t("pages.nodeSettings.fields.seconds", "seconds")}
+				form={props.form}
+				errors={props.errors}
+				onChange={props.onChange}
+				testId="node-settings-agenthome-patch-apply-timeout"
+			/>
 		</AdvancedCard>
 	);
 }

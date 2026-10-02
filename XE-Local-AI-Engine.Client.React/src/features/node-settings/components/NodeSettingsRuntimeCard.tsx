@@ -119,6 +119,31 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						wireUnit={secondsShort}
 						testId="node-settings-image-idle-ttl"
 					/>
+					<NodeSettingsNumberField
+						{...field}
+						field="imageMaxLoadedProcesses"
+						label={t("pages.nodeSettings.fields.imageMaxLoadedProcesses.label", "Max loaded image servers")}
+						description={t(
+							"pages.nodeSettings.fields.imageMaxLoadedProcesses.description",
+							"How many image models stay loaded at once; loading one more unloads the least recently used.",
+						)}
+						bounds={bounds.tunables.imageMaxLoadedProcesses}
+						testId="node-settings-image-max-processes"
+					/>
+					<Switch
+						label={nodeSettingsFieldLabel(
+							t,
+							"imageTextEncoderOnGpu",
+							t("pages.nodeSettings.fields.imageTextEncoderOnGpu.label", "Image text encoder on the GPU"),
+						)}
+						description={t(
+							"pages.nodeSettings.fields.imageTextEncoderOnGpu.description",
+							"Faster prompts at the cost of video memory; off keeps the text encoder on the CPU.",
+						)}
+						checked={form.imageTextEncoderOnGpu}
+						onChange={(event) => onChange("imageTextEncoderOnGpu", event.currentTarget.checked)}
+						data-testid="node-settings-image-text-encoder-gpu"
+					/>
 				</Stack>
 			</Card>
 			<Card withBorder={true} radius="md" p="lg" data-testid="node-settings-server-timeouts-card">

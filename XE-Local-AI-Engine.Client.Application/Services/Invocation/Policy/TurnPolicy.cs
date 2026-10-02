@@ -34,7 +34,7 @@ public sealed record TurnPolicy
     /// </summary>
     /// <remarks>
     ///     <see cref="WithEffectiveContext" /> needs the distinction: a user-requested bound is a ceiling to keep,
-    ///     whereas the untrusted <see cref="ConversationContextBudgetOptions.DefaultContextTokens" /> fallback must be
+    ///     whereas the untrusted node default-context fallback must be
     ///     REPLACED by the window the model actually launched with.
     /// </remarks>
     public int? RequestedContextTokens { get; init; }
@@ -44,10 +44,6 @@ public sealed record TurnPolicy
     public required int MaxToolIterationsPerRequest { get; init; }
 
     public required int MaxConsecutiveInvalidToolCallsPerTool { get; init; }
-
-    public required bool RetryEnabled { get; init; }
-
-    public required int MaxRetries { get; init; }
 
     public required TimeSpan BaseRetryDelay { get; init; }
 
@@ -66,11 +62,13 @@ public sealed record TurnPolicy
     /// <param name="fallbackToolResultTimeout">
     ///     The node-global pending tool-call age, used when the package sets no explicit <c>ToolCallTimeoutSeconds</c>.
     /// </param>
+    /// <param name="defaultContextTokens">The node's live default window (<c>INodeRuntimeSettings.GetDefaultContextTokensAsync</c>), read once per turn.</param>
     public static TurnPolicy Resolve(RuntimePackage package,
         ConversationContextBudgetOptions budgetOptions,
         ProviderResilienceOptions resilienceOptions,
         AgentToolPipelineOptions toolPipelineOptions,
-        TimeSpan fallbackToolResultTimeout)
+        TimeSpan fallbackToolResultTimeout,
+        int defaultContextTokens)
     {
         ArgumentNullException.ThrowIfNull(package);
         ArgumentNullException.ThrowIfNull(budgetOptions);
@@ -79,7 +77,7 @@ public sealed record TurnPolicy
 
         var timeouts = package.Timeouts;
 
-        var (requestedContext, capacity, reserved) = ResolveContextBudget(package, budgetOptions);
+        var (requestedContext, capacity, reserved) = ResolveContextBudget(package, budgetOptions, defaultContextTokens);
 
         return new TurnPolicy
         {
@@ -95,8 +93,6 @@ public sealed record TurnPolicy
             ReservedOutputTokens = reserved,
             MaxToolIterationsPerRequest = toolPipelineOptions.MaximumToolIterationsPerRequest,
             MaxConsecutiveInvalidToolCallsPerTool = toolPipelineOptions.MaxConsecutiveInvalidToolCallsPerTool,
-            RetryEnabled = resilienceOptions.RetryEnabled,
-            MaxRetries = resilienceOptions.MaxRetries,
             BaseRetryDelay = TimeSpan.FromMilliseconds(resilienceOptions.BaseDelayMilliseconds),
             MaxRetryDelay = TimeSpan.FromMilliseconds(resilienceOptions.MaxDelayMilliseconds),
             CircuitBreakerEnabled = resilienceOptions.CircuitBreakerEnabled,
@@ -111,13 +107,14 @@ public sealed record TurnPolicy
     ///     (<c>InvocationRunner.BudgetFirstRound</c>), so its pre-flight refusal cannot drift from what <see cref="Resolve" /> sets.
     /// </remarks>
     internal static (int? RequestedContextTokens, int ContextCapacityTokens, int ReservedOutputTokens) ResolveContextBudget(RuntimePackage package,
-        ConversationContextBudgetOptions budgetOptions)
+        ConversationContextBudgetOptions budgetOptions,
+        int defaultContextTokens)
     {
         var requestedContext = package.SamplingOptions?.NumCtx is { } numCtx && numCtx > 0 ? numCtx : (int?)null;
         var reserved = ResolveReservedOutputTokens(package.ReservedOutputTokensOverride,
             package.SamplingOptions?.MaxOutputTokens,
             budgetOptions.ReservedOutputTokenFloor);
-        return (requestedContext, requestedContext ?? budgetOptions.DefaultContextTokens, reserved);
+        return (requestedContext, requestedContext ?? defaultContextTokens, reserved);
     }
 
     /// <summary>The output tokens held back from the window before the input is measured.</summary>

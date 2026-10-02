@@ -9,7 +9,6 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -35,11 +34,7 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         // LocalToolOfferProvider takes INodeRuntimeSettings itself and reads the migrated AgentHome:ToolCapableModels allow-list LIVE
         // per offer through CachedNodeSettingsStore, whose cache SaveAsync re-primes. Never seed it here: a seed leaves a model saved in Node Settings toolless until restart.
         builder.Services.AddSingleton<ILocalToolOfferProvider>(sp =>
-        {
-            // Seed the knowledge-tool cloud-locality gate from KnowledgeBase:AllowCloudModelAccess (default false): knowledge tools go
-            // to node-local models unless the operator opts a cloud model in. A genuine appsettings knob, not a node setting, so seeding is right.
-            var knowledgeOptions = sp.GetRequiredService<IOptions<KnowledgeBaseOptions>>().Value;
-            return new LocalToolOfferProvider(sp.GetRequiredService<IAgentToolRegistry>(),
+            new LocalToolOfferProvider(sp.GetRequiredService<IAgentToolRegistry>(),
                 sp.GetRequiredService<IMcpToolRegistry>(),
                 sp.GetRequiredService<INodeRuntimeSettings>(),
                 // Singleton provider → the scoped, DbContext-backed custom-tool catalog is resolved per offer from a fresh scope.
@@ -47,9 +42,7 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
                 // Answers the three locality gates for an external id, which the threaded per-turn cloud flag cannot see: such an id
                 // falls THROUGH cloud selection by design, so without it a declared-cloud endpoint would be offered workspace, KB and run_python.
                 sp.GetRequiredService<IModelTrustResolver>(),
-                knowledgeOptions.AllowCloudModelAccess,
-                sp.GetRequiredService<ILogger<LocalToolOfferProvider>>());
-        });
+                sp.GetRequiredService<ILogger<LocalToolOfferProvider>>()));
         // The catalog read composed with the node approval policy, which the provider above deliberately never consults.
         // Singleton, like both seams it composes.
         builder.Services.AddSingleton<ToolCatalogService>();

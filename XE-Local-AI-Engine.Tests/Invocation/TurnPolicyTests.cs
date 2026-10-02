@@ -5,12 +5,16 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class TurnPolicyTests
 {
+    // The window the WithEffectiveContext cases treat as "the default"; any value above the launched windows they fold in.
+    private const int DefaultContextTokens = 8192;
+
     [Test]
     public void Resolve_WithDefaultOptions_CopiesEveryValueFromItsConfiguredSource()
     {
@@ -22,19 +26,18 @@ public sealed class TurnPolicyTests
             new ConversationContextBudgetOptions(),
             new ProviderResilienceOptions(),
             new AgentToolPipelineOptions(),
-            fallbackToolResultTimeout: TimeSpan.FromMinutes(5));
+            fallbackToolResultTimeout: TimeSpan.FromMinutes(5),
+            defaultContextTokens: StoredNodeSettings.DefaultDefaultContextTokens);
 
         AssertEx.Equal(TimeSpan.FromSeconds(120), policy.InvocationTimeout);
         AssertEx.Equal(TimeSpan.FromSeconds(45), policy.StreamIdleTimeout);
         AssertEx.True(policy.StreamIdleTimeoutMessage.Contains("45", StringComparison.Ordinal), "message should name the seconds that fired");
         // ToolCallTimeoutSeconds is set (15 > 0) so it wins over the fallback.
         AssertEx.Equal(TimeSpan.FromSeconds(15), policy.ToolResultTimeout);
-        AssertEx.Equal(new ConversationContextBudgetOptions().DefaultContextTokens, policy.ContextCapacityTokens);
+        AssertEx.Equal(StoredNodeSettings.DefaultDefaultContextTokens, policy.ContextCapacityTokens);
         AssertEx.Equal(new ConversationContextBudgetOptions().ReservedOutputTokenFloor, policy.ReservedOutputTokens);
         AssertEx.Equal(new AgentToolPipelineOptions().MaximumToolIterationsPerRequest, policy.MaxToolIterationsPerRequest);
         AssertEx.Equal(new AgentToolPipelineOptions().MaxConsecutiveInvalidToolCallsPerTool, policy.MaxConsecutiveInvalidToolCallsPerTool);
-        AssertEx.True(policy.RetryEnabled);
-        AssertEx.Equal(new ProviderResilienceOptions().MaxRetries, policy.MaxRetries);
         AssertEx.True(policy.CircuitBreakerEnabled);
     }
 
@@ -50,7 +53,8 @@ public sealed class TurnPolicyTests
             new ConversationContextBudgetOptions(),
             new ProviderResilienceOptions(),
             new AgentToolPipelineOptions(),
-            fallback);
+            fallback,
+            DefaultContextTokens);
 
         AssertEx.Equal(fallback, policy.ToolResultTimeout);
     }
@@ -67,7 +71,6 @@ public sealed class TurnPolicyTests
                                            .Build();
         var budgetOptions = new ConversationContextBudgetOptions
         {
-            DefaultContextTokens = 8192,
             ReservedOutputTokenFloor = 1024
         };
 
@@ -75,7 +78,8 @@ public sealed class TurnPolicyTests
             budgetOptions,
             new ProviderResilienceOptions(),
             new AgentToolPipelineOptions(),
-            TimeSpan.FromMinutes(5));
+            TimeSpan.FromMinutes(5),
+            DefaultContextTokens);
 
         AssertEx.Equal(expected: 4096, policy.ContextCapacityTokens);
         // The explicit max-output-tokens override (2048) is larger than the configured floor (1024), so it wins.
@@ -102,8 +106,8 @@ public sealed class TurnPolicyTests
             ReservedOutputTokensOverride = 512
         };
 
-        var chatPolicy = TurnPolicy.Resolve(chat, budgetOptions, new ProviderResilienceOptions(), new AgentToolPipelineOptions(), TimeSpan.FromMinutes(5));
-        var benchmarkPolicy = TurnPolicy.Resolve(benchmark, budgetOptions, new ProviderResilienceOptions(), new AgentToolPipelineOptions(), TimeSpan.FromMinutes(5));
+        var chatPolicy = TurnPolicy.Resolve(chat, budgetOptions, new ProviderResilienceOptions(), new AgentToolPipelineOptions(), TimeSpan.FromMinutes(5), DefaultContextTokens);
+        var benchmarkPolicy = TurnPolicy.Resolve(benchmark, budgetOptions, new ProviderResilienceOptions(), new AgentToolPipelineOptions(), TimeSpan.FromMinutes(5), DefaultContextTokens);
 
         AssertEx.Null(chat.ReservedOutputTokensOverride, "an ordinary package carries no override");
         AssertEx.Equal(expected: 1024, chatPolicy.ReservedOutputTokens, "chat keeps the larger of the floor and its max output tokens");
@@ -122,12 +126,11 @@ public sealed class TurnPolicyTests
     }
 
     [Test]
-    public void Resolve_WhenNoNumCtxOverride_FallsBackToConfiguredDefaultContextTokens()
+    public void Resolve_WhenNoNumCtxOverride_FallsBackToTheNodeDefaultContextTokens()
     {
         var package = RuntimePackageBuilder.Valid().Build();
         var budgetOptions = new ConversationContextBudgetOptions
         {
-            DefaultContextTokens = 6000,
             ReservedOutputTokenFloor = 500
         };
 
@@ -135,7 +138,8 @@ public sealed class TurnPolicyTests
             budgetOptions,
             new ProviderResilienceOptions(),
             new AgentToolPipelineOptions(),
-            TimeSpan.FromMinutes(5));
+            TimeSpan.FromMinutes(5),
+            defaultContextTokens: 6000);
 
         AssertEx.Equal(expected: 6000, policy.ContextCapacityTokens);
         AssertEx.Equal(expected: 500, policy.ReservedOutputTokens);
@@ -146,10 +150,7 @@ public sealed class TurnPolicyTests
     {
         // The regression: a model launched with a 64k window was pinned to the 8k default, so a 7k conversation failed
         // with ContextBudgetExceededException while the process had room for eight times as much.
-        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions
-        {
-            DefaultContextTokens = 8192
-        });
+        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions());
 
         var folded = policy.WithEffectiveContext(effectiveContextTokens: 65536);
 
@@ -159,10 +160,7 @@ public sealed class TurnPolicyTests
     [Test]
     public void WithEffectiveContext_WhenLaunchedWindowIsBelowTheDefault_LowersCapacityToTheRealWindow()
     {
-        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions
-        {
-            DefaultContextTokens = 8192
-        });
+        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions());
 
         var folded = policy.WithEffectiveContext(effectiveContextTokens: 2048);
 
@@ -193,10 +191,7 @@ public sealed class TurnPolicyTests
     public void WithEffectiveContext_WhenTheLaunchedWindowIsUnknown_LeavesThePolicyUnchanged()
     {
         // Cloud, Ollama, or a failed read: nothing better than the configured default is known.
-        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions
-        {
-            DefaultContextTokens = 8192
-        });
+        var policy = ResolveWithDefaults(new ConversationContextBudgetOptions());
 
         AssertEx.Equal(expected: 8192, policy.WithEffectiveContext(effectiveContextTokens: null).ContextCapacityTokens);
         AssertEx.Equal(expected: 8192, policy.WithEffectiveContext(effectiveContextTokens: 0).ContextCapacityTokens);
@@ -207,7 +202,6 @@ public sealed class TurnPolicyTests
     {
         var policy = ResolveWithDefaults(new ConversationContextBudgetOptions
         {
-            DefaultContextTokens = 8192,
             ReservedOutputTokenFloor = 4096
         });
 
@@ -222,7 +216,8 @@ public sealed class TurnPolicyTests
             budgetOptions,
             new ProviderResilienceOptions(),
             new AgentToolPipelineOptions(),
-            TimeSpan.FromMinutes(5));
+            TimeSpan.FromMinutes(5),
+            DefaultContextTokens);
     }
 
     private static TurnPolicy ResolveWithNumCtxOverride(int numCtx)
@@ -235,12 +230,10 @@ public sealed class TurnPolicyTests
                                            .Build();
 
         return TurnPolicy.Resolve(package,
-            new ConversationContextBudgetOptions
-            {
-                DefaultContextTokens = 8192
-            },
+            new ConversationContextBudgetOptions(),
             new ProviderResilienceOptions(),
             new AgentToolPipelineOptions(),
-            TimeSpan.FromMinutes(5));
+            TimeSpan.FromMinutes(5),
+            DefaultContextTokens);
     }
 }

@@ -2,12 +2,12 @@ namespace XE_Local_AI_Engine.Tests.Knowledge;
 
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class KnowledgeFollowUpToolNamespaceTests
@@ -81,7 +81,7 @@ public sealed class KnowledgeFollowUpToolNamespaceTests
         var services = new ServiceCollection();
         services.AddScoped(_ => catalog);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
-        return new ReadDocumentToolHandler(scopeFactory, EnabledOptions());
+        return new ReadDocumentToolHandler(scopeFactory, StubNodeRuntimeSettings.Create().Build());
     }
 
     private static ReadSurroundingChunksToolHandler CreateReadSurroundingHandler(IContextExpansionService expansion)
@@ -89,12 +89,6 @@ public sealed class KnowledgeFollowUpToolNamespaceTests
         var services = new ServiceCollection();
         services.AddScoped(_ => expansion);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
-        return new ReadSurroundingChunksToolHandler(scopeFactory, EnabledOptions());
+        return new ReadSurroundingChunksToolHandler(scopeFactory, StubNodeRuntimeSettings.Create().Build());
     }
-
-    private static IOptions<KnowledgeBaseOptions> EnabledOptions() =>
-        Options.Create(new KnowledgeBaseOptions
-        {
-            AgentToolsEnabled = true
-        });
 }

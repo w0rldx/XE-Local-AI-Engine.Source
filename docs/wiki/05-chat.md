@@ -523,7 +523,9 @@ timestamps. `ContextStatePanel`, a read-only Mantine drawer opened beside `Compa
 `ChatComposerToolbar`, groups the entries by category, marks superseded/retired ones, and shows the synopsis text
 alongside the coverage the two watermarks report.
 
-Configuration (`Agent:ConversationCompaction`), current defaults:
+Configuration (`Agent:ConversationCompaction`), current defaults. `AutoCompactEnabled`, `AutoCompactFraction` (as a
+percent), `DistillEnabled` and `RecentMessagesToKeepVerbatim` are node settings now (**Node Settings → Chat**); these keys
+only seed them:
 
 | Option | Default | What it controls |
 |---|---|---|

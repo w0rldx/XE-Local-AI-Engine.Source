@@ -139,6 +139,7 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
             Substitute.For<IContextExpansionService>(),
             Substitute.For<IKnowledgeQueryEmbeddingCache>(),
             options,
+            KnowledgeSearchRuntimeSettings.From(options),
             NullLogger<KnowledgeSearchService>.Instance);
     }
 

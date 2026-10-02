@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <inheritdoc cref="IProviderStreamResilience" />
 /// <remarks>
@@ -19,14 +20,17 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
     private readonly ConcurrentDictionary<string, BreakerState> _breakers = new(StringComparer.Ordinal);
     private readonly ILogger<ProviderStreamResilience> _logger;
     private readonly ProviderResilienceOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly TimeProvider _timeProvider;
 
     public ProviderStreamResilience(IOptions<ProviderResilienceOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<ProviderStreamResilience> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -80,7 +84,9 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
         BreakerState? breaker,
         CancellationToken cancellationToken)
     {
-        var maxAttempts = _options.RetryEnabled ? Math.Max(val1: 0, _options.MaxRetries) + 1 : 1;
+        // The two node-settings knobs are read once per send, at attempt start, so one send's retries cannot straddle a save.
+        var retryEnabled = await _runtimeSettings.GetProviderRetryEnabledAsync(cancellationToken);
+        var maxAttempts = retryEnabled ? Math.Max(val1: 0, await _runtimeSettings.GetProviderMaxRetriesAsync(cancellationToken)) + 1 : 1;
         var attempt = 0;
 
         while (true)
@@ -113,7 +119,7 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
                 }
 
                 var canRetry = transient
-                               && _options.RetryEnabled
+                               && retryEnabled
                                && attempt < maxAttempts
                                && (breaker is null || !IsOpen(breaker));
 

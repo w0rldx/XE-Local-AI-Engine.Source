@@ -11,9 +11,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Client.Services.Eval.Implementation;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Eval gate orchestration over a SEEDED golden set via fake runner + fake judge (no Ollama). The fake runner keys
@@ -46,6 +48,30 @@ public sealed class PlaybookEvalServiceTests
         AssertEx.Equal(expected: 1, outcome.Result.ActionVersionAtEval);
         await actionService.Received(1)
                            .RecordEvalResultAsync(agentId, actionId, Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task RunEvalAsync_WhenEvalModelIsNotNodeLocal_RunsNothingAndRecordsAnIncompleteFailure()
+    {
+        var agentId = Guid.NewGuid();
+        var actionId = Guid.NewGuid();
+        var trust = Substitute.For<IModelTrustResolver>();
+        trust.ResolveAsync("test-model", Arg.Any<CancellationToken>()).Returns(ModelTrustLocality.Cloud);
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ProviderName.Returns("ollama");
+        var runner = new FakePlaybookEvalAgentRunner();
+        var service = CreateServiceCore(agentId, actionId, suggestedPriority: 100, [], [JudgeCase(agentId)], runner,
+            new FakePlaybookEvalJudge((_, _) => true), maxGoldenCases: 25, out var actionService, trust, provider);
+
+        var outcome = await service.RunEvalAsync(agentId, actionId);
+
+        // No golden text reached any client, and the recorded result cannot authorize promotion.
+        provider.DidNotReceive().CreateChatClient(Arg.Any<LocalModelSelection>());
+        AssertEx.True(outcome.ActionFound);
+        AssertEx.False(outcome.Result!.Passed);
+        AssertEx.Equal(expected: 0, outcome.Result.GoldenCaseCount);
+        AssertEx.Equal(expected: 1, outcome.Result.GoldenCaseTotal);
+        await actionService.Received(1).RecordEvalResultAsync(agentId, actionId, Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -366,7 +392,9 @@ public sealed class PlaybookEvalServiceTests
         IPlaybookEvalAgentRunner runner,
         IPlaybookEvalJudge judge,
         int maxGoldenCases,
-        out IPlaybookActionService actionService)
+        out IPlaybookActionService actionService,
+        IModelTrustResolver? modelTrustResolver = null,
+        ILocalModelProvider? localModelProvider = null)
     {
         var pending = new PlaybookActionRecord
         {
@@ -403,7 +431,7 @@ public sealed class PlaybookEvalServiceTests
         goldenStore.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
                    .Returns(Task.FromResult(goldenCases));
 
-        return CreateServiceWith(actionService, actionStore, agentStore, goldenStore, runner, judge, maxGoldenCases);
+        return CreateServiceWith(actionService, actionStore, agentStore, goldenStore, runner, judge, maxGoldenCases, modelTrustResolver, localModelProvider);
     }
 
     private static PlaybookEvalService CreateServiceWith(IPlaybookActionService actionService,
@@ -412,12 +440,14 @@ public sealed class PlaybookEvalServiceTests
         IGoldenConversationStore goldenStore,
         IPlaybookEvalAgentRunner runner,
         IPlaybookEvalJudge judge,
-        int maxGoldenCases = 25)
+        int maxGoldenCases = 25,
+        IModelTrustResolver? modelTrustResolver = null,
+        ILocalModelProvider? localModelProviderOverride = null)
     {
         var localModelProvider = Substitute.For<ILocalModelProvider>();
         localModelProvider.ProviderName.Returns("ollama");
         localModelProvider.CreateChatClient(Arg.Any<LocalModelSelection>()).Returns(Substitute.For<IChatClient>());
-        var providerResolver = SingleProviderResolverFactory.Create(localModelProvider);
+        var providerResolver = SingleProviderResolverFactory.Create(localModelProviderOverride ?? localModelProvider);
 
         // The eval writer folds the model's weight identity into the recorded fingerprint. A fixed verified token models
         // a stable, unswapped model; the actual value is irrelevant to these orchestration tests (they don't assert the
@@ -441,9 +471,10 @@ public sealed class PlaybookEvalServiceTests
             TimeProvider.System,
             Options.Create(new PlaybookEvalOptions
             {
-                ModelName = "test-model",
                 MaxGoldenCases = maxGoldenCases
             }),
+            StubNodeRuntimeSettings.Create().WithPlaybookEvalModelName("test-model").Build(),
+            modelTrustResolver ?? Substitute.For<IModelTrustResolver>(),
             NullLogger<PlaybookEvalService>.Instance);
     }
 

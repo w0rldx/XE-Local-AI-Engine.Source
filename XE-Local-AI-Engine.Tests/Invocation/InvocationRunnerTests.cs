@@ -34,7 +34,6 @@ using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
-using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -823,6 +822,19 @@ public sealed class InvocationRunnerTests
         gate.SetResult();
         await runTask.WaitAsync(TimeSpan.FromSeconds(2));
 
+        AssertEx.Equal(expected: 0, runner.ActiveInvocationCount);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheProviderBudgetReadObservesCancellation_LeavesNoActiveInvocationRegistered()
+    {
+        var runner = CreateRunner(configureRuntimeSettings: static settings =>
+            settings.GetProviderBudgetMaxCumulativeInputTokensAsync(Arg.Any<CancellationToken>())
+                    .Returns<Task<int>>(static _ => throw new OperationCanceledException()));
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => RunAsync(runner, RuntimePackageBuilder.Valid().Build()));
+
+        // A registration left behind here is never cleared and the shutdown drain waits on it.
         AssertEx.Equal(expected: 0, runner.ActiveInvocationCount);
     }
 
@@ -2546,7 +2558,7 @@ public sealed class InvocationRunnerTests
         // The benchmark freeze refuses with BudgetFirstRound; the run fails on the tool-loop stage's hard stop. Built from the same
         // package, the two must agree on every number, or the freeze admits a run the runtime refuses (the live 2048/512 case).
         var budgetOptions = new ConversationContextBudgetOptions();
-        var budgeter = new RecordingContextBudgeter(new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(budgetOptions)));
+        var budgeter = new RecordingContextBudgeter(new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(budgetOptions), StubNodeRuntimeSettings.Create().Build()));
         AllowedToolDto[] tools =
         [
             new()
@@ -2575,7 +2587,7 @@ public sealed class InvocationRunnerTests
                }));
 
         await RunAsync(CreateRunner(factory, contextBudgeter: budgeter, contextBudgetOptions: budgetOptions), package);
-        var preflight = InvocationRunner.BudgetFirstRound(budgeter.Inner, package, budgetOptions, "bench-model");
+        var preflight = InvocationRunner.BudgetFirstRound(budgeter.Inner, package, budgetOptions, StoredNodeSettings.DefaultDefaultContextTokens, "bench-model");
 
         AssertEx.Equal(expected: 2, budgeter.Results.Count, "one initial-assembly and one tool-loop budget");
         var toolLoop = budgeter.Results[1];
@@ -4648,9 +4660,9 @@ public sealed class InvocationRunnerTests
         // the same stall would be retried before finally surfacing as a timeout).
         var resilience = new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions
             {
-                RetryEnabled = false,
                 CircuitBreakerEnabled = false
             }),
+            StubNodeRuntimeSettings.Create().WithProviderRetryEnabled(false).Build(),
             TimeProvider.System,
             NullLogger<ProviderStreamResilience>.Instance);
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -5220,7 +5232,8 @@ public sealed class InvocationRunnerTests
         TimeProvider? timeProvider = null,
         IConversationContextBudgeter? contextBudgeter = null,
         IKnowledgeModelPrewarmer? knowledgeModelPrewarmer = null,
-        bool knowledgeToolsEnabled = true)
+        bool knowledgeToolsEnabled = true,
+        Action<INodeRuntimeSettings>? configureRuntimeSettings = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -5258,6 +5271,7 @@ public sealed class InvocationRunnerTests
         // ProviderStreamResilienceTests; a test can still inject its own to exercise the wired path.
         var resolvedProviderStreamResilience = providerStreamResilience
                                                ?? new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions()),
+                                                   StubNodeRuntimeSettings.Create().Build(),
                                                    TimeProvider.System,
                                                    NullLogger<ProviderStreamResilience>.Instance);
 
@@ -5282,7 +5296,13 @@ public sealed class InvocationRunnerTests
                                                      .WithToolRelevanceEnabled(toolRelevanceRead ?? (static _ => Task.FromResult(false)))
                                                      // On, as the stub web the retriever reads: the coordinator re-reads it before accepted content lands.
                                                      .WithWebAccessEnabled(true)
+                                                     // The tests size the turn through ConversationContextBudgetOptions; the runner now reads
+                                                     // these two from the accessor, so mirror them to keep each test's window and keep-count.
+                                                     .WithDefaultContextTokens(resolvedContextBudgetOptions.DefaultContextTokens)
+                                                     .WithContextBudgetRecentTurnKeepCount(resolvedContextBudgetOptions.RecentTurnKeepCount)
+                                                     .WithKnowledgeAgentToolsEnabled(knowledgeToolsEnabled)
                                                      .Build();
+        configureRuntimeSettings?.Invoke(runtimeSettings);
 
         // One registry instance shared by all three collaborators, exactly as the DI graph wires it: a second copy
         // would let a call be registered in one dictionary and resolved against another. A test that has to observe
@@ -5298,7 +5318,7 @@ public sealed class InvocationRunnerTests
             resolvedProviderResolver,
             new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System),
             resolvedProviderStreamResilience,
-            contextBudgeter ?? new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions)),
+            contextBudgeter ?? new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions), runtimeSettings),
             Options.Create(resolvedContextBudgetOptions),
             Options.Create(new ProviderResilienceOptions()),
             Options.Create(new AgentToolPipelineOptions()),
@@ -5306,7 +5326,6 @@ public sealed class InvocationRunnerTests
             toolRelevanceCoreSet ?? new FakeToolRelevanceCoreSet(),
             configuration,
             runtimeSettings,
-            Options.Create(new SpawnOptions()),
             new ToolApprovalCoordinator(new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
                 resolvedPendingToolCallRegistry,
                 approvalAuditRecorder ?? Substitute.For<IToolApprovalAuditRecorder>(),
@@ -5323,10 +5342,6 @@ public sealed class InvocationRunnerTests
             // registers nothing, so a test that never sends `auto` proves — by not throwing — that no scope is used.
             CreateScopeFactory(reasoningEffortDispatcherFactory),
             knowledgeModelPrewarmer ?? Substitute.For<IKnowledgeModelPrewarmer>(),
-            Options.Create(new KnowledgeBaseOptions
-            {
-                AgentToolsEnabled = knowledgeToolsEnabled
-            }),
             NullLogger<InvocationRunner>.Instance,
             resolvedTimeProvider);
     }
@@ -5615,10 +5630,8 @@ public sealed class InvocationRunnerTests
     /// <summary>Retry OFF, so a failing stream surfaces once and the test observes exactly the runner's own behaviour.</summary>
     private static IProviderStreamResilience NoRetryResilience()
     {
-        return new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions
-            {
-                RetryEnabled = false
-            }),
+        return new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions()),
+            StubNodeRuntimeSettings.Create().WithProviderRetryEnabled(false).Build(),
             TimeProvider.System,
             NullLogger<ProviderStreamResilience>.Instance);
     }

@@ -5,14 +5,15 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Eval;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 internal sealed class PlaybookActionService : IPlaybookActionService
 {
     private readonly PlaybookActionOptions _actionOptions;
     private readonly IAgentDefinitionStore _agentDefinitionStore;
-    private readonly PlaybookEvalOptions _evalOptions;
     private readonly IGoldenConversationStore _goldenConversationStore;
     private readonly IEvalModelIdentityResolver _modelIdentityResolver;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IPlaybookActionStore _store;
 
     public PlaybookActionService(IPlaybookActionStore store,
@@ -20,12 +21,12 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         IGoldenConversationStore goldenConversationStore,
         IEvalModelIdentityResolver modelIdentityResolver,
         IOptions<PlaybookActionOptions> actionOptions,
-        IOptions<PlaybookEvalOptions> evalOptions)
+        INodeRuntimeSettings runtimeSettings)
     {
         _actionOptions = (actionOptions ?? throw new ArgumentNullException(nameof(actionOptions))).Value;
         ArgumentNullException.ThrowIfNull(agentDefinitionStore);
         _agentDefinitionStore = agentDefinitionStore;
-        _evalOptions = (evalOptions ?? throw new ArgumentNullException(nameof(evalOptions))).Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         ArgumentNullException.ThrowIfNull(goldenConversationStore);
         _goldenConversationStore = goldenConversationStore;
         ArgumentNullException.ThrowIfNull(modelIdentityResolver);
@@ -230,13 +231,14 @@ internal sealed class PlaybookActionService : IPlaybookActionService
         var enabledGoldenCases = await _goldenConversationStore.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken);
         // Resolve the model's weight identity so a same-name weight swap moves the fingerprint. The SAME resolver the
         // eval writer used, including its unverified sentinel, or a verified eval stops matching at promote time.
-        var modelIdentity = await _modelIdentityResolver.ResolveAsync(_evalOptions.ModelName, cancellationToken);
+        var evalModelName = await _runtimeSettings.GetPlaybookEvalModelNameAsync(cancellationToken);
+        var modelIdentity = await _modelIdentityResolver.ResolveAsync(evalModelName, cancellationToken);
         var currentFingerprint = PlaybookEvalFingerprint.Compute(pending.Id,
             pending.Version,
             owningAgent.Instructions,
             enabledActions,
             enabledGoldenCases,
-            _evalOptions.ModelName,
+            evalModelName,
             modelIdentity.Token);
         if (!string.Equals(currentFingerprint, evalResult.EvaluationFingerprint, StringComparison.Ordinal))
         {

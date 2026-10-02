@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class ConversationCompactionServiceTests
@@ -198,6 +199,7 @@ public sealed class ConversationCompactionServiceTests
             CreateWarmer(residentWindowTokens: null),
             CreateNodeSettingsStore(),
             options,
+            StubNodeRuntimeSettings.Create().Build(),
             TimeProvider.System,
             NullLogger<ConversationCompactionService>.Instance);
 
@@ -487,6 +489,7 @@ public sealed class ConversationCompactionServiceTests
             CreateWarmer(residentWindowTokens: null),
             CreateNodeSettingsStore(),
             options,
+            StubNodeRuntimeSettings.Create().Build(),
             TimeProvider.System,
             NullLogger<ConversationCompactionService>.Instance);
 
@@ -749,6 +752,7 @@ public sealed class ConversationCompactionServiceTests
             warmer ?? CreateWarmer(residentWindowTokens: null),
             nodeSettingsStore ?? CreateNodeSettingsStore(),
             Options.Create(new ConversationCompactionOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             timeProvider ?? TimeProvider.System,
             NullLogger<ConversationCompactionService>.Instance);
     }

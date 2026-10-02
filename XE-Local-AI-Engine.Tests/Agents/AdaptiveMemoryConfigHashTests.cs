@@ -10,8 +10,8 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
@@ -160,7 +160,7 @@ public sealed class AdaptiveMemoryConfigHashTests
             new FakeAgentInstructionProvider(),
             Substitute.For<IModelCapabilityResolver>(),
             new PermissiveToolApprovalPolicy(),
-            Options.Create(new KnowledgeBaseOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 

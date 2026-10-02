@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
@@ -35,6 +36,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
     private readonly ILogger<AgentHomeRunRetentionService> _logger;
     private readonly AgentHomeOptions _agentHomeOptions;
     private readonly AgentHomeRunRetentionOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly TimeProvider _timeProvider;
 
     public AgentHomeRunRetentionService(IOptions<AgentHomeRunRetentionOptions> options,
@@ -42,6 +44,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
         INodeDataDirectory dataDirectory,
         AgentHomeRunExecutionRegistry executingRuns,
         AgentHomeRunApplyGuard applyGuard,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<AgentHomeRunRetentionService> logger)
     {
@@ -53,6 +56,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
         _dataDirectoryRoot = dataDirectory.Root;
         _executingRuns = executingRuns ?? throw new ArgumentNullException(nameof(executingRuns));
         _applyGuard = applyGuard ?? throw new ArgumentNullException(nameof(applyGuard));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -110,17 +114,18 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
     }
 
     /// <summary>One sweep, exposed to the tests so a sweep can be observed without driving the whole service loop.</summary>
-    /// <remarks>
-    ///     A sweep is filesystem work end to end and awaits nothing; the <see cref="Task" /> stays because the loop
-    ///     below and the tests await it, and because a sweep is exactly the kind of work that would grow one.
-    /// </remarks>
-    internal Task SweepAsync(CancellationToken cancellationToken)
+    /// <remarks>The three limits are node settings read once per sweep, so a save applies to the next sweep.</remarks>
+    internal async Task SweepAsync(CancellationToken cancellationToken)
     {
         var runsRoot = AgentHomeRunPaths.ResolveRunsRoot(_agentHomeOptions, _dataDirectoryRoot);
         if (!Directory.Exists(runsRoot))
         {
-            return Task.CompletedTask;
+            return;
         }
+
+        var retentionDays = await _runtimeSettings.GetAgentHomeRunRetentionDaysAsync(cancellationToken);
+        var maxRuns = await _runtimeSettings.GetAgentHomeRunRetentionMaxRunsAsync(cancellationToken);
+        var maxTotalBytes = await _runtimeSettings.GetAgentHomeRunRetentionMaxTotalBytesAsync(cancellationToken);
 
         var now = _timeProvider.GetUtcNow();
         var runs = Classify(runsRoot, out var unclassified);
@@ -131,7 +136,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
 
         if (runs.Count == 0)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         // Oldest first: every limit evicts from this end. The last entry is the newest run — never evicted, whatever
@@ -140,7 +145,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
         var totalBytes = runs.Sum(static run => run.SizeBytes);
         var remainingRuns = runs.Count;
 
-        var ageCutoff = _options.RetentionDays > 0 ? now.AddDays(-_options.RetentionDays) : (DateTimeOffset?)null;
+        var ageCutoff = retentionDays > 0 ? now.AddDays(-retentionDays) : (DateTimeOffset?)null;
         var byAge = 0;
         var byCount = 0;
         var byBytes = 0;
@@ -159,7 +164,7 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
                 continue;
             }
 
-            var reason = ClassifyReason(candidate, remainingRuns, totalBytes, ageCutoff);
+            var reason = ClassifyReason(candidate, remainingRuns, totalBytes, ageCutoff, maxRuns, maxTotalBytes);
             if (reason is null)
             {
                 continue;
@@ -209,12 +214,12 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
             // what makes the line an audit trail; the host path they sat at never appears.
             SweepCompleted(_logger, removed.Count, byAge, byCount, byBytes, bytesReclaimed, string.Join(separator: ',', removed));
         }
-
-        return Task.CompletedTask;
     }
 
     /// <summary>Which limit takes this run, or <see langword="null" /> when none does.</summary>
-    private DeletionReason? ClassifyReason(RunCandidate candidate, int remainingRuns, long totalBytes, DateTimeOffset? ageCutoff)
+    private static DeletionReason? ClassifyReason(RunCandidate candidate, int remainingRuns, long totalBytes, DateTimeOffset? ageCutoff,
+        int maxRuns,
+        long maxTotalBytes)
     {
         if (ageCutoff is { } cutoff && candidate.StartedAt < cutoff)
         {
@@ -223,12 +228,12 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
 
         // The count and byte limits measure what is still on disk, so each earlier deletion counts towards them and
         // the cap is reached exactly rather than overshot.
-        if (_options.MaxRuns > 0 && remainingRuns > _options.MaxRuns)
+        if (maxRuns > 0 && remainingRuns > maxRuns)
         {
             return DeletionReason.Count;
         }
 
-        return _options.MaxTotalBytes > 0 && totalBytes > _options.MaxTotalBytes ? DeletionReason.Bytes : null;
+        return maxTotalBytes > 0 && totalBytes > maxTotalBytes ? DeletionReason.Bytes : null;
     }
 
     /// <summary>

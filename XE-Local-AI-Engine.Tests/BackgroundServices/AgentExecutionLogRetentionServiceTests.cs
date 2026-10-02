@@ -9,7 +9,10 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.Memory.Implementation;
+using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Tests for <see cref="AgentExecutionLogRetentionService" />: a periodic sweep, on its own DI scope, deletes
@@ -111,20 +114,18 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
             _ = await SeedRowAsync(seedScope.ServiceProvider, agentId, createdAtUtc: 0L);
         }
 
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithAgentExecutionLogRetentionEnabled(false).Build();
         using var service = CreateService(provider, new AgentExecutionLogRetentionOptions
         {
-            Enabled = false,
             SweepInterval = TimeSpan.FromMilliseconds(50)
-        });
+        }, runtimeSettings);
 
         await service.StartAsync(CancellationToken.None);
-        // A disabled sweeper returns from ExecuteAsync immediately without arming the timer. Await that completion
-        // signal deterministically (rather than sleeping) to prove the background loop ran to completion — so any
-        // regression that swept while disabled would have already run before the row-count assertion below.
-        if (service.ExecuteTask is { } executeTask)
-        {
-            await executeTask.WaitAsync(TimeSpan.FromSeconds(5));
-        }
+        // The startup pass plus at least one periodic tick have read the switch as off, so a regression that swept while
+        // disabled would already have run before the row-count assertion below.
+        await AssertEx.EventuallyAsync(() => EnabledReads(runtimeSettings) >= 2,
+            TimeSpan.FromSeconds(5),
+            "The sweeper should keep re-reading the retention switch while it is off.");
 
         await service.StopAsync(CancellationToken.None);
 
@@ -134,11 +135,60 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
         AssertEx.Equal(expected: 1, rows.Count);
     }
 
-    private static AgentExecutionLogRetentionService CreateService(IServiceProvider provider, AgentExecutionLogRetentionOptions options)
+    [Test]
+    public async Task ExecuteAsync_WhenRetentionIsTurnedOnWhileRunning_SweepsWithoutARestart()
     {
+        var agentId = Guid.NewGuid();
+        await using var provider = await BuildProviderAsync("retention-live-toggle.sqlite");
+
+        await using (var seedScope = provider.CreateAsyncScope())
+        {
+            _ = await SeedRowAsync(seedScope.ServiceProvider, agentId, createdAtUtc: 0L);
+        }
+
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithAgentExecutionLogRetentionEnabled(false).Build();
+        using var service = CreateService(provider, new AgentExecutionLogRetentionOptions
+        {
+            SweepInterval = TimeSpan.FromMilliseconds(50)
+        }, runtimeSettings);
+
+        await service.StartAsync(CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => EnabledReads(runtimeSettings) >= 2, TimeSpan.FromSeconds(5), "The switch should be read while it is off.");
+        AssertEx.Equal(expected: 1, await CountRowsAsync(provider, agentId), "Nothing is swept while retention is off.");
+
+        // The operator turns retention on in Node Settings: the next tick sweeps, with no restart of the hosted service.
+        runtimeSettings.GetAgentExecutionLogRetentionEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        await AssertEx.EventuallyAsync(async () => await CountRowsAsync(provider, agentId) == 0,
+            TimeSpan.FromSeconds(5),
+            "The next tick after the switch flips on should delete the expired row.");
+        await service.StopAsync(CancellationToken.None);
+    }
+
+    private static int EnabledReads(INodeRuntimeSettings runtimeSettings) =>
+        runtimeSettings.ReceivedCalls()
+                       .Count(static call => string.Equals(call.GetMethodInfo().Name,
+                           nameof(INodeRuntimeSettings.GetAgentExecutionLogRetentionEnabledAsync),
+                           StringComparison.Ordinal));
+
+    private static async Task<int> CountRowsAsync(IServiceProvider provider, Guid agentId)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
+        return (await store.ListByAgentAsync(agentId, limit: 10)).Count;
+    }
+
+    private static AgentExecutionLogRetentionService CreateService(IServiceProvider provider,
+        AgentExecutionLogRetentionOptions options,
+        INodeRuntimeSettings? runtimeSettings = null)
+    {
+        // The switch and window are node settings now; the options only carry the cadence and the per-agent cap.
         return new AgentExecutionLogRetentionService(provider.GetRequiredService<IServiceScopeFactory>(),
             TimeProvider.System,
             Options.Create(options),
+            runtimeSettings ?? StubNodeRuntimeSettings.Create()
+                                                      .WithAgentExecutionLogRetentionEnabled(options.Enabled)
+                                                      .WithAgentExecutionLogRetentionDays(options.RetentionDays)
+                                                      .Build(),
             NullLogger<AgentExecutionLogRetentionService>.Instance);
     }
 

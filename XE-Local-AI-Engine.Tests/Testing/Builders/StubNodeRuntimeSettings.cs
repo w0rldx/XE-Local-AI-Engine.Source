@@ -45,6 +45,54 @@ public sealed class StubNodeRuntimeSettings
     private bool _autoProvisionFirstRunModel = StoredNodeSettings.DefaultAutoProvisionFirstRunModel;
     private int _agentHomeMaxRunSeconds = 600;
     private int _webFetchMaxContentChars = StoredNodeSettings.DefaultWebFetchMaxContentChars;
+    private int _toolPipelineMaxIterationsPerRequest = StoredNodeSettings.DefaultToolPipelineMaxIterationsPerRequest;
+    private int _toolPipelineMaxToolResultChars = StoredNodeSettings.DefaultToolPipelineMaxToolResultChars;
+    private int _toolPipelineMaxConsecutiveInvalidToolCalls = StoredNodeSettings.DefaultToolPipelineMaxConsecutiveInvalidToolCalls;
+    private int _defaultContextTokens = StoredNodeSettings.DefaultDefaultContextTokens;
+    private int _providerBudgetRecentMessagesToKeep = StoredNodeSettings.DefaultProviderBudgetRecentMessagesToKeep;
+    private int _providerBudgetMaxCumulativeInputTokens = StoredNodeSettings.DefaultProviderBudgetMaxCumulativeInputTokens;
+    private int _contextBudgetRecentTurnKeepCount = StoredNodeSettings.DefaultContextBudgetRecentTurnKeepCount;
+    private bool _compactionAutoEnabled = StoredNodeSettings.DefaultCompactionAutoEnabled;
+    private int _compactionAutoCompactPercent = StoredNodeSettings.DefaultCompactionAutoCompactPercent;
+    private int _compactionRecentMessagesVerbatim = StoredNodeSettings.DefaultCompactionRecentMessagesVerbatim;
+    private bool _compactionDistillEnabled = StoredNodeSettings.DefaultCompactionDistillEnabled;
+    private int _maxInlinedAttachmentChars = StoredNodeSettings.DefaultMaxInlinedAttachmentChars;
+    private int _knowledgeChatTopK = StoredNodeSettings.DefaultKnowledgeChatTopK;
+    private bool _providerRetryEnabled = StoredNodeSettings.DefaultProviderRetryEnabled;
+    private int _providerMaxRetries = StoredNodeSettings.DefaultProviderMaxRetries;
+    private int _spawnMaxConcurrent = StoredNodeSettings.DefaultSpawnMaxConcurrent;
+    private int _spawnMaxCloud = StoredNodeSettings.DefaultSpawnMaxCloud;
+    private int _spawnQueueWaitSeconds = StoredNodeSettings.DefaultSpawnQueueWaitSeconds;
+    private bool _knowledgeAdaptiveRerankingEnabled = StoredNodeSettings.DefaultKnowledgeAdaptiveRerankingEnabled;
+    private int _knowledgeRetrievalLatencyBudgetMs = StoredNodeSettings.DefaultKnowledgeRetrievalLatencyBudgetMs;
+    private bool _knowledgeScheduledReindexEnabled = StoredNodeSettings.DefaultKnowledgeScheduledReindexEnabled;
+    private int _knowledgeScheduledReindexIntervalMinutes = StoredNodeSettings.DefaultKnowledgeScheduledReindexIntervalMinutes;
+    private bool _knowledgeAgentToolsEnabled = StoredNodeSettings.DefaultKnowledgeAgentToolsEnabled;
+    private bool _allowCloudModelAccess = StoredNodeSettings.DefaultAllowCloudModelAccess;
+    private string? _playbookAnalysisModelName;
+    private string? _playbookEvalModelName;
+    private string? _memoryExtractionModelName;
+    private bool _chatRetentionEnabled = StoredNodeSettings.DefaultChatRetentionEnabled;
+    private int _chatRetentionDays = StoredNodeSettings.DefaultChatRetentionDays;
+    private bool _agentExecutionLogRetentionEnabled = StoredNodeSettings.DefaultAgentExecutionLogRetentionEnabled;
+    private int _agentExecutionLogRetentionDays = StoredNodeSettings.DefaultAgentExecutionLogRetentionDays;
+    private int _nodeDbBackupRetainCount = StoredNodeSettings.DefaultNodeDbBackupRetainCount;
+    private long _benchmarkKldCacheMaxBytes = StoredNodeSettings.DefaultBenchmarkKldCacheMaxBytes;
+    private int _schedulerHistoryRetentionDays = StoredNodeSettings.DefaultSchedulerHistoryRetentionDays;
+    private int _imageMaxLoadedProcesses = StoredNodeSettings.DefaultImageMaxLoadedProcesses;
+    private bool _imageTextEncoderOnGpu = StoredNodeSettings.DefaultImageTextEncoderOnGpu;
+    private int _graphWorkflowMaxConcurrentRuns = StoredNodeSettings.DefaultGraphWorkflowMaxConcurrentRuns;
+    private int _graphWorkflowDefaultNodeTimeoutSeconds = StoredNodeSettings.DefaultGraphWorkflowDefaultNodeTimeoutSeconds;
+    private int _workSessionMaxStepsPerRun = StoredNodeSettings.DefaultWorkSessionMaxStepsPerRun;
+    private int _workSessionMaxConcurrentSessions = StoredNodeSettings.DefaultWorkSessionMaxConcurrentSessions;
+    private int _developmentMaxAttemptDurationSeconds = StoredNodeSettings.DefaultDevelopmentMaxAttemptDurationSeconds;
+    private int _developmentMaxToolCalls = StoredNodeSettings.DefaultDevelopmentMaxToolCalls;
+    private int _developmentMaxOutputTokens = StoredNodeSettings.DefaultDevelopmentMaxOutputTokens;
+    private int _agentHomeMaxInnerToolCalls = StoredNodeSettings.DefaultAgentHomeMaxInnerToolCalls;
+    private int _agentHomePatchApplyTimeoutSeconds = StoredNodeSettings.DefaultAgentHomePatchApplyTimeoutSeconds;
+    private int _agentHomeRunRetentionDays = StoredNodeSettings.DefaultAgentHomeRunRetentionDays;
+    private int _agentHomeRunRetentionMaxRuns = StoredNodeSettings.DefaultAgentHomeRunRetentionMaxRuns;
+    private long _agentHomeRunRetentionMaxTotalBytes = StoredNodeSettings.DefaultAgentHomeRunRetentionMaxTotalBytes;
 
     // A READ, not a value: the wait-until-decided gate re-reads the profile on every poll tick, so a test that flips the
     // decision mid-wait needs the substitute to answer differently on the second call. Same shape as the tool-relevance
@@ -278,6 +326,294 @@ public sealed class StubNodeRuntimeSettings
         return this;
     }
 
+    public StubNodeRuntimeSettings WithToolPipelineMaxIterationsPerRequest(int value)
+    {
+        _toolPipelineMaxIterationsPerRequest = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithToolPipelineMaxToolResultChars(int value)
+    {
+        _toolPipelineMaxToolResultChars = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithToolPipelineMaxConsecutiveInvalidToolCalls(int value)
+    {
+        _toolPipelineMaxConsecutiveInvalidToolCalls = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithDefaultContextTokens(int value)
+    {
+        _defaultContextTokens = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithProviderBudgetRecentMessagesToKeep(int value)
+    {
+        _providerBudgetRecentMessagesToKeep = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithProviderBudgetMaxCumulativeInputTokens(int value)
+    {
+        _providerBudgetMaxCumulativeInputTokens = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithContextBudgetRecentTurnKeepCount(int value)
+    {
+        _contextBudgetRecentTurnKeepCount = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithCompactionAutoEnabled(bool value)
+    {
+        _compactionAutoEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithCompactionAutoCompactPercent(int value)
+    {
+        _compactionAutoCompactPercent = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithCompactionRecentMessagesVerbatim(int value)
+    {
+        _compactionRecentMessagesVerbatim = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithCompactionDistillEnabled(bool value)
+    {
+        _compactionDistillEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithMaxInlinedAttachmentChars(int value)
+    {
+        _maxInlinedAttachmentChars = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithKnowledgeChatTopK(int value)
+    {
+        _knowledgeChatTopK = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithProviderRetryEnabled(bool value)
+    {
+        _providerRetryEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithProviderMaxRetries(int value)
+    {
+        _providerMaxRetries = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithSpawnMaxConcurrent(int value)
+    {
+        _spawnMaxConcurrent = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithSpawnMaxCloud(int value)
+    {
+        _spawnMaxCloud = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithSpawnQueueWaitSeconds(int value)
+    {
+        _spawnQueueWaitSeconds = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithKnowledgeAdaptiveRerankingEnabled(bool value)
+    {
+        _knowledgeAdaptiveRerankingEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithKnowledgeRetrievalLatencyBudgetMs(int value)
+    {
+        _knowledgeRetrievalLatencyBudgetMs = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithKnowledgeScheduledReindexEnabled(bool value)
+    {
+        _knowledgeScheduledReindexEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithKnowledgeScheduledReindexIntervalMinutes(int value)
+    {
+        _knowledgeScheduledReindexIntervalMinutes = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithKnowledgeAgentToolsEnabled(bool value)
+    {
+        _knowledgeAgentToolsEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAllowCloudModelAccess(bool value)
+    {
+        _allowCloudModelAccess = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithPlaybookAnalysisModelName(string value)
+    {
+        _playbookAnalysisModelName = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithPlaybookEvalModelName(string value)
+    {
+        _playbookEvalModelName = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithMemoryExtractionModelName(string value)
+    {
+        _memoryExtractionModelName = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithChatRetentionEnabled(bool value)
+    {
+        _chatRetentionEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithChatRetentionDays(int value)
+    {
+        _chatRetentionDays = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAgentExecutionLogRetentionEnabled(bool value)
+    {
+        _agentExecutionLogRetentionEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAgentExecutionLogRetentionDays(int value)
+    {
+        _agentExecutionLogRetentionDays = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithNodeDbBackupRetainCount(int value)
+    {
+        _nodeDbBackupRetainCount = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithBenchmarkKldCacheMaxBytes(long value)
+    {
+        _benchmarkKldCacheMaxBytes = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithSchedulerHistoryRetentionDays(int value)
+    {
+        _schedulerHistoryRetentionDays = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithImageMaxLoadedProcesses(int value)
+    {
+        _imageMaxLoadedProcesses = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithImageTextEncoderOnGpu(bool value)
+    {
+        _imageTextEncoderOnGpu = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithGraphWorkflowMaxConcurrentRuns(int value)
+    {
+        _graphWorkflowMaxConcurrentRuns = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithGraphWorkflowDefaultNodeTimeoutSeconds(int value)
+    {
+        _graphWorkflowDefaultNodeTimeoutSeconds = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithWorkSessionMaxStepsPerRun(int value)
+    {
+        _workSessionMaxStepsPerRun = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithWorkSessionMaxConcurrentSessions(int value)
+    {
+        _workSessionMaxConcurrentSessions = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithDevelopmentMaxAttemptDurationSeconds(int value)
+    {
+        _developmentMaxAttemptDurationSeconds = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithDevelopmentMaxToolCalls(int value)
+    {
+        _developmentMaxToolCalls = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithDevelopmentMaxOutputTokens(int value)
+    {
+        _developmentMaxOutputTokens = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAgentHomeMaxInnerToolCalls(int value)
+    {
+        _agentHomeMaxInnerToolCalls = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAgentHomePatchApplyTimeoutSeconds(int value)
+    {
+        _agentHomePatchApplyTimeoutSeconds = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAgentHomeRunRetentionDays(int value)
+    {
+        _agentHomeRunRetentionDays = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAgentHomeRunRetentionMaxRuns(int value)
+    {
+        _agentHomeRunRetentionMaxRuns = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAgentHomeRunRetentionMaxTotalBytes(long value)
+    {
+        _agentHomeRunRetentionMaxTotalBytes = value;
+        return this;
+    }
+
     public INodeRuntimeSettings Build()
     {
         var settings = Substitute.For<INodeRuntimeSettings>();
@@ -323,6 +659,20 @@ public sealed class StubNodeRuntimeSettings
         settings.GetKnowledgeSearchDefaultResultsAsync(Arg.Any<CancellationToken>()).Returns(StoredNodeSettings.DefaultKnowledgeSearchDefaultResults);
         settings.GetKnowledgeSearchMaxResultsAsync(Arg.Any<CancellationToken>()).Returns(StoredNodeSettings.DefaultKnowledgeSearchMaxResults);
         settings.GetAgentHomeMaxRunSecondsAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeMaxRunSeconds);
+        settings.GetDefaultContextTokensAsync(Arg.Any<CancellationToken>()).Returns(_defaultContextTokens);
+        settings.GetProviderBudgetRecentMessagesToKeepAsync(Arg.Any<CancellationToken>()).Returns(_providerBudgetRecentMessagesToKeep);
+        settings.GetProviderBudgetMaxCumulativeInputTokensAsync(Arg.Any<CancellationToken>()).Returns(_providerBudgetMaxCumulativeInputTokens);
+        settings.GetCompactionAutoEnabledAsync(Arg.Any<CancellationToken>()).Returns(_compactionAutoEnabled);
+        settings.GetCompactionAutoCompactPercentAsync(Arg.Any<CancellationToken>()).Returns(_compactionAutoCompactPercent);
+        settings.GetCompactionRecentMessagesVerbatimAsync(Arg.Any<CancellationToken>()).Returns(_compactionRecentMessagesVerbatim);
+        settings.GetCompactionDistillEnabledAsync(Arg.Any<CancellationToken>()).Returns(_compactionDistillEnabled);
+        settings.GetMaxInlinedAttachmentCharsAsync(Arg.Any<CancellationToken>()).Returns(_maxInlinedAttachmentChars);
+        settings.GetKnowledgeChatTopKAsync(Arg.Any<CancellationToken>()).Returns(_knowledgeChatTopK);
+        settings.GetProviderRetryEnabledAsync(Arg.Any<CancellationToken>()).Returns(_providerRetryEnabled);
+        settings.GetProviderMaxRetriesAsync(Arg.Any<CancellationToken>()).Returns(_providerMaxRetries);
+        settings.GetSpawnMaxConcurrentAsync(Arg.Any<CancellationToken>()).Returns(_spawnMaxConcurrent);
+        settings.GetSpawnMaxCloudAsync(Arg.Any<CancellationToken>()).Returns(_spawnMaxCloud);
+        settings.GetSpawnQueueWaitSecondsAsync(Arg.Any<CancellationToken>()).Returns(_spawnQueueWaitSeconds);
 
         // Synchronous twins (composition/ctor path) must mirror the async values so consumers repointed onto the sync
         // getters (e.g. InvocationRunner, the DI factory seeds) observe the same configured knobs.
@@ -354,8 +704,65 @@ public sealed class StubNodeRuntimeSettings
         settings.GetMaxProviderCallsPerInvocation().Returns(StoredNodeSettings.DefaultMaxProviderCallsPerInvocation);
         settings.GetHuggingFaceDownloadConnections().Returns(StoredNodeSettings.DefaultHuggingFaceDownloadConnections);
         settings.GetTranscriptionInferenceTimeout().Returns(TimeSpan.FromMinutes(StoredNodeSettings.DefaultTranscriptionInferenceTimeoutMinutes));
-        settings.GetAgentHomeRunRetentionDays().Returns(StoredNodeSettings.DefaultAgentHomeRunRetentionDays);
         settings.GetModelFitSafetyMarginFraction().Returns(StoredNodeSettings.DefaultModelFitSafetyMarginPercent / 100d);
+        settings.GetToolPipelineMaxIterationsPerRequest().Returns(_toolPipelineMaxIterationsPerRequest);
+        settings.GetToolPipelineMaxToolResultChars().Returns(_toolPipelineMaxToolResultChars);
+        settings.GetToolPipelineMaxConsecutiveInvalidToolCalls().Returns(_toolPipelineMaxConsecutiveInvalidToolCalls);
+        settings.GetContextBudgetRecentTurnKeepCount().Returns(_contextBudgetRecentTurnKeepCount);
+        settings.GetKnowledgeAdaptiveRerankingEnabledAsync(Arg.Any<CancellationToken>()).Returns(_knowledgeAdaptiveRerankingEnabled);
+        settings.GetKnowledgeRetrievalLatencyBudgetMsAsync(Arg.Any<CancellationToken>()).Returns(_knowledgeRetrievalLatencyBudgetMs);
+        settings.GetKnowledgeScheduledReindexEnabled().Returns(_knowledgeScheduledReindexEnabled);
+        settings.GetKnowledgeScheduledReindexIntervalMinutes().Returns(_knowledgeScheduledReindexIntervalMinutes);
+        settings.GetKnowledgeAgentToolsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_knowledgeAgentToolsEnabled);
+        settings.GetKnowledgeAgentToolsEnabled().Returns(_knowledgeAgentToolsEnabled);
+        settings.GetAllowCloudModelAccessAsync(Arg.Any<CancellationToken>()).Returns(_allowCloudModelAccess);
+        settings.GetAllowCloudModelAccess().Returns(_allowCloudModelAccess);
+        settings.GetPlaybookAnalysisModelNameAsync(Arg.Any<CancellationToken>()).Returns(_playbookAnalysisModelName ?? _defaultModelName);
+        settings.GetPlaybookEvalModelNameAsync(Arg.Any<CancellationToken>()).Returns(_playbookEvalModelName ?? _defaultModelName);
+        settings.GetMemoryExtractionModelNameAsync(Arg.Any<CancellationToken>()).Returns(_memoryExtractionModelName ?? _defaultModelName);
+        settings.GetChatRetentionEnabledAsync(Arg.Any<CancellationToken>()).Returns(_chatRetentionEnabled);
+        settings.GetChatRetentionDaysAsync(Arg.Any<CancellationToken>()).Returns(_chatRetentionDays);
+        settings.GetAgentExecutionLogRetentionEnabledAsync(Arg.Any<CancellationToken>()).Returns(_agentExecutionLogRetentionEnabled);
+        settings.GetAgentExecutionLogRetentionDaysAsync(Arg.Any<CancellationToken>()).Returns(_agentExecutionLogRetentionDays);
+        settings.GetNodeDbBackupRetainCountAsync(Arg.Any<CancellationToken>()).Returns(_nodeDbBackupRetainCount);
+        settings.GetBenchmarkKldCacheMaxBytesAsync(Arg.Any<CancellationToken>()).Returns(_benchmarkKldCacheMaxBytes);
+        settings.GetSchedulerHistoryRetentionDaysAsync(Arg.Any<CancellationToken>()).Returns(_schedulerHistoryRetentionDays);
+        settings.GetImageMaxLoadedProcesses().Returns(_imageMaxLoadedProcesses);
+        settings.GetImageTextEncoderOnGpu().Returns(_imageTextEncoderOnGpu);
+        settings.GetGraphWorkflowMaxConcurrentRuns().Returns(_graphWorkflowMaxConcurrentRuns);
+        settings.GetGraphWorkflowDefaultNodeTimeoutSeconds().Returns(_graphWorkflowDefaultNodeTimeoutSeconds);
+        settings.GetWorkSessionMaxStepsPerRun().Returns(_workSessionMaxStepsPerRun);
+        settings.GetWorkSessionMaxConcurrentSessions().Returns(_workSessionMaxConcurrentSessions);
+        settings.GetDevelopmentMaxAttemptDurationSeconds().Returns(_developmentMaxAttemptDurationSeconds);
+        settings.GetDevelopmentMaxToolCalls().Returns(_developmentMaxToolCalls);
+        settings.GetDevelopmentMaxOutputTokens().Returns(_developmentMaxOutputTokens);
+        settings.GetAgentHomeMaxInnerToolCallsAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeMaxInnerToolCalls);
+        settings.GetAgentHomePatchApplyTimeoutSecondsAsync(Arg.Any<CancellationToken>()).Returns(_agentHomePatchApplyTimeoutSeconds);
+        settings.GetAgentHomeRunRetentionDaysAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeRunRetentionDays);
+        settings.GetAgentHomeRunRetentionMaxRunsAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeRunRetentionMaxRuns);
+        settings.GetAgentHomeRunRetentionMaxTotalBytesAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeRunRetentionMaxTotalBytes);
+        settings.ResolveEffectiveValues(Arg.Any<StoredNodeSettings>())
+                .Returns(call =>
+                {
+                    var stored = call.Arg<StoredNodeSettings>();
+                    return new NodeSettingsEffectiveValues
+                    {
+                        CompactionAutoEnabled = stored.CompactionAutoEnabled ?? _compactionAutoEnabled,
+                        CompactionDistillEnabled = stored.CompactionDistillEnabled ?? _compactionDistillEnabled,
+                        ProviderRetryEnabled = stored.ProviderRetryEnabled ?? _providerRetryEnabled,
+                        KnowledgeAdaptiveRerankingEnabled = stored.KnowledgeAdaptiveRerankingEnabled ?? _knowledgeAdaptiveRerankingEnabled,
+                        KnowledgeScheduledReindexEnabled = stored.KnowledgeScheduledReindexEnabled ?? _knowledgeScheduledReindexEnabled,
+                        KnowledgeAgentToolsEnabled = stored.KnowledgeAgentToolsEnabled ?? _knowledgeAgentToolsEnabled,
+                        AllowCloudModelAccess = stored.AllowCloudModelAccess ?? _allowCloudModelAccess,
+                        ChatRetentionEnabled = stored.ChatRetentionEnabled ?? _chatRetentionEnabled,
+                        AgentExecutionLogRetentionEnabled = stored.AgentExecutionLogRetentionEnabled ?? _agentExecutionLogRetentionEnabled,
+                        ImageTextEncoderOnGpu = stored.ImageTextEncoderOnGpu ?? _imageTextEncoderOnGpu,
+                        ChatRetentionDays = stored.ChatRetentionDays ?? _chatRetentionDays,
+                        AgentExecutionLogRetentionDays = stored.AgentExecutionLogRetentionDays ?? _agentExecutionLogRetentionDays,
+                        SchedulerHistoryRetentionDays = stored.SchedulerHistoryRetentionDays ?? _schedulerHistoryRetentionDays,
+                        AgentHomeRunRetentionDays = stored.AgentHomeRunRetentionDays ?? _agentHomeRunRetentionDays
+                    };
+                });
         return settings;
     }
 }

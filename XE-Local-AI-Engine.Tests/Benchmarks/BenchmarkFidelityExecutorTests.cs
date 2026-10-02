@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -16,6 +15,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The fidelity measurement fails CLOSED and replays the run's placement while pinning the window. Both are the
@@ -407,7 +407,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                 Binaries(Path.Combine(RuntimeHasPerplexityTool ? _withTool : _withoutTool, "llama-server")),
                 runner ?? new ScriptedPerplexity(() => ScriptedOutputs.Count > 0 ? ScriptedOutputs.Dequeue() : Output),
                 _cache,
-                Options.Create(new BenchmarkKldCacheOptions()),
+                StubNodeRuntimeSettings.Create().Build(),
                 new StubEnvironment(),
                 new BenchmarkCancellationRegistry(),
                 new BenchmarkAdmissionRetry

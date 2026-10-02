@@ -19,7 +19,10 @@ public enum NodeSettingsField
     AutoEffortFastModelName,
     ContainerRuntimeSelection,
     KnowledgeSearchDefaultResults,
-    AgentHomeMaxRunSeconds
+    AgentHomeMaxRunSeconds,
+    PlaybookAnalysisModelName,
+    PlaybookEvalModelName,
+    MemoryExtractionModelName
 }
 
 /// <summary>A single cross-field violation: the offending field plus the operator-facing message.</summary>

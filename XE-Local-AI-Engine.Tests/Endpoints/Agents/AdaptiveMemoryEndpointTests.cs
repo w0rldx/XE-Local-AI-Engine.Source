@@ -4,11 +4,11 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Eval;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -351,7 +351,7 @@ public sealed class AdaptiveMemoryEndpointTests
         var agent = AssertEx.NotNull(await serviceProvider.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId));
         var enabledActions = await serviceProvider.GetRequiredService<IPlaybookActionStore>().ListEnabledByAgentAsync(agentDefinitionId);
         var enabledGolden = await serviceProvider.GetRequiredService<IGoldenConversationStore>().ListEnabledByAgentAsync(agentDefinitionId);
-        var modelName = serviceProvider.GetRequiredService<IOptions<PlaybookEvalOptions>>().Value.ModelName;
+        var modelName = await serviceProvider.GetRequiredService<INodeRuntimeSettings>().GetPlaybookEvalModelNameAsync();
         // Resolve the model identity through the SAME seam the gate uses so the fabricated fingerprint carries the
         // matching weight-identity token (an uninstalled eval model resolves to the unverified sentinel here).
         var modelIdentity = await serviceProvider.GetRequiredService<IEvalModelIdentityResolver>().ResolveAsync(modelName);

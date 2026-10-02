@@ -7,11 +7,13 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The privacy gate for adaptive-memory extraction: the agent MUST resolve a NODE-LOCAL provider via
@@ -39,10 +41,9 @@ public sealed class DefaultMemoryExtractionAgentTests
         resolver.ResolveProviderForModelAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns(Task.FromResult(provider));
 
         var agent = new DefaultMemoryExtractionAgent(resolver,
-            Options.Create(new MemoryExtractionOptions
-            {
-                ExtractionModelName = "qwen3:8b"
-            }),
+            Options.Create(new MemoryExtractionOptions()),
+            StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("qwen3:8b").Build(),
+            Substitute.For<IModelTrustResolver>(),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run());
@@ -62,16 +63,33 @@ public sealed class DefaultMemoryExtractionAgentTests
     {
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         var agent = new DefaultMemoryExtractionAgent(resolver,
-            Options.Create(new MemoryExtractionOptions
-            {
-                ExtractionModelName = string.Empty
-            }),
+            Options.Create(new MemoryExtractionOptions()),
+            StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName(string.Empty).Build(),
+            Substitute.For<IModelTrustResolver>(),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run());
 
         AssertEx.Empty(proposals);
         // The disabled gate must short-circuit before any provider resolution (no node-local client constructed at all).
+        await resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task MemoryExtraction_WhenModelIsNotNodeLocal_SkipsWithoutResolvingAProvider()
+    {
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        var trust = Substitute.For<IModelTrustResolver>();
+        trust.ResolveAsync("gpt-5-codex", Arg.Any<CancellationToken>()).Returns(ModelTrustLocality.Cloud);
+        var agent = new DefaultMemoryExtractionAgent(resolver,
+            Options.Create(new MemoryExtractionOptions()),
+            StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("gpt-5-codex").Build(),
+            trust,
+            NullLogger<DefaultMemoryExtractionAgent>.Instance);
+
+        var proposals = await agent.ProposeAsync(Run());
+
+        AssertEx.Empty(proposals);
         await resolver.DidNotReceive().ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
@@ -91,10 +109,9 @@ public sealed class DefaultMemoryExtractionAgentTests
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(provider));
 
         var agent = new DefaultMemoryExtractionAgent(resolver,
-            Options.Create(new MemoryExtractionOptions
-            {
-                ExtractionModelName = "qwen3:8b"
-            }),
+            Options.Create(new MemoryExtractionOptions()),
+            StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("qwen3:8b").Build(),
+            Substitute.For<IModelTrustResolver>(),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run(failed: false));

@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
 
 using System.Text.Json;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     <see cref="IClientLocalToolHandler" /> for <c>read_surrounding_chunks</c> (ClientLocal): JSON-in, JSON-out,
@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 ///     The scoped <see cref="IContextExpansionService" /> is resolved from a FRESH DI scope per call. The anchor is
 ///     identified by <c>documentId</c> plus <c>chunkIndex</c>, the coordinates a search hit carries, and
 ///     <c>before</c>/<c>after</c> select how many neighbors on each side. Read-only, so it auto-runs; gated by
-///     <c>KnowledgeBase:AgentToolsEnabled</c>.
+///     the live <c>KnowledgeAgentToolsEnabled</c> node setting.
 /// </remarks>
 internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
 {
@@ -22,13 +22,12 @@ internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
     private const int MaxNeighbors = 5;
 
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly bool _toolsEnabled;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public ReadSurroundingChunksToolHandler(IServiceScopeFactory scopeFactory, IOptions<KnowledgeBaseOptions> options)
+    public ReadSurroundingChunksToolHandler(IServiceScopeFactory scopeFactory, INodeRuntimeSettings runtimeSettings)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        ArgumentNullException.ThrowIfNull(options);
-        _toolsEnabled = options.Value.AgentToolsEnabled;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public string ToolName => ReadSurroundingChunksToolDefinition.ToolName;
@@ -43,9 +42,9 @@ internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
     {
         ArgumentNullException.ThrowIfNull(jsonArguments);
 
-        if (!_toolsEnabled)
+        if (!await _runtimeSettings.GetKnowledgeAgentToolsEnabledAsync(cancellationToken))
         {
-            return "The knowledge-base tools are disabled on this node (KnowledgeBase:AgentToolsEnabled=false).";
+            return "The knowledge-base tools are disabled on this node (Node Settings, Knowledge section).";
         }
 
         cancellationToken.ThrowIfCancellationRequested();

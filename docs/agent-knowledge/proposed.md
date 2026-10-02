@@ -64,6 +64,22 @@ reproductions: the forking `.NET TP Worker` tid and bwrap vanished in the same 1
 
 **Rule:** a desktop or `XE_DATA_DIR` host whose `node.key` is a v2 vault serves only the unlock pre-host until the admin password is given, so any test or script that spawns the real host against such a data directory must pass `XE_ADMIN_PASSWORD` (or `--admin-password-stdin`) for a one-shot, supply an operator secret (`XE_NODE_SQLITE_KEY`) to bypass the vault, or unlock over `auth/vault/unlock`. **Prevents:** a spawned host that reports `XE_READY` and a healthy `auth/status` but never serves the real API, so the test or shell hangs on the unlock page until the 2-minute shell start deadline. `--mcp-key` and `--setup` on a locked vault exit 5 without a password. **Authority:** ADR 0018; `Program.Vault.cs` `UnlockVaultAsync`; `EngineCliProcessTests` locked-vault flows. Target: runtime.md.
 
+### A test that calls an INodeRuntimeSettings synchronous twin from an async method fails only in Release
+
+**Rule:** in an `async` test, read a node setting that has both getters through the async one (`await sut.GetXAsync()`); call its synchronous twin (`sut.GetX()`) only from a synchronous test. A twin with no async sibling (a restart-gated knob) is fine anywhere. **Prevents:** a Debug-green test that the Release analyzers reject (CA1849 / S6966: a blocking call with an async overload inside an async method), found only by the backend gate. **Authority:** reported by the node-settings round 2 slice workers (S1/S2, 2026-10-02); `NodeRuntimeSettingsTests`. Target: backend-tests.md.
+
+### Removing a type can trip the file-placement allowlist, and only a direct test-host run names the entry
+
+**Rule:** after deleting or moving a type out of a multi-type file, run `FilePlacementConventionTests` through the native test host with `--treenode-filter`; `TheAllowlist_HasNoStaleEntry` fails for the now-single-type file, and the gate log shows only the failure, not the stale path. Delete the line from `Architecture/FilePlacementAllowlist.txt`. **Prevents:** a red gate after a clean Debug run, and guessing which allowance went stale. **Authority:** `8655fa109` (BenchmarkKldBaseCache.cs allowance removed), node-settings round 2. Target: backend-tests.md.
+
+### Tests that fingerprint a fabricated eval read the eval model through the same seam the gate reads
+
+**Rule:** when a value an endpoint gate compares against moves from `IOptions<T>` to `INodeRuntimeSettings`, every test that fabricates the compared artifact must build it from the accessor too (store the node setting, or use the stub's `With…`). **Prevents:** endpoint tests that still compile but fail on a fingerprint mismatch, because the fixture kept reading `PlaybookEvalOptions.ModelName` while the gate reads `GetPlaybookEvalModelNameAsync`. **Authority:** `8655fa109` (`AdaptiveMemoryEndpointTests`, `PromoteSuggestedPlaybookActionGateEndpointTests`), node-settings round 2. Target: backend-tests.md.
+
+### Run CommentBudgetConventionTests in the focused Debug pass before the backend gate
+
+**Rule:** after adding comments or XML docs, run `CommentBudgetConventionTests` with `--treenode-filter` in Debug before queueing `scripts/run-backend-tests.sh`: an own-line `//` run longer than two lines, a `<summary>` over 240 characters, or a now-stale `CommentBudgetAllowlist.txt` entry fails it. **Prevents:** a full Release gate spent to learn a comment is one line too long. **Authority:** `8385432c8` (accessor comments trimmed to the budget), node-settings round 2 S1. Target: backend-tests.md.
+
 ### FastEndpoints validator 400s carried a trace id that never joined the log
 
 **Rule:** FastEndpoints' default `ProblemDetails` `ResponseBuilder` writes `HttpContext.TraceIdentifier` (the Kestrel connection id), not the W3C trace id the log template prints, so any 400 the framework writes itself needs `FastEndpointsProblemWriter.Build` set as `ResponseBuilder` (`UseProblemDetails` in `Program.cs`). **Prevents:** a user quoting the `traceId` of a validation error and no `[trace:…]` log line ever matching it, while handler-written problems did match. **Authority:** `FastEndpointsProblemWriter.Build`, `ProblemDetailsExtensions.ResolveTraceId`; logging checkup 2026-10-02. Target: runtime.md.
