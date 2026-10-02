@@ -87,7 +87,7 @@ public class ConflictExceptionHandler : IExceptionHandler
             RequestLogSanitizer.Sanitize(httpContext.Request.Method),
             RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),
             StatusCodes.Status409Conflict,
-            httpContext.TraceIdentifier,
+            ProblemDetailsExtensions.ResolveTraceId(httpContext),
             httpContext.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "anonymous",
             exception.GetType().Name);
 

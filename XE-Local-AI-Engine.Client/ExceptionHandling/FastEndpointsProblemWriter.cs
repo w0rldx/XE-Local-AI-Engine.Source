@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.ExceptionHandling;
 
 using FluentValidation.Results;
+using XE_Local_AI_Engine.Client.Common.Extensions;
 using ProblemDetails = FastEndpoints.ProblemDetails;
 
 /// <summary>
@@ -8,10 +9,10 @@ using ProblemDetails = FastEndpoints.ProblemDetails;
 ///     global <see cref="Microsoft.AspNetCore.Diagnostics.IExceptionHandler" /> that has no endpoint to call it on.
 /// </summary>
 /// <remarks>
-///     The same <see cref="ProblemDetails" /> DTO built the way <c>ErrorOptions.ResponseBuilder</c> builds it
-///     (instance = request path, traceId = <see cref="HttpContext.TraceIdentifier" />), serialized with the same
-///     options and content type. Every handler that replaces a per-endpoint <c>AddError</c> catch goes through here, so
-///     the replacement stays byte-identical in one place rather than once per handler.
+///     FastEndpoints' own <see cref="ProblemDetails" /> shape, options and content type, so every handler replacing an
+///     <c>AddError</c> catch stays byte-identical in one place. One change: traceId is the W3C id
+///     (<see cref="ProblemDetailsExtensions.ResolveTraceId" />) the log prints, not FE's connection id. <see cref="Build" />
+///     is also the host's <c>ResponseBuilder</c>, so validator 400s carry it too.
 /// </remarks>
 internal static class FastEndpointsProblemWriter
 {
@@ -26,13 +27,18 @@ internal static class FastEndpointsProblemWriter
     {
         httpContext.Response.StatusCode = statusCode;
 
-        var problemDetails = new ProblemDetails([new ValidationFailure(GeneralErrorsField, message)],
-            httpContext.Request.Path,
-            httpContext.TraceIdentifier,
-            statusCode);
+        var problemDetails = Build([new ValidationFailure(GeneralErrorsField, message)], httpContext, statusCode);
 
         // Serialized as object (like FE's ResponseSerializer) against the DI json options, which ConfigureServices
         // configures with the very same ConfigureJsonSerializerOptions that seeds FastEndpoints' Config.Serializer.
         return httpContext.Response.WriteAsJsonAsync<object>(problemDetails, options: null, ProblemContentType, cancellationToken);
+    }
+
+    /// <summary>FastEndpoints' default <c>ResponseBuilder</c> with the W3C trace id in place of the connection id.</summary>
+    public static ProblemDetails Build(List<ValidationFailure> failures, HttpContext httpContext, int statusCode)
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
+        return new ProblemDetails(failures, httpContext.Request.Path, ProblemDetailsExtensions.ResolveTraceId(httpContext), statusCode);
     }
 }

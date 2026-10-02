@@ -16,6 +16,10 @@ internal static class DesktopStartupDiagnostics
 {
     private const string LogFileName = "desktop.log";
 
+    // Append-only with no rotation: past MaxBytes, only the newest KeepBytes (from a line start) survive the next append.
+    internal const long MaxBytes = 1024 * 1024;
+    internal const int KeepBytes = 256 * 1024;
+
     internal static void Record(string message)
     {
         var directory = ResolveLogDirectory(Environment.GetEnvironmentVariable("XE_DATA_DIR"));
@@ -59,7 +63,9 @@ internal static class DesktopStartupDiagnostics
             // Forced sync: the callers are the synchronous STA Main catch and a UI-thread failure path, neither of
             // which can await (see Program.Main).
 #pragma warning disable MA0045
-            File.AppendAllText(Path.Combine(directory, LogFileName), line);
+            var path = Path.Combine(directory, LogFileName);
+            TrimIfLarge(path);
+            File.AppendAllText(path, line);
 #pragma warning restore MA0045
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
@@ -68,5 +74,30 @@ internal static class DesktopStartupDiagnostics
             // Diagnostics are best-effort: if the per-user logs directory cannot be created or written (locked disk,
             // exotic profile), the failure being diagnosed still surfaces via Console.Error and the process exit code.
         }
+    }
+
+    /// <summary>
+    ///     Hand copy of the Client's <c>StartupCrashLog.TrimIfLargeAsync</c> (this project takes no project
+    ///     references): past <see cref="MaxBytes" /> the file keeps only its newest <see cref="KeepBytes" />, from a line
+    ///     start. I/O errors reach <see cref="RecordTo" />'s catch.
+    /// </summary>
+    internal static void TrimIfLarge(string path)
+    {
+        if (new FileInfo(path) is not { Exists: true, Length: > MaxBytes })
+        {
+            return;
+        }
+
+        // Forced sync for the same reason as RecordTo's append: its only caller cannot await.
+#pragma warning disable MA0045
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var tail = new byte[KeepBytes];
+        stream.Seek(-KeepBytes, SeekOrigin.End);
+        stream.ReadExactly(tail);
+        var start = Array.IndexOf(tail, (byte)'\n') + 1;
+        stream.Position = 0;
+        stream.Write(tail, start, tail.Length - start);
+        stream.SetLength(tail.Length - start);
+#pragma warning restore MA0045
     }
 }

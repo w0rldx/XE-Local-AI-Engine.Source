@@ -91,18 +91,19 @@ Several redactors enforce "secrets never surface":
 
 | Redactor | Purpose | Location |
 |---|---|---|
-| `AccessTokenQueryRedactor` | strips `access_token=` from request query strings before Serilog logs them | `Services/Auth/AccessTokenQueryRedactor.cs`, wired by the `UseSerilogRequestLogging` request-path projection in `Program.cs` |
+| `AccessTokenQueryRedactor` | strips `access_token=` from request query strings before Serilog logs them | `Services/Auth/AccessTokenQueryRedactor.cs`, wired by the `UseSerilogRequestLogging` request-path projection in `Program.Logging.cs` (`ConfigureRequestLogging`) |
 | `MemoryProposalSecretScanner` | rejects/redacts secrets in agent-memory proposals before persistence (PEM keys, GitHub/AWS/Azure/Slack tokens, JWTs, high-entropy bearers; ReDoS-guarded with a 2s regex timeout) | `Services/AgentHome/Implementation/MemoryProposalSecretScanner.cs` |
 | `McpServerConnectionManager.SafeMessage` | clamps MCP connection failures, sandbox refusals included, to one fixed message per failure reason so a command path/URL/protected host path/secret never reaches the UI; the exception is logged at Warning. Two reasons show text written for the operator instead: a Sandboxed command missing from the jail `PATH` (`ServerNotFound`, the message names the jail `PATH`) and a server that exited during or after startup (`ServerStartupFailed`/`ServerExited`, with its `stderr` tail). That text is scrubbed of the registration's own environment, header and argument values of 8 or more characters (`SecretValueRedactor`), and the sandbox already redacts environment values as it captures the tail (`SandboxStderrTail`); host paths a server prints are **not** stripped | `McpServerConnectionManager.SafeMessage` / `DescribeFailure` in `Services/Mcp/Implementation/McpServerConnectionManager.cs` |
 | `InvocationFailureClassifier.RedactAgentRuntimeMessage` | sanitizes agent runtime failure messages before surfacing | `InvocationFailureClassifier.RedactAgentRuntimeMessage` (private) in `Services/Invocation/Implementation/InvocationFailureClassifier.cs` |
 | `NodePatchApplyService.Redact` | redacts patch-apply output (AgentHome) | `NodePatchApplyService.Redact` in `Services/AgentHome/Implementation/NodePatchApplyService.cs` |
 
-The request-logging enricher is the canonical example — it replaces the raw query with a redacted one before anything is written:
+The request-logging enricher is the canonical example. It replaces the raw query with a redacted one and sanitizes the method and path before anything is written:
 
 ```csharp
-// Program.cs, UseSerilogRequestLogging request-path projection
+// Program.Logging.cs, ConfigureRequestLogging (EnrichDiagnosticContext)
 var redactedQuery = AccessTokenQueryRedactor.Redact(httpContext.Request.QueryString.Value);
-diagnosticContext.Set("RequestPathWithRedactedQuery", $"{httpContext.Request.Path}{redactedQuery}");
+var path = RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value);
+diagnosticContext.Set("RequestPathWithRedactedQuery", $"{path}{redactedQuery}");
 diagnosticContext.Set("QueryString", redactedQuery);
 ```
 
@@ -505,6 +506,31 @@ var detail = isDevelopment ? exception.Message : "An unexpected error occurred";
 ```
 
 The full exception is logged server-side with method, path, trace id, user id (or `anonymous`), and exception *type name* (not message-in-response). `ConflictExceptionHandler` handles the 409 domain-conflict case. **Maintainer rule:** never put `exception.Message`, stack traces, or internal identifiers into a production response body.
+
+**Which handlers log.** `DefaultExceptionHandler` logs the unhandled case at Error with method, path, trace id, span id, request id, user id and the exception type. The conflict, domain-validation, development-conflict and request-body-too-large handlers write their own line. The benchmark, GGUF download and import, training, container-runtime and selected-folder handlers go through one helper, `ExceptionHandlerLog.Log`: Warning for a 4xx, Error for a 5xx, with the exception attached. The NotFound handlers stay silent on purpose, because a 404 is an expected answer and the request-completion line already records it.
+
+**`traceId` is the W3C trace id everywhere.** Every exception handler that logs uses the W3C trace id (`ProblemDetailsExtensions.ResolveTraceId`, never the connection id): the line's `{TraceId}` equals the problem body's `traceId` and the `[trace:…]` field of the file log. FastEndpoints' own validator 400s do too, because `FastEndpointsProblemWriter.Build` is the host's `ResponseBuilder`. The id a user reads out of an error therefore matches the `[trace:…]` field of the node log line.
+
+### Support bundle redaction
+
+The support bundle (`diagnostics/support-bundle`, see [Hosting & Deployment](11-hosting-and-deployment.md)) is meant to be attached to a public issue, so `SupportBundleScrubber` runs over every log and `processes/*` entry, line by line with 1 s regex timeouts (a line that times out is dropped whole), and over the free-text values of `node-info.json` (warnings, CPU model, settings values) before that file is serialized. It is idempotent. Dense-token masking skips hex-only runs (trace ids, SHAs), compact timestamps (`20260913T134250067Z`), semantic versions with build metadata and anything directly under a `~`/`<data>` prefix, so those stay readable.
+
+| Scrubbed | Becomes |
+|---|---|
+| The user's home directory and the node data root | `~` and `<data>` |
+| Any other absolute path | its leaf name (`AbsolutePathSanitizer`) |
+| E-mail addresses | `[redacted-email]` |
+| JWTs, `Bearer` values, prefixed keys (`sk-`, GitHub, `hf_`, AWS `AKIA`, Slack `xox*-`, Google `AIza`, Azure `AccountKey=`), the value of a `password=`/`api_key:`-style assignment, and 20+ character runs with a 16+ character segment carrying 4+ digits | `[redacted-token]` |
+
+Not scrubbed, on purpose or because no pattern can tell:
+
+- A bare user or host name that appears outside a path.
+- Hex-only secrets. Hex runs are kept so trace ids, GUIDs and hashes stay readable.
+- Prompt text, file names and other content a child process prints. The sd-server and whisper-server tails are in the bundle too.
+- Model names and log category names.
+
+**Review the zip before attaching it to a public issue.** The scrubber narrows what leaks; it does not certify the file. Nothing is uploaded by the app: the export writes one zip to the user's disk and "Open GitHub issue" only opens a prefilled form.
+
 
 ---
 

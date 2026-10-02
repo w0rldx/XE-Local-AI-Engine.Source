@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
 using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Diagnostics;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.Inference.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
@@ -85,7 +86,7 @@ public sealed class RuntimeEnvironmentFactsProvider : IRuntimeEnvironmentFactsPr
                 var audit = await _deviceAudit.GetAuditAsync(forceRefresh: false, ct);
                 return new BenchmarkHardwareFactsV1(RuntimeInformation.OSDescription,
                     RuntimeInformation.OSArchitecture.ToString(),
-                    TryReadCpuModel(),
+                    HostCpuModel.TryRead(),
                     profile.CpuCores,
                     profile.TotalRamBytes,
                     audit.Devices.Select(static device => new BenchmarkGpuFactsV1(device.Name, device.TotalBytes, DriverVersion: null)).ToArray(),
@@ -126,31 +127,6 @@ public sealed class RuntimeEnvironmentFactsProvider : IRuntimeEnvironmentFactsPr
             variant is null ? "unavailable" : BenchmarkLaunchBackend.VariantName(variant.Value),
             provenance,
             isManagedSourceBuild ? runtime?.SourceCommit : null);
-    }
-
-    private static string? TryReadCpuModel()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            return Environment.GetEnvironmentVariable("PROCESSOR_IDENTIFIER");
-        }
-
-        const string cpuInfoPath = "/proc/cpuinfo";
-        if (!File.Exists(cpuInfoPath))
-        {
-            return null;
-        }
-
-        foreach (var line in File.ReadLines(cpuInfoPath))
-        {
-            var separator = line.IndexOf(':', StringComparison.Ordinal);
-            if (separator > 0 && line.StartsWith("model name", StringComparison.Ordinal))
-            {
-                return line[(separator + 1)..].Trim();
-            }
-        }
-
-        return null;
     }
 
     private async Task<T?> CapturePartAsync<T>(string part, Func<Task<T?>> capture, List<string> missing, CancellationToken ct)

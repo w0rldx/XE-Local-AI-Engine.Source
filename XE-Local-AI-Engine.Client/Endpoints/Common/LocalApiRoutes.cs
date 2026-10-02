@@ -1231,4 +1231,11 @@ public static class LocalApiRoutes
         public const string ExecutionCancel = "integration-api/executions/{executionId}/cancel";
         public const string SessionById = "integration-api/sessions/{sessionId}";
     }
+
+    /// <summary>The operator's support surface: the node-info report and the scrubbed support-bundle zip.</summary>
+    public static class Diagnostics
+    {
+        public const string NodeInfo = "diagnostics/node-info";
+        public const string SupportBundle = "diagnostics/support-bundle";
+    }
 }

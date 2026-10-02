@@ -40,3 +40,13 @@ export function problemDetailsRoute(method: Method, path: string, status: number
 export function domainErrorRoute(method: Method, path: string, status: number, body: DefaultBodyType): HttpHandler {
 	return http[method](localApiPath(path), () => HttpResponse.json(body, { status }));
 }
+
+/**
+ * A GET route answering 200 with raw `bytes` (a zip, an image) — the file-body routes the SPA reads through axios with
+ * `responseType: "blob"` rather than the generated client.
+ */
+export function binaryRoute(path: string, bytes: Uint8Array, contentType = "application/zip"): HttpHandler {
+	return http.get(localApiPath(path), () =>
+		HttpResponse.arrayBuffer(new Uint8Array(bytes).buffer, { headers: { "content-type": contentType } }),
+	);
+}

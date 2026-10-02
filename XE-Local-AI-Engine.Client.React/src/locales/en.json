@@ -7994,7 +7994,7 @@
 	},
 	"diagnostics": {
 		"title": "Diagnostics",
-		"description": "Local-only error snapshots captured in this browser. Nothing is sent to the server.",
+		"description": "Error snapshots captured in this browser. Export also fetches scrubbed logs and system info from your local node; the app never sends anything anywhere.",
 		"reportProblem": "Report a problem",
 		"reportProblemTooltip": "Capture a diagnostics snapshot of the current app state",
 		"reportSuccess": "Diagnostics snapshot captured.",
@@ -8004,7 +8004,7 @@
 		"importError": "Could not import the snapshot file.",
 		"clearAll": "Clear all",
 		"clearAllConfirm": "Remove all stored snapshots? This cannot be undone.",
-		"privacyNote": "Snapshots stay in this browser. Exported files may contain app state — share them carefully.",
+		"privacyNote": "Snapshots stay in this browser; an export adds your local node's recent log lines and llama-server, sd-server and whisper output, which may contain model names, file names or prompt text. Nothing is uploaded, so review the zip before you attach it to a public GitHub issue.",
 		"loading": "Loading snapshots…",
 		"loadError": "Could not load snapshots.",
 		"empty": {
@@ -8066,7 +8066,10 @@
 			"segmentPresent": "DOM replay segment present ({{count}} events).",
 			"play": "Play replay",
 			"unavailable": "Replay could not be initialised; the captured segment is still stored."
-		}
+		},
+		"serverBundleUnavailable": "Server logs could not be fetched, so the export contains the browser snapshot only.",
+		"openIssue": "Open GitHub issue",
+		"openIssueTooltip": "Opens a prefilled bug report on GitHub in a new tab. Attach the exported zip there yourself."
 	},
 	"voice": {
 		"composer": {
@@ -8377,6 +8380,19 @@
 			"run": "The dataset was edited after this run froze its hold-out set; scores may not be comparable.",
 			"evaluation": "The dataset was edited after this evaluation froze its hold-out set; scores may not be comparable.",
 			"deleted": "The dataset this used has been deleted; its frozen hold-out set can no longer be compared."
+		}
+	},
+	"app": {
+		"errorFallback": {
+			"alertTitle": "Something went wrong",
+			"alertMessage": "The application hit an unexpected error while rendering this page.",
+			"title": "Unable to load this view",
+			"description": "Try again to re-render the current route.",
+			"unknownError": "Unknown error",
+			"retry": "Try again",
+			"exportDiagnostics": "Export diagnostics",
+			"exportUnavailable": "No diagnostics snapshot is stored yet, so there is nothing to export.",
+			"openIssue": "Open GitHub issue"
 		}
 	}
 }

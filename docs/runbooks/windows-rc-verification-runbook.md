@@ -667,8 +667,9 @@ the card.
 >
 > All five criteria, measured:
 >
-> 1. **Console at `-lv 4`** — llama.cpp's own fit walk-down, which is worth reading in full because it shows the
->    decision rather than just the outcome:
+> 1. **Output at `-lv 4`** — llama.cpp's own fit walk-down, which is worth reading in full because it shows the
+>    decision rather than just the outcome. These lines are not markers, so they are Debug in the node log; read them
+>    in the support bundle's `processes/*.txt` tail:
 >    ```
 >    common_params_fit_impl: projected to use 33979 MiB of device memory vs. 30841 MiB of free device memory
 >    common_params_fit_impl: cannot meet free memory target of 1024 MiB, need to reduce device memory by 4162 MiB
@@ -1024,8 +1025,10 @@ It is recorded so a future session does not re-derive the *shape* of the differe
   not testing it — see §2 of `docs/agent-knowledge.md`: on WDDM, VRAM exhaustion **silently demand-pages to host
   RAM instead of OOMing** (measured 161.7 vs 698.4 tok/s, a 4.3× slowdown with zero errors), so the OOM branch
   cannot be reached that way and every number taken under that pressure is a paged number.
-- **Every GPU spawn pays `-lv 4`** (~213 extra startup lines at Information; ~22 lines/request demoted to Debug
-  once serving). A chatty console during model load is by design — that output *is* the placement evidence.
+- **Every GPU spawn pays `-lv 4`** (~213 extra startup lines and ~22 lines/request). The launcher logs only marker
+  lines (errors, warnings, CUDA, backend, `load_tensors`/offload summaries, listening) at Information and the rest at
+  Debug, so the console shows the placement evidence without the full banner; the tail kept for the support bundle
+  (`processes/*.txt`) holds every line.
 - **Startup-failure capture is last-64-lines / 16 KB, deliberately.** At `-lv 4` the "out of memory" text lands
   around line 179 of 186; a first-N window would capture only loader metadata and silently disable the context
   down-tier. If you ever see an OOM that does not down-tier, that window is the first place to look.

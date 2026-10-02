@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.ProcessSupervision;
 
-using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Providers.Abstractions.Diagnostics;
 
 /// <summary>
 ///     A bounded, sanitized ring of the last few lines the child wrote to <c>stderr</c>, so a runtime that died
@@ -12,26 +12,31 @@ using System.Text.RegularExpressions;
 ///     born-dead error, the transcription runtime only in its Warning log line). Absolute paths are reduced to their
 ///     file name on the way in, so the tail carries no directory layout wherever it later travels.
 /// </remarks>
-public sealed partial class ProcessStderrTail
+public sealed class ProcessStderrTail
 {
-    private const int MaxCharacters = 4096;
-    private const int MaxLines = 20;
-
-    private const string Replacement = "${leaf}";
-
-    // A directory segment: no separator, no colon (invalid in a Windows name, and it keeps a segment from swallowing
-    // the next path's drive root), and spaces only inside it, so "Jane Doe" survives but trailing prose does not.
-    private const string Segment = @"[^\\/:\s""'<>|\r\n](?:[^\\/:""'<>|\r\n]*[^\\/:\s""'<>|\r\n])?";
-
-    // The final segment, all that is kept. It stops at whitespace or a quote, so the words after a path stay.
-    private const string Leaf = @"(?<leaf>[^\s\\/""'<>|]*)";
-
-    // Every pattern carries a 1s match timeout, which bounds the parse against pathological input.
-    private const int MatchTimeout = 1000;
+    private const int DefaultMaxCharacters = 4096;
+    private const int DefaultMaxLines = 20;
 
     private readonly Lock _gate = new();
     private readonly Queue<string> _lines = new();
+    private readonly int _maxCharacters;
+    private readonly int _maxLines;
     private int _characters;
+
+    /// <summary>A crash-report tail: the last 20 lines, at most 4096 characters.</summary>
+    public ProcessStderrTail()
+        : this(DefaultMaxLines, DefaultMaxCharacters)
+    {
+    }
+
+    /// <summary>A tail bounded by <paramref name="maxLines" /> lines and <paramref name="maxCharacters" /> characters.</summary>
+    public ProcessStderrTail(int maxLines, int maxCharacters)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxLines);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCharacters);
+        _maxLines = maxLines;
+        _maxCharacters = maxCharacters;
+    }
 
     /// <summary>Appends one sanitized line, evicting the oldest lines until both bounds hold again.</summary>
     public void Append(string line)
@@ -41,12 +46,12 @@ public sealed partial class ProcessStderrTail
             return;
         }
 
-        var sanitized = Sanitize(line.Trim());
+        var sanitized = AbsolutePathSanitizer.Sanitize(line.Trim());
         lock (_gate)
         {
             _lines.Enqueue(sanitized);
             _characters += sanitized.Length;
-            while (_lines.Count > MaxLines || (_characters > MaxCharacters && _lines.Count > 1))
+            while (_lines.Count > _maxLines || (_characters > _maxCharacters && _lines.Count > 1))
             {
                 _characters -= _lines.Dequeue().Length;
             }
@@ -62,29 +67,12 @@ public sealed partial class ProcessStderrTail
         }
     }
 
-    /// <summary>Reduces every absolute path in the line to its file name; pure, so it is directly assertable.</summary>
-    internal static string Sanitize(string line)
+    /// <summary>A copy of the retained lines, oldest first.</summary>
+    public IReadOnlyList<string> Lines()
     {
-        var sanitized = DriveRootedPathRegex().Replace(line, Replacement);
-        sanitized = UncPathRegex().Replace(sanitized, Replacement);
-        return PosixPathRegex().Replace(sanitized, Replacement);
+        lock (_gate)
+        {
+            return [.. _lines];
+        }
     }
-
-    // A drive-rooted path. The lookbehind keeps a URL scheme ("https:") from reading as a drive letter.
-    [GeneratedRegex(@"(?<![A-Za-z])[A-Za-z]:[\\/](?:" + Segment + @"[\\/])+" + Leaf,
-        RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
-        matchTimeoutMilliseconds: MatchTimeout)]
-    private static partial Regex DriveRootedPathRegex();
-
-    // A UNC path: server, share, then optional directories. The "//server/share" form is out of scope.
-    [GeneratedRegex(@"\\\\[^\s\\/""'<>|]+[\\/](?:" + Segment + @"[\\/])*" + Leaf,
-        RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
-        matchTimeoutMilliseconds: MatchTimeout)]
-    private static partial Regex UncPathRegex();
-
-    // A POSIX path, segments read exactly as above. The lookbehind leaves URLs and relative paths alone.
-    [GeneratedRegex(@"(?<![:\w/])/(?:" + Segment + @"/)+" + Leaf,
-        RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
-        matchTimeoutMilliseconds: MatchTimeout)]
-    private static partial Regex PosixPathRegex();
 }

@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
@@ -133,7 +134,8 @@ public sealed class DomainValidationExceptionHandlerTests
 
             AssertEx.Equal(expected: 400, root.GetProperty("status").GetInt32(), typeName);
             AssertEx.Equal("/api/local/v1/promoted", root.GetProperty("instance").GetString(), typeName);
-            AssertEx.Equal(context.TraceIdentifier, root.GetProperty("traceId").GetString(), typeName);
+            // The W3C id every problem body carries (the ambient Activity's trace id), not the connection id.
+            AssertEx.Equal(ProblemDetailsExtensions.ResolveTraceId(context), root.GetProperty("traceId").GetString(), typeName);
             AssertEx.Equal(expected: 1, root.GetProperty("errors").GetArrayLength(), typeName);
             // The field NAME the message hangs off, put through FastEndpoints' naming policy the way the writer does
             // — see FastEndpointsProblemBody. Config.Serializer is process-global, so over a bare context this lands

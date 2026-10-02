@@ -223,6 +223,7 @@ import {
 	getNodeChatConversation,
 	getNodeChatConversationContextState,
 	getNodeChatMessageFeedback,
+	getNodeInfo,
 	getNodeSettings,
 	getRunningLocalModels,
 	getRuntimeAcquisitionStatus,
@@ -235,6 +236,7 @@ import {
 	getSlashCommand,
 	getStableDiffusionCppSourceBuildPrerequisites,
 	getStableDiffusionCppSourceBuildStatus,
+	getSupportBundle,
 	getToolCapableModels,
 	getToolCatalog,
 	getToolMock,
@@ -988,6 +990,8 @@ import type {
 	GetNodeChatConversationResponse,
 	GetNodeChatMessageFeedbackData,
 	GetNodeChatMessageFeedbackResponse,
+	GetNodeInfoData,
+	GetNodeInfoResponse,
 	GetNodeSettingsData,
 	GetNodeSettingsResponse,
 	GetRunningLocalModelsData,
@@ -1013,6 +1017,8 @@ import type {
 	GetStableDiffusionCppSourceBuildPrerequisitesResponse,
 	GetStableDiffusionCppSourceBuildStatusData,
 	GetStableDiffusionCppSourceBuildStatusResponse,
+	GetSupportBundleData,
+	GetSupportBundleResponse,
 	GetToolCapableModelsData,
 	GetToolCapableModelsResponse,
 	GetToolCatalogData,
@@ -5553,6 +5559,43 @@ export const unhandledExceptionProbeMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getNodeInfoQueryKey = (options?: Options<GetNodeInfoData>) => createQueryKey("getNodeInfo", options);
+
+export const getNodeInfoOptions = (options?: Options<GetNodeInfoData>) =>
+	queryOptions<GetNodeInfoResponse, AxiosError<DefaultError>, GetNodeInfoResponse, ReturnType<typeof getNodeInfoQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getNodeInfo({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getNodeInfoQueryKey(options),
+	});
+
+export const getSupportBundleQueryKey = (options?: Options<GetSupportBundleData>) => createQueryKey("getSupportBundle", options);
+
+export const getSupportBundleOptions = (options?: Options<GetSupportBundleData>) =>
+	queryOptions<
+		GetSupportBundleResponse,
+		AxiosError<DefaultError>,
+		GetSupportBundleResponse,
+		ReturnType<typeof getSupportBundleQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getSupportBundle({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getSupportBundleQueryKey(options),
+	});
 
 export const validationProblemProbeMutation = (
 	options?: Partial<Options<ValidationProblemProbeData>>,

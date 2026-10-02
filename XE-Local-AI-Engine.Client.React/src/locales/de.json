@@ -7994,7 +7994,7 @@
 	},
 	"diagnostics": {
 		"title": "Diagnose",
-		"description": "Nur lokal gespeicherte Fehler-Snapshots aus diesem Browser. Es wird nichts an den Server gesendet.",
+		"description": "In diesem Browser erfasste Fehler-Snapshots. Der Export holt zusätzlich bereinigte Logs und Systeminformationen von Ihrem lokalen Knoten; die App sendet nie etwas irgendwohin.",
 		"reportProblem": "Problem melden",
 		"reportProblemTooltip": "Einen Diagnose-Snapshot des aktuellen App-Zustands erstellen",
 		"reportSuccess": "Diagnose-Snapshot erstellt.",
@@ -8004,7 +8004,7 @@
 		"importError": "Die Snapshot-Datei konnte nicht importiert werden.",
 		"clearAll": "Alle löschen",
 		"clearAllConfirm": "Alle gespeicherten Snapshots entfernen? Dies kann nicht rückgängig gemacht werden.",
-		"privacyNote": "Snapshots bleiben in diesem Browser. Exportierte Dateien können App-Zustände enthalten — teilen Sie sie mit Bedacht.",
+		"privacyNote": "Snapshots bleiben in diesem Browser; ein Export fügt die letzten Log-Zeilen Ihres lokalen Knotens sowie Ausgaben von llama-server, sd-server und whisper hinzu, die Modellnamen, Dateinamen oder Prompt-Text enthalten können. Es wird nichts hochgeladen, prüfen Sie die ZIP-Datei daher, bevor Sie sie an ein öffentliches GitHub-Issue anhängen.",
 		"loading": "Snapshots werden geladen…",
 		"loadError": "Snapshots konnten nicht geladen werden.",
 		"empty": {
@@ -8066,7 +8066,10 @@
 			"segmentPresent": "DOM-Wiedergabesegment vorhanden ({{count}} Ereignisse).",
 			"play": "Wiedergabe abspielen",
 			"unavailable": "Die Wiedergabe konnte nicht initialisiert werden; das erfasste Segment ist weiterhin gespeichert."
-		}
+		},
+		"serverBundleUnavailable": "Server-Logs konnten nicht abgerufen werden, daher enthält der Export nur den Browser-Snapshot.",
+		"openIssue": "GitHub-Issue öffnen",
+		"openIssueTooltip": "Öffnet einen vorausgefüllten Fehlerbericht auf GitHub in einem neuen Tab. Hängen Sie die exportierte ZIP-Datei dort selbst an."
 	},
 	"voice": {
 		"composer": {
@@ -8377,6 +8380,19 @@
 			"run": "Der Datensatz wurde bearbeitet, nachdem dieser Lauf sein Holdout-Set eingefroren hat; die Werte sind möglicherweise nicht vergleichbar.",
 			"evaluation": "Der Datensatz wurde bearbeitet, nachdem diese Auswertung ihr Holdout-Set eingefroren hat; die Werte sind möglicherweise nicht vergleichbar.",
 			"deleted": "Der zugrunde liegende Datensatz wurde gelöscht; sein eingefrorenes Holdout-Set kann nicht mehr verglichen werden."
+		}
+	},
+	"app": {
+		"errorFallback": {
+			"alertTitle": "Etwas ist schiefgelaufen",
+			"alertMessage": "Beim Darstellen dieser Seite ist ein unerwarteter Fehler aufgetreten.",
+			"title": "Diese Ansicht kann nicht geladen werden",
+			"description": "Versuchen Sie es erneut, um die aktuelle Route neu darzustellen.",
+			"unknownError": "Unbekannter Fehler",
+			"retry": "Erneut versuchen",
+			"exportDiagnostics": "Diagnose exportieren",
+			"exportUnavailable": "Es ist noch kein Diagnose-Snapshot gespeichert, daher gibt es nichts zu exportieren.",
+			"openIssue": "GitHub-Issue öffnen"
 		}
 	}
 }

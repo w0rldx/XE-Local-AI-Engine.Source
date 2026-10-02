@@ -648,6 +648,9 @@ import type {
 	GetNodeChatMessageFeedbackData,
 	GetNodeChatMessageFeedbackErrors,
 	GetNodeChatMessageFeedbackResponses,
+	GetNodeInfoData,
+	GetNodeInfoErrors,
+	GetNodeInfoResponses,
 	GetNodeSettingsData,
 	GetNodeSettingsErrors,
 	GetNodeSettingsResponses,
@@ -684,6 +687,9 @@ import type {
 	GetStableDiffusionCppSourceBuildStatusData,
 	GetStableDiffusionCppSourceBuildStatusErrors,
 	GetStableDiffusionCppSourceBuildStatusResponses,
+	GetSupportBundleData,
+	GetSupportBundleErrors,
+	GetSupportBundleResponses,
 	GetToolCapableModelsData,
 	GetToolCapableModelsErrors,
 	GetToolCapableModelsResponses,
@@ -1804,6 +1810,7 @@ import {
 	zGetNodeChatConversationResponse,
 	zGetNodeChatMessageFeedbackPath,
 	zGetNodeChatMessageFeedbackResponse,
+	zGetNodeInfoResponse,
 	zGetNodeSettingsResponse,
 	zGetRunningLocalModelsResponse,
 	zGetRuntimeAcquisitionStatusResponse,
@@ -1822,6 +1829,7 @@ import {
 	zGetStableDiffusionCppSourceBuildPrerequisitesQuery,
 	zGetStableDiffusionCppSourceBuildPrerequisitesResponse,
 	zGetStableDiffusionCppSourceBuildStatusResponse,
+	zGetSupportBundleResponse,
 	zGetToolCapableModelsResponse,
 	zGetToolCatalogResponse,
 	zGetToolMockPath,
@@ -7717,6 +7725,66 @@ export const unhandledExceptionProbe = <ThrowOnError extends boolean = false>(
 			},
 		],
 		url: "/api/local/v1/diagnostics/exception-probe",
+		...options,
+	});
+
+export const getNodeInfo = <ThrowOnError extends boolean = false>(
+	options?: Options<GetNodeInfoData, ThrowOnError>,
+): RequestResult<GetNodeInfoResponses, GetNodeInfoErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetNodeInfoResponses, GetNodeInfoErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetNodeInfoResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/diagnostics/node-info",
+		...options,
+	});
+
+export const getSupportBundle = <ThrowOnError extends boolean = false>(
+	options?: Options<GetSupportBundleData, ThrowOnError>,
+): RequestResult<GetSupportBundleResponses, GetSupportBundleErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetSupportBundleResponses, GetSupportBundleErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "blob",
+		responseValidator: async (data) => await zGetSupportBundleResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/diagnostics/support-bundle",
 		...options,
 	});
 

@@ -9940,6 +9940,75 @@
         ]
       }
     },
+    "/api/local/v1/diagnostics/node-info": {
+      "get": {
+        "tags": [
+          "Diagnostics"
+        ],
+        "operationId": "getNodeInfo",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/diagnostics/support-bundle": {
+      "get": {
+        "tags": [
+          "Diagnostics"
+        ],
+        "operationId": "getSupportBundle",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/diagnostics/validation-probe": {
       "post": {
         "tags": [
@@ -33150,6 +33219,342 @@
             "maxLength": 8000,
             "minLength": 0,
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoGpuMemoryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "index",
+          "totalVramBytes",
+          "usedVramBytes",
+          "availableVramBytes"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalVramBytes": {
+            "type": "integer"
+          },
+          "usedVramBytes": {
+            "type": "integer"
+          },
+          "availableVramBytes": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoGpuResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "totalBytes",
+          "freeBytes"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "totalBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "freeBytes": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "provider",
+          "sizeBytes"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoResidentResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runtime",
+          "modelId",
+          "state",
+          "backend"
+        ],
+        "properties": {
+          "runtime": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string"
+          },
+          "backend": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "capturedAtUtc",
+          "version",
+          "commit",
+          "flavour",
+          "selectedChannel",
+          "defaultChannel",
+          "repositoryUrl",
+          "isLocalMode",
+          "isShellOwned",
+          "osDescription",
+          "osArchitecture",
+          "processArchitecture",
+          "runtimeFramework",
+          "cpuModel",
+          "cpuCores",
+          "totalRamBytes",
+          "availableRamBytes",
+          "freeDiskBytes",
+          "gpuVendor",
+          "inferenceBackend",
+          "cpuFallback",
+          "gpus",
+          "liveGpuMemory",
+          "runtimes",
+          "residents",
+          "runningModels",
+          "models",
+          "settings",
+          "uptimeSeconds",
+          "warnings"
+        ],
+        "properties": {
+          "capturedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string",
+            "nullable": true
+          },
+          "flavour": {
+            "type": "string"
+          },
+          "selectedChannel": {
+            "type": "string"
+          },
+          "defaultChannel": {
+            "type": "string"
+          },
+          "repositoryUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "isLocalMode": {
+            "type": "boolean"
+          },
+          "isShellOwned": {
+            "type": "boolean"
+          },
+          "osDescription": {
+            "type": "string"
+          },
+          "osArchitecture": {
+            "type": "string"
+          },
+          "processArchitecture": {
+            "type": "string"
+          },
+          "runtimeFramework": {
+            "type": "string"
+          },
+          "cpuModel": {
+            "type": "string",
+            "nullable": true
+          },
+          "cpuCores": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "totalRamBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "availableRamBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "freeDiskBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "gpuVendor": {
+            "type": "string",
+            "nullable": true
+          },
+          "inferenceBackend": {
+            "type": "string",
+            "nullable": true
+          },
+          "cpuFallback": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "gpus": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoGpuResponse"
+            }
+          },
+          "liveGpuMemory": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoGpuMemoryResponse"
+            }
+          },
+          "runtimes": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoRuntimeResponse"
+            }
+          },
+          "residents": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoResidentResponse"
+            }
+          },
+          "runningModels": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoRunningModelResponse"
+            }
+          },
+          "models": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoModelResponse"
+            }
+          },
+          "settings": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "uptimeSeconds": {
+            "type": "integer"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoRunningModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "role",
+          "state",
+          "isBusy",
+          "isTransient",
+          "lastUsedUtc"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "isBusy": {
+            "type": "boolean"
+          },
+          "isTransient": {
+            "type": "boolean"
+          },
+          "lastUsedUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoRuntimeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "tag",
+          "backend",
+          "installedAtUtc",
+          "sourceCommit",
+          "isValid"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string",
+            "nullable": true
+          },
+          "backend": {
+            "type": "string",
+            "nullable": true
+          },
+          "installedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sourceCommit": {
+            "type": "string",
+            "nullable": true
+          },
+          "isValid": {
+            "type": "boolean"
           }
         }
       },

@@ -9,6 +9,13 @@ using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 /// </summary>
 public sealed class BenchmarkExceptionHandler : IExceptionHandler
 {
+    private readonly ILogger<BenchmarkExceptionHandler> _logger;
+
+    public BenchmarkExceptionHandler(ILogger<BenchmarkExceptionHandler> logger)
+    {
+        _logger = logger;
+    }
+
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
@@ -20,6 +27,7 @@ public sealed class BenchmarkExceptionHandler : IExceptionHandler
         }
 
         await BenchmarkEndpointSupport.Error(exception).ExecuteAsync(httpContext);
+        ExceptionHandlerLog.Log(_logger, httpContext, exception, httpContext.Response.StatusCode);
         return true;
     }
 }

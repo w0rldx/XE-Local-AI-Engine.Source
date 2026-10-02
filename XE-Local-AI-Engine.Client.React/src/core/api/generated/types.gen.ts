@@ -2311,6 +2311,85 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflo
 	request?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoGpuMemoryResponse = {
+	index: number;
+	totalVramBytes: number;
+	usedVramBytes: number;
+	availableVramBytes: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoGpuResponse = {
+	name: string;
+	totalBytes: number | null;
+	freeBytes: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoModelResponse = {
+	name: string;
+	provider: string;
+	sizeBytes: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoResidentResponse = {
+	runtime: string;
+	modelId: string | null;
+	state: string;
+	backend: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoResponse = {
+	capturedAtUtc: string;
+	version: string;
+	commit: string | null;
+	flavour: string;
+	selectedChannel: string;
+	defaultChannel: string;
+	repositoryUrl: string | null;
+	isLocalMode: boolean;
+	isShellOwned: boolean;
+	osDescription: string;
+	osArchitecture: string;
+	processArchitecture: string;
+	runtimeFramework: string;
+	cpuModel: string | null;
+	cpuCores: number | null;
+	totalRamBytes: number | null;
+	availableRamBytes: number | null;
+	freeDiskBytes: number | null;
+	gpuVendor: string | null;
+	inferenceBackend: string | null;
+	cpuFallback: boolean | null;
+	gpus: Array<XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoGpuResponse> | null;
+	liveGpuMemory: Array<XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoGpuMemoryResponse> | null;
+	runtimes: Array<XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoRuntimeResponse> | null;
+	residents: Array<XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoResidentResponse> | null;
+	runningModels: Array<XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoRunningModelResponse> | null;
+	models: Array<XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoModelResponse> | null;
+	settings: {
+		[key: string]: string | null;
+	} | null;
+	uptimeSeconds: number;
+	warnings: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoRunningModelResponse = {
+	modelName: string;
+	role: string;
+	state: string;
+	isBusy: boolean;
+	isTransient: boolean;
+	lastUsedUtc: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoRuntimeResponse = {
+	kind: string;
+	tag: string | null;
+	backend: string | null;
+	installedAtUtc: string;
+	sourceCommit: string | null;
+	isValid: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppApplicationRequest = {
 	[key: string]: never;
 };
@@ -12395,6 +12474,60 @@ export type UnhandledExceptionProbeResponses = {
 };
 
 export type UnhandledExceptionProbeResponse = UnhandledExceptionProbeResponses[keyof UnhandledExceptionProbeResponses];
+
+export type GetNodeInfoData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/diagnostics/node-info";
+};
+
+export type GetNodeInfoErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetNodeInfoResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoResponse;
+};
+
+export type GetNodeInfoResponse = GetNodeInfoResponses[keyof GetNodeInfoResponses];
+
+export type GetSupportBundleData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/diagnostics/support-bundle";
+};
+
+export type GetSupportBundleErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetSupportBundleResponses = {
+	/**
+	 * Success
+	 */
+	200: Blob | File;
+};
+
+export type GetSupportBundleResponse = GetSupportBundleResponses[keyof GetSupportBundleResponses];
 
 export type ValidationProblemProbeData = {
 	body: XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeRequest;

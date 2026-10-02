@@ -44,13 +44,23 @@ If something seems overbuilt, pointless, or badly conceived — say so.
 
 ## Reporting a bug
 
-### The best version: an in-app diagnostics snapshot
+### The best version: the in-app support export
 
-1. In the left sidebar, open **Settings → Diagnostics**.
-2. Use **"Report a problem"** to export a snapshot.
-3. Attach it to your issue.
+1. Click the **bug button** in the header (the "Report a problem" action). This captures a snapshot and
+   opens the **Diagnostics** page.
+2. On the snapshot, click **Export**. You get one file, `xe-support-<id>.zip`, on your own disk.
+3. Click **Open GitHub issue**. A new tab opens the bug form with your app version, operating system,
+   browser and hardware already filled in. Nothing is sent by the app itself.
+4. **Review the zip**, then drag it into the issue.
 
-It captures recent activity, network calls and errors, **with secrets redacted**.
+The zip holds the browser snapshot (recent activity, network calls and errors) plus system information
+and the tail of the engine's logs, including the output of the model processes it started. Home and data
+folders, e-mail addresses and token-shaped values are scrubbed automatically. That is a safety net, not a
+guarantee: a bare user name or computer name, and text a model process printed (prompts, file names), can
+remain. Open the zip and skim it before attaching it to a public issue.
+
+If the engine cannot be reached, the export still works but contains only the browser snapshot, and a
+message says so.
 
 ### If you can't do that, include:
 
@@ -73,7 +83,7 @@ The black console window carries the real errors. To copy from it:
 
 Or attach a log file from `%LOCALAPPDATA%\XE-Local-AI-Engine\logs`.
 
-> **Skim a log before sending it.** The diagnostics export redacts secrets; a raw log file does not.
+> **Skim a log before sending it.** The support export scrubs paths, e-mail addresses and tokens; a raw log file does not.
 
 ---
 

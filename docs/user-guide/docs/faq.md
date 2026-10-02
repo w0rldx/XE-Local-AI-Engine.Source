@@ -88,7 +88,8 @@ If the *same last line* has been there for **10+ minutes**, it's genuinely stuck
 3. Start the app again.
 
 If it stalls at the same point twice, **please report it** with the last few console lines — that's a
-real bug. → [How to report](feedback.md)
+real bug. If the page still loads, the in-app **Export** on the Diagnostics page bundles the logs for you.
+→ [How to report](feedback.md)
 
 ### The console opens but the browser doesn't
 Look in the console for a line containing `http://127.0.0.1:` followed by a number, and paste that

@@ -1,0 +1,73 @@
+ggml_cuda_init: GGML_CUDA_FORCE_MMQ:    no
+ggml_cuda_init: GGML_CUDA_FORCE_CUBLAS: no
+ggml_cuda_init: found 1 CUDA devices:
+  Device 0: NVIDIA GeForce RTX 5090, compute capability 12.0, VMM: yes
+load_backend: loaded CUDA backend from ggml-cuda.dll
+load_backend: loaded CPU backend from ggml-cpu-zen4.dll
+build: 6550 (a1b2c3d4) with MSVC 19.44.35211.0 for x64
+system info: n_threads = 16, n_threads_batch = 16, total_threads = 32
+system_info: n_threads = 16 (n_threads_batch = 16) / 32 | CUDA : ARCHS = 1200 | USE_GRAPHS = 1 | PEER_MAX_BATCH_SIZE = 128 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | AVX512 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 |
+main: binding port with default address family
+main: HTTP server is listening, hostname: 127.0.0.1, port: 51234, http threads: 31
+main: loading model
+srv    load_model: loading model 'qwen2.5-0.5b-instruct-q4_k_m.gguf'
+llama_model_load_from_file_impl: using device CUDA0 (NVIDIA GeForce RTX 5090) - 30843 MiB free
+llama_model_loader: loaded meta data with 26 key-value pairs and 291 tensors from qwen2.5-0.5b-instruct-q4_k_m.gguf (version GGUF V3 (latest))
+llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
+llama_model_loader: - kv   0:                       general.architecture str              = qwen2
+llama_model_loader: - kv   1:                               general.type str              = model
+llama_model_loader: - kv   2:                               general.name str              = Qwen2.5 0.5B Instruct
+llama_model_loader: - kv   3:                           general.finetune str              = Instruct
+llama_model_loader: - kv   4:                           general.basename str              = Qwen2.5
+llama_model_loader: - kv   5:                         general.size_label str              = 0.5B
+llama_model_loader: - kv  12:                          general.file_type u32              = 15
+llama_model_loader: - kv  13:                       tokenizer.ggml.model str              = gpt2
+llama_model_loader: - kv  20:                tokenizer.ggml.eos_token_id u32              = 151645
+llama_model_loader: - type  f32:  121 tensors
+llama_model_loader: - type q5_0:  133 tensors
+llama_model_loader: - type q8_0:   13 tensors
+llama_model_loader: - type q4_K:   12 tensors
+llama_model_loader: - type q6_K:   12 tensors
+print_info: file format = GGUF V3 (latest)
+print_info: file type   = Q4_K - Medium
+print_info: file size   = 373.71 MiB (6.35 BPW)
+load: printing all EOG tokens:
+load:   - 151643 ('<|endoftext|>')
+load:   - 151645 ('<|im_end|>')
+load: special tokens cache size = 22
+load: token to piece cache size = 0.9310 MB
+print_info: arch             = qwen2
+print_info: n_ctx_train      = 32768
+print_info: n_embd           = 896
+print_info: n_layer          = 24
+print_info: n_head           = 14
+print_info: model type       = 1B
+print_info: model params     = 494.03 M
+print_info: general.name     = Qwen2.5 0.5B Instruct
+load_tensors: loading model tensors, this can take a while... (mmap = true)
+load_tensors: offloading 24 repeating layers to GPU
+load_tensors: offloading output layer to GPU
+load_tensors: offloaded 25/25 layers to GPU
+load_tensors:        CUDA0 model buffer size =   373.71 MiB
+load_tensors:   CPU_Mapped model buffer size =   137.94 MiB
+llama_context: constructing llama_context
+llama_context: n_seq_max     = 1
+llama_context: n_ctx         = 4096
+llama_context: flash_attn    = auto
+llama_context: n_ctx_per_seq (4096) < n_ctx_train (32768) -- the full capacity of the model will not be utilized
+llama_context:  CUDA_Host  output buffer size =     0.58 MiB
+llama_kv_cache: layer   0: dev = CUDA0
+llama_kv_cache:      CUDA0 KV buffer size =    48.00 MiB
+llama_kv_cache: size =   48.00 MiB (  4096 cells,  24 layers,  1/1 seqs), K (f16):   24.00 MiB, V (f16):   24.00 MiB
+llama_context: Flash Attention was auto, set to enabled
+graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =  512
+common_init_from_params: warming up the model with an empty run - please wait ... (--no-warmup to disable)
+srv          init: initializing slots, n_slots = 1
+slot         init: id  0 | task -1 | new slot, n_ctx = 4096
+main: model loaded
+main: chat template, chat_template: {%- if tools %}..., example_format: '<|im_start|>system'
+main: server is listening on http://127.0.0.1:51234 - starting the main loop
+srv  update_slots: all slots are idle
+srv  log_server_r: request: GET /health 127.0.0.1 200
+warn: failed to open the draft model; speculative decoding disabled
+error: ggml_backend_cuda_buffer_type_alloc_buffer: allocating 9216.00 MiB on device 0: cudaMalloc failed: out of memory

@@ -13,6 +13,13 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </remarks>
 public sealed class TrainingExceptionHandler : IExceptionHandler
 {
+    private readonly ILogger<TrainingExceptionHandler> _logger;
+
+    public TrainingExceptionHandler(ILogger<TrainingExceptionHandler> logger)
+    {
+        _logger = logger;
+    }
+
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
@@ -24,6 +31,7 @@ public sealed class TrainingExceptionHandler : IExceptionHandler
         }
 
         await TrainingEndpointSupport.Error(exception).ExecuteAsync(httpContext);
+        ExceptionHandlerLog.Log(_logger, httpContext, exception, httpContext.Response.StatusCode);
         return true;
     }
 }

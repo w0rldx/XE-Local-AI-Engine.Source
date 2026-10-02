@@ -257,8 +257,11 @@ protections above are all you have.**
 - **The build is unsigned because no signing certificate exists yet.** Windows and Linux security tools may warn you;
   verify `CHECKSUMS.sha256` before running a release. Signing is planned.
   [Why](faq.md#why-does-this-happen-at-all)
-- **Logs may contain fragments of your activity.** They stay on your machine. If you send me a log for
-  a bug report, skim it first — the in-app diagnostics export redacts secrets, but a raw log is raw.
+- **Logs may contain fragments of your activity.** They stay on your machine. The in-app support export
+  (Diagnostics page) writes a zip to your disk with system information, the tail of the logs and the output
+  of the model processes, scrubbed of home and data paths, e-mail addresses and token-shaped values. The app
+  never uploads it. Names that appear outside a path and text a model process printed are not scrubbed, so
+  skim the zip before you attach it to a public issue; a raw log file is not scrubbed at all.
 
 ---
 

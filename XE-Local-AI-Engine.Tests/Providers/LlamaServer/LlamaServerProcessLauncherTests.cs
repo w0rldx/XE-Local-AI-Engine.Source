@@ -4,8 +4,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The serving-time promotion throttle: under the placement probe's raised verbosity every line after readiness is
-///     demoted to Debug, which hid a long turn's progress. One slot line per interval per process goes back to Information.
+///     The forwarded-line level policy: marker lines stay at Information, the rest goes to Debug, and one slot line per
+///     interval per process is promoted so a long turn's progress stays visible.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LlamaServerProcessLauncherTests
@@ -59,5 +59,40 @@ public sealed class LlamaServerProcessLauncherTests
         AssertEx.False(LlamaServerProcessLauncher.TryPromoteServingLine("que    post: new task, id = 9", nowMilliseconds: 0, ref lastPromoted));
         AssertEx.True(LlamaServerProcessLauncher.TryPromoteServingLine(SlotLine, nowMilliseconds: 0, ref lastPromoted),
             "dropped chatter must not consume the slot line's budget");
+    }
+
+    // The recorded start-up transcript holds exactly this many marker lines; a regex drift changes the count.
+    private const int FixtureMarkerLines = 22;
+
+    [Test]
+    public async Task IsMarkerLine_OnARecordedLoadLog_KeepsExactlyTheMarkerLines()
+    {
+        var lines = await File.ReadAllLinesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "llama-server-load.log"));
+
+        AssertEx.True(lines.Length > 60, "the fixture must be copied to the output directory");
+        AssertEx.Equal(FixtureMarkerLines, lines.Count(LlamaServerProcessLauncher.IsMarkerLine));
+    }
+
+    [Test]
+    [Arguments("load_tensors: offloaded 25/25 layers to GPU")]
+    [Arguments("print_info: model type       = 1B")]
+    [Arguments("print_info: file size   = 373.71 MiB (6.35 BPW)")]
+    [Arguments("ggml_cuda_init: found 1 CUDA devices:")]
+    [Arguments("main: server is listening on http://127.0.0.1:51234 - starting the main loop")]
+    [Arguments("0.06.919.504 I srv  update_slots: all slots are idle")]
+    [Arguments("W warning: something odd")]
+    [Arguments("cudaMalloc failed: Out Of Memory")]
+    public void IsMarkerLine_MatchesMarkers(string line)
+    {
+        AssertEx.True(LlamaServerProcessLauncher.IsMarkerLine(line));
+    }
+
+    [Test]
+    [Arguments("llama_model_loader: - kv  12:                          general.file_type u32              = 15")]
+    [Arguments("print_info: n_layer          = 24")]
+    [Arguments("12.31.004.120 D que          post: new task, id = 9, front = 0")]
+    public void IsMarkerLine_LeavesChatterAtDebug(string line)
+    {
+        AssertEx.False(LlamaServerProcessLauncher.IsMarkerLine(line));
     }
 }

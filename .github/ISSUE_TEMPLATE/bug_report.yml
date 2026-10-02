@@ -76,6 +76,7 @@ body:
       label: Your hardware
       description: |
         Really useful — I can't test on your machine. Processor, graphics card and memory.
+        Prefilled when you use the in-app **Open GitHub issue** button.
       placeholder: |
         CPU: Ryzen 5 5600
         GPU: RTX 3060 12GB
@@ -91,8 +92,9 @@ body:
         Any red text from the black console window. To copy: right-click → Mark, drag to select,
         press Enter.
 
-        Better still, attach an in-app diagnostics snapshot (**Diagnostics → Report a problem**) —
-        it redacts secrets automatically.
+        Better still, attach the support zip exported by the app (bug button in the header →
+        **Diagnostics → Export**, a file named `xe-support-….zip`). It scrubs paths, e-mail addresses and
+        tokens, but please skim it first: this issue is public.
       render: shell
     validations:
       required: false

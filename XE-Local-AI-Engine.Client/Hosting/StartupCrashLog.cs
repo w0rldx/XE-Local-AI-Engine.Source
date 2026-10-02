@@ -17,6 +17,10 @@ internal static class StartupCrashLog
 {
     private const string LogFileName = "startup-crash.log";
 
+    // Append-only with no rotation: past MaxBytes, only the newest KeepBytes (from a line start) survive the next append.
+    internal const long MaxBytes = 1024 * 1024;
+    internal const int KeepBytes = 256 * 1024;
+
     internal static Task RecordAsync(string message, CancellationToken cancellationToken = default)
     {
         var directory = ResolveLogDirectory();
@@ -44,13 +48,36 @@ internal static class StartupCrashLog
             Directory.CreateDirectory(directory);
             var line = string.Create(CultureInfo.InvariantCulture,
                 $"[{TimeProvider.System.GetLocalNow():yyyy-MM-dd HH:mm:ss.fff zzz}] {message}{Environment.NewLine}");
-            await File.AppendAllTextAsync(Path.Combine(directory, LogFileName), line, cancellationToken);
+            var path = Path.Combine(directory, LogFileName);
+            await TrimIfLargeAsync(path, cancellationToken);
+            await File.AppendAllTextAsync(path, line, cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
                                               or ArgumentException or NotSupportedException)
         {
             // Best-effort: a diagnostics write must never mask or replace the startup failure it is recording.
         }
+    }
+
+    /// <summary>
+    ///     The canonical cap routine; <c>DesktopStartupDiagnostics</c> and the launcher's <c>StartupDiagnostics</c> keep
+    ///     synchronous hand copies (they take no project references). I/O errors propagate to the caller's catch.
+    /// </summary>
+    internal static async Task TrimIfLargeAsync(string path, CancellationToken cancellationToken)
+    {
+        if (new FileInfo(path) is not { Exists: true, Length: > MaxBytes })
+        {
+            return;
+        }
+
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None, bufferSize: 4096, useAsync: true);
+        var tail = new byte[KeepBytes];
+        stream.Seek(-KeepBytes, SeekOrigin.End);
+        await stream.ReadExactlyAsync(tail, cancellationToken);
+        var start = Array.IndexOf(tail, (byte)'\n') + 1;
+        stream.Position = 0;
+        await stream.WriteAsync(tail.AsMemory(start), cancellationToken);
+        stream.SetLength(tail.Length - start);
     }
 
     internal static Task RecordAsync(string context, Exception exception, CancellationToken cancellationToken = default)

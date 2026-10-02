@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.ApiFoundation;
 
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.Models;
@@ -24,17 +25,17 @@ public sealed class PromotedEndpointSupportHandlerTests
     [Test]
     public async Task SelectedFolderHandler_AnswersEachTypeWithTheStatusItsOwnEndpointsUsedToSend()
     {
-        var notFound = await HandleAsync(new SelectedFolderExceptionHandler(),
+        var notFound = await HandleAsync(new SelectedFolderExceptionHandler(NullLogger<SelectedFolderExceptionHandler>.Instance),
             new SelectedFolderNotFoundException("No selected folder with that id is registered."));
         AssertEx.Equal(expected: 404, notFound.StatusCode);
         AssertEx.Equal(expected: 0L, notFound.BodyLength, "the selected-folder 404 has always been bodyless.");
 
-        var conflict = await HandleAsync(new SelectedFolderExceptionHandler(),
+        var conflict = await HandleAsync(new SelectedFolderExceptionHandler(NullLogger<SelectedFolderExceptionHandler>.Instance),
             new SelectedFolderConflictException("That alias is already registered to another folder."));
         AssertEx.Equal(expected: 409, conflict.StatusCode);
         AssertEx.Equal("That alias is already registered to another folder.", conflict.Detail);
 
-        var validation = await HandleAsync(new SelectedFolderExceptionHandler(),
+        var validation = await HandleAsync(new SelectedFolderExceptionHandler(NullLogger<SelectedFolderExceptionHandler>.Instance),
             new SelectedFolderValidationException("The selected folder is not a Git repository root."));
         AssertEx.Equal(expected: 400, validation.StatusCode);
         AssertEx.Equal("The selected folder is not a Git repository root.", validation.Detail);
@@ -55,7 +56,7 @@ public sealed class PromotedEndpointSupportHandlerTests
                      new SelectedFolderConflictException("alias in use")
                  })
         {
-            derivedStatuses.Add((await HandleAsync(new SelectedFolderExceptionHandler(), exception)).StatusCode);
+            derivedStatuses.Add((await HandleAsync(new SelectedFolderExceptionHandler(NullLogger<SelectedFolderExceptionHandler>.Instance), exception)).StatusCode);
         }
 
         AssertEx.Equal("404,409", string.Join(',', derivedStatuses),
@@ -66,7 +67,7 @@ public sealed class PromotedEndpointSupportHandlerTests
     public async Task SelectedFolderHandler_ForAnUnrelatedException_DeclinesToHandleIt()
     {
         var context = NewContext();
-        var handled = await new SelectedFolderExceptionHandler()
+        var handled = await new SelectedFolderExceptionHandler(NullLogger<SelectedFolderExceptionHandler>.Instance)
             .TryHandleAsync(context, new InvalidOperationException("something else"), CancellationToken.None);
 
         AssertEx.False(handled);
@@ -86,7 +87,7 @@ public sealed class PromotedEndpointSupportHandlerTests
     public async Task GgufImportHandler_KeepsTheStatusTheSharedMapperAlwaysReturned(string errorCode, int expectedStatus)
     {
         var context = NewContext();
-        var handled = await new GgufImportExceptionHandler()
+        var handled = await new GgufImportExceptionHandler(NullLogger<GgufImportExceptionHandler>.Instance)
             .TryHandleAsync(context, new GgufImportApplicationException(errorCode, "sanitized"), CancellationToken.None);
 
         AssertEx.True(handled, errorCode);
@@ -97,7 +98,7 @@ public sealed class PromotedEndpointSupportHandlerTests
     public async Task GgufImportHandler_ForAnExceptionOutsideTheImportFamily_DeclinesToHandleIt()
     {
         var context = NewContext();
-        var handled = await new GgufImportExceptionHandler()
+        var handled = await new GgufImportExceptionHandler(NullLogger<GgufImportExceptionHandler>.Instance)
             .TryHandleAsync(context, new GgufAcquisitionConflictException(), CancellationToken.None);
 
         AssertEx.False(handled, "the download family has its own handler; claiming it here would answer the wrong body.");
@@ -107,7 +108,7 @@ public sealed class PromotedEndpointSupportHandlerTests
     public async Task GgufDownloadHandler_KeepsTheConflictStatusTheSharedMapperReturned()
     {
         var context = NewContext();
-        var handled = await new GgufDownloadExceptionHandler()
+        var handled = await new GgufDownloadExceptionHandler(NullLogger<GgufDownloadExceptionHandler>.Instance)
             .TryHandleAsync(context, new GgufAcquisitionConflictException(), CancellationToken.None);
 
         AssertEx.True(handled);
@@ -118,7 +119,7 @@ public sealed class PromotedEndpointSupportHandlerTests
     public async Task GgufDownloadHandler_ForAnExceptionOutsideItsNarrowedFamily_DeclinesToHandleIt()
     {
         var context = NewContext();
-        var handled = await new GgufDownloadExceptionHandler()
+        var handled = await new GgufDownloadExceptionHandler(NullLogger<GgufDownloadExceptionHandler>.Instance)
             .TryHandleAsync(context, new TimeoutException("the probe timed out"), CancellationToken.None);
 
         AssertEx.False(handled, "only the narrowed acquisition/Hugging Face family was ever mapped; the rest is a 500.");

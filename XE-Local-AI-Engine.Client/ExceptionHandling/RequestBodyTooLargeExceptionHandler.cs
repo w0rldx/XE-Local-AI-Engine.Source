@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.ExceptionHandling;
 
 using Microsoft.AspNetCore.Diagnostics;
+using XE_Local_AI_Engine.Client.Common.Extensions;
 
 /// <summary>
 ///     Answers the 413 a capped route DECLARES when the host is the one that refuses the body.
@@ -37,7 +38,7 @@ public sealed class RequestBodyTooLargeExceptionHandler : IExceptionHandler
             RequestLogSanitizer.Sanitize(httpContext.Request.Method),
             RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),
             StatusCodes.Status413PayloadTooLarge,
-            httpContext.TraceIdentifier);
+            ProblemDetailsExtensions.ResolveTraceId(httpContext));
 
         // The same writer the endpoints' own Content-Length exit uses; only the detail differs between the two.
         await RequestBodyTooLargeProblem.WriteAsync(httpContext, "The request body is larger than this route accepts.", cancellationToken);

@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.ApiFoundation;
 
+using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
@@ -15,7 +17,9 @@ using Serilog.Extensions.Hosting;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Integration)]
@@ -104,6 +108,7 @@ public sealed class ExceptionHandlerLogSanitizationTests
         var logger = new StructuredCapturingLogger<ConflictExceptionHandler>();
         var handler = new ConflictExceptionHandler(logger);
         var context = CreateContext();
+        using var activity = StartW3CActivity();
 
         var handled = await handler.TryHandleAsync(context,
             new WorkSessionInvalidTransitionException("A work session cannot be deleted mid-step."),
@@ -111,6 +116,7 @@ public sealed class ExceptionHandlerLogSanitizationTests
 
         AssertSanitizedRequestProperties(handled, logger);
         AssertEx.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
+        await AssertTraceIdJoinsAsync(logger, context, activity);
     }
 
     [Test]
@@ -119,11 +125,81 @@ public sealed class ExceptionHandlerLogSanitizationTests
         var logger = new StructuredCapturingLogger<DomainValidationExceptionHandler>();
         var handler = new DomainValidationExceptionHandler(logger);
         var context = CreateContext();
+        using var activity = StartW3CActivity();
 
         var handled = await handler.TryHandleAsync(context, new ScheduledJobValidationException("invalid"), CancellationToken.None);
 
         AssertSanitizedRequestProperties(handled, logger);
         AssertEx.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        await AssertTraceIdJoinsAsync(logger, context, activity);
+    }
+
+    [Test]
+    public async Task DevelopmentConflictHandler_LogsTheW3CTraceIdOfTheProblemBody()
+    {
+        var logger = new StructuredCapturingLogger<DevelopmentConflictExceptionHandler>();
+        var handler = new DevelopmentConflictExceptionHandler(logger);
+        var context = CreateContext();
+        using var activity = StartW3CActivity();
+
+        var handled = await handler.TryHandleAsync(context, new DevelopmentConcurrencyException("stale"), CancellationToken.None);
+
+        AssertSanitizedRequestProperties(handled, logger);
+        AssertEx.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
+        await AssertTraceIdJoinsAsync(logger, context, activity);
+    }
+
+    [Test]
+    public async Task RequestBodyTooLargeHandler_LogsTheW3CTraceIdOfTheProblemBody()
+    {
+        var logger = new StructuredCapturingLogger<RequestBodyTooLargeExceptionHandler>();
+        var handler = new RequestBodyTooLargeExceptionHandler(logger);
+        var context = CreateContext();
+        using var activity = StartW3CActivity();
+
+        var handled = await handler.TryHandleAsync(context,
+            new BadHttpRequestException("too large", StatusCodes.Status413PayloadTooLarge),
+            CancellationToken.None);
+
+        AssertSanitizedRequestProperties(handled, logger);
+        AssertEx.Equal(StatusCodes.Status413PayloadTooLarge, context.Response.StatusCode);
+        await AssertTraceIdJoinsAsync(logger, context, activity);
+    }
+
+    // A 4xx the failure handlers turn into a problem body logs at Warning with the W3C trace id the body carries.
+    [Test]
+    public async Task SelectedFolderHandler_ValidationFailure_LogsWarningWithTraceIdAndSanitizedPath()
+    {
+        var logger = new StructuredCapturingLogger<SelectedFolderExceptionHandler>();
+        var handler = new SelectedFolderExceptionHandler(logger);
+        var context = CreateContext();
+        using var activity = StartW3CActivity();
+
+        var handled = await handler.TryHandleAsync(context, new SelectedFolderValidationException("bad folder"), CancellationToken.None);
+
+        AssertSanitizedRequestProperties(handled, logger);
+        AssertEx.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        AssertEx.Equal(LogLevel.Warning, logger.LastLevel);
+        await AssertTraceIdJoinsAsync(logger, context, activity);
+        AssertEx.True(logger.LastException is SelectedFolderValidationException, "the exception must ride on the log line");
+    }
+
+    // A 5xx logs at Error.
+    [Test]
+    public async Task ContainerRuntimeUnavailableHandler_LogsErrorWithTraceIdAndSanitizedPath()
+    {
+        var logger = new StructuredCapturingLogger<ContainerRuntimeUnavailableExceptionHandler>();
+        var handler = new ContainerRuntimeUnavailableExceptionHandler(logger);
+        var context = CreateContext();
+        using var activity = StartW3CActivity();
+
+        var handled = await handler.TryHandleAsync(context, new ContainerRuntimeUnavailableException("no daemon"), CancellationToken.None);
+
+        AssertSanitizedRequestProperties(handled, logger);
+        AssertEx.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
+        AssertEx.Equal(LogLevel.Error, logger.LastLevel);
+        await AssertTraceIdJoinsAsync(logger, context, activity);
+        AssertEx.True(logger.LastException is ContainerRuntimeUnavailableException, "the exception must ride on the log line");
     }
 
     private static DefaultHttpContext CreateContext()
@@ -140,6 +216,24 @@ public sealed class ExceptionHandlerLogSanitizationTests
         AssertEx.True(handled);
         AssertEx.Equal(ExpectedMethod, logger.GetLoggedValue("Method")?.ToString());
         AssertEx.Equal(ExpectedPath, logger.GetLoggedValue("Path")?.ToString());
+    }
+
+    private static Activity StartW3CActivity()
+    {
+        var activity = new Activity("exception-handler-log-test");
+        activity.SetIdFormat(ActivityIdFormat.W3C);
+        activity.Start();
+        return activity;
+    }
+
+    // The logged TraceId, the problem body's traceId and the request Activity's W3C trace id are one value.
+    private static async Task AssertTraceIdJoinsAsync<T>(StructuredCapturingLogger<T> logger, DefaultHttpContext context, Activity activity)
+    {
+        context.Response.Body.Position = 0;
+        using var document = await JsonDocument.ParseAsync(context.Response.Body, cancellationToken: CancellationToken.None);
+        var traceId = activity.TraceId.ToString();
+        AssertEx.Equal(traceId, logger.GetLoggedValue("TraceId")?.ToString());
+        AssertEx.Equal(traceId, document.RootElement.GetProperty("traceId").GetString());
     }
 
     private static bool IsLineBreakingOrControlCharacter(char character) =>
@@ -165,6 +259,10 @@ public sealed class ExceptionHandlerLogSanitizationTests
     {
         private IReadOnlyList<KeyValuePair<string, object?>>? _lastState;
 
+        public LogLevel? LastLevel { get; private set; }
+
+        public Exception? LastException { get; private set; }
+
         public object? GetLoggedValue(string key)
         {
             return _lastState?.FirstOrDefault(pair => string.Equals(pair.Key, key, StringComparison.Ordinal)).Value;
@@ -185,6 +283,8 @@ public sealed class ExceptionHandlerLogSanitizationTests
             if (state is IReadOnlyList<KeyValuePair<string, object?>> structured)
             {
                 _lastState = structured;
+                LastLevel = logLevel;
+                LastException = exception;
             }
         }
     }

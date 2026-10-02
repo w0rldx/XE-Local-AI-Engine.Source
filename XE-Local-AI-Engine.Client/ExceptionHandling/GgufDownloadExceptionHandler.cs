@@ -14,6 +14,13 @@ using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 /// </remarks>
 public sealed class GgufDownloadExceptionHandler : IExceptionHandler
 {
+    private readonly ILogger<GgufDownloadExceptionHandler> _logger;
+
+    public GgufDownloadExceptionHandler(ILogger<GgufDownloadExceptionHandler> logger)
+    {
+        _logger = logger;
+    }
+
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
@@ -25,6 +32,7 @@ public sealed class GgufDownloadExceptionHandler : IExceptionHandler
         }
 
         await GgufDownloadEndpointSupport.Error(exception).ExecuteAsync(httpContext);
+        ExceptionHandlerLog.Log(_logger, httpContext, exception, httpContext.Response.StatusCode);
         return true;
     }
 }

@@ -5,34 +5,19 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Verifies the stderr tail's path sanitizer (the tail reaches a user-facing exception, so no directory may
+///     Verifies the stderr tail sanitizes on the way in (the tail reaches a user-facing exception, so no directory may
 ///     survive it) and its two bounds.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class ProcessStderrTailTests
 {
     [Test]
-    [Arguments(@"failed to load C:\Users\tester\models\sd15.safetensors", "failed to load sd15.safetensors")]
-    [Arguments(@"failed to load C:\Users\Jane Doe\models\sd15.safetensors", "failed to load sd15.safetensors")]
-    [Arguments(@"load \\fileserver\share\Model Files\sd15.safetensors now", "load sd15.safetensors now")]
-    [Arguments(@"open ""C:\Users\Jane Doe\models\sd15.safetensors"" failed", @"open ""sd15.safetensors"" failed")]
-    [Arguments("open '/home/tester/models/sd15.safetensors' failed", "open 'sd15.safetensors' failed")]
-    [Arguments("failed to load /home/tester/models/sd15.safetensors", "failed to load sd15.safetensors")]
-    [Arguments("/home/Jane Doe/models/private/sd.safetensors", "sd.safetensors")]
-    [Arguments("failed to load /home/Jane Doe/models/sd.safetensors failed to open",
-        "failed to load sd.safetensors failed to open")]
-    [Arguments("/home/a/b.txt and then /home/c/d.txt", "b.txt and then d.txt")]
-    [Arguments("GET https://huggingface.co/org/repo/resolve/main/sd.safetensors 404",
-        "GET https://huggingface.co/org/repo/resolve/main/sd.safetensors 404")]
-    [Arguments(@"copy C:\a\b.txt and C:\d\e.txt", "copy b.txt and e.txt")]
-    [Arguments(@"copy C:\a\b.txt failed /home/x/y.txt", "copy b.txt failed y.txt")]
-    [Arguments(@"C:\Users\Jane Doe\models\sd15.safetensors failed to open", "sd15.safetensors failed to open")]
-    [Arguments("download https://huggingface.co/org/repo/resolve/main/sd15.safetensors failed",
-        "download https://huggingface.co/org/repo/resolve/main/sd15.safetensors failed")]
-    [Arguments("ggml_cuda_init: no CUDA devices found", "ggml_cuda_init: no CUDA devices found")]
-    public void Sanitize_KeepsOnlyTheLeafAndTheProse(string line, string expected)
+    public void Append_ReducesAbsolutePathsToTheirLeaf()
     {
-        AssertEx.Equal(expected, ProcessStderrTail.Sanitize(line));
+        var tail = new ProcessStderrTail();
+        tail.Append("failed to load /home/tester/models/sd15.safetensors");
+
+        AssertEx.Equal("failed to load sd15.safetensors", tail.Snapshot());
     }
 
     [Test]
@@ -83,5 +68,27 @@ public sealed class ProcessStderrTailTests
         tail.Append(new string('a', count: 5000));
 
         AssertEx.Equal(expected: 5000, AssertEx.NotNull(tail.Snapshot()).Length);
+    }
+
+    [Test]
+    public void Append_WithCustomBounds_HonoursThemAndLinesIsACopy()
+    {
+        var tail = new ProcessStderrTail(maxLines: 3, maxCharacters: 10);
+        tail.Append("aaaa");
+        tail.Append("bbbb");
+        tail.Append("cccc");
+
+        var lines = tail.Lines();
+        tail.Append("dd");
+
+        AssertEx.Equal("bbbb,cccc", string.Join(',', lines), "the character bound evicted the oldest line");
+        AssertEx.Equal("bbbb,cccc,dd", string.Join(',', tail.Lines()));
+    }
+
+    [Test]
+    public void Constructor_RejectsANonPositiveBound()
+    {
+        _ = AssertEx.Throws<ArgumentOutOfRangeException>(() => _ = new ProcessStderrTail(maxLines: 0, maxCharacters: 10));
+        _ = AssertEx.Throws<ArgumentOutOfRangeException>(() => _ = new ProcessStderrTail(maxLines: 10, maxCharacters: 0));
     }
 }

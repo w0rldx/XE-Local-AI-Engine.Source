@@ -26,13 +26,16 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
 
     private readonly ILogger<ImageServerProcessLauncher> _logger;
     private readonly IImageServerProgressBroker _progressBroker;
+    private readonly ChildProcessOutputTailRegistry _outputTails;
 
-    public ImageServerProcessLauncher(ILogger<ImageServerProcessLauncher> logger, IImageServerProgressBroker progressBroker)
+    public ImageServerProcessLauncher(ILogger<ImageServerProcessLauncher> logger, IImageServerProgressBroker progressBroker,
+        ChildProcessOutputTailRegistry? outputTails = null)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(progressBroker);
         _logger = logger;
         _progressBroker = progressBroker;
+        _outputTails = outputTails ?? new ChildProcessOutputTailRegistry();
     }
 
     /// <inheritdoc />
@@ -119,6 +122,8 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
             StartInfo = startInfo
         };
 
+        _outputTails.Register($"sd-server[{label}]", stderrTail);
+
         try
         {
             if (!process.Start())
@@ -132,11 +137,13 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
         }
         catch (StableDiffusionRuntimeException)
         {
+            _outputTails.MarkExited(stderrTail);
             process.Dispose();
             throw;
         }
         catch (Exception ex)
         {
+            _outputTails.MarkExited(stderrTail);
             process.Dispose();
             throw new StableDiffusionRuntimeException("The image runtime could not be started.", ex);
         }
@@ -183,6 +190,12 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
             // The stream dies with the process (a tree-kill closes the pipe mid-read). Losing the tail of the log is
             // expected there and must never surface as an unobserved task exception.
             _logger.LogDebug(exception, "sd-server[{Label}] output drain ended.", label);
+        }
+
+        // stderr closes when the server and every descendant holding the pipe are gone: stamp the registered tail exited.
+        if (stderrTail is not null)
+        {
+            _outputTails.MarkExited(stderrTail);
         }
 
         // Whatever the child wrote without a trailing terminator before EOF is still worth forwarding.

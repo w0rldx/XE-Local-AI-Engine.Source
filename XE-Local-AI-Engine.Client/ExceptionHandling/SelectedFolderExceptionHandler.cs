@@ -16,6 +16,13 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 /// </remarks>
 public sealed class SelectedFolderExceptionHandler : IExceptionHandler
 {
+    private readonly ILogger<SelectedFolderExceptionHandler> _logger;
+
+    public SelectedFolderExceptionHandler(ILogger<SelectedFolderExceptionHandler> logger)
+    {
+        _logger = logger;
+    }
+
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
@@ -31,10 +38,12 @@ public sealed class SelectedFolderExceptionHandler : IExceptionHandler
 
             case SelectedFolderConflictException:
                 await FastEndpointsProblemWriter.WriteAsync(httpContext, exception.Message, StatusCodes.Status409Conflict, cancellationToken);
+                ExceptionHandlerLog.Log(_logger, httpContext, exception, StatusCodes.Status409Conflict);
                 return true;
 
             case SelectedFolderValidationException:
                 await FastEndpointsProblemWriter.WriteAsync(httpContext, exception.Message, StatusCodes.Status400BadRequest, cancellationToken);
+                ExceptionHandlerLog.Log(_logger, httpContext, exception, StatusCodes.Status400BadRequest);
                 return true;
 
             default:

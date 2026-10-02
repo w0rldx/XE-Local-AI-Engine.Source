@@ -2572,6 +2572,90 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkf
 	request: z.string().min(0).max(8000).nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoGpuMemoryResponse = z.object({
+	index: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	totalVramBytes: z.int(),
+	usedVramBytes: z.int(),
+	availableVramBytes: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoGpuResponse = z.object({
+	name: z.string(),
+	totalBytes: z.int().nullable(),
+	freeBytes: z.int().nullable(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoModelResponse = z.object({
+	name: z.string(),
+	provider: z.string(),
+	sizeBytes: z.int().nullable(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoResidentResponse = z.object({
+	runtime: z.string(),
+	modelId: z.string().nullable(),
+	state: z.string(),
+	backend: z.string().nullable(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoRunningModelResponse = z.object({
+	modelName: z.string(),
+	role: z.string(),
+	state: z.string(),
+	isBusy: z.boolean(),
+	isTransient: z.boolean(),
+	lastUsedUtc: z.iso.datetime({ offset: true }).nullable(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoRuntimeResponse = z.object({
+	kind: z.string(),
+	tag: z.string().nullable(),
+	backend: z.string().nullable(),
+	installedAtUtc: z.iso.datetime({ offset: true }),
+	sourceCommit: z.string().nullable(),
+	isValid: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoResponse = z.object({
+	capturedAtUtc: z.iso.datetime({ offset: true }),
+	version: z.string(),
+	commit: z.string().nullable(),
+	flavour: z.string(),
+	selectedChannel: z.string(),
+	defaultChannel: z.string(),
+	repositoryUrl: z.string().nullable(),
+	isLocalMode: z.boolean(),
+	isShellOwned: z.boolean(),
+	osDescription: z.string(),
+	osArchitecture: z.string(),
+	processArchitecture: z.string(),
+	runtimeFramework: z.string(),
+	cpuModel: z.string().nullable(),
+	cpuCores: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	totalRamBytes: z.int().nullable(),
+	availableRamBytes: z.int().nullable(),
+	freeDiskBytes: z.int().nullable(),
+	gpuVendor: z.string().nullable(),
+	inferenceBackend: z.string().nullable(),
+	cpuFallback: z.boolean().nullable(),
+	gpus: z.array(zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoGpuResponse).nullable(),
+	liveGpuMemory: z.array(zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoGpuMemoryResponse).nullable(),
+	runtimes: z.array(zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoRuntimeResponse).nullable(),
+	residents: z.array(zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoResidentResponse).nullable(),
+	runningModels: z.array(zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoRunningModelResponse).nullable(),
+	models: z.array(zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoModelResponse).nullable(),
+	settings: z.record(z.string(), z.string().nullable()).nullable(),
+	uptimeSeconds: z.int(),
+	warnings: z.array(z.string()),
+});
+
 export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppApplicationRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCapabilitiesView = z.object({
@@ -9956,6 +10040,16 @@ export const zRemoveDevelopmentTemplateResponse = z.void();
  * No Content
  */
 export const zUnhandledExceptionProbeResponse = z.void();
+
+/**
+ * Success
+ */
+export const zGetNodeInfoResponse = zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoResponse;
+
+/**
+ * Success
+ */
+export const zGetSupportBundleResponse = z.string();
 
 export const zValidationProblemProbeBody = zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeRequest;
 

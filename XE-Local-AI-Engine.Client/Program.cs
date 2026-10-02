@@ -56,6 +56,7 @@ namespace XE_Local_AI_Engine.Client
     using Serilog;
     using XE_Local_AI_Engine.Client.Common.Extensions;
     using XE_Local_AI_Engine.Client.Endpoints.Common;
+    using XE_Local_AI_Engine.Client.ExceptionHandling;
     using XE_Local_AI_Engine.Client.Hosting;
     using XE_Local_AI_Engine.Client.Hosting.Vault;
     using XE_Local_AI_Engine.Client.Hubs;
@@ -842,7 +843,8 @@ namespace XE_Local_AI_Engine.Client
                     return char.ToLowerInvariant(name[0]) + name[1..];
                 };
 
-                config.Errors.UseProblemDetails();
+                // W3C trace id in validator 400s too (FE's default builder uses the connection id no log line carries).
+                config.Errors.UseProblemDetails(static problemDetails => problemDetails.ResponseBuilder = FastEndpointsProblemWriter.Build);
                 ConfigureServices.ConfigureJsonSerializerOptions(config.Serializer.Options);
             });
             app.MapHub<LocalChatHub>(LocalApiRoutes.LocalChat.Hub)

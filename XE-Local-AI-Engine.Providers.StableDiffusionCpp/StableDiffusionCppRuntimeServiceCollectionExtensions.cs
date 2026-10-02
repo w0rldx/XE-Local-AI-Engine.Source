@@ -57,6 +57,7 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
         services.TryAddSingleton<IImageServerProgressBroker, ImageServerProgressBroker>();
 
         // OS-aware process launcher (Windows Job Object / Linux setsid tree-kill).
+        services.AddChildProcessOutputTails();
         services.TryAddSingleton<IImageServerProcessLauncher, ImageServerProcessLauncher>();
 
         services.TryAddSingleton<IImageServerReadinessProbe>(static sp =>

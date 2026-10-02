@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.ApiFoundation;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Endpoints.Training.V1;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
@@ -64,7 +65,7 @@ public sealed class TrainingExceptionHandlerTests
         await using var body = new MemoryStream();
         context.Response.Body = body;
 
-        var handled = await new TrainingExceptionHandler().TryHandleAsync(context, exception, CancellationToken.None);
+        var handled = await new TrainingExceptionHandler(NullLogger<TrainingExceptionHandler>.Instance).TryHandleAsync(context, exception, CancellationToken.None);
         body.Position = 0;
         using var reader = new StreamReader(body);
         return new HandlerResult

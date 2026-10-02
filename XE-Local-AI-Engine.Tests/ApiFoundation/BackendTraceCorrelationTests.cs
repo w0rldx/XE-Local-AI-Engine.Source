@@ -73,6 +73,39 @@ public sealed class BackendTraceCorrelationTests
         AssertEx.True(W3CTraceId.IsMatch(traceIdValue!), $"Expected a 32-hex W3C trace id but was \"{traceIdValue}\".");
     }
 
+    // Test matrix: backend_traceId_validation400. The host's ResponseBuilder (FastEndpointsProblemWriter.Build) gives a
+    // validator 400 the W3C id of the traceresponse header and the log, not FastEndpoints' default connection id.
+    [Test]
+    public async Task ValidationFailure_WhenInboundTraceparent_CarriesTheTraceResponseTraceId()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/diagnostics/validation-probe")
+        {
+            Content = JsonContent.Create(new
+            {
+                Name = string.Empty
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        request.Headers.TryAddWithoutValidation("traceparent", InboundTraceparent);
+
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.True(response.Headers.TryGetValues("traceresponse", out var headerValues),
+            "Expected a traceresponse header on the 400 response.");
+        var headerTraceId = headerValues!.Single().Split('-')[1];
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync();
+        using var document = await JsonDocument.ParseAsync(responseStream);
+        var bodyTraceId = document.RootElement.GetProperty("traceId").GetString();
+
+        AssertEx.Equal(InboundTraceId, bodyTraceId);
+        AssertEx.Equal(headerTraceId, bodyTraceId);
+    }
+
     // Test matrix: backend_traceResponseHeader_onSuccess.
     [Test]
     public async Task SuccessResponse_WhenInboundTraceparent_CarriesTraceResponseHeader()

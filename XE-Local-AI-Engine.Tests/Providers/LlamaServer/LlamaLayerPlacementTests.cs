@@ -287,48 +287,6 @@ public sealed class LlamaLayerPlacementTests
     }
 
     [Test]
-    public async Task EnsureRunning_RaisedVerbositySpawn_LogsTheLoadAtInformation_ThenDemotesRequestChatter()
-    {
-        // The elevated verbosity exists for the sniffer, not for the log sink. The load window (where the banner and
-        // any failure text live) must still reach Information; only steady-state chatter is demoted afterwards.
-        var report = new LlamaLayerPlacementReport();
-        var demoteDuringLoad = true;
-        var launcher = new FakeProcessLauncher(spec =>
-        {
-            demoteDuringLoad = spec.ShouldDemoteForwardedLines?.Invoke() ?? false;
-            return new FakeProcessHandle(pid: 4242);
-        })
-        {
-            StartupLines = [FullOffloadLine]
-        };
-        await using var supervisor = SupervisorFactory.Create(launcher,
-            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
-            layerPlacementReport: report);
-
-        await supervisor.EnsureRunningAsync("qwen3-14b", ModelRole.Chat, CancellationToken.None);
-
-        AssertEx.False(demoteDuringLoad, "the load window must stay at Information so the banner and failures are visible.");
-        AssertEx.True(launcher.Launches.TryDequeue(out var spec2));
-        AssertEx.True(spec2!.ShouldDemoteForwardedLines?.Invoke() ?? false,
-            "once the process is serving, its raised-verbosity chatter must drop to Debug.");
-    }
-
-    [Test]
-    public async Task EnsureRunning_OperatorDrivenSpawn_NeverDemotesItsLogging()
-    {
-        // A CPU spawn had no verbosity raised for it, so nothing about its logging may change.
-        var launcher = new FakeProcessLauncher();
-        await using var supervisor = SupervisorFactory.Create(launcher,
-            variantSelector: new FakeVariantSelector(GpuVariant.Cpu),
-            layerPlacementReport: new LlamaLayerPlacementReport());
-
-        await supervisor.EnsureRunningAsync("qwen3-14b", ModelRole.Chat, CancellationToken.None);
-
-        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
-        AssertEx.Null(spec!.ShouldDemoteForwardedLines);
-    }
-
-    [Test]
     public async Task EnsureRunning_CpuVariant_NeverRaisesVerbosity()
     {
         // There is no placement question on a CPU runtime, so there is nothing to buy with extra log volume.

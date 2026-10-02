@@ -150,6 +150,7 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<ILogger<LlamaServerLaunchPolicy>>()));
 
         // Process-supervision seams: the OS-aware launcher (tree-kill) + the /health readiness probe.
+        services.AddChildProcessOutputTails();
         services.TryAddSingleton<ILlamaServerProcessLauncher, LlamaServerProcessLauncher>();
 
         // DEDICATED HttpClient bypassing the app's IHttpClientFactory, so the readiness probe never inherits the standard resilience handler's exponential retries,

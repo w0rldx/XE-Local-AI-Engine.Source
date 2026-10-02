@@ -1,12 +1,15 @@
 // Diagnostics panel.
 //
 // Lists locally-stored snapshots (newest first) and drills into a detail view. Header actions cover
-// importing a previously exported bundle and clearing all snapshots; each row can be viewed, exported
-// or deleted. Everything is local-only — the data layer never transmits snapshot content.
+// importing a previously exported bundle, clearing all snapshots and opening a prefilled GitHub issue; each row can be
+// viewed, exported or deleted. Export merges the node's scrubbed server bundle into the snapshot zip. Nothing leaves the
+// machine: the issue button only opens a link, and the operator attaches the zip themselves.
 
-import { Alert, Badge, Button, FileButton, Group, Loader, Table, Text } from "@mantine/core";
+import { Alert, Badge, Button, FileButton, Group, Loader, Table, Text, Tooltip } from "@mantine/core";
+import { useMutation } from "@tanstack/react-query";
 import {
 	IconAlertTriangle,
+	IconBrandGithub,
 	IconDownload,
 	IconEye,
 	IconFileSearch,
@@ -28,7 +31,9 @@ import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { ReportProblemButton } from "@/features/diagnostics/components/ReportProblemButton";
 import { SnapshotDetail } from "@/features/diagnostics/components/SnapshotDetail";
-import { exportSnapshot } from "@/features/diagnostics/ExportSnapshot";
+import { buildIssueUrl } from "@/features/diagnostics/IssueUrl";
+import { useNodeInfo } from "@/features/diagnostics/queries/useNodeInfo";
+import { exportSupportBundle } from "@/features/diagnostics/SupportBundle";
 import { useClearSnapshots, useDeleteSnapshot, useImportSnapshot, useSnapshots } from "@/features/diagnostics/UseSnapshots";
 
 function errorMessage(snapshot: Snapshot): string {
@@ -45,10 +50,13 @@ export function DiagnosticsPanel() {
 	const deleteSnapshot = useDeleteSnapshot();
 	const clearSnapshots = useClearSnapshots();
 	const importSnapshot = useImportSnapshot();
+	const exportBundle = useMutation({ mutationFn: exportSupportBundle });
+	const { data: nodeInfo } = useNodeInfo();
 	const { confirm } = useConfirm();
 	const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
 
 	const selected = snapshots?.find((snapshot) => snapshot.id === selectedId);
+	const issueUrl = nodeInfo ? buildIssueUrl(nodeInfo, snapshots?.[0]) : undefined;
 
 	const handleImport = (file: File | null): void => {
 		if (!file) {
@@ -87,6 +95,20 @@ export function DiagnosticsPanel() {
 				actions={
 					<>
 						<ReportProblemButton variant="button" />
+						{issueUrl && (
+							<Tooltip label={t("diagnostics.openIssueTooltip")} multiline={true} w={280}>
+								<Button
+									component="a"
+									href={issueUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									variant="default"
+									leftSection={<IconBrandGithub size={16} />}
+								>
+									{t("diagnostics.openIssue")}
+								</Button>
+							</Tooltip>
+						)}
 						{/* The Button below IS the labelled control; FileButton's own input is display:none and only opens the
 						    OS picker. Marked hidden so it is not reported as an unnamed form control. */}
 						<FileButton onChange={handleImport} accept="application/zip,.zip" inputProps={{ "aria-hidden": true, tabIndex: -1 }}>
@@ -185,7 +207,8 @@ export function DiagnosticsPanel() {
 													size="xs"
 													variant="subtle"
 													leftSection={<IconDownload size={14} />}
-													onClick={() => exportSnapshot(snapshot)}
+													loading={exportBundle.isPending && exportBundle.variables?.id === snapshot.id}
+													onClick={() => exportBundle.mutate(snapshot)}
 												>
 													{t("diagnostics.actions.export")}
 												</Button>

@@ -15,6 +15,13 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 /// </remarks>
 public sealed class GgufImportExceptionHandler : IExceptionHandler
 {
+    private readonly ILogger<GgufImportExceptionHandler> _logger;
+
+    public GgufImportExceptionHandler(ILogger<GgufImportExceptionHandler> logger)
+    {
+        _logger = logger;
+    }
+
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
@@ -26,6 +33,7 @@ public sealed class GgufImportExceptionHandler : IExceptionHandler
         }
 
         await GgufImportEndpointSupport.Error(importFailure).ExecuteAsync(httpContext);
+        ExceptionHandlerLog.Log(_logger, httpContext, exception, httpContext.Response.StatusCode);
         return true;
     }
 }

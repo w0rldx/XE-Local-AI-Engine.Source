@@ -4,6 +4,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
@@ -120,7 +121,8 @@ public sealed class DevelopmentExceptionHandlerTests
         AssertEx.Equal("Conflict", root.GetProperty("title").GetString());
         AssertEx.Equal(expected: 409, root.GetProperty("status").GetInt32());
         AssertEx.Equal("/api/local/v1/development/projects/p/tasks/t/next-action", root.GetProperty("instance").GetString());
-        AssertEx.Equal(context.TraceIdentifier, root.GetProperty("traceId").GetString());
+        // The W3C id every problem body carries (the ambient Activity's trace id), not the connection id.
+        AssertEx.Equal(ProblemDetailsExtensions.ResolveTraceId(context), root.GetProperty("traceId").GetString());
         AssertEx.Equal(exception.Message, root.GetProperty("detail").GetString());
         AssertEx.Equal(expected: 1, root.GetProperty("errors").GetArrayLength());
         AssertEx.Equal(exception.Message, root.GetProperty("errors")[0].GetProperty("reason").GetString());

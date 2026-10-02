@@ -272,8 +272,8 @@ public sealed partial class LlamaServerProcessSupervisor
             // at the verbosity the banner requires it is printed around line 155, outside any small window.
             var placementSniffer = variant == GpuVariant.Cpu ? null : new LlamaServerLayerPlacementSniffer();
 
-            // Flipped once this child is serving, to demote its raised-verbosity request chatter to Debug. It stays false for the whole load, and forever on a spawn
-            // that never reaches readiness, so the placement banner and every failure message are still logged at Information.
+            // Flipped once this child is serving, to detach the automatic startup capture below. It stays false for the whole load, and forever on a spawn that
+            // never reaches readiness, so the placement banner and every failure message still reach the sniffer and the startup buffer.
             var servingWindow = new LlamaServerDiagnosticVerbosityWindow();
             try
             {
@@ -317,8 +317,7 @@ public sealed partial class LlamaServerProcessSupervisor
                 {
                     spec = spec with
                     {
-                        Arguments = [.. spec.Arguments, "-lv", PlacementProbeLogVerbosity],
-                        ShouldDemoteForwardedLines = servingWindow.IsServing
+                        Arguments = [.. spec.Arguments, "-lv", PlacementProbeLogVerbosity]
                     };
                 }
 
@@ -420,7 +419,7 @@ public sealed partial class LlamaServerProcessSupervisor
                     speculative,
                     admitted);
 
-                // The load window is over and the banner has been read: drop the child's raised-verbosity chatter to Debug AND detach the automatic startup capture
+                // The load window is over and the banner has been read: detach the automatic startup capture
                 // (same latch as the StartupCapture wiring above). Deliberately after RecordObservedLayerPlacement, and never reached on a spawn that failed to be ready.
                 servingWindow.MarkServing();
 

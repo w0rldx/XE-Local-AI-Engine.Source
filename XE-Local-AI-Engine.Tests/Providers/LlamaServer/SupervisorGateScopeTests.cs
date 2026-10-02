@@ -133,10 +133,8 @@ public sealed class SupervisorGateScopeTests
         AssertEx.Equal(expected: 1, report.RecordCount);
 
         var spec = launcher.Launches.Single();
-        AssertEx.True(spec.ShouldDemoteForwardedLines!(),
-            "Readiness must latch the serving window — the one latch that both demotes forwarded lines and detaches the automatic capture.");
 
-        // The launcher captured the sink delegate at process start, so serving-time lines still reach it; the sink
+        // Readiness latched the serving window. The launcher captured the sink delegate at process start, so serving-time lines still reach it; the sink
         // itself must now drop them rather than copy each into a buffer nothing reads again. Both buffers behind the
         // sink are write-only after readiness (which is exactly why detaching is safe), so this asserts the reachable
         // half: the sink is still callable and nothing downstream moves.

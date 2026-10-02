@@ -51,6 +51,7 @@
 
   <ItemGroup>
     <Content Include="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest"/>
+    <Content Include="Fixtures\*.log" CopyToOutputDirectory="PreserveNewest"/>
     <Content Include="Fixtures\Transcription\*" CopyToOutputDirectory="PreserveNewest"/>
     <Content Include="Fixtures\WebAccess\*" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>

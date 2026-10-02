@@ -23,15 +23,17 @@ using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 /// </remarks>
 internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
 {
-    // At most one demoted serving-time slot line per process is promoted back to Information in this window.
+    // At most one slot-module line per process is promoted to Information in this window.
     internal const long PromotedLineIntervalMilliseconds = 5000;
 
     private readonly ILogger<LlamaServerProcessLauncher> _logger;
+    private readonly ChildProcessOutputTailRegistry _outputTails;
 
-    public LlamaServerProcessLauncher(ILogger<LlamaServerProcessLauncher> logger)
+    public LlamaServerProcessLauncher(ILogger<LlamaServerProcessLauncher> logger, ChildProcessOutputTailRegistry? outputTails = null)
     {
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
+        _outputTails = outputTails ?? new ChildProcessOutputTailRegistry();
     }
 
     /// <inheritdoc />
@@ -45,22 +47,19 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
         // Optional per-line capture sink — set only for operator profiling spawns; null for every normal spawn.
         var capture = spec.StartupCapture;
 
-        // Null for every operator-driven spawn, so those keep logging at Information exactly as before.
-        var demote = spec.ShouldDemoteForwardedLines;
-
         if (OperatingSystem.IsWindows())
         {
-            return LaunchWindows(BuildStartInfo(spec), label, capture, demote);
+            return LaunchWindows(BuildStartInfo(spec), label, capture);
         }
 
         if (OperatingSystem.IsLinux())
         {
-            return LaunchLinux(BuildStartInfo(spec), label, capture, demote);
+            return LaunchLinux(BuildStartInfo(spec), label, capture);
         }
 
         // macOS and other Unix: no Job Object and no setsid wrapper, supervised GPU inference targeting Windows and Linux, the only platforms with a dedicated
         // containment primitive. On the CPU floor elsewhere a plain process whose own tree-kill tears down the server keeps the launcher functional.
-        return LaunchPlain(BuildStartInfo(spec), label, capture, demote);
+        return LaunchPlain(BuildStartInfo(spec), label, capture);
     }
 
     private static ProcessStartInfo BuildStartInfo(LlamaServerLaunchSpec spec)
@@ -84,18 +83,18 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
     }
 
     [SupportedOSPlatform("windows")]
-    private IProcessTreeHandle LaunchWindows(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
+    private IProcessTreeHandle LaunchWindows(ProcessStartInfo startInfo, string label, Action<string>? capture)
     {
         // Wrap takes ownership of the process and disposes it on any containment failure.
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a containment failure.
-        var process = StartProcess(startInfo, label, capture, demote);
+        var process = StartProcess(startInfo, label, capture);
         return WindowsJobObjectProcessHandle.Wrap(process,
             static ex => new LlamaRuntimeException("The local model runtime could not be contained for safe shutdown.", ex));
 #pragma warning restore CA2000
     }
 
     [SupportedOSPlatform("linux")]
-    private IProcessTreeHandle LaunchLinux(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
+    private IProcessTreeHandle LaunchLinux(ProcessStartInfo startInfo, string label, Action<string>? capture)
     {
         // Run llama-server under `setsid` so it leads a new process group; tree-kill = kill(-pgid). The server inherits
         // setsid's redirected stdout/stderr, so the forwarding wired in StartProcess still captures the server's output.
@@ -104,18 +103,18 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
         startInfo.ArgumentList.Insert(index: 0, serverPath);
 
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return LinuxProcessGroupHandle.Wrap(StartProcess(startInfo, label, capture, demote));
+        return LinuxProcessGroupHandle.Wrap(StartProcess(startInfo, label, capture));
 #pragma warning restore CA2000
     }
 
-    private IProcessTreeHandle LaunchPlain(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
+    private IProcessTreeHandle LaunchPlain(ProcessStartInfo startInfo, string label, Action<string>? capture)
     {
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return PlainProcessHandle.Wrap(StartProcess(startInfo, label, capture, demote));
+        return PlainProcessHandle.Wrap(StartProcess(startInfo, label, capture));
 #pragma warning restore CA2000
     }
 
-    private Process StartProcess(ProcessStartInfo startInfo, string label, Action<string>? capture, Func<bool>? demote)
+    private Process StartProcess(ProcessStartInfo startInfo, string label, Action<string>? capture)
     {
         var process = new Process
         {
@@ -123,11 +122,21 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
         };
 
         var lastPromoted = new StrongBox<long>(-PromotedLineIntervalMilliseconds);
+        var tail = _outputTails.Register($"llama-server[{label}]");
 
-        // Forward both streams to the app log and, for profiling spawns, the optional capture sink. Attached before Start, as the Process API requires, and pumped
-        // through the async begin-read APIs, so the pipes are drained continuously and never stall the child.
-        process.OutputDataReceived += (_, e) => ForwardLine(label, e.Data, capture, demote, lastPromoted);
-        process.ErrorDataReceived += (_, e) => ForwardLine(label, e.Data, capture, demote, lastPromoted);
+        // Forward both streams to the log, the output tail and the optional capture sink, attached before Start and pumped by the begin-read APIs so the
+        // pipes never stall the child. stderr's end-of-stream (null Data) stamps the tail exited: the pipe closes once the whole tree is gone.
+        process.OutputDataReceived += (_, e) => ForwardLine(label, e.Data, tail, capture, lastPromoted);
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data is null)
+            {
+                _outputTails.MarkExited(tail);
+                return;
+            }
+
+            ForwardLine(label, e.Data, tail, capture, lastPromoted);
+        };
 
         try
         {
@@ -141,11 +150,13 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
         }
         catch (LlamaRuntimeException)
         {
+            _outputTails.MarkExited(tail);
             process.Dispose();
             throw;
         }
         catch (Exception ex)
         {
+            _outputTails.MarkExited(tail);
             process.Dispose();
             throw new LlamaRuntimeException("The local model runtime could not be started.", ex);
         }
@@ -153,24 +164,26 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
         return process;
     }
 
-    // A line is logged at Information, the level the desktop console surfaces, so the llama.cpp backend banner and model-load summary reach the default app log. The
-    // final end-of-stream callback carries null Data, and a capture sink is invoked AFTER logging, both pipes calling this concurrently so the sink must be thread-safe.
-    private void ForwardLine(string label, string? line, Action<string>? capture, Func<bool>? demote, StrongBox<long> lastPromoted)
+    // Every line reaches the tail; only markers and the rate-limited slot line are logged at Information (what the desktop console shows), the rest at
+    // Debug. The capture sink runs AFTER logging, from both pipes concurrently, so it must be thread-safe.
+    private void ForwardLine(string label, string? line, ProcessStderrTail tail, Action<string>? capture, StrongBox<long> lastPromoted)
     {
         if (string.IsNullOrWhiteSpace(line))
         {
             return;
         }
 
-        var level = demote is not null && demote() && !TryPromoteServingLine(line, Environment.TickCount64, ref lastPromoted.Value)
-            ? LogLevel.Debug
-            : LogLevel.Information;
-        _logger.Log(level, "llama-server[{Label}] {Line}", label, line);
+        tail.Append(line);
+        var promoted = IsMarkerLine(line) || TryPromoteServingLine(line, Environment.TickCount64, ref lastPromoted.Value);
+        _logger.Log(promoted ? LogLevel.Information : LogLevel.Debug, "llama-server[{Label}] {Line}", label, line);
         capture?.Invoke(line);
     }
 
+    /// <summary>Whether a forwarded line is a marker kept at Information: errors, warnings, CUDA, backend, load summary and readiness lines.</summary>
+    internal static bool IsMarkerLine(string line) => MarkerLineRegex().IsMatch(line);
+
     /// <summary>
-    ///     Whether a demoted serving-time line is kept at Information: only <c>slot</c>-module lines (prompt progress, timings, release), at most one per
+    ///     Whether a non-marker line is kept at Information: only <c>slot</c>-module lines (prompt progress, timings, release), at most one per
     ///     <see cref="PromotedLineIntervalMilliseconds" /> per process.
     /// </summary>
     /// <remarks>
@@ -193,4 +206,9 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
     // ("0.06.876.442 I slot   load_model: ..."). Anchored, so "srv  update_slots" or a path containing "slot" never matches.
     [GeneratedRegex(@"^\s*(?:\S+\s+[A-Z]\s+)?slot\s", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex SlotLineRegex();
+
+    // Substring markers, case-insensitive. "warn" also covers "warning", "fail" covers "failed".
+    [GeneratedRegex(@"error|warn|fail|cuda|out of memory|ggml_backend|load_tensors|offloaded|print_info: model type|print_info: file size|listening|all slots are idle",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex MarkerLineRegex();
 }

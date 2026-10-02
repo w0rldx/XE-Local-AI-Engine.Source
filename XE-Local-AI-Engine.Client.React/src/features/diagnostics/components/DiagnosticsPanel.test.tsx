@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,7 +18,8 @@ const fixtures = vi.hoisted(() => ({
 	isLoading: false,
 	isError: false,
 	captureSnapshot: vi.fn((..._args: unknown[]) => Promise.resolve({})),
-	exportSnapshot: vi.fn((..._args: unknown[]) => undefined),
+	exportSupportBundle: vi.fn((..._args: unknown[]) => Promise.resolve()),
+	nodeInfo: undefined as Record<string, unknown> | undefined,
 	importMutate: vi.fn(),
 	deleteMutate: vi.fn(),
 	clearMutate: vi.fn(),
@@ -32,8 +34,12 @@ vi.mock("@/features/diagnostics/BuildSnapshot", () => ({
 	captureSnapshot: (...args: unknown[]) => fixtures.captureSnapshot(...args),
 }));
 
-vi.mock("@/features/diagnostics/ExportSnapshot", () => ({
-	exportSnapshot: (...args: unknown[]) => fixtures.exportSnapshot(...args),
+vi.mock("@/features/diagnostics/SupportBundle", () => ({
+	exportSupportBundle: (...args: unknown[]) => fixtures.exportSupportBundle(...args),
+}));
+
+vi.mock("@/features/diagnostics/queries/useNodeInfo", () => ({
+	useNodeInfo: () => ({ data: fixtures.nodeInfo }),
 }));
 
 vi.mock("@/features/diagnostics/UseSnapshots", () => ({
@@ -62,9 +68,11 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
 
 function renderPanel(ui: ReactElement) {
 	return render(
-		<MantineProvider env="test" theme={testMantineTheme}>
-			{ui}
-		</MantineProvider>,
+		<QueryClientProvider client={new QueryClient()}>
+			<MantineProvider env="test" theme={testMantineTheme}>
+				{ui}
+			</MantineProvider>
+		</QueryClientProvider>,
 	);
 }
 
@@ -75,6 +83,8 @@ describe("DiagnosticsPanel", () => {
 		fixtures.isError = false;
 		fixtures.captureSnapshot.mockClear();
 		fixtures.importMutate.mockClear();
+		fixtures.exportSupportBundle.mockClear();
+		fixtures.nodeInfo = undefined;
 		Object.defineProperty(window, "matchMedia", {
 			writable: true,
 			value: vi.fn().mockImplementation((query: string) => ({
@@ -158,5 +168,36 @@ describe("DiagnosticsPanel", () => {
 		const input = container.querySelector('input[type="file"]');
 		expect(input?.getAttribute("aria-hidden")).toBe("true");
 		expect(input?.getAttribute("tabindex")).toBe("-1");
+	});
+
+	it("exports the merged support bundle for the row's snapshot", async () => {
+		const snapshot = makeSnapshot({ id: "row-1" });
+		fixtures.snapshots = [snapshot];
+
+		renderPanel(<DiagnosticsPanel />);
+		fireEvent.click(screen.getByRole("button", { name: "Export" }));
+
+		await waitFor(() => expect(fixtures.exportSupportBundle).toHaveBeenCalledTimes(1));
+		expect(fixtures.exportSupportBundle.mock.calls[0]?.[0]).toBe(snapshot);
+	});
+
+	it("links a prefilled GitHub issue in a new tab once node info is known", () => {
+		fixtures.snapshots = [makeSnapshot()];
+		fixtures.nodeInfo = { version: "1.2.3", repositoryUrl: "https://github.com/acme/xe", osDescription: "Ubuntu 24.04 LTS" };
+
+		renderPanel(<DiagnosticsPanel />);
+
+		const link = screen.getByRole("link", { name: "Open GitHub issue" });
+		expect(link.getAttribute("href")).toMatch(
+			/^https:\/\/github\.com\/acme\/xe\/issues\/new\?template=bug_report\.yml&title=Boom%20happened&version=1\.2\.3&os=Linux/,
+		);
+		expect(link.getAttribute("target")).toBe("_blank");
+		expect(link.getAttribute("rel")).toContain("noopener");
+	});
+
+	it("hides the issue link while node info is unavailable", () => {
+		renderPanel(<DiagnosticsPanel />);
+
+		expect(screen.queryByRole("link", { name: "Open GitHub issue" })).toBeNull();
 	});
 });

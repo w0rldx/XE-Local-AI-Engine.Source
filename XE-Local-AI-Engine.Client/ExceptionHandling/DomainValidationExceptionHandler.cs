@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.ExceptionHandling;
 
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.IdentityModel.JsonWebTokens;
+using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
@@ -80,7 +81,7 @@ public sealed class DomainValidationExceptionHandler : IExceptionHandler
             RequestLogSanitizer.Sanitize(httpContext.Request.Method),
             RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),
             StatusCodes.Status400BadRequest,
-            httpContext.TraceIdentifier,
+            ProblemDetailsExtensions.ResolveTraceId(httpContext),
             httpContext.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "anonymous",
             exception.GetType().Name);
 

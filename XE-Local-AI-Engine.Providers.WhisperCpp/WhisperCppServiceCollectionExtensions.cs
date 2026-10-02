@@ -74,6 +74,7 @@ public static class WhisperCppServiceCollectionExtensions
                 sp.GetRequiredService<IWhisperInstalledRuntimeStore>(),
                 sp.GetRequiredService<IWhisperManagedSourceBuildSignal>()));
 
+        services.AddChildProcessOutputTails();
         services.TryAddSingleton<IWhisperServerProcessLauncher, WhisperServerProcessLauncher>();
         services.TryAddSingleton<IWhisperServerReadinessProbe>(static sp =>
             new WhisperServerReadinessProbe(sp.GetRequiredService<IHttpClientFactory>().CreateClient(RuntimeHttpClientName),

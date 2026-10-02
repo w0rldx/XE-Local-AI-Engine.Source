@@ -21,11 +21,13 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLauncher
 {
     private readonly ILogger<WhisperServerProcessLauncher> _logger;
+    private readonly ChildProcessOutputTailRegistry _outputTails;
 
-    public WhisperServerProcessLauncher(ILogger<WhisperServerProcessLauncher> logger)
+    public WhisperServerProcessLauncher(ILogger<WhisperServerProcessLauncher> logger, ChildProcessOutputTailRegistry? outputTails = null)
     {
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
+        _outputTails = outputTails ?? new ChildProcessOutputTailRegistry();
     }
 
     /// <inheritdoc />
@@ -110,6 +112,8 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
             StartInfo = startInfo
         };
 
+        _outputTails.Register($"whisper-server[{label}]", stderrTail);
+
         try
         {
             if (!process.Start())
@@ -123,11 +127,13 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
         }
         catch (WhisperRuntimeException)
         {
+            _outputTails.MarkExited(stderrTail);
             process.Dispose();
             throw;
         }
         catch (Exception ex)
         {
+            _outputTails.MarkExited(stderrTail);
             process.Dispose();
             throw new WhisperRuntimeException("The transcription runtime could not be started.", ex);
         }
@@ -163,6 +169,12 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
             // The stream dies with the process (a tree-kill closes the pipe mid-read). Losing the tail of the log is
             // expected there and must never surface as an unobserved task exception.
             _logger.LogDebug(exception, "whisper-server[{Label}] output drain ended.", label);
+        }
+
+        // stderr closes when the server and every descendant holding the pipe are gone: stamp the registered tail exited.
+        if (stderrTail is not null)
+        {
+            _outputTails.MarkExited(stderrTail);
         }
     }
 }

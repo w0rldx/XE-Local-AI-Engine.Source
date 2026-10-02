@@ -10,10 +10,14 @@ import { SCHEMA_VERSION, type Snapshot } from "@/core/diagnostics/Diagnostics";
 
 const ARCHIVE_ENTRY = "snapshot.json";
 
+/** The archive entries that carry a snapshot; the support bundle adds exactly these next to the server's files. */
+export function snapshotArchiveEntries(snapshot: Snapshot): Record<string, Uint8Array> {
+	return { [ARCHIVE_ENTRY]: strToU8(JSON.stringify(snapshot)) };
+}
+
 /** Serialize a snapshot to a zipped JSON archive (pure; reused by `exportSnapshot` and tests). */
 export function serializeSnapshotZip(snapshot: Snapshot): Uint8Array {
-	const json = JSON.stringify(snapshot);
-	return zipSync({ [ARCHIVE_ENTRY]: strToU8(json) });
+	return zipSync(snapshotArchiveEntries(snapshot));
 }
 
 /** Parse + validate a zipped JSON archive back into a Snapshot. Throws on a malformed/unsupported archive. */

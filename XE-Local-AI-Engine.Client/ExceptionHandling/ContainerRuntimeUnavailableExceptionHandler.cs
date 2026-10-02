@@ -15,6 +15,13 @@ using XE_Local_AI_Engine.Client.Services.Containers;
 /// </remarks>
 public sealed class ContainerRuntimeUnavailableExceptionHandler : IExceptionHandler
 {
+    private readonly ILogger<ContainerRuntimeUnavailableExceptionHandler> _logger;
+
+    public ContainerRuntimeUnavailableExceptionHandler(ILogger<ContainerRuntimeUnavailableExceptionHandler> logger)
+    {
+        _logger = logger;
+    }
+
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
@@ -27,6 +34,7 @@ public sealed class ContainerRuntimeUnavailableExceptionHandler : IExceptionHand
 
         await FastEndpointsProblemWriter
             .WriteAsync(httpContext, unavailable.Message, StatusCodes.Status503ServiceUnavailable, cancellationToken);
+        ExceptionHandlerLog.Log(_logger, httpContext, exception, httpContext.Response.StatusCode);
         return true;
     }
 }
