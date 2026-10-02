@@ -122,6 +122,7 @@ import {
 	deleteTrainingDataset,
 	deleteTrainingDefinition,
 	deleteTranscriptionSession,
+	deleteUploadedImage,
 	deleteWorkSession,
 	deleteWorkspace,
 	detectDevelopmentRepositoryProfile,
@@ -333,6 +334,7 @@ import {
 	listTrainingSamples,
 	listTranscriptionModels,
 	listTranscriptionSessions,
+	listUploadedImages,
 	listWorkSessionArtifacts,
 	listWorkSessionCheckpoints,
 	listWorkSessionEvents,
@@ -465,6 +467,7 @@ import {
 	updateTranscriptSegment,
 	updateWorkSession,
 	uploadConversationFile,
+	uploadImage,
 	uploadKnowledgeDocument,
 	uploadTranscriptionAudio,
 	validateExecutable,
@@ -756,6 +759,9 @@ import type {
 	DeleteTrainingDefinitionResponse,
 	DeleteTranscriptionSessionData,
 	DeleteTranscriptionSessionResponse,
+	DeleteUploadedImageData,
+	DeleteUploadedImageError,
+	DeleteUploadedImageResponse,
 	DeleteWorkSessionData,
 	DeleteWorkSessionError,
 	DeleteWorkSessionResponse,
@@ -1240,6 +1246,9 @@ import type {
 	ListTranscriptionSessionsData,
 	ListTranscriptionSessionsError,
 	ListTranscriptionSessionsResponse,
+	ListUploadedImagesData,
+	ListUploadedImagesError,
+	ListUploadedImagesResponse,
 	ListWorkSessionArtifactsData,
 	ListWorkSessionArtifactsError,
 	ListWorkSessionArtifactsResponse,
@@ -1596,6 +1605,9 @@ import type {
 	UploadConversationFileData,
 	UploadConversationFileError,
 	UploadConversationFileResponse,
+	UploadImageData,
+	UploadImageError,
+	UploadImageResponse,
 	UploadKnowledgeDocumentData,
 	UploadKnowledgeDocumentResponse,
 	UploadTranscriptionAudioData,
@@ -7099,6 +7111,103 @@ export const getStableDiffusionCppSourceBuildStatusOptions = (options?: Options<
 		},
 		queryKey: getStableDiffusionCppSourceBuildStatusQueryKey(options),
 	});
+
+export const listUploadedImagesQueryKey = (options?: Options<ListUploadedImagesData>) =>
+	createQueryKey("listUploadedImages", options);
+
+export const listUploadedImagesOptions = (options?: Options<ListUploadedImagesData>) =>
+	queryOptions<
+		ListUploadedImagesResponse,
+		AxiosError<ListUploadedImagesError>,
+		ListUploadedImagesResponse,
+		ReturnType<typeof listUploadedImagesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listUploadedImages({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listUploadedImagesQueryKey(options),
+	});
+
+export const listUploadedImagesInfiniteQueryKey = (
+	options?: Options<ListUploadedImagesData>,
+): QueryKey<Options<ListUploadedImagesData>> => createQueryKey("listUploadedImages", options, true);
+
+export const listUploadedImagesInfiniteOptions = (options?: Options<ListUploadedImagesData>) => {
+	const opts = infiniteQueryOptions<
+		ListUploadedImagesResponse,
+		AxiosError<ListUploadedImagesError>,
+		InfiniteData<ListUploadedImagesResponse>,
+		QueryKey<Options<ListUploadedImagesData>>,
+		number | null | Pick<QueryKey<Options<ListUploadedImagesData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListUploadedImagesData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									offset: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listUploadedImages({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listUploadedImagesInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
+export const uploadImageMutation = (
+	options?: Partial<Options<UploadImageData>>,
+): UseMutationOptions<UploadImageResponse, AxiosError<UploadImageError>, Options<UploadImageData>> => {
+	const mutationOptions: UseMutationOptions<UploadImageResponse, AxiosError<UploadImageError>, Options<UploadImageData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await uploadImage({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteUploadedImageMutation = (
+	options?: Partial<Options<DeleteUploadedImageData>>,
+): UseMutationOptions<DeleteUploadedImageResponse, AxiosError<DeleteUploadedImageError>, Options<DeleteUploadedImageData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteUploadedImageResponse,
+		AxiosError<DeleteUploadedImageError>,
+		Options<DeleteUploadedImageData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteUploadedImage({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const retrieveImageQueryKey = (options: Options<RetrieveImageData>) => createQueryKey("retrieveImage", options);
 

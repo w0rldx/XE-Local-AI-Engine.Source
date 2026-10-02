@@ -41,7 +41,10 @@ public sealed class ImageJobStore : IImageJobStore
             Sampler = create.Sampler,
             CfgScale = create.CfgScale,
             Status = ImageJobStatus.Queued,
-            CreatedAtUtc = create.CreatedAtUtc
+            CreatedAtUtc = create.CreatedAtUtc,
+            EditMode = create.EditMode is { } mode ? ImageEditModeNames.ToName(mode) : null,
+            SourceImageId = create.SourceImageId,
+            Strength = create.Strength
         };
 
         _ = _dbContext.ImageJobs.Add(entity);
@@ -254,7 +257,11 @@ public sealed class ImageJobStore : IImageJobStore
             DurationMs = entity.DurationMs,
             ImageId = entity.ImageId,
             SanitizedError = entity.SanitizedError,
-            CancellationRequestedAtUtc = entity.CancellationRequestedAtUtc
+            CancellationRequestedAtUtc = entity.CancellationRequestedAtUtc,
+            // An unrecognised stored name reads as no mode rather than failing the whole list.
+            EditMode = ImageEditModeNames.TryParse(entity.EditMode, out var mode) ? mode : null,
+            SourceImageId = entity.SourceImageId,
+            Strength = entity.Strength
         };
     }
 }

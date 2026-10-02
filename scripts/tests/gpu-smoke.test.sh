@@ -197,6 +197,81 @@ check "a failed job fails" "1" "$?"
 assert_image_result "$(records 'status\tSucceeded\npng\ttrue\nbytes\t78102\nerror\t\n')" >/dev/null 2>&1
 check "a real PNG passes" "0" "$?"
 
+echo "== image edit =="
+
+edit_ok='status\tSucceeded\npng\ttrue\nbytes\t91234\nerror\t\neditMode\timg2img\nsourceImageId\tup-1\nsubmitMs\t12\nsha256\taaa111\n'
+assert_image_edit_result "$(records "${edit_ok}")" "img2img" "up-1" "ccc333" >/dev/null 2>&1
+check "a succeeded img2img edit that differs from its control passes" "0" "$?"
+
+# A provider that drops the source pixels runs plain text-to-image under the edit's job metadata.
+out="$(assert_image_edit_result "$(records "${edit_ok}")" "img2img" "up-1" "aaa111" 2>&1)"; status=$?
+check "an edit byte-identical to its text-to-image control fails" "1" "${status}"
+check_contains "identical hashes say the source was not used" "the source image was not used" "${out}"
+
+out="$(assert_image_edit_result "$(records "${edit_ok}")" "img2img" "up-1" "" 2>&1)"; status=$?
+check "an edit with no control hash fails" "1" "${status}"
+check_contains "missing control hash is called out" "not proven" "${out}"
+
+out="$(assert_image_edit_result "$(records 'status\tSucceeded\npng\ttrue\nbytes\t91234\nerror\t\neditMode\timg2img\nsourceImageId\tup-1\n')" "img2img" "up-1" "ccc333" 2>&1)"; status=$?
+check "an edit with no hash of its own fails" "1" "${status}"
+check_contains "missing edit hash is called out" "not proven" "${out}"
+
+out="$(assert_image_edit_result "$(records 'status\tFailed\npng\tfalse\nbytes\t0\nerror\tsd-server died\neditMode\timg2img\nsourceImageId\tup-1\n')" "img2img" "up-1" 2>&1)"; status=$?
+check "a failed edit job fails" "1" "${status}"
+check_contains "a failed edit names the step" "7-image-edit" "${out}"
+
+assert_image_edit_result "$(records 'status\tFailed\npng\tfalse\nbytes\t0\nerror\t\neditMode\timg2img\nsourceImageId\tup-1\n')" "img2img" "up-1" >/dev/null 2>&1
+check "a non-succeeded status without an error text still fails" "1" "$?"
+
+out="$(assert_image_edit_result "$(records 'status\tSucceeded\npng\ttrue\nbytes\t91234\nerror\t\neditMode\timg2img\nsourceImageId\tother\n')" "img2img" "up-1" 2>&1)"; status=$?
+check "an edit on the wrong source id fails" "1" "${status}"
+check_contains "wrong source names the uploaded id" "up-1" "${out}"
+
+assert_image_edit_result "$(records 'status\tSucceeded\npng\tfalse\nbytes\t512\nerror\t\neditMode\timg2img\nsourceImageId\tup-1\n')" "img2img" "up-1" >/dev/null 2>&1
+check "an edit whose bytes are not a PNG fails" "1" "$?"
+
+# A node that dropped the edit fields would run plain text-to-image and pass everything else.
+assert_image_edit_result "$(records 'status\tSucceeded\npng\ttrue\nbytes\t91234\nerror\t\neditMode\t\nsourceImageId\t\n')" "img2img" "up-1" >/dev/null 2>&1
+check "an edit with no editMode on the job fails" "1" "$?"
+
+# Two-source oracle: a dropped init image can still differ from the text-to-image control, so the
+# load-bearing check is that two different sources give different bytes.
+assert_edit_depends_on_source "img2img" "aaa111" "bbb222" >/dev/null 2>&1
+check "edits from two different sources that differ pass" "0" "$?"
+
+out="$(assert_edit_depends_on_source "img2img" "aaa111" "aaa111" 2>&1)"; status=$?
+check "edits byte-identical across two sources fail" "1" "${status}"
+check_contains "identical across sources says the source was not used" "does not depend on the source image" "${out}"
+
+out="$(assert_edit_depends_on_source "reference" "aaa111" "" 2>&1)"; status=$?
+check "a missing second-source hash fails" "1" "${status}"
+check_contains "missing second-source hash is called out" "not proven" "${out}"
+
+assert_edit_depends_on_source "img2img" "" "" >/dev/null 2>&1
+check "no hashes at all fail" "1" "$?"
+
+neg_ref='negative\trefused\nhttpStatus\t400\nmessage\t{"errors":[{"reason":"The selected model does not support this edit mode."}]}\n'
+assert_image_edit_negative "$(records "${neg_ref}")" "does not support this edit mode" "reference" >/dev/null 2>&1
+check "a 400 with the fixed message is a negative-control pass" "0" "$?"
+
+out="$(assert_image_edit_negative "" "does not support this edit mode" "reference" 2>&1)"; status=$?
+check "a missing negative control fails" "1" "${status}"
+check_contains "missing negative control is called out" "not a pass" "${out}"
+
+assert_image_edit_negative "$(records 'negative\taccepted\nhttpStatus\t201\nmessage\t{}\n')" "does not support this edit mode" "reference" >/dev/null 2>&1
+check "an accepted unsupported mode fails" "1" "$?"
+
+assert_image_edit_negative "$(records 'negative\terror\nhttpStatus\t\nmessage\tHTTP 500\n')" "The edit mode must be" "bogus" >/dev/null 2>&1
+check "a 5xx negative control fails" "1" "$?"
+
+assert_image_edit_negative "$(records 'negative\trefused\nhttpStatus\t400\nmessage\t{"errors":[{"reason":"Prompt is required."}]}\n')" "The edit mode must be" "bogus" >/dev/null 2>&1
+check "a 400 for an unrelated reason fails" "1" "$?"
+
+modes_records="$(records 'imageModel\tsd-1.5\nimageModelEditModes\tsd-1.5|img2img\nimageModelEditModes\tqwen-image|img2img,reference\n')"
+check "edit modes are read per model" "img2img,reference" "$(image_model_edit_modes "${modes_records}" "qwen-image")"
+image_model_edit_modes "${modes_records}" "absent" >/dev/null 2>&1
+check "an unknown model has no edit modes" "1" "$?"
+
 echo "== eject =="
 
 # Read by assert_vram_released in the sourced script.
@@ -369,6 +444,21 @@ ledger_reset
 ledger_expect "a"; ledger_pass "a" >/dev/null; ledger_skip "6-image"
 out="$(ledger_finalize 2>&1)"
 check_contains "an un-requested opt-in step reads as routine" "opt-in; not requested" "${out}"
+
+# Without --images the edit step is skipped as opt-in, labelled by name, and never counted.
+ledger_reset
+ledger_expect "a"; ledger_pass "a" >/dev/null; ledger_skip "6-image"; ledger_skip "7-image-edit"
+out="$(ledger_finalize 2>&1)"; status=$?
+check "an un-requested image edit does not fail the run" "0" "${status}"
+check_contains "the image-edit skip is labelled opt-in" "7-image-edit  (opt-in; not requested)" "${out}"
+
+# With --images, an image-edit step whose negative control never ran must not end green.
+ledger_reset
+ledger_expect "7-image-edit"
+assert_image_edit_negative "" "does not support this edit mode" "reference" >/dev/null 2>&1
+out="$(ledger_finalize 2>&1)"; status=$?
+check "an image edit without a negative-control verdict fails the run" "1" "${status}"
+check_contains "the missing control is reported FAILED" "FAILED     7-image-edit" "${out}"
 
 ledger_reset
 ledger_expect "a"; ledger_pass "a" >/dev/null; ledger_skip "5-tool-calling"

@@ -1,11 +1,14 @@
 import { Badge, Button, Card, Group, Progress, Stack, Text } from "@mantine/core";
+import { IconPencil } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ImageJobDeleteButton } from "@/features/images/components/ImageJobDeleteButton";
 import { ImageResultView } from "@/features/images/components/ImageResultView";
+import { ImageEditLineage } from "@/features/images/components/ImageSourceThumbnail";
 import { useImageJobProgress } from "@/features/images/hooks/useImageJobHub";
 import {
+	type ImageEditSource,
 	type ImageJobView,
 	type ImageProgressDisplay,
 	isTerminalStatus,
@@ -103,18 +106,23 @@ interface ImageJobCardProps {
 	job: ImageJobView;
 	isCancelling: boolean;
 	onCancel: (jobId: string) => void;
+	/** Opens the generation form on this job's image; absent when no installed model can edit. */
+	onEdit?: (source: ImageEditSource) => void;
 }
 
 // One image job row: queued → generating → succeeded/failed/cancelled, with the live generation timeline (phase, step
 // bar, estimate) underneath while the job runs. A cancellable job (queued or generating) shows a Cancel button; a
 // succeeded job shows its decrypted PNG. Delete sits beside them and is disabled until the job is terminal — the
 // node refuses an active job, and the button says so rather than letting the operator find out through a toast.
-export function ImageJobCard({ job, isCancelling, onCancel }: ImageJobCardProps) {
+export function ImageJobCard({ job, isCancelling, onCancel, onEdit }: ImageJobCardProps) {
 	const { t } = useTranslation();
 	const isGenerating = job.status === "Generating";
 	const elapsed = useElapsedSeconds(job.startedAtUtc, isGenerating);
 	const canCancel = !isTerminalStatus(job.status);
 	const display = toProgressDisplay(useImageJobProgress(job.id));
+	const imageId = job.status === "Succeeded" ? job.imageId : null;
+	const handleEdit =
+		onEdit === undefined || imageId === null ? undefined : () => onEdit({ imageId, width: job.width, height: job.height });
 
 	return (
 		<Card withBorder={true} padding="md" radius="md" data-testid="image-job-card">
@@ -148,8 +156,20 @@ export function ImageJobCard({ job, isCancelling, onCancel }: ImageJobCardProps)
 								sampler: job.sampler,
 							})}
 						</Text>
+						<ImageEditLineage job={job} />
 					</Stack>
 					<Group gap="xs" wrap="nowrap">
+						{handleEdit === undefined ? null : (
+							<Button
+								size="xs"
+								variant="subtle"
+								leftSection={<IconPencil size={14} />}
+								onClick={handleEdit}
+								data-testid="image-job-edit"
+							>
+								{t("pages.images.edit.action", "Edit")}
+							</Button>
+						)}
 						{canCancel ? (
 							<Button
 								size="xs"
@@ -174,7 +194,7 @@ export function ImageJobCard({ job, isCancelling, onCancel }: ImageJobCardProps)
 					</Text>
 				) : null}
 
-				{job.status === "Succeeded" && job.imageId ? <ImageResultView job={job} imageId={job.imageId} /> : null}
+				{imageId ? <ImageResultView job={job} imageId={imageId} onEdit={handleEdit} /> : null}
 			</Stack>
 		</Card>
 	);

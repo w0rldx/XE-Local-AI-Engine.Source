@@ -54,7 +54,7 @@ public sealed class ImageModelCatalogTests
     }
 
     [Test]
-    public void BundledCatalog_QwenImage21Entry_SpansThreeRepositories()
+    public void BundledCatalog_QwenImage21Entry_SpansThreeRepositoriesAndShipsTheVisionTower()
     {
         // The reason ImageModelPartRequest carries a per-part RepoId at all: Qwen-Image 2.1's diffusion transformer, its VAE and its
         // Qwen3-VL text encoder ship from three different repositories. A catalog entry that assumed one repo could not install it.
@@ -68,6 +68,10 @@ public sealed class ImageModelCatalogTests
         AssertEx.Null(RepoOf(qwen, "Diffusion"), "A part in the set's own repo must leave repoId null rather than repeat it.");
         AssertEx.Equal("Comfy-Org/Qwen-Image-2.1", RepoOf(qwen, "Vae"));
         AssertEx.Equal("Qwen/Qwen3-VL-8B-Instruct-GGUF", RepoOf(qwen, "Llm"));
+        // The vision projector is what makes a reference edit possible: sd-server refuses a Qwen-Image 2.1 reference edit without
+        // --llm_vision (measured 2026-10-02), so the curated set has to ship it.
+        AssertEx.Equal("Qwen/Qwen3-VL-8B-Instruct-GGUF", RepoOf(qwen, "LlmVision"));
+        AssertEx.Equal("mmproj-Qwen3VL-8B-Instruct-F16.gguf", qwen.Parts.Single(static p => p.Role == "LlmVision").FileName);
         AssertEx.False(document.Models.Any(static entry => entry.Id == "qwen-image"), "The 2.1 set replaces the original Qwen-Image entry.");
     }
 

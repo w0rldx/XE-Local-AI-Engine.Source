@@ -5,7 +5,7 @@ import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useServerTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import { ImageJobCard } from "@/features/images/components/ImageJobCard";
-import { type ImageJobView, imageJobPageSizeOptions } from "@/features/images/models/ImageModels";
+import { type ImageEditSource, type ImageJobView, imageJobPageSizeOptions } from "@/features/images/models/ImageModels";
 
 interface ImageJobListProps {
 	/** The CURRENT page of jobs, as the server ordered them. Never re-sorted or re-sliced here. */
@@ -19,6 +19,8 @@ interface ImageJobListProps {
 	onCancel: (jobId: string) => void;
 	onPageChange: (page: number) => void;
 	onPageSizeChange: (pageSize: number) => void;
+	/** Opens the generation form on a succeeded job's image; absent when no installed model can edit. */
+	onEdit?: (source: ImageEditSource) => void;
 }
 
 // The generation history / live queue. Server-state comes from TanStack Query (invalidated by the hub on each coarse
@@ -36,6 +38,7 @@ export function ImageJobList({
 	onCancel,
 	onPageChange,
 	onPageSizeChange,
+	onEdit,
 }: ImageJobListProps) {
 	const { t } = useTranslation();
 	// Hook order must not depend on the early returns below, so pagination is computed before them. This is also what
@@ -66,7 +69,7 @@ export function ImageJobList({
 	return (
 		<Stack gap="sm" data-testid="image-job-list">
 			{jobs.map((job) => (
-				<ImageJobCard key={job.id} job={job} isCancelling={cancellingJobId === job.id} onCancel={onCancel} />
+				<ImageJobCard key={job.id} job={job} isCancelling={cancellingJobId === job.id} onCancel={onCancel} onEdit={onEdit} />
 			))}
 			<TablePaginationFooter {...pagination} data-testid="image-job-list-pagination" />
 		</Stack>

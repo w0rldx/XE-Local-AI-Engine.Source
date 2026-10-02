@@ -29,6 +29,8 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
 
     private const string OutOfMemoryMessage = "The GPU ran out of memory while loading the image model. Unload other models and retry.";
 
+    private const string FeatureUnsupportedMessage = "The image runtime build does not support this edit mode.";
+
     private readonly SdServerJobClient _jobClient;
     private readonly IImageServerSupervisor _supervisor;
     private readonly IImageServerProgressBroker _progressBroker;
@@ -49,6 +51,7 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
     public async Task<ImageGenerationResult> GenerateAsync(ImageGenerationRequest request, IProgress<ImageGenProgress> progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
+        SdServerJobClient.ThrowIfEditSourceMissing(request);
 
         // The model name is validated by the supervisor's EnsureRunningAsync.
         var startedTimestamp = Stopwatch.GetTimestamp();
@@ -67,6 +70,11 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
         string? jobId = null;
         try
         {
+            if (request.Mode is { } mode)
+            {
+                await EnsureEditModeSupportedAsync(endpoint.BaseAddress, mode, ct).ConfigureAwait(false);
+            }
+
             jobId = await _jobClient.SubmitAsync(endpoint.BaseAddress, request, ct).ConfigureAwait(false);
             tracker.ReportCoarse(ImageGenPhase.Queued, queuePosition: null);
 
@@ -147,6 +155,29 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
 
             tracker.ReportCoarse(ImageGenPhase.Cancelled, queuePosition: null);
             throw;
+        }
+    }
+
+    /// <summary>
+    ///     Asks the running daemon once per edit job whether its build accepts the edit input; an older build would
+    ///     otherwise ignore the field and silently return a text-to-image result.
+    /// </summary>
+    private async Task EnsureEditModeSupportedAsync(Uri baseAddress, ImageEditMode mode, CancellationToken ct)
+    {
+        var capabilities = await _jobClient.GetCapabilitiesAsync(baseAddress, ct).ConfigureAwait(false);
+        var supported = mode switch
+        {
+            ImageEditMode.Img2Img => capabilities.InitImage,
+            ImageEditMode.Reference => capabilities.ReferenceImages,
+            _ => false
+        };
+
+        if (!supported)
+        {
+            throw new StableDiffusionRuntimeException(FeatureUnsupportedMessage)
+            {
+                FeatureUnsupported = true
+            };
         }
     }
 

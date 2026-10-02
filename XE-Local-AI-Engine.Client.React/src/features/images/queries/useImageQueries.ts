@@ -1,9 +1,11 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
+import { axiosInstance } from "@/core/api/axios/AxiosInstance";
 import type {
 	XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest as CreateImageJobRequest,
 	XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest as StartImageModelDownloadRequest,
+	XeLocalAiEngineClientEndpointsImagesV1UploadedImageResponse as UploadedImageResponse,
 } from "@/core/api/generated";
 import {
 	browseImageRepositoriesOptions,
@@ -12,14 +14,17 @@ import {
 	createImageJobMutation,
 	deleteImageJobMutation,
 	deleteImageModelMutation,
+	deleteUploadedImageMutation,
 	getImageModelCatalogOptions,
 	inspectImageRepositoryOptions,
 	listImageJobsOptions,
 	listImageModelDownloadsOptions,
 	listImageModelsOptions,
+	listUploadedImagesOptions,
 	startImageModelDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { imageBlobQueryKey } from "@/features/images/hooks/useImageObjectUrl";
 import {
 	toImageJobView,
@@ -28,6 +33,7 @@ import {
 	toImageModelView,
 	toImageRepositoryFileView,
 	toImageRepositoryView,
+	toUploadedImageView,
 } from "@/features/images/models/ImageModels";
 
 // Server-state for the image feature. Reads use the generated hey-api `*Options()` (shared axios + TanStack
@@ -42,6 +48,7 @@ const imageQueryIds = {
 	models: "listImageModels",
 	downloads: "listImageModelDownloads",
 	catalog: "getImageModelCatalog",
+	uploads: "listUploadedImages",
 } as const;
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one image endpoint. */
@@ -264,6 +271,58 @@ export function useDeleteImageModel() {
 			await invalidate(queryClient, imageQueryIds.models);
 			// Deleting frees the catalog row to offer Install again.
 			await invalidate(queryClient, imageQueryIds.catalog);
+		},
+	});
+}
+
+// One page of images uploaded to be edited, newest first, plus how many exist in total. Uploads are not jobs: nothing on
+// the hub announces them, so the upload and delete mutations below are what refresh this list. The previous page is
+// held over for the same reason as useImageJobs.
+export function useUploadedImages(limit: number, offset: number) {
+	return useQuery({
+		...withResponseValidation(listUploadedImagesOptions({ query: { limit, offset } })),
+		placeholderData: keepPreviousData,
+		select: (data) => ({ items: (data.items ?? []).map(toUploadedImageView), totalCount: data.totalCount ?? 0 }),
+		staleTime: 30_000,
+	});
+}
+
+// Uploads one PNG or JPEG as an edit source. Multipart goes through the shared axios instance rather than the generated
+// `uploadImage`, as useTranscriptionUpload and useKnowledgeUpload do: the instance defaults Content-Type to JSON and the
+// generated binary body does not reliably override it. Auth, XSRF and the ProblemDetails → ApiError mapping still
+// ride the instance interceptors, so the node's fixed 400 message reaches the caller as the error message.
+export function useUploadImage() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (file: File) => {
+			const formData = new FormData();
+			formData.append("file", file);
+			const { data } = await axiosInstance.post<UploadedImageResponse>(buildLocalApiUrl("images/uploads"), formData, {
+				headers: { "Content-Type": "multipart/form-data" },
+			});
+			return toUploadedImageView(data);
+		},
+		onSuccess: () => invalidate(queryClient, imageQueryIds.uploads),
+	});
+}
+
+// Deletes one uploaded image (row and encrypted blob). A job edited from it keeps its own result; a queued job that
+// still needs it fails with the node's "source image no longer exists" message. The cached bytes go with it, for the
+// same reason as useDeleteImageJob. The jobs list is refreshed too: a job derived from the upload now reads back with no
+// source image, which is what lets its card say the source was removed instead of offering a dead thumbnail.
+export function useDeleteUploadedImage() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (imageId: string) => {
+			const options = withResponseValidation(deleteUploadedImageMutation());
+			return await options.mutationFn?.({ path: { imageId } }, undefined as never);
+		},
+		onSuccess: async (_data, imageId) => {
+			queryClient.removeQueries({ queryKey: imageBlobQueryKey(imageId) });
+			await invalidate(queryClient, imageQueryIds.uploads);
+			await invalidate(queryClient, imageQueryIds.jobs);
 		},
 	});
 }

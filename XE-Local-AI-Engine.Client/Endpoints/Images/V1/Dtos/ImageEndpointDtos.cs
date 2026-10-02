@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1;
 
+using System.ComponentModel.DataAnnotations;
+
 /// <summary>
 ///     Body for <c>POST images/jobs</c>, carrying the text-to-image generation parameters.
 /// </summary>
@@ -39,6 +41,18 @@ public sealed class CreateImageJobRequest
 
     /// <summary>Classifier-free-guidance scale.</summary>
     public double CfgScale { get; init; } = 7.0;
+
+    /// <summary>
+    ///     <c>img2img</c> or <c>reference</c> to derive the image from <see cref="SourceImageId" />; <see langword="null" />
+    ///     for text-to-image. The mode must be one of the model's <c>editModes</c>.
+    /// </summary>
+    public string? EditMode { get; init; }
+
+    /// <summary>A gallery image or an uploaded image to edit; required with <see cref="EditMode" />.</summary>
+    public Guid? SourceImageId { get; init; }
+
+    /// <summary>Img2img strength from 0 to 1; only valid with <c>img2img</c>. Omitted uses the runtime default.</summary>
+    public double? Strength { get; init; }
 }
 
 /// <summary>Route-only request for <c>GET images/jobs/{jobId}</c> and <c>POST images/jobs/{jobId}/cancel</c>.</summary>
@@ -97,6 +111,14 @@ public sealed class ImageJobResponse
     public string? SanitizedError { get; init; }
 
     public long? CancellationRequestedAtUtc { get; init; }
+
+    /// <summary><c>img2img</c> or <c>reference</c> for an edit job; <see langword="null" /> for text-to-image.</summary>
+    public string? EditMode { get; init; }
+
+    /// <summary>The image the edit started from; <see langword="null" /> for text-to-image or once that image was deleted.</summary>
+    public Guid? SourceImageId { get; init; }
+
+    public double? Strength { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET images/jobs</c>, newest first, with the unpaged total.</summary>
@@ -171,6 +193,14 @@ public sealed class ImageModelResponse
 
     /// <summary>Recommended starting sampling-method name for this model's family.</summary>
     public required string DefaultSampler { get; init; }
+
+    /// <summary>The edit modes this model's family offers (<c>img2img</c>, <c>reference</c>); the form shows only these.</summary>
+    public required IReadOnlyList<string> EditModes { get; init; }
+
+    /// <summary>
+    ///     The family's native pixel budget (width × height); the form fits a source image's aspect ratio to it.
+    /// </summary>
+    public required int NativePixels { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET images/models</c>.</summary>
@@ -491,4 +521,59 @@ public sealed class InspectImageRepositoryResponse
     public string? License { get; init; }
 
     public required IReadOnlyList<ImageRepositoryFileResponse> Files { get; init; }
+}
+
+/// <summary>The multipart request for <c>POST images/uploads</c>.</summary>
+public sealed class UploadImageRequest
+{
+    /// <summary>
+    ///     OpenAPI metadata ONLY: always null at runtime and never read.
+    /// </summary>
+    /// <remarks>
+    ///     Form auto-binding is disabled so the image never reaches a framework-owned temp file; the endpoint reads the
+    ///     single file section into memory. Declared required because a request without a file is refused with a 400.
+    /// </remarks>
+    [Required]
+    public IFormFile File { get; init; } = null!;
+}
+
+/// <summary>One uploaded source image. Retrieve its bytes through <c>GET images/{imageId}</c>.</summary>
+public sealed class UploadedImageResponse
+{
+    public required Guid ImageId { get; init; }
+
+    /// <summary><c>image/png</c> or <c>image/jpeg</c>, decided by the file's magic bytes.</summary>
+    public required string MimeType { get; init; }
+
+    public required int Width { get; init; }
+
+    public required int Height { get; init; }
+
+    /// <summary>Unix-ms upload instant.</summary>
+    public required long CreatedAtUtc { get; init; }
+}
+
+/// <summary>Response envelope for <c>GET images/uploads</c>, newest first, with the unpaged total.</summary>
+public sealed class UploadedImageListResponse
+{
+    public required IReadOnlyList<UploadedImageResponse> Items { get; init; }
+
+    /// <summary>How many uploads exist in total, ignoring paging.</summary>
+    public required int TotalCount { get; init; }
+}
+
+/// <summary>Query for <c>GET images/uploads</c>.</summary>
+public sealed class ListUploadedImagesRequest
+{
+    /// <summary>How many uploads to return (1..200); absent means 100.</summary>
+    public int? Limit { get; init; }
+
+    /// <summary>How many uploads to skip (0 or more); absent means 0.</summary>
+    public int? Offset { get; init; }
+}
+
+/// <summary>Route request for <c>DELETE images/uploads/{imageId}</c>.</summary>
+public sealed class UploadedImageRouteRequest
+{
+    public Guid ImageId { get; init; }
 }

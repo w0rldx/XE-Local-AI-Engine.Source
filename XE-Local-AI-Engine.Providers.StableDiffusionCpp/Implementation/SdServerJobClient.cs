@@ -19,6 +19,11 @@ internal sealed class SdServerJobClient
 {
     internal const string ImgGenRoute = "sdcpp/v1/img_gen";
 
+    internal const string CapabilitiesRoute = "sdcpp/v1/capabilities";
+
+    // sd-server's own img2img default; applied when the request leaves the strength open.
+    private const double DefaultStrength = 0.75;
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
@@ -120,6 +125,59 @@ internal sealed class SdServerJobClient
         };
     }
 
+    /// <summary>
+    ///     Reads which edit inputs the running build accepts (<c>GET /sdcpp/v1/capabilities</c>). A non-success status or
+    ///     an unparsable body yields <see cref="SdServerCapabilities.None" />, so an edit fails closed rather than being
+    ///     silently ignored by an older build.
+    /// </summary>
+    public async Task<SdServerCapabilities> GetCapabilitiesAsync(Uri baseAddress, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(baseAddress);
+
+        using var response = await _httpClient.GetAsync(new Uri(baseAddress, CapabilitiesRoute), ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            return SdServerCapabilities.None;
+        }
+
+        CapabilitiesResponse? payload;
+        try
+        {
+            payload = await response.Content.ReadFromJsonAsync<CapabilitiesResponse>(JsonOptions, ct).ConfigureAwait(false);
+        }
+        catch (JsonException)
+        {
+            return SdServerCapabilities.None;
+        }
+
+        var imgGen = payload?.FeaturesByMode?.ImgGen;
+        return new SdServerCapabilities
+        {
+            InitImage = imgGen?.InitImage == true,
+            ReferenceImages = imgGen?.RefImages == true,
+            MaskImage = imgGen?.MaskImage == true
+        };
+    }
+
+    /// <summary>
+    ///     Throws <see cref="ArgumentException" /> when an edit mode is set without its source bytes: a caller bug, never
+    ///     sent to the daemon. The message names the field only, never its content.
+    /// </summary>
+    internal static void ThrowIfEditSourceMissing(ImageGenerationRequest request)
+    {
+        var missing = request.Mode switch
+        {
+            ImageEditMode.Img2Img when request.InitImage is not { IsEmpty: false } => nameof(ImageGenerationRequest.InitImage),
+            ImageEditMode.Reference when request.ReferenceImage is not { IsEmpty: false } => nameof(ImageGenerationRequest.ReferenceImage),
+            _ => null
+        };
+
+        if (missing is not null)
+        {
+            throw new ArgumentException($"The edit mode requires {missing}.", nameof(request));
+        }
+    }
+
     private static string JobRoute(string jobId)
     {
         return $"sdcpp/v1/jobs/{Uri.EscapeDataString(jobId)}";
@@ -132,8 +190,13 @@ internal sealed class SdServerJobClient
 
     private static ImgGenRequestBody MapRequest(ImageGenerationRequest request)
     {
+        ThrowIfEditSourceMissing(request);
+
         return new ImgGenRequestBody
         {
+            InitImage = request.Mode == ImageEditMode.Img2Img ? Convert.ToBase64String(request.InitImage!.Value.Span) : null,
+            Strength = request.Mode == ImageEditMode.Img2Img ? request.Strength ?? DefaultStrength : null,
+            RefImages = request.Mode == ImageEditMode.Reference ? [Convert.ToBase64String(request.ReferenceImage!.Value.Span)] : null,
             Prompt = request.Prompt,
             NegativePrompt = string.IsNullOrWhiteSpace(request.NegativePrompt) ? null : request.NegativePrompt,
             Seed = request.Seed,
@@ -231,6 +294,40 @@ internal sealed class SdServerJobClient
 
         [JsonPropertyName("output_format")]
         public string OutputFormat { get; init; } = "png";
+
+        // Raw base64 of the PNG/JPEG file bytes, no data: prefix.
+        [JsonPropertyName("init_image")]
+        public string? InitImage { get; init; }
+
+        [JsonPropertyName("ref_images")]
+        public IReadOnlyList<string>? RefImages { get; init; }
+
+        [JsonPropertyName("strength")]
+        public double? Strength { get; init; }
+    }
+
+    private sealed record CapabilitiesResponse
+    {
+        [JsonPropertyName("features_by_mode")]
+        public FeaturesByModeBody? FeaturesByMode { get; init; }
+    }
+
+    private sealed record FeaturesByModeBody
+    {
+        [JsonPropertyName("img_gen")]
+        public ImgGenFeaturesBody? ImgGen { get; init; }
+    }
+
+    private sealed record ImgGenFeaturesBody
+    {
+        [JsonPropertyName("init_image")]
+        public bool? InitImage { get; init; }
+
+        [JsonPropertyName("ref_images")]
+        public bool? RefImages { get; init; }
+
+        [JsonPropertyName("mask_image")]
+        public bool? MaskImage { get; init; }
     }
 
     private sealed record SampleParamsBody

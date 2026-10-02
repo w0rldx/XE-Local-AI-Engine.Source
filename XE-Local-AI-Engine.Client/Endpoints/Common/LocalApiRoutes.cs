@@ -498,8 +498,13 @@ public static class LocalApiRoutes
         // literal "cancel" segment follows the job id, keeping it distinct from JobById.
         public const string JobCancel = "images/jobs/{jobId}/cancel";
 
-        // Decrypted PNG retrieve. {imageId} is the server-generated image id (never a client-supplied path).
+        // Decrypted image retrieve (generated PNG or uploaded PNG/JPEG). {imageId} is the server-generated image id (never a client-supplied path).
         public const string ImageById = "images/{imageId}";
+
+        // Operator-uploaded edit sources: POST one multipart image, GET the list (newest first), DELETE one by id. The literal "uploads" segment outranks ImageById's
+        // {imageId} parameter in routing, so GET images/uploads never binds as an image id.
+        public const string Uploads = "images/uploads";
+        public const string UploadById = "images/uploads/{imageId}";
 
         // AI-assisted prompt drafting with a node-local chat model. Writes nothing — the draft only fills the form.
         public const string PromptDraft = "images/prompts/draft";

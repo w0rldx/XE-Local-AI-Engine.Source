@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
 
 /// <summary>
-///     Enqueues a text-to-image job, returning the freshly created Queued view. Operator-gated.
+///     Enqueues a text-to-image or image-edit job, returning the freshly created Queued view. Operator-gated.
 /// </summary>
 /// <remarks>
 ///     Thin transport over <see cref="IImageJobCoordinator" />: it validates the prompt and model and hands a
@@ -48,6 +48,13 @@ public sealed class CreateImageJobEndpoint : Endpoint<CreateImageJobRequest, Ima
         catch (ImageRuntimeBusyException exception)
         {
             await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy(exception.Message, _imageRuntime.GetActivitySnapshot()));
+            return;
+        }
+        catch (ImageJobInputRejectedException exception)
+        {
+            // Fixed, display-safe messages: an edit mode the model's family does not offer, or a source image that does not exist.
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct);
             return;
         }
 

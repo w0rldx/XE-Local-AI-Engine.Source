@@ -158,6 +158,27 @@ public sealed class ImageModelSetDownloadTests
     }
 
     [Test]
+    public async Task EnsureModel_WhenAnInstalledSetLacksARequestedRole_FetchesOnlyThatPartAndCompletesTheEntry()
+    {
+        // A curated set that later gained a part (Qwen-Image's LlmVision projector) must be completable by installing it
+        // again: the installed set is not a reason to skip the request, and its existing files are not re-fetched.
+        using var models = new GgufStoreTestInfrastructure.TempModelsDir();
+        using var handler = FileServingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        using var registry = new ImageModelRegistry(ImageOptions(models.Path), NullLogger<ImageModelRegistry>.Instance);
+        var store = Store(http, models.Path, registry);
+        _ = await store.EnsureModelAsync(Request(Part(FirstFile, sizeBytes: 10)), progress: null, CancellationToken.None);
+
+        var handle = await store.EnsureModelAsync(SizedRequest(), progress: null, CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, handler.CallCount, "Only the missing part may be fetched on the second install.");
+        AssertEx.Equal(expected: 2, handle.Parts.Count);
+        var entry = AssertEx.NotNull(await registry.FindAsync(ModelName, CancellationToken.None));
+        AssertEx.True(entry.Parts.Any(static part => part.Role == ImageModelPartRole.Vae), "The registry entry must now carry the added part.");
+        AssertEx.Equal(expected: 16L, entry.SizeBytes);
+    }
+
+    [Test]
     public async Task EnsureModel_WhenNoPartIsOnDisk_DownloadsEveryPart()
     {
         using var models = new GgufStoreTestInfrastructure.TempModelsDir();

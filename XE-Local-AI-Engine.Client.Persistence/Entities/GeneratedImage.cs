@@ -1,7 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Metadata for one generated image blob. Cascade-deleted with its owning <see cref="ImageJob" />.
+///     Metadata for one image blob: a generated image (cascade-deleted with its owning <see cref="ImageJob" />) or an
+///     operator upload, which has no job (<see cref="JobId" /> is <see langword="null" />).
 /// </summary>
 /// <remarks>
 ///     The image bytes themselves live encrypted on disk (AES-256-GCM, node key) under
@@ -13,8 +14,11 @@ internal sealed record class GeneratedImage
     /// <summary>Image identity (PK).</summary>
     public Guid ImageId { get; set; }
 
-    /// <summary>The owning job (FK → <see cref="ImageJob" />, cascade delete).</summary>
-    public Guid JobId { get; set; }
+    /// <summary>
+    ///     The owning job (FK → <see cref="ImageJob" />, cascade delete), or <see langword="null" /> for an uploaded source
+    ///     image.
+    /// </summary>
+    public Guid? JobId { get; set; }
 
     /// <summary>MIME type of the stored image; currently <c>image/png</c>.</summary>
     public string MimeType { get; set; } = string.Empty;

@@ -64,6 +64,21 @@ reproductions: the forking `.NET TP Worker` tid and bwrap vanished in the same 1
 
 **Rule:** a desktop or `XE_DATA_DIR` host whose `node.key` is a v2 vault serves only the unlock pre-host until the admin password is given, so any test or script that spawns the real host against such a data directory must pass `XE_ADMIN_PASSWORD` (or `--admin-password-stdin`) for a one-shot, supply an operator secret (`XE_NODE_SQLITE_KEY`) to bypass the vault, or unlock over `auth/vault/unlock`. **Prevents:** a spawned host that reports `XE_READY` and a healthy `auth/status` but never serves the real API, so the test or shell hangs on the unlock page until the 2-minute shell start deadline. `--mcp-key` and `--setup` on a locked vault exit 5 without a password. **Authority:** ADR 0018; `Program.Vault.cs` `UnlockVaultAsync`; `EngineCliProcessTests` locked-vault flows. Target: runtime.md.
 
+### Binary payloads on a request contract are `ReadOnlyMemory<byte>`, never `byte[]` properties
+
+**Rule:** declare image/blob bytes on a public request or response type as `ReadOnlyMemory<byte>?` (as `ImageGenerationResult.ImageBytes` does) and encode with `Convert.ToBase64String(x.Value.Span)`. **Prevents:** a green Debug build that fails the Release build with CA1819 on every `byte[]` property (hit adding `InitImage`/`ReferenceImage`, 2026-10-02). **Authority:** `ImageGenerationRequest` in `Providers.Abstractions/Image/ImageRuntimeContracts.cs`; the Release analyzers.
+
+### Test connection strings may not say `Foreign Keys=True`: turn FKs on with a PRAGMA on the opened connection
+
+**Rule:** a migration test that must run under foreign keys ON executes `PRAGMA foreign_keys=ON` on the migrator's open connection and asserts it reads 1; it never adds `Foreign Keys=True` to the connection string. **Prevents:** `SqliteFileProbeConnectionStringGuardTests` failing the test project, and a table-rebuild migration that was never exercised under the production FK posture. **Authority:** `AddImageEditColumnsMigrationTests`; `AddPlaybookActionsMigrationTests`; `SqliteFileProbeConnectionStringGuardTests`.
+
+### Zod refuses `.pick`/`.omit` on an object that carries a `superRefine`
+
+**Rule:** keep the plain field object as its own exported schema and derive both the refined form schema and any `.pick(...)` subset from it; never call `.pick` on the refined result. **Prevents:** a runtime Zod error (and a typecheck failure) when a feature adds a cross-field refinement to a schema that other modules pick from. **Authority:** `imageGenerationFormFieldsSchema` vs `imageGenerationFormSchema` in `src/features/images/models/ImageModels.ts`; `ImageFormOverrides.ts`.
+
+### A new frontend feature can push the bundle over `applicationJavaScriptBytes`: measure before the final acceptance run
+
+**Rule:** after adding UI plus en/de strings, run `pnpm run build:bundle` and compare `applicationJavaScriptBytes` with `config/bundle-budget.json` before hand-off; a raise needs an approved, measured update, never a silent edit. **Prevents:** `pnpm run acceptance` passing lint, knip and coverage and then failing only at `bundle:check` (image-edit UI added 11,277 bytes against 8,337 of headroom). **Authority:** `scripts/CheckBundleBudget.mjs`; `config/bundle-budget.json`.
 ### A test that calls an INodeRuntimeSettings synchronous twin from an async method fails only in Release
 
 **Rule:** in an `async` test, read a node setting that has both getters through the async one (`await sut.GetXAsync()`); call its synchronous twin (`sut.GetX()`) only from a synchronous test. A twin with no async sibling (a restart-gated knob) is fine anywhere. **Prevents:** a Debug-green test that the Release analyzers reject (CA1849 / S6966: a blocking call with an async overload inside an async method), found only by the backend gate. **Authority:** reported by the node-settings round 2 slice workers (S1/S2, 2026-10-02); `NodeRuntimeSettingsTests`. Target: backend-tests.md.

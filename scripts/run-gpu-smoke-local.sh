@@ -27,7 +27,23 @@
 #   5. Tool calling       — a tool was actually offered and INVOKED (tool-call-requested plus
 #                           tool-call-completed events), not merely "the model replied".
 #   6. Image generation   — opt-in (--images): one small job returns real PNG bytes.
-#   7. Eject              — VRAM is released back toward the baseline.
+#   7. Image edit         — opt-in (--images), ledger label 7-image-edit: two generated fixture PNGs
+#                           (a gradient and its inversion) are uploaded and each is edited img2img on
+#                           step 6's model, with one fixed seed, prompt and size; every result must be
+#                           a PNG whose job records the edit mode and its uploaded source id. The
+#                           load-bearing oracle is the TWO-SOURCE check: sha256(edit from A) must
+#                           differ from sha256(edit from B), or the output did not depend on the
+#                           source. A secondary check requires each edit to differ from a same-seed
+#                           text-to-image CONTROL. A missing hash on any side FAILS. Both checks also
+#                           cover the reference edit when the model offers it. It also needs
+#                           a NEGATIVE CONTROL verdict: a model whose editModes lack `reference` must
+#                           refuse it with 400; a model that offers it must run a real reference edit
+#                           and refuse the invalid mode `bogus`. No negative verdict = FAIL.
+#   8. Eject              — VRAM is released back toward the baseline (ledger label 7-eject, kept
+#                           so existing summaries and tests still match). With --images the image
+#                           job has already evicted the idle chat model (image VRAM eviction), so a
+#                           successful image runtime eject stands in for the chat eject; the VRAM
+#                           assertion is unchanged. Without --images, nothing to eject still FAILS.
 #
 # Configuration vs observable outcome — the lesson this script encodes
 #   Do not assert that a setting is set; assert the behaviour it should produce. Two live findings
@@ -48,8 +64,8 @@
 #   scripts/run-gpu-smoke-local.sh [options]
 #
 # Options:
-#   --images              Also run step 6 (image generation). Off by default: it needs an image
-#                         model installed and adds ~10-30s. The assertion is never weakened, only
+#   --images              Also run steps 6 and 7 (image generation + image edit). Off by default: it
+#                         needs an image model installed and adds ~20-60s. The assertion is never weakened, only
 #                         skipped wholesale — and a skipped step is reported, never counted as pass.
 #   --no-tools            Skip step 5. Use ONLY when knowingly testing a node with tools disabled;
 #                         the skip is reported loudly in the summary.
@@ -464,6 +480,108 @@ assert_image_result() {
   return 0
 }
 
+# Step 7 (7-image-edit). An edit is only proven when the result is a real PNG AND the job says it
+# was the edit we asked for, on the source we uploaded: a node that silently dropped the edit
+# fields would run a text-to-image job and pass every other check. The job metadata alone cannot
+# catch a provider that drops the source pixels, so the bytes are also compared against a
+# same-seed text-to-image control: identical bytes mean the source was not used.
+assert_image_edit_result() {
+  local records="$1" expected_mode="$2" expected_source="$3" control_sha="${4:-}"
+  local status png bytes error mode source sha
+  status="$(record_value status "${records}")"
+  png="$(record_value png "${records}")"
+  bytes="$(as_int "$(record_value bytes "${records}")")"
+  error="$(record_value error "${records}")"
+  mode="$(record_value editMode "${records}")"
+  source="$(record_value sourceImageId "${records}")"
+  sha="$(record_value sha256 "${records}")"
+  log "image-edit: mode=${mode} status=${status} bytes=${bytes} durationMs=$(record_value durationMs "${records}") submitMs=$(record_value submitMs "${records}") size=$(record_value width "${records}")x$(record_value height "${records}")"
+  log "image-edit: ${expected_mode} sha256=${sha:-none} control sha256=${control_sha:-none}"
+  if [[ -n "${error}" ]]; then
+    step_fail "7-image-edit" "the ${expected_mode} edit job reported an error: ${error}"
+    return 1
+  fi
+  if [[ "${status,,}" != "succeeded" ]]; then
+    step_fail "7-image-edit" "the ${expected_mode} edit job ended with status '${status}', not Succeeded."
+    return 1
+  fi
+  if [[ "${png}" != "true" || "${bytes}" -le 0 ]]; then
+    step_fail "7-image-edit" "the ${expected_mode} edit succeeded but the retrieved bytes are not a PNG (${bytes} bytes)."
+    return 1
+  fi
+  if [[ "${mode}" != "${expected_mode}" ]]; then
+    step_fail "7-image-edit" "the job reports editMode '${mode}', expected '${expected_mode}'. The edit fields were not honoured."
+    return 1
+  fi
+  if [[ -z "${expected_source}" || "${source}" != "${expected_source}" ]]; then
+    step_fail "7-image-edit" "the job reports sourceImageId '${source}', expected the uploaded '${expected_source}'."
+    return 1
+  fi
+  if [[ -z "${sha}" || -z "${control_sha}" ]]; then
+    step_fail "7-image-edit" "the ${expected_mode} edit (sha256 '${sha}') or its text-to-image control (sha256 '${control_sha}') has no hash; the source dependence was not proven."
+    return 1
+  fi
+  if [[ "${sha}" == "${control_sha}" ]]; then
+    step_fail "7-image-edit" "the ${expected_mode} edit output is byte-identical to the same-seed text-to-image control: the source image was not used."
+    return 1
+  fi
+  return 0
+}
+
+# Step 7 two-source oracle. Two different sources edited with the same seed, prompt and size must
+# give different bytes; identical bytes mean the provider dropped the source. A missing hash on
+# either side is the vacuous case and FAILS.
+assert_edit_depends_on_source() {
+  local mode="$1" sha_a="$2" sha_b="$3"
+  log "image-edit: ${mode} two-source sha256 A=${sha_a:-none} B=${sha_b:-none}"
+  if [[ -z "${sha_a}" || -z "${sha_b}" ]]; then
+    step_fail "7-image-edit" "the ${mode} two-source check is missing a hash (A '${sha_a}', B '${sha_b}'); the source dependence was not proven."
+    return 1
+  fi
+  if [[ "${sha_a}" == "${sha_b}" ]]; then
+    step_fail "7-image-edit" "the ${mode} edit output does not depend on the source image: two different sources gave byte-identical results."
+    return 1
+  fi
+  return 0
+}
+
+# Step 7 negative control. A refusal only counts when it is a 4xx carrying the expected fixed
+# message; an empty record block means the control never ran, which is the vacuous case and FAILS.
+assert_image_edit_negative() {
+  local records="$1" expected_message="$2" label="$3"
+  local verdict http message
+  verdict="$(record_value negative "${records}")"
+  http="$(record_value httpStatus "${records}")"
+  message="$(record_value message "${records}")"
+  if [[ -z "${verdict}" ]]; then
+    step_fail "7-image-edit" "the negative control (${label}) produced no verdict. An edit step without a negative control is not a pass."
+    return 1
+  fi
+  log "image-edit negative (${label}): ${verdict} http=${http}"
+  if [[ "${verdict}" != "refused" ]]; then
+    step_fail "7-image-edit" "the negative control (${label}) was ${verdict} (HTTP ${http:-none}), expected a 4xx refusal: ${message}"
+    return 1
+  fi
+  if [[ "${message}" != *"${expected_message}"* ]]; then
+    step_fail "7-image-edit" "the negative control (${label}) was refused with HTTP ${http} but without the fixed message '${expected_message}': ${message}"
+    return 1
+  fi
+  return 0
+}
+
+# Prints the comma-joined editModes the image-models records list for one model.
+image_model_edit_modes() {
+  local records="$1" wanted="$2" line name modes
+  while IFS= read -r line; do
+    IFS='|' read -r name modes <<<"${line}"
+    if [[ "${name}" == "${wanted}" ]]; then
+      printf '%s\n' "${modes}"
+      return 0
+    fi
+  done < <(record_values imageModelEditModes "${records}")
+  return 1
+}
+
 # NOTE the asymmetry with assert_gpu_was_used: that one compares LOWER bounds, so coercing an
 # unreadable value to 0 fails safe. This one compares an UPPER bound, where 0 would PASS. So a
 # non-numeric reading is rejected outright instead of coerced — the safe default for a
@@ -852,6 +970,71 @@ else
   ledger_skip "6-image"
 fi
 
+if [[ "${RUN_IMAGES}" == "true" ]]; then
+  log "=== Step 7-image-edit: upload + img2img + negative control ==="
+  ledger_expect "7-image-edit"
+  if [[ -z "${IMAGE_MODEL}" ]]; then
+    step_fail "7-image-edit" "--images was requested but no image model is installed; nothing to edit with."
+  else
+    EDIT_OK="true"
+    UPLOAD_ID=""
+    UPLOAD_ID_B=""
+    # Two clearly different sources (variant 2 inverts every channel) for the two-source oracle.
+    if drive image-fixture --out "${TEMP_ROOT}/edit-source.png" >/dev/null \
+      && drive image-fixture --out "${TEMP_ROOT}/edit-source-b.png" --variant 2 >/dev/null; then
+      UPLOAD_RECORDS="$(drive image-upload --token "${TOKEN}" --file "${TEMP_ROOT}/edit-source.png")" || UPLOAD_RECORDS=""
+      UPLOAD_ID="$(record_value uploadedImageId "${UPLOAD_RECORDS}")"
+      UPLOAD_RECORDS_B="$(drive image-upload --token "${TOKEN}" --file "${TEMP_ROOT}/edit-source-b.png")" || UPLOAD_RECORDS_B=""
+      UPLOAD_ID_B="$(record_value uploadedImageId "${UPLOAD_RECORDS_B}")"
+    fi
+    if [[ -z "${UPLOAD_ID}" || -z "${UPLOAD_ID_B}" ]]; then
+      step_fail "7-image-edit" "the two source fixtures could not be generated or uploaded to images/uploads."
+    else
+      log "uploaded   A=${UPLOAD_ID} B=${UPLOAD_ID_B} ($(record_value width "${UPLOAD_RECORDS}")x$(record_value height "${UPLOAD_RECORDS}"), uploadMs=$(record_value uploadMs "${UPLOAD_RECORDS}"))"
+      # One fixed seed, prompt, size and step count for every edit and its text-to-image control.
+      EDIT_JOB_ARGS=(--seed 20261002 --prompt "the same scene as a watercolour painting" --width 256 --height 256 --steps 8)
+      CONTROL_RECORDS="$(drive image --token "${TOKEN}" --model "${IMAGE_MODEL}" "${EDIT_JOB_ARGS[@]}")" || CONTROL_RECORDS=""
+      CONTROL_SHA="$(record_value sha256 "${CONTROL_RECORDS}")"
+      log "control    text-to-image status=$(record_value status "${CONTROL_RECORDS}") sha256=${CONTROL_SHA:-none}"
+
+      # Runs one edit mode from source A and from source B; any failed check clears EDIT_OK.
+      run_edit_pair() {
+        local mode="$1"; shift
+        local records_a records_b
+        records_a="$(drive image-edit --token "${TOKEN}" --model "${IMAGE_MODEL}" --source "${UPLOAD_ID}" \
+          --mode "${mode}" "$@" "${EDIT_JOB_ARGS[@]}")" || records_a=""
+        records_b="$(drive image-edit --token "${TOKEN}" --model "${IMAGE_MODEL}" --source "${UPLOAD_ID_B}" \
+          --mode "${mode}" "$@" "${EDIT_JOB_ARGS[@]}")" || records_b=""
+        if [[ -z "${records_a}" || -z "${records_b}" ]]; then
+          step_fail "7-image-edit" "the ${mode} edit jobs could not be driven from both sources."; EDIT_OK="false"
+          return
+        fi
+        assert_image_edit_result "${records_a}" "${mode}" "${UPLOAD_ID}" "${CONTROL_SHA}" || EDIT_OK="false"
+        assert_image_edit_result "${records_b}" "${mode}" "${UPLOAD_ID_B}" "${CONTROL_SHA}" || EDIT_OK="false"
+        assert_edit_depends_on_source "${mode}" "$(record_value sha256 "${records_a}")" "$(record_value sha256 "${records_b}")" \
+          || EDIT_OK="false"
+      }
+      run_edit_pair img2img --strength 0.6
+
+      EDIT_MODES="$(image_model_edit_modes "${IMAGE_MODEL_RECORDS}" "${IMAGE_MODEL}")" || EDIT_MODES=""
+      log "editModes  ${IMAGE_MODEL}: [${EDIT_MODES}]"
+      if [[ ",${EDIT_MODES}," == *",reference,"* ]]; then
+        run_edit_pair reference
+        NEG_LABEL="mode bogus"; NEG_MODE="bogus"; NEG_MESSAGE="The edit mode must be"
+      else
+        NEG_LABEL="reference on a model without it"; NEG_MODE="reference"
+        NEG_MESSAGE="does not support this edit mode"
+      fi
+      NEG_RECORDS="$(drive image-edit-negative --token "${TOKEN}" --model "${IMAGE_MODEL}" --source "${UPLOAD_ID}" \
+        --mode "${NEG_MODE}")" || NEG_RECORDS=""
+      assert_image_edit_negative "${NEG_RECORDS}" "${NEG_MESSAGE}" "${NEG_LABEL}" || EDIT_OK="false"
+      [[ "${EDIT_OK}" == "true" ]] && ledger_pass "7-image-edit"
+    fi
+  fi
+else
+  ledger_skip "7-image-edit"
+fi
+
 log "=== Step 7: eject releases VRAM ==="
 ledger_expect "7-eject"
 RUNNING_RECORDS="$(drive running --token "${TOKEN}")" || RUNNING_RECORDS=""
@@ -876,7 +1059,16 @@ while IFS= read -r entry; do
 done < <(record_values running "${RUNNING_RECORDS}")
 
 if [[ "${RUN_IMAGES}" == "true" ]]; then
-  drive eject-images --token "${TOKEN}" >/dev/null || warn "the image runtime eject reported an error"
+  EJECT_IMAGES_RECORDS="$(drive eject-images --token "${TOKEN}")" || EJECT_IMAGES_RECORDS=""
+  if [[ -z "${EJECT_IMAGES_RECORDS}" ]]; then
+    warn "the image runtime eject reported an error"
+  elif [[ "${EJECTED_ANY}" != "true" ]]; then
+    # An image job ejects idle llama-server processes before it generates (image VRAM eviction),
+    # so after steps 6/7 the chat model is legitimately gone. The image runtime eject stands in
+    # for it, and the VRAM-returns-to-baseline assertion below still runs.
+    log "chat model was already evicted by the image job (image VRAM eviction); ejected the image runtime instead"
+    EJECTED_ANY="true"
+  fi
 fi
 
 if [[ -z "${CHAT_MODEL}" ]]; then

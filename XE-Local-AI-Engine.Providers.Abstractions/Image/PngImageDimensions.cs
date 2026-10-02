@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
+namespace XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 using System.Buffers.Binary;
 
@@ -12,7 +12,7 @@ using System.Buffers.Binary;
 ///     width/height at byte offsets 16 and 20 as big-endian uint32s, so no image-decoding dependency is needed, and a payload that is
 ///     not a well-formed PNG yields <see langword="null" /> for the caller to degrade on.
 /// </remarks>
-internal static class PngImageDimensions
+public static class PngImageDimensions
 {
     // The 8-byte PNG signature every PNG stream starts with.
     private static ReadOnlySpan<byte> Signature => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];

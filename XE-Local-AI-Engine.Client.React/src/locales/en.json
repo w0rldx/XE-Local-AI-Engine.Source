@@ -4688,6 +4688,36 @@
 				"settings": "Settings",
 				"settingsValue": "{{model}} · {{width}}×{{height}} · {{steps}} steps · {{sampler}} · CFG {{cfgScale}}",
 				"duration": "Duration"
+			},
+			"edit": {
+				"action": "Edit",
+				"label": "Edit",
+				"editingFrom": "Editing from",
+				"editedFrom": "Edited from",
+				"cancel": "Cancel edit",
+				"sourceRemoved": "source removed",
+				"referencePlaceholder": "Describe the change",
+				"unsupported": "The selected model cannot edit images. Pick another model.",
+				"modes": {
+					"img2img": "Variation",
+					"reference": "Instruction edit"
+				},
+				"strength": {
+					"label": "Strength",
+					"description": "Lower keeps more of the source; higher changes more."
+				},
+				"detailWithStrength": "{{mode}} · strength {{strength}}"
+			},
+			"uploads": {
+				"title": "Uploaded images",
+				"upload": "Upload image to edit",
+				"empty": "Upload a PNG or JPEG to start an edit from your own picture.",
+				"uploaded": "Uploaded",
+				"size": "{{width}}×{{height}}",
+				"error": "Could not upload the image.",
+				"deleteError": "Could not delete the uploaded image.",
+				"loadError": "Could not load the uploaded image.",
+				"listError": "Could not load the uploaded images."
 			}
 		},
 		"notFound": {

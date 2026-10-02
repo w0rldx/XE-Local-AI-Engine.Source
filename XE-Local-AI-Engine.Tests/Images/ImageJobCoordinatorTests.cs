@@ -407,7 +407,8 @@ public sealed class ImageJobCoordinatorTests
             NullLogger<ImageJobCoordinator>.Instance,
             new FakeImageRuntimeActivityGate(),
             new GpuWorkGate(),
-            NoLlamaServerResidents());
+            NoLlamaServerResidents(),
+            Substitute.For<IImageModelRegistry>());
         AssertEx.NotNull(timeProvider.EvictionCallback, "The coordinator must arm a periodic eviction timer at construction.");
 
         var jobId = await coordinator.EnqueueAsync(NewInput("idle-eviction"), CancellationToken.None);
@@ -618,7 +619,8 @@ public sealed class ImageJobCoordinatorTests
                 NullLogger<ImageJobCoordinator>.Instance,
                 activityGate,
                 gpuWorkGate ?? new GpuWorkGate(),
-                llamaSupervisor ?? NoLlamaServerResidents());
+                llamaSupervisor ?? NoLlamaServerResidents(),
+                Substitute.For<IImageModelRegistry>());
 #pragma warning restore CA2000
 
             return new Harness
@@ -980,6 +982,11 @@ public sealed class ImageJobCoordinatorTests
             });
         }
 
+        public Task<GeneratedImageInfo> AddUploadAsync(ReadOnlyMemory<byte> bytes, GeneratedImageMetadata metadata, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<GeneratedImageContent?> OpenReadAsync(Guid imageId, CancellationToken cancellationToken)
         {
             return Task.FromResult<GeneratedImageContent?>(null);
@@ -988,6 +995,11 @@ public sealed class ImageJobCoordinatorTests
         public void RemoveJobBlobs(Guid jobId, IReadOnlyList<string> storagePaths)
         {
             BlobRemovals[jobId] = storagePaths;
+        }
+
+        public void RemoveUploadBlob(Guid imageId, string storagePath)
+        {
+            throw new NotSupportedException();
         }
     }
 }

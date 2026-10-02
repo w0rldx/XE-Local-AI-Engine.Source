@@ -60,3 +60,22 @@ internal sealed record SdJobState
     /// <summary>The server's raw error message when <see cref="SdJobStatus.Failed" />; unsanitized, never surfaced to the operator as-is.</summary>
     public string? ErrorMessage { get; init; }
 }
+
+/// <summary>
+///     The edit inputs the running sd-server build accepts, from <c>GET /sdcpp/v1/capabilities</c>
+///     (<c>features_by_mode.img_gen</c>). A missing flag, and an unreachable or unparsable answer, read as unsupported.
+/// </summary>
+internal sealed record SdServerCapabilities
+{
+    /// <summary>The capabilities of a build that answered nothing usable: every edit input unsupported.</summary>
+    public static readonly SdServerCapabilities None = new();
+
+    /// <summary>Whether <c>init_image</c> (img2img) is accepted.</summary>
+    public bool InitImage { get; init; }
+
+    /// <summary>Whether <c>ref_images</c> (reference editing) is accepted.</summary>
+    public bool ReferenceImages { get; init; }
+
+    /// <summary>Whether <c>mask_image</c> (inpainting) is accepted.</summary>
+    public bool MaskImage { get; init; }
+}

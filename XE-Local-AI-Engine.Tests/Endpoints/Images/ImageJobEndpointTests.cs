@@ -8,7 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Images;
+using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -16,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     create → get round-trip returns the persisted Queued view through a stubbed coordinator, and the body-less cancel
 ///     POST is accepted (not 415) — an unknown job reports 404. Delete answers 204 for a terminal job, 404 for an
 ///     unknown one and 409 while the job is still in play; the list is paged server-side and carries the unpaged total.
+///     Edit parameters are validated, carried to the coordinator and echoed; models carry their family's edit modes.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class ImageJobEndpointTests
@@ -335,6 +338,166 @@ public sealed class ImageJobEndpointTests
         }
     }
 
+    [Test]
+    public async Task CreateImageJob_WithInvalidSizeStepsOrEditParameters_Returns400WithoutEnqueuing()
+    {
+        var coordinator = new StubImageJobCoordinator();
+        await using var factory = NewFactory(coordinator);
+        using var client = factory.CreateClient();
+        var source = Guid.NewGuid();
+
+        (object Body, string Message)[] cases =
+        [
+            (new { modelName = "m", prompt = "p", width = 4096 }, "Width and height must be between 64 and 2048 pixels."),
+            (new { modelName = "m", prompt = "p", height = 32 }, "Width and height must be between 64 and 2048 pixels."),
+            (new { modelName = "m", prompt = "p", steps = 0 }, "Steps must be at least 1."),
+            (new { modelName = "m", prompt = "p", editMode = "inpaint", sourceImageId = source }, "The edit mode must be 'img2img' or 'reference'."),
+            (new { modelName = "m", prompt = "p", editMode = "IMG2IMG", sourceImageId = source }, "The edit mode must be 'img2img' or 'reference'."),
+            (new { modelName = "m", prompt = "p", editMode = "img2img" }, "An edit mode requires a source image."),
+            (new { modelName = "m", prompt = "p", sourceImageId = source }, "A source image requires an edit mode."),
+            (new { modelName = "m", prompt = "p", editMode = "reference", sourceImageId = source, strength = 0.5 }, "Strength applies only to img2img edits."),
+            (new { modelName = "m", prompt = "p", editMode = "img2img", sourceImageId = source, strength = 1.5 }, "Strength must be between 0 and 1.")
+        ];
+
+        foreach (var (body, message) in cases)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/jobs")
+            {
+                Content = JsonContent.Create(body)
+            };
+            factory.AddNodeBearerToken(request);
+            using var response = await client.SendAsync(request);
+
+            AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, message);
+            AssertEx.Contains(await response.Content.ReadAsStringAsync(), message);
+        }
+
+        AssertEx.Null(coordinator.LastInput, "No refused request may reach the coordinator.");
+    }
+
+    [Test]
+    public async Task CreateImageJob_WithAnImg2ImgEdit_HandsTheEditToTheCoordinatorAndEchoesIt()
+    {
+        var coordinator = new StubImageJobCoordinator();
+        await using var factory = NewFactory(coordinator);
+        using var client = factory.CreateClient();
+        var source = Guid.NewGuid();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/jobs")
+        {
+            Content = JsonContent.Create(new
+            {
+                modelName = "stable-diffusion-1.5",
+                prompt = "make it autumn",
+                editMode = "img2img",
+                sourceImageId = source,
+                strength = 0.35
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+        var input = AssertEx.NotNull(coordinator.LastInput);
+        AssertEx.Equal(ImageEditMode.Img2Img, input.EditMode);
+        AssertEx.Equal(source, input.SourceImageId);
+        AssertEx.Equal(0.35, input.Strength);
+
+        var created = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        AssertEx.Equal("img2img", created.GetProperty("editMode").GetString());
+        AssertEx.Equal(source, created.GetProperty("sourceImageId").GetGuid());
+        AssertEx.Equal(0.35, created.GetProperty("strength").GetDouble());
+    }
+
+    [Test]
+    public async Task CreateImageJob_WhenTheCoordinatorRejectsTheEdit_Returns400WithItsMessage()
+    {
+        var coordinator = new StubImageJobCoordinator
+        {
+            Rejection = "The selected model does not support this edit mode."
+        };
+        await using var factory = NewFactory(coordinator);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/jobs")
+        {
+            Content = JsonContent.Create(new
+            {
+                modelName = "stable-diffusion-1.5",
+                prompt = "p",
+                editMode = "reference",
+                sourceImageId = Guid.NewGuid()
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "The selected model does not support this edit mode.");
+    }
+
+    [Test]
+    public async Task ListImageModels_CarriesThePerInstallEditModesAndNativePixels()
+    {
+        var registry = Substitute.For<IImageModelRegistry>();
+        registry.ListAsync(Arg.Any<CancellationToken>()).Returns([
+            new ImageModelRegistryEntry
+            {
+                ModelName = "sd-1.5",
+                RepoId = "leejet/stable-diffusion-1.5-gguf",
+                Family = ImageModelFamily.Sd15,
+                Kind = ImageModelKind.Txt2Img,
+                Parts = [],
+                SizeBytes = 1,
+                SourceRevision = "main",
+                DownloadedAtUtc = DateTimeOffset.UnixEpoch
+            },
+            QwenEntry("qwen-plain", ImageModelPartRole.Diffusion, ImageModelPartRole.Vae, ImageModelPartRole.Llm),
+            QwenEntry("qwen-vision", ImageModelPartRole.Diffusion, ImageModelPartRole.Vae, ImageModelPartRole.Llm, ImageModelPartRole.LlmVision)
+        ]);
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IImageModelRegistry>();
+                services.AddSingleton(registry);
+            }
+        };
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/images/models");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var items = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("items").EnumerateArray()
+                                                                                         .ToDictionary(static m => m.GetProperty("modelName").GetString()!);
+        AssertEx.True(EditModesOf(items["sd-1.5"]).SequenceEqual(["img2img"]), "Sd15 offers img2img only.");
+        AssertEx.Equal(expected: 512 * 512, items["sd-1.5"].GetProperty("nativePixels").GetInt32());
+        AssertEx.True(EditModesOf(items["qwen-plain"]).SequenceEqual(["img2img"]), "A Qwen-Image install without the vision tower offers img2img only.");
+        AssertEx.True(EditModesOf(items["qwen-vision"]).SequenceEqual(["img2img", "reference"]), "A Qwen-Image install with LlmVision also offers reference.");
+
+        static string?[] EditModesOf(JsonElement model)
+        {
+            return [.. model.GetProperty("editModes").EnumerateArray().Select(static mode => mode.GetString())];
+        }
+
+        static ImageModelRegistryEntry QwenEntry(string name, params ImageModelPartRole[] roles)
+        {
+            return new ImageModelRegistryEntry
+            {
+                ModelName = name,
+                RepoId = "unsloth/Qwen-Image-2.1-GGUF",
+                Family = ImageModelFamily.QwenImage,
+                Kind = ImageModelKind.Txt2Img,
+                Parts = [.. roles.Select(static role => new ImageModelPart { Role = role, FileName = $"{role}.gguf", LocalPath = $"/m/{role}.gguf", SizeBytes = 1 })],
+                SizeBytes = 1,
+                SourceRevision = "main",
+                DownloadedAtUtc = DateTimeOffset.UnixEpoch
+            };
+        }
+    }
+
     private static TestServerWebAppFactory NewFactory(IImageJobCoordinator coordinator)
     {
         return new TestServerWebAppFactory
@@ -383,9 +546,16 @@ public sealed class ImageJobEndpointTests
         /// <summary>The most recent input handed to <see cref="EnqueueAsync" />; null until the first enqueue.</summary>
         public CreateImageJobInput? LastInput { get; private set; }
 
+        /// <summary>When set, every enqueue is refused with this message, as the coordinator's edit checks do.</summary>
+        public string? Rejection { get; init; }
+
         public Task<Guid> EnqueueAsync(CreateImageJobInput input, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(input);
+            if (Rejection is not null)
+            {
+                throw new ImageJobInputRejectedException(Rejection);
+            }
 
             LastInput = input;
             var id = Guid.NewGuid();
@@ -402,7 +572,10 @@ public sealed class ImageJobEndpointTests
                 Sampler = input.Sampler ?? "euler_a",
                 CfgScale = input.CfgScale,
                 Status = ImageJobStatus.Queued,
-                CreatedAtUtc = 0
+                CreatedAtUtc = 0,
+                EditMode = input.EditMode,
+                SourceImageId = input.SourceImageId,
+                Strength = input.Strength
             };
             return Task.FromResult(id);
         }

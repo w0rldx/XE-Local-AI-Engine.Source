@@ -31,13 +31,17 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import json
 import ssl
+import struct
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+import zlib
 
 # SignalR's record separator. Every frame on the wire ends with it.
 RECORD_SEPARATOR = "\x1e"
@@ -355,8 +359,6 @@ class HubStream:
         than a real one. Measured in one local run: a CPU-fallback turn exhausted 600 polls while
         generating perfectly well.
         """
-        import time
-
         if self.connection_url is None:
             raise DriverError("stream invoked before the SignalR connection was negotiated")
         frame = (
@@ -455,30 +457,27 @@ def command_image_models(args: argparse.Namespace) -> int:
     for item in items:
         if isinstance(item, dict) and item.get("modelName"):
             emit("imageModel", item["modelName"])
+            # Step 7 picks its negative control from this: a model without `reference` must
+            # refuse it, a model with it must run it for real.
+            modes = item.get("editModes")
+            modes = modes if isinstance(modes, list) else []
+            emit("imageModelEditModes", f"{item['modelName']}|{','.join(str(m) for m in modes)}")
     return 0
 
 
-def command_image(args: argparse.Namespace) -> int:
-    """Submit one small generation job, poll it, and fetch the bytes back.
+TERMINAL_STATUSES = ("succeeded", "completed", "failed", "cancelled", "canceled")
 
-    The PNG signature is checked here rather than in the shell only because the response is
-    binary; everything else about the verdict (did it succeed, how big) is emitted for the
-    shell to judge.
+
+def run_image_job(client: NodeClient, body: dict, wait_seconds: float) -> dict:
+    """Submit one job, poll it to a terminal state, fetch the bytes back, emit the shared records.
+
+    Returns the last job payload plus ``submitMs`` (wall time of the POST alone). The PNG
+    signature is checked here rather than in the shell only because the response is binary;
+    everything else about the verdict is emitted for the shell to judge.
     """
-    import time
-
-    client = NodeClient(args.base_url, args.token, args.timeout)
-    body = json.dumps(
-        {
-            "modelName": args.model,
-            "prompt": args.prompt,
-            "width": args.width,
-            "height": args.height,
-            "steps": args.steps,
-            "seed": str(args.seed),
-        }
-    )
-    _, submitted = client.request("POST", f"{API}/images/jobs", body)
+    started = time.monotonic()
+    _, submitted = client.request("POST", f"{API}/images/jobs", json.dumps(body))
+    submit_ms = int((time.monotonic() - started) * 1000)
     job = require_mapping(submitted, "images/jobs")
     payload = job
     job_id = job.get("id")
@@ -486,7 +485,7 @@ def command_image(args: argparse.Namespace) -> int:
         raise DriverError("images/jobs returned no job id")
     emit("jobId", job_id)
 
-    deadline = time.monotonic() + args.wait_seconds
+    deadline = time.monotonic() + wait_seconds
     status = str(job.get("status") or "")
     image_id = job.get("imageId")
     while time.monotonic() < deadline:
@@ -495,7 +494,7 @@ def command_image(args: argparse.Namespace) -> int:
         )
         status = str(payload.get("status") or "")
         image_id = payload.get("imageId")
-        if status.lower() in ("succeeded", "completed", "failed", "cancelled", "canceled"):
+        if status.lower() in TERMINAL_STATUSES:
             break
         time.sleep(1.0)
 
@@ -505,15 +504,139 @@ def command_image(args: argparse.Namespace) -> int:
     emit("width", payload.get("width"))
     emit("height", payload.get("height"))
 
-    if not image_id:
-        emit("bytes", 0)
-        emit("png", False)
-        return 0
-
-    _, raw = client.request("GET", f"{API}/images/{urllib.parse.quote(str(image_id))}", expect_binary=True)
-    data = raw if isinstance(raw, bytes) else b""
+    data = b""
+    if image_id:
+        _, raw = client.request("GET", f"{API}/images/{urllib.parse.quote(str(image_id))}", expect_binary=True)
+        data = raw if isinstance(raw, bytes) else b""
     emit("bytes", len(data))
-    emit("png", data[:8] == b"\x89PNG\r\n\x1a\n")
+    emit("png", data[:8] == PNG_SIGNATURE)
+    emit("sha256", hashlib.sha256(data).hexdigest() if data else None)
+    return {**payload, "submitMs": submit_ms}
+
+
+def command_image(args: argparse.Namespace) -> int:
+    """Submit one small text-to-image job, poll it, and fetch the bytes back."""
+    client = NodeClient(args.base_url, args.token, args.timeout)
+    body = {
+        "modelName": args.model,
+        "prompt": args.prompt,
+        "width": args.width,
+        "height": args.height,
+        "steps": args.steps,
+        "seed": str(args.seed),
+    }
+    run_image_job(client, body, args.wait_seconds)
+    return 0
+
+
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def png_bytes(width: int, height: int, variant: int = 1) -> bytes:
+    """A two-colour gradient RGB PNG (red left-to-right, blue top-to-bottom), stdlib only.
+
+    img2img needs structure to transform; a flat colour would make "the edit did something"
+    indistinguishable from noise when a human looks at the result. Variant 2 inverts every
+    channel so the smoke has a second, clearly different source for its two-source check.
+    """
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+    rows = bytearray()
+    for y in range(height):
+        rows.append(0)  # filter: none
+        blue = y * 255 // max(height - 1, 1)
+        for x in range(width):
+            pixel = (x * 255 // max(width - 1, 1), 64, blue)
+            rows += bytes(255 - c for c in pixel) if variant == 2 else bytes(pixel)
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)  # 8-bit RGB
+    return PNG_SIGNATURE + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(bytes(rows), 9)) + chunk(b"IEND", b"")
+
+
+def encode_multipart(field: str, filename: str, content_type: str, data: bytes) -> tuple[bytes, str]:
+    """One-file multipart/form-data body; returns (body, Content-Type header value)."""
+    boundary = "xe-smoke-" + uuid.uuid4().hex
+    head = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="{field}"; filename="{filename}"\r\n'
+        f"Content-Type: {content_type}\r\n\r\n"
+    ).encode()
+    tail = f"\r\n--{boundary}--\r\n".encode()
+    return head + data + tail, f"multipart/form-data; boundary={boundary}"
+
+
+def command_image_fixture(args: argparse.Namespace) -> int:
+    with open(args.out, "wb") as handle:
+        handle.write(png_bytes(args.size, args.size, args.variant))
+    emit("path", args.out)
+    emit("width", args.size)
+    emit("height", args.size)
+    return 0
+
+
+def command_image_upload(args: argparse.Namespace) -> int:
+    client = NodeClient(args.base_url, args.token, args.timeout)
+    with open(args.file, "rb") as handle:
+        data = handle.read()
+    content_type = "image/png" if data[:8] == PNG_SIGNATURE else "image/jpeg"
+    body, header = encode_multipart("file", args.file.rsplit("/", 1)[-1], content_type, data)
+    started = time.monotonic()
+    _, payload = client.request("POST", f"{API}/images/uploads", body, header)
+    upload = require_mapping(payload, "images/uploads")
+    if not upload.get("imageId"):
+        raise DriverError("images/uploads returned no imageId")
+    emit("uploadedImageId", upload["imageId"])
+    emit("width", upload.get("width"))
+    emit("height", upload.get("height"))
+    emit("uploadMs", int((time.monotonic() - started) * 1000))
+    return 0
+
+
+def edit_body(args: argparse.Namespace) -> dict:
+    body: dict = {
+        "modelName": args.model,
+        "prompt": args.prompt,
+        "width": args.width,
+        "height": args.height,
+        "steps": args.steps,
+        "seed": str(args.seed),
+        "editMode": args.mode,
+        "sourceImageId": args.source,
+    }
+    if args.strength is not None:
+        body["strength"] = args.strength
+    return body
+
+
+def command_image_edit(args: argparse.Namespace) -> int:
+    client = NodeClient(args.base_url, args.token, args.timeout)
+    result = run_image_job(client, edit_body(args), args.wait_seconds)
+    emit("editMode", result.get("editMode"))
+    emit("sourceImageId", result.get("sourceImageId"))
+    emit("submitMs", result["submitMs"])
+    return 0
+
+
+def command_image_edit_negative(args: argparse.Namespace) -> int:
+    """Submit an edit the node must refuse. Emits the verdict; the shell judges it.
+
+    ``refused`` = any 4xx (the body is emitted as ``message`` so the shell can check the fixed
+    text), ``accepted`` = the node took the job, ``error`` = anything else (5xx, transport).
+    """
+    client = NodeClient(args.base_url, args.token, args.timeout)
+    try:
+        status, payload = client.request(
+            "POST", f"{API}/images/jobs", json.dumps(edit_body(args)), allowed_status=tuple(range(400, 500))
+        )
+    except DriverError as error:
+        emit("negative", "error")
+        emit("httpStatus", "")
+        emit("message", str(error)[:400])
+        return 0
+    emit("negative", "refused" if 400 <= status < 500 else "accepted")
+    emit("httpStatus", status)
+    emit("message", json.dumps(payload)[:400] if payload is not None else "")
     return 0
 
 
@@ -567,6 +690,33 @@ def build_parser() -> argparse.ArgumentParser:
     image.add_argument("--seed", type=int, default=42)
     image.add_argument("--wait-seconds", type=float, default=300.0)
     image.set_defaults(func=command_image)
+
+    fixture = sub.add_parser("image-fixture")
+    fixture.add_argument("--out", required=True)
+    fixture.add_argument("--size", type=int, default=256)
+    fixture.add_argument("--variant", type=int, choices=(1, 2), default=1)
+    fixture.set_defaults(func=command_image_fixture)
+
+    upload = sub.add_parser("image-upload")
+    upload.add_argument("--token", required=True)
+    upload.add_argument("--file", required=True)
+    upload.set_defaults(func=command_image_upload)
+
+    for name, func in (("image-edit", command_image_edit), ("image-edit-negative", command_image_edit_negative)):
+        edit = sub.add_parser(name)
+        edit.add_argument("--token", required=True)
+        edit.add_argument("--model", required=True)
+        edit.add_argument("--source", required=True)
+        # Free text on purpose: the negative control sends `bogus` and expects validation to refuse it.
+        edit.add_argument("--mode", required=True)
+        edit.add_argument("--strength", type=float, default=None)
+        edit.add_argument("--prompt", default="the same scene as a watercolour painting")
+        edit.add_argument("--width", type=int, default=256)
+        edit.add_argument("--height", type=int, default=256)
+        edit.add_argument("--steps", type=int, default=8)
+        edit.add_argument("--seed", type=int, default=42)
+        edit.add_argument("--wait-seconds", type=float, default=300.0)
+        edit.set_defaults(func=func)
 
     return parser
 

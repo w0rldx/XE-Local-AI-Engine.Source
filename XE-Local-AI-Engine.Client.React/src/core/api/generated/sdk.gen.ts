@@ -345,6 +345,9 @@ import type {
 	DeleteTranscriptionSessionData,
 	DeleteTranscriptionSessionErrors,
 	DeleteTranscriptionSessionResponses,
+	DeleteUploadedImageData,
+	DeleteUploadedImageErrors,
+	DeleteUploadedImageResponses,
 	DeleteWorkSessionData,
 	DeleteWorkSessionErrors,
 	DeleteWorkSessionResponses,
@@ -978,6 +981,9 @@ import type {
 	ListTranscriptionSessionsData,
 	ListTranscriptionSessionsErrors,
 	ListTranscriptionSessionsResponses,
+	ListUploadedImagesData,
+	ListUploadedImagesErrors,
+	ListUploadedImagesResponses,
 	ListWorkSessionArtifactsData,
 	ListWorkSessionArtifactsErrors,
 	ListWorkSessionArtifactsResponses,
@@ -1371,6 +1377,9 @@ import type {
 	UploadConversationFileData,
 	UploadConversationFileErrors,
 	UploadConversationFileResponses,
+	UploadImageData,
+	UploadImageErrors,
+	UploadImageResponses,
 	UploadKnowledgeDocumentData,
 	UploadKnowledgeDocumentErrors,
 	UploadKnowledgeDocumentResponses,
@@ -1633,6 +1642,8 @@ import {
 	zDeleteTrainingDefinitionResponse,
 	zDeleteTranscriptionSessionPath,
 	zDeleteTranscriptionSessionResponse,
+	zDeleteUploadedImagePath,
+	zDeleteUploadedImageResponse,
 	zDeleteWorkSessionPath,
 	zDeleteWorkSessionResponse,
 	zDeleteWorkspacePath,
@@ -1996,6 +2007,8 @@ import {
 	zListTranscriptionModelsResponse,
 	zListTranscriptionSessionsQuery,
 	zListTranscriptionSessionsResponse,
+	zListUploadedImagesQuery,
+	zListUploadedImagesResponse,
 	zListWorkSessionArtifactsPath,
 	zListWorkSessionArtifactsQuery,
 	zListWorkSessionArtifactsResponse,
@@ -2306,6 +2319,8 @@ import {
 	zUploadConversationFileBody,
 	zUploadConversationFilePath,
 	zUploadConversationFileResponse,
+	zUploadImageBody,
+	zUploadImageResponse,
 	zUploadKnowledgeDocumentBody,
 	zUploadKnowledgeDocumentResponse,
 	zUploadTranscriptionAudioBody,
@@ -9940,6 +9955,100 @@ export const getStableDiffusionCppSourceBuildStatus = <ThrowOnError extends bool
 			},
 		],
 		url: "/api/local/v1/images/runtime/source-build/status",
+		...options,
+	});
+
+export const listUploadedImages = <ThrowOnError extends boolean = false>(
+	options?: Options<ListUploadedImagesData, ThrowOnError>,
+): RequestResult<ListUploadedImagesResponses, ListUploadedImagesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListUploadedImagesResponses, ListUploadedImagesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zListUploadedImagesQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListUploadedImagesResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/images/uploads",
+		...options,
+	});
+
+export const uploadImage = <ThrowOnError extends boolean = false>(
+	options: Options<UploadImageData, ThrowOnError>,
+): RequestResult<UploadImageResponses, UploadImageErrors, ThrowOnError> =>
+	(options.client ?? client).post<UploadImageResponses, UploadImageErrors, ThrowOnError>({
+		...formDataBodySerializer,
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUploadImageBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUploadImageResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/images/uploads",
+		...options,
+		headers: {
+			"Content-Type": null,
+			...options.headers,
+		},
+	});
+
+export const deleteUploadedImage = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteUploadedImageData, ThrowOnError>,
+): RequestResult<DeleteUploadedImageResponses, DeleteUploadedImageErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeleteUploadedImageResponses, DeleteUploadedImageErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteUploadedImagePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteUploadedImageResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/images/uploads/{imageId}",
 		...options,
 	});
 

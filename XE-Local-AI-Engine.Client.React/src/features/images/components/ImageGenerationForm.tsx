@@ -1,4 +1,16 @@
-import { Alert, Button, Group, NumberInput, Select, SimpleGrid, Stack, Textarea } from "@mantine/core";
+import {
+	Alert,
+	Button,
+	Group,
+	NumberInput,
+	SegmentedControl,
+	Select,
+	SimpleGrid,
+	Slider,
+	Stack,
+	Text,
+	Textarea,
+} from "@mantine/core";
 import { IconSparkles } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -7,6 +19,7 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
 import { AssistActions } from "@/features/assist/components/AssistActions";
 import type { AssistDraft } from "@/features/assist/models/AssistModels";
+import { ImageSourceThumbnail } from "@/features/images/components/ImageSourceThumbnail";
 import {
 	clearImageFormOverrides,
 	imageFormValuesForModel,
@@ -14,6 +27,11 @@ import {
 	writeImageFormOverrides,
 } from "@/features/images/models/ImageFormOverrides";
 import {
+	defaultImageEditStrength,
+	editModeLabel,
+	fitEditDimensions,
+	type ImageEditMode,
+	type ImageEditSource,
 	type ImageGenerationFormValues,
 	type ImageModelView,
 	imageFormDefaultsForModel,
@@ -29,16 +47,69 @@ interface ImageGenerationFormProps {
 	isSubmitting: boolean;
 	submitError?: string;
 	onSubmit: (values: ImageGenerationFormValues) => void;
+	/** The image being edited; null (the default) is plain text-to-image. */
+	editSource?: ImageEditSource | null;
+	/** Leaves edit mode; the page clears `editSource`. */
+	onCancelEdit?: () => void;
+}
+
+type EditFields = Pick<ImageGenerationFormValues, "editMode" | "strength"> &
+	Partial<Pick<ImageGenerationFormValues, "width" | "height">>;
+
+/**
+ * The edit fields a model and source imply. The mode the operator picked survives a model switch only when the new
+ * model offers it; the size is re-fitted to the new model's native pixel count, because a size right for SD1.5 is a
+ * quarter of what SDXL was trained at. Leaving edit mode clears mode and strength and keeps the size.
+ */
+function editFieldsFor(
+	model: ImageModelView | undefined,
+	source: ImageEditSource | null,
+	current: Pick<ImageGenerationFormValues, "editMode" | "strength">,
+): EditFields {
+	if (source === null) {
+		return { editMode: undefined, strength: undefined };
+	}
+	const modes = model?.editModes ?? [];
+	const editMode = current.editMode !== undefined && modes.includes(current.editMode) ? current.editMode : modes[0];
+	return {
+		editMode,
+		strength: current.strength ?? defaultImageEditStrength,
+		...(model === undefined ? {} : fitEditDimensions(source, model.nativePixels)),
+	};
 }
 
 // Text-to-image generation form. Schema-first: on submit the values are validated with the shared Zod schema and any
 // issues are mapped to their owning field (client-side); a server-side failure is surfaced as a submit-level alert
 // (this codebase's ProblemDetails carries no per-field error map — same posture as McpServerForm). The model picker is
 // sourced from the installed image models; with none installed the form disables so a job can't be enqueued modelless.
-export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmit }: ImageGenerationFormProps) {
+export function ImageGenerationForm({
+	models,
+	isSubmitting,
+	submitError,
+	onSubmit,
+	editSource = null,
+	onCancelEdit,
+}: ImageGenerationFormProps) {
 	const { t } = useTranslation();
 	const [values, setValues] = useState<ImageGenerationFormValues>(() => imageFormValuesForModel(models[0]));
 	const [errors, setErrors] = useState<Record<string, string>>({});
+
+	// Entering edit mode (or picking a different source) re-derives mode, strength and size; leaving it clears them.
+	// Adjusted during render against the last applied source rather than in an effect, so the first paint of the edit
+	// form already shows the fitted size and a refetched model list never overwrites a size the operator typed.
+	const [appliedSource, setAppliedSource] = useState<ImageEditSource | null>(null);
+	if (editSource !== appliedSource) {
+		setAppliedSource(editSource);
+		setValues((current) => ({
+			...current,
+			...editFieldsFor(
+				models.find((model) => model.modelName === current.modelName),
+				editSource,
+				// A new source starts from the defaults, not from the previous edit's mode and strength.
+				{ editMode: undefined, strength: undefined },
+			),
+		}));
+	}
 
 	// Picking a different model re-seeds the sampling parameters from ITS family, keeping the prompts. The families
 	// disagree sharply — FLUX-schnell wants ~4 steps at CFG 1.0 where SD1.5 wants 20 at 7.0 — and carrying one family's
@@ -55,9 +126,10 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 				width: current.width,
 				height: current.height,
 				seed: current.seed,
+				...editFieldsFor(model, editSource, current),
 			}));
 		},
-		[models],
+		[editSource, models],
 	);
 
 	const modelData = useMemo(() => models.map((model) => ({ value: model.modelName, label: model.modelName })), [models]);
@@ -87,6 +159,10 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 			...values,
 			modelName: values.modelName || models[0]?.modelName || "",
 			negativePrompt: values.negativePrompt?.trim() ? values.negativePrompt : undefined,
+			// The edit fields ride only while editing, and strength only with img2img — the node refuses it otherwise.
+			editMode: editSource === null ? undefined : values.editMode,
+			sourceImageId: editSource?.imageId,
+			strength: editSource !== null && values.editMode === "img2img" ? values.strength : undefined,
 		};
 		const result = imageGenerationFormSchema.safeParse(candidate);
 		if (!result.success) {
@@ -99,7 +175,7 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 		}
 		setErrors({});
 		onSubmit(result.data);
-	}, [models, onSubmit, values]);
+	}, [editSource, models, onSubmit, values]);
 
 	// Reconcile the selection against the models that actually exist.
 	//
@@ -136,6 +212,14 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 		? values.modelName
 		: (models[0]?.modelName ?? null);
 
+	const editModes = models.find((model) => model.modelName === selectedModel)?.editModes ?? [];
+	const editModeData = editModes.map((mode) => ({ value: mode, label: editModeLabel(t, mode) }));
+	const cannotEdit = editSource !== null && editModes.length === 0;
+	const promptPlaceholder =
+		editSource !== null && values.editMode === "reference"
+			? t("pages.images.edit.referencePlaceholder", "Describe the change")
+			: t("pages.images.form.prompt.placeholder", "A watercolor fox in a misty forest");
+
 	return (
 		<Stack gap="md" data-testid="image-generation-form">
 			<Select
@@ -150,11 +234,61 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 				data-testid="image-form-model"
 			/>
 
+			{editSource === null ? null : (
+				<Stack gap="xs" data-testid="image-form-edit">
+					<Group justify="space-between" align="center" wrap="nowrap">
+						<ImageSourceThumbnail
+							imageId={editSource.imageId}
+							label={t("pages.images.edit.editingFrom", "Editing from")}
+							data-testid="image-form-edit-source"
+						/>
+						<Button variant="subtle" size="xs" onClick={onCancelEdit} data-testid="image-form-cancel-edit">
+							{t("pages.images.edit.cancel", "Cancel edit")}
+						</Button>
+					</Group>
+
+					{editModes.length > 1 ? (
+						<SegmentedControl
+							data={editModeData}
+							value={values.editMode ?? editModes[0]}
+							onChange={(value) => setValues((current) => ({ ...current, editMode: value as ImageEditMode }))}
+							data-testid="image-form-edit-mode"
+						/>
+					) : null}
+
+					{cannotEdit ? (
+						<Alert color="yellow" data-testid="image-form-edit-unsupported">
+							{t("pages.images.edit.unsupported", "The selected model cannot edit images. Pick another model.")}
+						</Alert>
+					) : null}
+
+					{values.editMode === "img2img" ? (
+						<Stack gap={4} data-testid="image-form-strength">
+							<Text size="sm" fw={500}>
+								{t("pages.images.edit.strength.label", "Strength")}
+							</Text>
+							<Slider
+								min={0.1}
+								max={1}
+								step={0.05}
+								value={values.strength ?? defaultImageEditStrength}
+								onChange={(value) => setValues((current) => ({ ...current, strength: value }))}
+								thumbLabel={t("pages.images.edit.strength.label", "Strength")}
+								label={(value) => value.toFixed(2)}
+							/>
+							<Text size="xs" c="dimmed">
+								{t("pages.images.edit.strength.description", "Lower keeps more of the source; higher changes more.")}
+							</Text>
+						</Stack>
+					) : null}
+				</Stack>
+			)}
+
 			<AssistActions surface="image" existing={assistExisting} onApply={applyPromptDraft} onDiscard={noop} />
 
 			<Textarea
 				label={t("pages.images.form.prompt.label", "Prompt")}
-				placeholder={t("pages.images.form.prompt.placeholder", "A watercolor fox in a misty forest")}
+				placeholder={promptPlaceholder}
 				value={values.prompt}
 				required={true}
 				autosize={true}
@@ -277,7 +411,7 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 				<Button
 					leftSection={<IconSparkles size={16} />}
 					loading={isSubmitting}
-					disabled={!hasModels}
+					disabled={!hasModels || cannotEdit}
 					onClick={handleSubmit}
 					data-testid="image-form-submit"
 				>

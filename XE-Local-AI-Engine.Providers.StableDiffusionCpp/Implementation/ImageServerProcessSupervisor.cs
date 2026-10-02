@@ -273,6 +273,24 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     /// </remarks>
     private async Task<ImageServerEndpoint?> TryReuseAsync(string modelName, RunningServer existing, CancellationToken ct)
     {
+        // The launch arguments were built from the weight set installed at spawn time; an install completed since (a Qwen-Image set gaining its LlmVision part) leaves the resident daemon without
+        // the new part, so it is respawned rather than handed out. A daemon under a job lease is never torn down: fail closed instead of reusing the stale weight set.
+        var installedParts = await _modelStore.ResolveModelPartsAsync(modelName, ct).ConfigureAwait(false);
+        if (installedParts is not { Count: > 0 } || !string.Equals(FingerprintOf(installedParts), existing.PartsFingerprint, StringComparison.Ordinal))
+        {
+            if (!existing.TryBeginEvict())
+            {
+                // Leased: a generation is still running on the old weight set. Otherwise another caller already latched it for eviction.
+                return existing.IsLeased
+                    ? throw new StableDiffusionRuntimeException("The image runtime is busy finishing a job on this model's previous weight set; retry once it completes.")
+                    : null;
+            }
+
+            _logger.LogInformation("image daemon for {ModelName} was launched from a different weight set; respawning", modelName);
+            await RemoveProcessAsync(modelName, existing).ConfigureAwait(false);
+            return null;
+        }
+
         var now = _timeProvider.GetUtcNow();
 
         // Rate limit: only the caller that wins the probe claim issues the HTTP probe this interval; every other caller
@@ -431,7 +449,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             };
             var residentLease = _runtimeActivityGate.TryAcquireResidentProcessLease()
                                 ?? throw new StableDiffusionRuntimeException("The image runtime became busy before the server process could be registered.");
-            var running = new RunningServer(handle, endpoint, port, _timeProvider.GetUtcNow(), residentLease);
+            var running = new RunningServer(handle, endpoint, port, _timeProvider.GetUtcNow(), residentLease, FingerprintOf(parts));
             _processes[modelName] = running;
 
             // A DisposeAsync that ran while this spawn was in flight tore down only the daemons in its teardown snapshot; this one registered AFTER it, so tear it down here rather than leave it
@@ -877,6 +895,12 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
     }
 
+    /// <summary>Order-insensitive identity of a weight set: the sorted (role, local path) pairs the launch arguments are built from. Compared, never logged.</summary>
+    private static string FingerprintOf(IReadOnlyList<ImageModelPart> parts)
+    {
+        return string.Join('\n', parts.Select(static part => ((int)part.Role).ToString(CultureInfo.InvariantCulture) + "|" + part.LocalPath).Order(StringComparer.Ordinal));
+    }
+
     /// <summary>A live, registered daemon and its last-used timestamp (drives idle-TTL eviction).</summary>
     private sealed class RunningServer
     {
@@ -897,8 +921,10 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             ImageServerEndpoint endpoint,
             int port,
             DateTimeOffset startedUtc,
-            IImageRuntimeActivityLease residentLease)
+            IImageRuntimeActivityLease residentLease,
+            string partsFingerprint)
         {
+            PartsFingerprint = partsFingerprint;
             _lastUsedTicks = startedUtc.UtcTicks;
             _lastLivenessProbeTicks = startedUtc.UtcTicks;
             Handle = handle;
@@ -910,6 +936,9 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         public IProcessTreeHandle Handle { get; }
 
         public IImageRuntimeActivityLease ResidentLease { get; }
+
+        /// <summary>The <see cref="FingerprintOf" /> of the weight set this daemon was launched from.</summary>
+        public string PartsFingerprint { get; }
 
         /// <summary>Whether a generation currently leases this daemon — best-effort read for the evictor's victim heuristic; the atomic claim is <see cref="TryBeginEvict" />.</summary>
         public bool IsLeased => Volatile.Read(ref _leaseState) > 0;

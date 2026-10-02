@@ -3121,6 +3121,9 @@ export type XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = {
 	steps?: number;
 	sampler?: string | null;
 	cfgScale?: number;
+	editMode?: string | null;
+	sourceImageId?: string | null;
+	strength?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1DeleteImageModelRequest = {
@@ -3163,6 +3166,9 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = {
 	imageId?: string | null;
 	sanitizedError?: string | null;
 	cancellationRequestedAtUtc?: number | null;
+	editMode?: string | null;
+	sourceImageId?: string | null;
+	strength?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1ImageJobRouteRequest = {
@@ -3229,6 +3235,8 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = {
 	defaultSteps: number;
 	defaultCfgScale: number;
 	defaultSampler: string;
+	editModes: Array<string>;
+	nativePixels: number;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1ImagePromptDraftResponse = {
@@ -3306,6 +3314,10 @@ export type XeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsRespons
 
 export type XeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ListUploadedImagesRequest = {
+	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1RetrieveImageRequest = {
@@ -3395,6 +3407,27 @@ export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceB
 export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse = {
 	started: boolean;
 	status: XeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1UploadImageRequest = {
+	file: Blob | File;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1UploadedImageListResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsImagesV1UploadedImageResponse>;
+	totalCount: number;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1UploadedImageResponse = {
+	imageId: string;
+	mimeType: string;
+	width: number;
+	height: number;
+	createdAtUtc: number;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1UploadedImageRouteRequest = {
+	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsIntegrationsV1CreateIntegrationTriggerRequest = {
@@ -15015,6 +15048,110 @@ export type GetStableDiffusionCppSourceBuildStatusResponses = {
 
 export type GetStableDiffusionCppSourceBuildStatusResponse =
 	GetStableDiffusionCppSourceBuildStatusResponses[keyof GetStableDiffusionCppSourceBuildStatusResponses];
+
+export type ListUploadedImagesData = {
+	body?: never;
+	path?: never;
+	query?: {
+		limit?: number | null;
+		offset?: number | null;
+	};
+	url: "/api/local/v1/images/uploads";
+};
+
+export type ListUploadedImagesErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListUploadedImagesError = ListUploadedImagesErrors[keyof ListUploadedImagesErrors];
+
+export type ListUploadedImagesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1UploadedImageListResponse;
+};
+
+export type ListUploadedImagesResponse = ListUploadedImagesResponses[keyof ListUploadedImagesResponses];
+
+export type UploadImageData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1UploadImageRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/uploads";
+};
+
+export type UploadImageErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UploadImageError = UploadImageErrors[keyof UploadImageErrors];
+
+export type UploadImageResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1UploadedImageResponse;
+};
+
+export type UploadImageResponse = UploadImageResponses[keyof UploadImageResponses];
+
+export type DeleteUploadedImageData = {
+	body?: never;
+	path: {
+		imageId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/images/uploads/{imageId}";
+};
+
+export type DeleteUploadedImageErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type DeleteUploadedImageError = DeleteUploadedImageErrors[keyof DeleteUploadedImageErrors];
+
+export type DeleteUploadedImageResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteUploadedImageResponse = DeleteUploadedImageResponses[keyof DeleteUploadedImageResponses];
 
 export type RetrieveImageData = {
 	body?: never;

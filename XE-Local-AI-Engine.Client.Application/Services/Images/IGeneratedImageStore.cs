@@ -16,6 +16,12 @@ public interface IGeneratedImageStore
     Task<GeneratedImageInfo> AddAsync(Guid jobId, Guid imageId, ReadOnlyMemory<byte> pngBytes, GeneratedImageMetadata metadata, CancellationToken cancellationToken);
 
     /// <summary>
+    ///     Encrypts an uploaded image under <c>generated-images/uploads/{imageId}.png|jpg</c> (associated data binds an
+    ///     empty job id) and persists its job-less metadata row. The image id is minted here.
+    /// </summary>
+    Task<GeneratedImageInfo> AddUploadAsync(ReadOnlyMemory<byte> bytes, GeneratedImageMetadata metadata, CancellationToken cancellationToken);
+
+    /// <summary>
     ///     Reads and decrypts a stored image's bytes for the retrieve endpoint, or <see langword="null" /> when the image
     ///     id is unknown or its blob is missing on disk.
     /// </summary>
@@ -32,6 +38,12 @@ public interface IGeneratedImageStore
     ///     the deletion boundary and it enforces that invariant itself rather than trusting the column.
     /// </remarks>
     void RemoveJobBlobs(Guid jobId, IReadOnlyList<string> storagePaths);
+
+    /// <summary>
+    ///     Best-effort removal of a deleted upload's encrypted blob, called after its row is gone. A path outside the
+    ///     image blob root is skipped with a warning.
+    /// </summary>
+    void RemoveUploadBlob(Guid imageId, string storagePath);
 }
 
 /// <summary>Non-secret metadata supplied when persisting a generated image.</summary>
@@ -43,7 +55,7 @@ public sealed record GeneratedImageMetadata
     /// <summary>Pixel height of the image.</summary>
     public required int Height { get; init; }
 
-    /// <summary>MIME type of the stored image; currently always <c>image/png</c>.</summary>
+    /// <summary>MIME type of the stored image: <c>image/png</c>, or <c>image/jpeg</c> for an uploaded JPEG.</summary>
     public string MimeType { get; init; } = "image/png";
 }
 
@@ -52,7 +64,8 @@ public sealed class GeneratedImageInfo
 {
     public required Guid ImageId { get; init; }
 
-    public required Guid JobId { get; init; }
+    /// <summary>The producing job, or <see langword="null" /> for an uploaded image.</summary>
+    public required Guid? JobId { get; init; }
 
     public required string MimeType { get; init; }
 

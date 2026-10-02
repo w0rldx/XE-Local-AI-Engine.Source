@@ -3753,7 +3753,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("height");
 
-                    b.Property<Guid>("JobId")
+                    b.Property<Guid?>("JobId")
                         .HasColumnType("TEXT")
                         .HasColumnName("job_id");
 
@@ -4194,6 +4194,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("duration_ms");
 
+                    b.Property<string>("EditMode")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("edit_mode");
+
                     b.Property<int>("Height")
                         .HasColumnType("INTEGER")
                         .HasColumnName("height");
@@ -4229,6 +4233,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("seed");
 
+                    b.Property<Guid?>("SourceImageId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source_image_id");
+
                     b.Property<long?>("StartedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("started_at_utc");
@@ -4241,6 +4249,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("steps");
 
+                    b.Property<double?>("Strength")
+                        .HasColumnType("REAL")
+                        .HasColumnName("strength");
+
                     b.Property<int>("Width")
                         .HasColumnType("INTEGER")
                         .HasColumnName("width");
@@ -4248,6 +4260,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("SourceImageId");
 
                     b.HasIndex("Status");
 
@@ -7712,8 +7726,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.ImageJob", null)
                         .WithMany()
                         .HasForeignKey("JobId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.GoldenConversation", b =>
@@ -7749,6 +7762,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ImageJob", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.GeneratedImage", null)
+                        .WithMany()
+                        .HasForeignKey("SourceImageId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.IntegrationExecutionEvent", b =>

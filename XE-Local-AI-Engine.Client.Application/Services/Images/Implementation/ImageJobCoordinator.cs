@@ -46,6 +46,10 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     private readonly IImageRuntimeActivityGate _runtimeActivityGate;
     private readonly IGpuWorkGate _gpuWorkGate;
     private readonly ILlamaServerProcessSupervisor _llamaSupervisor;
+    private readonly IImageModelRegistry _modelRegistry;
+
+    private const string SourceImageMissing = "The source image no longer exists.";
+    private const string EditModeUnsupportedByRuntime = "The image runtime build does not support this edit mode.";
 
     // Serializes generation to one running job; extra jobs wait here (still Queued) until the slot frees.
     private readonly SemaphoreSlim _generationSlot = new(initialCount: 1, maxCount: 1);
@@ -80,8 +84,10 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         ILogger<ImageJobCoordinator> logger,
         IImageRuntimeActivityGate runtimeActivityGate,
         IGpuWorkGate gpuWorkGate,
-        ILlamaServerProcessSupervisor llamaSupervisor)
+        ILlamaServerProcessSupervisor llamaSupervisor,
+        IImageModelRegistry modelRegistry)
     {
+        _modelRegistry = modelRegistry ?? throw new ArgumentNullException(nameof(modelRegistry));
         _llamaSupervisor = llamaSupervisor ?? throw new ArgumentNullException(nameof(llamaSupervisor));
         _gpuWorkGate = gpuWorkGate ?? throw new ArgumentNullException(nameof(gpuWorkGate));
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
@@ -102,6 +108,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     {
         ArgumentNullException.ThrowIfNull(input);
         ValidateInput(input);
+        await ValidateEditAsync(input, cancellationToken);
 
         var jobId = Guid.NewGuid();
         var createdAt = NowUnixMs();
@@ -133,7 +140,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         // Detached run task owns the CTS lifetime: it captures only the token (a struct) and disposes the CTS via the registry in Cleanup, so no IDisposable
         // instance is passed into an un-awaited task (CA2025), while Cancel can still signal it through the registry until then.
         var request = ToRequest(input);
-        var runTask = RunJobAsync(jobId, request, cts.Token);
+        var runTask = RunJobAsync(jobId, request, input.SourceImageId, cts.Token);
 
         // Track the run task for the shutdown drain. If the task already completed (its Cleanup ran before this add),
         // remove it again so a finished job never lingers in the registry.
@@ -296,7 +303,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         _evictionTimer.Dispose();
     }
 
-    private async Task RunJobAsync(Guid jobId, ImageGenerationRequest request, CancellationToken token)
+    private async Task RunJobAsync(Guid jobId, ImageGenerationRequest request, Guid? sourceImageId, CancellationToken token)
     {
         var acquired = false;
         try
@@ -326,6 +333,23 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         try
         {
             token.ThrowIfCancellationRequested();
+
+            // The source bytes are read only now, while this job holds the slot, so a queue of edits never pins their images in memory. They live in the request object
+            // until the runtime has submitted them, and are never logged. A source deleted while the job waited fails it before any GPU work.
+            if (sourceImageId is { } sourceId)
+            {
+                var source = await _imageStore.OpenReadAsync(sourceId, token);
+                if (source is null)
+                {
+                    await RunStoreAsync(store => store.MarkFailedAsync(jobId, SourceImageMissing, NowUnixMs(), CancellationToken.None), jobId, "mark failed");
+                    PushStatus(jobId, ImageJobStatus.Failed, queuePosition: null, elapsedMs: null, imageId: null, SourceImageMissing, ImageJobProgressDetail.None, isMilestone: true);
+                    return;
+                }
+
+                request = request.Mode == ImageEditMode.Reference
+                    ? request with { ReferenceImage = source.Bytes }
+                    : request with { InitImage = source.Bytes };
+            }
 
             // A training run holds the whole GPU (decision #13). Admission sits here, after the slot is held and before the runtime is called: a run can begin while this job
             // still waits behind another, so this is the only point at which it is definitely about to allocate VRAM. HELD through generation — checking then releasing would let a run admit.
@@ -385,9 +409,12 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         {
             // Sanitized: never surface a raw message (it may carry internal/model detail) and never log the prompt. A daemon
             // death and a GPU out-of-memory are the runtime texts passed through: fixed, display-safe and telling the operator what happened.
-            var sanitizedError = exception is StableDiffusionRuntimeException { ProcessExited: true } or StableDiffusionRuntimeException { OutOfMemory: true }
-                ? exception.Message
-                : "Image generation failed.";
+            var sanitizedError = exception switch
+            {
+                StableDiffusionRuntimeException { FeatureUnsupported: true } => EditModeUnsupportedByRuntime,
+                StableDiffusionRuntimeException { ProcessExited: true } or StableDiffusionRuntimeException { OutOfMemory: true } => exception.Message,
+                _ => "Image generation failed."
+            };
             await RunStoreAsync(store => store.MarkFailedAsync(jobId, sanitizedError, NowUnixMs(), CancellationToken.None), jobId, "mark failed");
             PushStatus(jobId, ImageJobStatus.Failed, queuePosition: null, elapsedMs: null, imageId: null, sanitizedError: sanitizedError, ImageJobProgressDetail.None, isMilestone: true);
             _logger.LogWarning(exception, "Image job {JobId} failed during generation.", jobId);
@@ -510,7 +537,10 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             Steps = input.Steps,
             Sampler = input.Sampler ?? string.Empty,
             CfgScale = input.CfgScale,
-            CreatedAtUtc = createdAtUtc
+            CreatedAtUtc = createdAtUtc,
+            EditMode = input.EditMode,
+            SourceImageId = input.SourceImageId,
+            Strength = input.Strength
         }, cancellationToken);
     }
 
@@ -682,7 +712,9 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
             Steps = input.Steps,
             Sampler = input.Sampler,
             CfgScale = input.CfgScale,
-            BatchCount = 1
+            BatchCount = 1,
+            Mode = input.EditMode,
+            Strength = input.Strength
         };
     }
 
@@ -696,6 +728,60 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         if (string.IsNullOrWhiteSpace(input.Prompt))
         {
             throw new ArgumentException("An image job requires a prompt.", nameof(input));
+        }
+
+        if (input.EditMode is null)
+        {
+            if (input.SourceImageId is not null)
+            {
+                throw new ImageJobInputRejectedException("A source image requires an edit mode.");
+            }
+        }
+        else if (input.SourceImageId is null)
+        {
+            throw new ImageJobInputRejectedException("An edit mode requires a source image.");
+        }
+
+        if (input.Strength is { } strength)
+        {
+            if (input.EditMode != ImageEditMode.Img2Img)
+            {
+                throw new ImageJobInputRejectedException("Strength applies only to img2img edits.");
+            }
+
+            if (strength is < 0 or > 1 || double.IsNaN(strength))
+            {
+                throw new ImageJobInputRejectedException("Strength must be between 0 and 1.");
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Refuses an edit the installed model does not offer, or one whose source image does not exist right now. The
+    ///     source is checked again when the job runs, because it can be deleted while the job waits.
+    /// </summary>
+    private async Task ValidateEditAsync(CreateImageJobInput input, CancellationToken cancellationToken)
+    {
+        if (input is not { EditMode: { } mode, SourceImageId: { } sourceImageId })
+        {
+            return;
+        }
+
+        // A model missing from the registry resolves as Unknown with no parts, which offers img2img only. The parts
+        // matter: a Qwen-Image install offers reference only when it carries the vision tower.
+        var entry = await _modelRegistry.FindAsync(input.ModelName, cancellationToken);
+        var family = entry?.Family ?? ImageModelFamily.Unknown;
+        var roles = entry?.Parts.Select(static p => p.Role) ?? [];
+        if (!ImageFamilyDefaults.EditModesFor(family, roles).Contains(mode))
+        {
+            throw new ImageJobInputRejectedException("The selected model does not support this edit mode.");
+        }
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var rows = scope.ServiceProvider.GetRequiredService<IGeneratedImageRowStore>();
+        if (await rows.FindAsync(sourceImageId, cancellationToken) is null)
+        {
+            throw new ImageJobInputRejectedException("The source image does not exist.");
         }
     }
 

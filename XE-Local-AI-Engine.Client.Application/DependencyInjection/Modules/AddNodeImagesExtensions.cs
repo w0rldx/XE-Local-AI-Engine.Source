@@ -67,6 +67,7 @@ internal static class AddNodeImagesExtensions
         // Encrypted-at-rest generated-image blob store. Singleton: it opens a scope per row operation and depends only
         // on singletons (data directory, sqlite key holder, time provider) — the same posture as the uploaded-file store.
         builder.Services.AddSingleton<IGeneratedImageStore, GeneratedImageStore>();
+        builder.Services.AddSingleton<UploadedImageService>();
 
         // No-op default image-job event publisher; the Client host supersedes it with the hub-backed publisher.
         builder.Services.AddSingleton<IImageJobEventPublisher, NullImageJobEventPublisher>();

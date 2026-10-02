@@ -1,18 +1,18 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sourceThemeConfiguration } from "@/core/theme/config/ThemeConfiguration";
 import { ThemeProvider } from "@/core/theme/provider/ThemeProvider";
 import { ImageGenerationForm } from "@/features/images/components/ImageGenerationForm";
 import { imageFormOverridesKeyPrefix } from "@/features/images/models/ImageFormOverrides";
-import type { ImageModelView } from "@/features/images/models/ImageModels";
+import type { ImageGenerationFormValues, ImageModelView } from "@/features/images/models/ImageModels";
 import en from "@/locales/en.json";
 import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
-import { renderWithProviders } from "@/test/RenderWithProviders";
+import { createProvidersWrapper, renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
 // The form embeds the prompt assist, which reads the installed chat models and the running set on mount.
@@ -59,6 +59,8 @@ const model: ImageModelView = {
 	defaultSteps: 20,
 	defaultCfgScale: 7,
 	defaultSampler: "euler_a",
+	editModes: ["img2img"],
+	nativePixels: 512 * 512,
 };
 
 function renderForm() {
@@ -239,5 +241,155 @@ describe("ImageGenerationForm prompt assist", () => {
 		);
 		expect((screen.getByTestId("image-form-negative-prompt") as HTMLTextAreaElement).value).toBe("blurry, watermark");
 		expect(sent).toMatchObject({ mode: "Create", modelName: "qwen3-4b", brief: "a fox in a forest" });
+	});
+});
+
+// Edit mode: the same form, prefilled from the source image. The defaults matter more than they look — a phone photo's
+// own 4000×3000 would be an out-of-memory job, so the size starts at the source's aspect fitted to the model's native
+// pixel count, and the mode list is the model's own.
+describe("ImageGenerationForm edit mode", () => {
+	const source = { imageId: "99999999-9999-4999-8999-999999999999", width: 4000, height: 3000 };
+	const qwenEdit: ImageModelView = {
+		...model,
+		modelName: "qwen-image-edit",
+		family: "QwenImage",
+		editModes: ["img2img", "reference"],
+		nativePixels: 1024 * 1024,
+	};
+	const noEdit: ImageModelView = { ...model, modelName: "no-edit", editModes: [] };
+
+	beforeEach(() => {
+		localStorage.clear();
+		Object.assign(URL, { createObjectURL: () => "blob:source", revokeObjectURL: () => undefined });
+		server.use(
+			http.get(
+				localApiPath(`images/${source.imageId}`),
+				() => new HttpResponse(new Blob(["png"]), { headers: { "content-type": "image/png" } }),
+			),
+		);
+	});
+	afterEach(cleanup);
+
+	function renderEdit(models: readonly ImageModelView[], onSubmit = vi.fn(), onCancelEdit = vi.fn()) {
+		renderWithProviders(
+			<ThemeProvider>
+				<ImageGenerationForm
+					models={models}
+					isSubmitting={false}
+					onSubmit={onSubmit}
+					editSource={source}
+					onCancelEdit={onCancelEdit}
+				/>
+			</ThemeProvider>,
+		);
+		return { onSubmit, onCancelEdit };
+	}
+
+	function numberValue(testId: string): string {
+		return (screen.getByTestId(testId) as HTMLInputElement).value;
+	}
+
+	function submitWithPrompt(prompt: string) {
+		fireEvent.change(screen.getByTestId("image-form-prompt"), { target: { value: prompt } });
+		fireEvent.click(screen.getByTestId("image-form-submit"));
+	}
+
+	it("shows the source and fits its aspect to the model's native pixels", async () => {
+		renderEdit([model]);
+
+		expect(screen.getByText(en.pages.images.edit.editingFrom)).toBeTruthy();
+		expect((await screen.findByTestId("image-source-thumbnail")).getAttribute("src")).toBe("blob:source");
+		expect(numberValue("image-form-width")).toBe("576");
+		expect(numberValue("image-form-height")).toBe("448");
+	});
+
+	it("hides the mode selector for a model with one mode and shows the strength slider for img2img", () => {
+		renderEdit([model]);
+
+		expect(screen.queryByTestId("image-form-edit-mode")).toBeNull();
+		expect(screen.getByText(en.pages.images.edit.strength.label)).toBeTruthy();
+		expect(screen.getByRole("slider").getAttribute("aria-valuenow")).toBe("0.75");
+	});
+
+	it("submits img2img with the source and strength", () => {
+		const { onSubmit } = renderEdit([model]);
+
+		submitWithPrompt("make it autumn");
+
+		expect(onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				prompt: "make it autumn",
+				editMode: "img2img",
+				sourceImageId: source.imageId,
+				strength: 0.75,
+				width: 576,
+				height: 448,
+			}),
+		);
+	});
+
+	it("offers the model's modes, and reference drops the strength and asks for the change", () => {
+		const { onSubmit } = renderEdit([qwenEdit]);
+		expect(screen.getByTestId("image-form-edit-mode")).toBeTruthy();
+
+		fireEvent.click(screen.getByRole("radio", { name: en.pages.images.edit.modes.reference }));
+
+		expect(screen.queryByRole("slider")).toBeNull();
+		expect(screen.getByTestId("image-form-prompt").getAttribute("placeholder")).toBe(en.pages.images.edit.referencePlaceholder);
+		submitWithPrompt("replace the sky with a sunset");
+		const sent = onSubmit.mock.calls[0]?.[0] as ImageGenerationFormValues;
+		expect(sent).toMatchObject({ editMode: "reference", sourceImageId: source.imageId, width: 1152, height: 896 });
+		expect(sent.strength).toBeUndefined();
+	});
+
+	it("re-derives the size and drops a mode the newly picked model lacks", async () => {
+		renderEdit([qwenEdit, model]);
+		fireEvent.click(screen.getByRole("radio", { name: en.pages.images.edit.modes.reference }));
+		expect(numberValue("image-form-width")).toBe("1152");
+
+		await pickModel("sd15");
+
+		expect(numberValue("image-form-width")).toBe("576");
+		expect(numberValue("image-form-height")).toBe("448");
+		expect(screen.queryByTestId("image-form-edit-mode")).toBeNull();
+		expect(screen.getByRole("slider")).toBeTruthy();
+	});
+
+	it("blocks submit on a model that cannot edit", () => {
+		renderEdit([noEdit]);
+
+		expect(screen.getByTestId("image-form-edit-unsupported").textContent).toBe(en.pages.images.edit.unsupported);
+		expect(screen.getByTestId("image-form-submit")).toHaveProperty("disabled", true);
+	});
+
+	it("leaves edit mode through Cancel edit", () => {
+		const { onCancelEdit } = renderEdit([model]);
+
+		fireEvent.click(screen.getByRole("button", { name: en.pages.images.edit.cancel }));
+
+		expect(onCancelEdit).toHaveBeenCalledTimes(1);
+	});
+
+	it("sends no edit fields once the page clears the source", () => {
+		const onSubmit = vi.fn();
+		const { wrapper } = createProvidersWrapper();
+		const { rerender } = render(
+			<ThemeProvider>
+				<ImageGenerationForm models={[model]} isSubmitting={false} onSubmit={onSubmit} editSource={source} />
+			</ThemeProvider>,
+			{ wrapper },
+		);
+		rerender(
+			<ThemeProvider>
+				<ImageGenerationForm models={[model]} isSubmitting={false} onSubmit={onSubmit} editSource={null} />
+			</ThemeProvider>,
+		);
+
+		expect(screen.queryByTestId("image-form-edit")).toBeNull();
+		submitWithPrompt("a fox");
+		const sent = onSubmit.mock.calls[0]?.[0] as ImageGenerationFormValues;
+		expect(sent.editMode).toBeUndefined();
+		expect(sent.sourceImageId).toBeUndefined();
+		expect(sent.strength).toBeUndefined();
 	});
 });

@@ -68,7 +68,11 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
             "duration_ms",
             "image_id",
             "sanitized_error",
-            "cancellation_requested_at_utc"
+            "cancellation_requested_at_utc",
+            // Added at head by AddImageEditColumns.
+            "edit_mode",
+            "source_image_id",
+            "strength"
         }), "image_jobs should expose all mapped columns.");
     }
 

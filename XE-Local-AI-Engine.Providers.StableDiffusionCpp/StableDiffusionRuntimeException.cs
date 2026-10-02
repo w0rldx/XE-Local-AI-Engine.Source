@@ -29,4 +29,10 @@ public sealed class StableDiffusionRuntimeException : Exception
 
     /// <summary>Whether the daemon's stderr showed a GPU out-of-memory. The message is then a fixed, display-safe instruction.</summary>
     public bool OutOfMemory { get; init; }
+
+    /// <summary>
+    ///     Whether the running daemon build does not support the requested edit mode. The message is then a fixed,
+    ///     display-safe statement of that.
+    /// </summary>
+    public bool FeatureUnsupported { get; init; }
 }

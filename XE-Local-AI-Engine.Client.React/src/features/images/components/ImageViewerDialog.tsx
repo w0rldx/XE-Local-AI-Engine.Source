@@ -1,9 +1,10 @@
 import { ActionIcon, Button, CopyButton, Group, Image, Loader, Stack, Text, Tooltip } from "@mantine/core";
-import { IconCheck, IconCopy, IconDownload } from "@tabler/icons-react";
+import { IconCheck, IconCopy, IconDownload, IconPencil } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { LabelValueRow } from "@/core/ui/components/LabelValueRow/LabelValueRow";
+import { ImageEditLineage } from "@/features/images/components/ImageSourceThumbnail";
 import { buildGeneratedImageFileName, downloadGeneratedImage } from "@/features/images/GeneratedImageDownload";
 import { useImageObjectUrl } from "@/features/images/hooks/useImageObjectUrl";
 import type { ImageJobView } from "@/features/images/models/ImageModels";
@@ -12,6 +13,8 @@ interface ImageViewerDialogProps {
 	job: ImageJobView;
 	opened: boolean;
 	onClose: () => void;
+	/** Opens the generation form on this image and closes the viewer; absent when no installed model can edit. */
+	onEdit?: () => void;
 }
 
 /**
@@ -22,7 +25,7 @@ interface ImageViewerDialogProps {
  * viewport height rather than a fixed pixel box so it scales down to fit instead of overflowing, and the metadata sits
  * below it rather than beside it so neither competes with the other for width.
  */
-export function ImageViewerDialog({ job, opened, onClose }: ImageViewerDialogProps) {
+export function ImageViewerDialog({ job, opened, onClose, onEdit }: ImageViewerDialogProps) {
 	const { t } = useTranslation();
 	// Same query key as the inline thumbnail, so opening the dialog is a cache hit — no second fetch of the PNG.
 	const { url, blob, isLoading, isError } = useImageObjectUrl(opened ? job.imageId : null);
@@ -42,14 +45,29 @@ export function ImageViewerDialog({ job, opened, onClose }: ImageViewerDialogPro
 			size="min(80rem, 96vw)"
 			data-testid="image-viewer-dialog"
 			footer={
-				<Button
-					leftSection={<IconDownload size={16} />}
-					onClick={handleDownload}
-					disabled={!blob}
-					data-testid="image-viewer-download"
-				>
-					{t("pages.images.viewer.download", "Download PNG")}
-				</Button>
+				<Group gap="sm">
+					{onEdit === undefined ? null : (
+						<Button
+							variant="default"
+							leftSection={<IconPencil size={16} />}
+							onClick={() => {
+								onEdit();
+								onClose();
+							}}
+							data-testid="image-viewer-edit"
+						>
+							{t("pages.images.edit.action", "Edit")}
+						</Button>
+					)}
+					<Button
+						leftSection={<IconDownload size={16} />}
+						onClick={handleDownload}
+						disabled={!blob}
+						data-testid="image-viewer-download"
+					>
+						{t("pages.images.viewer.download", "Download PNG")}
+					</Button>
+				</Group>
 			}
 		>
 			<Stack gap="md">
@@ -158,6 +176,12 @@ export function ImageViewerDialog({ job, opened, onClose }: ImageViewerDialogPro
 							)}
 						</Text>
 					</LabelValueRow>
+
+					{job.editMode !== null || job.sourceImageId !== null ? (
+						<LabelValueRow labelWidth={110} size="xs" align="flex-start" label={t("pages.images.edit.label", "Edit")}>
+							<ImageEditLineage job={job} />
+						</LabelValueRow>
+					) : null}
 
 					{job.durationMs !== null ? (
 						<LabelValueRow labelWidth={110} size="xs" align="flex-start" label={t("pages.images.viewer.duration", "Duration")}>

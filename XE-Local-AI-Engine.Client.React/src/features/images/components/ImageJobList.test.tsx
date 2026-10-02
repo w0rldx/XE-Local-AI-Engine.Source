@@ -31,6 +31,9 @@ function job(id: string): ImageJobView {
 		durationMs: 5000,
 		imageId: null,
 		sanitizedError: null,
+		editMode: null,
+		sourceImageId: null,
+		strength: null,
 	};
 }
 

@@ -35,6 +35,40 @@ public sealed record ImageGenerationRequest
 
     /// <summary>How many images to generate in the batch; the current runtime supports single-image jobs.</summary>
     public int BatchCount { get; init; } = 1;
+
+    /// <summary>
+    ///     How this request derives from a source image; <see langword="null" /> is plain text-to-image and ignores
+    ///     <see cref="InitImage" />, <see cref="ReferenceImage" /> and <see cref="Strength" />.
+    /// </summary>
+    public ImageEditMode? Mode { get; init; }
+
+    /// <summary>
+    ///     The source image for <see cref="ImageEditMode.Img2Img" />, as PNG or JPEG file bytes. Plaintext in memory only;
+    ///     never logged.
+    /// </summary>
+    public ReadOnlyMemory<byte>? InitImage { get; init; }
+
+    /// <summary>
+    ///     The single reference image for <see cref="ImageEditMode.Reference" />, as PNG or JPEG file bytes. Plaintext in
+    ///     memory only; never logged.
+    /// </summary>
+    public ReadOnlyMemory<byte>? ReferenceImage { get; init; }
+
+    /// <summary>
+    ///     Img2img denoising strength in <c>0..1</c> (0 keeps the source, 1 ignores it); only meaningful for
+    ///     <see cref="ImageEditMode.Img2Img" />. <see langword="null" /> uses the runtime default.
+    /// </summary>
+    public double? Strength { get; init; }
+}
+
+/// <summary>How an image request derives its output from a source image.</summary>
+public enum ImageEditMode
+{
+    /// <summary>Image-to-image: the source seeds the latent and <see cref="ImageGenerationRequest.Strength" /> sets how far the result departs from it.</summary>
+    Img2Img = 0,
+
+    /// <summary>Reference/instruction edit: the source conditions the model while the prompt describes the change.</summary>
+    Reference = 1
 }
 
 /// <summary>The lifecycle phase of an image job.</summary>

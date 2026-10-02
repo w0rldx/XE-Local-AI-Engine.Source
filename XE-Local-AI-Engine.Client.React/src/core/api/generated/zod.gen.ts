@@ -3507,6 +3507,9 @@ export const zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = z.ob
 		.optional(),
 	sampler: z.string().nullish(),
 	cfgScale: z.number().optional(),
+	editMode: z.string().nullish(),
+	sourceImageId: z.guid().nullish(),
+	strength: z.number().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1DeleteImageModelRequest = z.record(z.string(), z.never());
@@ -3544,6 +3547,9 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = z.object(
 	imageId: z.guid().nullish(),
 	sanitizedError: z.string().nullish(),
 	cancellationRequestedAtUtc: z.int().nullish(),
+	editMode: z.string().nullish(),
+	sourceImageId: z.guid().nullish(),
+	strength: z.number().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobRouteRequest = z.record(z.string(), z.never());
@@ -3624,6 +3630,11 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = z.objec
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	defaultCfgScale: z.number(),
 	defaultSampler: z.string(),
+	editModes: z.array(z.string()),
+	nativePixels: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse = z.object({
@@ -3706,6 +3717,8 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelDownloadsRespo
 export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelResponse),
 });
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ListUploadedImagesRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsImagesV1RetrieveImageRequest = z.record(z.string(), z.never());
 
@@ -3799,6 +3812,34 @@ export const zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourc
 	started: z.boolean(),
 	status: zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse,
 });
+
+export const zXeLocalAiEngineClientEndpointsImagesV1UploadImageRequest = z.object({
+	file: z.string().min(1),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1UploadedImageResponse = z.object({
+	imageId: z.guid(),
+	mimeType: z.string(),
+	width: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	height: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	createdAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1UploadedImageListResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1UploadedImageResponse),
+	totalCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1UploadedImageRouteRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1GenerateIntegrationApiKeyRequest = z.object({
 	label: z.string().min(0).max(128),
@@ -11202,6 +11243,40 @@ export const zRemoveStableDiffusionCppSourceBuildResponse = zXeLocalAiEngineClie
  */
 export const zGetStableDiffusionCppSourceBuildStatusResponse =
 	zXeLocalAiEngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse;
+
+export const zListUploadedImagesQuery = z.object({
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	offset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListUploadedImagesResponse = zXeLocalAiEngineClientEndpointsImagesV1UploadedImageListResponse;
+
+export const zUploadImageBody = zXeLocalAiEngineClientEndpointsImagesV1UploadImageRequest;
+
+/**
+ * Success
+ */
+export const zUploadImageResponse = zXeLocalAiEngineClientEndpointsImagesV1UploadedImageResponse;
+
+export const zDeleteUploadedImagePath = z.object({
+	imageId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteUploadedImageResponse = z.void();
 
 export const zRetrieveImagePath = z.object({
 	imageId: z.guid(),

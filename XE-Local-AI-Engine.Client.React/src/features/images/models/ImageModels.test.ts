@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
 
+import type {
+	XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse as ImageJobResponse,
+	XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse as ImageModelResponse,
+} from "@/core/api/generated";
 import {
+	fitEditDimensions,
 	type ImageJobProgressView,
+	type ImageModelView,
 	imageFormDefaults,
 	imageFormDefaultsForModel,
 	imageGenerationFormSchema,
-	type ImageModelView,
 	isTerminalStatus,
 	keepLatestImageJobProgress,
 	toImageJobStatus,
+	toImageJobView,
+	toImageModelView,
 	toProgressDisplay,
 } from "@/features/images/models/ImageModels";
 
@@ -199,6 +206,8 @@ describe("imageFormDefaultsForModel", () => {
 			defaultSteps: 20,
 			defaultCfgScale: 2.5,
 			defaultSampler: "euler",
+			editModes: ["img2img"],
+			nativePixels: 1024 * 1024,
 			...overrides,
 		};
 	}
@@ -226,5 +235,83 @@ describe("imageFormDefaultsForModel", () => {
 		expect(values.modelName).toBe("");
 		expect(values.steps).toBe(imageFormDefaults.steps);
 		expect(values.cfgScale).toBe(imageFormDefaults.cfgScale);
+	});
+});
+
+describe("imageGenerationFormSchema edit fields", () => {
+	const source = "33333333-3333-4333-8333-333333333333";
+
+	it.each([
+		["img2img with a source and a strength", { editMode: "img2img", sourceImageId: source, strength: 0.75 }, true],
+		["img2img with a source and no strength", { editMode: "img2img", sourceImageId: source }, true],
+		["reference with a source", { editMode: "reference", sourceImageId: source }, true],
+		["a mode without a source", { editMode: "img2img" }, false],
+		["a source without a mode", { sourceImageId: source }, false],
+		["strength with reference", { editMode: "reference", sourceImageId: source, strength: 0.5 }, false],
+		["strength without an edit", { strength: 0.5 }, false],
+		["strength above 1", { editMode: "img2img", sourceImageId: source, strength: 1.5 }, false],
+		["an unknown mode", { editMode: "inpaint", sourceImageId: source }, false],
+	])("%s → valid=%s", (_name, edit, expected) => {
+		expect(imageGenerationFormSchema.safeParse({ ...validValues, ...edit }).success).toBe(expected);
+	});
+});
+
+describe("fitEditDimensions", () => {
+	// Source aspect scaled to the native pixel count, each side rounded to 64 and clamped to 64..2048.
+	it.each([
+		["square on SD1.5", { width: 1024, height: 1024 }, 512 * 512, { width: 512, height: 512 }],
+		["4:3 landscape photo on SD1.5", { width: 4000, height: 3000 }, 512 * 512, { width: 576, height: 448 }],
+		["3:4 portrait photo on SD1.5", { width: 3000, height: 4000 }, 512 * 512, { width: 448, height: 576 }],
+		["16:9 landscape on SDXL", { width: 1920, height: 1080 }, 1024 * 1024, { width: 1344, height: 768 }],
+		["9:16 portrait on SDXL", { width: 1080, height: 1920 }, 1024 * 1024, { width: 768, height: 1344 }],
+		["small square scales up to native", { width: 256, height: 256 }, 1024 * 1024, { width: 1024, height: 1024 }],
+		["extreme panorama clamps the long side to 2048", { width: 8000, height: 500 }, 1024 * 1024, { width: 2048, height: 256 }],
+		["extreme strip clamps the short side to 64", { width: 2000, height: 10 }, 512 * 512, { width: 2048, height: 64 }],
+	])("%s", (_name, source, nativePixels, expected) => {
+		expect(fitEditDimensions(source, nativePixels)).toEqual(expected);
+	});
+});
+
+describe("edit fields on the wire views", () => {
+	it("keeps the model's known edit modes and native pixels and drops a mode this client cannot send", () => {
+		const view = toImageModelView({
+			modelName: "sdxl",
+			repoId: "r",
+			family: "Sdxl",
+			kind: "Txt2Img",
+			sizeBytes: 1,
+			downloadedAtUtc: 0,
+			defaultSteps: 30,
+			defaultCfgScale: 7,
+			defaultSampler: "euler",
+			editModes: ["img2img", "future-mode", "reference"],
+			nativePixels: 1024 * 1024,
+		} as ImageModelResponse);
+
+		expect(view.editModes).toEqual(["img2img", "reference"]);
+		expect(view.nativePixels).toBe(1024 * 1024);
+	});
+
+	it("maps a job's edit lineage and reads an absent one as null", () => {
+		const base = {
+			id: "j",
+			modelName: "sd",
+			prompt: "p",
+			status: "Succeeded",
+			seed: "1",
+			width: 512,
+			height: 512,
+			steps: 20,
+			sampler: "euler",
+			cfgScale: 7,
+			createdAtUtc: 0,
+		} as ImageJobResponse;
+
+		expect(toImageJobView({ ...base, editMode: "img2img", sourceImageId: "s", strength: 0.4 })).toMatchObject({
+			editMode: "img2img",
+			sourceImageId: "s",
+			strength: 0.4,
+		});
+		expect(toImageJobView(base)).toMatchObject({ editMode: null, sourceImageId: null, strength: null });
 	});
 });

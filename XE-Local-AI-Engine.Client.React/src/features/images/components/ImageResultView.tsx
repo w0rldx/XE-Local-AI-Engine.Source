@@ -9,6 +9,8 @@ import type { ImageJobView } from "@/features/images/models/ImageModels";
 interface ImageResultViewProps {
 	job: ImageJobView;
 	imageId: string;
+	/** Passed through to the viewer's Edit action. */
+	onEdit?: () => void;
 }
 
 // Renders the decrypted PNG for a succeeded job. The bytes are fetched as an authed blob (bearer via the shared axios
@@ -17,7 +19,7 @@ interface ImageResultViewProps {
 //
 // The thumbnail is a real button, not an <img onClick>: a bare image is not focusable and ignores Enter/Space, so
 // opening the full-size viewer would be mouse-only.
-export function ImageResultView({ job, imageId }: ImageResultViewProps) {
+export function ImageResultView({ job, imageId, onEdit }: ImageResultViewProps) {
 	const { t } = useTranslation();
 	const { url, isLoading, isError } = useImageObjectUrl(imageId);
 	const [isViewerOpen, setIsViewerOpen] = useState(false);
@@ -44,7 +46,7 @@ export function ImageResultView({ job, imageId }: ImageResultViewProps) {
 			>
 				<Image src={url} alt={job.prompt} radius="sm" fit="contain" />
 			</UnstyledButton>
-			<ImageViewerDialog job={job} opened={isViewerOpen} onClose={() => setIsViewerOpen(false)} />
+			<ImageViewerDialog job={job} opened={isViewerOpen} onClose={() => setIsViewerOpen(false)} onEdit={onEdit} />
 		</Box>
 	);
 }

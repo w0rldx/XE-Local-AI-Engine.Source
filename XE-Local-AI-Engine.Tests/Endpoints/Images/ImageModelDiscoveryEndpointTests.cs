@@ -309,7 +309,8 @@ public sealed class ImageModelDiscoveryEndpointTests
                     RepoId = "owner/repo",
                     Family = ImageModelFamily.Sd15,
                     Kind = ImageModelKind.Txt2Img,
-                    Parts = [],
+                    // A catalog entry reads as installed only when every role it declares is present; sd-1.5 is one Diffusion file.
+                    Parts = [new ImageModelPart { Role = ImageModelPartRole.Diffusion, FileName = "d.gguf", LocalPath = "/m/d.gguf", SizeBytes = 1 }],
                     SizeBytes = 1,
                     SourceRevision = "main",
                     DownloadedAtUtc = DateTimeOffset.UnixEpoch

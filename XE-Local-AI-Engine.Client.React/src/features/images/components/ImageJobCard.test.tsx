@@ -2,11 +2,11 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageJobCard } from "@/features/images/components/ImageJobCard";
-import type { ImageJobProgressView, ImageJobView } from "@/features/images/models/ImageModels";
+import type { ImageEditSource, ImageJobProgressView, ImageJobView } from "@/features/images/models/ImageModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 // The card reads the live timeline through this hook; driving it directly keeps the test on the rendering contract
@@ -14,6 +14,17 @@ import { testMantineTheme } from "@/test/MantineTestRender";
 let currentProgress: ImageJobProgressView | null = null;
 vi.mock("@/features/images/hooks/useImageJobHub", () => ({
 	useImageJobProgress: () => currentProgress,
+}));
+
+// The result thumbnail and the lineage thumbnail fetch through this hook; the card only needs a URL back.
+vi.mock("@/features/images/hooks/useImageObjectUrl", () => ({
+	useImageObjectUrl: (imageId: string | null) => ({
+		url: imageId ? `blob:${imageId}` : undefined,
+		blob: undefined,
+		isLoading: false,
+		isError: false,
+	}),
+	imageBlobQueryKey: (imageId: string) => ["image-blob", imageId],
 }));
 
 // No i18next instance under vitest, so the real useTranslation would return the template with {{placeholders}}
@@ -51,6 +62,9 @@ function job(overrides: Partial<ImageJobView> = {}): ImageJobView {
 		durationMs: null,
 		imageId: null,
 		sanitizedError: null,
+		editMode: null,
+		sourceImageId: null,
+		strength: null,
 		...overrides,
 	};
 }
@@ -70,12 +84,12 @@ function progress(overrides: Partial<ImageJobProgressView>): ImageJobProgressVie
 }
 
 // The card now carries a delete button whose mutation needs a client; the timeline assertions below are unaffected.
-function renderCard(view = job()) {
+function renderCard(view = job(), onEdit?: (source: ImageEditSource) => void) {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 	return render(
 		<QueryClientProvider client={queryClient}>
 			<MantineProvider env="test" theme={testMantineTheme}>
-				<ImageJobCard job={view} isCancelling={false} onCancel={() => undefined} />
+				<ImageJobCard job={view} isCancelling={false} onCancel={() => undefined} onEdit={onEdit} />
 			</MantineProvider>
 		</QueryClientProvider>,
 	);
@@ -145,5 +159,35 @@ describe("ImageJobCard generation timeline", () => {
 
 		expect(screen.queryByTestId("image-job-steps")).toBeNull();
 		expect(screen.queryByTestId("image-job-eta")).toBeNull();
+	});
+});
+
+describe("ImageJobCard edit", () => {
+	afterEach(cleanup);
+
+	it("hands a succeeded job's image and size to the edit form", () => {
+		const onEdit = vi.fn();
+		renderCard(job({ status: "Succeeded", imageId: "img-1", width: 768, height: 512 }), onEdit);
+
+		fireEvent.click(screen.getByTestId("image-job-edit"));
+
+		expect(onEdit).toHaveBeenCalledWith({ imageId: "img-1", width: 768, height: 512 });
+	});
+
+	it("offers no Edit for a job without an image, or when no model can edit", () => {
+		renderCard(job({ status: "Failed", imageId: null }), vi.fn());
+		expect(screen.queryByTestId("image-job-edit")).toBeNull();
+		cleanup();
+
+		renderCard(job({ status: "Succeeded", imageId: "img-1" }));
+		expect(screen.queryByTestId("image-job-edit")).toBeNull();
+	});
+
+	it("shows how an edited job was made and what it was edited from", () => {
+		renderCard(job({ status: "Succeeded", imageId: "img-2", editMode: "img2img", sourceImageId: "src-1", strength: 0.6 }));
+
+		expect(screen.getByTestId("image-edit-detail").textContent).toBe("Variation · strength 0.6");
+		expect(screen.getByText("Edited from")).toBeTruthy();
+		expect(screen.getByTestId("image-source-thumbnail").getAttribute("src")).toBe("blob:src-1");
 	});
 });

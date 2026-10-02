@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>
 ///     Persistence boundary for the local image-generation job registry (<c>image_jobs</c>).
@@ -98,6 +99,13 @@ public sealed record ImageJobCreate
     public required string Sampler { get; init; }
     public double CfgScale { get; init; }
     public long CreatedAtUtc { get; init; }
+
+    /// <summary>How the job derives from <see cref="SourceImageId" />; <see langword="null" /> for text-to-image.</summary>
+    public ImageEditMode? EditMode { get; init; }
+
+    public Guid? SourceImageId { get; init; }
+
+    public double? Strength { get; init; }
 }
 
 /// <summary>
@@ -124,4 +132,43 @@ public sealed record ImageJobView
     public Guid? ImageId { get; init; }
     public string? SanitizedError { get; init; }
     public long? CancellationRequestedAtUtc { get; init; }
+    public ImageEditMode? EditMode { get; init; }
+
+    /// <summary>The source image; <see langword="null" /> for text-to-image, or once that image was deleted.</summary>
+    public Guid? SourceImageId { get; init; }
+
+    public double? Strength { get; init; }
+}
+
+/// <summary>
+///     The one string form of <see cref="ImageEditMode" />, shared by the <c>image_jobs.edit_mode</c> column and the wire.
+/// </summary>
+public static class ImageEditModeNames
+{
+    public const string Img2Img = "img2img";
+    public const string Reference = "reference";
+
+    public static string ToName(ImageEditMode mode) => mode switch
+    {
+        ImageEditMode.Img2Img => Img2Img,
+        ImageEditMode.Reference => Reference,
+        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, message: null)
+    };
+
+    /// <summary>Parses a stored or wire name; anything else, including a differently cased one, is refused.</summary>
+    public static bool TryParse(string? name, out ImageEditMode mode)
+    {
+        switch (name)
+        {
+            case Img2Img:
+                mode = ImageEditMode.Img2Img;
+                return true;
+            case Reference:
+                mode = ImageEditMode.Reference;
+                return true;
+            default:
+                mode = default;
+                return false;
+        }
+    }
 }

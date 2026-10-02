@@ -73,4 +73,19 @@ internal sealed record class ImageJob
 
     /// <summary>When a cancel was requested (unix ms UTC), or <see langword="null" />.</summary>
     public long? CancellationRequestedAtUtc { get; set; }
+
+    /// <summary>
+    ///     How the job derives from <see cref="SourceImageId" /> (<c>img2img</c> or <c>reference</c>), or
+    ///     <see langword="null" /> for a text-to-image job.
+    /// </summary>
+    public string? EditMode { get; set; }
+
+    /// <summary>
+    ///     The source image an edit job derives from (FK → <see cref="GeneratedImage" />, set null when that image is
+    ///     deleted), or <see langword="null" />.
+    /// </summary>
+    public Guid? SourceImageId { get; set; }
+
+    /// <summary>Img2img denoising strength (0..1), or <see langword="null" /> when not an img2img job.</summary>
+    public double? Strength { get; set; }
 }

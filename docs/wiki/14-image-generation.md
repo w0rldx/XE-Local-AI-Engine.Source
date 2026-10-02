@@ -60,6 +60,38 @@ On success the image is persisted encrypted-at-rest **before** the job is marked
 
 **Freeing VRAM for the job.** sd-server loads its weights inside the first job (`eager_load` is off, so readiness proves only the HTTP bind), which is where an idle chat model's VRAM turns into an out-of-memory. After the GPU gate admits the job and before the runtime is called, the coordinator reads `ILlamaServerProcessSupervisor.ListRunningProcesses` and ejects every idle llama-server process, any role, through the graceful operator `EjectAsync` the top-bar eject uses, logging each at Information. If any process is serving a request, nothing is ejected and the job fails with "A chat model is still generating; wait for it to finish, then retry the image." Ollama residents are not touched.
 
+## Editing images (img2img, reference)
+
+An image job can derive from an existing image, a gallery result or an uploaded photo. There is no second runtime: the same resident `sd-server` serves text-to-image and edits on the same weights, and the mode is chosen per request.
+
+**Request fields.** `ImageGenerationRequest` (`XE-Local-AI-Engine.Providers.Abstractions/Image/ImageRuntimeContracts.cs`) carries `ImageEditMode? Mode` (`Img2Img` or `Reference`), `InitImage`, `ReferenceImage` (both `ReadOnlyMemory<byte>?`, because the Release analyzers reject `byte[]` properties) and `double? Strength`. Over the API the same choice is `editMode` (`img2img` / `reference`), `sourceImageId` and `strength` on `CreateImageJobEndpoint`. `ImageEditModeNames` (`XE-Local-AI-Engine.Client.Persistence/Stores/IImageJobStore.cs`) is the single mapping between the enum, the `edit_mode` column and the wire strings. `CreateImageJobRequestValidator` requires mode and source together, allows `strength` only with `img2img` (0..1), and caps width and height at 64..2048.
+
+**Wire mapping.** `SdServerJobClient.MapRequest` (`XE-Local-AI-Engine.Providers.StableDiffusionCpp/Implementation/SdServerJobClient.cs`) sends `Img2Img` as raw base64 `init_image` plus `strength` (default 0.75 when the request omits it) and `Reference` as `ref_images[0]`. A request without a mode sends none of the three fields. The bytes are never placed in an exception message or a log line.
+
+**Per-job capability gate.** After `EnsureRunningAsync` and lease acquisition, `StableDiffusionCppRuntime.GenerateAsync` does one `GET sdcpp/v1/capabilities` (`SdServerJobClient.GetCapabilitiesAsync`, no cache) for every edit job and requires `features_by_mode.img_gen.init_image` (img2img) or `ref_images` (reference) to be `true`. A non-2xx answer, unparsable JSON or a missing flag counts as unsupported (fail closed): the runtime throws `StableDiffusionRuntimeException` with `FeatureUnsupported = true` before any `img_gen` POST, and `ImageJobCoordinator` maps that flag to the fixed job message "The image runtime build does not support this edit mode." Text-to-image jobs make no capabilities request.
+
+**Two capability layers.** The daemon flags describe the sd-server *build*, not how well a loaded model edits. Support is therefore XE-side and per install: `ImageFamilyDefaults.EditModesFor(family, parts)` (`XE-Local-AI-Engine.Providers.Abstractions/Image/ImageFamilyDefaults.cs`) starts from the family's `EditModes` and drops `Reference` for a `QwenImage` set without an `LlmVision` part; `.NativePixels` stays per family. Every family lists `Img2Img`; `QwenImage` also lists `Reference`. `ImageModelResponse.editModes` exposes the per-install list, and `ImageJobCoordinator.EnqueueAsync` refuses a mode outside it (an unregistered model resolves to the Unknown family with no parts, so img2img only).
+
+**Why the vision part gates reference.** Measured on 2026-10-02: sd-server fails every Qwen-Image 2.1 reference edit on a set without the Qwen3-VL vision tower, with stderr `Qwen Image 2.1 editing requires Qwen3-VL vision weights; provide --llm_vision or a combined encoder`, and the job reads "Image generation failed.". With `mmproj-Qwen3VL-8B-Instruct-F16.gguf` as the `LlmVision` part (`ImageServerArgumentBuilder` emits `--llm_vision`), a 512² reference edit followed both the source and the instruction. The curated set downloads that part since this change; a set installed earlier lacks it and offers img2img only until it is completed (see "The curated Qwen-Image 2.1 set").
+
+**Source resolution.** The coordinator validates at enqueue that the source row exists, but reads the bytes inside `ImageJobCoordinator.RunJobAsync` *after* the single slot is acquired and before GPU admission or llama eviction. A queued edit therefore pins no source bytes in memory. A source that has disappeared fails the job with "The source image no longer exists." and no runtime call.
+
+**Lineage.** `image_jobs` gains `edit_mode` (TEXT, null for text-to-image), `source_image_id` (FK to `generated_images.image_id`, `ON DELETE SET NULL`) and `strength` (REAL), added by migration `20261002082214_AddImageEditColumns`. `generated_images.job_id` became nullable in the same migration. Both tables are rebuilt by the scripted SQL; production runs with SQLite foreign keys ON, so the rebuild is only safe because EF emits `PRAGMA foreign_keys = 0` around the drops. `AddImageEditColumnsMigrationTests` (`XE-Local-AI-Engine.Client.Persistence.Tests`) seeds jobs and images, migrates with `PRAGMA foreign_keys=ON` and asserts every row and `storage_path` survives and that deleting a source leaves the derived job with `source_image_id = NULL`. Keep that test when changing either table.
+
+**Dimensions.** The form fits the source aspect ratio to the family's `NativePixels`, rounds each side to a multiple of 64 and clamps to 64..2048 (`fitEditDimensions` in `XE-Local-AI-Engine.Client.React/src/features/images/models/ImageModels.ts`). The server only validates the 64..2048 cap; it does not clamp to the daemon's `limits`, since the daemon may not be running at enqueue.
+
+### Uploaded source images
+
+`POST images/uploads` (`UploadImageEndpoint`, multipart field `file`) stores a photo as an image with no job.
+
+- **Intake.** The endpoint never binds an `IFormFile`: it pre-checks `Content-Length`, applies `RequestSizeLimitAttribute` (`SecurityOptions.MaxUploadFileSizeMb` plus a 64 KB multipart envelope), refuses a second file part and copies the part into a capped `MemoryStream`. The photo never reaches a plaintext temp file.
+- **Validation.** `UploadedImageService.AddAsync` (`XE-Local-AI-Engine.Client.Application/Services/Images/UploadedImageService.cs`) identifies PNG or JPEG by magic bytes, never by the declared type, and reads the dimensions with `PngImageDimensions` / `JpegImageDimensions` (`Providers.Abstractions/Image`). It rejects other formats, unreadable headers, either side above 2048 px and CMYK JPEGs (four components). Failures surface as `ImageUploadRejectedException`, answered 400 with a fixed message.
+- **Storage.** `GeneratedImageStore.AddUploadAsync` encrypts the bytes to `generated-images/uploads/{imageId}.<ext>` with the AAD built from `Guid.Empty`, the image id, the `image_bytes` column and the v1 tag, and inserts a `generated_images` row whose `job_id` is NULL. A null `job_id` is what "uploaded" means; there is no origin column. `OpenReadAsync` serves both layouts through the existing `GET images/{imageId}` and refuses a `storage_path` outside the blob root.
+- **Routes.** `GET images/uploads` (`ListUploadedImagesEndpoint`, newest first, `limit` default 100 and 1..200, `offset` default 0 and never negative, response `{ items, totalCount }` with the unpaged upload count; the SPA pages it like the job list) and `DELETE images/uploads/{imageId}` (`DeleteUploadedImageEndpoint`, 204, or 404 for an unknown id and for an image a job produced). `GeneratedImageStore.RemoveUploadBlob` unlinks only under `generated-images/uploads`.
+- **No delete guard.** Deleting an upload, or the job that produced a gallery image, is never refused because something derives from it. A derived job then fails with "The source image no longer exists." and the React card shows "source removed".
+
+Limits, stated as current behaviour: the node does not apply EXIF orientation (a sideways phone JPEG stays sideways), does not resample uploads, and has no mask/inpaint, upscale, control-image or multi-reference path. Those are not built.
+
 ## The runtime (stable-diffusion.cpp)
 
 `StableDiffusionCppRuntime` (`IImageRuntime`) is the orchestration boundary: it ensures a resident `sd-server` via the supervisor, submits the job and polls it over `SdServerJobClient`, maps coarse status transitions to `ImageGenProgress`, and decodes the base64 image inline on completion. **No sd-server flag, route, or HTTP shape escapes this project** (architecture invariant §3).
@@ -100,14 +132,26 @@ Both stay off until there is a measurement that says otherwise.
 
 ## The curated Qwen-Image 2.1 set
 
-The catalog ships `qwen-image-2.1` and no longer ships the original `qwen-image`. The set spans three repositories and
-totals about 10 GB:
+The catalog ships `qwen-image-2.1` and no longer ships the original `qwen-image`. The set is four files from three
+repositories and totals about 10.3 GiB:
 
 | Role | File | Repository |
 |---|---|---|
 | Diffusion | `qwen_image_2.1-Q4_K.gguf` | `leejet/Qwen-Image-2.1-GGUF` |
 | Vae | `vae/qwen_image_2.1_vae_bf16.safetensors` | `Comfy-Org/Qwen-Image-2.1` |
 | Llm | `Qwen3VL-8B-Instruct-Q4_K_M.gguf` | `Qwen/Qwen3-VL-8B-Instruct-GGUF` |
+| LlmVision | `mmproj-Qwen3VL-8B-Instruct-F16.gguf` (1159029824 bytes) | `Qwen/Qwen3-VL-8B-Instruct-GGUF` |
+
+The `LlmVision` part (`--llm_vision`) is not needed for text-to-image; it is what makes reference (instruction) edits
+work, and only a set that carries it offers them (see "Editing images"). Model fit charges only the diffusion part
+(`ImageModelFitEstimator.Estimate`), so the projector does not change the verdict.
+
+**An install made before the vision part was added.** The catalog marks an entry installed only when the registry entry
+carries every role the catalog declares, so such a set shows **Install** again. Installing it re-runs
+`HuggingFaceImageModelStore.EnsureModelAsync`, which skips its offline short-circuit when a requested role is missing,
+keeps the three files already on disk (declared size matches) and downloads only the projector, then rewrites the
+registry entry with four parts. No delete is needed. `ImageServerProcessSupervisor` respawns a resident daemon whose
+installed weight set changed since it was launched, so completing an install needs no manual eject.
 
 The weights are under the **Qwen Research License**, which allows non-commercial research use only. The catalog
 entry says so in its `license` (`qwen-research`) and `notes` fields, and it is not marked recommended. The 2.1 VAE is
@@ -330,13 +374,16 @@ Routes under `images/*` (`LocalApiRoutes.Images`), one endpoint class per file i
 
 | Endpoint | Route | Role |
 |---|---|---|
-| `CreateImageJobEndpoint` | `POST images/jobs` | Enqueue a new generation job (prompt, negative prompt, width/height/steps/sampler). Returns the job id. |
+| `CreateImageJobEndpoint` | `POST images/jobs` | Enqueue a new generation job (prompt, negative prompt, width/height/steps/sampler, optional `editMode`/`sourceImageId`/`strength`). Returns the job id. |
 | `DraftImagePromptEndpoint` | `POST images/prompts/draft` | Turn an image idea into a detailed prompt (and negative prompt) with a node-local chat model, through the shared drafting service (`IConfigDraftService`: fail-closed model eligibility, single draft slot → 409, unusable output → 422). Writes nothing; the form's Apply fills the prompt fields. |
 | `ListImageJobsEndpoint` | `GET images/jobs` | One page of persisted jobs, newest first (`limit`/`offset`, with the unpaged `totalCount`). |
 | `GetImageJobEndpoint` | `GET images/jobs/{jobId}` | One job's current status view. |
 | `CancelImageJobEndpoint` | `POST images/jobs/{jobId}/cancel` | Request cancellation of a tracked job. |
 | `DeleteImageJobEndpoint` | `DELETE images/jobs/{jobId}` | Delete a terminal job with its image(s) — rows and encrypted blobs. 409 while the job is still queued or generating. |
-| `RetrieveImageEndpoint` | `GET images/{imageId}` | Fetch the produced image bytes for a succeeded job (decrypted on read). |
+| `RetrieveImageEndpoint` | `GET images/{imageId}` | Fetch the produced image bytes for a succeeded job or an uploaded image (decrypted on read). |
+| `UploadImageEndpoint` | `POST images/uploads` | Store a PNG or JPEG source photo, encrypted, with no job. See [Uploaded source images](#uploaded-source-images). |
+| `ListUploadedImagesEndpoint` | `GET images/uploads` | Uploaded images (`job_id IS NULL`), newest first, paged by `limit` + `offset`, with `totalCount`. |
+| `DeleteUploadedImageEndpoint` | `DELETE images/uploads/{imageId}` | Delete an upload (row, then blob). 404 for an unknown or job-produced id. |
 | `ListImageModelsEndpoint` | `GET images/models` | Installed image models available to the runtime. |
 | `DeleteImageModelEndpoint` | `DELETE images/models/{modelName}` | Remove an installed image model. |
 | `StartImageModelDownloadEndpoint` | `POST images/models/downloads` | Begin downloading an image model. |
@@ -373,7 +420,7 @@ The ordering that makes the pass race-free: migrations are applied in `Program` 
 
 It is deliberately **not** `MemoryFitEstimator.Estimate`. That estimator's whole model is a transformer LLM's: it needs block counts, attention head counts, an embedding length and a llama.cpp quant-byte table to size a KV cache. A diffusion transformer has no KV cache, and a GGUF diffusion file exposes none of those fields, so feeding it here would produce a confident number with nothing behind it. What genuinely reuses is the **hardware probe**: the image estimator shares `MemoryFitEstimator.ResolveFitBudgetBytes`, so an image verdict is scored against the identical budget the LLM advisor uses and cannot drift from it.
 
-**Only the diffusion part is a VRAM cost.** `ImageServerArgumentBuilder.BuildBackendSpec` pins the text encoder and VAE to the CPU on every GPU backend (`diffusion=cuda0,te=cpu,vae=cpu`), so charging a Qwen-Image set's full weight (about 10 GB for 2.1, 18 GB for the original) against VRAM would reject a set that runs fine. In CPU mode there is no such split and the whole set is resident in RAM. The placement is overridable for measurement only: `StableDiffusionRuntime:TextEncoderOnGpu` (env form `StableDiffusionRuntime__TextEncoderOnGpu=true`, default off) moves the text encoder to the GPU (`te=cuda0` / `te=vulkan0`) while the VAE stays on the CPU, and the fit verdict does not follow it. The last measured split for Qwen-Image 2.1 was text encoder 4.3 GB, diffusion 4.0 GB and VAE 0.64 GB.
+**Only the diffusion part is a VRAM cost.** `ImageServerArgumentBuilder.BuildBackendSpec` pins the text encoder and VAE to the CPU on every GPU backend (`diffusion=cuda0,te=cpu,vae=cpu`), so charging a Qwen-Image set's full weight (about 10.3 GiB for 2.1 including the vision projector, 18 GB for the original) against VRAM would reject a set that runs fine. In CPU mode there is no such split and the whole set is resident in RAM. The placement is overridable for measurement only: `StableDiffusionRuntime:TextEncoderOnGpu` (env form `StableDiffusionRuntime__TextEncoderOnGpu=true`, default off) moves the text encoder to the GPU (`te=cuda0` / `te=vulkan0`) while the VAE stays on the CPU, and the fit verdict does not follow it. The last measured split for Qwen-Image 2.1 was text encoder 4.3 GB, diffusion 4.0 GB and VAE 0.64 GB.
 
 A set is called a comfortable `Fits` below 80% of the budget rather than tight; the remaining headroom absorbs the runtime's own allocations and the working buffers a diffusion step needs beyond the weights. `Unknown` is a first-class verdict, not a soft "probably fine": `HardwareProfiler` leaves VRAM unmeasured on every non-NVIDIA GPU (and on NVIDIA without `nvidia-smi`), there is no budget to score against, and the CPU budget is the wrong one because the host would run the set on the GPU.
 
@@ -391,6 +438,8 @@ The job's replay log is dropped with it, so a late hub subscriber replays nothin
 
 `src/features/images/` (`pages/`, `hooks/`, `queries/`) renders the generation form, the job list, and the produced images. It follows the standard client conventions: TanStack Query for server state, a SignalR hub (`useImageJobHub`) that **invalidates** the matching query on each pushed job event (notification-only; the query refetches canonical state). See [React Client](10-react-client.md).
 
+Editing is in the same feature: `components/ImageUploadButton.tsx` posts the file through `useUploadImage` (`queries/useImageQueries.ts`, multipart via `axiosInstance`); `components/UploadedImageCard.tsx` renders an upload with Edit and Delete; `components/ImageSourceThumbnail.tsx` (`ImageEditLineage`) shows "Edited from" on a job card and in `ImageViewerDialog.tsx`, or "source removed" when the source is gone. `ImageJobCard` and the viewer carry an Edit action that opens `components/ImageGenerationForm.tsx` with an `editSource`: the form re-derives the mode (first of the model's `editModes`), strength 0.75 and the aspect-fitted size, shows a strength slider for img2img only, and disables submit when the model lists no edit modes. `ImagesPage` offers Edit only while an installed model lists an edit mode.
+
 ## Invariants a maintainer must respect
 
 1. **Generation is serialized to one job.** The single-slot semaphore is what makes a kill+restart cancel safe — never widen it without redesigning cancellation.
@@ -402,6 +451,10 @@ The job's replay log is dropped with it, so a late hub subscriber replays nothin
 7. **Eject before build/remove.** Runtime mutation must not race active jobs, spawn/readiness, or a resident daemon.
 8. **Nothing outside the image blob root is ever unlinked.** `RemoveJobBlobs` proves containment for every recorded path and for the job directory before deleting either.
 9. **Delete rows before blobs, children before parents.** The declared cascade would remove `generated_images` on its own, but `ImageJobStore.DeleteAsync` deletes them explicitly in the same transaction because it must read their storage paths first — the blob teardown has nothing to unlink once the rows are gone.
+10. **Source and upload bytes are never logged.** Not in exceptions, progress pushes or hub events; the coordinator holds them only between `RunJobAsync` reading them and the submit.
+11. **sd-server edit fields stay in the provider.** `init_image`, `ref_images`, `strength` and the capabilities route exist only in `Providers.StableDiffusionCpp`; the rest of the app speaks `ImageEditMode`.
+12. **A family is offered an edit mode only if a live measurement proved it.** `ImageFamilyDefaults.EditModes` is the offer list; the daemon's `features_by_mode` flags are a build check, not evidence that a model edits well.
+13. **Uploads never touch plaintext disk and never leave the blob root.** Memory-only intake, encrypted blob, containment check on read and on delete.
 
 ## Related pages
 

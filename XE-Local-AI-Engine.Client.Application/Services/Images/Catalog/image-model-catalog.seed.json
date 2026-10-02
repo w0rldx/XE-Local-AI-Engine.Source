@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026.09.25",
-  "updatedAt": "2026-09-25",
+  "catalogVersion": "2026.10.02",
+  "updatedAt": "2026-10-02",
   "models": [
     {
       "id": "sd-1.5",
@@ -83,7 +83,7 @@
       "family": "QwenImage",
       "license": "qwen-research",
       "recommended": false,
-      "notes": "Qwen Research License: non-commercial research use only. Spans three repositories: the diffusion transformer from leejet, the Qwen-Image 2.1 VAE from Comfy-Org and the Qwen3-VL-8B text encoder from Qwen. About 9 GB in total.",
+      "notes": "Qwen Research License: non-commercial research use only. Four files from three repositories: the diffusion transformer from leejet, the Qwen-Image 2.1 VAE from Comfy-Org, and the Qwen3-VL-8B text encoder plus its vision projector from Qwen. The vision projector is what enables instruction edits. About 10.3 GB in total.",
       "parts": [
         {
           "role": "Diffusion",
@@ -102,6 +102,12 @@
           "fileName": "Qwen3VL-8B-Instruct-Q4_K_M.gguf",
           "repoId": "Qwen/Qwen3-VL-8B-Instruct-GGUF",
           "sizeBytes": 5027784800
+        },
+        {
+          "role": "LlmVision",
+          "fileName": "mmproj-Qwen3VL-8B-Instruct-F16.gguf",
+          "repoId": "Qwen/Qwen3-VL-8B-Instruct-GGUF",
+          "sizeBytes": 1159029824
         }
       ]
     }

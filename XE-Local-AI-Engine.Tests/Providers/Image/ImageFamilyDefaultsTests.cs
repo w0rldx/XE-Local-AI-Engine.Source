@@ -52,4 +52,37 @@ public sealed class ImageFamilyDefaultsTests
             AssertEx.False(string.IsNullOrWhiteSpace(defaults.Sampler), $"{family} must name a sampler.");
         }
     }
+
+    [Test]
+    public void EditModesFor_QwenImageWithoutTheVisionTower_OffersImg2ImgOnly()
+    {
+        // Measured 2026-10-02: sd-server fails every Qwen-Image 2.1 reference edit without --llm_vision, so a set
+        // without the LlmVision part must not offer the mode.
+        var modes = ImageFamilyDefaults.EditModesFor(ImageModelFamily.QwenImage,
+            [ImageModelPartRole.Diffusion, ImageModelPartRole.Vae, ImageModelPartRole.Llm]);
+
+        AssertEx.True(modes.SequenceEqual([ImageEditMode.Img2Img]), "A Qwen-Image set without LlmVision offers img2img only.");
+    }
+
+    [Test]
+    public void EditModesFor_QwenImageWithTheVisionTower_AlsoOffersReference()
+    {
+        var modes = ImageFamilyDefaults.EditModesFor(ImageModelFamily.QwenImage,
+            [ImageModelPartRole.Diffusion, ImageModelPartRole.Vae, ImageModelPartRole.Llm, ImageModelPartRole.LlmVision]);
+
+        AssertEx.True(modes.SequenceEqual([ImageEditMode.Img2Img, ImageEditMode.Reference]), "The vision tower unlocks reference edits.");
+    }
+
+    [Test]
+    public void EditModesFor_OtherFamilies_AreNotChangedByAVisionPart()
+    {
+        foreach (var family in Enum.GetValues<ImageModelFamily>().Where(static f => f != ImageModelFamily.QwenImage))
+        {
+            var withVision = ImageFamilyDefaults.EditModesFor(family, [ImageModelPartRole.Diffusion, ImageModelPartRole.LlmVision]);
+            var without = ImageFamilyDefaults.EditModesFor(family, [ImageModelPartRole.Diffusion]);
+
+            AssertEx.True(withVision.SequenceEqual(ImageFamilyDefaults.For(family).EditModes), $"{family} keeps its family edit modes.");
+            AssertEx.True(without.SequenceEqual(withVision), $"{family} does not depend on the vision part.");
+        }
+    }
 }

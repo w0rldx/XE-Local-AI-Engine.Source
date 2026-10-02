@@ -59,23 +59,47 @@ public sealed class ImageModelCatalogServiceTests
         AssertEx.True(view.Entries.Where(static entry => entry.Entry.Id != "sd-1.5").All(static entry => !entry.IsInstalled));
     }
 
+    [Test]
+    public async Task GetCatalogView_AnInstallMissingACatalogPart_ReadsAsNotInstalledSoInstallCanCompleteIt()
+    {
+        // Qwen-Image 2.1 installs made before the catalog gained the LlmVision projector carry three parts. Showing them as
+        // installed would hide the only button that fetches the missing file (the store keeps the three it has).
+        var profiler = Substitute.For<IHardwareProfiler>();
+        profiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).ThrowsAsync(new TimeoutException());
+        ImageModelPartRole[] olderSet = [ImageModelPartRole.Diffusion, ImageModelPartRole.Vae, ImageModelPartRole.Llm];
+
+        var older = await CreateServiceWith(profiler, [Entry("qwen-image-2.1", olderSet)]).GetCatalogViewAsync(CancellationToken.None);
+        var complete = await CreateServiceWith(profiler, [Entry("qwen-image-2.1", [.. olderSet, ImageModelPartRole.LlmVision])])
+            .GetCatalogViewAsync(CancellationToken.None);
+
+        AssertEx.False(older.Entries.Single(static entry => entry.Entry.Id == "qwen-image-2.1").IsInstalled);
+        AssertEx.True(complete.Entries.Single(static entry => entry.Entry.Id == "qwen-image-2.1").IsInstalled);
+    }
+
     private static ImageModelCatalogService CreateService(IHardwareProfiler profiler, IReadOnlyList<string> installedNames)
     {
+        return CreateServiceWith(profiler, [.. installedNames.Select(static name => Entry(name, ImageModelPartRole.Diffusion))]);
+    }
+
+    private static ImageModelRegistryEntry Entry(string name, params ImageModelPartRole[] roles)
+    {
+        return new ImageModelRegistryEntry
+        {
+            ModelName = name,
+            RepoId = "owner/repo",
+            Family = ImageModelFamily.Sd15,
+            Kind = ImageModelKind.Txt2Img,
+            Parts = [.. roles.Select(static role => new ImageModelPart { Role = role, FileName = $"{role}.gguf", LocalPath = $"/m/{role}.gguf", SizeBytes = 1 })],
+            SizeBytes = 0,
+            SourceRevision = "0000000",
+            DownloadedAtUtc = DateTimeOffset.UnixEpoch
+        };
+    }
+
+    private static ImageModelCatalogService CreateServiceWith(IHardwareProfiler profiler, IReadOnlyList<ImageModelRegistryEntry> installed)
+    {
         var registry = Substitute.For<IImageModelRegistry>();
-        registry.ListAsync(Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<IReadOnlyList<ImageModelRegistryEntry>>([
-                    .. installedNames.Select(static name => new ImageModelRegistryEntry
-                    {
-                        ModelName = name,
-                        RepoId = "owner/repo",
-                        Family = ImageModelFamily.Sd15,
-                        Kind = ImageModelKind.Txt2Img,
-                        Parts = [],
-                        SizeBytes = 0,
-                        SourceRevision = "0000000",
-                        DownloadedAtUtc = DateTimeOffset.UnixEpoch
-                    })
-                ]));
+        registry.ListAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(installed));
 
         return new ImageModelCatalogService(new ImageModelCatalog(NullLogger<ImageModelCatalog>.Instance),
             registry,

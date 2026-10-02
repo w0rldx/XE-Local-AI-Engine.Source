@@ -2,7 +2,7 @@ import {
 	type ImageGenerationFormValues,
 	type ImageModelView,
 	imageFormDefaultsForModel,
-	imageGenerationFormSchema,
+	imageGenerationFormFieldsSchema,
 } from "@/features/images/models/ImageModels";
 
 // The operator's own steps / CFG / sampler for one installed model, remembered in this browser. The family defaults
@@ -11,7 +11,7 @@ import {
 // A per-viewer convenience, so localStorage; every access is guarded and a failure reads as "no override".
 export const imageFormOverridesKeyPrefix = "xe.images.formOverrides.";
 
-const overridesSchema = imageGenerationFormSchema.pick({ steps: true, cfgScale: true, sampler: true });
+const overridesSchema = imageGenerationFormFieldsSchema.pick({ steps: true, cfgScale: true, sampler: true });
 type ImageFormOverrides = Pick<ImageGenerationFormValues, "steps" | "cfgScale" | "sampler">;
 
 export function readImageFormOverrides(modelId: string | undefined): ImageFormOverrides | null {

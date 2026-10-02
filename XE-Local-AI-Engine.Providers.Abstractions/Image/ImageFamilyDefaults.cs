@@ -12,12 +12,16 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Image;
 /// </remarks>
 public static class ImageFamilyDefaults
 {
+    private static readonly IReadOnlyList<ImageEditMode> Img2ImgOnly = [ImageEditMode.Img2Img];
+
     /// <summary>The fallback used for <see cref="ImageModelFamily.Unknown" /> and any family not listed — SD1.5-era values.</summary>
     private static readonly ImageGenerationDefaults Fallback = new()
     {
         Steps = 20,
         CfgScale = 7.0,
-        Sampler = "euler_a"
+        Sampler = "euler_a",
+        EditModes = Img2ImgOnly,
+        NativePixels = 512 * 512
     };
 
     /// <summary>
@@ -33,7 +37,9 @@ public static class ImageFamilyDefaults
             {
                 Steps = 25,
                 CfgScale = 7.0,
-                Sampler = "euler_a"
+                Sampler = "euler_a",
+                EditModes = Img2ImgOnly,
+                NativePixels = 1024 * 1024
             },
 
             // Flow-matching families default to plain euler in sd.cpp and want markedly lower guidance than SD.
@@ -41,7 +47,9 @@ public static class ImageFamilyDefaults
             {
                 Steps = 28,
                 CfgScale = 4.5,
-                Sampler = "euler"
+                Sampler = "euler",
+                EditModes = Img2ImgOnly,
+                NativePixels = 1024 * 1024
             },
 
             // FLUX.1-schnell is timestep-distilled: it is meant to run at ~4 steps with guidance effectively disabled
@@ -50,7 +58,9 @@ public static class ImageFamilyDefaults
             {
                 Steps = 4,
                 CfgScale = 1.0,
-                Sampler = "euler"
+                Sampler = "euler",
+                EditModes = Img2ImgOnly,
+                NativePixels = 1024 * 1024
             },
 
             // Qwen-Image 2.1 (the curated set): CFG 6.0 + euler from sd.cpp docs/qwen_image_2.1.md, 40 steps from the
@@ -59,11 +69,39 @@ public static class ImageFamilyDefaults
             {
                 Steps = 40,
                 CfgScale = 6.0,
-                Sampler = "euler"
+                Sampler = "euler",
+
+                // Reference is the family's ceiling, not a promise: an install only gets it with the vision tower, see
+                // EditModesFor.
+                EditModes = [ImageEditMode.Img2Img, ImageEditMode.Reference],
+                NativePixels = 1024 * 1024
             },
 
             _ => Fallback
         };
+    }
+
+    /// <summary>
+    ///     The edit modes one <b>installed</b> model offers: its family's <see cref="ImageGenerationDefaults.EditModes" />,
+    ///     minus <see cref="ImageEditMode.Reference" /> for a Qwen-Image set that carries no
+    ///     <see cref="ImageModelPartRole.LlmVision" /> part.
+    /// </summary>
+    /// <remarks>
+    ///     Qwen-Image conditions a reference edit on the source through the Qwen-VL vision tower (<c>--llm_vision</c>).
+    ///     Without it sd-server fails every reference job ("Qwen Image 2.1 editing requires Qwen3-VL vision weights"),
+    ///     so offering the mode on such an install would offer a mode that always fails.
+    /// </remarks>
+    public static IReadOnlyList<ImageEditMode> EditModesFor(ImageModelFamily family, IEnumerable<ImageModelPartRole> parts)
+    {
+        ArgumentNullException.ThrowIfNull(parts);
+
+        var modes = For(family).EditModes;
+        if (family == ImageModelFamily.QwenImage && !parts.Contains(ImageModelPartRole.LlmVision))
+        {
+            return [.. modes.Where(static m => m != ImageEditMode.Reference)];
+        }
+
+        return modes;
     }
 }
 
@@ -78,4 +116,13 @@ public sealed record ImageGenerationDefaults
 
     /// <summary>Recommended sd-server sampling method name.</summary>
     public required string Sampler { get; init; }
+
+    /// <summary>
+    ///     The edit modes this family can offer (per-model quality, not the runtime build's feature flags). An install
+    ///     may offer fewer; use <see cref="ImageFamilyDefaults.EditModesFor" />.
+    /// </summary>
+    public required IReadOnlyList<ImageEditMode> EditModes { get; init; }
+
+    /// <summary>The family-native training resolution as a pixel count (width x height), the target an edit's output is fitted to.</summary>
+    public required int NativePixels { get; init; }
 }

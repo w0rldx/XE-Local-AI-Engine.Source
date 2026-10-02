@@ -199,14 +199,22 @@ internal sealed class FakeImageModelStore : IImageModelStore
         _diffusionPath = diffusionPath;
     }
 
+    /// <summary>When set, resolved verbatim instead of the single diffusion part — lets a test change the installed weight set under a resident daemon.</summary>
+    public IReadOnlyList<ImageModelPart>? Parts { get; set; }
+
     public Task<IReadOnlyList<ImageModelPart>?> ResolveModelPartsAsync(string modelName, CancellationToken ct)
     {
+        if (Parts is { } parts)
+        {
+            return Task.FromResult<IReadOnlyList<ImageModelPart>?>(parts);
+        }
+
         if (_diffusionPath is null)
         {
             return Task.FromResult<IReadOnlyList<ImageModelPart>?>(null);
         }
 
-        IReadOnlyList<ImageModelPart> parts =
+        IReadOnlyList<ImageModelPart> single =
         [
             new ImageModelPart
             {
@@ -217,7 +225,7 @@ internal sealed class FakeImageModelStore : IImageModelStore
             }
         ];
 
-        return Task.FromResult<IReadOnlyList<ImageModelPart>?>(parts);
+        return Task.FromResult<IReadOnlyList<ImageModelPart>?>(single);
     }
 
     public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct)

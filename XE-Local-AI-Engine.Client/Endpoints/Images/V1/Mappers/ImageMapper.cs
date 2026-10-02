@@ -34,7 +34,11 @@ internal static class ImageMapper
             Height = request.Height,
             Steps = request.Steps,
             Sampler = request.Sampler,
-            CfgScale = request.CfgScale
+            CfgScale = request.CfgScale,
+            // The validator has already refused an unknown name.
+            EditMode = ImageEditModeNames.TryParse(request.EditMode, out var mode) ? mode : null,
+            SourceImageId = request.SourceImageId,
+            Strength = request.Strength
         };
     }
 
@@ -61,7 +65,10 @@ internal static class ImageMapper
             DurationMs = view.DurationMs,
             ImageId = view.ImageId,
             SanitizedError = view.SanitizedError,
-            CancellationRequestedAtUtc = view.CancellationRequestedAtUtc
+            CancellationRequestedAtUtc = view.CancellationRequestedAtUtc,
+            EditMode = view.EditMode is { } mode ? ImageEditModeNames.ToName(mode) : null,
+            SourceImageId = view.SourceImageId,
+            Strength = view.Strength
         };
     }
 
@@ -70,6 +77,7 @@ internal static class ImageMapper
         ArgumentNullException.ThrowIfNull(entry);
 
         var defaults = ImageFamilyDefaults.For(entry.Family);
+        var editModes = ImageFamilyDefaults.EditModesFor(entry.Family, entry.Parts.Select(static p => p.Role));
         return new ImageModelResponse
         {
             ModelName = entry.ModelName,
@@ -90,7 +98,37 @@ internal static class ImageMapper
             DownloadedAtUtc = entry.DownloadedAtUtc.ToUnixTimeMilliseconds(),
             DefaultSteps = defaults.Steps,
             DefaultCfgScale = defaults.CfgScale,
-            DefaultSampler = defaults.Sampler
+            DefaultSampler = defaults.Sampler,
+            EditModes = [.. editModes.Select(ImageEditModeNames.ToName)],
+            NativePixels = defaults.NativePixels
+        };
+    }
+
+    public static UploadedImageResponse ToUploadedResponse(this GeneratedImageInfo info)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+
+        return new UploadedImageResponse
+        {
+            ImageId = info.ImageId,
+            MimeType = info.MimeType,
+            Width = info.Width,
+            Height = info.Height,
+            CreatedAtUtc = info.CreatedAtUtc
+        };
+    }
+
+    public static UploadedImageResponse ToUploadedResponse(this GeneratedImageRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        return new UploadedImageResponse
+        {
+            ImageId = row.ImageId,
+            MimeType = row.MimeType,
+            Width = row.Width,
+            Height = row.Height,
+            CreatedAtUtc = row.CreatedAtUtc
         };
     }
 

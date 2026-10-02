@@ -18,6 +18,21 @@ public interface IGeneratedImageRowStore
     ///     Reads where one image's bytes live and how to serve them, or <see langword="null" /> when the id is unknown.
     /// </summary>
     Task<GeneratedImageLocation?> FindAsync(Guid imageId, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Lists up to <paramref name="limit" /> uploaded images (rows with no job), newest first, skipping
+    ///     <paramref name="offset" /> rows.
+    /// </summary>
+    Task<IReadOnlyList<GeneratedImageRow>> ListUploadsAsync(int limit, int offset, CancellationToken cancellationToken);
+
+    /// <summary>Counts the uploaded images (rows with no job), ignoring paging.</summary>
+    Task<int> CountUploadsAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Deletes one uploaded image's row and returns the storage path its bytes were written to, or
+    ///     <see langword="null" /> when no uploaded image has that id. A job-backed row is never deleted here.
+    /// </summary>
+    Task<string?> DeleteUploadAsync(Guid imageId, CancellationToken cancellationToken);
 }
 
 /// <summary>One <c>generated_images</c> row as the blob store hands it over.</summary>
@@ -25,7 +40,8 @@ public sealed class GeneratedImageRow
 {
     public required Guid ImageId { get; init; }
 
-    public required Guid JobId { get; init; }
+    /// <summary>The job that produced the image, or <see langword="null" /> for an uploaded image.</summary>
+    public required Guid? JobId { get; init; }
 
     public required string MimeType { get; init; }
 
@@ -41,8 +57,11 @@ public sealed class GeneratedImageRow
 /// <summary>Where one stored image's bytes are, and what the retrieve path needs to describe them.</summary>
 public sealed class GeneratedImageLocation
 {
-    /// <summary>The owning job, which is half of the blob's associated data and so decides whether it decrypts.</summary>
-    public required Guid JobId { get; init; }
+    /// <summary>
+    ///     The owning job, which is half of the blob's associated data and so decides whether it decrypts;
+    ///     <see langword="null" /> for an uploaded image, which has no job.
+    /// </summary>
+    public required Guid? JobId { get; init; }
 
     public required string MimeType { get; init; }
 

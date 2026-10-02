@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Images;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>On-demand image-job orchestrator, mirroring the GGUF download coordinator.</summary>
 /// <remarks>
@@ -16,6 +17,10 @@ public interface IImageJobCoordinator
     ///     Persists a new <see cref="Client.Persistence.Entities.ImageJobStatus.Queued" /> job, mints its cancellation token, kicks the serialized
     ///     worker, and returns the job id. The generation runs detached after this call returns.
     /// </summary>
+    /// <exception cref="ImageJobInputRejectedException">
+    ///     The edit parameters are inconsistent, the model's family does not offer the edit mode, or the source image
+    ///     does not exist.
+    /// </exception>
     Task<Guid> EnqueueAsync(CreateImageJobInput input, CancellationToken cancellationToken);
 
     /// <summary>Requests cancellation of a tracked job by signalling its token.</summary>
@@ -99,4 +104,13 @@ public sealed record CreateImageJobInput
 
     /// <summary>Classifier-free-guidance scale.</summary>
     public double CfgScale { get; init; } = 7.0;
+
+    /// <summary>How to derive the image from <see cref="SourceImageId" />; <see langword="null" /> for text-to-image.</summary>
+    public ImageEditMode? EditMode { get; init; }
+
+    /// <summary>The gallery or uploaded image an edit starts from; its bytes are read only once the job runs.</summary>
+    public Guid? SourceImageId { get; init; }
+
+    /// <summary>Img2img strength (0..1); only valid with <see cref="ImageEditMode.Img2Img" />.</summary>
+    public double? Strength { get; init; }
 }

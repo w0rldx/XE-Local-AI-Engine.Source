@@ -31,8 +31,19 @@ internal sealed class ImageJobConfiguration : IEntityTypeConfiguration<ImageJob>
         builder.Property(entity => entity.ImageId).HasColumnName("image_id");
         builder.Property(entity => entity.SanitizedError).HasColumnName("sanitized_error");
         builder.Property(entity => entity.CancellationRequestedAtUtc).HasColumnName("cancellation_requested_at_utc");
+        builder.Property(entity => entity.EditMode).HasColumnName("edit_mode");
+        builder.Property(entity => entity.SourceImageId).HasColumnName("source_image_id");
+        builder.Property(entity => entity.Strength).HasColumnName("strength");
+
+        // Deleting the source image (an upload, or a generated image via its job's cascade) keeps the derived job and
+        // clears its lineage pointer.
+        builder.HasOne<GeneratedImage>()
+               .WithMany()
+               .HasForeignKey(entity => entity.SourceImageId)
+               .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(entity => entity.Status);
         builder.HasIndex(entity => entity.CreatedAtUtc);
+        builder.HasIndex(entity => entity.SourceImageId);
     }
 }

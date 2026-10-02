@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 public sealed class GeneratedImageStore : IGeneratedImageStore
 {
     private const string RootFolderName = "generated-images";
+    private const string UploadsFolderName = "uploads";
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly INodeDataDirectory _dataDirectory;
@@ -82,6 +83,60 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
         };
     }
 
+    public async Task<GeneratedImageInfo> AddUploadAsync(ReadOnlyMemory<byte> bytes, GeneratedImageMetadata metadata, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+
+        var imageId = Guid.NewGuid();
+        var uploadsDirectory = Path.Combine(_dataDirectory.Root, RootFolderName, UploadsFolderName);
+        Directory.CreateDirectory(uploadsDirectory);
+
+        var extension = string.Equals(metadata.MimeType, "image/jpeg", StringComparison.Ordinal) ? ".jpg" : ".png";
+        var bytesPath = Path.Combine(uploadsDirectory, string.Concat(imageId.ToString("D"), extension));
+
+        // Guid.Empty stands in for the job in the associated data: an upload blob can never decrypt as a job's image, nor a job's as an upload.
+        var encrypted = _blobProtector.Encrypt(Guid.Empty, imageId, ImageBlobProtector.ImageBytesColumn, bytes.Span);
+        var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        var sizeBytes = (long)encrypted.Length;
+
+        try
+        {
+            await File.WriteAllBytesAsync(bytesPath, encrypted, cancellationToken);
+
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var rows = scope.ServiceProvider.GetRequiredService<IGeneratedImageRowStore>();
+            await rows.InsertAsync(new GeneratedImageRow
+                {
+                    ImageId = imageId,
+                    JobId = null,
+                    MimeType = metadata.MimeType,
+                    Width = metadata.Width,
+                    Height = metadata.Height,
+                    SizeBytes = sizeBytes,
+                    CreatedAtUtc = createdAtUtc
+                },
+                bytesPath,
+                cancellationToken);
+        }
+        catch
+        {
+            // An upload has no job directory and no sweep: a blob whose row never landed would be unreachable forever.
+            DeleteOrphanedUploadBlob(imageId, bytesPath);
+            throw;
+        }
+
+        return new GeneratedImageInfo
+        {
+            ImageId = imageId,
+            JobId = null,
+            MimeType = metadata.MimeType,
+            Width = metadata.Width,
+            Height = metadata.Height,
+            SizeBytes = sizeBytes,
+            CreatedAtUtc = createdAtUtc
+        };
+    }
+
     public async Task<GeneratedImageContent?> OpenReadAsync(Guid imageId, CancellationToken cancellationToken)
     {
         GeneratedImageLocation? location;
@@ -91,13 +146,21 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
             location = await rows.FindAsync(imageId, cancellationToken);
         }
 
-        if (location is null || !File.Exists(location.StoragePath))
+        if (location is null)
+        {
+            return null;
+        }
+
+        // Read only from under the blob root, the same rule the deletes enforce: a tampered storage_path must not turn the retrieve route into a file reader.
+        var blobRoot = Path.GetFullPath(Path.Combine(_dataDirectory.Root, RootFolderName));
+        if (!PathContainment.IsUnderRoot(location.StoragePath, blobRoot) || !File.Exists(location.StoragePath))
         {
             return null;
         }
 
         var encrypted = await File.ReadAllBytesAsync(location.StoragePath, cancellationToken);
-        var plaintext = _blobProtector.Decrypt(location.JobId, imageId, ImageBlobProtector.ImageBytesColumn, encrypted);
+        // An upload has no job; its blob was bound to Guid.Empty when it was written (AddUploadAsync).
+        var plaintext = _blobProtector.Decrypt(location.JobId ?? Guid.Empty, imageId, ImageBlobProtector.ImageBytesColumn, encrypted);
         return new GeneratedImageContent
         {
             Bytes = plaintext,
@@ -156,6 +219,44 @@ public sealed class GeneratedImageStore : IGeneratedImageStore
         {
             _logger.LogDebug(exception, "Could not remove the image directory of deleted job {JobId}.", jobId);
         }
+    }
+
+    public void RemoveUploadBlob(Guid imageId, string storagePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(storagePath);
+
+        var uploadsRoot = Path.GetFullPath(Path.Combine(_dataDirectory.Root, RootFolderName, UploadsFolderName));
+        if (!PathContainment.IsUnderRoot(storagePath, uploadsRoot))
+        {
+            // The path is never logged (privacy), only the refusal.
+            _logger.LogWarning("The blob of deleted uploaded image {ImageId} resolves outside the upload blob root; it was left untouched.", imageId);
+            return;
+        }
+
+        try
+        {
+            File.Delete(storagePath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(exception, "Could not delete the blob of deleted uploaded image {ImageId}; the file is left orphaned.", imageId);
+        }
+    }
+
+    private void DeleteOrphanedUploadBlob(Guid imageId, string bytesPath)
+    {
+        try
+        {
+            File.Delete(bytesPath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The path is never logged (privacy), only the image id.
+            _logger.LogWarning(exception, "Could not delete the blob of uploaded image {ImageId} whose row was never written; the file is left orphaned.", imageId);
+            return;
+        }
+
+        _logger.LogWarning("The upload of image {ImageId} failed after its blob was written; the blob was removed.", imageId);
     }
 
     private string JobDirectory(Guid jobId)

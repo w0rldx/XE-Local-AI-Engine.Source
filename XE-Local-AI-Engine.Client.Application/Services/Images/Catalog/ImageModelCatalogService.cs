@@ -34,7 +34,12 @@ public sealed class ImageModelCatalogService
     {
         var document = _catalog.GetDocument();
         var installed = await _registry.ListAsync(cancellationToken);
-        var installedNames = installed.Select(static entry => entry.ModelName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Installed = the registry entry carries every role the catalog declares. A set installed before the catalog gained a part (Qwen-Image's
+        // LlmVision) reads as not installed, so Install completes it: the store keeps the parts it has and fetches only the missing one.
+        var installedRoles = installed.DistinctBy(static entry => entry.ModelName, StringComparer.OrdinalIgnoreCase)
+                                      .ToDictionary(static entry => entry.ModelName,
+                                          static entry => entry.Parts.Select(static part => part.Role.ToString()).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                                          StringComparer.OrdinalIgnoreCase);
 
         // A failed hardware probe must not fail the catalog: the list is still useful without a fit badge, and the
         // estimator reports Unknown for a null profile rather than guessing.
@@ -58,7 +63,7 @@ public sealed class ImageModelCatalogService
             entries.Add(new ImageModelCatalogEntryView
             {
                 Entry = entry,
-                IsInstalled = installedNames.Contains(entry.Id),
+                IsInstalled = installedRoles.TryGetValue(entry.Id, out var roles) && entry.Parts.All(part => roles.Contains(part.Role)),
                 Fit = Estimate(entry, profile)
             });
         }

@@ -12,8 +12,15 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { ImageGenerationForm } from "@/features/images/components/ImageGenerationForm";
 import { ImageJobList } from "@/features/images/components/ImageJobList";
 import { ImageModelManager } from "@/features/images/components/ImageModelManager";
+import { ImageUploadButton } from "@/features/images/components/ImageUploadButton";
+import { UploadedImageList } from "@/features/images/components/UploadedImageList";
 import { useImageJobHub } from "@/features/images/hooks/useImageJobHub";
-import { type ImageGenerationFormValues, imageJobsPerPage, isTerminalStatus } from "@/features/images/models/ImageModels";
+import {
+	type ImageEditSource,
+	type ImageGenerationFormValues,
+	imageJobsPerPage,
+	isTerminalStatus,
+} from "@/features/images/models/ImageModels";
 import { useCancelImageJob, useCreateImageJob, useImageJobs, useImageModels } from "@/features/images/queries/useImageQueries";
 
 /** Keyed so the job list remembers its own rows-per-page, independently of every other table. */
@@ -49,10 +56,15 @@ export function ImagesPage() {
 	const createMutation = useCreateImageJob();
 	const cancelMutation = useCancelImageJob();
 
+	// The image the form is editing; null = text-to-image. Edit actions are offered only while some installed model
+	// can edit at all — the form handles a selected model that cannot.
+	const [editSource, setEditSource] = useState<ImageEditSource | null>(null);
+
 	const [submitError, setSubmitError] = useState<string | undefined>(undefined);
 	const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
 
 	const models = useMemo(() => modelsQuery.data ?? [], [modelsQuery.data]);
+	const handleEdit = models.some((model) => model.editModes.length > 0) ? setEditSource : undefined;
 	const jobs = useMemo(() => jobsQuery.data?.items ?? [], [jobsQuery.data]);
 
 	// Subscribe the hub only to jobs that can still transition (queued / generating) — a terminal job needs no push.
@@ -75,6 +87,9 @@ export function ImagesPage() {
 					steps: values.steps,
 					sampler: values.sampler,
 					cfgScale: values.cfgScale,
+					editMode: values.editMode ?? null,
+					sourceImageId: values.sourceImageId ?? null,
+					strength: values.strength ?? null,
 				},
 				{
 					onError: (error) => {
@@ -126,6 +141,8 @@ export function ImagesPage() {
 							isSubmitting={createMutation.isPending}
 							submitError={submitError}
 							onSubmit={handleGenerate}
+							editSource={editSource}
+							onCancelEdit={() => setEditSource(null)}
 						/>
 					</Card>
 					<Card>
@@ -136,19 +153,25 @@ export function ImagesPage() {
 						/>
 					</Card>
 				</Stack>
-				<SectionCard title={t("pages.images.jobs.title", "Jobs")} gap="sm">
-					<ImageJobList
-						jobs={jobs}
-						totalCount={jobsQuery.data?.totalCount ?? 0}
-						page={page}
-						pageSize={pageSize}
-						isLoading={jobsQuery.isLoading}
-						cancellingJobId={cancellingJobId}
-						onCancel={handleCancel}
-						onPageChange={setPage}
-						onPageSizeChange={handlePageSizeChange}
-					/>
-				</SectionCard>
+				<Stack gap="lg">
+					<SectionCard title={t("pages.images.uploads.title", "Uploaded images")} gap="sm" actions={<ImageUploadButton />}>
+						<UploadedImageList onEdit={handleEdit} />
+					</SectionCard>
+					<SectionCard title={t("pages.images.jobs.title", "Jobs")} gap="sm">
+						<ImageJobList
+							jobs={jobs}
+							totalCount={jobsQuery.data?.totalCount ?? 0}
+							page={page}
+							pageSize={pageSize}
+							isLoading={jobsQuery.isLoading}
+							cancellingJobId={cancellingJobId}
+							onCancel={handleCancel}
+							onPageChange={setPage}
+							onPageSizeChange={handlePageSizeChange}
+							onEdit={handleEdit}
+						/>
+					</SectionCard>
+				</Stack>
 			</SimpleGrid>
 		</PageShell>
 	);

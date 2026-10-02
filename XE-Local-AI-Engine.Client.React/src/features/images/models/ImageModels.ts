@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import { z } from "zod";
 
 import type {
@@ -7,6 +8,7 @@ import type {
 	XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse as ImageModelResponse,
 	XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryFileResponse as ImageRepositoryFileResponse,
 	XeLocalAiEngineClientEndpointsImagesV1ImageRepositoryResponse as ImageRepositoryResponse,
+	XeLocalAiEngineClientEndpointsImagesV1UploadedImageResponse as UploadedImageResponse,
 } from "@/core/api/generated";
 
 // Coarse image-job lifecycle, mirroring the backend ImageJobStatus enum (Queued/Generating/Succeeded/Failed/
@@ -47,10 +49,30 @@ export const imageFormDefaults = {
 	seed: -1,
 } as const;
 
+// How a job edits a source image, mirroring the backend ImageEditModeNames (exact, case-sensitive). img2img redraws the
+// source under a strength; reference keeps the source as a reference for an instruction prompt. Which of them a model
+// supports is per family, and the node sends it as the model's `editModes`.
+const imageEditModes = ["img2img", "reference"] as const;
+export type ImageEditMode = (typeof imageEditModes)[number];
+
+function toImageEditMode(raw: string | null | undefined): ImageEditMode | null {
+	return (imageEditModes as readonly string[]).includes(raw ?? "") ? (raw as ImageEditMode) : null;
+}
+
+/** The operator-facing name of an edit mode. Literal keys, so the i18n default check covers both. */
+export function editModeLabel(t: TFunction, mode: ImageEditMode): string {
+	return mode === "img2img"
+		? t("pages.images.edit.modes.img2img", "Variation")
+		: t("pages.images.edit.modes.reference", "Instruction edit");
+}
+
+/** The img2img strength a fresh edit starts from — the same value the node substitutes when the field is omitted. */
+export const defaultImageEditStrength = 0.75;
+
 // Schema-first form contract. Numeric bounds keep a request within sane runtime limits before it reaches the server
 // (which re-validates). modelName is required (a job cannot run without a resolved model); prompt is required and
 // bounded so a runaway paste is rejected at the boundary. negativePrompt is optional. Maps 1:1 to CreateImageJobRequest.
-export const imageGenerationFormSchema = z.object({
+export const imageGenerationFormFieldsSchema = z.object({
 	modelName: z.string().min(1),
 	prompt: z.string().trim().min(1).max(2000),
 	negativePrompt: z.string().trim().max(2000).optional(),
@@ -60,9 +82,24 @@ export const imageGenerationFormSchema = z.object({
 	sampler: z.enum(imageSamplers),
 	cfgScale: z.number().min(1).max(30),
 	seed: z.number().int().min(-1).max(4_294_967_295),
+	editMode: z.enum(imageEditModes).optional(),
+	sourceImageId: z.string().min(1).optional(),
+	strength: z.number().min(0).max(1).optional(),
 });
 
-export type ImageGenerationFormValues = z.infer<typeof imageGenerationFormSchema>;
+// The edit fields follow the node's CreateImageJobRequestValidator: a mode needs a source and a source needs a mode,
+// and strength belongs to img2img alone. Refined on top of the field schema, because a refined object cannot be
+// `.pick`ed (ImageFormOverrides picks the sampling fields from the unrefined one).
+export const imageGenerationFormSchema = imageGenerationFormFieldsSchema.superRefine((values, ctx) => {
+	if ((values.editMode === undefined) !== (values.sourceImageId === undefined)) {
+		ctx.addIssue({ code: "custom", path: ["editMode"], message: "An edit needs both a mode and a source image." });
+	}
+	if (values.strength !== undefined && values.editMode !== "img2img") {
+		ctx.addIssue({ code: "custom", path: ["strength"], message: "Strength applies to img2img only." });
+	}
+});
+
+export type ImageGenerationFormValues = z.infer<typeof imageGenerationFormFieldsSchema>;
 
 // Domain view-models derived from the (optional-field) generated DTOs — a strict shape the components render against.
 export interface ImageJobView {
@@ -83,6 +120,9 @@ export interface ImageJobView {
 	durationMs: number | null;
 	imageId: string | null;
 	sanitizedError: string | null;
+	editMode: ImageEditMode | null;
+	sourceImageId: string | null;
+	strength: number | null;
 }
 
 export function toImageJobView(dto: ImageJobResponse): ImageJobView {
@@ -106,6 +146,9 @@ export function toImageJobView(dto: ImageJobResponse): ImageJobView {
 		durationMs: dto.durationMs ?? null,
 		imageId: dto.imageId ?? null,
 		sanitizedError: dto.sanitizedError ?? null,
+		editMode: toImageEditMode(dto.editMode),
+		sourceImageId: dto.sourceImageId ?? null,
+		strength: dto.strength ?? null,
 	};
 }
 
@@ -121,6 +164,10 @@ export interface ImageModelView {
 	defaultSteps: number;
 	defaultCfgScale: number;
 	defaultSampler: string;
+	/** The edit modes this model's family supports; empty = the model cannot edit. */
+	editModes: readonly ImageEditMode[];
+	/** The pixel count (width × height) the family was trained at; edit dimensions are fitted to it. */
+	nativePixels: number;
 }
 
 export function toImageModelView(dto: ImageModelResponse): ImageModelView {
@@ -134,7 +181,51 @@ export function toImageModelView(dto: ImageModelResponse): ImageModelView {
 		defaultSteps: dto.defaultSteps,
 		defaultCfgScale: dto.defaultCfgScale,
 		defaultSampler: dto.defaultSampler,
+		// An unknown mode name from a newer node is dropped rather than offered: this client cannot label or send it.
+		editModes: dto.editModes.map(toImageEditMode).filter((mode): mode is ImageEditMode => mode !== null),
+		nativePixels: dto.nativePixels,
 	};
+}
+
+/** An image uploaded to be edited: no job, no prompt, just the source dimensions. */
+export interface UploadedImageView {
+	imageId: string;
+	width: number;
+	height: number;
+	createdAtUtc: number;
+}
+
+export function toUploadedImageView(dto: UploadedImageResponse): UploadedImageView {
+	return { imageId: dto.imageId, width: dto.width, height: dto.height, createdAtUtc: dto.createdAtUtc };
+}
+
+/** The image an edit starts from — a generated job's image or an upload — with the dimensions its aspect comes from. */
+export interface ImageEditSource {
+	imageId: string;
+	width: number;
+	height: number;
+}
+
+const editDimensionStep = 64;
+const editDimensionMin = 64;
+const editDimensionMax = 2048;
+
+function fitEditDimension(value: number): number {
+	const rounded = Math.round(value / editDimensionStep) * editDimensionStep;
+	return Math.min(editDimensionMax, Math.max(editDimensionMin, rounded));
+}
+
+/**
+ * The output size an edit defaults to: the source's aspect ratio scaled to the model's native pixel count, each side
+ * rounded to a multiple of 64 and clamped to 64..2048. A 4000×3000 photo edited on SD1.5 becomes 576×448, not a
+ * 3968×2944 job that would run out of memory; the operator can still override both fields.
+ */
+export function fitEditDimensions(
+	source: { width: number; height: number },
+	nativePixels: number,
+): { width: number; height: number } {
+	const scale = Math.sqrt(nativePixels / (source.width * source.height));
+	return { width: fitEditDimension(source.width * scale), height: fitEditDimension(source.height * scale) };
 }
 
 /**

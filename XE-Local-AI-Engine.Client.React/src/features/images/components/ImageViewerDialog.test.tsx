@@ -75,6 +75,9 @@ function job(overrides: Partial<ImageJobView> = {}): ImageJobView {
 		durationMs: 12_000,
 		imageId: "22222222-2222-2222-2222-222222222222",
 		sanitizedError: null,
+		editMode: null,
+		sourceImageId: null,
+		strength: null,
 		...overrides,
 	};
 }
@@ -202,5 +205,39 @@ describe("ImageViewerDialog", () => {
 		renderWithProviders(<ImageViewerDialog job={job()} opened={false} onClose={vi.fn()} />);
 
 		expect(screen.queryByTestId("image-viewer-image")).toBeNull();
+	});
+});
+
+describe("ImageViewerDialog edit", () => {
+	afterEach(cleanup);
+
+	it("starts an edit and closes the viewer", () => {
+		const onEdit = vi.fn();
+		const onClose = vi.fn();
+		renderWithProviders(<ImageViewerDialog job={job()} opened={true} onClose={onClose} onEdit={onEdit} />);
+
+		fireEvent.click(screen.getByTestId("image-viewer-edit"));
+
+		expect(onEdit).toHaveBeenCalledTimes(1);
+		expect(onClose).toHaveBeenCalledTimes(1);
+	});
+
+	it("has no Edit action when no model can edit", () => {
+		renderWithProviders(<ImageViewerDialog job={job()} opened={true} onClose={vi.fn()} />);
+
+		expect(screen.queryByTestId("image-viewer-edit")).toBeNull();
+	});
+
+	it("shows the edit mode and the source beside the other settings", () => {
+		renderWithProviders(
+			<ImageViewerDialog
+				job={job({ editMode: "reference", sourceImageId: "src-9", strength: null })}
+				opened={true}
+				onClose={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId("image-edit-detail").textContent).toBe("Instruction edit");
+		expect(screen.getByText("Edited from")).toBeTruthy();
 	});
 });

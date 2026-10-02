@@ -4688,6 +4688,36 @@
 				"settings": "Einstellungen",
 				"settingsValue": "{{model}} · {{width}}×{{height}} · {{steps}} Schritte · {{sampler}} · CFG {{cfgScale}}",
 				"duration": "Dauer"
+			},
+			"edit": {
+				"action": "Bearbeiten",
+				"label": "Bearbeitung",
+				"editingFrom": "Ausgangsbild",
+				"editedFrom": "Bearbeitet aus",
+				"cancel": "Bearbeitung abbrechen",
+				"sourceRemoved": "Ausgangsbild entfernt",
+				"referencePlaceholder": "Beschreiben Sie die Änderung",
+				"unsupported": "Das gewählte Modell kann keine Bilder bearbeiten. Wählen Sie ein anderes Modell.",
+				"modes": {
+					"img2img": "Variation",
+					"reference": "Bearbeitung per Anweisung"
+				},
+				"strength": {
+					"label": "Stärke",
+					"description": "Niedriger behält mehr vom Ausgangsbild, höher verändert mehr."
+				},
+				"detailWithStrength": "{{mode}} · Stärke {{strength}}"
+			},
+			"uploads": {
+				"title": "Hochgeladene Bilder",
+				"upload": "Bild zum Bearbeiten hochladen",
+				"empty": "Laden Sie ein PNG oder JPEG hoch, um ein eigenes Bild zu bearbeiten.",
+				"uploaded": "Hochgeladen",
+				"size": "{{width}}×{{height}}",
+				"error": "Das Bild konnte nicht hochgeladen werden.",
+				"deleteError": "Das hochgeladene Bild konnte nicht gelöscht werden.",
+				"loadError": "Das hochgeladene Bild konnte nicht geladen werden.",
+				"listError": "Die hochgeladenen Bilder konnten nicht geladen werden."
 			}
 		},
 		"notFound": {

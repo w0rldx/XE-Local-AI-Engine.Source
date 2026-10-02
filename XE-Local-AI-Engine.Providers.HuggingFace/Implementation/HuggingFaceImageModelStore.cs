@@ -97,9 +97,11 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
         await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            // Offline reuse — a verified file-set already present needs no download.
+            // Offline reuse — a verified file-set already present needs no download. A set lacking a requested role (a curated set that later gained a part, e.g. Qwen-Image's
+            // LlmVision) falls through: the per-part reuse below keeps the files it has and fetches only the missing one.
             var existing = await _registry.FindAsync(request.ModelName, ct).ConfigureAwait(false);
-            if (existing is not null && existing.Parts.All(part => File.Exists(part.LocalPath)))
+            if (existing is not null && existing.Parts.All(part => File.Exists(part.LocalPath))
+                && request.Parts.All(requested => existing.Parts.Any(part => part.Role == requested.Role)))
             {
                 progress?.Report(new PullProgress
                 {

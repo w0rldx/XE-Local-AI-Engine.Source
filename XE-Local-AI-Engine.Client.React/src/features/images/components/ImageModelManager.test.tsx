@@ -92,6 +92,8 @@ function model(overrides: Partial<ImageModelView> = {}): ImageModelView {
 		defaultSteps: 20,
 		defaultCfgScale: 7,
 		defaultSampler: "euler_a",
+		editModes: ["img2img"],
+		nativePixels: 512 * 512,
 		...overrides,
 	};
 }

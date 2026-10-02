@@ -13948,6 +13948,173 @@
         ]
       }
     },
+    "/api/local/v1/images/uploads": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "listUploadedImages",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1UploadedImageListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "uploadImage",
+        "requestBody": {
+          "x-name": "UploadImageRequest",
+          "description": "",
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1UploadImageRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1UploadedImageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/uploads/{imageId}": {
+      "delete": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "deleteUploadedImage",
+        "parameters": [
+          {
+            "name": "imageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/images/{imageId}": {
       "get": {
         "tags": [
@@ -36336,6 +36503,20 @@
           "cfgScale": {
             "type": "number",
             "format": "double"
+          },
+          "editMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceImageId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "strength": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
           }
         }
       },
@@ -36473,6 +36654,20 @@
           },
           "cancellationRequestedAtUtc": {
             "type": "integer",
+            "nullable": true
+          },
+          "editMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceImageId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "strength": {
+            "type": "number",
+            "format": "double",
             "nullable": true
           }
         }
@@ -36675,7 +36870,9 @@
           "downloadedAtUtc",
           "defaultSteps",
           "defaultCfgScale",
-          "defaultSampler"
+          "defaultSampler",
+          "editModes",
+          "nativePixels"
         ],
         "properties": {
           "modelName": {
@@ -36712,6 +36909,16 @@
           },
           "defaultSampler": {
             "type": "string"
+          },
+          "editModes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nativePixels": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -36973,6 +37180,10 @@
             }
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ListUploadedImagesRequest": {
+        "type": "object",
+        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsImagesV1RetrieveImageRequest": {
         "type": "object",
@@ -37303,6 +37514,75 @@
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StableDiffusionCppSourceBuildStatusResponse"
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1UploadImageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file"
+        ],
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "minLength": 1
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1UploadedImageListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "totalCount"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1UploadedImageResponse"
+            }
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1UploadedImageResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "imageId",
+          "mimeType",
+          "width",
+          "height",
+          "createdAtUtc"
+        ],
+        "properties": {
+          "imageId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1UploadedImageRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsIntegrationsV1CreateIntegrationTriggerRequest": {
         "type": "object",
