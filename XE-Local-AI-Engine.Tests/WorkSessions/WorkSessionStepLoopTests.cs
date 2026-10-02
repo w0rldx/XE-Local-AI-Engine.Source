@@ -467,6 +467,7 @@ public sealed class WorkSessionStepLoopTests
             factory.Services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
             publisher,
             factory.Services.GetRequiredService<IOptions<WorkSessionOptions>>(),
+            factory.Services.GetRequiredService<INodeRuntimeSettings>(),
             time,
             factory.Services.GetRequiredService<PendingToolCallRegistry>(),
             approvalCoordinator,

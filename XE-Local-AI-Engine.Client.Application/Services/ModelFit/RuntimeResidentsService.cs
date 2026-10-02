@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 
-using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     <see cref="LlamaCppRuntimeOrchestrationService" />.
 /// </summary>
 /// <remarks>
-///     Reads the two supervisors' in-memory state and the two activity gates only: no disk, no settings store, no probe,
+///     Reads the two supervisors' in-memory state, the two activity gates and the cached transcription switch only: no disk, no probe,
 ///     no recommendation, which is why it does not go through <see cref="ITranscriptionRuntimeService" />.
 ///     <see cref="RuntimeResident.CanEject" /> repeats each gate's <c>TryAcquireEvictionReservation</c> refusal, so the
 ///     flag and the eject endpoint agree; the rows and that flag come from separate reads and can briefly disagree.
@@ -19,7 +19,7 @@ public sealed class RuntimeResidentsService
 {
     private readonly IImageRuntimeActivityGate _imageGate;
     private readonly IImageServerSupervisor _imageSupervisor;
-    private readonly IOptions<TranscriptionOptions> _transcriptionOptions;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IWhisperRuntimeActivityGate _whisperGate;
     private readonly IWhisperServerSupervisor _whisperSupervisor;
 
@@ -27,27 +27,27 @@ public sealed class RuntimeResidentsService
         IImageRuntimeActivityGate imageGate,
         IWhisperServerSupervisor whisperSupervisor,
         IWhisperRuntimeActivityGate whisperGate,
-        IOptions<TranscriptionOptions> transcriptionOptions)
+        INodeRuntimeSettings runtimeSettings)
     {
         ArgumentNullException.ThrowIfNull(imageGate);
         ArgumentNullException.ThrowIfNull(imageSupervisor);
-        ArgumentNullException.ThrowIfNull(transcriptionOptions);
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(whisperGate);
         ArgumentNullException.ThrowIfNull(whisperSupervisor);
         _imageGate = imageGate;
         _imageSupervisor = imageSupervisor;
-        _transcriptionOptions = transcriptionOptions;
+        _runtimeSettings = runtimeSettings;
         _whisperGate = whisperGate;
         _whisperSupervisor = whisperSupervisor;
     }
 
-    public IReadOnlyList<RuntimeResident> GetResidents()
+    public async Task<IReadOnlyList<RuntimeResident>> GetResidentsAsync(CancellationToken cancellationToken = default)
     {
         var residents = new List<RuntimeResident>();
         AddImageResidents(residents);
 
-        // The same key Program.cs reads for the /transcription kill switch; a disabled node reports no whisper rows.
-        if (_transcriptionOptions.Value.Enabled)
+        // The switch FeatureSwitchMiddleware reads for /transcription; a disabled node reports no whisper rows.
+        if (await _runtimeSettings.GetTranscriptionEnabledAsync(cancellationToken))
         {
             AddTranscriptionResident(residents);
         }

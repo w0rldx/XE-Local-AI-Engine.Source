@@ -63,9 +63,9 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.Enabled || !_agentHomeOptions.Enabled)
+        if (!_options.Enabled)
         {
-            // Retention off, or the feature that writes the runs is off: nothing to sweep either way.
+            // Retention's own switch, bound to the process. The AgentHome switch is live, so each sweep reads it instead.
             return;
         }
 
@@ -117,6 +117,11 @@ internal sealed partial class AgentHomeRunRetentionService : BackgroundService
     /// <remarks>The three limits are node settings read once per sweep, so a save applies to the next sweep.</remarks>
     internal async Task SweepAsync(CancellationToken cancellationToken)
     {
+        if (!await _runtimeSettings.GetAgentHomeEnabledAsync(cancellationToken))
+        {
+            return;
+        }
+
         var runsRoot = AgentHomeRunPaths.ResolveRunsRoot(_agentHomeOptions, _dataDirectoryRoot);
         if (!Directory.Exists(runsRoot))
         {

@@ -153,6 +153,14 @@ group that would otherwise hold it alone and becomes a top-level entry — Agent
 — and a group left with no children is dropped rather than rendered empty. Changing the mode on the Node Settings page
 re-renders the rails on the next commit; no reload, and the operator stays on whatever page they were on.
 
+A third gate sits before the mode filter: `useServerDisabledNavigationCapabilities` returns the capabilities the node
+has switched off, and `filterNavigationLinksByDisabledCapabilities` drops their entries. It reads the nine effective
+feature switches from the shared node-settings query (the cache entry `useUiMode` also reads) and maps seven of them
+to nav capabilities: `development`, `workSessions`, `devWorkflows`, `graphWorkflows`, `externalApps`, `transcription`
+and `scheduler`. Compute and AgentHome have no nav entry of their own. Graph workflows also keeps its capability probe,
+which a session that cannot read node settings still gets. Only a definite `false` hides an entry: a pending, failed or
+forbidden read hides nothing.
+
 ### Node Settings: one draft, one save bar
 
 `features/node-settings/pages/NodeSettings.tsx` treats the whole page as **one draft**. `nodeSettingsFieldSections`
@@ -163,6 +171,15 @@ than landing in no section or two. `NodeSettingsSectionNav` renders that list as
 and a `Select` on phone width; the active section is driven by the route's `?section=` search param
 (`nodeSettingsSearchSchema` falls an unrecognized value back to the default section rather than failing the route) so
 every section is a bookmarkable, linkable URL.
+
+**General holds the Features card** (`components/NodeSettingsFeaturesCard.tsx`): the nine feature switches, each
+showing its effective value. `developmentEnabled` and `schedulerEnabled` are in `restartGatedNodeSettingsFields`; the
+External apps, Compute tools and Development workflows descriptions name the part that waits for a restart (the
+container bridge listener, the seeded Mathematician agent and workflow definitions). `buildNodeSettingsRequest`
+mirrors the server's two couplings so the refusal lands on the field: development workflows without work sessions
+(`requiresWorkSessions`), and AgentHome with an empty tool-capable list (`requiresToolCapableModels`). The second rule
+fires only when `useEffectiveToolCapableModels` reports the effective list empty, because the server falls back from an
+empty stored list to the appsettings seed.
 
 **The draft is `fieldsForm`; `fieldsBaseline` is the server state it was last seeded from.** `buildNodeSettingsRequest`
 diffs the two and sends only the changed fields, matching the PUT DTO's optional-field-keeps-current-value contract

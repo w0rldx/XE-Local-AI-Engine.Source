@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Diagnostics;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -22,6 +21,7 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     <see cref="NodeInfoService" />: a failing or silent provider degrades to a null section plus a warning, the
@@ -228,7 +228,7 @@ public sealed class NodeInfoServiceTests
             new ImageRuntimeActivityGate(),
             Substitute.For<IWhisperServerSupervisor>(),
             new WhisperRuntimeActivityGate(),
-            Options.Create(new TranscriptionOptions { Enabled = false }));
+            StubNodeRuntimeSettings.Create().WithTranscriptionEnabled(false).Build());
         return new NodeInfoService(_profiler,
             _deviceAudit,
             _sampler,

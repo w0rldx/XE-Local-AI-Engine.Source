@@ -29,6 +29,7 @@ public sealed class StubNodeRuntimeSettings
     private int _maxResponseSizeMb = StoredNodeSettings.DefaultMaxResponseSizeMb;
     private int _orchestrationIdleTimeoutSeconds = StoredNodeSettings.DefaultOrchestrationIdleTimeoutSeconds;
     private IReadOnlyList<string> _toolCapableModels = ["qwen3:8b"];
+    private IReadOnlyList<string> _toolCapableModelsSeed = ["qwen3:8b"];
     private int _chatCacheReuse = StoredNodeSettings.DefaultChatCacheReuse;
     private string _kvCacheType = StoredNodeSettings.DefaultKvCacheType;
     private string _speculativeMode = StoredNodeSettings.DefaultSpeculativeMode;
@@ -94,6 +95,17 @@ public sealed class StubNodeRuntimeSettings
     private int _agentHomeRunRetentionMaxRuns = StoredNodeSettings.DefaultAgentHomeRunRetentionMaxRuns;
     private long _agentHomeRunRetentionMaxTotalBytes = StoredNodeSettings.DefaultAgentHomeRunRetentionMaxTotalBytes;
 
+    // The feature switches default ON here, unlike their code defaults: a consumer test exercises the feature unless it says otherwise.
+    private bool _developmentEnabled = true;
+    private bool _workSessionsEnabled = true;
+    private bool _graphWorkflowsEnabled = true;
+    private bool _transcriptionEnabled = true;
+    private bool _externalAppsEnabled = true;
+    private bool _computeEnabled = true;
+    private bool _agentHomeEnabled = true;
+    private bool _schedulerEnabled = true;
+    private bool _devWorkflowsEnabled = true;
+
     // A READ, not a value: the wait-until-decided gate re-reads the profile on every poll tick, so a test that flips the
     // decision mid-wait needs the substitute to answer differently on the second call. Same shape as the tool-relevance
     // read above, and for the same reason.
@@ -158,6 +170,13 @@ public sealed class StubNodeRuntimeSettings
     {
         ArgumentNullException.ThrowIfNull(toolCapableModels);
         _toolCapableModels = [.. toolCapableModels];
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithToolCapableModelsSeed(params string[] toolCapableModelsSeed)
+    {
+        ArgumentNullException.ThrowIfNull(toolCapableModelsSeed);
+        _toolCapableModelsSeed = [.. toolCapableModelsSeed];
         return this;
     }
 
@@ -614,6 +633,60 @@ public sealed class StubNodeRuntimeSettings
         return this;
     }
 
+    public StubNodeRuntimeSettings WithDevelopmentEnabled(bool value)
+    {
+        _developmentEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithWorkSessionsEnabled(bool value)
+    {
+        _workSessionsEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithGraphWorkflowsEnabled(bool value)
+    {
+        _graphWorkflowsEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithTranscriptionEnabled(bool value)
+    {
+        _transcriptionEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithExternalAppsEnabled(bool value)
+    {
+        _externalAppsEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithComputeEnabled(bool value)
+    {
+        _computeEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAgentHomeEnabled(bool value)
+    {
+        _agentHomeEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithSchedulerEnabled(bool value)
+    {
+        _schedulerEnabled = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithDevWorkflowsEnabled(bool value)
+    {
+        _devWorkflowsEnabled = value;
+        return this;
+    }
+
     public INodeRuntimeSettings Build()
     {
         var settings = Substitute.For<INodeRuntimeSettings>();
@@ -678,6 +751,7 @@ public sealed class StubNodeRuntimeSettings
         // getters (e.g. InvocationRunner, the DI factory seeds) observe the same configured knobs.
         settings.GetDefaultModelName().Returns(_defaultModelName);
         settings.GetToolCapableModels().Returns(_toolCapableModels);
+        settings.GetToolCapableModelsSeed().Returns(_ => _toolCapableModelsSeed);
         settings.GetOllamaEndpoint().Returns(StoredNodeSettings.DefaultOllamaEndpoint);
         settings.GetHuggingFaceDefaultQuant().Returns(_huggingFaceDefaultQuant);
         settings.GetHuggingFaceDiskMarginBytes().Returns(_huggingFaceDiskMarginBytes);
@@ -741,6 +815,24 @@ public sealed class StubNodeRuntimeSettings
         settings.GetAgentHomeRunRetentionDaysAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeRunRetentionDays);
         settings.GetAgentHomeRunRetentionMaxRunsAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeRunRetentionMaxRuns);
         settings.GetAgentHomeRunRetentionMaxTotalBytesAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeRunRetentionMaxTotalBytes);
+        settings.GetDevelopmentEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _developmentEnabled);
+        settings.GetDevelopmentEnabled().Returns(_ => _developmentEnabled);
+        settings.GetWorkSessionsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _workSessionsEnabled);
+        settings.GetWorkSessionsEnabled().Returns(_ => _workSessionsEnabled);
+        settings.GetGraphWorkflowsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _graphWorkflowsEnabled);
+        settings.GetGraphWorkflowsEnabled().Returns(_ => _graphWorkflowsEnabled);
+        settings.GetTranscriptionEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _transcriptionEnabled);
+        settings.GetTranscriptionEnabled().Returns(_ => _transcriptionEnabled);
+        settings.GetExternalAppsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _externalAppsEnabled);
+        settings.GetExternalAppsEnabled().Returns(_ => _externalAppsEnabled);
+        settings.GetComputeEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _computeEnabled);
+        settings.GetComputeEnabled().Returns(_ => _computeEnabled);
+        settings.GetAgentHomeEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _agentHomeEnabled);
+        settings.GetAgentHomeEnabled().Returns(_ => _agentHomeEnabled);
+        settings.GetSchedulerEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _schedulerEnabled);
+        settings.GetSchedulerEnabled().Returns(_ => _schedulerEnabled);
+        settings.GetDevWorkflowsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _devWorkflowsEnabled);
+        settings.GetDevWorkflowsEnabled().Returns(_ => _devWorkflowsEnabled);
         settings.ResolveEffectiveValues(Arg.Any<StoredNodeSettings>())
                 .Returns(call =>
                 {
@@ -760,7 +852,16 @@ public sealed class StubNodeRuntimeSettings
                         ChatRetentionDays = stored.ChatRetentionDays ?? _chatRetentionDays,
                         AgentExecutionLogRetentionDays = stored.AgentExecutionLogRetentionDays ?? _agentExecutionLogRetentionDays,
                         SchedulerHistoryRetentionDays = stored.SchedulerHistoryRetentionDays ?? _schedulerHistoryRetentionDays,
-                        AgentHomeRunRetentionDays = stored.AgentHomeRunRetentionDays ?? _agentHomeRunRetentionDays
+                        AgentHomeRunRetentionDays = stored.AgentHomeRunRetentionDays ?? _agentHomeRunRetentionDays,
+                        DevelopmentEnabled = stored.DevelopmentEnabled ?? _developmentEnabled,
+                        WorkSessionsEnabled = stored.WorkSessionsEnabled ?? _workSessionsEnabled,
+                        GraphWorkflowsEnabled = stored.GraphWorkflowsEnabled ?? _graphWorkflowsEnabled,
+                        TranscriptionEnabled = stored.TranscriptionEnabled ?? _transcriptionEnabled,
+                        ExternalAppsEnabled = stored.ExternalAppsEnabled ?? _externalAppsEnabled,
+                        ComputeEnabled = stored.ComputeEnabled ?? _computeEnabled,
+                        AgentHomeEnabled = stored.AgentHomeEnabled ?? _agentHomeEnabled,
+                        SchedulerEnabled = stored.SchedulerEnabled ?? _schedulerEnabled,
+                        DevWorkflowsEnabled = stored.DevWorkflowsEnabled ?? _devWorkflowsEnabled
                     };
                 });
         return settings;

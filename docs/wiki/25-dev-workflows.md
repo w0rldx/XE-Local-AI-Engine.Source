@@ -10,7 +10,7 @@ at most the work that was in flight.
 The module lives in `Client.Application/Services/DevWorkflows/` (the parser, the state machine, the dispatcher
 and the three lanes), `Client.Persistence` (work items, definitions, rule sets, runs, node runs, events and
 artifacts, with per-column AEAD encryption), the `LocalApiRoutes.DevelopmentWorkflows` endpoint family and
-`DevWorkflowRunHub`. It is gated by `DevWorkflows:Enabled`, which ships **off**.
+`DevWorkflowRunHub`. It is gated by the `DevWorkflowsEnabled` node setting (**Node Settings → General → Features**), seeded from `DevWorkflows:Enabled`, which ships **off**. The API and the dispatcher read it live; the definition seeder only at startup.
 
 This page is the runtime reference. Two neighbours own what it deliberately does not repeat:
 

@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The <c>pythonTests</c> adversarial set against the REAL jail: the real uv-provisioned interpreter, the real
@@ -316,6 +317,7 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
             Options.Create(options),
             Options.Create(new LocalContainerOptions()),
             Options.Create(new AgentToolPipelineOptions()),
+            SeededNodeRuntimeSettings.FromSeed("Compute:Enabled", enabled),
             NullLogger<ComputeToolGateway>.Instance);
         return new BenchmarkPythonTestsVerifier(gateway, Options.Create(options), NullLogger<BenchmarkPythonTestsVerifier>.Instance);
     }

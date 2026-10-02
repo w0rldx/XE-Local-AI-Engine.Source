@@ -21,12 +21,12 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Development.Implementation;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Integration)]
 public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
@@ -1220,10 +1220,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             Substitute.For<IDevelopmentProfileBackfillService>(),
             Substitute.For<IDevelopmentTemplateStore>(),
             Substitute.For<IDevWorkflowStore>(),
-            Options.Create(new DevWorkflowOptions
-            {
-                Enabled = true
-            }),
+            StubNodeRuntimeSettings.Create().WithDevWorkflowsEnabled(true).Build(),
             TimeProvider.System,
             NullLogger<DevelopmentManagementService>.Instance);
     }

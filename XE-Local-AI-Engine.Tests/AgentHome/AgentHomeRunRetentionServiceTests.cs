@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
-using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -372,16 +371,93 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
             },
             new AgentHomeOptions
             {
-                Enabled = agentHomeEnabled,
+                Enabled = true,
                 RootPath = Path.Combine(_dataRoot.Path, "agent-home-state")
             },
             new RecordingLogger<AgentHomeRunRetentionService>(),
-            new ManualTimeProvider(Now));
+            new ManualTimeProvider(Now),
+            agentHomeSwitch: agentHomeEnabled);
 
         await service.StartAsync(CancellationToken.None);
         await service.StopAsync(CancellationToken.None);
 
         AssertEx.True(Directory.Exists(old), why);
+    }
+
+    /// <summary>The AgentHome switch is live, so a loop that started with it off keeps its timer and sweeps on the first tick after it turns on.</summary>
+    [Test]
+    public async Task ExecuteAsync_WhenAgentHomeIsSwitchedOnLive_SweepsOnTheNextTick()
+    {
+        var old = SeedRun(Now.AddDays(-40));
+        SeedRun(Now.AddHours(-1));
+
+        var clock = new ManualTimeProvider(Now);
+        var options = new AgentHomeRunRetentionOptions
+        {
+            RetentionDays = 30,
+            SweepInterval = TimeSpan.FromHours(1)
+        };
+        var settings = LimitsOf(options).WithAgentHomeEnabled(false);
+        using var service = new AgentHomeRunRetentionService(Options.Create(options),
+            Options.Create(new AgentHomeOptions
+            {
+                Enabled = true,
+                RootPath = Path.Combine(_dataRoot.Path, "agent-home-state")
+            }),
+            new FakeNodeDataDirectory(_dataRoot.Path),
+            new AgentHomeRunExecutionRegistry(),
+            new AgentHomeRunApplyGuard(),
+            settings.Build(),
+            clock,
+            new RecordingLogger<AgentHomeRunRetentionService>());
+
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount > 0, TestBudgets.Contended, "the loop must keep its timer while AgentHome is off.");
+            AssertEx.True(Directory.Exists(old), "the startup sweep ran with AgentHome off, so it must have deleted nothing.");
+
+            _ = settings.WithAgentHomeEnabled(true);
+            clock.Advance(TimeSpan.FromHours(1));
+
+            await AssertEx.EventuallyAsync(() => !Directory.Exists(old), TestBudgets.Contended, "the first tick after AgentHome turns on must sweep.");
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenOnlyTheOptionsSayAgentHomeIsOff_StillSweeps_BecauseTheNodeSettingIsTheAuthority()
+    {
+        // Two runs: the newest is never deleted, so the old one is the only thing a sweep can remove.
+        var old = SeedRun(Now.AddDays(-40));
+        SeedRun(Now.AddHours(-1));
+
+        using var service = CreateService(new AgentHomeRunRetentionOptions
+            {
+                RetentionDays = 30
+            },
+            new AgentHomeOptions
+            {
+                Enabled = false,
+                RootPath = Path.Combine(_dataRoot.Path, "agent-home-state")
+            },
+            new RecordingLogger<AgentHomeRunRetentionService>(),
+            new ManualTimeProvider(Now),
+            agentHomeSwitch: true);
+
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            await AssertEx.EventuallyAsync(() => !Directory.Exists(old), TestBudgets.Contended,
+                "AgentHomeOptions.Enabled is only the seed; the node-settings switch decides.");
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
     }
 
     /// <summary>
@@ -409,7 +485,7 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
             new FakeNodeDataDirectory(_dataRoot.Path),
             new AgentHomeRunExecutionRegistry(),
             new AgentHomeRunApplyGuard(),
-            LimitsOf(new AgentHomeRunRetentionOptions { RetentionDays = 30 }),
+            LimitsOf(new AgentHomeRunRetentionOptions { RetentionDays = 30 }).Build(),
             new ThrowOnceClock(clock),
             logger);
 
@@ -460,23 +536,23 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
         ILogger<AgentHomeRunRetentionService> logger,
         TimeProvider timeProvider,
         AgentHomeRunApplyGuard? applyGuard = null,
-        AgentHomeRunExecutionRegistry? executingRuns = null) =>
+        AgentHomeRunExecutionRegistry? executingRuns = null,
+        bool agentHomeSwitch = true) =>
         new(Options.Create(options),
             Options.Create(agentHomeOptions),
             new FakeNodeDataDirectory(_dataRoot.Path),
             executingRuns ?? new AgentHomeRunExecutionRegistry(),
             applyGuard ?? new AgentHomeRunApplyGuard(),
-            LimitsOf(options),
+            LimitsOf(options).WithAgentHomeEnabled(agentHomeSwitch).Build(),
             timeProvider,
             logger);
 
     // The three limits are node settings the sweep reads per sweep; the tests state them on the options object they used to live on.
-    private static INodeRuntimeSettings LimitsOf(AgentHomeRunRetentionOptions options) =>
+    private static StubNodeRuntimeSettings LimitsOf(AgentHomeRunRetentionOptions options) =>
         StubNodeRuntimeSettings.Create()
                                .WithAgentHomeRunRetentionDays(options.RetentionDays)
                                .WithAgentHomeRunRetentionMaxRuns(options.MaxRuns)
-                               .WithAgentHomeRunRetentionMaxTotalBytes(options.MaxTotalBytes)
-                               .Build();
+                               .WithAgentHomeRunRetentionMaxTotalBytes(options.MaxTotalBytes);
 
     private string RunsRoot()
     {

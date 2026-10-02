@@ -18,11 +18,12 @@ import {
 	IconSitemap,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import type { ForwardRefExoticComponent, RefAttributes } from "react";
+import { type ForwardRefExoticComponent, type RefAttributes, useMemo } from "react";
 
 import type { UiMode } from "@/capabilities/NodeCapabilities";
 import { nodeCapabilities, nodeRoutePaths } from "@/capabilities/NodeCapabilities";
-import { getGraphWorkflowCapabilityOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import type { XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse as NodeSettingsResponse } from "@/core/api/generated";
+import { getGraphWorkflowCapabilityOptions, getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 
 // Capability flags that gate individual navigation entries (top-level or nested). A link with no
@@ -206,8 +207,8 @@ export const allNavigationLinks: INavigationLink[] = [
 	},
 	// External Apps group, directly after Integrations: both children carry the same `externalApps` capability, so
 	// the generic empty-group filter below drops the whole group when the capability is compiled off. It ships ON;
-	// the node's own `ExternalApps:Enabled` is a separate switch, and turning THAT off leaves this group visible
-	// (the capability is compile-time) while every route answers 404. Like Integrations the group entry has no `to`
+	// the node's own `ExternalApps:Enabled` is a separate switch: turning THAT off hides the group through
+	// useServerDisabledNavigationCapabilities while every route answers 404. Like Integrations the group entry has no `to`
 	// — /external-apps only redirects to the catalog — and the instance detail route has no nav entry, like the
 	// work-session and workflow detail pages.
 	{
@@ -364,9 +365,9 @@ export const navigationLinks: INavigationLink[] = allNavigationLinks
 	)
 	.filter((link) => !link.links || link.links.length > 0);
 
-// Server switches: a feature the node's operator turned off at runtime (today only `GraphWorkflows:Enabled=false`).
-// The compile-time filter above cannot see it, so the nav bars apply this one live, before the mode filter. Pure,
-// and dropping a group that ends up empty, exactly like the capability filter.
+// Server switches: a feature the node's operator turned off at runtime (the Features card in Node Settings). The
+// compile-time filter above cannot see it, so the nav bars apply this one live, before the mode filter. Pure, and
+// dropping a group that ends up empty, exactly like the capability filter.
 export function filterNavigationLinksByDisabledCapabilities(
 	links: readonly INavigationLink[],
 	disabled: ReadonlySet<string>,
@@ -379,20 +380,43 @@ export function filterNavigationLinksByDisabledCapabilities(
 		.filter((link) => !link.links || link.links.length > 0);
 }
 
-const NO_DISABLED_CAPABILITIES: ReadonlySet<NavigationCapabilityKey> = new Set<NavigationCapabilityKey>();
-const GRAPH_WORKFLOWS_DISABLED: ReadonlySet<NavigationCapabilityKey> = new Set<NavigationCapabilityKey>(["graphWorkflows"]);
+// The node-settings switch behind each nav capability that has one. Compute and AgentHome have no nav entry of their own.
+const featureSwitchByCapability = {
+	development: "developmentEnabled",
+	workSessions: "workSessionsEnabled",
+	devWorkflows: "devWorkflowsEnabled",
+	graphWorkflows: "graphWorkflowsEnabled",
+	externalApps: "externalAppsEnabled",
+	transcription: "transcriptionEnabled",
+	scheduler: "schedulerEnabled",
+} as const satisfies Partial<Record<NavigationCapabilityKey, keyof NodeSettingsResponse>>;
 
-// The capabilities this node's server reports switched off. Unknown (loading, failed) reads as on: hiding an entry on a
-// failed read would lock the operator out of a page the node still serves.
-// Reads the generated capability query directly (same key and settings as the graphWorkflows feature's
-// `useGraphWorkflowCapability`), so the shared shell does not depend on a feature.
+const NO_DISABLED_CAPABILITIES: ReadonlySet<NavigationCapabilityKey> = new Set<NavigationCapabilityKey>();
+
+// The capabilities this node's server reports switched off: the effective feature switches from the node-settings GET
+// (the operator's read, sharing the cache entry the layout guard and useUiMode use), plus the graph-workflows capability
+// probe, which every role can read. Only a definite `false` hides an entry; unknown (loading, failed, forbidden) reads
+// as on, because hiding an entry on a failed read would lock the operator out of a page the node still serves.
+// Reads the generated queries directly so the shared shell does not depend on a feature.
 export function useServerDisabledNavigationCapabilities(): ReadonlySet<NavigationCapabilityKey> {
-	const { data } = useQuery({
+	const { data: settings } = useQuery(getNodeSettingsOptions());
+	const { data: graphCapability } = useQuery({
 		...withResponseValidation(getGraphWorkflowCapabilityOptions()),
 		enabled: nodeCapabilities.graphWorkflows,
 		staleTime: 30_000,
 	});
-	return data?.enabled === false ? GRAPH_WORKFLOWS_DISABLED : NO_DISABLED_CAPABILITIES;
+	return useMemo(() => {
+		const disabled = new Set<NavigationCapabilityKey>();
+		for (const [capability, field] of Object.entries(featureSwitchByCapability)) {
+			if (settings?.[field] === false) {
+				disabled.add(capability as NavigationCapabilityKey);
+			}
+		}
+		if (graphCapability?.enabled === false) {
+			disabled.add("graphWorkflows");
+		}
+		return disabled.size === 0 ? NO_DISABLED_CAPABILITIES : disabled;
+	}, [settings, graphCapability]);
 }
 
 // The SECOND, independent filter, layered on top of the capability one above. It is a separate pure function rather

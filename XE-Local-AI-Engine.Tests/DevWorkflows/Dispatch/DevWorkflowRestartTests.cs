@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Killing the engine at each interesting point of a run, one test per row of the runtime plan's restart
@@ -235,6 +236,23 @@ public sealed class DevWorkflowRestartTests
         var reconciled = await harness.ReadNodeRunAsync(runId, "validate");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, reconciled.Status);
         AssertEx.Equal(expected: 2, reconciled.Attempt, "the command batch has to run again from the start, so the budget pays for it.");
+    }
+
+    /// <summary>
+    ///     The switch is live, so recovery cannot wait for it: a row stranded while the feature was off would otherwise
+    ///     stay in flight once it is turned on, and nothing downstream settles a <c>Running</c> tool row.
+    /// </summary>
+    [Test]
+    public async Task ARestartWithTheFeatureSwitchedOff_StillSettlesTheNodeRunsTheCrashStranded()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleTool);
+        _ = await harness.AdvanceAsync(runId);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running);
+
+        await harness.RestartAsync(StubNodeRuntimeSettings.Create().WithDevWorkflowsEnabled(false).WithWorkSessionsEnabled(false).Build());
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "validate")).Status);
     }
 
     /// <summary>

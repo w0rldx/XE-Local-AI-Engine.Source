@@ -5,7 +5,6 @@ using System.Reflection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Hubs;
@@ -13,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class WorkSessionHubTests
@@ -193,11 +193,7 @@ public sealed class WorkSessionHubTests
         context.ConnectionAborted.Returns(CancellationToken.None);
         var groups = Substitute.For<IGroupManager>();
         var clients = Substitute.For<IHubCallerClients>();
-        var hub = new WorkSessionHub(service,
-            Options.Create(new WorkSessionOptions
-            {
-                Enabled = enabled
-            }))
+        var hub = new WorkSessionHub(service, StubNodeRuntimeSettings.Create().WithWorkSessionsEnabled(enabled).Build())
         {
             Context = context,
             Groups = groups,

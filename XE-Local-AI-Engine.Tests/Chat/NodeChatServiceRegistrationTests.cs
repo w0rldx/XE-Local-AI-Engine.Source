@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 [Category(TestCategories.Integration)]
 public sealed class NodeChatServiceRegistrationTests : IDisposable
@@ -28,7 +29,7 @@ public sealed class NodeChatServiceRegistrationTests : IDisposable
     public async Task AddServices_RegistersNodeChatPersistenceServicesWithValidateScopes()
     {
         var builder = CreateBuilder();
-        builder.AddServices(builder.Configuration);
+        builder.AddServices(builder.Configuration, NodeStartupSettings.Read(builder.Configuration, builder.Environment));
         builder.Services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
 
         await using var provider = builder.Services.BuildServiceProvider(true);
@@ -52,7 +53,7 @@ public sealed class NodeChatServiceRegistrationTests : IDisposable
     public void AddServices_DoesNotRegisterNodeChatEndpoints()
     {
         var builder = CreateBuilder();
-        builder.AddServices(builder.Configuration);
+        builder.AddServices(builder.Configuration, NodeStartupSettings.Read(builder.Configuration, builder.Environment));
 
         var localChatHubRegistration = builder.Services.FirstOrDefault(descriptor => descriptor.ServiceType.FullName?.Contains("LocalChatHub", StringComparison.Ordinal) == true);
 

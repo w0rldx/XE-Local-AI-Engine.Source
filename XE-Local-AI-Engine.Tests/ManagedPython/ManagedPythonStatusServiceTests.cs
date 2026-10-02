@@ -1,10 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.ManagedPython;
 
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using TUnit.Core.Enums;
-using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using XE_Local_AI_Engine.Client.Services.ManagedPython;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -14,6 +12,7 @@ using XE_Local_AI_Engine.Providers.Training;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using static Providers.Training.TrainingRuntimeTestInfrastructure;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     State derivation of the Managed Python status surface over temp directories and a substituted Training service:
@@ -281,10 +280,7 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
         sandbox.Capabilities.Returns(isolation ? SandboxProviderCapabilities.SupportsFilesystemIsolation : SandboxProviderCapabilities.None);
         return new ManagedPythonStatusService(compute,
             _training,
-            Options.Create(new ComputeOptions
-            {
-                Enabled = enabled
-            }),
+            SeededNodeRuntimeSettings.FromSeed("Compute:Enabled", enabled),
             sandbox,
             Toolchain,
             () => isLinux,

@@ -1,11 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.Coder;
 
-using Microsoft.Extensions.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Coder;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Handler-shape coverage for the three coder tools: each flag-gates on <c>AgentHome:Enabled</c>, validates before
@@ -19,7 +20,7 @@ public sealed class CoderToolHandlerTests
     public async Task ListFiles_WhenAgentHomeDisabled_ReturnsDisabledMessage()
     {
         var reader = new RecordingReader();
-        var handler = new ListFilesToolHandler(Configuration(enabled: false), reader);
+        var handler = new ListFilesToolHandler(Settings(enabled: false), reader);
 
         var result = await handler.ExecuteAsync("{}");
 
@@ -31,7 +32,7 @@ public sealed class CoderToolHandlerTests
     public async Task ReadFile_WhenAgentHomeDisabled_ReturnsDisabledMessage()
     {
         var reader = new RecordingReader();
-        var handler = new ReadFileToolHandler(Configuration(enabled: false), reader);
+        var handler = new ReadFileToolHandler(Settings(enabled: false), reader);
 
         var result = await handler.ExecuteAsync("""{"path":"src/a.txt"}""");
 
@@ -43,7 +44,7 @@ public sealed class CoderToolHandlerTests
     public async Task SearchText_WhenAgentHomeDisabled_ReturnsDisabledMessage()
     {
         var reader = new RecordingReader();
-        var handler = new SearchTextToolHandler(Configuration(enabled: false), reader);
+        var handler = new SearchTextToolHandler(Settings(enabled: false), reader);
 
         var result = await handler.ExecuteAsync("""{"pattern":"x"}""");
 
@@ -55,7 +56,7 @@ public sealed class CoderToolHandlerTests
     public async Task ReadFile_WhenPathMissing_ReturnsValidationError()
     {
         var reader = new RecordingReader();
-        var handler = new ReadFileToolHandler(Configuration(enabled: true), reader);
+        var handler = new ReadFileToolHandler(Settings(enabled: true), reader);
 
         var result = await handler.ExecuteAsync("{}");
 
@@ -68,7 +69,7 @@ public sealed class CoderToolHandlerTests
     public async Task SearchText_WhenInvalidRegex_ReturnsValidationError()
     {
         var reader = new RecordingReader();
-        var handler = new SearchTextToolHandler(Configuration(enabled: true), reader);
+        var handler = new SearchTextToolHandler(Settings(enabled: true), reader);
 
         var result = await handler.ExecuteAsync("""{"pattern":"a(b","isRegex":true}""");
 
@@ -80,9 +81,9 @@ public sealed class CoderToolHandlerTests
     public async Task Handlers_WhenEnabledAndValid_DelegateToReader()
     {
         var reader = new RecordingReader();
-        var list = new ListFilesToolHandler(Configuration(enabled: true), reader);
-        var read = new ReadFileToolHandler(Configuration(enabled: true), reader);
-        var search = new SearchTextToolHandler(Configuration(enabled: true), reader);
+        var list = new ListFilesToolHandler(Settings(enabled: true), reader);
+        var read = new ReadFileToolHandler(Settings(enabled: true), reader);
+        var search = new SearchTextToolHandler(Settings(enabled: true), reader);
 
         AssertEx.Equal("list-ok", await list.ExecuteAsync("{}"));
         AssertEx.Equal("read-ok", await read.ExecuteAsync("""{"path":"src/a.txt"}"""));
@@ -90,27 +91,42 @@ public sealed class CoderToolHandlerTests
     }
 
     [Test]
+    public async Task Handlers_ReadTheStoredSwitchPerCall_OverTheConfigurationSeed()
+    {
+        var stored = new StoredNodeSettings
+        {
+            AgentHomeEnabled = true
+        };
+        var reader = new RecordingReader();
+        var list = new ListFilesToolHandler(SeededNodeRuntimeSettings.Create(new Dictionary<string, string?>
+        {
+            ["AgentHome:Enabled"] = "false"
+        }, () => stored), reader);
+
+        AssertEx.Equal("list-ok", await list.ExecuteAsync("{}"), "a stored on must win over the seed's off");
+
+        stored = new StoredNodeSettings
+        {
+            AgentHomeEnabled = false
+        };
+        AssertEx.Contains(await list.ExecuteAsync("{}"), "disabled", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Test]
     public void CoderHandlers_DoNotRequireApproval()
     {
         var reader = new RecordingReader();
-        IClientLocalToolHandler list = new ListFilesToolHandler(Configuration(enabled: true), reader);
-        IClientLocalToolHandler read = new ReadFileToolHandler(Configuration(enabled: true), reader);
-        IClientLocalToolHandler search = new SearchTextToolHandler(Configuration(enabled: true), reader);
+        IClientLocalToolHandler list = new ListFilesToolHandler(Settings(enabled: true), reader);
+        IClientLocalToolHandler read = new ReadFileToolHandler(Settings(enabled: true), reader);
+        IClientLocalToolHandler search = new SearchTextToolHandler(Settings(enabled: true), reader);
 
         AssertEx.False(list.RequiresApproval, "list_files is read-only and auto-runs");
         AssertEx.False(read.RequiresApproval, "read_file is read-only and auto-runs");
         AssertEx.False(search.RequiresApproval, "search_text is read-only and auto-runs");
     }
 
-    private static IConfiguration Configuration(bool enabled)
-    {
-        return new ConfigurationBuilder()
-               .AddInMemoryCollection(new Dictionary<string, string?>
-               {
-                   ["AgentHome:Enabled"] = enabled ? "true" : "false"
-               })
-               .Build();
-    }
+    private static INodeRuntimeSettings Settings(bool enabled) =>
+        SeededNodeRuntimeSettings.FromSeed("AgentHome:Enabled", enabled);
 
     private sealed class RecordingReader : ICoderWorkspaceReader
     {

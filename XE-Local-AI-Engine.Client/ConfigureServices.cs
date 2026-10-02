@@ -66,8 +66,10 @@ public static class ConfigureServices
 {
     private const string ConsoleOutputTemplate = "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] {Message:lj}{NewLine}{Exception}";
 
-    public static void AddServices(this IHostApplicationBuilder builder, IConfiguration configuration)
+    public static void AddServices(this IHostApplicationBuilder builder, IConfiguration configuration, NodeStartupSettings startupSettings)
     {
+        ArgumentNullException.ThrowIfNull(startupSettings);
+
         // Serilog: console always on, a date-rolled file sink under the per-user data dir, and writeToProviders MUST stay true — its false default makes
         // Serilog the terminus and dead-ends every ILogger call before the OTLP exporter. See docs/wiki/11-hosting-and-deployment.md ("Logging and the Data Protection key-ring at registration time").
         var logFileDirectory = LoggerExtensions.ResolveLogFileDirectory(builder.Environment, configuration);
@@ -128,11 +130,11 @@ public static class ConfigureServices
 
         // The application layer (services, options, persistence, runtime) lives in XE-Local-AI-Engine.Client.Application; the host wires
         // only web-framework concerns below — FastEndpoints, auth, SignalR, rate limiting, health checks, hosted services.
-        builder.AddNodeApplication(configuration);
+        builder.AddNodeApplication(configuration, startupSettings);
 
-        // Quartz scheduler runtime (persistent store + hosted service + dispatcher). Registers nothing when
-        // Scheduler:Enabled is false. The QRTZ_ tables are created by the same node-chat EF migration.
-        builder.AddNodeScheduler(configuration);
+        // Quartz scheduler runtime (persistent store + hosted service + dispatcher). Registers only a refusing management
+        // service when Scheduler:Enabled is false. The QRTZ_ tables are created by the same node-chat EF migration.
+        builder.AddNodeScheduler(configuration, startupSettings);
 
         // This node's INBOUND MCP server, the Streamable HTTP surface an external MCP client delegates work through. Registration is
         // unconditional, but the endpoint authenticates nobody until the operator generates a key, so opting out exposes no tool.
@@ -198,7 +200,7 @@ public static class ConfigureServices
         builder.Services.AddSingleton<IExternalAppEventPublisher, ExternalAppEventPublisher>();
 
         // Development ships enabled. Keep the no-op publisher only when the administrator explicitly disables it.
-        var developmentEnabled = configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);
+        var developmentEnabled = startupSettings.DevelopmentEnabled;
         if (developmentEnabled)
         {
             builder.Services.AddSingleton<IDevelopmentAttemptLiveEventPublisher, DevelopmentAttemptLiveEventPublisher>();
@@ -466,9 +468,12 @@ public static class ConfigureServices
             };
         });
 
-        // Seeds the enabled on-demand (Manual) model-recommendation-check schedule so the React "Refresh now" button works out of the box. AFTER
-        // AddNodeScheduler, so the factory and job store exist when the seeder's StartAsync calls IScheduledJobManagementService.
-        builder.Services.AddHostedService<ModelRecommendationScheduleSeeder>();
+        // Seeds the on-demand model-recommendation-check schedule behind "Refresh now". It comes AFTER AddNodeScheduler so the job store exists
+        // at start, and it is skipped with the scheduler off, because the refusing management service would fail its start and stop the host.
+        if (startupSettings.SchedulerEnabled)
+        {
+            builder.Services.AddHostedService<ModelRecommendationScheduleSeeder>();
+        }
         // Seeds the node-local "Default Assistant" agent definition (mode-off persona) so every send resolves through a
         // real, uniformly-selectable definition. Idempotent by slug and self-healing across boots.
         builder.Services.AddHostedService<DefaultAgentSeeder>();

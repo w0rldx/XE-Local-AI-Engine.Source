@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection;
 
 using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 /// <summary>
 ///     Registers the node-local application services, persistence boundaries, model providers, and host-agent clients.
@@ -12,10 +13,13 @@ using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 /// </remarks>
 public static class NodeApplicationServiceCollectionExtensions
 {
-    public static IHostApplicationBuilder AddNodeApplication(this IHostApplicationBuilder builder, IConfiguration configuration)
+    public static IHostApplicationBuilder AddNodeApplication(this IHostApplicationBuilder builder,
+        IConfiguration configuration,
+        NodeStartupSettings startupSettings)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(startupSettings);
 
         builder.AddNodeCoreOptions(configuration);
         builder.AddNodeAuth(configuration);
@@ -41,18 +45,18 @@ public static class NodeApplicationServiceCollectionExtensions
         // and the owner/node identity its jail is keyed on.
         builder.AddNodeCompute(configuration);
         builder.AddNodeDocumentIngestion(configuration);
-        builder.AddNodeKnowledgeBase(configuration);
+        builder.AddNodeKnowledgeBase(configuration, startupSettings);
         builder.AddNodeChat(configuration);
         builder.AddNodeChatStreamBudget(configuration);
 
         // After AddNodeChat: hosted services start in registration order, so the chat restart recovery terminalizes
         // rows orphaned by a crash before the work-session reconciler collapses those sessions to Interrupted.
         builder.AddNodeWorkSessions(configuration);
-        builder.AddNodeDevelopment(configuration);
+        builder.AddNodeDevelopment(configuration, startupSettings);
 
         // After both, for hosted-service START order — NOT because the dependency is one-way: a DevTask node run drives a
         // Development task and vice versa, so Development's reconciler must terminalize its orphans before this dispatcher admits runs.
-        builder.AddNodeDevWorkflows(configuration);
+        builder.AddNodeDevWorkflows(configuration, startupSettings);
 
         // Immediately after: the graph-workflow runtime has the same shape, and its hosted services
         // must start behind the ones whose orphaned rows they would otherwise adopt mid-repair.

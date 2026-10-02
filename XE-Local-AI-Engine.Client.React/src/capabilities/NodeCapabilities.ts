@@ -80,8 +80,8 @@ export interface NodeCapabilityConfig {
 	// External Apps: a curated catalog of applications XE installs and supervises on this computer, their installed
 	// instances and one detail page per instance. Gates the nav group and all four /external-apps routes. The node
 	// ALSO has its own `ExternalApps:Enabled` switch, which 404s the API and the hub negotiate — this flag only
-	// decides whether the surface is OFFERED, and it is compile-time: the backend switch can neither reveal these
-	// routes nor hide them. Ships ON.
+	// decides whether the surface is OFFERED, and it is compile-time: the backend switch cannot reveal these routes,
+	// though when off it hides their nav entries (useServerDisabledNavigationCapabilities). Ships ON.
 	readonly externalApps: boolean;
 	// Local audio transcription (whisper.cpp): upload a recording, get a timestamped transcript. Gates the nav child
 	// and the two /transcription routes. Shipped under the PREVIEW nav group next to Image Generation — the runtime is

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     <c>record_finding</c>: the session's durable memory of what it learned.
@@ -15,8 +16,9 @@ internal sealed class RecordFindingToolHandler : WorkSessionToolHandler<RecordFi
 {
     public RecordFindingToolHandler(IServiceScopeFactory scopeFactory,
         IOptions<WorkSessionOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         IWorkSessionEventPublisher publisher,
-        ILogger<RecordFindingToolHandler> logger) : base(scopeFactory, options, publisher, logger)
+        ILogger<RecordFindingToolHandler> logger) : base(scopeFactory, options, runtimeSettings, publisher, logger)
     {
     }
 

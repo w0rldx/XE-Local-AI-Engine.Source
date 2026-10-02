@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -120,7 +121,7 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     ///         time provider only to decide whether a running row is past its node's timeout.
     ///     </para>
     /// </summary>
-    public GraphWorkflowDispatcher CreateReplacementDispatcher(bool enabled = true, TimeProvider? clock = null)
+    public GraphWorkflowDispatcher CreateReplacementDispatcher(INodeRuntimeSettings? runtimeSettings = null, TimeProvider? clock = null)
     {
         _replacement = new GraphWorkflowDispatcher(Services.GetRequiredService<IServiceScopeFactory>(),
             Services.GetRequiredService<GraphWorkflowInlineExecutor>(),
@@ -130,13 +131,13 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
             Services.GetServices<IGraphWorkflowNodeExecutor>(),
             Options.Create(new GraphWorkflowOptions
             {
-                Enabled = enabled,
                 MaxConcurrentRuns = CurrentOptions().MaxConcurrentRuns,
                 MaxTotalAttempts = CurrentOptions().MaxTotalAttempts,
                 MaxOutputJsonBytes = CurrentOptions().MaxOutputJsonBytes,
                 DefaultNodeTimeoutSeconds = CurrentOptions().DefaultNodeTimeoutSeconds,
                 DispatchIntervalMilliseconds = CurrentOptions().DispatchIntervalMilliseconds
             }),
+            runtimeSettings ?? Services.GetRequiredService<INodeRuntimeSettings>(),
             clock ?? Services.GetRequiredService<TimeProvider>(),
             Services.GetRequiredService<ILogger<GraphWorkflowDispatcher>>());
         return _replacement;

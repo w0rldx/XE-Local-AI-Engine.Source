@@ -747,6 +747,47 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    public async Task FeatureSwitches_RoundTripThroughTheStore_AndAnOldFileLoadsThemAsNull()
+    {
+        // An explicit false turns a feature off and must survive; an absent member must stay null so the configuration seed decides.
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            DevelopmentEnabled = false,
+            WorkSessionsEnabled = false,
+            GraphWorkflowsEnabled = false,
+            TranscriptionEnabled = false,
+            ExternalAppsEnabled = false,
+            ComputeEnabled = false,
+            AgentHomeEnabled = false,
+            SchedulerEnabled = false,
+            DevWorkflowsEnabled = false
+        });
+
+        AssertEx.Equal(expected: false, loaded.DevelopmentEnabled);
+        AssertEx.Equal(expected: false, loaded.WorkSessionsEnabled);
+        AssertEx.Equal(expected: false, loaded.GraphWorkflowsEnabled);
+        AssertEx.Equal(expected: false, loaded.TranscriptionEnabled);
+        AssertEx.Equal(expected: false, loaded.ExternalAppsEnabled);
+        AssertEx.Equal(expected: false, loaded.ComputeEnabled);
+        AssertEx.Equal(expected: false, loaded.AgentHomeEnabled);
+        AssertEx.Equal(expected: false, loaded.SchedulerEnabled);
+        AssertEx.Equal(expected: false, loaded.DevWorkflowsEnabled);
+
+        await WriteSettingsJsonAsync("{ \"maxMessageRequestTimeoutSeconds\": 120 }");
+        var old = await LoadAsync();
+
+        AssertEx.Null(old.DevelopmentEnabled);
+        AssertEx.Null(old.WorkSessionsEnabled);
+        AssertEx.Null(old.GraphWorkflowsEnabled);
+        AssertEx.Null(old.TranscriptionEnabled);
+        AssertEx.Null(old.ExternalAppsEnabled);
+        AssertEx.Null(old.ComputeEnabled);
+        AssertEx.Null(old.AgentHomeEnabled);
+        AssertEx.Null(old.SchedulerEnabled);
+        AssertEx.Null(old.DevWorkflowsEnabled);
+    }
+
+    [Test]
     public async Task ExternalAccessSwitches_RoundTripThroughTheStore()
     {
         var loaded = await SaveAndReloadAsync(new StoredNodeSettings

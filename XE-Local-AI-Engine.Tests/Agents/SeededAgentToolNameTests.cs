@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     One rule over every seeded persona: a tool name it allow-lists has to be a name this node's catalog carries.
@@ -88,10 +88,7 @@ public sealed class SeededAgentToolNameTests
         // Compute is off in the shipped config, and the Mathematician seeder then writes nothing. Forced ON here so
         // its allow-list is actually checked; every other seeder takes the node's own options.
         new MathematicianAgentSeeder(scopeFactory,
-            Options.Create(new ComputeOptions
-            {
-                Enabled = true
-            }),
+            SeededNodeRuntimeSettings.FromSeed("Compute:Enabled", value: true),
             NullLogger<MathematicianAgentSeeder>.Instance)
     ];
 }

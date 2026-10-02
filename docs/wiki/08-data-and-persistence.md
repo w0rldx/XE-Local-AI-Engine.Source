@@ -434,7 +434,7 @@ cap/TTL) the seed IS the hardcoded default.
 
 **The appsettings keys that became node settings in the second round.** Forty-seven former appsettings-only
 knobs are stored fields now; each keeps its old configuration key as the seed, so a node that never saves one behaves
-exactly as before, and the UI shows the shipped default for an unset numeric knob. The ten migrated switches report
+exactly as before, and the UI shows the shipped default for an unset numeric knob. The migrated switches, the nine feature switches included, report
 their effective value (stored, else the configuration seed), so a switch an appsettings seed turned on shows on and
 can be turned off. The four retention windows (conversations, agent execution logs, scheduler history, AgentHome
 runs) report their effective value the same way, so a seeded window shows what the next sweep actually uses. A blank background model (playbook analysis, playbook eval, memory extraction) inherits the
@@ -451,6 +451,11 @@ default chat model only when it is node-local; a cloud or `ext:` default falls b
 | Runtime | `ImageMaxLoadedProcesses`, `ImageTextEncoderOnGpu` (`StableDiffusionRuntime`) | restart: the `AddNodeImagesExtensions` host-build factory |
 | Workspaces | the graph-workflow run cap and default node timeout, the work-session step and concurrency caps, the development attempt duration, tool-call and output-token budgets | restart: `Configure<T>` after each section's bind |
 | | AgentHome inner tool calls, patch-apply timeout, and the run-retention window, count cap and byte cap (0 turns a cap off) | next run, apply or sweep |
+| Feature switches | the nine `<Feature>Enabled` booleans (`Development`, `WorkSessions`, `DevWorkflows`, `GraphWorkflows`, `AgentHome`, `Compute`, `ExternalApps`, `Transcription`, `Scheduler`, each from its section's `Enabled`), edited in the General section's Features card | live for seven: `FeatureSwitchMiddleware` and every per-service check read the switch per request (the Compute and DevWorkflows seeders still run only at startup); restart for `DevelopmentEnabled` and `SchedulerEnabled`, and for the container-bridge half of `ExternalAppsEnabled`, all three read by `NodeStartupSettings` before the host is built |
+
+Two save-time couplings mirror the startup validators: development workflows need work sessions, and AgentHome needs a
+non-empty effective tool-capable list. `NodeSettingsPolicy.ValidateMergedAsync` refuses the save with the error on the
+switch being turned on, or on what took its prerequisite away when it was already on.
 
 A migrated consumer reads the accessor, never `IOptions<T>` of a migrated field. Live knobs are read once per run,
 turn or sweep into a local, so one run never sees two values.

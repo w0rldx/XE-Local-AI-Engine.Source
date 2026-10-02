@@ -2121,7 +2121,9 @@
 					"unavailableKeepWarmModel": "Das ausgewählte Modell {{model}} ist nicht mehr installiert.",
 					"rate": "Jede Rate benötigt einen Modellnamen sowie nicht-negative Eingabe- und Ausgabewerte.",
 					"defaultAboveMax": "Die Standardanzahl der Treffer darf nicht größer als das Maximum sein.",
-					"belowCommandTimeout": "Das Laufzeitlimit muss mindestens so groß wie das Befehls-Timeout sein."
+					"belowCommandTimeout": "Das Laufzeitlimit muss mindestens so groß wie das Befehls-Timeout sein.",
+					"requiresWorkSessions": "Entwicklungs-Workflows benötigen Arbeitssitzungen. Schalten Sie Arbeitssitzungen ein oder Entwicklungs-Workflows aus.",
+					"requiresToolCapableModels": "AgentHome benötigt mindestens ein Modell mit Werkzeugunterstützung. Fügen Sie unter Chat eines hinzu oder schalten Sie AgentHome aus."
 				},
 				"localChat": {
 					"title": "Lokaler Chat"
@@ -2656,6 +2658,46 @@
 				"agentHomePatchApplyTimeoutSeconds": {
 					"label": "Zeitlimit für das Anwenden von AgentHome-Patches",
 					"description": "Wie lange ein Git-Schritt beim Anwenden des Patches eines Laufs auf deine Ordner dauern darf. Gilt ab der nächsten Anwendung."
+				},
+				"features": {
+					"title": "Funktionen",
+					"description": "Schaltet ganze Funktionen dieses Knotens ein oder aus. Eine ausgeschaltete Funktion wird in der Navigation ausgeblendet."
+				},
+				"developmentEnabled": {
+					"label": "Entwicklungsmodus",
+					"description": "Lässt Agenten Code in registrierten Quellordnern ändern, jeden Versuch in einem eigenen isolierten Worktree."
+				},
+				"workSessionsEnabled": {
+					"label": "Arbeitssitzungen",
+					"description": "Lang laufende Agentensitzungen mit eigenem Plan, eigenen Ergebnissen und Checkpoints."
+				},
+				"devWorkflowsEnabled": {
+					"label": "Entwicklungs-Workflows",
+					"description": "Dauerhafte, graphbasierte Arbeitselemente, deren Läufe einen Neustart überstehen. Benötigt Arbeitssitzungen. Die mitgelieferten Workflow-Definitionen werden beim nächsten Neustart angelegt."
+				},
+				"graphWorkflowsEnabled": {
+					"label": "Graph-Workflows",
+					"description": "Agentengraphen auf einer Arbeitsfläche erstellen und ausführen."
+				},
+				"agentHomeEnabled": {
+					"label": "AgentHome-Arbeitsbereiche",
+					"description": "Lässt Agenten in einem eigenen Arbeitsbereich auf diesem Computer Befehle ausführen und Dateien bearbeiten. Benötigt mindestens ein Modell mit Werkzeugunterstützung."
+				},
+				"computeEnabled": {
+					"label": "Rechenwerkzeuge",
+					"description": "Lässt Agenten Python-Berechnungen in der verwalteten Python-Umgebung ausführen. Der Mathematiker-Agent wird beim nächsten Neustart angelegt."
+				},
+				"externalAppsEnabled": {
+					"label": "Externe Apps",
+					"description": "Ausgewählte Anwendungen auf diesem Computer installieren und überwachen. Die API wirkt sofort; der Listener der Container-Brücke erst nach einem Neustart."
+				},
+				"transcriptionEnabled": {
+					"label": "Audiotranskription",
+					"description": "Aufnahmen auf diesem Computer mit whisper.cpp transkribieren."
+				},
+				"schedulerEnabled": {
+					"label": "Zeitplaner",
+					"description": "Agenten und Jobs nach Zeitplan ausführen."
 				}
 			},
 			"title": "Node-Einstellungen",

@@ -5050,6 +5050,15 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	agentHomeRunRetentionMaxTotalBytes?: number | null;
 	minAgentHomeRunRetentionMaxTotalBytes?: number;
 	maxAllowedAgentHomeRunRetentionMaxTotalBytes?: number;
+	developmentEnabled?: boolean;
+	workSessionsEnabled?: boolean;
+	graphWorkflowsEnabled?: boolean;
+	transcriptionEnabled?: boolean;
+	externalAppsEnabled?: boolean;
+	computeEnabled?: boolean;
+	agentHomeEnabled?: boolean;
+	schedulerEnabled?: boolean;
+	devWorkflowsEnabled?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest = {
@@ -5165,6 +5174,15 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	agentHomePatchApplyTimeoutSeconds?: number | null;
 	agentHomeRunRetentionMaxRuns?: number | null;
 	agentHomeRunRetentionMaxTotalBytes?: number | null;
+	developmentEnabled?: boolean | null;
+	workSessionsEnabled?: boolean | null;
+	graphWorkflowsEnabled?: boolean | null;
+	transcriptionEnabled?: boolean | null;
+	externalAppsEnabled?: boolean | null;
+	computeEnabled?: boolean | null;
+	agentHomeEnabled?: boolean | null;
+	schedulerEnabled?: boolean | null;
+	devWorkflowsEnabled?: boolean | null;
 };
 
 export type XeLocalAiEngineClientEndpointsProxyV1GeneratedLocalModelProxyApiKeyResponse = {

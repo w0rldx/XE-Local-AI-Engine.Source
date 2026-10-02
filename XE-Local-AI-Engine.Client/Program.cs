@@ -55,25 +55,22 @@ namespace XE_Local_AI_Engine.Client
     using Microsoft.Extensions.Diagnostics.HealthChecks;
     using Scalar.AspNetCore;
     using Serilog;
+    using Serilog.Extensions.Logging;
     using XE_Local_AI_Engine.Client.Common.Extensions;
     using XE_Local_AI_Engine.Client.Endpoints.Common;
     using XE_Local_AI_Engine.Client.ExceptionHandling;
     using XE_Local_AI_Engine.Client.Hosting;
     using XE_Local_AI_Engine.Client.Hosting.Vault;
     using XE_Local_AI_Engine.Client.Hubs;
+    using XE_Local_AI_Engine.Client.Middleware;
     using XE_Local_AI_Engine.Client.Persistence.Sqlite;
     using XE_Local_AI_Engine.Client.Services.Auth;
     using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
-    using XE_Local_AI_Engine.Client.Services.Development;
-    using XE_Local_AI_Engine.Client.Services.DevWorkflows;
-    using XE_Local_AI_Engine.Client.Services.ExternalApps;
-    using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
     using XE_Local_AI_Engine.Client.Services.Integrations;
     using XE_Local_AI_Engine.Client.Services.NodeSettings;
+    using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
     using XE_Local_AI_Engine.Client.Services.Proxy;
-    using XE_Local_AI_Engine.Client.Services.Transcription;
     using XE_Local_AI_Engine.Client.Services.Vault;
-    using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
     /// <summary>
     ///     Application entry point for this executable. Also exposes <see cref="CreateAppAsync" />, the directly
@@ -432,12 +429,20 @@ namespace XE_Local_AI_Engine.Client
                                 + "them to a local OTLP collector; see docs/runbooks/otel-export-operator-runbook.md.");
             }
 
-            var isDevelopmentModeEnabled = builder.Configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);
-            var areWorkSessionsEnabled = builder.Configuration.GetValue($"{WorkSessionOptions.Section}:Enabled", defaultValue: false);
-            var areDevWorkflowsEnabled = builder.Configuration.GetValue($"{DevWorkflowOptions.Section}:Enabled", defaultValue: false);
-            var areGraphWorkflowsEnabled = builder.Configuration.GetValue($"{GraphWorkflowOptions.Section}:Enabled", defaultValue: true);
-            var isTranscriptionEnabled = builder.Configuration.GetValue($"{TranscriptionOptions.Section}:Enabled", defaultValue: true);
-            var areExternalAppsEnabled = builder.Configuration.GetValue($"{ExternalAppsOptions.SectionName}:Enabled", defaultValue: false);
+            // The switches that change what is registered or bound, read from node-settings.json before the container exists. After the vault step and
+            // EnsureLocalDataConfiguration, which layers in the data directory. A test host skips the legacy content-root file: its content root is the source tree.
+            NodeStartupSettings startupSettings;
+            using (var startupLoggerFactory = new SerilogLoggerFactory(Log.Logger))
+            {
+                startupSettings = NodeStartupSettings.Read(builder.Configuration,
+                    builder.Environment,
+                    startupLoggerFactory.CreateLogger<NodeSettingsStore>(),
+                    includeLegacyContentRoot: customization is null);
+            }
+
+            builder.Services.AddSingleton(startupSettings);
+            var isDevelopmentModeEnabled = startupSettings.DevelopmentEnabled;
+            var areExternalAppsEnabled = startupSettings.ExternalAppsEnabled;
 
             // The container bridge, the engine's ONE deliberately non-loopback listener, so an application container can reach this node's inference surface — a container
             // cannot reach the host's loopback. BOTH flags, because a node with External Apps off has no containers, and each defaults to false, so a missing config opens nothing.
@@ -460,7 +465,7 @@ namespace XE_Local_AI_Engine.Client
             };
             builder.Services.AddSingleton(launchContext);
 
-            builder.AddServices(builder.Configuration);
+            builder.AddServices(builder.Configuration, startupSettings);
 
             // App self-update (Velopack + anonymous public GitHub releases), desktop-mode only: off the flag this registers nothing and the desktop-only endpoints are
             // filtered out of FastEndpoints above. The process args are re-passed on relaunch, so the new version comes back up in desktop mode on the persisted port.
@@ -665,121 +670,9 @@ namespace XE_Local_AI_Engine.Client
                 ResponseWriter = ReadinessHealthResponse.WriteAsync
             }).AllowAnonymous();
 
-            if (!isDevelopmentModeEnabled)
-            {
-                var developmentPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Development.Root}");
-                var capabilityPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Development.Capability}");
-                // Endpoint discovery is per host (the EndpointDiscoveryOptions.Filter in ConfigureServices), so these routes are genuinely absent on a disabled node.
-                // This middleware still answers FIRST, ahead of local API security and authentication, so the disabled capability cannot be probed by status code.
-                app.Use(async (context, next) =>
-                {
-                    if (context.Request.Path.StartsWithSegments(developmentPath, StringComparison.OrdinalIgnoreCase)
-                        && !context.Request.Path.Equals(capabilityPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        context.Response.StatusCode = StatusCodes.Status404NotFound;
-                        return;
-                    }
-
-                    await next(context);
-                });
-            }
-
-            if (!areWorkSessionsEnabled)
-            {
-                // Unlike Development, the work-session endpoints and hub stay DISCOVERED when the feature is off, because dropping them would drop the whole family out of
-                // the OpenAPI document and the generated client; only behaviour is gated, here, ahead of security and authentication so the switch cannot be probed.
-                var workSessionPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.WorkSessions.Root}");
-                // The one carve-out, like Development's: the capability GET stays reachable so the SPA can say the
-                // feature is switched off rather than rendering this bodyless 404 as a load failure.
-                var workSessionCapabilityPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.WorkSessions.Capability}");
-                app.Use(async (context, next) =>
-                {
-                    if (context.Request.Path.StartsWithSegments(workSessionPath, StringComparison.OrdinalIgnoreCase)
-                        && !context.Request.Path.Equals(workSessionCapabilityPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        context.Response.StatusCode = StatusCodes.Status404NotFound;
-                        return;
-                    }
-
-                    await next(context);
-                });
-            }
-
-            if (!areDevWorkflowsEnabled)
-            {
-                // Same posture as work sessions, and for the same reason: the endpoints and the hub stay discovered so the OpenAPI document, and the client generated from
-                // it, is the same on every node. Behaviour is gated here instead, ahead of local API security and authentication, so the switch cannot be probed.
-                var devWorkflowPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.DevelopmentWorkflows.Root}");
-                // The one carve-out, like Development's: the capability GET stays reachable so the SPA can say the
-                // feature is switched off rather than rendering this bodyless 404 as a load failure.
-                var devWorkflowCapabilityPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.DevelopmentWorkflows.Capability}");
-                app.Use(async (context, next) =>
-                {
-                    if (context.Request.Path.StartsWithSegments(devWorkflowPath, StringComparison.OrdinalIgnoreCase)
-                        && !context.Request.Path.Equals(devWorkflowCapabilityPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        context.Response.StatusCode = StatusCodes.Status404NotFound;
-                        return;
-                    }
-
-                    await next(context);
-                });
-            }
-
-            if (!areGraphWorkflowsEnabled)
-            {
-                // The graph-workflow family holds the same posture as the two blocks above: discovered with the feature off, so the document and the generated client are
-                // identical on every node, with only behaviour gated here — ahead of security and authentication, so it answers 404 before anything can answer 403.
-                var graphWorkflowPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.GraphWorkflows.Root}");
-                // The same carve-out as development workflows: the capability GET stays reachable so the SPA can hide the
-                // feature and keep chat sending instead of reading this bodyless 404 as a load failure.
-                var graphWorkflowCapabilityPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.GraphWorkflows.Capability}");
-                app.Use(async (context, next) =>
-                {
-                    if (context.Request.Path.StartsWithSegments(graphWorkflowPath, StringComparison.OrdinalIgnoreCase)
-                        && !context.Request.Path.Equals(graphWorkflowCapabilityPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        context.Response.StatusCode = StatusCodes.Status404NotFound;
-                        return;
-                    }
-
-                    await next(context);
-                });
-            }
-
-            if (!isTranscriptionEnabled)
-            {
-                // The same posture as the three blocks above and for the same reasons: the endpoints stay DISCOVERED with the feature off, so the document and the generated
-                // client are identical on every node, with only behaviour gated — ahead of security and authentication, so it answers 404 before anything can answer 403.
-                var transcriptionPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Transcription.Root}");
-                app.Use(async (context, next) =>
-                {
-                    if (context.Request.Path.StartsWithSegments(transcriptionPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        context.Response.StatusCode = StatusCodes.Status404NotFound;
-                        return;
-                    }
-
-                    await next(context);
-                });
-            }
-
-            if (!areExternalAppsEnabled)
-            {
-                // The external-apps family holds the same posture as the three blocks above, and the prefix check covers the hub's negotiate too, since that path shares the
-                // family's first segment. Sitting ahead of local API security and authentication is what makes the switch answer 404 before anything can answer 401 or 403.
-                var externalAppsPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.ExternalApps.Root}");
-                app.Use(async (context, next) =>
-                {
-                    if (context.Request.Path.StartsWithSegments(externalAppsPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        context.Response.StatusCode = StatusCodes.Status404NotFound;
-                        return;
-                    }
-
-                    await next(context);
-                });
-            }
+            // The feature switches (Development, work sessions, dev and graph workflows, transcription, external apps) answer 404 per request from node
+            // settings, ahead of local API security and authentication so a switched-off feature cannot be probed by status code.
+            app.UseMiddleware<FeatureSwitchMiddleware>();
 
             app.UseMiddleware<LocalApiSecurityMiddleware>();
             app.UseRouting();
@@ -877,21 +770,22 @@ namespace XE_Local_AI_Engine.Client
             app.MapHub<TranscriptionHub>(LocalApiRoutes.Transcription.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
-            // Mapped unconditionally, like the work-session hub: DevWorkflows:Enabled is enforced by the request-path
-            // middleware above, which answers 404 for the whole prefix — including this path.
+            // Mapped unconditionally, like the work-session hub: the DevWorkflows switch is enforced by FeatureSwitchMiddleware
+            // above, which answers 404 for the whole prefix — including this path.
             app.MapHub<DevWorkflowRunHub>(LocalApiRoutes.DevelopmentWorkflows.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
-            // Same posture for graph workflows: GraphWorkflows:Enabled is enforced by the request-path middleware
+            // Same posture for graph workflows: the GraphWorkflows switch is enforced by FeatureSwitchMiddleware
             // above, which answers 404 for the whole prefix — this path included.
             app.MapHub<GraphWorkflowRunHub>(LocalApiRoutes.GraphWorkflows.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
-            // And for external apps: ExternalApps:Enabled is enforced by the request-path middleware above, which
+            // And for external apps: the ExternalApps switch is enforced by FeatureSwitchMiddleware above, which
             // answers 404 for the whole prefix — this path and its negotiate included.
             app.MapHub<ExternalAppHub>(LocalApiRoutes.ExternalApps.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
+            // Development's hub follows the startup value, like its endpoints and services; a stored change applies after a restart.
             if (isDevelopmentModeEnabled)
             {
                 app.MapHub<DevelopmentAttemptHub>(LocalApiRoutes.Development.Hub)

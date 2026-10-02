@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -240,7 +241,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     ///     Also the only way to run the real signal and sweep pumps: the test host strips every hosted service, so a
     ///     dispatcher the container built is never started.
     /// </para>
-    public DevWorkflowDispatcher CreateReplacementDispatcher(bool enabled = true) =>
+    public DevWorkflowDispatcher CreateReplacementDispatcher(INodeRuntimeSettings? runtimeSettings = null) =>
         new(Services.GetRequiredService<IServiceScopeFactory>(),
             new DevWorkflowGraphCache(),
 
@@ -249,11 +250,8 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
             Services.GetRequiredService<DevWorkflowToolExecutor>(),
             Services.GetRequiredService<DevWorkflowRetryPolicy>(),
             Services.GetRequiredService<DevWorkflowMaterializer>(),
-            Options.Create(new DevWorkflowOptions
-            {
-                Enabled = enabled,
-                SweepSeconds = Services.GetRequiredService<IOptions<DevWorkflowOptions>>().Value.SweepSeconds
-            }),
+            Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+            runtimeSettings ?? Services.GetRequiredService<INodeRuntimeSettings>(),
             Services.GetRequiredService<TimeProvider>(),
             Services.GetRequiredService<ILogger<DevWorkflowDispatcher>>());
 
@@ -824,26 +822,21 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     /// <summary>
     ///     A host restart, in the order the composition root registers it: the work-session reconciler terminalizes what
     ///     it was driving, then the workflow one makes its node runs dispatchable again, then a fresh dispatcher takes
-    ///     over. Both reconcilers are constructed by hand because the test host strips every hosted service — which is
+    ///     over. Both reconcilers are built here rather than hosted because the test host strips every hosted service — which is
     ///     why the ORDER is pinned by a registration test rather than observed here.
     ///     <para>
     ///         Everything the harness drives afterwards goes through the replacement, so a test reads like the restart
     ///         it simulates: the same database, and a dispatcher that remembers nothing.
     ///     </para>
     /// </summary>
-    public async Task RestartAsync()
+    public async Task RestartAsync(INodeRuntimeSettings? runtimeSettings = null)
     {
         await Dispatcher.DisposeAsync();
 
-        var scopes = Services.GetRequiredService<IServiceScopeFactory>();
-        await new WorkSessionStartupReconciler(scopes,
-                Services.GetRequiredService<IOptions<WorkSessionOptions>>(),
-                Services.GetRequiredService<ILogger<WorkSessionStartupReconciler>>())
-            .StartAsync(CancellationToken.None);
-        await new DevWorkflowStartupReconciler(scopes,
-                Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
-                Services.GetRequiredService<ILogger<DevWorkflowStartupReconciler>>())
-            .StartAsync(CancellationToken.None);
+        // Built the way the host builds them, so a reconciler that came to read the switch would read this one.
+        var services = runtimeSettings is null ? Services : Services.With(runtimeSettings);
+        await ActivatorUtilities.CreateInstance<WorkSessionStartupReconciler>(services).StartAsync(CancellationToken.None);
+        await ActivatorUtilities.CreateInstance<DevWorkflowStartupReconciler>(services).StartAsync(CancellationToken.None);
 
         _replacement = CreateReplacementDispatcher();
     }

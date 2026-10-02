@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
@@ -16,28 +15,20 @@ public sealed class WorkSessionStartupReconciler : IHostedService
     private const string InterruptedReason = "The host restarted while the work session was in flight.";
 
     private readonly ILogger<WorkSessionStartupReconciler> _logger;
-    private readonly WorkSessionOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
 
     public WorkSessionStartupReconciler(IServiceScopeFactory scopeFactory,
-        IOptions<WorkSessionOptions> options,
         ILogger<WorkSessionStartupReconciler> logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
         ArgumentNullException.ThrowIfNull(scopeFactory);
         _scopeFactory = scopeFactory;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!_options.Enabled)
-        {
-            // The services stay registered when the feature is off, so the guard is here rather than in the container.
-            return;
-        }
-
+        // Not gated on the feature switch: it is live, so a row a crash stranded while it was off must already be settled when it is turned on.
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         var reconciled = await store.ReconcileRunningSessionsAsync(InterruptedReason, cancellationToken);

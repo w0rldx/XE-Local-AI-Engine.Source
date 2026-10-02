@@ -784,3 +784,76 @@ describe("NodeSettingsFieldsCard — knowledge, privacy and usage knobs", () => 
 		expect((screen.getByTestId("node-settings-memory-extraction-model") as HTMLInputElement).value).toBe("deleted-model");
 	});
 });
+
+describe("NodeSettingsFieldsCard — feature switches", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => cleanup());
+
+	const switchTestIds = [
+		"development",
+		"work-sessions",
+		"dev-workflows",
+		"graph-workflows",
+		"agent-home",
+		"compute",
+		"external-apps",
+		"transcription",
+		"scheduler",
+	].map((name) => `node-settings-feature-${name}`);
+
+	it("places the Features card with all nine switches in the general section only", () => {
+		renderCard({ section: "general" });
+		const card = screen.getByTestId("node-settings-features-card");
+		expect(within(card).getByText("Features")).toBeTruthy();
+		for (const testId of switchTestIds) {
+			expect(within(card).getByTestId(testId)).toBeTruthy();
+		}
+		cleanup();
+
+		renderCard({ section: "chat" });
+		expect(screen.queryByTestId("node-settings-features-card")).toBeNull();
+	});
+
+	it("renders the effective values and reports a toggle through the generic onChange", () => {
+		const { onChange } = renderCard({
+			section: "general",
+			form: { ...toNodeSettingsFieldsForm(undefined), developmentEnabled: false, agentHomeEnabled: true },
+		});
+		expect((screen.getByTestId("node-settings-feature-development") as HTMLInputElement).checked).toBe(false);
+		expect((screen.getByTestId("node-settings-feature-agent-home") as HTMLInputElement).checked).toBe(true);
+
+		fireEvent.click(screen.getByTestId("node-settings-feature-scheduler"));
+
+		expect(onChange).toHaveBeenCalledWith("schedulerEnabled", false);
+	});
+
+	it("badges only Development and Scheduler, and explains the delayed parts of the others", () => {
+		renderCard({ section: "general" });
+
+		expect(screen.getByTestId("node-settings-restart-badge-developmentEnabled")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-restart-badge-schedulerEnabled")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-restart-badge-externalAppsEnabled")).toBeNull();
+		expect(screen.queryByTestId("node-settings-restart-badge-workSessionsEnabled")).toBeNull();
+		expect(screen.getByText(/the container bridge listener applies after a restart/)).toBeTruthy();
+		expect(screen.getByText(/The Mathematician agent is seeded on the next restart/)).toBeTruthy();
+		expect(screen.getByText(/workflow definitions are seeded on the next restart/)).toBeTruthy();
+	});
+
+	it("shows a coupling error on the switch it is blamed on, with both codes in the en and de bundles", () => {
+		renderCard({ section: "general", errors: { devWorkflowsEnabled: "requiresWorkSessions" } });
+
+		const switchRoot = (testId: string): HTMLElement => screen.getByTestId(testId).closest(".mantine-Switch-root") as HTMLElement;
+		expect(within(switchRoot("node-settings-feature-dev-workflows")).getByText("Invalid value.")).toBeTruthy();
+		expect(within(switchRoot("node-settings-feature-work-sessions")).queryByText("Invalid value.")).toBeNull();
+		const de = nonEnglishLocales.find((locale) => locale.code === "de")?.resource;
+		for (const code of ["requiresWorkSessions", "requiresToolCapableModels"]) {
+			const key = `pages.nodeSettings.fields.errors.${code}`;
+			expect(i18next.getFixedT("en")(key)).not.toBe(key);
+			expect(typeof key.split(".").reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], de)).toBe("string");
+		}
+	});
+});

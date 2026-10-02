@@ -3,10 +3,10 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Seeds the definition templates a node ships with, idempotently on their seed slug, so nobody starts from a
@@ -374,22 +374,22 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
     internal static readonly string[] FeatureDevelopmentPriorRevisions = [FeatureDevelopmentGraphRevision1, FeatureDevelopmentGraphRevision2];
 
     private readonly ILogger<DevWorkflowDefinitionSeeder> _logger;
-    private readonly DevWorkflowOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
 
     public DevWorkflowDefinitionSeeder(IServiceScopeFactory scopeFactory,
-        IOptions<DevWorkflowOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<DevWorkflowDefinitionSeeder> logger)
     {
-        ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!_options.Enabled)
+        // Read once at start: a stored change seeds on the next restart.
+        if (!await _runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken))
         {
             return;
         }

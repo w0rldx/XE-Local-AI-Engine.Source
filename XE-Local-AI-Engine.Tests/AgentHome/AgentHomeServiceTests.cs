@@ -852,9 +852,9 @@ public sealed class AgentHomeServiceTests : IDisposable
         var store = new FakeConversationUploadedFileStore();
         store.Add(conversationId, "report.pdf", "# Report\n\nBearing housing B-12.");
 
-        // enabled defaults to false → the coder tools refuse at execution anyway, so no sandbox is created and no
+        // The switch off, with the options left on: the node setting alone decides, so no sandbox is created and no
         // decrypted snapshot is staged.
-        using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store);
+        using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store, enabled: false, optionsEnabled: true);
 
         await using var staged = await harness.Service.PrepareConversationAttachmentsAsync(conversationId);
 
@@ -904,6 +904,22 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         AssertEx.Null(await contender);
         await staged.DisposeAsync();
+    }
+
+    [Test]
+    public async Task PrepareConversationAttachmentsAsync_WhenOnlyTheOptionsSayDisabled_StillStages_BecauseTheNodeSettingIsTheAuthority()
+    {
+        var clock = new ManualTimeProvider(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var conversationId = Guid.NewGuid();
+        var store = new FakeConversationUploadedFileStore();
+        store.Add(conversationId, "spec.pdf", "# Spec\n\nPeak battery endurance 38 minutes.");
+
+        using var harness = CreateHarness(clock, provider, new FakeSelectedFolderResolver(), uploadedFileStore: store, enabled: true, optionsEnabled: false);
+
+        await using var staged = await harness.Service.PrepareConversationAttachmentsAsync(conversationId);
+
+        AssertEx.Contains(staged.StagedPaths, path => string.Equals(path, "attachments/spec.md", StringComparison.Ordinal));
     }
 
     [Test]
@@ -1078,7 +1094,8 @@ public sealed class AgentHomeServiceTests : IDisposable
         ComputeOptions? ceilingDefaults = null,
         LocalContainerOptions? nodeOptions = null,
         IAgentHomeGoalExecutor? goalExecutor = null,
-        AgentHomeRunExecutionRegistry? executingRuns = null)
+        AgentHomeRunExecutionRegistry? executingRuns = null,
+        bool? optionsEnabled = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
         _tempRoots.Add(root);
@@ -1087,9 +1104,10 @@ public sealed class AgentHomeServiceTests : IDisposable
         {
             RootPath = root,
             CommandTimeoutSeconds = commandTimeoutSeconds,
-            Enabled = enabled
+            Enabled = optionsEnabled ?? enabled
         });
         var runtimeSettings = StubNodeRuntimeSettings.Create()
+                                                     .WithAgentHomeEnabled(enabled)
                                                      .WithAgentHomeCommandTimeoutSeconds(commandTimeoutSeconds)
                                                      .Build();
         var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);

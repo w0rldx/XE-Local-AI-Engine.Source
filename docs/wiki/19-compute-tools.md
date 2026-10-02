@@ -218,7 +218,7 @@ On Windows, the process sandbox provider does not advertise filesystem isolation
 
 ### 5.1 Enable the tool on the node
 
-Set `Compute:Enabled=true` in configuration:
+Turn on **Compute tools** in **Node Settings → General → Features** (the `ComputeEnabled` node setting, read per call), or seed it with `Compute:Enabled=true` in configuration:
 
 **Aspire dev** (`appsettings.json` or environment):
 ```json

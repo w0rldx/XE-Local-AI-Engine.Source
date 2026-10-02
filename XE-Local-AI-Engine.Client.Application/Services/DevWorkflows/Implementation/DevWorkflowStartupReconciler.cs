@@ -58,12 +58,7 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!_options.Enabled)
-        {
-            // The services stay registered when the feature is off, so the guard is here rather than in the container.
-            return;
-        }
-
+        // Not gated on the feature switch: it is live, so a row a crash stranded while it was off must already be settled when it is turned on.
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
         var sessions = scope.ServiceProvider.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>();

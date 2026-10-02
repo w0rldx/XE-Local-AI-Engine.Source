@@ -21,10 +21,12 @@ using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     One node's worth of External Apps runtime: a real SQLite-backed instance store, the real service, the real
@@ -37,6 +39,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 internal sealed class ExternalAppServiceHarness : IAsyncDisposable
 {
     private readonly IOptions<ExternalAppsOptions> _appOptions;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IDisposable _hostHandle;
     private readonly Action _stopHost;
     private readonly List<Socket> _squatters = [];
@@ -57,6 +60,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         TestHostLifetime lifetime,
         ExternalAppStorageLayout layout,
         IOptions<ExternalAppsOptions> appOptions,
+        INodeRuntimeSettings runtimeSettings,
         RecordingLogger<ExternalAppService> serviceLog)
     {
         // An action and an opaque handle rather than the lifetime itself: a CancellationToken source in scope makes
@@ -76,6 +80,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         Service = service;
         Layout = layout;
         _appOptions = appOptions;
+        _runtimeSettings = runtimeSettings;
         ServiceLog = serviceLog;
     }
 
@@ -132,7 +137,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     ///     The boot reconciler over this harness's own provider, service, gate and runner. Built on demand rather
     ///     than always: most suites never run a pass, and one that did would judge rows the test is still writing.
     /// </summary>
-    public ExternalAppStartupReconciler CreateReconciler()
+    public ExternalAppStartupReconciler CreateReconciler(INodeRuntimeSettings? runtimeSettings = null)
     {
         return new ExternalAppStartupReconciler(_provider.GetRequiredService<IServiceScopeFactory>(),
             Service,
@@ -142,6 +147,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
             Publisher,
             (IHostApplicationLifetime)_hostHandle,
             _appOptions,
+            runtimeSettings ?? _runtimeSettings,
             Time,
             NullLogger<ExternalAppStartupReconciler>.Instance);
     }
@@ -150,15 +156,16 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     ///     The state observer over the same wiring. Its own <see cref="IDisposable" />: the caller owns it. The
     ///     reconciler is its boot-pass gate, so a test that never starts one gets an observer that polls at once.
     /// </summary>
-    public ExternalAppStateObserver CreateObserver(ExternalAppStartupReconciler? reconciler = null)
+    public ExternalAppStateObserver CreateObserver(ExternalAppStartupReconciler? reconciler = null, INodeRuntimeSettings? runtimeSettings = null)
     {
         return new ExternalAppStateObserver(_provider.GetRequiredService<IServiceScopeFactory>(),
             Service,
             Gate,
             Runner,
-            reconciler ?? CreateReconciler(),
+            reconciler ?? CreateReconciler(runtimeSettings),
             Publisher,
             _appOptions,
+            runtimeSettings ?? _runtimeSettings,
             Time,
             NullLogger<ExternalAppStateObserver>.Instance);
     }
@@ -242,6 +249,8 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
 
         var dataDirectory = new FakeNodeDataDirectory(rootPath);
         var wrapped = Options.Create(options);
+        // The switch through its configuration seed, the way a node that never saved it reads it.
+        var runtimeSettings = SeededNodeRuntimeSettings.FromSeed("ExternalApps:Enabled", options.Enabled);
         var gate = new ExternalAppInstanceGate();
         var lifetime = new TestHostLifetime();
         var runner = new ExternalAppOperationRunner(provider.GetRequiredService<IServiceScopeFactory>(),
@@ -265,6 +274,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
             new ContainerBridgeEndpointSource(withBridge
                 ? new ResolvedContainerBridgeEndpoint(IPAddress.Parse("192.0.2.10"), 18790, "192.0.2.10:18790")
                 : null),
+            runtimeSettings,
             time,
             serviceLog);
 
@@ -282,6 +292,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
             lifetime,
             layout,
             wrapped,
+            runtimeSettings,
             serviceLog);
 
         // The storage-wipe helper is the one container the service starts, waits for, and then judges by what is

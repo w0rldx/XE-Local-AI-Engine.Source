@@ -2,17 +2,16 @@ namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class DevelopmentManagementServiceTests
@@ -357,10 +356,7 @@ public sealed class DevelopmentManagementServiceTests
             workflows ?? Substitute.For<IDevWorkflowStore>(),
 
             // Workflows ON, so the apply-ownership guard is the one under test wherever these tests reach it.
-            Options.Create(new DevWorkflowOptions
-            {
-                Enabled = true
-            }),
+            StubNodeRuntimeSettings.Create().WithDevWorkflowsEnabled(true).Build(),
             TimeProvider.System,
             NullLogger<DevelopmentManagementService>.Instance);
 

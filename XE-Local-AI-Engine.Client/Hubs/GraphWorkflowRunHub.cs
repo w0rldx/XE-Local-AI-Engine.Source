@@ -4,13 +4,13 @@ using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Operator-only live notifications for one graph workflow run.
@@ -24,15 +24,15 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = NodeAuthorizationPolicies.Operator)]
 public sealed class GraphWorkflowRunHub : Hub
 {
-    private readonly GraphWorkflowOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IInvocationResumeRegistry _resumeRegistry;
     private readonly IGraphWorkflowRunService _runs;
 
     public GraphWorkflowRunHub(IGraphWorkflowRunService runs,
         IInvocationResumeRegistry resumeRegistry,
-        IOptions<GraphWorkflowOptions> options)
+        INodeRuntimeSettings runtimeSettings)
     {
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         ArgumentNullException.ThrowIfNull(runs);
         ArgumentNullException.ThrowIfNull(resumeRegistry);
         _runs = runs;
@@ -41,7 +41,7 @@ public sealed class GraphWorkflowRunHub : Hub
 
     public async Task<GraphWorkflowRunSubscriptionSnapshot> SubscribeRun(Guid runId, long afterSeq)
     {
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetGraphWorkflowsEnabledAsync(Context.ConnectionAborted))
         {
             throw new HubException("Graph workflows are disabled on this node.");
         }
@@ -101,7 +101,7 @@ public sealed class GraphWorkflowRunHub : Hub
         [EnumeratorCancellation]
         CancellationToken cancellationToken)
     {
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetGraphWorkflowsEnabledAsync(cancellationToken))
         {
             throw new HubException("Graph workflows are disabled on this node.");
         }

@@ -209,7 +209,7 @@ Either way, the handler must actually *observe* the token. The dispatcher record
 
 ## DI registration & two key gotchas
 
-`AddNodeScheduler` (`NodeSchedulerServiceCollectionExtensions.cs`) wires the whole subsystem behind `SchedulerOptions.Enabled`. When disabled, the Quartz hosted service never starts (no jobs fire) but persistence tables and DI registrations remain. It configures `AddQuartz` with `UseProperties = true`, `PerformSchemaValidation = true` (the `QRTZ_` tables are created by the scheduler EF migration), `UseMicrosoftSQLite`, `UseTimeZoneConverter`, `UseJobAutoInterrupt`, and `AddQuartzHostedService(WaitForJobsToComplete = true)`. The dispatch jobs are `Transient`, the executor + management service are `Scoped`, and the registry plus both shipped handlers are `Singleton`. Each handler creates a scope per fire before resolving scoped collaborators.
+`AddNodeScheduler` (`NodeSchedulerServiceCollectionExtensions.cs`) wires the whole subsystem behind the `SchedulerEnabled` node setting (**Node Settings → General → Features**, restart), which `NodeStartupSettings` reads from `node-settings.json` before the host is built, seeded from `Scheduler:Enabled`. When disabled, nothing Quartz-related is registered (no jobs fire), the Scheduler navigation entry is hidden and the persistence tables remain; a refusing `IScheduledJobManagementService` is registered instead, so the Scheduler endpoints still activate and answer 400 "The scheduler is disabled on this node.", and the host skips `ModelRecommendationScheduleSeeder`. It configures `AddQuartz` with `UseProperties = true`, `PerformSchemaValidation = true` (the `QRTZ_` tables are created by the scheduler EF migration), `UseMicrosoftSQLite`, `UseTimeZoneConverter`, `UseJobAutoInterrupt`, and `AddQuartzHostedService(WaitForJobsToComplete = true)`. The dispatch jobs are `Transient`, the executor + management service are `Scoped`, and the registry plus both shipped handlers are `Singleton`. Each handler creates a scope per fire before resolving scoped collaborators.
 
 ### Gotcha 1 — Quartz `ConnectionStringName` is resolved lazily, by name
 
@@ -236,7 +236,7 @@ Quartz's fluent config exposes **no per-connection PRAGMA hook**. If evidence of
 
 | Option | Default | Notes |
 |---|---|---|
-| `Enabled` | `true` | false → hosted service not started |
+| `Enabled` | `true` | false → hosted service not started. Seeds the `SchedulerEnabled` node setting (restart) |
 | `MaxConcurrency` | `4` | Quartz thread-pool max; must be > 0 |
 | `HistoryRetentionDays` | `30` | retention sweep cutoff; seeds the `SchedulerHistoryRetentionDays` node setting, read per sweep |
 | `RetentionSweepIntervalMinutes` | `60` | sweep cadence |

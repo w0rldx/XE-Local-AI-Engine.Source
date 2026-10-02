@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The tick, over the real store and a real database. Nothing is faked, and every graph here is inline throughout,
@@ -249,6 +250,23 @@ public sealed class GraphWorkflowDispatcherTests
     ///     A productive tick re-signals, because a tick advances the graph by one layer and there is almost always more
     ///     to do; a quiescent one does not, or the loop would never stop asking about a run that has finished.
     /// </summary>
+    [Test]
+    public async Task TheSweep_IdlesWhileTheSwitchIsOff_AndTheNextTickAfterItTurnsOnDispatches()
+    {
+        // A private host: the replacement dispatcher sweeps every live run in the database, and a shared host's are every sibling's.
+        await using var harness = new GraphWorkflowHarness();
+        var runId = await harness.StartRunAsync(GraphWorkflowGraphs.InlineLinear);
+        var settings = StubNodeRuntimeSettings.Create().WithGraphWorkflowsEnabled(false);
+        var dispatcher = harness.CreateReplacementDispatcher(settings.Build());
+
+        await dispatcher.SweepAsync(CancellationToken.None);
+        AssertEx.Equal(GraphWorkflowRunStatus.Pending, (await harness.ReadRunAsync(runId)).Status, "a sweep while the switch is off must advance nothing.");
+
+        _ = settings.WithGraphWorkflowsEnabled(true);
+        await dispatcher.SweepAsync(CancellationToken.None);
+        AssertEx.Equal(GraphWorkflowRunStatus.Running, (await harness.ReadRunAsync(runId)).Status, "the first tick after the switch turns on starts the run.");
+    }
+
     [Test]
     public async Task AProductiveTickReSignals_AndAQuiescentOneDoesNot()
     {

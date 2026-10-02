@@ -4,9 +4,16 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Transcription;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -89,6 +96,15 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     private readonly int _agentHomePatchApplyTimeoutSecondsSeed;
     private readonly int _agentHomeRunRetentionMaxRunsSeed;
     private readonly long _agentHomeRunRetentionMaxTotalBytesSeed;
+    private readonly bool _developmentEnabledSeed;
+    private readonly bool _workSessionsEnabledSeed;
+    private readonly bool _graphWorkflowsEnabledSeed;
+    private readonly bool _transcriptionEnabledSeed;
+    private readonly bool _externalAppsEnabledSeed;
+    private readonly bool _computeEnabledSeed;
+    private readonly bool _agentHomeEnabledSeed;
+    private readonly bool _schedulerEnabledSeed;
+    private readonly bool _devWorkflowsEnabledSeed;
 
     public NodeRuntimeSettings(INodeSettingsStore store,
         IConfiguration configuration,
@@ -212,6 +228,17 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         _agentHomeRunRetentionMaxTotalBytesSeed = configuredRetentionBytes is >= 0
             ? configuredRetentionBytes.Value
             : StoredNodeSettings.DefaultAgentHomeRunRetentionMaxTotalBytes;
+
+        // The feature switches seed from configuration, never their options: several of those options are Configure-d FROM this accessor.
+        _developmentEnabledSeed = BoolSeed(configuration, $"{DevelopmentOptions.Section}:Enabled", true);
+        _workSessionsEnabledSeed = BoolSeed(configuration, $"{WorkSessionOptions.Section}:Enabled", false);
+        _graphWorkflowsEnabledSeed = BoolSeed(configuration, $"{GraphWorkflowOptions.Section}:Enabled", true);
+        _transcriptionEnabledSeed = BoolSeed(configuration, $"{TranscriptionOptions.Section}:Enabled", true);
+        _externalAppsEnabledSeed = BoolSeed(configuration, $"{ExternalAppsOptions.SectionName}:Enabled", false);
+        _computeEnabledSeed = BoolSeed(configuration, $"{ComputeOptions.SectionName}:Enabled", false);
+        _agentHomeEnabledSeed = BoolSeed(configuration, $"{AgentHomeOptions.SectionName}:Enabled", false);
+        _schedulerEnabledSeed = BoolSeed(configuration, $"{SchedulerOptions.Section}:Enabled", true);
+        _devWorkflowsEnabledSeed = BoolSeed(configuration, $"{DevWorkflowOptions.Section}:Enabled", false);
 
         // From configuration, not IOptions<OrchestrationAgentOptions>, to avoid a DI cycle: OrchestrationAgentOptions is itself Configure-d FROM
         // this accessor at the composition root, so taking IOptions<OrchestrationAgentOptions> here would depend on the option it configures.
@@ -547,9 +574,45 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
             ChatRetentionDays = stored.ChatRetentionDays ?? _chatRetentionDaysSeed,
             AgentExecutionLogRetentionDays = stored.AgentExecutionLogRetentionDays ?? _agentExecutionLogRetentionDaysSeed,
             SchedulerHistoryRetentionDays = stored.SchedulerHistoryRetentionDays ?? _schedulerHistoryRetentionDaysSeed,
-            AgentHomeRunRetentionDays = stored.AgentHomeRunRetentionDays ?? _agentHomeRunRetentionDaysSeed
+            AgentHomeRunRetentionDays = stored.AgentHomeRunRetentionDays ?? _agentHomeRunRetentionDaysSeed,
+            DevelopmentEnabled = stored.DevelopmentEnabled ?? _developmentEnabledSeed,
+            WorkSessionsEnabled = stored.WorkSessionsEnabled ?? _workSessionsEnabledSeed,
+            GraphWorkflowsEnabled = stored.GraphWorkflowsEnabled ?? _graphWorkflowsEnabledSeed,
+            TranscriptionEnabled = stored.TranscriptionEnabled ?? _transcriptionEnabledSeed,
+            ExternalAppsEnabled = stored.ExternalAppsEnabled ?? _externalAppsEnabledSeed,
+            ComputeEnabled = stored.ComputeEnabled ?? _computeEnabledSeed,
+            AgentHomeEnabled = stored.AgentHomeEnabled ?? _agentHomeEnabledSeed,
+            SchedulerEnabled = stored.SchedulerEnabled ?? _schedulerEnabledSeed,
+            DevWorkflowsEnabled = stored.DevWorkflowsEnabled ?? _devWorkflowsEnabledSeed
         };
     }
+
+    public async Task<bool> GetDevelopmentEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).DevelopmentEnabled ?? _developmentEnabledSeed;
+
+    public async Task<bool> GetWorkSessionsEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).WorkSessionsEnabled ?? _workSessionsEnabledSeed;
+
+    public async Task<bool> GetGraphWorkflowsEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).GraphWorkflowsEnabled ?? _graphWorkflowsEnabledSeed;
+
+    public async Task<bool> GetTranscriptionEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).TranscriptionEnabled ?? _transcriptionEnabledSeed;
+
+    public async Task<bool> GetExternalAppsEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).ExternalAppsEnabled ?? _externalAppsEnabledSeed;
+
+    public async Task<bool> GetComputeEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).ComputeEnabled ?? _computeEnabledSeed;
+
+    public async Task<bool> GetAgentHomeEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).AgentHomeEnabled ?? _agentHomeEnabledSeed;
+
+    public async Task<bool> GetSchedulerEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).SchedulerEnabled ?? _schedulerEnabledSeed;
+
+    public async Task<bool> GetDevWorkflowsEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).DevWorkflowsEnabled ?? _devWorkflowsEnabledSeed;
 
     public async Task<bool> GetChatRetentionEnabledAsync(CancellationToken cancellationToken = default) =>
         (await LoadAsync(cancellationToken)).ChatRetentionEnabled ?? _chatRetentionEnabledSeed;
@@ -592,6 +655,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public IReadOnlyList<string> GetToolCapableModels() =>
         ResolveToolCapableModels(LoadStored());
+
+    public IReadOnlyList<string> GetToolCapableModelsSeed() =>
+        _toolCapableModelsSeed;
 
     public string GetOllamaEndpoint() =>
         ResolveOllamaEndpoint(LoadStored());
@@ -732,6 +798,33 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public int GetDevelopmentMaxOutputTokens() =>
         LoadStored().DevelopmentMaxOutputTokens ?? _developmentMaxOutputTokensSeed;
+
+    public bool GetDevelopmentEnabled() =>
+        LoadStored().DevelopmentEnabled ?? _developmentEnabledSeed;
+
+    public bool GetWorkSessionsEnabled() =>
+        LoadStored().WorkSessionsEnabled ?? _workSessionsEnabledSeed;
+
+    public bool GetGraphWorkflowsEnabled() =>
+        LoadStored().GraphWorkflowsEnabled ?? _graphWorkflowsEnabledSeed;
+
+    public bool GetTranscriptionEnabled() =>
+        LoadStored().TranscriptionEnabled ?? _transcriptionEnabledSeed;
+
+    public bool GetExternalAppsEnabled() =>
+        LoadStored().ExternalAppsEnabled ?? _externalAppsEnabledSeed;
+
+    public bool GetComputeEnabled() =>
+        LoadStored().ComputeEnabled ?? _computeEnabledSeed;
+
+    public bool GetAgentHomeEnabled() =>
+        LoadStored().AgentHomeEnabled ?? _agentHomeEnabledSeed;
+
+    public bool GetSchedulerEnabled() =>
+        LoadStored().SchedulerEnabled ?? _schedulerEnabledSeed;
+
+    public bool GetDevWorkflowsEnabled() =>
+        LoadStored().DevWorkflowsEnabled ?? _devWorkflowsEnabledSeed;
 
     private static int IntSeed(IConfiguration configuration, string key, int floor, int fallback) =>
         configuration.GetValue<int?>(key) is { } configured && configured >= floor ? configured : fallback;

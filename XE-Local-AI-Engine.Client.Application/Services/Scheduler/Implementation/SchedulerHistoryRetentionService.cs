@@ -37,7 +37,7 @@ public sealed class SchedulerHistoryRetentionService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetSchedulerEnabledAsync(stoppingToken))
         {
             // Scheduler disabled → no jobs fire and no new history accrues; nothing to sweep.
             return;

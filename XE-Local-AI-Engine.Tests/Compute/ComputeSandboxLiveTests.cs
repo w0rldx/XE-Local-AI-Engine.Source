@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     <para>
@@ -568,6 +569,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
             Options.Create(Enabled(options: null)),
             Options.Create(new LocalContainerOptions()),
             Options.Create(new AgentToolPipelineOptions()),
+            SeededNodeRuntimeSettings.FromSeed("Compute:Enabled", value: true),
             NullLogger<ComputeToolGateway>.Instance);
 
         var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
@@ -589,6 +591,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
             Options.Create(Enabled(options)),
             Options.Create(new LocalContainerOptions()),
             Options.Create(new AgentToolPipelineOptions()),
+            SeededNodeRuntimeSettings.FromSeed("Compute:Enabled", value: true),
             NullLogger<ComputeToolGateway>.Instance);
     }
 

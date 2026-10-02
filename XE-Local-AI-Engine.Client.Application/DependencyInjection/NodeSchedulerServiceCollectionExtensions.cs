@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection;
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Quartz;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
@@ -11,21 +12,26 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 ///     drives it, the dispatch executor + dispatch <see cref="IJob" /> variants, and the template registry.
 /// </summary>
 /// <remarks>
-///     When <see cref="SchedulerOptions.Enabled" /> is <c>false</c> this registers nothing: the persistence tables and
-///     options remain, but no scheduler or hosted service is wired up. The QRTZ_ tables are created by the scheduler EF
+///     When <see cref="NodeStartupSettings.SchedulerEnabled" /> is <c>false</c> this registers only a refusing management service: the
+///     persistence tables and options remain, but no scheduler or hosted service is wired up. The QRTZ_ tables are created by the scheduler EF
 ///     migration in the same node-chat SQLite database, so the store runs with schema validation on.
 ///     See docs/wiki/06-scheduler.md ("DI registration &amp; two key gotchas").
 /// </remarks>
 public static class NodeSchedulerServiceCollectionExtensions
 {
-    public static IHostApplicationBuilder AddNodeScheduler(this IHostApplicationBuilder builder, IConfiguration configuration)
+    public static IHostApplicationBuilder AddNodeScheduler(this IHostApplicationBuilder builder,
+        IConfiguration configuration,
+        NodeStartupSettings startupSettings)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(startupSettings);
 
         var options = configuration.GetSection(SchedulerOptions.Section).Get<SchedulerOptions>() ?? new SchedulerOptions();
-        if (!options.Enabled)
+        if (!startupSettings.SchedulerEnabled)
         {
+            // The endpoints stay discovered and FastEndpoints activates them at startup, so they need a service that refuses.
+            builder.Services.AddScoped<IScheduledJobManagementService, DisabledScheduledJobManagementService>();
             return builder;
         }
 

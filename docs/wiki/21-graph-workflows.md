@@ -940,8 +940,8 @@ calibrated score, and inventing one would route on noise. Out-edges route on `ou
 ## 5. API and hub
 
 Full route table and hub inventory: [API & Hubs](09-api-and-hubs.md). `LocalApiRoutes.GraphWorkflows` is the family;
-the whole surface, hub path included, sits behind request-path middleware in `Program.cs` that answers **404** when
-`GraphWorkflows:Enabled` is false — ahead of the security middleware, so the switch cannot be probed by status code.
+the whole surface, hub path included, sits behind `FeatureSwitchMiddleware`, which answers **404** while the
+`GraphWorkflowsEnabled` node setting (**Node Settings → General → Features**, seeded from `GraphWorkflows:Enabled`) is off, read per request — ahead of the security middleware, so the switch cannot be probed by status code.
 The one carve-out is `GET graph-workflows/capability` (`LocalApiRoutes.GraphWorkflows.Capability`, `GetGraphWorkflowCapabilityEndpoint`), which stays reachable and answers `enabled: false` so the SPA can hide the feature instead of reading a bodyless 404 as a load failure.
 Every route is Operator-gated.
 

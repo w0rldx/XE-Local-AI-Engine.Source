@@ -1,9 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
-using Microsoft.Extensions.Configuration;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class RunInAgentHomeToolHandlerTests
@@ -33,6 +34,29 @@ public sealed class RunInAgentHomeToolHandlerTests
 
         AssertEx.Equal("run reached the gateway", result);
         AssertEx.True(gateway.WasCalled);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_ReadsTheStoredSwitchPerCall_OverTheConfigurationSeed()
+    {
+        var stored = new StoredNodeSettings
+        {
+            AgentHomeEnabled = false
+        };
+        var gateway = new StubGateway("run reached the gateway");
+        var handler = new RunInAgentHomeToolHandler(SeededNodeRuntimeSettings.Create(new Dictionary<string, string?>
+        {
+            ["AgentHome:Enabled"] = "true"
+        }, () => stored), gateway);
+
+        AssertEx.Contains(await handler.ExecuteAsync(ValidArguments), "disabled", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(gateway.WasCalled, "a stored off must win over the seed's on");
+
+        stored = new StoredNodeSettings
+        {
+            AgentHomeEnabled = true
+        };
+        AssertEx.Equal("run reached the gateway", await handler.ExecuteAsync(ValidArguments));
     }
 
     [Test]
@@ -72,17 +96,8 @@ public sealed class RunInAgentHomeToolHandlerTests
             handler.ExecuteAsync(ValidArguments, cancellationTokenSource.Token));
     }
 
-    private static RunInAgentHomeToolHandler CreateHandler(bool enabled, IAgentHomeToolGateway gateway)
-    {
-        var configuration = new ConfigurationBuilder()
-                            .AddInMemoryCollection(new Dictionary<string, string?>
-                            {
-                                ["AgentHome:Enabled"] = enabled ? "true" : "false"
-                            })
-                            .Build();
-
-        return new RunInAgentHomeToolHandler(configuration, gateway);
-    }
+    private static RunInAgentHomeToolHandler CreateHandler(bool enabled, IAgentHomeToolGateway gateway) =>
+        new(SeededNodeRuntimeSettings.FromSeed("AgentHome:Enabled", enabled), gateway);
 
     private sealed class StubGateway : IAgentHomeToolGateway
     {

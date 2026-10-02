@@ -35,6 +35,7 @@ internal static class AddNodeGraphWorkflowsExtensions
                {
                    options.MaxConcurrentRuns = runtimeSettings.GetGraphWorkflowMaxConcurrentRuns();
                    options.DefaultNodeTimeoutSeconds = runtimeSettings.GetGraphWorkflowDefaultNodeTimeoutSeconds();
+                   options.Enabled = runtimeSettings.GetGraphWorkflowsEnabled();
                })
 #pragma warning restore MA0045
                .ValidateDataAnnotations()

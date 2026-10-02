@@ -86,7 +86,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     public async Task<WorkSessionDetail> CreateAsync(CreateWorkSessionRequestModel model, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(model);
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
 
         var title = Require(model.Title, "title", MaxTitleLength);
         var objective = Require(model.Objective, "objective", MaxObjectiveLength);
@@ -227,7 +227,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
     public async Task<Guid> PostFollowUpAsync(Guid sessionId, string text, CancellationToken cancellationToken = default)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
 
         var session = await _store.GetAsync(sessionId, cancellationToken);
         if (string.IsNullOrWhiteSpace(text))
@@ -412,7 +412,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         WorkSessionRuntimeOverride? runtime,
         CancellationToken cancellationToken)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
 
         var session = await _store.GetAsync(sessionId, cancellationToken);
         EnsureCallerOwns(session, workflowOwned);
@@ -589,9 +589,9 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             : "This work session belongs to no development workflow run, so a run cannot drive its lifecycle.");
     }
 
-    private void EnsureEnabled()
+    private async Task EnsureEnabledAsync(CancellationToken cancellationToken)
     {
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetWorkSessionsEnabledAsync(cancellationToken))
         {
             throw new WorkSessionValidationException("Work sessions are disabled on this node.");
         }

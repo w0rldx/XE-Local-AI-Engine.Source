@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The live transcription hub's own contract: what a subscriber is handed, what a frame must look like to be
@@ -383,6 +384,20 @@ public sealed class TranscriptionHubTests
     }
 
     /// <summary>
+    ///     Switching transcription off must not strand a live session: ending it is the only way to stop it recording.
+    /// </summary>
+    [Test]
+    public async Task EndSession_SucceedsWhileTheSwitchIsOff()
+    {
+        var live = Live();
+        using var fixture = CreateHub(Sessions(), live, enabled: false);
+
+        await fixture.Hub.EndSession(SessionId);
+
+        await live.Received(1).EndAsync(SessionId, LiveEndReason.Completed, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
     ///     Unlike the graph-workflow hub, a disconnect means something here: nothing else will feed this session, so
     ///     the registry has to learn the connection is gone in order to arm the abandonment grace.
     /// </summary>
@@ -525,9 +540,9 @@ public sealed class TranscriptionHubTests
             live,
             Options.Create(new TranscriptionOptions
             {
-                Enabled = enabled,
                 SegmentReplayLimit = ReplayLimit
-            }))
+            }),
+            StubNodeRuntimeSettings.Create().WithTranscriptionEnabled(enabled).Build())
         {
             Context = context,
             Groups = groups,

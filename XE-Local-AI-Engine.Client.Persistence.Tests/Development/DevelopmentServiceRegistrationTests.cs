@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Development.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 [Category(TestCategories.Integration)]
 public sealed class DevelopmentServiceRegistrationTests
@@ -21,7 +22,7 @@ public sealed class DevelopmentServiceRegistrationTests
         {
             ["Development:Enabled"] = "false"
         }).Build();
-        builder.AddNodeDevelopment(configuration);
+        builder.AddNodeDevelopment(configuration, new NodeStartupSettings { DevelopmentEnabled = false });
         using var provider = builder.Services.BuildServiceProvider();
         AssertEx.Null(provider.GetService<IDevelopmentCoordinator>());
         AssertEx.Null(provider.GetService<IDevelopmentArtifactBlobStore>());
@@ -35,7 +36,7 @@ public sealed class DevelopmentServiceRegistrationTests
         {
             ["Development:MaxArtifactBytes"] = "1024"
         }).Build();
-        builder.AddNodeDevelopment(configuration);
+        builder.AddNodeDevelopment(configuration, new NodeStartupSettings());
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IDevelopmentStore)));
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IDevelopmentCoordinator)));
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IDevelopmentArtifactBlobStore)));

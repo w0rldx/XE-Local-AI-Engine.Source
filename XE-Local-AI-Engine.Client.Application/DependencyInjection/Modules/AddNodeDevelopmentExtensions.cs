@@ -8,13 +8,17 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 internal static class AddNodeDevelopmentExtensions
 {
-    public static IHostApplicationBuilder AddNodeDevelopment(this IHostApplicationBuilder builder, IConfiguration configuration)
+    public static IHostApplicationBuilder AddNodeDevelopment(this IHostApplicationBuilder builder,
+        IConfiguration configuration,
+        NodeStartupSettings startupSettings)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(startupSettings);
 
         builder.Services.AddOptions<DevelopmentOptions>()
                .Bind(configuration.GetSection(DevelopmentOptions.Section))
@@ -25,6 +29,8 @@ internal static class AddNodeDevelopmentExtensions
                    options.MaxAttemptDurationSeconds = runtimeSettings.GetDevelopmentMaxAttemptDurationSeconds();
                    options.MaxToolCalls = runtimeSettings.GetDevelopmentMaxToolCalls();
                    options.MaxOutputTokens = runtimeSettings.GetDevelopmentMaxOutputTokens();
+                   // The startup value of the switch: what registration followed, read by the capability report.
+                   options.Enabled = runtimeSettings.GetDevelopmentEnabled();
                })
 #pragma warning restore MA0045
                .ValidateDataAnnotations()
@@ -32,7 +38,7 @@ internal static class AddNodeDevelopmentExtensions
         // Before the early return: the capability endpoint answers while Development Mode is off.
         builder.Services.AddScoped<IDevelopmentCapabilityService, DevelopmentCapabilityService>();
 
-        if (!configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true))
+        if (!startupSettings.DevelopmentEnabled)
         {
             return builder;
         }

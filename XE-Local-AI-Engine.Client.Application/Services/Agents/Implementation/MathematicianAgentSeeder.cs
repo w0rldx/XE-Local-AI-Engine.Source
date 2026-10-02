@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Idempotent startup task that seeds ONE "Mathematician" agent definition: the persona that opts into the
@@ -47,30 +47,28 @@ public sealed class MathematicianAgentSeeder : IHostedService
         small enough that a reader can check it.
         """;
 
-    private readonly bool _computeEnabled;
     private readonly ILogger<MathematicianAgentSeeder> _logger;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    // Reads the kill-switch through the validated options, as RunPythonToolHandler does, so ComputeOptions.Enabled
-    // stays the single definition of "may this node execute code" rather than a second reading of raw configuration.
+    // Reads the same node-settings switch ComputeToolGateway does, once at start, so a stored change seeds on the next restart.
     public MathematicianAgentSeeder(IServiceScopeFactory scopeFactory,
-        IOptions<ComputeOptions> computeOptions,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<MathematicianAgentSeeder> logger)
     {
-        ArgumentNullException.ThrowIfNull(computeOptions);
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _computeEnabled = computeOptions.Value.Enabled;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!_computeEnabled)
+        if (!await _runtimeSettings.GetComputeEnabledAsync(cancellationToken))
         {
             // One line per start, not per call: an operator who wonders where the agent went gets the reason and the
             // fix, and a node that never enables compute pays a single Information line at boot.
             _logger.LogInformation(
-                "Skipped seeding the Mathematician agent definition because the compute tool is disabled on this node (Compute:Enabled=false); it is seeded on the next start after compute is enabled.");
+                "Skipped seeding the Mathematician agent definition because the compute tool is disabled on this node; it is seeded on the next start after compute is enabled.");
             return;
         }
 

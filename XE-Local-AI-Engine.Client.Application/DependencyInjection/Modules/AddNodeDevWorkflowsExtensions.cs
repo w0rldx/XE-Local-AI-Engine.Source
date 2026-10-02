@@ -5,9 +5,10 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 internal static class AddNodeDevWorkflowsExtensions
 {
@@ -19,13 +20,20 @@ internal static class AddNodeDevWorkflowsExtensions
     ///     legibly rather than 500 out of an empty container, so the switch is enforced in the runtime — the dispatcher
     ///     registers either way and simply never starts its loop.
     /// </remarks>
-    public static IHostApplicationBuilder AddNodeDevWorkflows(this IHostApplicationBuilder builder, IConfiguration configuration)
+    public static IHostApplicationBuilder AddNodeDevWorkflows(this IHostApplicationBuilder builder,
+        IConfiguration configuration,
+        NodeStartupSettings startupSettings)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(startupSettings);
 
         builder.Services.AddOptions<DevWorkflowOptions>()
                .Bind(configuration.GetSection(DevWorkflowOptions.Section))
+#pragma warning disable MA0045 // Options Configure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
+               // The node-settings switch, so a reader left on these options sees the stored value. Appended after Bind so stored wins.
+               .Configure<INodeRuntimeSettings>(static (options, runtimeSettings) => options.Enabled = runtimeSettings.GetDevWorkflowsEnabled())
+#pragma warning restore MA0045
                .ValidateDataAnnotations()
                .ValidateOnStart();
 
@@ -84,7 +92,7 @@ internal static class AddNodeDevWorkflowsExtensions
 
         // Only when Development Mode is on, because the workspace provider, the repository bindings and the sandbox come from there.
         // A tool node on a node with it off finds no commands and says so — a configuration answer, not a container failure in a task.
-        if (configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true))
+        if (startupSettings.DevelopmentEnabled)
         {
             builder.Services.AddScoped<IDevWorkflowToolCommands, DevWorkflowToolCommands>();
 

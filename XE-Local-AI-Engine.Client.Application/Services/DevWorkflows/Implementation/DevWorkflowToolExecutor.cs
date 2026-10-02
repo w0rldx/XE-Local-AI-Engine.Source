@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>The sandbox lane: a bounded number of Tool node-runs may hold a prepared workspace at once.</summary>
 /// <remarks>
@@ -23,6 +24,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     private readonly SemaphoreSlim _lane;
     private readonly ILogger<DevWorkflowToolExecutor> _logger;
     private readonly DevWorkflowRetryPolicy _retries;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly CancellationTokenSource _shutdown = new();
     private int _disposed;
@@ -31,12 +33,14 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         IDevWorkflowArtifactBlobStore blobs,
         DevWorkflowRetryPolicy retries,
         IOptions<DevWorkflowOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<DevWorkflowToolExecutor> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _blobs = blobs ?? throw new ArgumentNullException(nameof(blobs));
         _retries = retries ?? throw new ArgumentNullException(nameof(retries));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _lane = new SemaphoreSlim(options.Value.MaxParallelToolNodes, options.Value.MaxParallelToolNodes);
     }
@@ -345,18 +349,20 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     {
         try
         {
+            // Development Mode switched off since startup leaves the commands registered, so the live switch refuses here too.
+            var developmentEnabled = await _runtimeSettings.GetDevelopmentEnabledAsync(cancellationToken);
             await using var scope = _scopeFactory.CreateAsyncScope();
             if (node.ToolMode == DevWorkflowToolMode.Apply)
             {
                 // The integration variant takes the same lane slot as a validation pass, deliberately: same workspace
                 // machinery, same repository, which is the resource the slot count bounds.
-                return scope.ServiceProvider.GetService<DevWorkflowApplyCommands>() is { } apply
+                return developmentEnabled && scope.ServiceProvider.GetService<DevWorkflowApplyCommands>() is { } apply
                     ? await apply.RunAsync(run, nodeRun, cancellationToken)
                     : Refused(DevWorkflowFailureClasses.Configuration,
                         "This node applies approved patches, and Development Mode is switched off on this node.");
             }
 
-            if (scope.ServiceProvider.GetService<IDevWorkflowToolCommands>() is not { } commands)
+            if (!developmentEnabled || scope.ServiceProvider.GetService<IDevWorkflowToolCommands>() is not { } commands)
             {
                 // Development Mode is switched off on this node, so there is no workspace provider, no repository
                 // binding and no sandbox. Nothing here can run, and no retry changes that.

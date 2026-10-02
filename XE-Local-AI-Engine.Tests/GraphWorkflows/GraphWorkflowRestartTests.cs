@@ -5,13 +5,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Killing the engine while a run is in flight, one test per row of the run-engine plan's reconciler table.
@@ -268,7 +267,7 @@ public sealed class GraphWorkflowRestartTests
     {
         var store = new DriftingGraphWorkflowStore();
 
-        await NewReconciler(enabled: true).RecoverAsync(store, CancellationToken.None);
+        await NewReconciler().RecoverAsync(store, CancellationToken.None);
 
         AssertEx.Equal(expected: 3, store.Settlements.Count, "recovery is bounded: a writer it cannot outrace must not keep it from the dispatcher.");
         AssertEx.Null(store.Settlements[0], "an unjudged row on an early pass is read again rather than failed off stale evidence.");
@@ -279,18 +278,20 @@ public sealed class GraphWorkflowRestartTests
     }
 
     /// <summary>
-    ///     A disabled node reads nothing at all. The guard sits before the scope, so recovery on a node whose feature is
-    ///     off does not even reach the container — which is what this scope factory, which throws if asked, pins.
+    ///     The switch is live, so recovery cannot wait for it: a row stranded while the feature was off would otherwise
+    ///     stay in flight once it is turned on. Built the way the host builds it, so a reconciler that read the switch would read this one.
     /// </summary>
     [Test]
     [NotInParallel(RecoveryKey)]
-    public async Task ADisabledNode_OpensNoScopeAndReadsNoRowAtStartup()
+    public async Task ARestartWithTheFeatureSwitchedOff_StillCollapsesTheNodeRunsTheCrashStranded()
     {
-        var scopes = new ThrowingServiceScopeFactory();
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await InFlightWorkNodeAsync(harness, GraphWorkflowNodeRunStatus.Running);
+        var switchedOff = harness.Services.With(StubNodeRuntimeSettings.Create().WithGraphWorkflowsEnabled(false).Build());
 
-        await NewReconciler(enabled: false, scopes).StartAsync(CancellationToken.None);
+        await ActivatorUtilities.CreateInstance<GraphWorkflowStartupReconciler>(switchedOff).StartAsync(CancellationToken.None);
 
-        AssertEx.Equal(expected: 0, scopes.ScopeRequests, "a disabled node opens no scope, so no store is resolved and no row is read.");
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "work")).Status);
     }
 
     /// <summary>
@@ -319,7 +320,6 @@ public sealed class GraphWorkflowRestartTests
     private static async Task RestartAsync(GraphWorkflowHarness harness)
     {
         await new GraphWorkflowStartupReconciler(harness.Services.GetRequiredService<IServiceScopeFactory>(),
-                Options.Create(harness.CurrentOptions()),
                 harness.Services.GetRequiredService<ILogger<GraphWorkflowStartupReconciler>>())
             .StartAsync(CancellationToken.None);
 
@@ -363,12 +363,8 @@ public sealed class GraphWorkflowRestartTests
         ]));
     }
 
-    private static GraphWorkflowStartupReconciler NewReconciler(bool enabled, IServiceScopeFactory? scopes = null) =>
-        new(scopes ?? new ThrowingServiceScopeFactory(),
-            Options.Create(new GraphWorkflowOptions
-            {
-                Enabled = enabled
-            }),
+    private static GraphWorkflowStartupReconciler NewReconciler() =>
+        new(new ThrowingServiceScopeFactory(),
             NullLogger<GraphWorkflowStartupReconciler>.Instance);
 
     private const string DecisionModelGraph = """
@@ -532,14 +528,9 @@ internal sealed class DriftingGraphWorkflowStore : IGraphWorkflowStore
         throw new NotSupportedException();
 }
 
-/// <summary>A scope factory that fails the test if anything asks it for a scope. The disabled node's guard is that nothing does.</summary>
+/// <summary>A scope factory that fails the test if anything asks it for a scope: recovery driven directly is handed its store.</summary>
 internal sealed class ThrowingServiceScopeFactory : IServiceScopeFactory
 {
-    public int ScopeRequests { get; private set; }
-
-    public IServiceScope CreateScope()
-    {
-        ScopeRequests++;
-        throw new AssertionException("Startup recovery opened a service scope on a node whose feature is disabled.");
-    }
+    public IServiceScope CreateScope() =>
+        throw new AssertionException("Recovery driven over a supplied store opened a service scope.");
 }

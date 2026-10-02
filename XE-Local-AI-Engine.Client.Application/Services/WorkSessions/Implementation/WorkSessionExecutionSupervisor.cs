@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Runs a work session as a bounded sequence of steps, each one an ordinary chat turn on the session's owned
@@ -64,6 +65,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     private readonly ILogger<WorkSessionExecutionSupervisor> _logger;
     private readonly IWorkSessionEventPublisher _publisher;
     private readonly WorkSessionOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly TimeSpan _pendingToolCallAge;
 
     /// <summary>
@@ -82,6 +84,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         INodeChatStreamCancellationRegistry cancellationRegistry,
         IWorkSessionEventPublisher publisher,
         IOptions<WorkSessionOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         PendingToolCallRegistry pendingToolCalls,
         ToolApprovalCoordinator approvalCoordinator,
@@ -95,6 +98,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         ArgumentNullException.ThrowIfNull(approvalCoordinator);
         // Use the wait owner's snapshot: separately reading settings could observe a later edit.
         _pendingToolCallAge = approvalCoordinator.PendingToolCallAge;
@@ -105,11 +109,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     ///     A hint, not a reservation — the slot can be taken between this read and the caller's start. The authority is
     ///     <see cref="TryStart" />, which <c>WorkSessionService.BeginAsync</c> re-checks.
     /// </summary>
-    public bool HasCapacity => _options.Enabled && !_shutdown.IsCancellationRequested && _admission.CurrentCount > 0;
+    public bool HasCapacity => _runtimeSettings.GetWorkSessionsEnabled() && !_shutdown.IsCancellationRequested && _admission.CurrentCount > 0;
 
     public bool TryStart(Guid sessionId, WorkSessionRuntimeOverride? runtime = null)
     {
-        if (!_options.Enabled || _shutdown.IsCancellationRequested || !_admission.Wait(millisecondsTimeout: 0, CancellationToken.None))
+        if (!_runtimeSettings.GetWorkSessionsEnabled() || _shutdown.IsCancellationRequested || !_admission.Wait(millisecondsTimeout: 0, CancellationToken.None))
         {
             return false;
         }

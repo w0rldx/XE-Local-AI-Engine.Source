@@ -46,6 +46,11 @@ async function renderWithProviders(ui: ReactElement) {
 }
 
 // Mock the generated API hooks so NodeSettings renders without a real backend.
+// The effective tool-capable list only feeds the client mirror of the AgentHome rule; unknown (undefined) reads as satisfied.
+vi.mock("@/features/node-settings/queries/useEffectiveToolCapableModels", () => ({
+	useEffectiveToolCapableModels: () => undefined,
+}));
+
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getNodeSettingsOptions: () => ({ queryKey: ["node-settings"], queryFn: () => Promise.resolve(null) }),
 	getNodeSettingsQueryKey: () => ["node-settings"],

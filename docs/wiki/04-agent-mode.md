@@ -993,7 +993,8 @@ tools':
   unattended callers (sub-agent spawn, scheduler, graph workflows, delegate-scope inbound MCP) strip it, since
   each strips every approval-required tool rather than consulting a name list.
 - **`AgentHome:Enabled` is enforced at execution, not at the offer**, like the compute and work-session
-  kill-switches: the handler re-reads it and refuses before touching anything.
+  kill-switches: the handler re-reads it and refuses before touching anything. The switch is the `AgentHomeEnabled`
+  node setting (**Node Settings → General → Features**, read per call), which `AgentHome:Enabled` only seeds.
 - **Sandbox backend.** A node whose `AgentHome:Sandbox:Provider` is unset resolves the no-op `fake` backend in
   non-Production, which executes nothing; the tool result says so explicitly rather than reporting a clean
   exit 0. Set `AgentHome:Sandbox:Provider=process` (restart-time) to execute for real.
@@ -2066,7 +2067,7 @@ is refused until an operator adds that id under **Node Settings → Tools**, and
 
 | Key | Default | Note |
 |---|---|---|
-| `WorkSessions:Enabled` | `true` | Shipped in `appsettings.json`; gates behaviour, never registration |
+| `WorkSessions:Enabled` | `true` | Shipped in `appsettings.json`; gates behaviour, never registration. Seeds the `WorkSessionsEnabled` node setting (**Node Settings → General → Features**, live) |
 | `WorkSessions:MaxStepsPerRun` | `25` | Per start/resume, not per lifetime. Seeds the node setting (**Node Settings → Workspaces**, restart) |
 | `WorkSessions:CheckpointEveryNSteps` | `5` | |
 | `WorkSessions:MaxConcurrentSessions` | `1` | Admission cap — see §5.2. Seeds the node setting (restart) |

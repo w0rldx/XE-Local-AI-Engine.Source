@@ -103,6 +103,26 @@ reproductions: the forking `.NET TP Worker` tid and bwrap vanished in the same 1
 
 **Rule:** in `ConfigureServices.AddServices`, the Serilog `MinimumLevel.ControlledBy(NodeLogLevelSwitch.Level)` call goes after `ReadFrom.Configuration` and before `ReadFrom.Services`; never reorder it. **Prevents:** the verbose switch silently doing nothing, because the configured `Serilog:MinimumLevel:Default` is applied last and wins over the switch. The configured `Microsoft*`/`System` Warning overrides are unaffected either way, so nothing else breaks and only the switch test notices. **Authority:** break proof in logging scope C (2026-10-02): with `ControlledBy` moved before `ReadFrom.Configuration`, the Debug switch test failed. Target: runtime.md.
 
+### `StubNodeRuntimeSettings` feature switches default ON: disable a feature in the stub, not only in options
+
+**Rule:** a test that needs a feature off sets it on the stub (`With…Enabled(false)`) or in the stored settings; the nine switch getters on `StubNodeRuntimeSettings` return `true` unless told otherwise, and consumers read the accessor, never `IOptions<T>.Enabled`. Bound any loop the test drives with a `CancellationToken` that fires. **Prevents:** a harness that disables a feature through options alone running the enabled path, and a timer loop under `CancellationToken.None` with an unadvanced `FakeTimeProvider` hanging the gate batch silently. **Authority:** `b202ba93b`, `80d064fda` (`AgentHomeRunRetentionServiceTests`, `SchedulerHistoryRetentionServiceTests`), node-settings tier B. Target: backend-tests.md.
+
+### `NodeSettingsEndpointDtoMapper.ToStoredSettings` must copy every new stored field
+
+**Rule:** `ToStoredSettings` builds a NEW `StoredNodeSettings` record from the request and the current settings; a new stored field needs its `request.X ?? currentSettings.X` line there in the same change, with an endpoint round-trip test that saves a DIFFERENT field and asserts X survived. **Prevents:** a UI save of any unrelated setting writing the record without X, which wipes the stored value back to its seed. **Authority:** `NodeSettingsEndpointDtoMapper.ToStoredSettings`, node-settings tier B S1. Target: backend-tests.md.
+
+### A failed `XE_FULL_ANALYSIS=1` Debug build leaves the previous binary, and the next focused run reports stale green
+
+**Rule:** after a Debug build with `XE_FULL_ANALYSIS=1`, confirm it ended `0 Error(s)` before trusting a focused test-host run; an analyzer failure writes no new assembly, so the run executes the previous one. **Prevents:** a "green" focused run that never exercised the edit, the Debug twin of the Release break-proof trap. **Authority:** node-settings tier B S1 worker report, 2026-10-02; AGENTS.md Validation (deliberate-break proofs). Target: build-and-ci.md.
+
+### `AddServices` registration tests run at `--maximum-parallel-tests 1`
+
+**Rule:** run tests that build the full `ConfigureServices.AddServices` container (Development endpoint registration, hub inventory, feature-switch composition) with `--maximum-parallel-tests 1` when iterating; they share process-global FastEndpoints serializer options and Serilog static state. **Prevents:** intermittent failures in a focused run that look like a product regression and vanish at width 1. **Authority:** memory of FastEndpoints `SerOpts` being process-global; node-settings tier B S1 worker report, 2026-10-02. Target: backend-tests.md.
+
+### A new pre-host file read must skip the test content root
+
+**Rule:** a read of node state before the host is built takes the same `customization is null` guard `Program.cs` passes to `NodeStartupSettings.Read` (`includeLegacyContentRoot`): a test host's content root is the developer's source directory, so a legacy-path fallback there reads whatever file a dev run left behind. **Prevents:** test hosts whose registrations depend on a stray `node-settings.json` in `XE-Local-AI-Engine.Client/`, green on CI and red on one machine. **Authority:** `NodeStartupSettings.Read`, `Program.cs` (`includeLegacyContentRoot: customization is null`), node-settings tier B S0. Target: runtime.md.
+
 ### A trust question goes to `IModelTrustResolver`; a routing question to the cloud factory
 
 **Rule:** a gate deciding whether node-local data or execution may reach a model asks `IModelTrustResolver` (`ResolveAsync`, or `Classify` without an async boundary), never `CodexModelCatalog.IsCodexModel` or `IsCloudProviderSelected`; only "which provider serves this send now" asks the factory. **Prevents:** a second locality answer that drifts: `IsCloudProviderSelected` needs a live Codex session and sees no `ext:` id, and three hand-rolled copies once disagreed on Codex ids and on failing open versus closed. **Authority:** `ModelTrustResolver`, `ModelTrustAuthorityGuardTests`; wiki 03 "Trust is not routing", 2026-10-02. Target: agents-and-sandbox.md.

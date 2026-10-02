@@ -1,12 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.Transcription;
 
 using System.Net;
+using System.Net.Http.Json;
+using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <c>Transcription:Enabled</c> gates behaviour, not registration: the routes stay discovered so the OpenAPI
-///     document is identical on every node, and a disabled node answers 404 from request-path middleware placed ahead
-///     of local API security.
+///     The transcription switch gates behaviour, not registration: the routes stay discovered, and a disabled node answers 404
+///     from request-path middleware placed ahead of local API security.
 /// </summary>
 [Category(TestCategories.Integration)]
 public sealed class TranscriptionFeatureGateTests
@@ -73,6 +74,61 @@ public sealed class TranscriptionFeatureGateTests
 
         AssertEx.NotEqual(HttpStatusCode.NotFound, response.StatusCode,
             "With the feature on, the runtime route must be reachable — otherwise the disabled-case 404 proves nothing.");
+    }
+
+    [Test]
+    public async Task TranscriptionRoutes_WhenTheStoredSettingIsOff_Return404_OverASeedOfOn()
+    {
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = new Dictionary<string, string?>
+            {
+                ["Transcription:Enabled"] = "true"
+            }
+        };
+        _ = Directory.CreateDirectory(factory.NodeDataDirectoryPath);
+        await File.WriteAllTextAsync(Path.Combine(factory.NodeDataDirectoryPath, "node-settings.json"), """{ "transcriptionEnabled": false }""");
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/transcription/runtime");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Test]
+    public async Task ASavedSwitch_ClosesAndReopensTheRoutes_WithoutARestart()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        AssertEx.NotEqual(HttpStatusCode.NotFound, await GetRuntimeStatusAsync(factory, client));
+        await SaveTranscriptionEnabledAsync(factory, client, enabled: false);
+        AssertEx.Equal(HttpStatusCode.NotFound, await GetRuntimeStatusAsync(factory, client), "the next request after the save must see the switch off");
+        await SaveTranscriptionEnabledAsync(factory, client, enabled: true);
+        AssertEx.NotEqual(HttpStatusCode.NotFound, await GetRuntimeStatusAsync(factory, client));
+    }
+
+    private static async Task<HttpStatusCode> GetRuntimeStatusAsync(TestServerWebAppFactory factory, HttpClient client)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/transcription/runtime");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request);
+        return response.StatusCode;
+    }
+
+    private static async Task SaveTranscriptionEnabledAsync(TestServerWebAppFactory factory, HttpClient client, bool enabled)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"{ApiPrefix}/node-settings");
+        factory.AddNodeBearerToken(request);
+        request.Headers.Add("Origin", "http://localhost");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            TranscriptionEnabled = enabled
+        });
+        using var response = await client.SendAsync(request);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     private static IEnumerable<string> Routes()

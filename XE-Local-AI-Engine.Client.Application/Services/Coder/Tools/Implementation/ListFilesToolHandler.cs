@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Coder.Tools.Implementation;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     <see cref="IClientLocalToolHandler" /> for <c>list_files</c> (ClientLocal), JSON-in and JSON-out: deserializes the model arguments,
@@ -15,14 +16,13 @@ internal sealed class ListFilesToolHandler : IClientLocalToolHandler
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly bool _agentHomeEnabled;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly ICoderWorkspaceReader _reader;
 
-    public ListFilesToolHandler(IConfiguration configuration, ICoderWorkspaceReader reader)
+    public ListFilesToolHandler(INodeRuntimeSettings runtimeSettings, ICoderWorkspaceReader reader)
     {
-        ArgumentNullException.ThrowIfNull(configuration);
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
-        _agentHomeEnabled = configuration.GetValue<bool>("AgentHome:Enabled");
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public string ToolName => CoderToolDefinition.ListFilesToolName;
@@ -37,7 +37,7 @@ internal sealed class ListFilesToolHandler : IClientLocalToolHandler
     {
         ArgumentNullException.ThrowIfNull(jsonArguments);
 
-        if (!_agentHomeEnabled)
+        if (!await _runtimeSettings.GetAgentHomeEnabledAsync(cancellationToken))
         {
             return "Agent Mode is disabled on this node (AgentHome:Enabled=false).";
         }

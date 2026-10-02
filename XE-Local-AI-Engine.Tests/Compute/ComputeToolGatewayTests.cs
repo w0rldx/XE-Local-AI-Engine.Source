@@ -9,9 +9,11 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Gateway behavior against a recording sandbox provider: what it ASKS the sandbox for (its own runtime profile, a
@@ -724,6 +726,7 @@ public sealed class ComputeToolGatewayTests
             Options.Create(new ComputeOptions()),
             Options.Create(new LocalContainerOptions()),
             Options.Create(new AgentToolPipelineOptions()),
+            SeededNodeRuntimeSettings.FromSeed("Compute:Enabled", value: false),
             NullLogger<ComputeToolGateway>.Instance);
 
         var outcome = await gateway.ExecuteDetailedAsync(new ComputeRunToolRequest
@@ -736,6 +739,28 @@ public sealed class ComputeToolGatewayTests
         AssertEx.Contains(AssertEx.NotNull(outcome.RefusalMessage), "Compute:Enabled=false");
         AssertEx.False(environment.Requested, "a disabled node must not provision an interpreter");
         AssertEx.Null(provider.CreateRequest, "and must not create a jail");
+    }
+
+    [Test]
+    public async Task ExecuteDetailedAsync_WhenTheStoredSwitchIsOff_RefusesOverAnOnSeed()
+    {
+        var provider = new RecordingSandboxProvider(Contained);
+        var environment = new StubEnvironment("/provisioned/python");
+        var gateway = CreateGateway(provider, environment: environment, runtimeSettings: SeededNodeRuntimeSettings.Create(new Dictionary<string, string?>
+        {
+            ["Compute:Enabled"] = "true"
+        }, static () => new StoredNodeSettings
+        {
+            ComputeEnabled = false
+        }));
+
+        var outcome = await gateway.ExecuteDetailedAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        }, requireResourceLimits: false);
+
+        AssertEx.Equal(ComputeRefusalCodes.ComputeDisabled, outcome.RefusalCode);
+        AssertEx.False(environment.Requested, "a stored off must refuse before provisioning, whatever the seed says");
     }
 
     [Test]
@@ -828,8 +853,8 @@ public sealed class ComputeToolGatewayTests
         var readers = new List<string>();
         foreach (var file in Directory.EnumerateFiles(application, "*.cs", SearchOption.AllDirectories))
         {
-            // The declaration itself and the options validator are not reads of the node's answer.
-            if (Path.GetFileName(file) is "ComputeOptions.cs" or "ComputeOptionsValidator.cs")
+            // The declaration itself, the options validator and the accessor that resolves the switch are not reads of the node's answer.
+            if (Path.GetFileName(file) is "ComputeOptions.cs" or "ComputeOptionsValidator.cs" or "INodeRuntimeSettings.cs" or "NodeRuntimeSettings.cs")
             {
                 continue;
             }
@@ -841,8 +866,10 @@ public sealed class ComputeToolGatewayTests
             var code = (await File.ReadAllLinesAsync(file))
                        .Where(static line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal))
                        .ToArray();
-            if (code.Any(static line => line.Contains("omputeOptions", StringComparison.Ordinal))
-                && code.Any(static line => line.Contains(".Enabled", StringComparison.Ordinal)))
+            // A reader goes through the accessor; a co-occurring options read is the stale second copy this guards against.
+            if (code.Any(static line => line.Contains("GetComputeEnabled", StringComparison.Ordinal))
+                || (code.Any(static line => line.Contains("omputeOptions", StringComparison.Ordinal))
+                    && code.Any(static line => line.Contains(".Enabled", StringComparison.Ordinal))))
             {
                 readers.Add(Path.GetRelativePath(application, file));
             }
@@ -871,20 +898,19 @@ public sealed class ComputeToolGatewayTests
         ComputeOptions? options = null,
         IComputePythonEnvironment? environment = null,
         IAgentHomeIdentityProvider? identityProvider = null,
-        AgentToolPipelineOptions? pipelineOptions = null)
+        AgentToolPipelineOptions? pipelineOptions = null,
+        INodeRuntimeSettings? runtimeSettings = null)
     {
         options ??= new ComputeOptions();
-        // Every test in this suite is about a node that has OPTED IN. ComputeOptions.Enabled defaults to false — the
-        // production fail-closed default — and the kill-switch now lives in the gateway rather than in the handler, so
-        // without this line every call here would refuse before reaching the sandbox. The switch itself is asserted by
-        // its own test, which builds a gateway directly rather than through this helper.
-        options.Enabled = true;
+        // Every test in this suite is about a node that has OPTED IN, through the switch's configuration seed; the switch
+        // itself is asserted by its own tests. Without it every call here would refuse before reaching the sandbox.
         return new ComputeToolGateway(provider,
             identityProvider ?? new StubIdentityProvider(),
             environment ?? new StubEnvironment("/provisioned/python"),
             Options.Create(options),
             Options.Create(new LocalContainerOptions()),
             Options.Create(pipelineOptions ?? new AgentToolPipelineOptions()),
+            runtimeSettings ?? SeededNodeRuntimeSettings.FromSeed("Compute:Enabled", value: true),
             NullLogger<ComputeToolGateway>.Instance);
     }
 

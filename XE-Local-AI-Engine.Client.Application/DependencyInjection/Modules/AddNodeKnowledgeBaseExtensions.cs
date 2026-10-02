@@ -5,13 +5,17 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 internal static class AddNodeKnowledgeBaseExtensions
 {
-    public static IHostApplicationBuilder AddNodeKnowledgeBase(this IHostApplicationBuilder builder, IConfiguration configuration)
+    public static IHostApplicationBuilder AddNodeKnowledgeBase(this IHostApplicationBuilder builder,
+        IConfiguration configuration,
+        NodeStartupSettings startupSettings)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(startupSettings);
 
         // Durable knowledge-base document store. Singleton: it opens its own DbContext scope per operation and depends only on
         // singletons (data directory, sqlite key holder, time provider), so the singleton ingestion and cleanup surfaces can take it.
@@ -67,7 +71,12 @@ internal static class AddNodeKnowledgeBaseExtensions
         // FK cascade is OFF) and the read + reindex-reset catalog. Both drive the request-scoped NodeChatDbContext.
         builder.Services.AddScoped<IKnowledgeDocumentPurgeService, KnowledgeDocumentPurgeService>();
         builder.Services.AddScoped<IKnowledgeDocumentCatalogService, KnowledgeDocumentCatalogService>();
-        builder.Services.AddScoped<IKnowledgeRepositoryImportService, KnowledgeRepositoryImportService>();
+        // Only with Development Mode on: the importer resolves folders through Development's repository bindings, which
+        // AddNodeDevelopment skips when it is off. The import endpoint answers 404 then and never asks for the importer.
+        if (startupSettings.DevelopmentEnabled)
+        {
+            builder.Services.AddScoped<IKnowledgeRepositoryImportService, KnowledgeRepositoryImportService>();
+        }
 
         // Shared admission rule for every store path — upload endpoint and repository importer (enqueue when the store wrote the
         // document, or on a retryable dedupe hit). Scoped: it reads status through the scoped catalog service, enqueuing on the dispatcher.

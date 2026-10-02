@@ -3,11 +3,11 @@ namespace XE_Local_AI_Engine.Client.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ExternalApps.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Operator-only live notifications for one external application instance.
@@ -35,18 +35,18 @@ public sealed class ExternalAppHub : Hub
     private const string InstanceNotFoundMessage = "External app instance was not found.";
 
     private readonly IExternalAppService _apps;
-    private readonly ExternalAppsOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public ExternalAppHub(IExternalAppService apps, IOptions<ExternalAppsOptions> options)
+    public ExternalAppHub(IExternalAppService apps, INodeRuntimeSettings runtimeSettings)
     {
         ArgumentNullException.ThrowIfNull(apps);
         _apps = apps;
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public async Task<ExternalAppSubscriptionSnapshot> Subscribe(Guid instanceId, long afterSequence)
     {
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetExternalAppsEnabledAsync(Context.ConnectionAborted))
         {
             throw new HubException("External apps are disabled on this node.");
         }

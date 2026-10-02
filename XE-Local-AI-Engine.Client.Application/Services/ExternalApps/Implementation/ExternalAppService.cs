@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -55,6 +56,7 @@ internal sealed partial class ExternalAppService
     private readonly IExternalAppEventPublisher _publisher;
     private readonly ExternalAppResourceGate _resourceGate;
     private readonly ExternalAppOperationRunner _runner;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ContainerBridgeEndpointSource _bridgeEndpoints;
     private readonly TimeProvider _timeProvider;
@@ -68,6 +70,7 @@ internal sealed partial class ExternalAppService
         INodeDataDirectory dataDirectory,
         IOptions<ExternalAppsOptions> options,
         ContainerBridgeEndpointSource bridgeEndpoints,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<ExternalAppService> logger)
     {
@@ -82,6 +85,7 @@ internal sealed partial class ExternalAppService
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _options = options.Value;
         _bridgeEndpoints = bridgeEndpoints ?? throw new ArgumentNullException(nameof(bridgeEndpoints));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -168,7 +172,7 @@ internal sealed partial class ExternalAppService
 
     public async Task<IReadOnlyList<ExternalAppInstanceSummary>> ListAsync(CancellationToken cancellationToken = default)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
@@ -181,7 +185,7 @@ internal sealed partial class ExternalAppService
 
     public async Task<IReadOnlyList<ExternalAppInstanceDetail>> ListDetailsAsync(CancellationToken cancellationToken = default)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
@@ -194,7 +198,7 @@ internal sealed partial class ExternalAppService
 
     public async Task<ExternalAppInstanceDetail> GetAsync(Guid instanceId, CancellationToken cancellationToken = default)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
@@ -210,7 +214,7 @@ internal sealed partial class ExternalAppService
         int limit,
         CancellationToken cancellationToken = default)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
@@ -227,7 +231,7 @@ internal sealed partial class ExternalAppService
         int tail,
         CancellationToken cancellationToken = default)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
 
         if (tail < 1 || tail > _options.MaxLogTailLines)
         {
@@ -605,9 +609,9 @@ internal sealed partial class ExternalAppService
         }
     }
 
-    private void EnsureEnabled()
+    private async Task EnsureEnabledAsync(CancellationToken cancellationToken)
     {
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetExternalAppsEnabledAsync(cancellationToken))
         {
             throw new ExternalAppsDisabledException();
         }

@@ -38,6 +38,7 @@ using DevWorkflowRunStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevW
 using DevWorkflowWorkItemStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowWorkItemStatus;
 // System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
 using CategoryAttribute = CategoryAttribute;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class NodeAdminMcpToolsTests
@@ -1277,10 +1278,8 @@ public sealed class NodeAdminMcpToolsTests
                 Agents,
                 WorkflowRuns,
                 WorkflowStore,
-                Options.Create(new DevWorkflowOptions
-                {
-                    Enabled = devWorkflowsEnabled
-                }),
+                Options.Create(new DevWorkflowOptions()),
+                StubNodeRuntimeSettings.Create().WithDevWorkflowsEnabled(devWorkflowsEnabled).Build(),
                 timeProvider ?? TimeProvider.System,
                 HttpContextAccessor,
                 logger ?? Logger);

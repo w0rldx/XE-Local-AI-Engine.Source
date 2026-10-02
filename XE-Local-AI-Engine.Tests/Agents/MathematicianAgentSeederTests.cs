@@ -2,13 +2,14 @@ namespace XE_Local_AI_Engine.Tests.Agents;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Seeder behavior against the real wired DI graph + encrypted SQLite: the first boot seeds exactly one
@@ -59,6 +60,26 @@ public sealed class MathematicianAgentSeederTests
     }
 
     [Test]
+    public async Task MathematicianAgentSeeder_Seeds_WhenTheStoredSwitchIsOnOverAnOffSeed()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
+        var runtimeSettings = SeededNodeRuntimeSettings.Create(new Dictionary<string, string?>
+        {
+            ["Compute:Enabled"] = "false"
+        }, static () => new StoredNodeSettings
+        {
+            ComputeEnabled = true
+        });
+
+        await CreateSeeder(scopeFactory, runtimeSettings).StartAsync(CancellationToken.None);
+
+        using var scope = factory.Services.CreateScope();
+        var slugs = await scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>().ListSeededSlugsAsync();
+        AssertEx.Contains(slugs, AgentDefaults.MathematicianAgentSeedSlug);
+    }
+
+    [Test]
     public async Task MathematicianAgentSeeder_SeedsNothing_WhenComputeIsDisabled()
     {
         await using var factory = new TestServerWebAppFactory();
@@ -103,13 +124,9 @@ public sealed class MathematicianAgentSeederTests
         AssertEx.Contains(rows[0].AllowedToolNames, ComputeToolDefinition.ToolName);
     }
 
-    private static MathematicianAgentSeeder CreateSeeder(IServiceScopeFactory scopeFactory, bool computeEnabled)
-    {
-        return new MathematicianAgentSeeder(scopeFactory,
-            Options.Create(new ComputeOptions
-            {
-                Enabled = computeEnabled
-            }),
-            NullLogger<MathematicianAgentSeeder>.Instance);
-    }
+    private static MathematicianAgentSeeder CreateSeeder(IServiceScopeFactory scopeFactory, bool computeEnabled) =>
+        CreateSeeder(scopeFactory, SeededNodeRuntimeSettings.FromSeed("Compute:Enabled", computeEnabled));
+
+    private static MathematicianAgentSeeder CreateSeeder(IServiceScopeFactory scopeFactory, INodeRuntimeSettings runtimeSettings) =>
+        new(scopeFactory, runtimeSettings, NullLogger<MathematicianAgentSeeder>.Instance);
 }

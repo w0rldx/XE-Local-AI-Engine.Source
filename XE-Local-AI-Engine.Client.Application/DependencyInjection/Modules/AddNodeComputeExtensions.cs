@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using XE_Local_AI_Engine.Client.Services.ManagedPython;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
@@ -41,7 +42,7 @@ internal static class AddNodeComputeExtensions
         // The Managed Python status surface: Compute's repair/remove must reach the same singleton run_python provisions through.
         builder.Services.AddSingleton(static sp => new ManagedPythonStatusService(sp.GetRequiredService<ComputePythonEnvironment>(),
             sp.GetRequiredService<ITrainingRuntimeService>(),
-            sp.GetRequiredService<IOptions<ComputeOptions>>(),
+            sp.GetRequiredService<INodeRuntimeSettings>(),
             sp.GetRequiredService<IAgentSandboxRuntimeProvider>(),
             ManagedPythonToolchain.Default()));
         builder.Services.AddSingleton<IComputeToolGateway, ComputeToolGateway>();

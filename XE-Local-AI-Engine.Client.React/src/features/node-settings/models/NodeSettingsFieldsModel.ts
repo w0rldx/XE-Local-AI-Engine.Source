@@ -364,7 +364,30 @@ export interface NodeSettingsFieldsForm {
 	agentHomeRunRetentionMaxRuns: number | string;
 	// Shown and edited in GB (see nodeSettingsDisplayScale).
 	agentHomeRunRetentionMaxTotalBytes: number | string;
+	// The nine feature switches (section "general", Features card). The response carries their effective value.
+	developmentEnabled: boolean;
+	workSessionsEnabled: boolean;
+	graphWorkflowsEnabled: boolean;
+	transcriptionEnabled: boolean;
+	externalAppsEnabled: boolean;
+	computeEnabled: boolean;
+	agentHomeEnabled: boolean;
+	schedulerEnabled: boolean;
+	devWorkflowsEnabled: boolean;
 }
+
+// The feature switches in display order. Explicit false is meaningful (it turns the feature off).
+export const featureSwitchFields = [
+	"developmentEnabled",
+	"workSessionsEnabled",
+	"devWorkflowsEnabled",
+	"graphWorkflowsEnabled",
+	"agentHomeEnabled",
+	"computeEnabled",
+	"externalAppsEnabled",
+	"transcriptionEnabled",
+	"schedulerEnabled",
+] as const satisfies readonly (keyof NodeSettingsFieldsForm)[];
 
 export type ChatCacheRamMode = "auto" | "off" | "custom";
 
@@ -580,6 +603,16 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	agentHomePatchApplyTimeoutSeconds: 120,
 	agentHomeRunRetentionMaxRuns: 200,
 	agentHomeRunRetentionMaxTotalBytes: 2,
+	// The C# code defaults of the BoolSeed calls in NodeRuntimeSettings (the response carries the effective value).
+	developmentEnabled: true,
+	workSessionsEnabled: false,
+	graphWorkflowsEnabled: true,
+	transcriptionEnabled: true,
+	externalAppsEnabled: false,
+	computeEnabled: false,
+	agentHomeEnabled: false,
+	schedulerEnabled: true,
+	devWorkflowsEnabled: false,
 };
 
 // Coalesces a nullable numeric response field into a form value, falling back to the provided default when absent.
@@ -702,6 +735,9 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		agentExecutionLogRetentionEnabled:
 			response.agentExecutionLogRetentionEnabled ?? nodeSettingsFieldDefaults.agentExecutionLogRetentionEnabled,
 		imageTextEncoderOnGpu: response.imageTextEncoderOnGpu ?? nodeSettingsFieldDefaults.imageTextEncoderOnGpu,
+		...(Object.fromEntries(
+			featureSwitchFields.map((field) => [field, response[field] ?? nodeSettingsFieldDefaults[field]]),
+		) as Pick<NodeSettingsFieldsForm, (typeof featureSwitchFields)[number]>),
 	};
 }
 
@@ -962,6 +998,9 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 //   knowledgeScheduledReindexEnabled / knowledgeScheduledReindexIntervalMinutes
 //                                   — AddNodeKnowledgeBaseExtensions Configure<KnowledgeBaseOptions>: the hosted reindex
 //                                     worker reads both once at start.
+//   developmentEnabled / schedulerEnabled
+//                                   — NodeStartupSettings, read from node-settings.json BEFORE the host is built: the
+//                                     Development endpoints and hub, and the Quartz scheduler, are registered or not.
 // Live and NOT listed: modelFitSafetyMarginPercent, customToolMaxTimeoutSeconds, webFetch*, knowledgeSearch*,
 // agentHomeMaxRunSeconds, agentHomeMaxInnerToolCalls, agentHomePatchApplyTimeoutSeconds, every agentHomeRunRetention* field
 // (read per sweep) and containerRuntimeSelection (read per call); and the other chat knobs — defaultContextTokens,
@@ -969,7 +1008,10 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 // providerRetryEnabled / providerMaxRetries and spawn* — each read per turn, job, send or root run; and the knowledge,
 // privacy and usage knobs — knowledgeAdaptiveRerankingEnabled, knowledgeRetrievalLatencyBudgetMs, knowledgeAgentToolsEnabled,
 // allowCloudModelAccess, the three background models, the two retention switches, every retention window,
-// nodeDbBackupRetainCount and benchmarkKldCacheMaxBytes — each read per search, offer, turn, run, sweep or backup.
+// nodeDbBackupRetainCount and benchmarkKldCacheMaxBytes — each read per search, offer, turn, run, sweep or backup; and the
+// other seven feature switches — FeatureSwitchMiddleware and every per-service check read them per request. Three carry
+// help text instead of a badge: externalAppsEnabled (its container-bridge listener is bound at host build) and
+// computeEnabled / devWorkflowsEnabled (their agent and workflow definitions are seeded at startup).
 // Every other form field is read live on each call and must NOT be listed here: agentHome*, keepModelWarm*,
 // toolCapableModels, enableTools, customToolsEnabled, toolRelevanceEnabled, webAccessEnabled, webSearchSearxngUrl,
 // detachedGraceSeconds, usageRates, uiMode, voiceFeatureEnabled, defaultVoiceProfile, and the message-request timeout.
@@ -1016,6 +1058,8 @@ export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsField
 	"developmentMaxAttemptDurationSeconds",
 	"developmentMaxToolCalls",
 	"developmentMaxOutputTokens",
+	"developmentEnabled",
+	"schedulerEnabled",
 ]);
 
 // True when a built save body carries at least one restart-gated field, so the page can tell the operator a restart is
@@ -1051,6 +1095,7 @@ export function buildNodeSettingsRequest(
 	bounds: NodeSettingsFieldBounds,
 	includeDeveloperFields: boolean,
 	pendingPreset: ExternalAccessPreset | null = null,
+	effectiveToolCapableModels?: readonly string[],
 ): NodeSettingsValidationResult {
 	const body: SaveNodeSettingsRequest = {};
 	const errors: Record<string, string> = {};
@@ -1306,6 +1351,30 @@ export function buildNodeSettingsRequest(
 		if (form[field] !== baseline[field]) {
 			body[field] = form[field];
 		}
+	}
+
+	for (const field of featureSwitchFields) {
+		if (form[field] !== baseline[field]) {
+			body[field] = form[field];
+		}
+	}
+
+	// Client mirror of the two NodeSettingsPolicy couplings, blamed on the same field the server blames: the switch being
+	// turned on, or — when it was already on — what took its prerequisite away.
+	if (form.devWorkflowsEnabled && !form.workSessionsEnabled) {
+		errors[baseline.devWorkflowsEnabled ? "workSessionsEnabled" : "devWorkflowsEnabled"] = "requiresWorkSessions";
+	}
+	// The server judges the list the save leaves: a non-empty one, else the appsettings seed. Only an empty stored list lets
+	// the effective list (`effectiveToolCapableModels`, GET agents/tool-capable-models) reveal that seed, so clearing a
+	// non-empty list is left to the server's refusal on the field. Unknown reads as satisfied: a missed refusal still
+	// comes back from the server, a false one would block every save.
+	if (
+		form.agentHomeEnabled &&
+		toolModels.value.length === 0 &&
+		baseline.toolCapableModels.length === 0 &&
+		effectiveToolCapableModels?.length === 0
+	) {
+		errors[baseline.agentHomeEnabled ? "toolCapableModels" : "agentHomeEnabled"] ??= "requiresToolCapableModels";
 	}
 
 	// The background models: the empty string is the "inherit the default model" signal (the server stores null).

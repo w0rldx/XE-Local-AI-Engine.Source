@@ -65,7 +65,7 @@ internal sealed partial class ExternalAppService
         IReadOnlyDictionary<string, string> variables,
         CancellationToken cancellationToken = default)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(variables);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
@@ -100,7 +100,7 @@ internal sealed partial class ExternalAppService
 
     public async Task CancelAsync(Guid instanceId, CancellationToken cancellationToken = default)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
@@ -130,7 +130,7 @@ internal sealed partial class ExternalAppService
         Func<IServiceProvider, LifecycleContext, CancellationToken, Task> pipeline,
         CancellationToken cancellationToken)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);

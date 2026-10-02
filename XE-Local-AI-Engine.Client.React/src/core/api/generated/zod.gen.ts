@@ -8384,6 +8384,15 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 	agentHomeRunRetentionMaxTotalBytes: z.int().nullish(),
 	minAgentHomeRunRetentionMaxTotalBytes: z.int().optional(),
 	maxAllowedAgentHomeRunRetentionMaxTotalBytes: z.int().optional(),
+	developmentEnabled: z.boolean().optional(),
+	workSessionsEnabled: z.boolean().optional(),
+	graphWorkflowsEnabled: z.boolean().optional(),
+	transcriptionEnabled: z.boolean().optional(),
+	externalAppsEnabled: z.boolean().optional(),
+	computeEnabled: z.boolean().optional(),
+	agentHomeEnabled: z.boolean().optional(),
+	schedulerEnabled: z.boolean().optional(),
+	devWorkflowsEnabled: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest = z.object({
@@ -8497,6 +8506,15 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	agentHomePatchApplyTimeoutSeconds: z.int().gte(10).lte(3600).nullish(),
 	agentHomeRunRetentionMaxRuns: z.int().gte(0).lte(100000).nullish(),
 	agentHomeRunRetentionMaxTotalBytes: z.int().gte(0).lte(1099511627776).nullish(),
+	developmentEnabled: z.boolean().nullish(),
+	workSessionsEnabled: z.boolean().nullish(),
+	graphWorkflowsEnabled: z.boolean().nullish(),
+	transcriptionEnabled: z.boolean().nullish(),
+	externalAppsEnabled: z.boolean().nullish(),
+	computeEnabled: z.boolean().nullish(),
+	agentHomeEnabled: z.boolean().nullish(),
+	schedulerEnabled: z.boolean().nullish(),
+	devWorkflowsEnabled: z.boolean().nullish(),
 });
 
 export const zXeLocalAiEngineClientServicesTrainingDatasetsDatasetExportFormat = z.enum(["Jsonl", "Hermes"]);

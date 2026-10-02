@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 [Category(TestCategories.Integration)]
 public sealed class DevWorkflowServiceRegistrationTests
@@ -15,7 +16,7 @@ public sealed class DevWorkflowServiceRegistrationTests
     public void AddNodeDevWorkflows_RegistersTheStoreAndTheBlobStore()
     {
         var builder = Host.CreateApplicationBuilder();
-        _ = builder.AddNodeDevWorkflows(new ConfigurationBuilder().Build());
+        _ = builder.AddNodeDevWorkflows(new ConfigurationBuilder().Build(), new NodeStartupSettings());
 
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IDevWorkflowStore)));
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IDevWorkflowArtifactBlobStore)));
@@ -29,7 +30,7 @@ public sealed class DevWorkflowServiceRegistrationTests
         {
             ["DevWorkflows:Enabled"] = "false"
         }).Build();
-        _ = builder.AddNodeDevWorkflows(configuration);
+        _ = builder.AddNodeDevWorkflows(configuration, new NodeStartupSettings());
 
         // The kill switch gates behaviour, not the container: a disabled node has to answer legibly rather than 500 out
         // of an empty container.
@@ -46,8 +47,8 @@ public sealed class DevWorkflowServiceRegistrationTests
         // which is why it is read from the source rather than from a container.
         var source = File.ReadAllText(CompositionRootPath());
         var workSessionIndex = source.IndexOf("AddNodeWorkSessions(configuration)", StringComparison.Ordinal);
-        var developmentIndex = source.IndexOf("AddNodeDevelopment(configuration)", StringComparison.Ordinal);
-        var devWorkflowIndex = source.IndexOf("AddNodeDevWorkflows(configuration)", StringComparison.Ordinal);
+        var developmentIndex = source.IndexOf("AddNodeDevelopment(configuration", StringComparison.Ordinal);
+        var devWorkflowIndex = source.IndexOf("AddNodeDevWorkflows(configuration", StringComparison.Ordinal);
 
         AssertEx.True(workSessionIndex >= 0, "The composition root must still call AddNodeWorkSessions.");
         AssertEx.True(developmentIndex >= 0, "The composition root must still call AddNodeDevelopment.");
@@ -65,7 +66,7 @@ public sealed class DevWorkflowServiceRegistrationTests
     public void AddNodeDevWorkflows_RegistersTheReconcilerBeforeTheDispatcher()
     {
         var builder = Host.CreateApplicationBuilder();
-        _ = builder.AddNodeDevWorkflows(new ConfigurationBuilder().Build());
+        _ = builder.AddNodeDevWorkflows(new ConfigurationBuilder().Build(), new NodeStartupSettings());
 
         var hosted = builder.Services.Where(descriptor => descriptor.ServiceType == typeof(IHostedService)).ToList();
         var reconciler = hosted.FindIndex(descriptor => descriptor.ImplementationType == typeof(DevWorkflowStartupReconciler));

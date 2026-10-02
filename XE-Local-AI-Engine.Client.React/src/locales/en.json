@@ -2121,7 +2121,9 @@
 					"unavailableKeepWarmModel": "The selected model {{model}} is no longer installed.",
 					"rate": "Each rate needs a model name and non-negative input and output values.",
 					"defaultAboveMax": "The default number of results cannot be larger than the maximum.",
-					"belowCommandTimeout": "The run time limit must be at least the command timeout."
+					"belowCommandTimeout": "The run time limit must be at least the command timeout.",
+					"requiresWorkSessions": "Development workflows need work sessions. Turn work sessions on, or development workflows off.",
+					"requiresToolCapableModels": "AgentHome needs at least one tool-capable model. Add one under Chat, or turn AgentHome off."
 				},
 				"localChat": {
 					"title": "Local chat"
@@ -2656,6 +2658,46 @@
 				"agentHomePatchApplyTimeoutSeconds": {
 					"label": "AgentHome patch apply timeout",
 					"description": "The longest one git step of applying a run's patch to your folders may take. Applies to the next apply."
+				},
+				"features": {
+					"title": "Features",
+					"description": "Turn whole features of this node on or off. A feature that is off is hidden from the navigation."
+				},
+				"developmentEnabled": {
+					"label": "Development mode",
+					"description": "Lets agents change code in registered source folders, each attempt in its own isolated worktree."
+				},
+				"workSessionsEnabled": {
+					"label": "Work sessions",
+					"description": "Long-running agent sessions with their own plan, findings and checkpoints."
+				},
+				"devWorkflowsEnabled": {
+					"label": "Development workflows",
+					"description": "Durable, graph-based work items whose runs survive a restart. Needs work sessions. The built-in workflow definitions are seeded on the next restart."
+				},
+				"graphWorkflowsEnabled": {
+					"label": "Graph workflows",
+					"description": "Author agent graphs on a canvas and run them."
+				},
+				"agentHomeEnabled": {
+					"label": "AgentHome workspaces",
+					"description": "Lets agents run commands and edit files in a workspace of their own on this computer. Needs at least one tool-capable model."
+				},
+				"computeEnabled": {
+					"label": "Compute tools",
+					"description": "Lets agents run Python calculations in the managed Python environment. The Mathematician agent is seeded on the next restart."
+				},
+				"externalAppsEnabled": {
+					"label": "External apps",
+					"description": "Install and supervise curated applications on this computer. The API applies at once; the container bridge listener applies after a restart."
+				},
+				"transcriptionEnabled": {
+					"label": "Audio transcription",
+					"description": "Transcribe recordings on this computer with whisper.cpp."
+				},
+				"schedulerEnabled": {
+					"label": "Scheduler",
+					"description": "Run agents and jobs on a schedule."
 				}
 			},
 			"title": "Node settings",

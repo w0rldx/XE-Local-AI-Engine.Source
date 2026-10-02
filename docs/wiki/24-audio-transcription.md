@@ -240,7 +240,7 @@ Routes under `transcription/*` (`LocalApiRoutes.Transcription`), one endpoint cl
 
 The runtime and model-catalogue routes of the same family — `transcription/runtime*`, `transcription/models*` and the
 five source-build routes (start, prerequisites, status, cancel, remove) — are listed in [API & Hubs](09-api-and-hubs.md). The whole prefix is gated: with
-`Transcription:Enabled` off, a request-path middleware in `Program.cs` answers 404 while the endpoints stay
+the `TranscriptionEnabled` node setting off (**Node Settings → General → Features**, seeded from `Transcription:Enabled`), `FeatureSwitchMiddleware` answers 404 per request while the endpoints stay
 *discovered*, so the OpenAPI document and the generated client are identical on every node.
 The whisper child process is contained through the shared `XE-Local-AI-Engine.Providers.ProcessSupervision` handles, which the `Providers.WhisperCpp` project references.
 
@@ -978,7 +978,7 @@ re-probes server-side regardless, so a stale "can build" can never let an unbuil
 
 | Key | Where | Default | What it does |
 |---|---|---|---|
-| `Transcription:Enabled` | `TranscriptionOptions.Enabled`, read once in `Program.cs` | `true` | Gates behaviour, never registration: the 404 middleware, not a missing endpoint. |
+| `Transcription:Enabled` | seeds the `TranscriptionEnabled` node setting (**Node Settings → General → Features**), read per request | `true` | Gates behaviour, never registration: the 404 middleware, not a missing endpoint. |
 | `Transcription:IdleTimeoutMinutes` | `TranscriptionOptions.IdleTimeoutMinutes` | `15` | Seed for the daemon's idle-unload TTL, used until a node setting is stored. |
 | `TranscriptionIdleTimeoutMinutes` | `StoredNodeSettings`, clamped 1–240 | unset | The stored node setting; it wins over the appsettings seed. Applies after a node restart. |
 | `Transcription:MaxBufferedAudioMb` | `TranscriptionOptions.MaxBufferedAudioMb`, 16–1 048 576, validated on start | `512` | Safety cap in MiB on one live session's queued, untranscribed audio across its lanes (about 4.6 h of one mono lane). Crossing it ends the session gracefully as `Completed`, draining what is queued, with one Warning. |

@@ -1340,6 +1340,33 @@ public sealed partial record StoredNodeSettings
     /// <summary>AgentHome runs byte ceiling, 0 = no byte limit. Seed: <c>AgentHome:RunRetention:MaxTotalBytes</c> (2 GiB). Read per sweep.</summary>
     public long? AgentHomeRunRetentionMaxTotalBytes { get; init; }
 
+    /// <summary>Whether Development Mode is on. Seed: <c>Development:Enabled</c> (on). Applies after a node restart.</summary>
+    public bool? DevelopmentEnabled { get; init; }
+
+    /// <summary>Whether the scheduler runs. Seed: <c>Scheduler:Enabled</c> (on). Applies after a node restart.</summary>
+    public bool? SchedulerEnabled { get; init; }
+
+    /// <summary>Whether external apps are on. Seed: <c>ExternalApps:Enabled</c> (off; shipped on). The API reads it per request; the container bridge after a restart.</summary>
+    public bool? ExternalAppsEnabled { get; init; }
+
+    /// <summary>Whether work sessions run. Seed: <c>WorkSessions:Enabled</c> (off; shipped on). Read per request.</summary>
+    public bool? WorkSessionsEnabled { get; init; }
+
+    /// <summary>Whether graph workflows run. Seed: <c>GraphWorkflows:Enabled</c> (on). Read per request and dispatcher tick.</summary>
+    public bool? GraphWorkflowsEnabled { get; init; }
+
+    /// <summary>Whether transcription runs. Seed: <c>Transcription:Enabled</c> (on). Read per request.</summary>
+    public bool? TranscriptionEnabled { get; init; }
+
+    /// <summary>Whether the <c>run_python</c> tool executes. Seed: <c>Compute:Enabled</c> (off). Read per call.</summary>
+    public bool? ComputeEnabled { get; init; }
+
+    /// <summary>Whether the AgentHome tools run. Seed: <c>AgentHome:Enabled</c> (off; shipped on). Read per call.</summary>
+    public bool? AgentHomeEnabled { get; init; }
+
+    /// <summary>Whether development workflows run. Seed: <c>DevWorkflows:Enabled</c> (off). Read per request and dispatcher tick.</summary>
+    public bool? DevWorkflowsEnabled { get; init; }
+
     /// <summary>
     ///     Which container runtime application containers use: <c>auto</c> (the default) or <c>docker</c>.
     /// </summary>

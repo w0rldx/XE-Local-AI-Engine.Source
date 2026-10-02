@@ -22,7 +22,10 @@ public enum NodeSettingsField
     AgentHomeMaxRunSeconds,
     PlaybookAnalysisModelName,
     PlaybookEvalModelName,
-    MemoryExtractionModelName
+    MemoryExtractionModelName,
+    WorkSessionsEnabled,
+    DevWorkflowsEnabled,
+    AgentHomeEnabled
 }
 
 /// <summary>A single cross-field violation: the offending field plus the operator-facing message.</summary>
@@ -146,6 +149,40 @@ public static class NodeSettingsPolicy
                     }
                 ];
             }
+        }
+
+        // The two startup couplings, on the effective merged values: a stored combination either validator refuses would fail the next start.
+        // Blamed on the switch being turned on; when it was already on (the accessor still reads the record before this save), on what took the other away.
+        if ((settings.DevWorkflowsEnabled ?? await runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken))
+            && !(settings.WorkSessionsEnabled ?? await runtimeSettings.GetWorkSessionsEnabledAsync(cancellationToken)))
+        {
+            return
+            [
+                new NodeSettingsValidationError
+                {
+                    Field = await runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken)
+                        ? NodeSettingsField.WorkSessionsEnabled
+                        : NodeSettingsField.DevWorkflowsEnabled,
+                    Message = "Development workflows need work sessions: every workflow agent node runs as a work session. Turn work sessions on, or development workflows off."
+                }
+            ];
+        }
+
+        // The list as the runtime will resolve it after this save: the store normalizes a list with no non-blank name to null, which falls back to the seed.
+        if ((settings.AgentHomeEnabled ?? await runtimeSettings.GetAgentHomeEnabledAsync(cancellationToken))
+            && settings.ToolCapableModels?.Any(static model => !string.IsNullOrWhiteSpace(model)) != true
+            && runtimeSettings.GetToolCapableModelsSeed() is not { Count: > 0 })
+        {
+            return
+            [
+                new NodeSettingsValidationError
+                {
+                    Field = await runtimeSettings.GetAgentHomeEnabledAsync(cancellationToken)
+                        ? NodeSettingsField.ToolCapableModels
+                        : NodeSettingsField.AgentHomeEnabled,
+                    Message = "AgentHome needs at least one tool-capable model. Add one, or turn AgentHome off."
+                }
+            ];
         }
 
         if (settings.KeepModelWarmEnabled is not true)

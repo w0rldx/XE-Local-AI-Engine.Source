@@ -278,7 +278,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
         // Agent Mode off → the coder / run_in_agent_home tool handlers refuse at execution anyway, so skip the prepare
         // entirely rather than create a sandbox that nothing can read.
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetAgentHomeEnabledAsync(cancellationToken))
         {
             return new ConversationSandboxPreparation([], lease: null);
         }

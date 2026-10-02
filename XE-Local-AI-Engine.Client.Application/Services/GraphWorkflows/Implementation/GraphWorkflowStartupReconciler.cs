@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -28,28 +27,18 @@ internal sealed class GraphWorkflowStartupReconciler : IHostedService
     private const int RecoveryPasses = 3;
 
     private readonly ILogger<GraphWorkflowStartupReconciler> _logger;
-    private readonly GraphWorkflowOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
 
     public GraphWorkflowStartupReconciler(IServiceScopeFactory scopeFactory,
-        IOptions<GraphWorkflowOptions> options,
         ILogger<GraphWorkflowStartupReconciler> logger)
     {
-        ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _options = options.Value;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!_options.Enabled)
-        {
-            // The services stay registered when the feature is off, so the guard is here rather than in the container —
-            // and it is BEFORE the scope, so a disabled node opens no scope and reads no row.
-            return;
-        }
-
+        // Not gated on the feature switch: it is live, so a row a crash stranded while it was off must already be settled when it is turned on.
         await using var scope = _scopeFactory.CreateAsyncScope();
 
         // One scope for every pass, which is the caller shape ReconcileNonTerminalNodeRunsAsync documents: it clears the

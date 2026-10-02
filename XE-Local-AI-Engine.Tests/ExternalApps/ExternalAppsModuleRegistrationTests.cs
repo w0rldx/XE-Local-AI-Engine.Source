@@ -14,8 +14,10 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The External Apps module against a REAL container assembled by the production module extension, rather than
@@ -45,6 +47,22 @@ public sealed class ExternalAppsModuleRegistrationTests
         // the node.
         await using var scope = host.Services.CreateAsyncScope();
         AssertEx.NotNull(scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>());
+    }
+
+    /// <summary>
+    ///     A stored switch beats the configuration seed, for the live readers and for a reader left on the options alike.
+    /// </summary>
+    [Test]
+    public async Task Container_TheStoredSwitchWinsOverTheConfigurationSeed()
+    {
+        await using var host = BuildHost(enabled: false,
+            stored: new StoredNodeSettings
+            {
+                ExternalAppsEnabled = true
+            });
+
+        AssertEx.True(host.Services.GetRequiredService<IOptions<ExternalAppsOptions>>().Value.Enabled);
+        AssertEx.True(await host.Services.GetRequiredService<INodeRuntimeSettings>().GetExternalAppsEnabledAsync());
     }
 
     /// <summary>
@@ -139,7 +157,7 @@ public sealed class ExternalAppsModuleRegistrationTests
         AssertEx.Contains(string.Join(" ", exception.Failures), "not-absolute");
     }
 
-    private static TestHost BuildHost(bool enabled, string? instanceRoot = null)
+    private static TestHost BuildHost(bool enabled, string? instanceRoot = null, StoredNodeSettings? stored = null)
     {
         var values = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
@@ -170,6 +188,7 @@ public sealed class ExternalAppsModuleRegistrationTests
         // Supplied by other AddNode* modules in the real host. Constructing the layout only reads the path; nothing
         // here creates a directory or opens the database.
         builder.Services.TryAddSingleton(TimeProvider.System);
+        builder.Services.TryAddSingleton(SeededNodeRuntimeSettings.Create(values, () => stored ?? new StoredNodeSettings()));
         builder.Services.TryAddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(root));
         builder.Services.TryAddSingleton(Substitute.For<IRuntimeDeviceAudit>());
         builder.Services.TryAddScoped<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();

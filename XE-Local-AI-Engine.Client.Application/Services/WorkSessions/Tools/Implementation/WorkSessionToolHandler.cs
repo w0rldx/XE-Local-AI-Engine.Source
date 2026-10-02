@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     The shared shape of the four work-session state tools: bounded JSON in, one sentence out, never a throw.
@@ -28,16 +29,19 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
 
     protected ILogger Logger { get; }
     private readonly IWorkSessionEventPublisher _publisher;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
 
     protected WorkSessionToolHandler(IServiceScopeFactory scopeFactory,
         IOptions<WorkSessionOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         IWorkSessionEventPublisher publisher,
         ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         Options = options.Value;
     }
@@ -77,7 +81,7 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
         ArgumentNullException.ThrowIfNull(jsonArguments);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!Options.Enabled)
+        if (!await _runtimeSettings.GetWorkSessionsEnabledAsync(cancellationToken))
         {
             return Disabled;
         }

@@ -39,6 +39,7 @@ public sealed partial class NodeAdminMcpTools
     private readonly ILocalModelAdministrationService _localModelAdministrationService;
     private readonly INodeSettingsAdministrationService _nodeSettingsAdministrationService;
     private readonly ILlamaCppRuntimeAdministrationService _runtimeAdministrationService;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly TimeProvider _timeProvider;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<NodeAdminMcpTools> _logger;
@@ -51,6 +52,7 @@ public sealed partial class NodeAdminMcpTools
         IDevWorkflowRunService devWorkflowRunService,
         IDevWorkflowStore devWorkflowStore,
         IOptions<DevWorkflowOptions> devWorkflowOptions,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         IHttpContextAccessor httpContextAccessor,
         ILogger<NodeAdminMcpTools> logger)
@@ -62,6 +64,7 @@ public sealed partial class NodeAdminMcpTools
         ArgumentNullException.ThrowIfNull(devWorkflowStore);
         _devWorkflowStore = devWorkflowStore;
         _devWorkflowOptions = (devWorkflowOptions ?? throw new ArgumentNullException(nameof(devWorkflowOptions))).Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         ArgumentNullException.ThrowIfNull(ggufDownloadCoordinator);
         _ggufDownloadCoordinator = ggufDownloadCoordinator;
         ArgumentNullException.ThrowIfNull(localModelAdministrationService);

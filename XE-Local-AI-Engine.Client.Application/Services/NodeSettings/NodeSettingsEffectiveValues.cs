@@ -33,4 +33,22 @@ public sealed record NodeSettingsEffectiveValues
     public required int SchedulerHistoryRetentionDays { get; init; }
 
     public required int AgentHomeRunRetentionDays { get; init; }
+
+    public required bool DevelopmentEnabled { get; init; }
+
+    public required bool WorkSessionsEnabled { get; init; }
+
+    public required bool GraphWorkflowsEnabled { get; init; }
+
+    public required bool TranscriptionEnabled { get; init; }
+
+    public required bool ExternalAppsEnabled { get; init; }
+
+    public required bool ComputeEnabled { get; init; }
+
+    public required bool AgentHomeEnabled { get; init; }
+
+    public required bool SchedulerEnabled { get; init; }
+
+    public required bool DevWorkflowsEnabled { get; init; }
 }

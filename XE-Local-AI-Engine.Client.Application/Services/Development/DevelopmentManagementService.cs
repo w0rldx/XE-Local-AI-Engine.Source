@@ -2,12 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 public interface IDevelopmentManagementService
@@ -99,7 +99,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     private readonly IDevelopmentStore _store;
     private readonly IDevelopmentAttemptExecutionSupervisor _supervisor;
     private readonly IDevelopmentTemplateStore _templateStore;
-    private readonly DevWorkflowOptions _workflowOptions;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     /// <summary>
     ///     Read-only, and for one question: which workflow run — if any — owns the approval for a task.
@@ -125,7 +125,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         IDevelopmentProfileBackfillService profileBackfill,
         IDevelopmentTemplateStore templateStore,
         IDevWorkflowStore workflows,
-        IOptions<DevWorkflowOptions> workflowOptions,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<DevelopmentManagementService> logger)
     {
@@ -153,7 +153,7 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
         _supervisor = supervisor;
         ArgumentNullException.ThrowIfNull(templateStore);
         _templateStore = templateStore;
-        _workflowOptions = (workflowOptions ?? throw new ArgumentNullException(nameof(workflowOptions))).Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         ArgumentNullException.ThrowIfNull(workflows);
         _workflows = workflows;
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -609,11 +609,11 @@ internal sealed class DevelopmentManagementService : IDevelopmentManagementServi
     ///     because a hidden Apply button is a hint and any client could leave a HumanGate trail describing a decision
     ///     nobody made. The workflow lane passes by naming the run it applies for, so "on behalf of run X" against run
     ///     Y's task is refused. An ended run answers no further gate, so authority returns here; and with
-    ///     <c>DevWorkflows:Enabled</c> off the guard stands down, or a run live at the flip strands its tasks for good.
+    ///     the DevWorkflows switch off the guard stands down, or a run live at the flip strands its tasks for good.
     /// </remarks>
     private async Task EnsureApplyAuthorityAsync(Guid taskId, Guid? onBehalfOfWorkflowRunId, CancellationToken cancellationToken)
     {
-        if (!_workflowOptions.Enabled)
+        if (!await _runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken))
         {
             return;
         }

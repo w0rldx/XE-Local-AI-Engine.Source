@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
@@ -31,6 +32,10 @@ internal static class AddNodeExternalAppsExtensions
         // ValidateOnStart, so a misspelt instance root is a startup error rather than a storage failure on somebody's first install.
         builder.Services.AddOptions<ExternalAppsOptions>()
                .Bind(configuration.GetSection(ExternalAppsOptions.SectionName))
+#pragma warning disable MA0045 // Options Configure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
+               // The node-settings switch, so a reader left on these options sees the stored value. Appended after Bind so stored wins.
+               .Configure<INodeRuntimeSettings>(static (options, runtimeSettings) => options.Enabled = runtimeSettings.GetExternalAppsEnabled())
+#pragma warning restore MA0045
                .ValidateDataAnnotations()
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<ExternalAppsOptions>, ExternalAppsOptionsValidator>();

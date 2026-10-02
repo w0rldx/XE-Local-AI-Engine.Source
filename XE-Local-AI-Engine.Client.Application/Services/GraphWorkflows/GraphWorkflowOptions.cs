@@ -21,7 +21,7 @@ public sealed class GraphWorkflowOptions
     ///     gets a 404 for the whole prefix from the request-path gate in <c>Program</c>, and that gate's own default
     ///     moved with this one.
     /// </remarks>
-    public bool Enabled { get; init; } = true;
+    public bool Enabled { get; set; } = true;
 
     /// <summary>The cap on one definition's nodes, enforced when a definition is validated rather than when it runs.</summary>
     [Range(1, 10_000)]

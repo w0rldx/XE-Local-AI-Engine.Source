@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     <see cref="DevelopmentCapabilityService" />: the home-directory caveat is driven through the seam rather than by
@@ -60,6 +61,7 @@ public sealed class DevelopmentCapabilityServiceTests
             provider,
             probe,
             preflight,
+            StubNodeRuntimeSettings.Create().Build(),
             () => home);
     }
 }

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -388,6 +389,53 @@ public sealed class DevWorkflowDevTaskTests
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.Configuration, blocked.FailureClass, "no retry answers a node that has nothing to run on.");
         AssertEx.Equal(expected: 1, blocked.Attempt, "and no attempt is spent finding that out.");
+        AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "Development Mode is switched off");
+    }
+
+    /// <summary>
+    ///     Development Mode switched off LIVE leaves its services registered, so the lane itself has to refuse: a node
+    ///     dispatched after the flip asks the chain for nothing and stands down the way a node on a node without it does.
+    /// </summary>
+    [Test]
+    public async Task ADevTaskNodeDispatchedAfterDevelopmentWasSwitchedOffLiveStartsNothing()
+    {
+        await using var harness = NewHarness();
+        var (projectId, _) = await SeedDevelopmentTaskAsync(harness);
+        await SwitchDevelopmentOffAsync(harness);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        AssertEx.Empty(harness.Chain.Actions, "no coder, validation or review round may start with Development switched off.");
+        var blocked = await harness.ReadNodeRunAsync(runId, "implement");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.Configuration, blocked.FailureClass, "no retry turns Development Mode back on.");
+        AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "Development Mode is switched off");
+    }
+
+    /// <summary>
+    ///     The flip mid-run: the attempt already in flight is left to land, and the next round it would have started is
+    ///     not asked for — the node stands down instead.
+    /// </summary>
+    [Test]
+    public async Task ARunningDevTaskNodeStartsNoFurtherRoundOnceDevelopmentIsSwitchedOffLive()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness);
+        harness.Chain.HoldNextAttempt();
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+        var askedBeforeTheFlip = harness.Chain.Actions.Count;
+        AssertEx.True(askedBeforeTheFlip > 0, "the coder round started while Development was on.");
+
+        await SwitchDevelopmentOffAsync(harness);
+        await LandTheHeldAttemptAsync(harness, taskId);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId);
+
+        AssertEx.Equal(askedBeforeTheFlip, harness.Chain.Actions.Count, "the landed attempt is not followed by another round.");
+        var blocked = await harness.ReadNodeRunAsync(runId, "implement");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.Configuration, blocked.FailureClass);
         AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "Development Mode is switched off");
     }
 
@@ -1550,6 +1598,10 @@ public sealed class DevWorkflowDevTaskTests
         public IReadOnlyList<Guid> ListRunIdsLastWrittenBefore(DateTimeOffset cutoffUtc) =>
             [];
     }
+
+    /// <summary>The operator's live switch, written where every consumer reads it: the stored node setting.</summary>
+    private static async Task SwitchDevelopmentOffAsync(DevWorkflowHarness harness) =>
+        _ = await harness.Services.GetRequiredService<INodeSettingsStore>().UpdateAsync(static settings => settings with { DevelopmentEnabled = false });
 
     /// <summary>Lands the held attempt the way its runner would have, so the drain has nothing left to wait for.</summary>
     private static async Task LandTheHeldAttemptAsync(DevWorkflowHarness harness, Guid taskId)

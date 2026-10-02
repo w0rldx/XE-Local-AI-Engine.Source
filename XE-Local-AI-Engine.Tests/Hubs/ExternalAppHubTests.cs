@@ -5,7 +5,6 @@ using System.Reflection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Hubs;
@@ -15,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Tests.Endpoints.ExternalApps.V1;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The subscription side of the instance hub. <see cref="IExternalAppService.ListEventsAsync" /> is the replay
@@ -249,11 +249,7 @@ public sealed class ExternalAppHubTests
         context.ConnectionAborted.Returns(CancellationToken.None);
         var groups = Substitute.For<IGroupManager>();
         var clients = Substitute.For<IHubCallerClients>();
-        var hub = new ExternalAppHub(apps,
-            Options.Create(new ExternalAppsOptions
-            {
-                Enabled = enabled
-            }))
+        var hub = new ExternalAppHub(apps, StubNodeRuntimeSettings.Create().WithExternalAppsEnabled(enabled).Build())
         {
             Context = context,
             Groups = groups,

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 
 /// <summary>
@@ -43,15 +44,18 @@ public sealed class TranscriptionHub : Hub
 
     private readonly ILiveTranscriptionSessionRegistry _live;
     private readonly TranscriptionOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly ITranscriptionService _sessions;
 
     public TranscriptionHub(ITranscriptionService sessions,
         ILiveTranscriptionSessionRegistry live,
-        IOptions<TranscriptionOptions> options)
+        IOptions<TranscriptionOptions> options,
+        INodeRuntimeSettings runtimeSettings)
     {
         ArgumentNullException.ThrowIfNull(live);
         _live = live;
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         ArgumentNullException.ThrowIfNull(sessions);
         _sessions = sessions;
     }
@@ -61,7 +65,7 @@ public sealed class TranscriptionHub : Hub
     /// </summary>
     public async Task<TranscriptionSessionSubscriptionSnapshot> SubscribeSession(Guid sessionId, long afterSeq)
     {
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetTranscriptionEnabledAsync(Context.ConnectionAborted))
         {
             throw new HubException(TranscriptionHubErrors.Disabled);
         }
@@ -150,7 +154,7 @@ public sealed class TranscriptionHub : Hub
     /// </remarks>
     public async Task PushAudioFrame(Guid sessionId, int channel, byte[] pcm16k)
     {
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetTranscriptionEnabledAsync(Context.ConnectionAborted))
         {
             throw new HubException(TranscriptionHubErrors.Disabled);
         }
@@ -215,13 +219,12 @@ public sealed class TranscriptionHub : Hub
     ///     Ends the session: the lanes flush, the last commits persist, the status push goes out and the entry is
     ///     disposed.
     /// </summary>
+    /// <remarks>
+    ///     Not behind the transcription switch, unlike subscribe and push: a session that was live when the operator switched the
+    ///     feature off must still be endable, or it keeps recording with nothing able to stop it.
+    /// </remarks>
     public async Task EndSession(Guid sessionId)
     {
-        if (!_options.Enabled)
-        {
-            throw new HubException(TranscriptionHubErrors.Disabled);
-        }
-
         if (sessionId == Guid.Empty)
         {
             throw new HubException(TranscriptionHubErrors.SessionRequired);

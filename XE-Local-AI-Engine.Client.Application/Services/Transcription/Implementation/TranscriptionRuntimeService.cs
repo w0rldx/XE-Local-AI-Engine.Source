@@ -24,6 +24,7 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
     private readonly IWhisperServerSupervisor _supervisor;
     private readonly IProcessAudioCaptureSource _processCapture;
     private readonly TranscriptionOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     public TranscriptionRuntimeService(IWhisperServerSupervisor supervisor,
         IWhisperRuntimeActivityGate activityGate,
@@ -34,7 +35,8 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
         INodeSettingsStore settingsStore,
         IRuntimeDeviceAudit runtimeDeviceAudit,
         IProcessAudioCaptureSource processCapture,
-        IOptions<TranscriptionOptions> options)
+        IOptions<TranscriptionOptions> options,
+        INodeRuntimeSettings runtimeSettings)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _activityGate = activityGate ?? throw new ArgumentNullException(nameof(activityGate));
@@ -47,6 +49,7 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
         _processCapture = processCapture ?? throw new ArgumentNullException(nameof(processCapture));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     /// <inheritdoc />
@@ -58,7 +61,7 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
 
         return new TranscriptionRuntimeView
         {
-            Enabled = _options.Enabled,
+            Enabled = await _runtimeSettings.GetTranscriptionEnabledAsync(ct),
             Runtime = _supervisor.GetStatus(),
             Activity = _activityGate.GetSnapshot(),
             ManagedRuntime = managedRuntime,

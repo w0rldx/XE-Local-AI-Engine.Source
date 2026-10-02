@@ -1044,6 +1044,128 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public async Task FeatureSwitches_UnsavedReadBackTheirSeed_AndSavedValuesRoundTrip()
+    {
+        var saved = new StoredNodeSettings();
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => saved);
+        nodeSettingsStore.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             saved = call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(saved);
+                             return Task.FromResult(saved);
+                         });
+
+        // Seeds that differ from three code defaults (work sessions, external apps, AgentHome), the shipped-config shape.
+        await using var factory = CreateFactory(nodeSettingsStore,
+            configuration: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["WorkSessions:Enabled"] = "true",
+                ["ExternalApps:Enabled"] = "true",
+                ["AgentHome:Enabled"] = "true",
+                ["Transcription:Enabled"] = "false"
+            });
+        using var client = factory.CreateClient();
+
+        using var firstGet = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var firstGetResponse = await client.SendAsync(firstGet);
+        var unsaved = await ReadJsonAsync<NodeSettingsResponse>(firstGetResponse);
+        AssertEx.True(unsaved.WorkSessionsEnabled, "an unsaved switch reports its seed, not the code default");
+        AssertEx.True(unsaved.ExternalAppsEnabled);
+        AssertEx.True(unsaved.AgentHomeEnabled);
+        AssertEx.False(unsaved.TranscriptionEnabled);
+        AssertEx.True(unsaved.GraphWorkflowsEnabled, "an unseeded switch reports its code default");
+        AssertEx.False(unsaved.DevWorkflowsEnabled);
+
+        using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            DevelopmentEnabled = false,
+            WorkSessionsEnabled = true,
+            GraphWorkflowsEnabled = false,
+            TranscriptionEnabled = true,
+            ExternalAppsEnabled = false,
+            ComputeEnabled = true,
+            AgentHomeEnabled = false,
+            SchedulerEnabled = false,
+            DevWorkflowsEnabled = true
+        });
+        using var putResponse = await client.SendAsync(putRequest);
+        AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+        AssertEx.Equal(expected: false, saved.DevelopmentEnabled);
+        AssertEx.Equal(expected: true, saved.WorkSessionsEnabled);
+        AssertEx.Equal(expected: false, saved.GraphWorkflowsEnabled);
+        AssertEx.Equal(expected: true, saved.TranscriptionEnabled);
+        AssertEx.Equal(expected: false, saved.ExternalAppsEnabled);
+        AssertEx.Equal(expected: true, saved.ComputeEnabled);
+        AssertEx.Equal(expected: false, saved.AgentHomeEnabled);
+        AssertEx.Equal(expected: false, saved.SchedulerEnabled);
+        AssertEx.Equal(expected: true, saved.DevWorkflowsEnabled);
+
+        using var secondGet = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var secondGetResponse = await client.SendAsync(secondGet);
+        var reread = await ReadJsonAsync<NodeSettingsResponse>(secondGetResponse);
+        AssertEx.False(reread.DevelopmentEnabled);
+        AssertEx.True(reread.WorkSessionsEnabled);
+        AssertEx.False(reread.GraphWorkflowsEnabled);
+        AssertEx.True(reread.TranscriptionEnabled, "a saved true overrides the seeded false");
+        AssertEx.False(reread.ExternalAppsEnabled, "a saved false overrides the seeded true");
+        AssertEx.True(reread.ComputeEnabled);
+        AssertEx.False(reread.AgentHomeEnabled);
+        AssertEx.False(reread.SchedulerEnabled);
+        AssertEx.True(reread.DevWorkflowsEnabled);
+    }
+
+    [Test]
+    [Arguments(true, false, "devWorkflowsEnabled")]
+    [Arguments(null, false, "workSessionsEnabled")]
+    public async Task SaveNodeSettings_WhenDevWorkflowsWouldRunWithoutWorkSessions_BindsTheErrorToTheSwitchThatBrokeIt(bool? devWorkflows,
+        bool workSessions,
+        string expectedField)
+    {
+        // Development workflows already stored on, so the second row's request only takes work sessions away.
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            DevWorkflowsEnabled = devWorkflows is null ? true : null
+        });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            DevWorkflowsEnabled = devWorkflows,
+            WorkSessionsEnabled = workSessions
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal(expectedField, document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenAgentHomeIsEnabledWithNoToolCapableModel_BindsTheErrorToTheSwitch()
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore, StubNodeRuntimeSettings.Create().WithAgentHomeEnabled(false).WithToolCapableModels().WithToolCapableModelsSeed().Build());
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            AgentHomeEnabled = true
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal("agentHomeEnabled", document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task UnsavedRetentionWindow_WithASeededNonDefaultValue_ReadsBackTheSeed_AndSavingAnotherValuePersistsIt()
     {
         var saved = new StoredNodeSettings();

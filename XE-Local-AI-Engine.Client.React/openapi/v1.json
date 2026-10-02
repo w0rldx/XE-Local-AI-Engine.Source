@@ -43479,6 +43479,33 @@
           },
           "maxAllowedAgentHomeRunRetentionMaxTotalBytes": {
             "type": "integer"
+          },
+          "developmentEnabled": {
+            "type": "boolean"
+          },
+          "workSessionsEnabled": {
+            "type": "boolean"
+          },
+          "graphWorkflowsEnabled": {
+            "type": "boolean"
+          },
+          "transcriptionEnabled": {
+            "type": "boolean"
+          },
+          "externalAppsEnabled": {
+            "type": "boolean"
+          },
+          "computeEnabled": {
+            "type": "boolean"
+          },
+          "agentHomeEnabled": {
+            "type": "boolean"
+          },
+          "schedulerEnabled": {
+            "type": "boolean"
+          },
+          "devWorkflowsEnabled": {
+            "type": "boolean"
           }
         }
       },
@@ -44135,6 +44162,42 @@
             "type": "integer",
             "maximum": 1099511627776,
             "minimum": 0,
+            "nullable": true
+          },
+          "developmentEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "workSessionsEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "graphWorkflowsEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "transcriptionEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "externalAppsEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "computeEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "agentHomeEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "schedulerEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "devWorkflowsEnabled": {
+            "type": "boolean",
             "nullable": true
           }
         }

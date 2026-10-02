@@ -6,6 +6,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     The workflow runtime's one loop: it advances a persisted run by transitioning persisted node runs and holds no
@@ -79,6 +80,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     private readonly ILogger<DevWorkflowDispatcher> _logger;
     private readonly DevWorkflowMaterializer _materializer;
     private readonly DevWorkflowOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly DevWorkflowRetryPolicy _retries;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
@@ -92,6 +94,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         DevWorkflowRetryPolicy retries,
         DevWorkflowMaterializer materializer,
         IOptions<DevWorkflowOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<DevWorkflowDispatcher> logger)
     {
@@ -104,6 +107,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public void Signal(Guid runId) =>
@@ -112,13 +116,10 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     /// <summary>What the signal pump is about to read. The only way to assert that a productive tick re-signals.</summary>
     internal ChannelReader<Guid> PendingSignals => _signals.Reader;
 
+    /// <summary>Starts both pumps on every node: each tick reads the switch, so a node idles while it is off and dispatches once it is on.</summary>
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        if (_options.Enabled)
-        {
-            _loop = Task.WhenAll(PumpSignalsAsync(_stopping.Token), PumpSweepAsync(_stopping.Token));
-        }
-
+        _loop = Task.WhenAll(PumpSignalsAsync(_stopping.Token), PumpSweepAsync(_stopping.Token));
         return Task.CompletedTask;
     }
 
@@ -1220,7 +1221,11 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         {
             await foreach (var runId in _signals.Reader.ReadAllAsync(cancellationToken))
             {
-                await AdvanceSafelyAsync(runId, cancellationToken);
+                // A signal dropped while the switch is off is not lost: the first sweep after it is back on finds the run.
+                if (await _runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken))
+                {
+                    await AdvanceSafelyAsync(runId, cancellationToken);
+                }
             }
         }
         catch (OperationCanceledException)
@@ -1250,6 +1255,11 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
     internal async Task SweepAsync(CancellationToken cancellationToken)
     {
+        if (!await _runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken))
+        {
+            return;
+        }
+
         var runIds = new HashSet<Guid>();
         try
         {

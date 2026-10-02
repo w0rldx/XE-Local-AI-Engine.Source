@@ -11,13 +11,19 @@ import type {
 	SaveNodeSettingsResponse,
 } from "@/core/api/generated";
 import {
+	getDevelopmentCapabilityQueryKey,
+	getDevWorkflowCapabilityQueryKey,
+	getGraphWorkflowCapabilityQueryKey,
 	getNodeSettingsOptions,
 	getNodeSettingsQueryKey,
+	getTranscriptionRuntimeStatusQueryKey,
+	getWorkSessionCapabilityQueryKey,
 	saveNodeSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { useUiMode } from "@/core/layout/hooks/useUiMode";
+import { useEffectiveToolCapableModels } from "@/features/node-settings/queries/useEffectiveToolCapableModels";
 import { useOllamaRuntimeConfigured } from "@/features/node-settings/queries/useOllamaRuntimeConfigured";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
@@ -46,6 +52,7 @@ import {
 	applyExternalAccessPreset,
 	buildNodeSettingsRequest,
 	type ExternalAccessPreset,
+	featureSwitchFields,
 	isExternalAccessBooleanField,
 	type NodeSettingsFieldsForm,
 	summarizePendingChanges,
@@ -125,6 +132,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector }
 	// Whether the optional Ollama runtime is gated off on this node (XE_OLLAMA_RUNTIME_ENABLED=false). FAIL OPEN: only
 	// a definite `false` disables the endpoint field, so a still-loading or failed probe leaves the field in place.
 	const ollamaRuntimeDisabled = useOllamaRuntimeConfigured().data === false;
+	const effectiveToolCapableModels = useEffectiveToolCapableModels();
 
 	// Replaces the draft (and the save baseline) with a server state. Every deliberate "take the server's values" path
 	// goes through here: the first load, Reset, and a successful save.
@@ -160,8 +168,9 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector }
 	// The save body and the save bar's counts come from the same diff, so the bar never promises a change Save skips.
 	// Developer-only fields are included ONLY when developer mode is on (off-mode their cards are unmounted).
 	const draftRequest = useMemo(
-		() => buildNodeSettingsRequest(fieldsForm, fieldsBaseline, fieldBounds, developerMode, pendingPreset),
-		[fieldsForm, fieldsBaseline, fieldBounds, developerMode, pendingPreset],
+		() =>
+			buildNodeSettingsRequest(fieldsForm, fieldsBaseline, fieldBounds, developerMode, pendingPreset, effectiveToolCapableModels),
+		[fieldsForm, fieldsBaseline, fieldBounds, developerMode, pendingPreset, effectiveToolCapableModels],
 	);
 	const pendingChanges = summarizePendingChanges(draftRequest, fieldsForm, fieldsBaseline);
 	const timeoutChanged = timeoutSeconds !== timeoutBaseline;
@@ -223,6 +232,19 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector }
 			// voice runtime reads its gate from.
 			queryClient.setQueryData(getNodeSettingsQueryKey(), updatedSettings);
 			await queryClient.invalidateQueries({ queryKey: getNodeSettingsQueryKey() });
+			// The capability probes the nav and the gated pages read answer from the live switches; a cached answer from
+			// before the save would keep a re-enabled feature hidden (or a disabled one offered) until it went stale.
+			if (featureSwitchFields.some((field) => field in variables.body)) {
+				await Promise.all(
+					[
+						getDevelopmentCapabilityQueryKey(),
+						getDevWorkflowCapabilityQueryKey(),
+						getGraphWorkflowCapabilityQueryKey(),
+						getWorkSessionCapabilityQueryKey(),
+						getTranscriptionRuntimeStatusQueryKey(),
+					].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+				);
+			}
 		},
 		onError: (error) => toast.error(errorMessage(error)),
 	});

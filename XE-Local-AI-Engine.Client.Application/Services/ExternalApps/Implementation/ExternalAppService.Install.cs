@@ -29,7 +29,7 @@ internal sealed partial class ExternalAppService
 
     public async Task<InstallPreview> PreviewInstallAsync(string applicationId, CancellationToken cancellationToken = default)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
@@ -57,7 +57,7 @@ internal sealed partial class ExternalAppService
 
     public async Task<ExternalAppInstanceSummary> InstallAsync(InstallCommand command, CancellationToken cancellationToken = default)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(command);
 
         await using var scope = _scopeFactory.CreateAsyncScope();

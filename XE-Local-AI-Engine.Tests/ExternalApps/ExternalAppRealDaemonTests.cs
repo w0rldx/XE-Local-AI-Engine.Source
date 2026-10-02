@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Tests.Containers;
 using XE_Local_AI_Engine.Tests.ContainerSandbox;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The only tests that put a whole two-service application through the real <c>ExternalAppService</c> against a
@@ -502,6 +503,7 @@ public sealed class ExternalAppRealDaemonTests
                 // No bridge in the real-daemon box: it exercises the container runtime, not the bridge, and a
                 // container told about an endpoint nothing is listening on would be told a falsehood.
                 new ContainerBridgeEndpointSource(endpoint: null),
+                SeededNodeRuntimeSettings.FromSeed("ExternalApps:Enabled", value: true),
                 TimeProvider.System,
                 NullLogger<ExternalAppService>.Instance);
 

@@ -32,6 +32,10 @@ internal static class AddNodeTranscriptionExtensions
         // and the range annotation is the whole check.
         builder.Services.AddOptions<TranscriptionOptions>()
                .Bind(configuration.GetSection(TranscriptionOptions.Section))
+#pragma warning disable MA0045 // Options Configure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
+               // The node-settings switch, so a reader left on these options sees the stored value. Appended after Bind so stored wins.
+               .Configure<INodeRuntimeSettings>(static (options, runtimeSettings) => options.Enabled = runtimeSettings.GetTranscriptionEnabled())
+#pragma warning restore MA0045
                .ValidateDataAnnotations()
                .ValidateOnStart();
 

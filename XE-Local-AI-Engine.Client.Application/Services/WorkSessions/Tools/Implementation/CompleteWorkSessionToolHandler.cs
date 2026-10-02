@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     <c>complete_work_session</c>: the model closing the session, met or not.
@@ -16,8 +17,9 @@ internal sealed class CompleteWorkSessionToolHandler : WorkSessionToolHandler<Co
 {
     public CompleteWorkSessionToolHandler(IServiceScopeFactory scopeFactory,
         IOptions<WorkSessionOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         IWorkSessionEventPublisher publisher,
-        ILogger<CompleteWorkSessionToolHandler> logger) : base(scopeFactory, options, publisher, logger)
+        ILogger<CompleteWorkSessionToolHandler> logger) : base(scopeFactory, options, runtimeSettings, publisher, logger)
     {
     }
 

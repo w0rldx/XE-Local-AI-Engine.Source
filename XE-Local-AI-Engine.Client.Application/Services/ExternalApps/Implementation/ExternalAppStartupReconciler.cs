@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>The boot pass that makes the stored instances agree with the daemon again, and the same pass the operator's runtime refresh re-runs.</summary>
 /// <remarks>
@@ -27,6 +28,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
     private readonly ExternalAppsOptions _options;
     private readonly IExternalAppEventPublisher _publisher;
     private readonly ExternalAppOperationRunner _runner;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ExternalAppService _service;
     private readonly TimeProvider _timeProvider;
@@ -40,6 +42,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         IExternalAppEventPublisher publisher,
         IHostApplicationLifetime lifetime,
         IOptions<ExternalAppsOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<ExternalAppStartupReconciler> logger)
     {
@@ -53,6 +56,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
         _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -62,6 +66,12 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
     ///     the rows are. It completes without faulting: <see cref="RunBootPassAsync" /> guards its whole body.
     /// </summary>
     internal Task BootPass => _bootPass;
+
+    /// <summary>
+    ///     Whether the boot pass found the feature switched off and judged nothing, so the state observer knows the rows are
+    ///     still unsettled when the switch first reads on.
+    /// </summary>
+    internal bool BootPassFoundFeatureOff { get; private set; }
 
     /// <summary>
     ///     The boot pass, started and never awaited: the host must reach <c>ApplicationStarted</c> without it.
@@ -74,11 +84,6 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
     /// </remarks>
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!_options.Enabled)
-        {
-            return Task.CompletedTask;
-        }
-
         // ApplicationStopping, not this start call's token, which is cancelled the moment startup finishes. The
         // Task.Run takes None: the pass's lifetime is the host's.
         _bootPass = Task.Run(() => RunBootPassAsync(_lifetime.ApplicationStopping), CancellationToken.None);
@@ -107,6 +112,12 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
     {
         try
         {
+            if (!await _runtimeSettings.GetExternalAppsEnabledAsync(cancellationToken))
+            {
+                BootPassFoundFeatureOff = true;
+                return;
+            }
+
             var summary = await ReconcileAsync(cancellationToken);
             if (summary != ExternalAppReconcileSummary.Nothing)
             {
@@ -131,7 +142,7 @@ internal sealed class ExternalAppStartupReconciler : IExternalAppStartupReconcil
 
     public async Task<ExternalAppReconcileSummary> ReconcileAsync(CancellationToken cancellationToken = default)
     {
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetExternalAppsEnabledAsync(cancellationToken))
         {
             return ExternalAppReconcileSummary.Nothing;
         }

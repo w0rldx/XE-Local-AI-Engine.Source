@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     The run engine's one loop, advancing a persisted run by transitioning persisted node runs and holding no
@@ -77,6 +78,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     private readonly GraphWorkflowInlineExecutor _inline;
     private readonly ILogger<GraphWorkflowDispatcher> _logger;
     private readonly GraphWorkflowOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
     private int _disposed;
@@ -86,6 +88,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         GraphWorkflowInlineExecutor inline,
         IEnumerable<IGraphWorkflowNodeExecutor> executors,
         IOptions<GraphWorkflowOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<GraphWorkflowDispatcher> logger)
     {
@@ -97,6 +100,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _executors = [.. executors];
         _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     /// <summary>What the signal pump is about to read. The only way to assert that a productive tick re-signals.</summary>
@@ -113,13 +117,10 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     public void Signal(Guid runId) =>
         _ = _signals.Writer.TryWrite(runId);
 
+    /// <summary>Starts both pumps on every node: each tick reads the switch, so a node idles while it is off and dispatches once it is on.</summary>
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        if (_options.Enabled)
-        {
-            _loop = Task.WhenAll(PumpSignalsAsync(_stopping.Token), PumpSweepAsync(_stopping.Token));
-        }
-
+        _loop = Task.WhenAll(PumpSignalsAsync(_stopping.Token), PumpSweepAsync(_stopping.Token));
         return Task.CompletedTask;
     }
 
@@ -863,7 +864,11 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         {
             await foreach (var runId in _signals.Reader.ReadAllAsync(cancellationToken))
             {
-                await AdvanceSafelyAsync(runId, cancellationToken);
+                // A signal dropped while the switch is off is not lost: the first sweep after it is back on finds the run.
+                if (await _runtimeSettings.GetGraphWorkflowsEnabledAsync(cancellationToken))
+                {
+                    await AdvanceSafelyAsync(runId, cancellationToken);
+                }
             }
         }
         catch (OperationCanceledException)
@@ -893,6 +898,11 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
 
     internal async Task SweepAsync(CancellationToken cancellationToken)
     {
+        if (!await _runtimeSettings.GetGraphWorkflowsEnabledAsync(cancellationToken))
+        {
+            return;
+        }
+
         var runIds = new HashSet<Guid>();
         try
         {

@@ -8,6 +8,7 @@ import {
 	NodeSettingsAgentWorkspacesCard,
 } from "@/features/node-settings/components/NodeSettingsAdvancedFieldsCard";
 import { NodeSettingsExternalAccessCard } from "@/features/node-settings/components/NodeSettingsExternalAccessCard";
+import { NodeSettingsFeaturesCard } from "@/features/node-settings/components/NodeSettingsFeaturesCard";
 import {
 	nodeSettingsFieldError,
 	nodeSettingsFieldLabel,
@@ -88,7 +89,12 @@ export function NodeSettingsFieldsCard(props: NodeSettingsFieldsCardProps) {
 
 	switch (section) {
 		case "general":
-			return <NodeSettingsUiModeCard value={form.uiMode} onChange={(value) => onChange("uiMode", value)} />;
+			return (
+				<>
+					<NodeSettingsUiModeCard value={form.uiMode} onChange={(value) => onChange("uiMode", value)} />
+					<NodeSettingsFeaturesCard form={form} errors={errors} onChange={onChange} />
+				</>
+			);
 		case "chat":
 			return (
 				<>

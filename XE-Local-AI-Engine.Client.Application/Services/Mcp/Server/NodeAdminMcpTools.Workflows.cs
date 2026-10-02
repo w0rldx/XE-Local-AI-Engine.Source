@@ -24,7 +24,7 @@ public sealed partial class NodeAdminMcpTools
         InvokeAuditedAsync("list_workflow_runs", AuditArguments(("limit", limit), ("status", status)), async () =>
         {
             var boundedLimit = ClampWorkflowListLimit(limit);
-            if (!_devWorkflowOptions.Enabled)
+            if (!await _runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken))
             {
                 return new McpWorkflowRunListResponse
                 {
@@ -90,7 +90,7 @@ public sealed partial class NodeAdminMcpTools
         CancellationToken cancellationToken) =>
         InvokeAuditedAsync("get_workflow_run", AuditArguments(("run_id", run_id)), async () =>
         {
-            if (!_devWorkflowOptions.Enabled)
+            if (!await _runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken))
             {
                 return new McpWorkflowRunGetResponse
                 {

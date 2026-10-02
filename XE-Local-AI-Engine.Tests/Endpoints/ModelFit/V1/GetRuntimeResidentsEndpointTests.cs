@@ -64,13 +64,19 @@ public sealed class GetRuntimeResidentsEndpointTests
     }
 
     [Test]
-    public async Task GetResidents_WithTranscriptionDisabled_AnswersOkWithoutWhisperRows()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task GetResidents_WithTranscriptionDisabled_AnswersOkWithoutWhisperRows(bool throughTheStoredSetting)
     {
         var host = new Doubles(new ImageRuntimeActivityGate());
         host.ImageSupervisor.GetResidents().Returns([ImageProcess("sd15", leased: false, exited: false)]);
         host.WhisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Ready, "base", WhisperBackend.Cpu);
 
-        var (status, body) = await GetAsync(host, factory => factory.AddNodeBearerToken, transcriptionEnabled: false);
+        // Off through the configuration seed, or through a stored node setting that beats a seed of on.
+        var (status, body) = await GetAsync(host,
+            factory => factory.AddNodeBearerToken,
+            transcriptionEnabled: throughTheStoredSetting,
+            storedSettingsJson: throughTheStoredSetting ? """{ "transcriptionEnabled": false }""" : null);
 
         AssertEx.Equal(HttpStatusCode.OK, status);
         using var document = JsonDocument.Parse(body);
@@ -146,7 +152,8 @@ public sealed class GetRuntimeResidentsEndpointTests
 
     private static async Task<(HttpStatusCode Status, string Body)> GetAsync(Doubles host,
         Func<TestServerWebAppFactory, Action<HttpRequestMessage>> authorize,
-        bool transcriptionEnabled = true)
+        bool transcriptionEnabled = true,
+        string? storedSettingsJson = null)
     {
         await using var factory = new TestServerWebAppFactory
         {
@@ -166,6 +173,12 @@ public sealed class GetRuntimeResidentsEndpointTests
                 services.AddSingleton<IWhisperRuntimeActivityGate>(host.WhisperGate);
             }
         };
+        if (storedSettingsJson is not null)
+        {
+            _ = Directory.CreateDirectory(factory.NodeDataDirectoryPath);
+            await File.WriteAllTextAsync(Path.Combine(factory.NodeDataDirectoryPath, "node-settings.json"), storedSettingsJson);
+        }
+
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, ResidentsRoute);
         authorize(factory)(request);

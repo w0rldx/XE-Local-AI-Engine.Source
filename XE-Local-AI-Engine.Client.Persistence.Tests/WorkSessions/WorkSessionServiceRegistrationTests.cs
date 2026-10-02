@@ -3,12 +3,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.WorkSessions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 
@@ -45,28 +47,23 @@ public sealed class WorkSessionServiceRegistrationTests
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IHostedService) && descriptor.ImplementationType == typeof(WorkSessionStartupReconciler)));
     }
 
+    /// <summary>
+    ///     The switch is live, so recovery cannot wait for it: a session stranded while the feature was off would stay
+    ///     Running once it is turned on, and BeginAsync refuses to resume a Running session.
+    /// </summary>
     [Test]
-    public async Task Reconciler_CollapsesInFlightSessionsOnlyWhenEnabled()
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task Reconciler_CollapsesInFlightSessionsWhateverTheFeatureSwitchSays(bool enabled)
     {
-        using var disabledFixture = new WorkSessionTestFixture();
-        await using var disabledContext = await disabledFixture.CreateSchemaAsync();
-        var disabledStore = WorkSessionTestFixture.StoreFor(disabledContext);
-        var disabledSessionId = await ArrangeRunningAsync(disabledStore);
-        await RunReconcilerAsync(disabledStore, new WorkSessionOptions());
-        AssertEx.Equal(AgentWorkSessionStatus.Running,
-            (await disabledStore.GetAsync(disabledSessionId)).Status,
-            "A disabled node must leave its session rows exactly as it found them.");
+        using var fixture = new WorkSessionTestFixture();
+        await using var context = await fixture.CreateSchemaAsync();
+        var store = WorkSessionTestFixture.StoreFor(context);
+        var sessionId = await ArrangeRunningAsync(store);
 
-        using var enabledFixture = new WorkSessionTestFixture();
-        await using var enabledContext = await enabledFixture.CreateSchemaAsync();
-        var enabledStore = WorkSessionTestFixture.StoreFor(enabledContext);
-        var enabledSessionId = await ArrangeRunningAsync(enabledStore);
-        await RunReconcilerAsync(enabledStore,
-            new WorkSessionOptions
-            {
-                Enabled = true
-            });
-        AssertEx.Equal(AgentWorkSessionStatus.Interrupted, (await enabledStore.GetAsync(enabledSessionId)).Status);
+        await RunReconcilerAsync(store, enabled);
+
+        AssertEx.Equal(AgentWorkSessionStatus.Interrupted, (await store.GetAsync(sessionId)).Status);
     }
 
     [Test]
@@ -96,14 +93,18 @@ public sealed class WorkSessionServiceRegistrationTests
         return sessionId;
     }
 
-    private static async Task RunReconcilerAsync(IAgentWorkSessionStore store, WorkSessionOptions options)
+    private static async Task RunReconcilerAsync(IAgentWorkSessionStore store, bool enabled)
     {
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+        runtimeSettings.GetWorkSessionsEnabledAsync(Arg.Any<CancellationToken>()).Returns(enabled);
         var services = new ServiceCollection();
         services.AddSingleton(store);
+        services.AddSingleton(runtimeSettings);
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         await using var provider = services.BuildServiceProvider();
-        var reconciler = new WorkSessionStartupReconciler(provider.GetRequiredService<IServiceScopeFactory>(),
-            Options.Create(options),
-            NullLogger<WorkSessionStartupReconciler>.Instance);
+
+        // Built the way the host builds it, so a reconciler that came to read the switch would read this one.
+        var reconciler = ActivatorUtilities.CreateInstance<WorkSessionStartupReconciler>(provider);
 
         await reconciler.StartAsync(CancellationToken.None);
         await reconciler.StopAsync(CancellationToken.None);

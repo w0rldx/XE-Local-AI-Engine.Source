@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.DevWorkflows.Dispatch;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The dispatcher over real rows: what one tick decides, and what a run's whole life looks like from the outside.
@@ -470,24 +471,27 @@ public sealed class DevWorkflowDispatcherTests
             "one signal reached a node run several ticks past where it was sent.");
     }
 
-    /// <summary>A disabled node registers the dispatcher and starts nothing, so a signal moves no run.</summary>
+    /// <summary>The pumps run on every node and read the switch per tick: off, a signal moves no run; on, the next tick does.</summary>
     [Test]
-    public async Task ADisabledNodeStartsNoPump()
+    public async Task ADisabledNodeIdles_AndTheNextTickAfterTheSwitchTurnsOnDispatches()
     {
-        // A private host, for the same reason: it starts a dispatcher, and asserts that nothing moved.
+        // A private host, for the same reason: it starts a dispatcher, and asserts on what moved.
         await using var harness = new DevWorkflowHarness();
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.TerminalGate);
+        var settings = StubNodeRuntimeSettings.Create().WithDevWorkflowsEnabled(false);
 
-        await using var dispatcher = harness.CreateReplacementDispatcher(enabled: false);
+        await using var dispatcher = harness.CreateReplacementDispatcher(settings.Build());
         await dispatcher.StartAsync(CancellationToken.None);
         dispatcher.Signal(runId);
 
-        await AssertEx.SettleAsync();
+        // The pump drains the signal while off and drops it, which the empty channel proves; the run must not have moved.
+        await AssertEx.EventuallyAsync(() => dispatcher.PendingSignals.Count == 0, TimeSpan.FromSeconds(10), "the running pump must read the signal.");
+        await dispatcher.SweepAsync(CancellationToken.None);
+        AssertEx.Equal(DevWorkflowRunStatus.Pending, (await harness.ReadRunAsync(runId)).Status, "neither pump may advance a run while the switch is off.");
 
-        // The status alone would be true by construction — nothing moved it before the signal either. The signal
-        // sitting UNREAD in the channel is what proves the pump never started: a running pump drains it.
-        AssertEx.Equal(expected: 1, dispatcher.PendingSignals.Count, "a disabled node must leave the signal unconsumed.");
-        AssertEx.Equal(DevWorkflowRunStatus.Pending, (await harness.ReadRunAsync(runId)).Status);
+        _ = settings.WithDevWorkflowsEnabled(true);
+        dispatcher.Signal(runId);
+        _ = await harness.WaitForRunStatusAsync(runId, DevWorkflowRunStatus.WaitingForApproval);
     }
 
     /// <summary>

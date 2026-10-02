@@ -3,11 +3,11 @@ namespace XE_Local_AI_Engine.Tests.DevWorkflows.Materialization;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -889,7 +889,7 @@ public sealed class DevWorkflowIntegrationApplyTests
 
     private static Task SeedAsync(DevWorkflowHarness harness) =>
         new DevWorkflowDefinitionSeeder(harness.Services.GetRequiredService<IServiceScopeFactory>(),
-                harness.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+                harness.Services.GetRequiredService<INodeRuntimeSettings>(),
                 harness.Services.GetRequiredService<ILogger<DevWorkflowDefinitionSeeder>>())
             .StartAsync(CancellationToken.None);
 

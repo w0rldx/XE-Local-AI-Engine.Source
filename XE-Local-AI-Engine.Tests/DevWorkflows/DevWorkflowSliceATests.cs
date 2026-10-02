@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -173,7 +174,7 @@ public sealed class DevWorkflowSliceATests
         var scopes = factory.Services.GetRequiredService<IServiceScopeFactory>();
         await new WorkSessionAgentSeeder(scopes, factory.Services.GetRequiredService<ILogger<WorkSessionAgentSeeder>>()).StartAsync(CancellationToken.None);
         await new DevWorkflowDefinitionSeeder(scopes,
-                factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+                factory.Services.GetRequiredService<INodeRuntimeSettings>(),
                 factory.Services.GetRequiredService<ILogger<DevWorkflowDefinitionSeeder>>())
             .StartAsync(CancellationToken.None);
     }
@@ -185,7 +186,6 @@ public sealed class DevWorkflowSliceATests
 
         var scopes = factory.Services.GetRequiredService<IServiceScopeFactory>();
         await new WorkSessionStartupReconciler(scopes,
-                factory.Services.GetRequiredService<IOptions<WorkSessionOptions>>(),
                 factory.Services.GetRequiredService<ILogger<WorkSessionStartupReconciler>>())
             .StartAsync(CancellationToken.None);
         await new DevWorkflowStartupReconciler(scopes,
@@ -199,6 +199,7 @@ public sealed class DevWorkflowSliceATests
             factory.Services.GetRequiredService<DevWorkflowRetryPolicy>(),
             factory.Services.GetRequiredService<DevWorkflowMaterializer>(),
             factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+            factory.Services.GetRequiredService<INodeRuntimeSettings>(),
             factory.Services.GetRequiredService<TimeProvider>(),
             factory.Services.GetRequiredService<ILogger<DevWorkflowDispatcher>>());
     }

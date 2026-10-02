@@ -12,7 +12,7 @@ public sealed class DevWorkflowOptions
 {
     public const string Section = "DevWorkflows";
 
-    public bool Enabled { get; init; }
+    public bool Enabled { get; set; }
 
     /// <summary>
     ///     The cap on one definition's nodes, enforced when a definition is validated rather than when it runs.

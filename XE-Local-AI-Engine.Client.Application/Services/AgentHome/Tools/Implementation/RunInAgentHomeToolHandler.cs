@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     <see cref="IClientLocalToolHandler" /> for <c>run_in_agent_home</c> (ClientLocal).
@@ -16,14 +17,13 @@ internal sealed class RunInAgentHomeToolHandler : IClientLocalToolHandler
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly bool _agentHomeEnabled;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IAgentHomeToolGateway _gateway;
 
-    public RunInAgentHomeToolHandler(IConfiguration configuration, IAgentHomeToolGateway gateway)
+    public RunInAgentHomeToolHandler(INodeRuntimeSettings runtimeSettings, IAgentHomeToolGateway gateway)
     {
-        ArgumentNullException.ThrowIfNull(configuration);
         _gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
-        _agentHomeEnabled = configuration.GetValue<bool>("AgentHome:Enabled");
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public string ToolName => AgentHomeToolDefinition.ToolName;
@@ -38,7 +38,7 @@ internal sealed class RunInAgentHomeToolHandler : IClientLocalToolHandler
     {
         ArgumentNullException.ThrowIfNull(jsonArguments);
 
-        if (!_agentHomeEnabled)
+        if (!await _runtimeSettings.GetAgentHomeEnabledAsync(cancellationToken))
         {
             return "AgentHome is disabled on this node (AgentHome:Enabled=false).";
         }

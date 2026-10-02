@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The poll that keeps a running instance honest between boots. Reconciliation runs at startup and on an explicit
@@ -197,6 +198,69 @@ public sealed class ExternalAppStateObserverTests
         AssertEx.Equal(ExternalAppInstanceStatus.Running,
             AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId)).Status,
             "A row nothing could judge keeps the status it had.");
+    }
+
+    /// <summary>
+    ///     An off boot judged nothing, so the first tick that reads the switch on settles interrupted rows before it polls.
+    /// </summary>
+    [Test]
+    public async Task Observer_AfterAnOffBoot_ReconcilesOnceOnTheFirstOnTick_ThenPolls()
+    {
+        var manifest = SingleServiceManifest();
+        await using var harness = await RunningHarnessAsync(manifest);
+        var pass = await ListsMadeByOnePassAsync(harness);
+        var interrupted = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Installing);
+        var settings = StubNodeRuntimeSettings.Create().WithExternalAppsEnabled(false);
+        var runtimeSettings = settings.Build();
+        var reconciler = harness.CreateReconciler(runtimeSettings);
+        await reconciler.StartAsync(CancellationToken.None);
+        await reconciler.BootPass;
+        using var observer = harness.CreateObserver(reconciler, runtimeSettings);
+        var lists = harness.Gated.ListDetailedCalls;
+
+        await observer.PollOnceAsync(CancellationToken.None);
+        AssertEx.Equal(lists, harness.Gated.ListDetailedCalls, "an off tick must not reconcile or poll");
+
+        _ = settings.WithExternalAppsEnabled(true);
+        await observer.PollOnceAsync(CancellationToken.None);
+        AssertEx.Equal(ExternalAppInstanceStatus.Failed, AssertEx.NotNull(await harness.ReadAsync(interrupted.Id)).Status,
+            "the first on tick settles the row an engine death left Installing");
+        AssertEx.True(harness.Gated.ListDetailedCalls >= lists + pass + 1, "the first on tick reconciles, then polls");
+        lists = harness.Gated.ListDetailedCalls;
+
+        await observer.PollOnceAsync(CancellationToken.None);
+        AssertEx.Equal(lists + 1, harness.Gated.ListDetailedCalls, "a tick that stays on only polls");
+    }
+
+    [Test]
+    public async Task Observer_SwitchedOffAndOnAgain_ReconcilesAgain()
+    {
+        await using var harness = await RunningHarnessAsync(SingleServiceManifest());
+        var pass = await ListsMadeByOnePassAsync(harness);
+        var settings = StubNodeRuntimeSettings.Create().WithExternalAppsEnabled(true);
+        var runtimeSettings = settings.Build();
+        var reconciler = harness.CreateReconciler(runtimeSettings);
+        await reconciler.StartAsync(CancellationToken.None);
+        await reconciler.BootPass;
+        using var observer = harness.CreateObserver(reconciler, runtimeSettings);
+        var lists = harness.Gated.ListDetailedCalls;
+
+        await observer.PollOnceAsync(CancellationToken.None);
+        AssertEx.Equal(lists + 1, harness.Gated.ListDetailedCalls, "the boot pass judged the rows, so an on boot's first tick only polls");
+
+        _ = settings.WithExternalAppsEnabled(false);
+        await observer.PollOnceAsync(CancellationToken.None);
+        _ = settings.WithExternalAppsEnabled(true);
+        await observer.PollOnceAsync(CancellationToken.None);
+
+        AssertEx.Equal(lists + pass + 2, harness.Gated.ListDetailedCalls, "switching back on reconciles again before the poll");
+    }
+
+    private static async Task<int> ListsMadeByOnePassAsync(ExternalAppServiceHarness harness)
+    {
+        var before = harness.Gated.ListDetailedCalls;
+        _ = await harness.CreateReconciler().ReconcileAsync();
+        return harness.Gated.ListDetailedCalls - before;
     }
 
     private static ContainerRunState Exited(long exitCode)

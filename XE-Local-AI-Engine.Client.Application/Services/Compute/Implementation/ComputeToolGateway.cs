@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
@@ -66,6 +67,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     private readonly ComputeOptions _options;
     private readonly int _maxToolResultCharacters;
     private readonly IAgentSandboxRuntimeProvider _provider;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     public ComputeToolGateway(IAgentSandboxRuntimeProvider provider,
         IAgentHomeIdentityProvider identityProvider,
@@ -73,6 +75,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         IOptions<ComputeOptions> options,
         IOptions<LocalContainerOptions> nodeOptions,
         IOptions<AgentToolPipelineOptions> pipelineOptions,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<ComputeToolGateway> logger)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
@@ -84,6 +87,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         _nodeOptions = nodeOptions.Value;
         ArgumentNullException.ThrowIfNull(pipelineOptions);
         _maxToolResultCharacters = pipelineOptions.Value.MaxToolResultCharacters;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -109,7 +113,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
 
         // The node kill-switch, read HERE and nowhere else: a copy in a handler is a property of one CALLER, so a second
         // caller reaching this gateway would execute code on a node that never opted in. The sentence is the one the model reads.
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetComputeEnabledAsync(cancellationToken))
         {
             return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.ComputeDisabled,
                 "The Python compute tool is disabled on this node (Compute:Enabled=false).");

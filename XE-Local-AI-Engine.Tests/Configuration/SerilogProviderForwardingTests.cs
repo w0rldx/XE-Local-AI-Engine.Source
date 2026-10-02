@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 // Regression guard for the OTLP log-export path.
 //
@@ -39,7 +40,7 @@ public sealed class SerilogProviderForwardingTests : IDisposable
         var builder = CreateBuilder();
         // Mirrors Program.cs, which clears providers before AddServiceDefaults/AddServices compose the real pipeline.
         builder.Logging.ClearProviders();
-        builder.AddServices(builder.Configuration);
+        builder.AddServices(builder.Configuration, NodeStartupSettings.Read(builder.Configuration, builder.Environment));
         // Stands in for the OpenTelemetry logger provider: any provider other than Serilog's own sinks.
         using var recordingProvider = new RecordingLoggerProvider(recorded);
         builder.Logging.AddProvider(recordingProvider);

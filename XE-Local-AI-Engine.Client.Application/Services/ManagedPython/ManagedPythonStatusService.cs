@@ -1,8 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ManagedPython;
 
-using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Providers.Training;
@@ -27,16 +26,16 @@ public sealed class ManagedPythonStatusService
     private const int TrainingProfileRevision = 1;
 
     private readonly ComputePythonEnvironment _compute;
-    private readonly ComputeOptions _computeOptions;
     private readonly Func<bool> _isLinux;
     private readonly Func<bool> _isPlatformSupported;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IAgentSandboxRuntimeProvider _sandbox;
     private readonly ManagedPythonToolchain _toolchain;
     private readonly ITrainingRuntimeService _training;
 
     internal ManagedPythonStatusService(ComputePythonEnvironment compute,
         ITrainingRuntimeService training,
-        IOptions<ComputeOptions> computeOptions,
+        INodeRuntimeSettings runtimeSettings,
         IAgentSandboxRuntimeProvider sandbox,
         ManagedPythonToolchain toolchain,
         Func<bool>? isLinux = null,
@@ -44,8 +43,7 @@ public sealed class ManagedPythonStatusService
     {
         _compute = compute ?? throw new ArgumentNullException(nameof(compute));
         _training = training ?? throw new ArgumentNullException(nameof(training));
-        ArgumentNullException.ThrowIfNull(computeOptions);
-        _computeOptions = computeOptions.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
         _toolchain = toolchain ?? throw new ArgumentNullException(nameof(toolchain));
         _isLinux = isLinux ?? OperatingSystem.IsLinux;
@@ -67,20 +65,20 @@ public sealed class ManagedPythonStatusService
     }
 
     /// <summary>Removes the Compute venv and its state; refused while Compute is unsupported or provisioning.</summary>
-    public Task<ManagedPythonActionResult> RemoveComputeAsync(CancellationToken cancellationToken)
+    public async Task<ManagedPythonActionResult> RemoveComputeAsync(CancellationToken cancellationToken)
     {
-        return ComputeUnsupportedReason() is { } reason ? Task.FromResult(Unsupported(reason)) : _compute.RemoveAsync(cancellationToken);
+        return await ComputeUnsupportedReasonAsync(cancellationToken) is { } reason ? Unsupported(reason) : await _compute.RemoveAsync(cancellationToken);
     }
 
     /// <summary>Removes the Compute venv and provisions it again in the background; refused while unsupported or provisioning.</summary>
-    public Task<ManagedPythonActionResult> RepairComputeAsync(CancellationToken cancellationToken)
+    public async Task<ManagedPythonActionResult> RepairComputeAsync(CancellationToken cancellationToken)
     {
-        return ComputeUnsupportedReason() is { } reason ? Task.FromResult(Unsupported(reason)) : _compute.RepairAsync(cancellationToken);
+        return await ComputeUnsupportedReasonAsync(cancellationToken) is { } reason ? Unsupported(reason) : await _compute.RepairAsync(cancellationToken);
     }
 
     private async Task<ManagedPythonEnvironmentStatus> GetComputeStatusAsync(CancellationToken cancellationToken)
     {
-        return ComputeUnsupportedReason() is { } reason
+        return await ComputeUnsupportedReasonAsync(cancellationToken) is { } reason
             ? new ManagedPythonEnvironmentStatus
             {
                 ProfileId = ComputePythonEnvironment.ProfileId,
@@ -91,7 +89,7 @@ public sealed class ManagedPythonStatusService
     }
 
     /// <summary>The same three gates <c>ComputeToolGateway</c> and the environment apply before a script can run, in the same order.</summary>
-    private string? ComputeUnsupportedReason()
+    private async Task<string?> ComputeUnsupportedReasonAsync(CancellationToken cancellationToken)
     {
         // An unpinned architecture (linux-arm64) must answer here: ManagedPythonPins.Current would throw further in.
         if (!_isLinux() || !_isPlatformSupported())
@@ -99,7 +97,7 @@ public sealed class ManagedPythonStatusService
             return "The Python compute tool is available on Linux x64 only.";
         }
 
-        if (!_computeOptions.Enabled)
+        if (!await _runtimeSettings.GetComputeEnabledAsync(cancellationToken))
         {
             return "The Python compute tool is disabled on this node (Compute:Enabled=false).";
         }

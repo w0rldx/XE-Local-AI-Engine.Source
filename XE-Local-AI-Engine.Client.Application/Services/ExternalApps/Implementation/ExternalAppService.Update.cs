@@ -15,7 +15,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
 {
     public async Task<UpdatePreview> PreviewUpdateAsync(Guid instanceId, CancellationToken cancellationToken = default)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var services = ScopedServices.From(scope.ServiceProvider);
@@ -73,7 +73,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
         UpdateCommand command,
         CancellationToken cancellationToken = default)
     {
-        EnsureEnabled();
+        await EnsureEnabledAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(command);
 
         await using var scope = _scopeFactory.CreateAsyncScope();

@@ -100,6 +100,18 @@ public sealed class SaveNodeSettingsEndpoint : Endpoint<SaveNodeSettingsRequest,
             case NodeSettingsField.MemoryExtractionModelName:
                 AddError(r => r.MemoryExtractionModelName, error.Message);
                 break;
+            case NodeSettingsField.ToolCapableModels:
+                AddError(r => r.ToolCapableModels, error.Message);
+                break;
+            case NodeSettingsField.WorkSessionsEnabled:
+                AddError(r => r.WorkSessionsEnabled, error.Message);
+                break;
+            case NodeSettingsField.DevWorkflowsEnabled:
+                AddError(r => r.DevWorkflowsEnabled, error.Message);
+                break;
+            case NodeSettingsField.AgentHomeEnabled:
+                AddError(r => r.AgentHomeEnabled, error.Message);
+                break;
             default:
                 AddError(error.Message);
                 break;

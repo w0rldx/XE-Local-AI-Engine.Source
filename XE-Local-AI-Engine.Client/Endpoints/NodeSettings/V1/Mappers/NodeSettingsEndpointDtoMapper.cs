@@ -255,7 +255,16 @@ internal static class NodeSettingsEndpointDtoMapper
             MaxAllowedAgentHomeRunRetentionMaxRuns = StoredNodeSettings.MaxAgentHomeRunRetentionMaxRuns,
             AgentHomeRunRetentionMaxTotalBytes = settings.AgentHomeRunRetentionMaxTotalBytes,
             MinAgentHomeRunRetentionMaxTotalBytes = StoredNodeSettings.MinAgentHomeRunRetentionMaxTotalBytes,
-            MaxAllowedAgentHomeRunRetentionMaxTotalBytes = StoredNodeSettings.MaxAgentHomeRunRetentionMaxTotalBytes
+            MaxAllowedAgentHomeRunRetentionMaxTotalBytes = StoredNodeSettings.MaxAgentHomeRunRetentionMaxTotalBytes,
+            DevelopmentEnabled = effective.DevelopmentEnabled,
+            WorkSessionsEnabled = effective.WorkSessionsEnabled,
+            GraphWorkflowsEnabled = effective.GraphWorkflowsEnabled,
+            TranscriptionEnabled = effective.TranscriptionEnabled,
+            ExternalAppsEnabled = effective.ExternalAppsEnabled,
+            ComputeEnabled = effective.ComputeEnabled,
+            AgentHomeEnabled = effective.AgentHomeEnabled,
+            SchedulerEnabled = effective.SchedulerEnabled,
+            DevWorkflowsEnabled = effective.DevWorkflowsEnabled
         };
     }
 
@@ -443,7 +452,16 @@ internal static class NodeSettingsEndpointDtoMapper
             AgentHomeMaxInnerToolCalls = request.AgentHomeMaxInnerToolCalls ?? currentSettings.AgentHomeMaxInnerToolCalls,
             AgentHomePatchApplyTimeoutSeconds = request.AgentHomePatchApplyTimeoutSeconds ?? currentSettings.AgentHomePatchApplyTimeoutSeconds,
             AgentHomeRunRetentionMaxRuns = request.AgentHomeRunRetentionMaxRuns ?? currentSettings.AgentHomeRunRetentionMaxRuns,
-            AgentHomeRunRetentionMaxTotalBytes = request.AgentHomeRunRetentionMaxTotalBytes ?? currentSettings.AgentHomeRunRetentionMaxTotalBytes
+            AgentHomeRunRetentionMaxTotalBytes = request.AgentHomeRunRetentionMaxTotalBytes ?? currentSettings.AgentHomeRunRetentionMaxTotalBytes,
+            DevelopmentEnabled = request.DevelopmentEnabled ?? currentSettings.DevelopmentEnabled,
+            WorkSessionsEnabled = request.WorkSessionsEnabled ?? currentSettings.WorkSessionsEnabled,
+            GraphWorkflowsEnabled = request.GraphWorkflowsEnabled ?? currentSettings.GraphWorkflowsEnabled,
+            TranscriptionEnabled = request.TranscriptionEnabled ?? currentSettings.TranscriptionEnabled,
+            ExternalAppsEnabled = request.ExternalAppsEnabled ?? currentSettings.ExternalAppsEnabled,
+            ComputeEnabled = request.ComputeEnabled ?? currentSettings.ComputeEnabled,
+            AgentHomeEnabled = request.AgentHomeEnabled ?? currentSettings.AgentHomeEnabled,
+            SchedulerEnabled = request.SchedulerEnabled ?? currentSettings.SchedulerEnabled,
+            DevWorkflowsEnabled = request.DevWorkflowsEnabled ?? currentSettings.DevWorkflowsEnabled
         };
     }
 

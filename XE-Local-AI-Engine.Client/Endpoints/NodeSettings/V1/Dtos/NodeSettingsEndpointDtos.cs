@@ -659,6 +659,33 @@ public sealed record NodeSettingsResponse
     public long MinAgentHomeRunRetentionMaxTotalBytes { get; init; }
 
     public long MaxAllowedAgentHomeRunRetentionMaxTotalBytes { get; init; }
+
+    /// <summary>Whether Development Mode is on. After a node restart for its endpoints, services and hub; the live switch closes them sooner. Effective value: stored, else the configuration seed.</summary>
+    public bool DevelopmentEnabled { get; init; }
+
+    /// <summary>Whether work sessions run. Applies to the next request. Effective value: stored, else the configuration seed.</summary>
+    public bool WorkSessionsEnabled { get; init; }
+
+    /// <summary>Whether graph workflows run. Applies to the next request and dispatcher tick. Effective value: stored, else the configuration seed.</summary>
+    public bool GraphWorkflowsEnabled { get; init; }
+
+    /// <summary>Whether transcription runs. Applies to the next request. Effective value: stored, else the configuration seed.</summary>
+    public bool TranscriptionEnabled { get; init; }
+
+    /// <summary>Whether external apps are on. Applies to the next request; the container bridge after a node restart. Effective value: stored, else the configuration seed.</summary>
+    public bool ExternalAppsEnabled { get; init; }
+
+    /// <summary>Whether the <c>run_python</c> tool executes. Applies to the next call; the Mathematician agent is seeded on the next restart. Effective value: stored, else the configuration seed.</summary>
+    public bool ComputeEnabled { get; init; }
+
+    /// <summary>Whether the AgentHome tools run. Applies to the next call. Effective value: stored, else the configuration seed.</summary>
+    public bool AgentHomeEnabled { get; init; }
+
+    /// <summary>Whether the scheduler runs. Applies after a node restart. Effective value: stored, else the configuration seed.</summary>
+    public bool SchedulerEnabled { get; init; }
+
+    /// <summary>Whether development workflows run. Applies to the next request and dispatcher tick; definitions are seeded on the next restart. Effective value: stored, else the configuration seed.</summary>
+    public bool DevWorkflowsEnabled { get; init; }
 }
 
 /// <summary>
@@ -1048,6 +1075,33 @@ public sealed record SaveNodeSettingsRequest
 
     /// <summary>AgentHome runs byte ceiling, 0 = no byte limit (developer-only). Applies to the next sweep.</summary>
     public long? AgentHomeRunRetentionMaxTotalBytes { get; init; }
+
+    /// <summary>Whether Development Mode is on. After a node restart for its endpoints, services and hub; the live switch closes them sooner.</summary>
+    public bool? DevelopmentEnabled { get; init; }
+
+    /// <summary>Whether work sessions run. Applies to the next request.</summary>
+    public bool? WorkSessionsEnabled { get; init; }
+
+    /// <summary>Whether graph workflows run. Applies to the next request and dispatcher tick.</summary>
+    public bool? GraphWorkflowsEnabled { get; init; }
+
+    /// <summary>Whether transcription runs. Applies to the next request.</summary>
+    public bool? TranscriptionEnabled { get; init; }
+
+    /// <summary>Whether external apps are on. Applies to the next request; the container bridge after a node restart.</summary>
+    public bool? ExternalAppsEnabled { get; init; }
+
+    /// <summary>Whether the <c>run_python</c> tool executes. Applies to the next call; the Mathematician agent is seeded on the next restart.</summary>
+    public bool? ComputeEnabled { get; init; }
+
+    /// <summary>Whether the AgentHome tools run. Applies to the next call.</summary>
+    public bool? AgentHomeEnabled { get; init; }
+
+    /// <summary>Whether the scheduler runs. Applies after a node restart.</summary>
+    public bool? SchedulerEnabled { get; init; }
+
+    /// <summary>Whether development workflows run. Applies to the next request and dispatcher tick; definitions are seeded on the next restart.</summary>
+    public bool? DevWorkflowsEnabled { get; init; }
 }
 
 /// <summary>

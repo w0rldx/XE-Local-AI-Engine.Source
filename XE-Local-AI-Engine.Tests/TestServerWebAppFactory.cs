@@ -113,7 +113,16 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
 
     public bool? EnableDevelopmentMode { get; init; }
 
+    /// <summary>This host's per-factory data directory (<c>NodeData:Directory</c>); a file written here before the host boots is read at startup.</summary>
+    public string NodeDataDirectoryPath => _nodeDataDirectory;
+
     public Action<IServiceCollection>? ConfigureAdditionalTestServices { get; init; }
+
+    /// <summary>
+    ///     Builds the container with <c>ValidateScopes</c> and <c>ValidateOnBuild</c> on, as the product does only in the
+    ///     <c>Development</c> environment, so a registration the host skips fails the boot instead of a later request.
+    /// </summary>
+    public bool ValidateServiceProvider { get; init; }
 
     // Last-wins overlay on the fixture's own configuration block, replacing the WebApplicationFactory-era
     // WithWebHostBuilder(b => b.ConfigureAppConfiguration(...)) re-configuration.
@@ -323,6 +332,15 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
                     {
                         builder.WebHost.UseTestServer();
                         ConfigureTestServices(builder.Services);
+                        if (ValidateServiceProvider)
+                        {
+                            // After the product's own environment-conditional call, so this is what the container is built with.
+                            _ = builder.Host.UseDefaultServiceProvider(static options =>
+                            {
+                                options.ValidateScopes = true;
+                                options.ValidateOnBuild = true;
+                            });
+                        }
                     }
                 }).GetAwaiter().GetResult();
 

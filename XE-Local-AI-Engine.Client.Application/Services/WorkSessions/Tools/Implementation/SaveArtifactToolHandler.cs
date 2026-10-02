@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     <c>save_artifact</c>: the session's durable outputs.
@@ -21,9 +22,10 @@ internal sealed class SaveArtifactToolHandler : WorkSessionToolHandler<SaveArtif
 
     public SaveArtifactToolHandler(IServiceScopeFactory scopeFactory,
         IOptions<WorkSessionOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         IWorkSessionEventPublisher publisher,
         IWorkSessionArtifactBlobStore blobStore,
-        ILogger<SaveArtifactToolHandler> logger) : base(scopeFactory, options, publisher, logger)
+        ILogger<SaveArtifactToolHandler> logger) : base(scopeFactory, options, runtimeSettings, publisher, logger)
     {
         ArgumentNullException.ThrowIfNull(blobStore);
         _blobStore = blobStore;

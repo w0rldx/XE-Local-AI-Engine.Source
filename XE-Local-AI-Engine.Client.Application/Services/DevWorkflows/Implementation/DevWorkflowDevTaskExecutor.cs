@@ -6,6 +6,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     The implementation lane: a <c>DevTask</c> node run drives the Development task its work item's project owns —
@@ -66,6 +67,7 @@ internal sealed class DevWorkflowDevTaskExecutor
     private readonly IDevWorkflowArtifactBlobStore _blobs;
     private readonly ILogger<DevWorkflowDevTaskExecutor> _logger;
     private readonly DevWorkflowRetryPolicy _retries;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceProvider _services;
     private readonly TimeProvider _timeProvider;
 
@@ -73,12 +75,14 @@ internal sealed class DevWorkflowDevTaskExecutor
         IDevWorkflowArtifactBlobStore blobs,
         DevWorkflowRetryPolicy retries,
         TimeProvider timeProvider,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<DevWorkflowDevTaskExecutor> logger)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _blobs = blobs ?? throw new ArgumentNullException(nameof(blobs));
         _retries = retries ?? throw new ArgumentNullException(nameof(retries));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -101,10 +105,10 @@ internal sealed class DevWorkflowDevTaskExecutor
         ArgumentNullException.ThrowIfNull(nodeRun);
 
         var (development, management) = Resolve();
-        if (development is null || management is null)
+        if (development is null || management is null || !await _runtimeSettings.GetDevelopmentEnabledAsync(cancellationToken))
         {
-            // Development Mode is switched off on this node, so there is no task machine, no workspace and no sandbox.
-            // Nothing here can run, and no retry changes that.
+            // Development Mode is switched off on this node — at startup, so there is no task machine, workspace or
+            // sandbox, or live since, which leaves them registered. Nothing here may run, and no retry changes that.
             return await BlockAsync(store,
                 graph,
                 run,
@@ -724,6 +728,21 @@ internal sealed class DevWorkflowDevTaskExecutor
             nodeRun.NodeKey,
             nodeRun.Attempt,
             string.Create(CultureInfo.InvariantCulture, $"devtask-{task.Status}-{task.CurrentReviewRound}-{attemptCount}"));
+
+        // The one place this lane starts Development work. A switch flipped off live leaves the services registered, so a
+        // running node must stop here rather than start the next coder, validation or review round; one in flight finishes.
+        if (!await _runtimeSettings.GetDevelopmentEnabledAsync(cancellationToken))
+        {
+            return await BlockAsync(store,
+                graph,
+                run,
+                nodeRun,
+                nodeRuns,
+                DevWorkflowFailureClasses.Configuration,
+                "This node implements a development task, and Development Mode is switched off on this node.",
+                cancellationToken);
+        }
+
         try
         {
             _ = await management.StartNextActionAsync(projectId, taskId, operationId, cancellationToken);

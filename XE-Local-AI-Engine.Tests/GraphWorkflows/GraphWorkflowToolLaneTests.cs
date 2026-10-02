@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
@@ -371,7 +370,6 @@ public sealed class GraphWorkflowToolLaneTests
     private static async Task RestartAsync(GraphWorkflowHarness harness)
     {
         await new GraphWorkflowStartupReconciler(harness.Services.GetRequiredService<IServiceScopeFactory>(),
-                Options.Create(harness.CurrentOptions()),
                 harness.Services.GetRequiredService<ILogger<GraphWorkflowStartupReconciler>>())
             .StartAsync(CancellationToken.None);
 

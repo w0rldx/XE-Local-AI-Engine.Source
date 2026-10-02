@@ -3,10 +3,10 @@ namespace XE_Local_AI_Engine.Client.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Endpoints.WorkSessions.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
@@ -30,19 +30,19 @@ public sealed class WorkSessionHub : Hub
     /// </remarks>
     private const int ReplayCap = 200;
 
-    private readonly WorkSessionOptions _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IWorkSessionService _service;
 
-    public WorkSessionHub(IWorkSessionService service, IOptions<WorkSessionOptions> options)
+    public WorkSessionHub(IWorkSessionService service, INodeRuntimeSettings runtimeSettings)
     {
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         ArgumentNullException.ThrowIfNull(service);
         _service = service;
     }
 
     public async Task<WorkSessionSubscriptionSnapshot> SubscribeSession(Guid sessionId, long afterSeq)
     {
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetWorkSessionsEnabledAsync(Context.ConnectionAborted))
         {
             throw new HubException("Work sessions are disabled on this node.");
         }

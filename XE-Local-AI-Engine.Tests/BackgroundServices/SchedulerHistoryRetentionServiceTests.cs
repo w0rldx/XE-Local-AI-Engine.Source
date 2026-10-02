@@ -30,10 +30,27 @@ public sealed class SchedulerHistoryRetentionServiceTests
         using var harness = new Harness(enabled: false);
         using var service = harness.CreateService();
 
-        // No cancellation is needed: the disabled path must return on its own rather than parking on a timer.
-        await BackgroundServiceTestHelper.RunExecuteAsync(service, CancellationToken.None);
+        // The disabled path must return on its own rather than park on a timer. real-timer: a wall-clock bound, because a
+        // parked loop never sees the fake clock move; it only turns a regression into a failure instead of a hung gate.
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await BackgroundServiceTestHelper.RunExecuteAsync(service, deadline.Token);
 
+        AssertEx.False(deadline.IsCancellationRequested, "the disabled sweeper parked on its timer instead of returning");
         AssertEx.Empty(harness.Cutoffs);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenOnlyTheOptionsSayDisabled_StillSweeps_BecauseTheNodeSettingIsTheAuthority()
+    {
+        using var harness = new Harness(enabled: true, optionsEnabled: false);
+        using var service = harness.CreateService();
+
+        await RunLoopAsync(service, harness, async () =>
+        {
+            harness.Time.Advance(TimeSpan.FromMinutes(1));
+            await AssertEx.EventuallyAsync(() => !harness.Cutoffs.IsEmpty, TimeSpan.FromSeconds(5),
+                "SchedulerOptions.Enabled is only the seed; the node-settings switch decides.");
+        });
     }
 
     [Test]
@@ -108,13 +125,15 @@ public sealed class SchedulerHistoryRetentionServiceTests
         private readonly SchedulerOptions _options;
         private readonly ServiceProvider _provider;
         private readonly bool _failFirstSweep;
+        private readonly bool _enabled;
 
-        public Harness(bool enabled, bool failFirstSweep = false)
+        public Harness(bool enabled, bool failFirstSweep = false, bool optionsEnabled = true)
         {
             _failFirstSweep = failFirstSweep;
+            _enabled = enabled;
             _options = new SchedulerOptions
             {
-                Enabled = enabled,
+                Enabled = optionsEnabled,
                 RetentionSweepIntervalMinutes = 1
             };
 
@@ -135,7 +154,7 @@ public sealed class SchedulerHistoryRetentionServiceTests
             new(_provider.GetRequiredService<IServiceScopeFactory>(),
                 Time,
                 Options.Create(_options),
-                StubNodeRuntimeSettings.Create().WithSchedulerHistoryRetentionDays(RetentionDays).Build(),
+                StubNodeRuntimeSettings.Create().WithSchedulerEnabled(_enabled).WithSchedulerHistoryRetentionDays(RetentionDays).Build(),
                 Logger);
 
         public void Dispose()

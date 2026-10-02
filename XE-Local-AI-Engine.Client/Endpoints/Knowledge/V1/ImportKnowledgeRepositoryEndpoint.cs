@@ -6,16 +6,20 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>Starts bounded background indexing for a previously registered local Git repository.</summary>
 public sealed class ImportKnowledgeRepositoryEndpoint : Endpoint<ImportKnowledgeRepositoryRequest, ImportKnowledgeRepositoryResponse>
 {
-    private readonly bool _developmentModeEnabled;
+    private readonly bool _developmentRegistered;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scopeFactory, IOptions<DevelopmentOptions> options)
+    public ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scopeFactory, IOptions<DevelopmentOptions> options, INodeRuntimeSettings runtimeSettings)
     {
-        _developmentModeEnabled = (options ?? throw new ArgumentNullException(nameof(options))).Value.Enabled;
+        // The options carry the startup value, which decided whether the repository services exist; the live switch closes the rest.
+        _developmentRegistered = (options ?? throw new ArgumentNullException(nameof(options))).Value.Enabled;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         ArgumentNullException.ThrowIfNull(scopeFactory);
         _scopeFactory = scopeFactory;
     }
@@ -31,7 +35,7 @@ public sealed class ImportKnowledgeRepositoryEndpoint : Endpoint<ImportKnowledge
 
     public override async Task HandleAsync(ImportKnowledgeRepositoryRequest req, CancellationToken ct)
     {
-        if (!_developmentModeEnabled)
+        if (!_developmentRegistered || !await _runtimeSettings.GetDevelopmentEnabledAsync(ct))
         {
             await Send.NotFoundAsync(ct);
             return;

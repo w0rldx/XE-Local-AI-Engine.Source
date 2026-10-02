@@ -46,6 +46,15 @@ const nodeSettingsFieldSections: Readonly<
 	Record<keyof NodeSettingsFieldsForm | "maxMessageRequestTimeoutSeconds", NodeSettingsSectionId>
 > = {
 	uiMode: "general",
+	developmentEnabled: "general",
+	workSessionsEnabled: "general",
+	graphWorkflowsEnabled: "general",
+	transcriptionEnabled: "general",
+	externalAppsEnabled: "general",
+	computeEnabled: "general",
+	agentHomeEnabled: "general",
+	schedulerEnabled: "general",
+	devWorkflowsEnabled: "general",
 	maxMessageRequestTimeoutSeconds: "chat",
 	defaultModelName: "chat",
 	enableTools: "chat",

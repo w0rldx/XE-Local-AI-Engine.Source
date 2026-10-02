@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
 using System.Text.Json;
-using Microsoft.Extensions.Configuration;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The two places the <c>selectedFolderIds</c> contract exists — the model-visible schema in
@@ -137,14 +137,7 @@ public sealed class AgentHomeToolSchemaContractTests
     private static RunInAgentHomeToolHandler CreateEnabledHandler(out RecordingGateway gateway)
     {
         gateway = new RecordingGateway();
-        var configuration = new ConfigurationBuilder()
-                            .AddInMemoryCollection(new Dictionary<string, string?>
-                            {
-                                ["AgentHome:Enabled"] = "true"
-                            })
-                            .Build();
-
-        return new RunInAgentHomeToolHandler(configuration, gateway);
+        return new RunInAgentHomeToolHandler(SeededNodeRuntimeSettings.FromSeed("AgentHome:Enabled", value: true), gateway);
     }
 
     private sealed class RecordingGateway : IAgentHomeToolGateway

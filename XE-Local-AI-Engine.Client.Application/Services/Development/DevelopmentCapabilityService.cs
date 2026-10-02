@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
@@ -28,6 +29,7 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
         + "Run the engine as an account with a home directory, or move each server to the Privileged host tier deliberately.";
 
     private readonly IOptions<DevelopmentOptions> _options;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IOptions<SandboxOptions> _agentSandboxOptions;
     private readonly IOptions<DevelopmentSandboxOptions> _developmentSandboxOptions;
     private readonly IDevelopmentSandboxRuntimeProvider _sandboxRuntimeProvider;
@@ -44,7 +46,8 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
         IAgentSandboxRuntimeProvider agentSandboxRuntimeProvider,
         IWorkSessionSandboxRuntimeProvider workSessionSandboxRuntimeProvider,
         ISandboxContainmentProbe containmentProbe,
-        IDockerDaemonPreflightService dockerDaemonPreflight)
+        IDockerDaemonPreflightService dockerDaemonPreflight,
+        INodeRuntimeSettings runtimeSettings)
         : this(options,
             agentSandboxOptions,
             developmentSandboxOptions,
@@ -53,6 +56,7 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
             workSessionSandboxRuntimeProvider,
             containmentProbe,
             dockerDaemonPreflight,
+            runtimeSettings,
             static () => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile))
     {
     }
@@ -66,6 +70,7 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
         IWorkSessionSandboxRuntimeProvider workSessionSandboxRuntimeProvider,
         ISandboxContainmentProbe containmentProbe,
         IDockerDaemonPreflightService dockerDaemonPreflight,
+        INodeRuntimeSettings runtimeSettings,
         Func<string> homeDirectory)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -78,6 +83,7 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
         ArgumentNullException.ThrowIfNull(dockerDaemonPreflight);
         ArgumentNullException.ThrowIfNull(homeDirectory);
         _options = options;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _agentSandboxOptions = agentSandboxOptions;
         _developmentSandboxOptions = developmentSandboxOptions;
         _sandboxRuntimeProvider = sandboxRuntimeProvider;
@@ -98,7 +104,8 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
 
         return new DevelopmentCapability
         {
-            Enabled = _options.Value.Enabled,
+            // The options carry the startup value, which decided registration; the live switch can only close what that opened.
+            Enabled = _options.Value.Enabled && await _runtimeSettings.GetDevelopmentEnabledAsync(cancellationToken),
             SandboxProvider = providerName,
             ContainerRuntime = preflight,
             Isolation = isolation

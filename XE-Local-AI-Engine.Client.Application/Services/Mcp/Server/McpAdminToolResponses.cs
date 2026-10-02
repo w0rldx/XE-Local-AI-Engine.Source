@@ -474,6 +474,9 @@ internal static class McpAdminWireNames
             NodeSettingsField.PlaybookAnalysisModelName => "playbook_analysis_model_name",
             NodeSettingsField.PlaybookEvalModelName => "playbook_eval_model_name",
             NodeSettingsField.MemoryExtractionModelName => "memory_extraction_model_name",
+            NodeSettingsField.WorkSessionsEnabled => "work_sessions_enabled",
+            NodeSettingsField.DevWorkflowsEnabled => "dev_workflows_enabled",
+            NodeSettingsField.AgentHomeEnabled => "agent_home_enabled",
             _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown node-settings field.")
         };
 

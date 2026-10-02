@@ -66,6 +66,10 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         // hosted service reads Enabled before starting so a disabled scheduler never fires jobs.
         builder.Services.AddOptions<SchedulerOptions>()
                .Bind(configuration.GetSection(SchedulerOptions.Section))
+#pragma warning disable MA0045 // Options Configure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
+               // The node-settings switch, so a reader left on these options sees the stored value. Appended after Bind so stored wins.
+               .Configure<INodeRuntimeSettings>(static (options, runtimeSettings) => options.Enabled = runtimeSettings.GetSchedulerEnabled())
+#pragma warning restore MA0045
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<SchedulerOptions>, SchedulerOptionsValidator>();
         builder.Services.AddSingleton<IMcpClientFactory, McpClientFactory>();

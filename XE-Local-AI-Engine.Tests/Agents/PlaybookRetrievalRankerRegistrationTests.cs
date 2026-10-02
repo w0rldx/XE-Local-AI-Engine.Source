@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 // AddServices builds the full service graph with ValidateOnBuild, which eagerly constructs NodeOperatorSecretProvider and
 // so resolves the operator secret. That secret is read process-env-first (XE_NODE_SQLITE_KEY) before configuration, so
@@ -36,7 +37,7 @@ public sealed class PlaybookRetrievalRankerRegistrationTests : IDisposable
     public async Task AddServices_ResolvesBothEmbeddingRankerAndConcreteLexicalRanker()
     {
         var builder = CreateBuilder();
-        builder.AddServices(builder.Configuration);
+        builder.AddServices(builder.Configuration, NodeStartupSettings.Read(builder.Configuration, builder.Environment));
         builder.Services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
 
         await using var provider = builder.Services.BuildServiceProvider(true);

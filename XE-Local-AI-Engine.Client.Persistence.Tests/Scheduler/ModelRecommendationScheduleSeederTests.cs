@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 /// <summary>
 ///     Integration tests for <see cref="ModelRecommendationScheduleSeeder" />. Uses a fully-migrated temporary SQLite
@@ -159,7 +160,7 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
 
         // AddNodeScheduler registers the real ModelRecommendationCheckHandler template, the scheduler factory, and the
         // management service the seeder drives.
-        new MinimalHostApplicationBuilder(services).AddNodeScheduler(config);
+        new MinimalHostApplicationBuilder(services).AddNodeScheduler(config, new NodeStartupSettings { SchedulerEnabled = config.GetValue("Scheduler:Enabled", defaultValue: true) });
 
         return services.BuildServiceProvider();
     }

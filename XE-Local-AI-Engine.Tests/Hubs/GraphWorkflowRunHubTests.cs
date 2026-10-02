@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Tools;
 using XE_Local_AI_Engine.Tests.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -466,7 +467,6 @@ public sealed class GraphWorkflowRunHubTests
     {
         var options = Options.Create(new GraphWorkflowOptions
         {
-            Enabled = enabled,
             EventReplayLimit = ReplayLimit
         });
 
@@ -481,20 +481,20 @@ public sealed class GraphWorkflowRunHubTests
                 options,
                 Options.Create(new SecurityOptions())),
             registry ?? Substitute.For<IInvocationResumeRegistry>(),
-            options);
+            StubNodeRuntimeSettings.Create().WithGraphWorkflowsEnabled(enabled).Build());
     }
 
     [SuppressMessage("Reliability",
         "CA2000:Dispose objects before losing scope",
         Justification = "HubFixture takes ownership of the constructed hub and every test disposes the fixture.")]
-    private static HubFixture CreateHub(IGraphWorkflowRunService runs, IInvocationResumeRegistry registry, IOptions<GraphWorkflowOptions> options)
+    private static HubFixture CreateHub(IGraphWorkflowRunService runs, IInvocationResumeRegistry registry, INodeRuntimeSettings runtimeSettings)
     {
         var context = Substitute.For<HubCallerContext>();
         context.ConnectionId.Returns("connection");
         context.ConnectionAborted.Returns(CancellationToken.None);
         var groups = Substitute.For<IGroupManager>();
         var clients = Substitute.For<IHubCallerClients>();
-        var hub = new GraphWorkflowRunHub(runs, registry, options)
+        var hub = new GraphWorkflowRunHub(runs, registry, runtimeSettings)
         {
             Context = context,
             Groups = groups,

@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     <c>update_work_plan</c>: the model's only way to change the session's task list. The whole batch commits in one
@@ -22,8 +23,9 @@ internal sealed class UpdateWorkPlanToolHandler : WorkSessionToolHandler<UpdateW
 
     public UpdateWorkPlanToolHandler(IServiceScopeFactory scopeFactory,
         IOptions<WorkSessionOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         IWorkSessionEventPublisher publisher,
-        ILogger<UpdateWorkPlanToolHandler> logger) : base(scopeFactory, options, publisher, logger)
+        ILogger<UpdateWorkPlanToolHandler> logger) : base(scopeFactory, options, runtimeSettings, publisher, logger)
     {
     }
 

@@ -21,7 +21,7 @@ public sealed record ExternalAppsOptions
     ///     The module still registers so the composition root has one shape, but the reconciler and the observer
     ///     return immediately and every service entry point refuses: registration is not the gate, behaviour is.
     /// </remarks>
-    public bool Enabled { get; init; }
+    public bool Enabled { get; set; }
 
     /// <summary>
     ///     Absolute directory under which instance state is written, or <see langword="null" /> to use the node data

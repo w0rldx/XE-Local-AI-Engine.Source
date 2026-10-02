@@ -16,7 +16,7 @@ public sealed class WorkSessionOptions
 {
     public const string Section = "WorkSessions";
 
-    public bool Enabled { get; init; }
+    public bool Enabled { get; set; }
 
     /// <summary>Steps one start or resume may take before the session parks with a checkpoint. Not a lifetime budget.</summary>
     [Range(1, 1000)]

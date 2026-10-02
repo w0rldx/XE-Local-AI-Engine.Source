@@ -36,6 +36,7 @@ internal static class AddNodeWorkSessionsExtensions
                {
                    options.MaxStepsPerRun = runtimeSettings.GetWorkSessionMaxStepsPerRun();
                    options.MaxConcurrentSessions = runtimeSettings.GetWorkSessionMaxConcurrentSessions();
+                   options.Enabled = runtimeSettings.GetWorkSessionsEnabled();
                })
 #pragma warning restore MA0045
                .ValidateDataAnnotations()

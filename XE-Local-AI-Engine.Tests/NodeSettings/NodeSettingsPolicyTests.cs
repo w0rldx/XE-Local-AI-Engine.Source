@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.NodeSettings;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The cross-field save policy runs on the MERGED settings, so it must reject a draft-* mode with no draft model
@@ -113,6 +114,32 @@ public sealed class NodeSettingsPolicyTests
 
         AssertEx.Empty(errors);
         await runtimeSettings.DidNotReceive().GetLlamaMaxLoadedProcessesAsync(Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     A save that clears the stored list leaves the runtime on the configuration seed, so the AgentHome rule judges the
+    ///     seed rather than the list the save is about to remove.
+    /// </summary>
+    [Test]
+    public async Task AgentHomeOn_ClearingTheStoredToolList_IsRejected_WhenTheSeedIsEmpty()
+    {
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithAgentHomeEnabled(true).WithToolCapableModels("stored.gguf").WithToolCapableModelsSeed().Build();
+
+        var errors = await NodeSettingsPolicy.ValidateMergedAsync(new StoredNodeSettings { ToolCapableModels = [] }, runtimeSettings, CancellationToken.None);
+
+        AssertEx.ContainsSingle(errors,
+            error => error.Field == NodeSettingsField.ToolCapableModels
+                     && error.Message == "AgentHome needs at least one tool-capable model. Add one, or turn AgentHome off.");
+    }
+
+    [Test]
+    public async Task AgentHomeOn_ClearingTheStoredToolList_IsAccepted_WhenTheSeedNamesAModel()
+    {
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithAgentHomeEnabled(true).WithToolCapableModels("stored.gguf").WithToolCapableModelsSeed("seed.gguf").Build();
+
+        var errors = await NodeSettingsPolicy.ValidateMergedAsync(new StoredNodeSettings { ToolCapableModels = [] }, runtimeSettings, CancellationToken.None);
+
+        AssertEx.Empty(errors);
     }
 
     private static async Task<IReadOnlyList<NodeSettingsValidationError>> ValidateAsync(StoredNodeSettings settings,

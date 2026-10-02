@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     With no model pinned, the effective model is never an uninstalled recommendation while another model is installed:
@@ -107,6 +108,7 @@ public sealed class TranscriptionModelResolutionTests : IDisposable
             settings,
             deviceAudit,
             Substitute.For<IProcessAudioCaptureSource>(),
-            Options.Create(new TranscriptionOptions()));
+            Options.Create(new TranscriptionOptions()),
+            StubNodeRuntimeSettings.Create().Build());
     }
 }

@@ -547,15 +547,23 @@ public sealed class OpenApiDocumentTests
     ///     which the document never sees.
     /// </summary>
     [Test]
-    public async Task LocalOpenApiDocument_DescribesWorkSessionSurface_WhenTheFeatureIsDisabled()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task LocalOpenApiDocument_DescribesWorkSessionSurface_WhenTheFeatureIsDisabled(bool throughTheStoredSetting)
     {
+        // Off through the configuration seed, or through a stored node setting that beats a seed of on.
         await using var disabledFactory = new TestServerWebAppFactory
         {
             AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
             {
-                ["WorkSessions:Enabled"] = "false"
+                ["WorkSessions:Enabled"] = throughTheStoredSetting ? "true" : "false"
             }
         };
+        if (throughTheStoredSetting)
+        {
+            _ = Directory.CreateDirectory(disabledFactory.NodeDataDirectoryPath);
+            await File.WriteAllTextAsync(Path.Combine(disabledFactory.NodeDataDirectoryPath, "node-settings.json"), """{ "workSessionsEnabled": false }""");
+        }
 
         using var client = disabledFactory.CreateClient();
         using var response = await client.GetAsync("/openapi/local/v1/v1.json");
@@ -578,15 +586,23 @@ public sealed class OpenApiDocumentTests
     ///     hey-api client describe every node rather than only the ones that had the feature switched on.
     /// </summary>
     [Test]
-    public async Task LocalOpenApiDocument_DescribesExternalAppSurface_WhenTheFeatureIsDisabled()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task LocalOpenApiDocument_DescribesExternalAppSurface_WhenTheFeatureIsDisabled(bool throughTheStoredSetting)
     {
+        // Off through the configuration seed, or through a stored node setting that beats a seed of on.
         await using var disabledFactory = new TestServerWebAppFactory
         {
             AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
             {
-                ["ExternalApps:Enabled"] = "false"
+                ["ExternalApps:Enabled"] = throughTheStoredSetting ? "true" : "false"
             }
         };
+        if (throughTheStoredSetting)
+        {
+            _ = Directory.CreateDirectory(disabledFactory.NodeDataDirectoryPath);
+            await File.WriteAllTextAsync(Path.Combine(disabledFactory.NodeDataDirectoryPath, "node-settings.json"), """{ "externalAppsEnabled": false }""");
+        }
 
         using var client = disabledFactory.CreateClient();
         using var response = await client.GetAsync("/openapi/local/v1/v1.json");

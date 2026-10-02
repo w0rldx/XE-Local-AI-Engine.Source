@@ -1,15 +1,14 @@
 namespace XE_Local_AI_Engine.Tests.ModelFit;
 
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
-using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Transcription;
 
 /// <summary>
@@ -39,15 +38,15 @@ public sealed class RuntimeResidentsServiceTests
     };
 
     [Test]
-    public void GetResidents_WithNothingResident_IsEmpty()
+    public async Task GetResidents_WithNothingResident_IsEmpty()
     {
         _imageSupervisor.GetResidents().Returns([]);
 
-        AssertEx.Equal(expected: 0, CreateService().GetResidents().Count);
+        AssertEx.Equal(expected: 0, (await CreateService().GetResidentsAsync()).Count);
     }
 
     [Test]
-    public void ImageRows_FollowTheProcessTable_ExitedThenLeasedThenIdle()
+    public async Task ImageRows_FollowTheProcessTable_ExitedThenLeasedThenIdle()
     {
         _imageSupervisor.GetResidents().Returns([
             ImageProcess("idle-model", leased: false, exited: false),
@@ -55,7 +54,7 @@ public sealed class RuntimeResidentsServiceTests
             ImageProcess("dead-model", leased: true, exited: true)
         ]);
 
-        var rows = CreateService().GetResidents();
+        var rows = await CreateService().GetResidentsAsync();
 
         AssertEx.Equal("idle-model:Idle,busy-model:Active,dead-model:Exited",
             string.Join(',', rows.Select(static row => $"{row.ModelId}:{row.State}")));
@@ -63,12 +62,12 @@ public sealed class RuntimeResidentsServiceTests
     }
 
     [Test]
-    public void ImageSpawnInFlight_WithAnEmptyTable_IsOneStartingRowWithoutAModel()
+    public async Task ImageSpawnInFlight_WithAnEmptyTable_IsOneStartingRowWithoutAModel()
     {
         _imageSupervisor.GetResidents().Returns([]);
         using var spawn = AssertEx.NotNull(_imageGate.TryAcquireSpawnReadinessLease());
 
-        var row = CreateService().GetResidents().Single();
+        var row = (await CreateService().GetResidentsAsync()).Single();
 
         AssertEx.Equal(RuntimeResidentKind.Image, row.Runtime);
         AssertEx.Equal(RuntimeResidentState.Starting, row.State);
@@ -77,34 +76,34 @@ public sealed class RuntimeResidentsServiceTests
     }
 
     [Test]
-    public void ImageSpawnInFlight_WithARegisteredDaemon_ListsTheTableOnly()
+    public async Task ImageSpawnInFlight_WithARegisteredDaemon_ListsTheTableOnly()
     {
         _imageSupervisor.GetResidents().Returns([ImageProcess("sd15", leased: false, exited: false)]);
         using var spawn = AssertEx.NotNull(_imageGate.TryAcquireSpawnReadinessLease());
 
-        var row = CreateService().GetResidents().Single();
+        var row = (await CreateService().GetResidentsAsync()).Single();
 
         AssertEx.Equal("sd15", row.ModelId);
         AssertEx.Equal(RuntimeResidentState.Idle, row.State);
     }
 
     [Test]
-    public void Whisper_Stopped_HasNoRow()
+    public async Task Whisper_Stopped_HasNoRow()
     {
         _imageSupervisor.GetResidents().Returns([ImageProcess("sd15", leased: false, exited: false)]);
         _whisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Stopped, modelId: null, backend: null);
 
-        AssertEx.Equal(RuntimeResidentKind.Image, CreateService().GetResidents().Single().Runtime);
+        AssertEx.Equal(RuntimeResidentKind.Image, (await CreateService().GetResidentsAsync()).Single().Runtime);
     }
 
     [Test]
-    public void Whisper_Starting_IsAStartingRowWithoutAModel()
+    public async Task Whisper_Starting_IsAStartingRowWithoutAModel()
     {
         _imageSupervisor.GetResidents().Returns([]);
         _whisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Starting, modelId: null, backend: null);
         using var spawn = AssertEx.NotNull(_whisperGate.TryAcquireSpawnReadinessLease());
 
-        var row = CreateService().GetResidents().Single();
+        var row = (await CreateService().GetResidentsAsync()).Single();
 
         AssertEx.Equal(RuntimeResidentKind.Transcription, row.Runtime);
         AssertEx.Equal(RuntimeResidentState.Starting, row.State);
@@ -113,12 +112,12 @@ public sealed class RuntimeResidentsServiceTests
     }
 
     [Test]
-    public void Whisper_ReadyWithNoTranscription_IsIdleAndEjectable()
+    public async Task Whisper_ReadyWithNoTranscription_IsIdleAndEjectable()
     {
         _imageSupervisor.GetResidents().Returns([]);
         _whisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Ready, "large-v3-turbo", WhisperBackend.Cuda);
 
-        var row = CreateService().GetResidents().Single();
+        var row = (await CreateService().GetResidentsAsync()).Single();
 
         AssertEx.Equal(RuntimeResidentState.Idle, row.State);
         AssertEx.Equal("large-v3-turbo", row.ModelId);
@@ -127,25 +126,25 @@ public sealed class RuntimeResidentsServiceTests
     }
 
     [Test]
-    public void Whisper_ReadyWithATranscriptionInFlight_IsActive()
+    public async Task Whisper_ReadyWithATranscriptionInFlight_IsActive()
     {
         _imageSupervisor.GetResidents().Returns([]);
         _whisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Ready, "base", WhisperBackend.Cpu);
         using var transcription = AssertEx.NotNull(_whisperGate.TryAcquireTranscriptionLease());
 
-        var row = CreateService().GetResidents().Single();
+        var row = (await CreateService().GetResidentsAsync()).Single();
 
         AssertEx.Equal(RuntimeResidentState.Active, row.State);
         AssertEx.False(row.CanEject);
     }
 
     [Test]
-    public void TranscriptionDisabled_ReportsNoWhisperRow_ButKeepsImageRows()
+    public async Task TranscriptionDisabled_ReportsNoWhisperRow_ButKeepsImageRows()
     {
         _imageSupervisor.GetResidents().Returns([ImageProcess("sd15", leased: false, exited: false)]);
         _whisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Ready, "base", WhisperBackend.Cpu);
 
-        var rows = CreateService(transcriptionEnabled: false).GetResidents();
+        var rows = await CreateService(transcriptionEnabled: false).GetResidentsAsync();
 
         AssertEx.Equal(RuntimeResidentKind.Image, rows.Single().Runtime);
     }
@@ -155,7 +154,7 @@ public sealed class RuntimeResidentsServiceTests
     [Arguments(Blocker.SpawnReadiness)]
     [Arguments(Blocker.MutationReservation)]
     [Arguments(Blocker.EvictionReservation)]
-    public void ImageCanEject_IsFalseWhileTheGateWouldRefuseTheEviction(Blocker blocker)
+    public async Task ImageCanEject_IsFalseWhileTheGateWouldRefuseTheEviction(Blocker blocker)
     {
         _imageSupervisor.GetResidents().Returns([ImageProcess("sd15", leased: false, exited: false)]);
         using var lease = AssertEx.NotNull(blocker switch
@@ -166,7 +165,7 @@ public sealed class RuntimeResidentsServiceTests
             _ => _imageGate.TryAcquireEvictionReservation()
         });
 
-        var row = CreateService().GetResidents().Single();
+        var row = (await CreateService().GetResidentsAsync()).Single();
 
         AssertEx.False(row.CanEject, $"{blocker} must block the image eject.");
         AssertEx.Null(_imageGate.TryAcquireEvictionReservation());
@@ -177,7 +176,7 @@ public sealed class RuntimeResidentsServiceTests
     [Arguments(Blocker.SpawnReadiness)]
     [Arguments(Blocker.MutationReservation)]
     [Arguments(Blocker.EvictionReservation)]
-    public void WhisperCanEject_IsFalseWhileTheGateWouldRefuseTheEviction(Blocker blocker)
+    public async Task WhisperCanEject_IsFalseWhileTheGateWouldRefuseTheEviction(Blocker blocker)
     {
         _imageSupervisor.GetResidents().Returns([]);
         _whisperSupervisor.Status = WhisperStatus(WhisperRuntimeState.Ready, "base", WhisperBackend.Cpu);
@@ -189,14 +188,14 @@ public sealed class RuntimeResidentsServiceTests
             _ => _whisperGate.TryAcquireEvictionReservation()
         });
 
-        var row = CreateService().GetResidents().Single();
+        var row = (await CreateService().GetResidentsAsync()).Single();
 
         AssertEx.False(row.CanEject, $"{blocker} must block the transcription eject.");
         AssertEx.Null(_whisperGate.TryAcquireEvictionReservation());
     }
 
     [Test]
-    public void CanEject_IsTrueWhileResidentLeasesAloneAreHeld()
+    public async Task CanEject_IsTrueWhileResidentLeasesAloneAreHeld()
     {
         // A resident daemon is exactly what an eject is for, so neither eviction reservation refuses on it.
         _imageSupervisor.GetResidents().Returns([ImageProcess("sd15", leased: false, exited: false)]);
@@ -204,7 +203,7 @@ public sealed class RuntimeResidentsServiceTests
         using var imageResident = AssertEx.NotNull(_imageGate.TryAcquireResidentProcessLease());
         using var whisperResident = AssertEx.NotNull(_whisperGate.TryAcquireResidentProcessLease());
 
-        var rows = CreateService().GetResidents();
+        var rows = await CreateService().GetResidentsAsync();
 
         AssertEx.Equal(expected: 2, rows.Count);
         AssertEx.True(rows.All(static row => row.CanEject));
@@ -216,10 +215,7 @@ public sealed class RuntimeResidentsServiceTests
             _imageGate,
             _whisperSupervisor,
             _whisperGate,
-            Options.Create(new TranscriptionOptions
-            {
-                Enabled = transcriptionEnabled
-            }));
+            SeededNodeRuntimeSettings.FromSeed("Transcription:Enabled", transcriptionEnabled));
     }
 
     private static ImageServerResidentSnapshot ImageProcess(string modelName, bool leased, bool exited)

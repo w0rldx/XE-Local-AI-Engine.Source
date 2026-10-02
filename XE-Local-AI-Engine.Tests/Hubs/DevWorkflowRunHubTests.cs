@@ -5,7 +5,6 @@ using System.Reflection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Hubs;
@@ -16,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class DevWorkflowRunHubTests
@@ -246,10 +246,7 @@ public sealed class DevWorkflowRunHubTests
         // store call the hub actually causes.
         var hub = new DevWorkflowRunHub(new DevWorkflowRunQueryService(store, Substitute.For<IAgentDefinitionService>(), Substitute.For<IWorkSessionService>()),
             runs,
-            Options.Create(new DevWorkflowOptions
-            {
-                Enabled = enabled
-            }))
+            StubNodeRuntimeSettings.Create().WithDevWorkflowsEnabled(enabled).Build())
         {
             Context = context,
             Groups = groups,

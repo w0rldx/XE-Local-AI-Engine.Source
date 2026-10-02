@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>Notices that a container the engine believes is running has stopped, and says so.</summary>
 /// <remarks>
@@ -22,11 +23,18 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
     private readonly IExternalAppEventPublisher _publisher;
     private readonly ExternalAppStartupReconciler _reconciler;
     private readonly ExternalAppOperationRunner _runner;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ExternalAppService _service;
     private readonly CancellationTokenSource _stopping = new();
     private readonly TimeProvider _timeProvider;
     private Task? _loop;
+
+    /// <summary>
+    ///     Whether the next on tick reconciles first: <see langword="null" /> until the boot pass has spoken, set by an off tick,
+    ///     cleared by a completed pass. Only the loop touches it.
+    /// </summary>
+    private bool? _reconcileOnEnable;
 
     public ExternalAppStateObserver(IServiceScopeFactory scopeFactory,
         ExternalAppService service,
@@ -35,6 +43,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         ExternalAppStartupReconciler reconciler,
         IExternalAppEventPublisher publisher,
         IOptions<ExternalAppsOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<ExternalAppStateObserver> logger)
     {
@@ -47,6 +56,7 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         _reconciler = reconciler ?? throw new ArgumentNullException(nameof(reconciler));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -56,15 +66,9 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         _stopping.Dispose();
     }
 
+    /// <summary>Starts the loop on every node: each tick reads the switch, so the observer idles while external apps are off.</summary>
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!_options.Enabled)
-        {
-            // The registration stays so the composition root has one shape whether or not the feature is on; the
-            // behaviour is what the flag gates.
-            return Task.CompletedTask;
-        }
-
         // CancellationToken.None on purpose: the loop's lifetime is the host's, not this start call's.
         _loop = Task.Run(() => PollAsync(_stopping.Token), CancellationToken.None);
         return Task.CompletedTask;
@@ -97,8 +101,9 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
     /// </summary>
     internal async Task PollOnceAsync(CancellationToken cancellationToken)
     {
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetExternalAppsEnabledAsync(cancellationToken))
         {
+            _reconcileOnEnable = true;
             return;
         }
 
@@ -107,6 +112,23 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         if (!_reconciler.BootPass.IsCompleted)
         {
             return;
+        }
+
+        // The switch went on after the boot pass judged nothing: rows an engine death left Installing, Updating or Uninstalling
+        // would otherwise stay there, because this poll only examines Running rows.
+        _reconcileOnEnable ??= _reconciler.BootPassFoundFeatureOff;
+        if (_reconcileOnEnable == true)
+        {
+            try
+            {
+                _ = await _reconciler.ReconcileAsync(cancellationToken);
+                _reconcileOnEnable = false;
+            }
+            // The boot pass's posture: a broken daemon is a warning, and the next tick that reads the switch on tries again.
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger.LogWarning(exception, "Reconciling external applications after the feature was switched on failed; retrying on the next tick.");
+            }
         }
 
         await using var scope = _scopeFactory.CreateAsyncScope();

@@ -11,6 +11,7 @@ using Serilog.Events;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Services.Diagnostics;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 /// <summary>
 ///     The verbose switch on the real <c>AddServices</c> Serilog pipeline: it must be applied after
@@ -35,7 +36,7 @@ public sealed class NodeLogLevelSwitchTests : IDisposable
         var sink = new CapturingSink();
         var builder = CreateBuilder();
         builder.Logging.ClearProviders();
-        builder.AddServices(builder.Configuration);
+        builder.AddServices(builder.Configuration, NodeStartupSettings.Read(builder.Configuration, builder.Environment));
         builder.Services.AddSingleton<ILogEventSink>(sink);
         using var provider = builder.Services.BuildServiceProvider();
         var factory = provider.GetRequiredService<ILoggerFactory>();

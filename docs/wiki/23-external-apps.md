@@ -36,9 +36,11 @@ that contract — it stands beside it.
   so a catalog that half-parses never reaches the engine.
 - **Digest-pinned.** Every service image must carry `@sha256:`. `ApplicationContainerPolicy.BuildSpecification`
   throws before anything is created if it does not.
-- **Operator-gated.** `ExternalApps:Enabled` is read once at startup. The shipped `appsettings.json` sets it to
-  `true`; the code default in `ExternalAppsOptions.Enabled` and `Program`'s `GetValue(…, defaultValue: false)` stay
-  `false`, so a node with missing configuration fails closed.
+- **Operator-gated.** The switch is the `ExternalAppsEnabled` node setting (**Node Settings → General → Features**), seeded from
+  `ExternalApps:Enabled`. The API reads it per request (`FeatureSwitchMiddleware`), so it applies at once; the container
+  bridge listener is bound from the value `NodeStartupSettings` read before the host was built, so that half applies after
+  a restart. The shipped `appsettings.json` sets it to `true`; the code default in `ExternalAppsOptions.Enabled` and
+  `NodeStartupSettings` stays `false`, so a node with missing configuration fails closed.
 - **One instance per application.** A second install answers 409 `ExternalAppAlreadyInstalled` (decision D13). The
   409 is the seam to remove if multi-instance is ever wanted.
 

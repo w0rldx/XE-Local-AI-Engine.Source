@@ -262,6 +262,33 @@ public interface INodeRuntimeSettings
     /// </summary>
     NodeSettingsEffectiveValues ResolveEffectiveValues(StoredNodeSettings stored);
 
+    /// <summary>Whether Development Mode is on (stored &gt; <c>Development:Enabled</c> &gt; on). Live gates only; registration follows <c>NodeStartupSettings</c>.</summary>
+    Task<bool> GetDevelopmentEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether work sessions are on (stored &gt; <c>WorkSessions:Enabled</c> &gt; off). Read once per request, turn or tick.</summary>
+    Task<bool> GetWorkSessionsEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether graph workflows are on (stored &gt; <c>GraphWorkflows:Enabled</c> &gt; on). Read once per request, turn or tick.</summary>
+    Task<bool> GetGraphWorkflowsEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether transcription is on (stored &gt; <c>Transcription:Enabled</c> &gt; on). Read once per request, turn or tick.</summary>
+    Task<bool> GetTranscriptionEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether external apps are on (stored &gt; <c>ExternalApps:Enabled</c> &gt; off). Read once per request, turn or tick.</summary>
+    Task<bool> GetExternalAppsEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether the <c>run_python</c> tool runs (stored &gt; <c>Compute:Enabled</c> &gt; off). Read once per request, turn or tick.</summary>
+    Task<bool> GetComputeEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether the AgentHome tools are on (stored &gt; <c>AgentHome:Enabled</c> &gt; off). Read once per request, turn or tick.</summary>
+    Task<bool> GetAgentHomeEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether the scheduler is on (stored &gt; <c>Scheduler:Enabled</c> &gt; on). Read once per request, turn or tick.</summary>
+    Task<bool> GetSchedulerEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether development workflows are on (stored &gt; <c>DevWorkflows:Enabled</c> &gt; off). Read once per request, turn or tick.</summary>
+    Task<bool> GetDevWorkflowsEnabledAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Whether old conversations are deleted (stored &gt; <c>ChatRetention:Enabled</c> &gt; off). Read per sweep.</summary>
     Task<bool> GetChatRetentionEnabledAsync(CancellationToken cancellationToken = default);
 
@@ -306,6 +333,9 @@ public interface INodeRuntimeSettings
 
     /// <inheritdoc cref="GetToolCapableModelsAsync" />
     IReadOnlyList<string> GetToolCapableModels();
+
+    /// <summary>The configured <c>AgentHome:ToolCapableModels</c> seed the allowlist falls back to when none is stored. Fixed for the process.</summary>
+    IReadOnlyList<string> GetToolCapableModelsSeed();
 
     /// <inheritdoc cref="GetOllamaEndpointAsync" />
     string GetOllamaEndpoint();
@@ -464,4 +494,23 @@ public interface INodeRuntimeSettings
 
     /// <summary>The output tokens per development attempt (stored &gt; <c>Development:MaxOutputTokens</c> &gt; 32768).</summary>
     int GetDevelopmentMaxOutputTokens();
+
+    // The feature switches, for the synchronous sites: an options overlay, a seeder read once at start, a synchronous capacity check.
+    bool GetDevelopmentEnabled();
+
+    bool GetWorkSessionsEnabled();
+
+    bool GetGraphWorkflowsEnabled();
+
+    bool GetTranscriptionEnabled();
+
+    bool GetExternalAppsEnabled();
+
+    bool GetComputeEnabled();
+
+    bool GetAgentHomeEnabled();
+
+    bool GetSchedulerEnabled();
+
+    bool GetDevWorkflowsEnabled();
 }

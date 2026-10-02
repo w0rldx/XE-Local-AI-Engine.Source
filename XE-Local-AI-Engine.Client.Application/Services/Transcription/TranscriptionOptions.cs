@@ -13,7 +13,7 @@ public sealed class TranscriptionOptions
     public const string Section = "Transcription";
 
     /// <summary>Whether the transcription surface answers at all. On by default.</summary>
-    public bool Enabled { get; init; } = true;
+    public bool Enabled { get; set; } = true;
 
     /// <summary>
     ///     The appsettings SEED for the idle time-to-live of the whisper daemon, in minutes. The stored node setting

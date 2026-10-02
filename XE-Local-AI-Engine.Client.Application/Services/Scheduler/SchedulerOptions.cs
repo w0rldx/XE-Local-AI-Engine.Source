@@ -15,7 +15,7 @@ public sealed class SchedulerOptions
     ///     Whether the scheduler is active. When <c>false</c> the Quartz hosted service is not started and no jobs
     ///     fire, but the persistence tables and DI registrations remain in place. Defaults to <c>true</c>.
     /// </summary>
-    public bool Enabled { get; init; } = true;
+    public bool Enabled { get; set; } = true;
 
     /// <summary>
     ///     Maximum number of jobs that may execute concurrently on this node. Must be greater than zero.

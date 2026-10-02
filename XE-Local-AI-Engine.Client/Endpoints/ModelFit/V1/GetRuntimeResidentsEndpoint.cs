@@ -30,8 +30,8 @@ public sealed class GetRuntimeResidentsEndpoint : EndpointWithoutRequest<Runtime
         Policies(NodeAuthorizationPolicies.Operator);
     }
 
-    public override Task HandleAsync(CancellationToken ct)
+    public override async Task HandleAsync(CancellationToken ct)
     {
-        return Send.OkAsync(_residents.GetResidents().ToResponse(), ct);
+        await Send.OkAsync((await _residents.GetResidentsAsync(ct)).ToResponse(), ct);
     }
 }

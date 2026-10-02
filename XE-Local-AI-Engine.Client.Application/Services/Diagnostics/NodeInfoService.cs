@@ -88,6 +88,9 @@ public sealed class NodeInfoService : INodeInfoService
         nameof(StoredNodeSettings.ImageMaxLoadedProcesses), nameof(StoredNodeSettings.ImageTextEncoderOnGpu), nameof(StoredNodeSettings.GraphWorkflowMaxConcurrentRuns),
         nameof(StoredNodeSettings.GraphWorkflowDefaultNodeTimeoutSeconds), nameof(StoredNodeSettings.WorkSessionMaxStepsPerRun),
         nameof(StoredNodeSettings.WorkSessionMaxConcurrentSessions), nameof(StoredNodeSettings.DevelopmentMaxAttemptDurationSeconds),
+        nameof(StoredNodeSettings.DevelopmentEnabled), nameof(StoredNodeSettings.SchedulerEnabled), nameof(StoredNodeSettings.ExternalAppsEnabled),
+        nameof(StoredNodeSettings.WorkSessionsEnabled), nameof(StoredNodeSettings.GraphWorkflowsEnabled), nameof(StoredNodeSettings.TranscriptionEnabled),
+        nameof(StoredNodeSettings.ComputeEnabled), nameof(StoredNodeSettings.AgentHomeEnabled), nameof(StoredNodeSettings.DevWorkflowsEnabled),
         nameof(StoredNodeSettings.DevelopmentMaxToolCalls), nameof(StoredNodeSettings.DevelopmentMaxOutputTokens), nameof(StoredNodeSettings.AgentHomeMaxInnerToolCalls),
         nameof(StoredNodeSettings.AgentHomePatchApplyTimeoutSeconds), nameof(StoredNodeSettings.AgentHomeRunRetentionMaxRuns),
         nameof(StoredNodeSettings.AgentHomeRunRetentionMaxTotalBytes)
@@ -184,8 +187,9 @@ public sealed class NodeInfoService : INodeInfoService
         var runningTask = CaptureAsync("running models", _llamaSupervisor.CheckHealthAsync, token);
         var modelsTask = CaptureAsync("installed models", _ggufModelStore.ListInstalledModelsAsync, token);
         var settingsTask = CaptureAsync("node settings", t => _settings.GetTrustedSettingsAsync(t), token);
-        var residents = Capture("runtime residents", _residents.GetResidents, warnings);
+        var residentsTask = CaptureAsync("runtime residents", _residents.GetResidentsAsync, token);
 
+        var residents = await Collect(residentsTask, warnings);
         var profile = await Collect(profileTask, warnings);
         var audit = await Collect(auditTask, warnings);
         var sample = await Collect(sampleTask, warnings);

@@ -3,13 +3,13 @@ namespace XE_Local_AI_Engine.Client.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Operator-only live notifications for one development workflow run.
@@ -30,13 +30,13 @@ public sealed class DevWorkflowRunHub : Hub
     /// </summary>
     private const int ReplayCap = 200;
 
-    private readonly DevWorkflowOptions _options;
     private readonly DevWorkflowRunQueryService _queries;
     private readonly IDevWorkflowRunService _runs;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public DevWorkflowRunHub(DevWorkflowRunQueryService queries, IDevWorkflowRunService runs, IOptions<DevWorkflowOptions> options)
+    public DevWorkflowRunHub(DevWorkflowRunQueryService queries, IDevWorkflowRunService runs, INodeRuntimeSettings runtimeSettings)
     {
-        _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         ArgumentNullException.ThrowIfNull(queries);
         _queries = queries;
         ArgumentNullException.ThrowIfNull(runs);
@@ -45,7 +45,7 @@ public sealed class DevWorkflowRunHub : Hub
 
     public async Task<DevWorkflowRunSubscriptionSnapshot> SubscribeRun(Guid runId, long afterSeq)
     {
-        if (!_options.Enabled)
+        if (!await _runtimeSettings.GetDevWorkflowsEnabledAsync(Context.ConnectionAborted))
         {
             throw new HubException("Development workflows are disabled on this node.");
         }

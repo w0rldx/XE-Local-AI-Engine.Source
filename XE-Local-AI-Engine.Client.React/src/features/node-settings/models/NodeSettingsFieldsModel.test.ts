@@ -4,6 +4,7 @@ import type { XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse a
 import {
 	applyExternalAccessPreset,
 	buildNodeSettingsRequest,
+	featureSwitchFields,
 	isExternalAccessBooleanField,
 	newUsageRateRow,
 	nodeSettingsFieldDefaults,
@@ -1436,5 +1437,112 @@ describe("runtime and workspace knobs", () => {
 		for (const field of [...restartGated, ...live].filter((field) => field !== "agentHomeRunRetentionMaxTotalBytes")) {
 			expect(nodeSettingsScaleOf(field)).toBe(1);
 		}
+	});
+});
+
+describe("feature switches", () => {
+	const bounds = toNodeSettingsFieldBounds(undefined);
+	const baseline = toNodeSettingsFieldsForm(undefined);
+	const restartGated = ["developmentEnabled", "schedulerEnabled"] as const;
+	const live = [
+		"workSessionsEnabled",
+		"devWorkflowsEnabled",
+		"graphWorkflowsEnabled",
+		"agentHomeEnabled",
+		"computeEnabled",
+		"externalAppsEnabled",
+		"transcriptionEnabled",
+	] as const;
+
+	it("defaults mirror the C# code defaults of the BoolSeed calls", () => {
+		expect(nodeSettingsFieldDefaults).toMatchObject({
+			developmentEnabled: true,
+			workSessionsEnabled: false,
+			graphWorkflowsEnabled: true,
+			transcriptionEnabled: true,
+			externalAppsEnabled: false,
+			computeEnabled: false,
+			agentHomeEnabled: false,
+			schedulerEnabled: true,
+			devWorkflowsEnabled: false,
+		});
+	});
+
+	it("takes the effective value from the response, false included, and the default only when absent", () => {
+		const form = toNodeSettingsFieldsForm({ developmentEnabled: false, workSessionsEnabled: true, agentHomeEnabled: true });
+		expect(form.developmentEnabled).toBe(false);
+		expect(form.workSessionsEnabled).toBe(true);
+		expect(form.agentHomeEnabled).toBe(true);
+		expect(form.schedulerEnabled).toBe(true);
+		expect(form.computeEnabled).toBe(false);
+	});
+
+	it("sends only the changed switches, an explicit false included", () => {
+		const loaded = { ...baseline, workSessionsEnabled: true };
+		const form = { ...loaded, developmentEnabled: false, computeEnabled: true, transcriptionEnabled: false };
+
+		const { body, errors } = buildNodeSettingsRequest(form, loaded, bounds, false);
+
+		expect(errors).toEqual({});
+		expect(body).toEqual({ developmentEnabled: false, computeEnabled: true, transcriptionEnabled: false });
+		expect(buildNodeSettingsRequest(loaded, loaded, bounds, false).body).toEqual({});
+	});
+
+	it("restart-gates only Development and Scheduler", () => {
+		expect([...featureSwitchFields].sort()).toEqual([...restartGated, ...live].sort());
+		for (const field of restartGated) {
+			expect(restartGatedNodeSettingsFields.has(field)).toBe(true);
+		}
+		for (const field of live) {
+			expect(restartGatedNodeSettingsFields.has(field)).toBe(false);
+		}
+		expect(touchesRestartGatedField({ schedulerEnabled: false })).toBe(true);
+		expect(touchesRestartGatedField({ workSessionsEnabled: false, externalAppsEnabled: true })).toBe(false);
+	});
+
+	it("refuses development workflows without work sessions, blamed on the switch being turned on", () => {
+		const { body, errors } = buildNodeSettingsRequest({ ...baseline, devWorkflowsEnabled: true }, baseline, bounds, false);
+		expect(errors).toEqual({ devWorkflowsEnabled: "requiresWorkSessions" });
+		expect(body.devWorkflowsEnabled).toBe(true);
+
+		expect(
+			buildNodeSettingsRequest({ ...baseline, devWorkflowsEnabled: true, workSessionsEnabled: true }, baseline, bounds, false)
+				.errors,
+		).toEqual({});
+	});
+
+	it("blames work sessions when they are turned off under running development workflows", () => {
+		const loaded = { ...baseline, workSessionsEnabled: true, devWorkflowsEnabled: true };
+		const { errors } = buildNodeSettingsRequest({ ...loaded, workSessionsEnabled: false }, loaded, bounds, false);
+		expect(errors).toEqual({ workSessionsEnabled: "requiresWorkSessions" });
+	});
+
+	it("refuses AgentHome only when the effective tool-capable list is known to be empty", () => {
+		const form = { ...baseline, agentHomeEnabled: true };
+		expect(buildNodeSettingsRequest(form, baseline, bounds, false, null, []).errors).toEqual({
+			agentHomeEnabled: "requiresToolCapableModels",
+		});
+		// Unknown, or a seeded list behind the empty stored one, is not refused: the server falls back to it.
+		expect(buildNodeSettingsRequest(form, baseline, bounds, false, null, undefined).errors).toEqual({});
+		expect(buildNodeSettingsRequest(form, baseline, bounds, false, null, ["qwen3:8b"]).errors).toEqual({});
+		// A model added in the same save satisfies it.
+		expect(
+			buildNodeSettingsRequest({ ...form, toolCapableModels: ["qwen3:8b"] }, baseline, bounds, false, null, []).errors,
+		).toEqual({});
+	});
+
+	it("leaves clearing a stored tool-capable list to the server, which alone knows the seed behind it", () => {
+		const loaded = { ...baseline, agentHomeEnabled: true, toolCapableModels: ["qwen3:8b"] };
+		const { body, errors } = buildNodeSettingsRequest({ ...loaded, toolCapableModels: [] }, loaded, bounds, false, null, [
+			"qwen3:8b",
+		]);
+		expect(errors).toEqual({});
+		expect(body.toolCapableModels).toEqual([]);
+	});
+
+	it("blames the tool-capable list when AgentHome was already on", () => {
+		const loaded = { ...baseline, agentHomeEnabled: true };
+		const { errors } = buildNodeSettingsRequest({ ...loaded, computeEnabled: true }, loaded, bounds, false, null, []);
+		expect(errors).toEqual({ toolCapableModels: "requiresToolCapableModels" });
 	});
 });

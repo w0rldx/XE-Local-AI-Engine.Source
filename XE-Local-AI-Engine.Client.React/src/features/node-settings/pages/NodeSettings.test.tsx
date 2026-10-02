@@ -73,6 +73,12 @@ const { generatedMock } = vi.hoisted(() => ({
 		// One-click recommended-embedding download mutation.
 		downloadRecommendedEmbeddingMutation: vi.fn(),
 		downloadEmbeddingFn: vi.fn(),
+		// The capability probes a feature-switch save invalidates.
+		getDevelopmentCapabilityQueryKey: vi.fn(() => ["getDevelopmentCapability"]),
+		getDevWorkflowCapabilityQueryKey: vi.fn(() => ["getDevWorkflowCapability"]),
+		getGraphWorkflowCapabilityQueryKey: vi.fn(() => ["getGraphWorkflowCapability"]),
+		getWorkSessionCapabilityQueryKey: vi.fn(() => ["getWorkSessionCapability"]),
+		getTranscriptionRuntimeStatusQueryKey: vi.fn(() => ["getTranscriptionRuntimeStatus"]),
 	},
 }));
 
@@ -80,6 +86,11 @@ const { generatedMock } = vi.hoisted(() => ({
 function fakeQueryKey(operationId: string): unknown {
 	return [{ _id: operationId }];
 }
+
+// The effective tool-capable list only feeds the client mirror of the AgentHome rule; unknown (undefined) reads as satisfied.
+vi.mock("@/features/node-settings/queries/useEffectiveToolCapableModels", () => ({
+	useEffectiveToolCapableModels: () => undefined,
+}));
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getNodeSettingsOptions: generatedMock.getNodeSettingsOptions,
@@ -94,6 +105,11 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	updateLlamaCppRuntimeMutation: generatedMock.updateLlamaCppRuntimeMutation,
 	downloadRecommendedRerankerMutation: generatedMock.downloadRecommendedRerankerMutation,
 	downloadRecommendedEmbeddingMutation: generatedMock.downloadRecommendedEmbeddingMutation,
+	getDevelopmentCapabilityQueryKey: generatedMock.getDevelopmentCapabilityQueryKey,
+	getDevWorkflowCapabilityQueryKey: generatedMock.getDevWorkflowCapabilityQueryKey,
+	getGraphWorkflowCapabilityQueryKey: generatedMock.getGraphWorkflowCapabilityQueryKey,
+	getWorkSessionCapabilityQueryKey: generatedMock.getWorkSessionCapabilityQueryKey,
+	getTranscriptionRuntimeStatusQueryKey: generatedMock.getTranscriptionRuntimeStatusQueryKey,
 }));
 
 // The recommended-reranker download progress reuses the shared GgufDownload feed (SignalR hub + cancel mutation).
@@ -825,6 +841,77 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 				"Node settings saved. Some of the changed settings only take effect after the node restarts.",
 			),
 		);
+	});
+
+	it("saves a feature switch from the General Features card and says a restart is needed", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, schedulerEnabled: true, workSessionsEnabled: true }),
+		});
+		renderPage("general");
+		await waitFor(() =>
+			expect((screen.getByTestId("node-settings-feature-work-sessions") as HTMLInputElement).checked).toBe(true),
+		);
+
+		fireEvent.click(screen.getByTestId("node-settings-feature-scheduler"));
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
+				body: { schedulerEnabled: false, maxMessageRequestTimeoutSeconds: 600 },
+			}),
+		);
+		await waitFor(() =>
+			expect(toastMock.success).toHaveBeenCalledWith(
+				"Node settings saved. Some of the changed settings only take effect after the node restarts.",
+			),
+		);
+	});
+
+	it("invalidates the capability probes when a feature switch was saved", async () => {
+		const queryClient = renderPage("general");
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
+
+		fireEvent.click(screen.getByTestId("node-settings-feature-graph-workflows"));
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		const capabilityKeys = [
+			["getDevelopmentCapability"],
+			["getDevWorkflowCapability"],
+			["getGraphWorkflowCapability"],
+			["getWorkSessionCapability"],
+			["getTranscriptionRuntimeStatus"],
+		];
+		await waitFor(() => {
+			for (const queryKey of capabilityKeys) {
+				expect(invalidate).toHaveBeenCalledWith({ queryKey });
+			}
+		});
+	});
+
+	it("leaves the capability probes alone when no feature switch was saved", async () => {
+		const queryClient = renderPage("chat");
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
+
+		clickSwitch("node-settings-enable-tools");
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["getNodeSettings"] }));
+		expect(invalidate).toHaveBeenCalledTimes(1);
+	});
+
+	it("refuses development workflows without work sessions, returns to General and flags the switch", async () => {
+		renderPage("general");
+		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
+
+		fireEvent.click(screen.getByTestId("node-settings-feature-dev-workflows"));
+		openSection("chat");
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() => expect(screen.getByTestId("node-settings-features-card")).toBeTruthy());
+		expect(generatedMock.saveFn).not.toHaveBeenCalled();
 	});
 
 	it("keeps the plain saved notice when only live fields changed", async () => {
