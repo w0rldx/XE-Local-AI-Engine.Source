@@ -322,7 +322,7 @@ public sealed class NodeAuthRefreshRotationGraceTests
                 email = Email,
                 password = Password
             });
-        AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     private static async Task<NodeAuthTokenResult> LoginAsync(TestServerWebAppFactory factory)

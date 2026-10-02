@@ -13,6 +13,14 @@ export const Route = createFileRoute("/external-access")({
 				throw redirect({ to: "/setup" });
 			}
 
+			if (restoreResult === "vault-locked") {
+				throw redirect({ to: "/vault" });
+			}
+
+			if (restoreResult === "vault-setup-required") {
+				throw redirect({ to: "/vault-setup" });
+			}
+
 			if (restoreResult !== "authenticated") {
 				throw redirect({ to: "/login" });
 			}

@@ -43,7 +43,7 @@ XE_READY=1 XE_VERSION=<semver> XE_URL=http://127.0.0.1:<port> XE_MCP_URL=<XE_URL
 
 Canonical `<data-dir>/ready.json` has `version`, `url`, `mcpUrl`, `dataDir`, `pid`, and
 `startedAtUtc`. Require a live PID and HTTP 200 from `<url>/health/ready`. `--status --json` returns
-`running`, nullable `version`/`url`/`mcpUrl`, `dataDir`, nullable `setupRequired`, and `installKind`
+`running`, nullable `version`/`url`/`mcpUrl`, `dataDir`, nullable `setupRequired`, nullable `vault` (`pending`, `locked` or `unlocked`), and `installKind`
 (`velopack-managed` or `unmanaged`); it exits 0 only when running, otherwise 1.
 
 Engine codes: 0 success; 1 stopped/unexpected; 2 usage; 3 validation; 4 instance busy; 5

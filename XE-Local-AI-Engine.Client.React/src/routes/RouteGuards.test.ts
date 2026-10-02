@@ -8,18 +8,34 @@ import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getNodeSettingsQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
+import type { NodeAuthStatusResponse, NodeVaultState } from "@/core/auth/models/NodeAuthModels";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import type { NodeAuthRestoreResult } from "@/core/auth/utils/SessionRestore";
 
 // Both guards are reached through their route module's exported `Route.options.beforeLoad` and called with a
 // hand-built context — no render, no router. `restoreNodeAuthSession` is stubbed because these tests are about the
 // PROFILE half of each guard; the authenticated case is set up by seeding the auth store instead.
-const { restoreMock } = vi.hoisted(() => ({
-	restoreMock: vi.fn<() => Promise<"authenticated" | "unauthenticated" | "setup-required">>(async () => "authenticated"),
+const { restoreMock, pendingVaultStepMock, statusMock } = vi.hoisted(() => ({
+	restoreMock: vi.fn<() => Promise<NodeAuthRestoreResult>>(async () => "authenticated"),
+	pendingVaultStepMock: vi.fn<() => Promise<"vault-locked" | "vault-setup-required" | undefined>>(async () => undefined),
+	statusMock: vi.fn<() => Promise<NodeAuthStatusResponse>>(async () => ({
+		setupRequired: false,
+		authenticated: false,
+		vault: "unlocked",
+	})),
 }));
 
 vi.mock("@/core/auth/utils/SessionRestore", () => ({
 	restoreNodeAuthSession: restoreMock,
+	getPendingVaultStep: pendingVaultStepMock,
 }));
+
+vi.mock("@/core/auth/api/NodeAuthApi", () => ({ getNodeAuthStatus: statusMock }));
+
+vi.mock("@/core/auth/pages/Login", () => ({ Login: () => null }));
+vi.mock("@/core/auth/pages/Setup", () => ({ Setup: () => null }));
+vi.mock("@/core/auth/pages/VaultUnlock", () => ({ VaultUnlock: () => null }));
+vi.mock("@/core/auth/pages/VaultSetup", () => ({ VaultSetup: () => null }));
 
 // The layout route renders the whole app shell; the guard under test never touches the component, so stubbing it keeps
 // this file from importing every page in the tree.
@@ -31,7 +47,11 @@ vi.mock("@/features/node-settings/pages/UiModeSetup", () => ({ UiModeSetup: () =
 
 import { Route as ExternalAccessRoute } from "@/routes/external-access";
 import { Route as LayoutRoute } from "@/routes/_layout";
+import { Route as LoginRoute } from "@/routes/login";
+import { Route as SetupRoute } from "@/routes/setup";
 import { Route as UiModeSetupRoute } from "@/routes/ui-mode-setup";
+import { Route as VaultRoute } from "@/routes/vault";
+import { Route as VaultSetupRoute } from "@/routes/vault-setup";
 
 // A client whose node-settings entry is already resolved, so `ensureQueryData` answers from the cache; the queryFn is
 // what a read FAILURE runs.
@@ -83,6 +103,27 @@ async function runExternalAccessGuard(queryClient: QueryClient): Promise<unknown
 	return await (beforeLoad as any)({ context: { queryClient }, location });
 }
 
+// Every guard below reads at most `context`, `location` and `search`; one argument shape serves them all.
+async function runGuard(route: { options: { beforeLoad?: unknown } }, queryClient: QueryClient = clientWith("recommended")) {
+	const beforeLoad = route.options.beforeLoad;
+	if (typeof beforeLoad !== "function") {
+		throw new Error("the route declares no beforeLoad");
+	}
+	return await beforeLoad({ context: { queryClient }, location, search: {} });
+}
+
+// Resolves to the redirect target, or "stay" when the guard let the navigation through.
+async function guardOutcome(run: Promise<unknown>): Promise<string | undefined> {
+	return await run.then(
+		() => "stay",
+		(thrown: unknown) => redirectTarget(thrown),
+	);
+}
+
+function statusWith(vault: NodeVaultState, setupRequired = false): NodeAuthStatusResponse {
+	return { setupRequired, authenticated: false, vault };
+}
+
 function redirectTarget(error: unknown): string | undefined {
 	if (!isRedirect(error)) {
 		return undefined;
@@ -95,6 +136,8 @@ describe("route guards for the first-run external-access and interface-mode choi
 	beforeEach(() => {
 		vi.clearAllMocks();
 		restoreMock.mockResolvedValue("authenticated");
+		pendingVaultStepMock.mockResolvedValue(undefined);
+		statusMock.mockResolvedValue(statusWith("unlocked"));
 		useNodeAuthStore.getState().actions.setToken({ accessToken: "access-token", expiresAtUtc: "2099-01-01T00:00:00Z" });
 	});
 
@@ -224,5 +267,100 @@ describe("route guards for the first-run external-access and interface-mode choi
 			.sort();
 		expect(mountedIn).toEqual([layoutPath]);
 		expect(sources.get(layoutPath)).toMatch(/<OnboardingProvider>\s*<Layout \/>\s*<\/OnboardingProvider>/);
+	});
+});
+
+describe("route guards for the vault states", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		pendingVaultStepMock.mockResolvedValue(undefined);
+		statusMock.mockResolvedValue(statusWith("unlocked"));
+		useNodeAuthStore.getState().actions.clear();
+	});
+
+	describe("locked", () => {
+		beforeEach(() => {
+			restoreMock.mockResolvedValue("vault-locked");
+			statusMock.mockResolvedValue(statusWith("locked"));
+		});
+
+		it("sends every entry route to the unlock page", async () => {
+			await expect(guardOutcome(runGuard(LayoutRoute))).resolves.toBe("/vault");
+			await expect(guardOutcome(runGuard(LoginRoute))).resolves.toBe("/vault");
+			await expect(guardOutcome(runGuard(SetupRoute))).resolves.toBe("/vault");
+			await expect(guardOutcome(runGuard(ExternalAccessRoute, clientWith("pending")))).resolves.toBe("/vault");
+			await expect(guardOutcome(runGuard(UiModeSetupRoute, clientWith("recommended", null)))).resolves.toBe("/vault");
+			await expect(guardOutcome(runGuard(VaultSetupRoute))).resolves.toBe("/vault");
+		});
+
+		it("opens the unlock page", async () => {
+			await expect(guardOutcome(runGuard(VaultRoute))).resolves.toBe("stay");
+		});
+
+		it("sends a token-holding session to the unlock page from the layout", async () => {
+			useNodeAuthStore.getState().actions.setToken({ accessToken: "access-token", expiresAtUtc: "2099-01-01T00:00:00Z" });
+			pendingVaultStepMock.mockResolvedValue("vault-locked");
+
+			await expect(guardOutcome(runGuard(LayoutRoute))).resolves.toBe("/vault");
+		});
+	});
+
+	describe("pending on a node that already has an admin", () => {
+		beforeEach(() => {
+			restoreMock.mockResolvedValue("vault-setup-required");
+			statusMock.mockResolvedValue(statusWith("pending"));
+		});
+
+		// Order, not just presence: the vault step comes before the external-access and ui-mode choices.
+		it("sends the layout to vault setup before the first-run choices", async () => {
+			await expect(guardOutcome(runGuard(LayoutRoute, clientWith("pending", null)))).resolves.toBe("/vault-setup");
+		});
+
+		it("sends a session that just signed in to vault setup", async () => {
+			useNodeAuthStore.getState().actions.setToken({ accessToken: "access-token", expiresAtUtc: "2099-01-01T00:00:00Z" });
+			pendingVaultStepMock.mockResolvedValue("vault-setup-required");
+
+			await expect(guardOutcome(runGuard(LayoutRoute, clientWith("pending", null)))).resolves.toBe("/vault-setup");
+			await expect(guardOutcome(runGuard(VaultSetupRoute))).resolves.toBe("stay");
+		});
+
+		it("routes login, setup and the first-run choices to vault setup", async () => {
+			await expect(guardOutcome(runGuard(LoginRoute))).resolves.toBe("/vault-setup");
+			await expect(guardOutcome(runGuard(SetupRoute))).resolves.toBe("/vault-setup");
+			await expect(guardOutcome(runGuard(ExternalAccessRoute, clientWith("pending")))).resolves.toBe("/vault-setup");
+			await expect(guardOutcome(runGuard(UiModeSetupRoute, clientWith("recommended", null)))).resolves.toBe("/vault-setup");
+		});
+
+		it("opens vault setup and keeps the unlock page closed", async () => {
+			await expect(guardOutcome(runGuard(VaultSetupRoute))).resolves.toBe("stay");
+			await expect(guardOutcome(runGuard(VaultRoute))).resolves.toBe("/");
+		});
+
+		it("sends a signed-out visitor of vault setup to login", async () => {
+			restoreMock.mockResolvedValue("unauthenticated");
+
+			await expect(guardOutcome(runGuard(VaultSetupRoute))).resolves.toBe("/login");
+		});
+	});
+
+	describe("unlocked", () => {
+		it("closes both vault pages", async () => {
+			restoreMock.mockResolvedValue("authenticated");
+
+			await expect(guardOutcome(runGuard(VaultRoute))).resolves.toBe("/");
+			await expect(guardOutcome(runGuard(VaultSetupRoute))).resolves.toBe("/");
+		});
+
+		it("lets the layout through", async () => {
+			restoreMock.mockResolvedValue("authenticated");
+
+			await expect(guardOutcome(runGuard(LayoutRoute))).resolves.toBe("stay");
+		});
+
+		it("sends a fresh install's vault setup visitor to setup", async () => {
+			restoreMock.mockResolvedValue("setup-required");
+
+			await expect(guardOutcome(runGuard(VaultSetupRoute))).resolves.toBe("/setup");
+		});
 	});
 });

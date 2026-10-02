@@ -1,6 +1,6 @@
 import { createRouter } from "@tanstack/react-router";
 
-import { registerLoginNavigator } from "@/core/api/axios/LoginNavigation";
+import { registerLoginNavigator, registerVaultNavigator } from "@/core/api/axios/LoginNavigation";
 import { getContext as getTanStackQueryContext } from "@/core/integrations/tanstack-query/Context";
 import { NavigationLoadingIndicator } from "@/core/ui/components/NavigationLoadingIndicator/NavigationLoadingIndicator";
 import { routeTree } from "@/routeTree.gen";
@@ -19,6 +19,7 @@ export const router = createRouter({
 
 // The axios 401 interceptor redirects through this registration rather than importing the router (LoginNavigation.ts).
 registerLoginNavigator((redirect) => router.navigate({ to: "/login", search: { redirect } }));
+registerVaultNavigator(() => router.navigate({ to: "/vault" }));
 
 declare module "@tanstack/react-router" {
 	interface Register {

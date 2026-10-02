@@ -603,6 +603,7 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = z.ob
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = z.object({
 	setupRequired: z.boolean(),
 	authenticated: z.boolean(),
+	vault: z.string(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest = z.object({
@@ -636,6 +637,18 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = z.object({
 		.max(256)
 		.regex(/^[^@]+@[^@]+$/),
 	password: z.string().min(12).max(256),
+});
+
+export const zXeLocalAiEngineClientEndpointsAuthV1NodeSetupResponse = z.object({
+	recoveryCode: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAuthV1NodeVaultConfirmRequest = z.object({
+	password: z.string().min(0).max(256),
+});
+
+export const zXeLocalAiEngineClientEndpointsAuthV1NodeVaultConfirmResponse = z.object({
+	recoveryCode: z.string(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionTypeDto = z.enum(["sendPrompt"]);
@@ -8712,14 +8725,21 @@ export const zNodeRefreshResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeAcc
 export const zNodeSetupBody = zXeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest;
 
 /**
- * No Content
+ * Success
  */
-export const zNodeSetupResponse = z.void();
+export const zNodeSetupResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeSetupResponse;
 
 /**
  * Success
  */
 export const zNodeAuthStatusResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse;
+
+export const zNodeVaultConfirmBody = zXeLocalAiEngineClientEndpointsAuthV1NodeVaultConfirmRequest;
+
+/**
+ * Success
+ */
+export const zNodeVaultConfirmResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeVaultConfirmResponse;
 
 /**
  * Success

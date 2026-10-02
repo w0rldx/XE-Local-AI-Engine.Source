@@ -107,7 +107,7 @@ public sealed class NodeLoginLockoutIntegrationTests
                 password = Password
             });
 
-        AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
     }
 
     private static Task<HttpResponseMessage> LoginAsync(HttpClient client, string password)

@@ -27,7 +27,8 @@ public sealed class NodeAuthStatusEndpoint : EndpointWithoutRequest<NodeAuthStat
         await Send.OkAsync(new NodeAuthStatusResponse
         {
             SetupRequired = status.SetupRequired,
-            Authenticated = status.Authenticated
+            Authenticated = status.Authenticated,
+            Vault = NodeAuthVaultStatus.From(status.Vault)
         }, ct);
     }
 }

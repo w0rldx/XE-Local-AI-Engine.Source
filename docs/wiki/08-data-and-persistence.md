@@ -52,7 +52,7 @@ There are **two distinct crypto layers** that both delegate to the same AES-GCM 
 
 ### The key
 
-`NodeSqliteKeyHolder` derives a 32-byte key with **HKDF-SHA256** from the operator secret, using `info = "c0re-node-sqlite|v1|{NodeName}"` and an empty salt (`NodeSqliteKeyHolder.cs`). The operator secret is zeroed immediately after derivation (`CryptographicOperations.ZeroMemory`), and the derived key is zeroed on `Dispose`. The key holder throws at construction if `WorkerNode:NodeName` is unset. The key never leaves the node; see [Security & Privacy](12-security-and-privacy.md).
+`NodeSqliteKeyHolder` derives a 32-byte key with **HKDF-SHA256** from the operator secret, using `info = "c0re-node-sqlite|v1|{NodeName}"` and an empty salt (`NodeSqliteKeyHolder.cs`). The operator secret is zeroed immediately after derivation (`CryptographicOperations.ZeroMemory`), and the derived key is zeroed on `Dispose`. The key holder throws at construction if `WorkerNode:NodeName` is unset. The operator secret itself is the node's random master key: in packaged local modes it is persisted only inside the passphrase-wrapped v2 `node.key` vault (it never appears raw on disk), unwrapped into memory at unlock and handed to the host as an in-memory configuration value, while an operator-supplied secret (`XE_NODE_SQLITE_KEY`, secrets file, Aspire parameter) bypasses the vault. The derivation above is unchanged by the vault, so data written before the vault existed stays readable. The key never leaves the node; see [Security & Privacy](12-security-and-privacy.md) §2.1 and [ADR 0018](../adr/0018-local-vault-passphrase-wrapped-node-key.md).
 
 ### The SaveChanges interceptor
 

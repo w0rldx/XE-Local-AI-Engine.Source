@@ -343,6 +343,7 @@ import {
 	nodeLogout,
 	nodeRefresh,
 	nodeSetup,
+	nodeVaultConfirm,
 	type Options,
 	overrideTrainingArtifactQuality,
 	pauseDevWorkflowRun,
@@ -1263,6 +1264,9 @@ import type {
 	NodeSetupData,
 	NodeSetupError,
 	NodeSetupResponse,
+	NodeVaultConfirmData,
+	NodeVaultConfirmError,
+	NodeVaultConfirmResponse,
 	OverrideTrainingArtifactQualityData,
 	OverrideTrainingArtifactQualityError,
 	OverrideTrainingArtifactQualityResponse,
@@ -2696,6 +2700,26 @@ export const nodeAuthStatusOptions = (options?: Options<NodeAuthStatusData>) =>
 		},
 		queryKey: nodeAuthStatusQueryKey(options),
 	});
+
+export const nodeVaultConfirmMutation = (
+	options?: Partial<Options<NodeVaultConfirmData>>,
+): UseMutationOptions<NodeVaultConfirmResponse, AxiosError<NodeVaultConfirmError>, Options<NodeVaultConfirmData>> => {
+	const mutationOptions: UseMutationOptions<
+		NodeVaultConfirmResponse,
+		AxiosError<NodeVaultConfirmError>,
+		Options<NodeVaultConfirmData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await nodeVaultConfirm({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const listSlashCommandsQueryKey = (options?: Options<ListSlashCommandsData>) =>
 	createQueryKey("listSlashCommands", options);

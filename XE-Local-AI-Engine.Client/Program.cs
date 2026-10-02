@@ -47,16 +47,17 @@ namespace XE_Local_AI_Engine.Client
 {
     using System.Diagnostics;
     using System.Diagnostics.CodeAnalysis;
+    using System.Security.Cryptography;
     using FastEndpoints;
     using FastEndpoints.Swagger;
     using Microsoft.AspNetCore.Diagnostics.HealthChecks;
     using Microsoft.Extensions.Diagnostics.HealthChecks;
-    using Microsoft.Net.Http.Headers;
     using Scalar.AspNetCore;
     using Serilog;
     using XE_Local_AI_Engine.Client.Common.Extensions;
     using XE_Local_AI_Engine.Client.Endpoints.Common;
     using XE_Local_AI_Engine.Client.Hosting;
+    using XE_Local_AI_Engine.Client.Hosting.Vault;
     using XE_Local_AI_Engine.Client.Hubs;
     using XE_Local_AI_Engine.Client.Persistence.Sqlite;
     using XE_Local_AI_Engine.Client.Services.Auth;
@@ -69,6 +70,7 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Services.NodeSettings;
     using XE_Local_AI_Engine.Client.Services.Proxy;
     using XE_Local_AI_Engine.Client.Services.Transcription;
+    using XE_Local_AI_Engine.Client.Services.Vault;
     using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
     /// <summary>
@@ -278,10 +280,15 @@ namespace XE_Local_AI_Engine.Client
                 builder.Configuration.AddInMemoryCollection(configurationOverrides);
             }
 
+            // Resolved in the local-data block below and applied after a locked vault (if any) is unwrapped, so the real host
+            // re-binds the origin the unlock page used.
+            string? desktopDataDirectory = null;
+            string? bindUrl = null;
+            var vaultState = VaultState.External;
             if (needsLocalData)
             {
                 // Resolve (and create) the per-user data dir up front so both the bind below and the config layer share it.
-                var desktopDataDirectory = DesktopBootstrap.ResolveDataDirectory();
+                desktopDataDirectory = DesktopBootstrap.ResolveDataDirectory();
 
                 // Acquire the exclusive per-data-root lease BEFORE any key/DB initialization, which happens in EnsureLocalDataConfiguration just below: two concurrent instances
                 // sharing this directory would each generate a key and split the DB. Held for the process lifetime and disposed on shutdown; never reached off the desktop flag.
@@ -327,17 +334,17 @@ namespace XE_Local_AI_Engine.Client
                     }
 
 #pragma warning disable S5332 // Local mode intentionally binds plain HTTP exclusively on 127.0.0.1; it never leaves the machine.
-                    builder.WebHost.UseUrls($"http://{DesktopLaunch.LoopbackHost}:{port}");
+                    bindUrl = $"http://{DesktopLaunch.LoopbackHost}:{port}";
 #pragma warning restore S5332
                 }
                 else
                 {
-                    builder.WebHost.UseUrls(await DesktopPortStore.ResolveBindUrlAsync(desktopDataDirectory, CancellationToken.None));
+                    bindUrl = await DesktopPortStore.ResolveBindUrlAsync(desktopDataDirectory, CancellationToken.None);
                 }
 
                 // A double-click launch supplies neither the node SQLite connection string nor the operator secret, so fill them from the per-user data directory
                 // BEFORE AddServices reads configuration below. Each key is layered in only when absent, so any value already supplied wins.
-                DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration);
+                vaultState = DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration);
             }
 
             builder.Logging.ClearProviders();
@@ -351,6 +358,65 @@ namespace XE_Local_AI_Engine.Client
 
             Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
             StartupLoggerReady = true;
+
+            // Read once: stdin is consumed, and both the locked-vault unlock below and the reset after migrations need it.
+            var resetRequested = DesktopLaunch.TryGetResetAdminPassword(args, out var resetPassword);
+            var resetRecoveryCode = resetRequested ? DesktopLaunch.GetRecoveryCode(args) : null;
+
+            // A v2 node.key is the passphrase-wrapped vault (ADR 0018): nothing below may build until it is unwrapped. The lease is
+            // already held, so a second launch exits 4 instead of serving a second unlock page.
+            VaultUnlockOutcome? vaultUnlock = null;
+            if (vaultState == VaultState.Locked)
+            {
+                var attempt = await UnlockVaultAsync(new VaultUnlockRequestContext
+                {
+                    Args = args,
+                    DataDirectory = desktopDataDirectory!,
+                    BindUrl = bindUrl!,
+                    Builder = builder,
+                    LaunchMode = launchMode,
+                    SetupCommand = setupCommand,
+                    McpKeyRequested = mcpKeyRequested,
+                    ResetRequested = resetRequested,
+                    RecoveryCode = resetRecoveryCode,
+                    StandardOutput = standardOutput,
+                    StandardError = standardError,
+                    ParentLost = parentLifetime?.ParentLost
+                });
+                if (attempt.Outcome is null)
+                {
+                    instanceLease?.Dispose();
+                    return new ProgramStartResult
+                    {
+                        App = null,
+                        ExitCode = attempt.ExitCode!.Value
+                    };
+                }
+
+                vaultUnlock = attempt.Outcome;
+                if (vaultUnlock.BoundUrl is { } unlockPageUrl)
+                {
+                    if (!await RebindUnlockPagePortAsync(unlockPageUrl, standardError))
+                    {
+                        CryptographicOperations.ZeroMemory(vaultUnlock.MasterKey);
+                        instanceLease?.Dispose();
+                        return new ProgramStartResult
+                        {
+                            App = null,
+                            ExitCode = UnlockPortLostExitCode
+                        };
+                    }
+
+                    bindUrl = unlockPageUrl;
+                }
+
+                InjectUnlockedSecret(builder.Configuration, vaultUnlock);
+            }
+
+            if (bindUrl is not null)
+            {
+                builder.WebHost.UseUrls(bindUrl);
+            }
 
             // Aspire services
             builder.AddServiceDefaults();
@@ -483,9 +549,14 @@ namespace XE_Local_AI_Engine.Client
 
             // Local admin password recovery, handled AFTER identity migrations guarantee the tables and Admin role and BEFORE the web host serves, so it runs against the SAME
             // database the app uses and the single-instance lease has already proved nothing else holds the directory. Resets without the old password, revokes refresh tokens, exits.
-            if (DesktopLaunch.TryGetResetAdminPassword(args, out var resetPassword))
+            if (vaultUnlock?.ResetPassword is not null)
             {
-                var resetExitCode = await ResetAdminPasswordAsync(app.Services, resetPassword);
+                await ResetRecoveredAdminPasswordAsync(app.Services, vaultUnlock);
+            }
+
+            if (resetRequested)
+            {
+                var resetExitCode = await ResetAdminPasswordAsync(app.Services, resetPassword, resetRecoveryCode);
                 instanceLease?.Dispose();
                 return new ProgramStartResult
                 {
@@ -553,24 +624,7 @@ namespace XE_Local_AI_Engine.Client
 
             // Apply response-wide security/correlation headers at the shared boundary, before static files, health checks, authentication, endpoints and the SPA
             // fallback. OnStarting is what makes even a short-circuit response carry the anti-framing defense. An existing trace header is never overwritten.
-            app.Use(static async (context, next) =>
-            {
-                var activity = Activity.Current;
-                context.Response.OnStarting(() =>
-                {
-                    context.Response.Headers[HeaderNames.XFrameOptions] = "DENY";
-                    if (activity is not null && !context.Response.Headers.ContainsKey(TraceResponseHeader.HeaderName))
-                    {
-                        // The trace-flags byte reflects the activity's actual recorded state rather than a hardcoded "01"
-                        // (see TraceResponseHeader.Build), so a downstream reader is not told the span was sampled when it was not.
-                        context.Response.Headers[TraceResponseHeader.HeaderName] = TraceResponseHeader.Build(activity);
-                    }
-
-                    return Task.CompletedTask;
-                });
-
-                await next();
-            });
+            app.UseNodeResponseHeaders();
 
             // Desktop mode serves plain HTTP on loopback only, so the HTTPS-redirect/HSTS pipeline is
             // bypassed entirely. Off-flag both branches are exactly as before. UseAntiforgery is scheme-agnostic and stays.
@@ -914,7 +968,8 @@ namespace XE_Local_AI_Engine.Client
             // handler or P/Invoke is installed. The lifecycle is rooted for the app's lifetime through the lifetime token registration and disposes with the host.
             if (isLocalMode)
             {
-                ActivateDesktopLifecycle(app, launchMode, DesktopLaunch.HasNoBrowserFlag(args));
+                // After an unlock the browser is already on the unlock page, on this same origin, and follows to the real host itself.
+                ActivateDesktopLifecycle(app, launchMode, DesktopLaunch.HasNoBrowserFlag(args) || vaultUnlock?.BoundUrl is not null);
             }
 
 

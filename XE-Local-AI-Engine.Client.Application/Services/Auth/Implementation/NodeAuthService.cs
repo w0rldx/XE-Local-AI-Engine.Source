@@ -7,12 +7,23 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.Vault;
 
 public sealed class NodeAuthService : INodeAuthService
 {
     private const int MaxRotationChainHops = 16;
 
+    /// <summary>Identity's own PasswordMismatch wording, so a vault refusal reads the same as an Identity one.</summary>
+    private const string IncorrectPasswordError = "Incorrect password.";
+
+    private const string RecoveryCodeRequiredError =
+        "This node's key is protected by the admin password; a password reset requires the recovery code shown at setup.";
+
     private static readonly SemaphoreSlim SetupLock = new(initialCount: 1, maxCount: 1);
+
+    // Confirm, change and reset each prove a password and then write vault and Identity in separate steps; run alone, a
+    // change landing between a confirm's check and its wrap would leave node.key on the old password.
+    private static readonly SemaphoreSlim PasswordLock = new(initialCount: 1, maxCount: 1);
 
     /// <summary>How long a refresh token that ROTATION replaced still buys a successor.</summary>
     /// <remarks>
@@ -32,6 +43,7 @@ public sealed class NodeAuthService : INodeAuthService
     private readonly TimeProvider _timeProvider;
     private readonly INodeTokenService _tokenService;
     private readonly UserManager<NodeUser> _userManager;
+    private readonly INodeVault _vault;
 
     public NodeAuthService(INodeIdentityStore identity,
         UserManager<NodeUser> userManager,
@@ -40,6 +52,7 @@ public sealed class NodeAuthService : INodeAuthService
         IOptions<NodeAuthOptions> options,
         INodeSettingsStore nodeSettingsStore,
         TimeProvider timeProvider,
+        INodeVault vault,
         ILogger<NodeAuthService> logger)
     {
         _identity = identity ?? throw new ArgumentNullException(nameof(identity));
@@ -49,6 +62,7 @@ public sealed class NodeAuthService : INodeAuthService
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _vault = vault ?? throw new ArgumentNullException(nameof(vault));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -61,7 +75,8 @@ public sealed class NodeAuthService : INodeAuthService
         return new NodeAuthStatus
         {
             SetupRequired = !hasAdminUser,
-            Authenticated = principal.Identity?.IsAuthenticated == true
+            Authenticated = principal.Identity?.IsAuthenticated == true,
+            Vault = _vault.State
         };
     }
 
@@ -147,13 +162,26 @@ public sealed class NodeAuthService : INodeAuthService
                     : latest,
                 cancellationToken);
 
-            await transaction.CommitAsync(cancellationToken);
+            // The vault wrap is the last step inside the transaction: if it throws, the transaction disposes unconfirmed and
+            // no admin exists; if the commit throws after it, the file is put back so the next setup starts from Pending.
+            var vaultChange = await _vault.CreateAsync(password, replaceUnlocked: true, cancellationToken);
+            try
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch when (vaultChange is not null)
+            {
+                await _vault.RestoreAsync(vaultChange, CancellationToken.None);
+                throw;
+            }
+
             _logger.LogInformation("Node admin user created during first-run setup.");
             return new NodeSetupResult
             {
                 Succeeded = true,
                 AlreadyInitialized = false,
-                Errors = []
+                Errors = [],
+                RecoveryCode = vaultChange?.RecoveryCode
             };
         }
         finally
@@ -251,7 +279,29 @@ public sealed class NodeAuthService : INodeAuthService
         await _identity.RevokeActiveTokensAsync(user.Id, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
     }
 
-    public async Task<NodePasswordChangeResult> ChangePasswordAsync(ClaimsPrincipal principal, string currentPassword, string newPassword, CancellationToken cancellationToken)
+    public Task<NodePasswordChangeResult> ChangePasswordAsync(ClaimsPrincipal principal, string currentPassword, string newPassword, CancellationToken cancellationToken) =>
+        UnderPasswordLockAsync(() => ChangePasswordCoreAsync(principal, currentPassword, newPassword, cancellationToken), cancellationToken);
+
+    public Task<NodePasswordChangeResult> ResetAdminPasswordAsync(string newPassword, string? recoveryCode, CancellationToken cancellationToken) =>
+        UnderPasswordLockAsync(() => ResetAdminPasswordCoreAsync(newPassword, recoveryCode, cancellationToken), cancellationToken);
+
+    public Task<NodeVaultConfirmResult> ConfirmLegacyVaultAsync(ClaimsPrincipal principal, string password, CancellationToken cancellationToken) =>
+        UnderPasswordLockAsync(() => ConfirmLegacyVaultCoreAsync(principal, password, cancellationToken), cancellationToken);
+
+    private static async Task<T> UnderPasswordLockAsync<T>(Func<Task<T>> action, CancellationToken cancellationToken)
+    {
+        await PasswordLock.WaitAsync(cancellationToken);
+        try
+        {
+            return await action();
+        }
+        finally
+        {
+            PasswordLock.Release();
+        }
+    }
+
+    private async Task<NodePasswordChangeResult> ChangePasswordCoreAsync(ClaimsPrincipal principal, string currentPassword, string newPassword, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(currentPassword);
         ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
@@ -266,9 +316,40 @@ public sealed class NodeAuthService : INodeAuthService
             };
         }
 
-        var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+        // Vault first (it proves the current password against node.key), then Identity; no shared transaction, so an Identity
+        // failure restores the file. A crash between the two leaves Identity on the old password: recoverable with the code.
+        VaultChange? vaultChange;
+        try
+        {
+            vaultChange = await _vault.RewrapAsync(currentPassword, newPassword, cancellationToken);
+        }
+        catch (VaultUnlockException)
+        {
+            return new NodePasswordChangeResult
+            {
+                Succeeded = false,
+                Errors = [IncorrectPasswordError]
+            };
+        }
+
+        IdentityResult result;
+        try
+        {
+            result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+        }
+        catch when (vaultChange is not null)
+        {
+            await _vault.RestoreAsync(vaultChange, CancellationToken.None);
+            throw;
+        }
+
         if (!result.Succeeded)
         {
+            if (vaultChange is not null)
+            {
+                await _vault.RestoreAsync(vaultChange, CancellationToken.None);
+            }
+
             return new NodePasswordChangeResult
             {
                 Succeeded = false,
@@ -284,9 +365,18 @@ public sealed class NodeAuthService : INodeAuthService
         };
     }
 
-    public async Task<NodePasswordChangeResult> ResetAdminPasswordAsync(string newPassword, CancellationToken cancellationToken)
+    private async Task<NodePasswordChangeResult> ResetAdminPasswordCoreAsync(string newPassword, string? recoveryCode, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
+
+        if (_vault.State.HasWrappedKey() && string.IsNullOrWhiteSpace(recoveryCode))
+        {
+            return new NodePasswordChangeResult
+            {
+                Succeeded = false,
+                Errors = [RecoveryCodeRequiredError]
+            };
+        }
 
         // No email on a recovery reset: resolve the single completed-setup admin, exactly as login does when the UI omits
         // the email (single-user model). Nothing to reset if first-run setup never happened.
@@ -300,6 +390,101 @@ public sealed class NodeAuthService : INodeAuthService
             };
         }
 
+        // The recovery code is proven against node.key and the vault re-wrapped BEFORE Identity; a failed Identity reset puts the file back.
+        VaultChange? vaultChange = null;
+        if (_vault.State.HasWrappedKey())
+        {
+            try
+            {
+                vaultChange = await _vault.RewrapWithRecoveryAsync(recoveryCode!, newPassword, cancellationToken);
+            }
+            catch (VaultUnlockException)
+            {
+                return new NodePasswordChangeResult
+                {
+                    Succeeded = false,
+                    Errors = ["The recovery code is not valid for this node."]
+                };
+            }
+        }
+
+        try
+        {
+            var result = await ResetIdentityPasswordAsync(user, newPassword, cancellationToken);
+            if (!result.Succeeded && vaultChange is not null)
+            {
+                await _vault.RestoreAsync(vaultChange, CancellationToken.None);
+            }
+
+            return result;
+        }
+        catch when (vaultChange is not null)
+        {
+            await _vault.RestoreAsync(vaultChange, CancellationToken.None);
+            throw;
+        }
+    }
+
+    private async Task<NodeVaultConfirmResult> ConfirmLegacyVaultCoreAsync(ClaimsPrincipal principal, string password, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+
+        if (_vault.State is not VaultState.Pending || !await HasCompletedSetupAsync(cancellationToken))
+        {
+            return new NodeVaultConfirmResult
+            {
+                Succeeded = false,
+                NotPending = true
+            };
+        }
+
+        var user = await _userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return new NodeVaultConfirmResult
+            {
+                Succeeded = false,
+                Errors = ["The current session is invalid."]
+            };
+        }
+
+        // lockoutOnFailure: this endpoint verifies the password, so it must not become an unthrottled guessing oracle beside login.
+        var check = await _signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
+        if (!check.Succeeded)
+        {
+            return new NodeVaultConfirmResult
+            {
+                Succeeded = false,
+                Errors = [check.IsLockedOut ? "The account is temporarily locked. Try again later." : IncorrectPasswordError]
+            };
+        }
+
+        VaultChange? change;
+        try
+        {
+            change = await _vault.CreateAsync(password, replaceUnlocked: false, cancellationToken);
+        }
+        catch (VaultAlreadyCreatedException)
+        {
+            // A concurrent confirm wrapped it first; its recovery code is the valid one.
+            return new NodeVaultConfirmResult
+            {
+                Succeeded = false,
+                NotPending = true
+            };
+        }
+
+        _logger.LogInformation("Legacy node.key wrapped into the node vault for user {UserId}.", user.Id);
+        return new NodeVaultConfirmResult
+        {
+            Succeeded = true,
+            RecoveryCode = change?.RecoveryCode
+        };
+    }
+
+    private async Task<NodePasswordChangeResult> ResetIdentityPasswordAsync(NodeUser user, string newPassword, CancellationToken cancellationToken)
+    {
         // RemovePassword + AddPassword is the no-old-password reset primitive (Identity has no token-less ResetPassword, and no reset-token
         // provider is registered). Both go in a serializable transaction — as in SetupAsync — so a rejected new password never leaves the account passwordless.
         await using var transaction = await _identity.BeginSerializableTransactionAsync(cancellationToken);

@@ -59,3 +59,7 @@ retires after idling, so the jail is SIGKILLed at a random moment. Bound a jail'
 servers dying after 40-180 s with no exit code, no stderr and nothing in the host log (live round 2026-09-30, two
 reproductions: the forking `.NET TP Worker` tid and bwrap vanished in the same 10-100 ms sample). **Authority:**
 `SandboxIsolatedChainTests.Render_NeverAsksBwrapToDieWithItsParent`; `SandboxIsolatedChain.Render` comment.
+
+### A local-mode host with a v2 `node.key` starts locked: tests and scripts that spawn the real host must unlock it
+
+**Rule:** a desktop or `XE_DATA_DIR` host whose `node.key` is a v2 vault serves only the unlock pre-host until the admin password is given, so any test or script that spawns the real host against such a data directory must pass `XE_ADMIN_PASSWORD` (or `--admin-password-stdin`) for a one-shot, supply an operator secret (`XE_NODE_SQLITE_KEY`) to bypass the vault, or unlock over `auth/vault/unlock`. **Prevents:** a spawned host that reports `XE_READY` and a healthy `auth/status` but never serves the real API, so the test or shell hangs on the unlock page until the 2-minute shell start deadline. `--mcp-key` and `--setup` on a locked vault exit 5 without a password. **Authority:** ADR 0018; `Program.Vault.cs` `UnlockVaultAsync`; `EngineCliProcessTests` locked-vault flows. Target: runtime.md.

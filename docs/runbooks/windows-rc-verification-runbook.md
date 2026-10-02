@@ -57,7 +57,7 @@ what is left for you:
 |---|---|
 | 1 — Job Object tree-kill | **Verified** with a real `llama-server` holding 31741 MiB through driver 610.88 |
 | 2 — stale-orphan reaper | **Verified** — 0 reaper lines, so the Job Object is what reaped it |
-| 3 — `node.key` DPAPI wrap | Verified in the earlier session |
+| 3 — `node.key` v2 vault | **Not yet run on Windows** — the earlier DPAPI-wrap result is superseded by ADR 0018 |
 | 4 — `dp-keys` fail-closed ring | Verified in the earlier session, both directions |
 | 5 — Development Mode surveys | **Blocked** by a redirected `%LOCALAPPDATA%` in that harness — see the note in check 5; not a product failure, but read it before re-running |
 | 5b — Coder surveys | **Unproven** — attempted with a *reasoning* model, which cannot produce a tool call; see the note in 5b |
@@ -200,17 +200,20 @@ unambiguously ours.
 
 ---
 
-## 3. First-run `node.key` generation + DPAPI wrap
+## 3. First-run `node.key` vault (v2, passphrase-wrapped)
 
-**What it proves.** That `ProtectedData.Protect(..., DataProtectionScope.CurrentUser)` actually runs on Windows
-(`DesktopBootstrap.ProtectSecretForAtRest`). **This branch is completely untested** —
-`DesktopBootstrapTests.EnsureLocalDataConfiguration_OnNonWindows_PersistsKeyFileWithOwnerOnlyPermissions`
-returns early `if (OperatingSystem.IsWindows())`, and `ProtectedData` appears in no test file. A regression here
-writes the SQLite operator secret to disk in plaintext.
+> **Changed for this RC.** `node.key` is no longer a DPAPI-wrapped raw secret. It is a v2 JSON vault
+> ([ADR 0018](../adr/0018-local-vault-passphrase-wrapped-node-key.md), Proposed) wrapped by the admin password and a
+> recovery code; the DPAPI layer on this file is gone, so the old "length is more than 32, `Unprotect` returns 32"
+> gates no longer apply. The earlier DPAPI result for this check is **superseded** and nothing below has run on
+> Windows yet. The `dp-keys` ring in check 4 still uses DPAPI and is unchanged.
 
-**There is no log line for any of this.** The desktop setup branch calls
-`DesktopBootstrap.EnsureLocalDataConfiguration` before `CreateStartupLogger`, and `DesktopBootstrap` has no
-`ILogger`/`Console` call anywhere. Verification is filesystem-only.
+**What it proves.** That on real Windows the secret never rests in the data directory in plaintext, that the vault
+file is written and replaced atomically under `%LOCALAPPDATA%`, that a restart comes up **locked** on the unlock
+page, and that the shell and `--status --json` still treat the locked engine as running. A regression here writes the
+SQLite operator secret to disk in plaintext or leaves a node nobody can unlock.
+
+**There is no log line for the key bytes, and there must not be.** Verification is filesystem plus the unlock page.
 
 **Do this.** Full reset first, so this is a genuine first run:
 
@@ -219,37 +222,68 @@ writes the SQLite operator secret to disk in plaintext.
 Remove-Item -Recurse -Force $XE
 ```
 
-Launch, wait for first-run provisioning to reach the admin-password screen, then:
+Launch and reach the admin setup screen. Before submitting it, `node.key` is still a pre-vault key (`pending`):
 
 ```powershell
-$p   = "$XE\node.key"
-$raw = (Get-Content $p -Raw).Trim()
-$b   = [Convert]::FromBase64String($raw)
-$b.Length                                   # discriminator
-Add-Type -AssemblyName System.Security
-[System.Security.Cryptography.ProtectedData]::Unprotect($b,$null,'CurrentUser').Length
-(Get-Item $p).Length                        # single line, ASCII, no BOM/newline
-Get-FileHash $p -Algorithm SHA256
+$p = "$XE\node.key"
+(Get-Item $p).Length
 ```
 
-Then close the console, relaunch, and re-run `Get-FileHash`.
+Create the admin (email plus a password of at least 12 characters). The next screen shows a **recovery code**
+(8 groups of 5 characters); write it down, it is shown once. Then:
+
+```powershell
+$raw = Get-Content $p -Raw
+$raw -match '"magic":\s*"xe-vault"'          # True
+$vault = $raw | ConvertFrom-Json
+$vault.v                                      # 2
+$vault.kdf.alg                                # PBKDF2-SHA512
+$vault.kdf.iterations                         # the stored count; unwrap honours this value
+Get-FileHash $p -Algorithm SHA256
+(Get-ChildItem $XE -Filter 'node.key*').Name  # only node.key, no leftover .tmp
+```
+
+Look for a 32-byte plaintext: the file holds only the JSON above, so a base64 value that decodes to exactly 32 bytes
+must not appear (the wrapped values decode to 48 bytes, key plus the 16-byte tag):
+
+```powershell
+[regex]::Matches($raw, '"(?:ct|nonce|salt)":\s*"([^"]+)"') | ForEach-Object {
+  "{0}: {1} bytes" -f ($_.Value -split '"')[1], [Convert]::FromBase64String($_.Groups[1].Value).Length
+}
+```
+
+Close the console, relaunch, and re-run `Get-FileHash`. The **unlock page** must appear (not the sign-in page) and
+the hash must be unchanged. While it is showing, in another window:
+
+```powershell
+& "<install dir>\XE-Local-AI-Engine.exe" --status --json   # running: true while locked
+```
+
+Enter the admin password. The page must reach the app on the **same origin** (same port); if the port changed, record
+it, the host logs the reason.
 
 **Pass looks like.**
-- `$b.Length` is **> 32** (a few hundred) — wrapped.
-- `Unprotect(...).Length` is **exactly 32**, no exception.
-- `Get-FileHash` identical before and after the restart (key reused, not regenerated —
-  `DesktopBootstrap.EnsureOperatorSecret` reads the existing winner while the file exists).
+- After setup the file parses as JSON with `magic` `xe-vault`, `v` `2` and a stored PBKDF2-SHA512 iteration count.
+- No base64 field in the file decodes to exactly 32 bytes, and no `.tmp` sibling remains.
+- `Get-FileHash` is identical before and after the restart (the vault is not regenerated).
+- The restart shows the unlock page, `--status --json` reports `running: true` with the engine locked, and the
+  correct password unlocks it.
 
 **Fail looks like / next step.**
-- `$b.Length` is **exactly 32** → the secret is on disk in plaintext; the DPAPI branch did not run. P0.
-  (This is the product's own discriminator: `DesktopBootstrap.UnwrapSecretBytes` plus the
-  `NodeOperatorSecretProvider.ExpectedSecretLength` gate in `ReadAndValidateExistingSecret`.)
-- `Unprotect` throws `CryptographicException` → the blob is not CurrentUser-scoped for this account.
-- Hash changes across restart → regeneration; the previous `node.sqlite` is now unreadable.
+- A field decodes to exactly 32 bytes, or the file is not JSON after setup, so the secret is on disk raw. P0.
+- The file is still the pre-vault form after the setup screen was submitted and the recovery code shown. The wrap did not run.
+- The restart goes straight to the sign-in page with the previous session: the vault was not locked at start. P0.
+- `--status --json` reports `running: false` while the unlock page is up: the pre-host did not publish readiness, so the shell will start a second engine and hit the single-instance lease.
+- Hash changes across restart: regeneration; the previous `node.sqlite` is now unreadable.
+- The correct password is refused: capture the log and the file; do not retry more than a few times, the unlock route is rate limited.
 
-Related failure signature worth recognising (do not chase it here): copying the data dir to another Windows user
-produces a **~2 s hang then a misleading message** — *"The desktop operator key file '…' does not contain exactly
-32 bytes…"* — even though it does. The DPAPI unwrap failed; the length gate is reporting the wrong cause.
+**Also exercise once** (each needs the recovery code you wrote down): change the password, restart and unlock with
+the new one; then from a stopped engine run `--reset-admin-password <new>` with `--recovery-code-stdin` and confirm the
+old password no longer unlocks.
+
+A v2 vault is user-independent: copying the data dir to another Windows user no longer produces the old misleading
+*"does not contain exactly 32 bytes"* message for `node.key`, and the password unlocks it on any account. Only the
+`dp-keys` ring (check 4) stays bound to the Windows user.
 
 ---
 

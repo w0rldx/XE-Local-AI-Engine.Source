@@ -131,6 +131,12 @@ describe("ExternalAccessSetup", () => {
 		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 		queryClient.setQueryData(getNodeSettingsQueryKey(), { externalAccessProfile: "pending" });
 		useNodeAuthStore.getState().actions.setToken({ accessToken: "access-token", expiresAtUtc: "2099-01-01T00:00:00Z" });
+		// The layout guard asks a token-holding session whether the vault still owes a step; an unlocked vault owes none.
+		server.use(
+			http.get(localApiPath("auth/status"), () =>
+				HttpResponse.json({ setupRequired: false, authenticated: true, vault: "unlocked" }),
+			),
+		);
 		renderWithProviders(<ExternalAccessSetup />, { queryClient });
 
 		fireEvent.click(screen.getByTestId("external-access-choose-recommended"));

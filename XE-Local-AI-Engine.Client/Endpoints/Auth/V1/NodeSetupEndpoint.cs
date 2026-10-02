@@ -5,7 +5,7 @@ using FastEndpoints.Swagger;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
-public sealed class NodeSetupEndpoint : Endpoint<NodeSetupRequest>
+public sealed class NodeSetupEndpoint : Endpoint<NodeSetupRequest, NodeSetupResponse>
 {
     private readonly INodeAuthService _authService;
 
@@ -27,7 +27,11 @@ public sealed class NodeSetupEndpoint : Endpoint<NodeSetupRequest>
         var result = await _authService.SetupAsync(req.Email, req.Password, ct);
         if (result.Succeeded)
         {
-            await Send.NoContentAsync(ct);
+            // The recovery code is in this one response and nowhere else: the SPA shows it once, the node never stores it.
+            await Send.OkAsync(new NodeSetupResponse
+            {
+                RecoveryCode = result.RecoveryCode
+            }, ct);
             return;
         }
 

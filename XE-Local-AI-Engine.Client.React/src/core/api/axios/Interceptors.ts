@@ -4,16 +4,17 @@ import { toast } from "@/core/ui/notifications/Toast";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { NetworkError } from "@/core/api/errors/NetworkError";
-import { navigateToLogin } from "@/core/api/axios/LoginNavigation";
+import { navigateToLogin, navigateToVault } from "@/core/api/axios/LoginNavigation";
 import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import { refreshNodeAuthToken } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { resetVaultSettled } from "@/core/auth/utils/SessionRestore";
 
 const retriedRequests = new WeakSet<InternalAxiosRequestConfig>();
 let isRedirectingToLogin = false;
 
 function redirectToLoginOnce(): void {
-	if (globalThis.location.pathname === "/login" || globalThis.location.pathname === "/setup") {
+	if (["/login", "/setup", "/vault", "/vault-setup"].includes(globalThis.location.pathname)) {
 		return;
 	}
 
@@ -27,6 +28,21 @@ function redirectToLoginOnce(): void {
 	Promise.resolve(navigateToLogin(globalThis.location.pathname + globalThis.location.search))
 		.finally(() => {
 			isRedirectingToLogin = false;
+		})
+		.catch(() => undefined);
+}
+
+let isRedirectingToVault = false;
+
+function redirectToVaultOnce(): void {
+	if (globalThis.location.pathname === "/vault" || isRedirectingToVault) {
+		return;
+	}
+
+	isRedirectingToVault = true;
+	Promise.resolve(navigateToVault())
+		.finally(() => {
+			isRedirectingToVault = false;
 		})
 		.catch(() => undefined);
 }
@@ -83,6 +99,25 @@ export const addUnauthorizedErrorInterceptor = (axiosInstance: AxiosInstance) =>
 				redirectToLoginOnce();
 				return Promise.reject(refreshError);
 			}
+		},
+	);
+};
+
+// A locked engine answers every protected route with 503 "Vault locked". A tab that stayed open across an engine
+// restart still holds a token and a settled vault cache, so nothing else would send it to the unlock page. Only this
+// exact title counts: any other 503 is an ordinary outage and stays an error for the caller.
+export const addVaultLockedInterceptor = (axiosInstance: AxiosInstance) => {
+	axiosInstance.interceptors.response.use(
+		(response) => response,
+		(error: AxiosError) => {
+			const problem = error.response?.data as ProblemDetails | undefined;
+			if (error.response?.status === 503 && problem?.title === "Vault locked") {
+				resetVaultSettled();
+				useNodeAuthStore.getState().actions.clear();
+				redirectToVaultOnce();
+			}
+
+			return Promise.reject(error);
 		},
 	);
 };

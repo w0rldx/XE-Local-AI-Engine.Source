@@ -2181,8 +2181,15 @@
           "x-position": 1
         },
         "responses": {
-          "204": {
-            "description": "No Content"
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeSetupResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad Request",
@@ -2221,6 +2228,63 @@
             "description": "Forbidden"
           }
         }
+      }
+    },
+    "/api/local/v1/auth/vault/confirm": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "nodeVaultConfirm",
+        "requestBody": {
+          "x-name": "NodeVaultConfirmRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeVaultConfirmRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeVaultConfirmResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
       }
     },
     "/api/local/v1/automation/commands": {
@@ -27022,7 +27086,8 @@
         "additionalProperties": false,
         "required": [
           "setupRequired",
-          "authenticated"
+          "authenticated",
+          "vault"
         ],
         "properties": {
           "setupRequired": {
@@ -27030,6 +27095,9 @@
           },
           "authenticated": {
             "type": "boolean"
+          },
+          "vault": {
+            "type": "string"
           }
         }
       },
@@ -27119,6 +27187,43 @@
             "maxLength": 256,
             "minLength": 12,
             "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAuthV1NodeSetupResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "recoveryCode": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAuthV1NodeVaultConfirmRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 0,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAuthV1NodeVaultConfirmResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recoveryCode"
+        ],
+        "properties": {
+          "recoveryCode": {
+            "type": "string"
           }
         }
       },

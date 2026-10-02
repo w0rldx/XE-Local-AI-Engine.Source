@@ -282,6 +282,30 @@ internal static class DesktopPortStore
         return port;
     }
 
+    /// <summary>How often the real host probes the unlock page's port after the pre-host stopped: about 5 s at <see cref="RebindProbeInterval" />.</summary>
+    internal const int RebindProbeAttempts = 21;
+
+    internal static readonly TimeSpan RebindProbeInterval = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>Probes <paramref name="port" /> up to <paramref name="attempts" /> times, awaiting <paramref name="delay" /> between probes.</summary>
+    /// <returns><c>true</c> as soon as a probe finds the port free; <c>false</c> when every probe found it taken.</returns>
+    internal static async Task<bool> WaitForPortAsync(int port, int attempts, Func<int, bool> isAvailable, Func<Task> delay)
+    {
+        ArgumentNullException.ThrowIfNull(isAvailable);
+        ArgumentNullException.ThrowIfNull(delay);
+        for (var attempt = 1; attempt < attempts; attempt++)
+        {
+            if (isAvailable(port))
+            {
+                return true;
+            }
+
+            await delay();
+        }
+
+        return isAvailable(port);
+    }
+
     internal static bool IsPortAvailable(int port)
     {
         // Probe by binding a throwaway loopback listener; rejection means the port is taken and a dynamic one is used. The listener stops before Kestrel binds, leaving a TOCTOU window.

@@ -251,7 +251,6 @@ XE-Local-AI-Engine.Client.Application/Services/Training/Runs/TrainingOptionDefau
 XE-Local-AI-Engine.Client.Application/Services/Workspace/WorkspaceFileScanner.cs|ScannedDirectory
 XE-Local-AI-Engine.Client.Persistence/Cryptography/AeadCiphertext.cs|AeadCiphertext
 XE-Local-AI-Engine.Client/Hosting/BrowserLauncher.cs|OpenCommand
-XE-Local-AI-Engine.Client/Hosting/DesktopBootstrap.cs|UnwrappedSecret
 XE-Local-AI-Engine.Providers.Capabilities/Implementation/HardwareProfiler.cs|AdapterListCommand
 XE-Local-AI-Engine.Providers.CodexOAuth/Implementation/CodexStoreDisabledChatClient.cs|CodexRequest
 XE-Local-AI-Engine.Providers.HuggingFace/Implementation/GgufHeaderReader.cs|ParsedHeader

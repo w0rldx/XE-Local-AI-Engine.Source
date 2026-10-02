@@ -14,6 +14,8 @@ using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Tutorial;
 using XE_Local_AI_Engine.Client.Services.Tutorial.Implementation;
+using XE_Local_AI_Engine.Client.Services.Vault;
+using XE_Local_AI_Engine.Client.Services.Vault.Implementation;
 
 internal static class AddNodeAuthExtensions
 {
@@ -24,6 +26,17 @@ internal static class AddNodeAuthExtensions
 
         builder.Services.AddSingleton<ITokenStore, TokenStore>();
         builder.Services.AddSingleton<INodeOperatorSecretProvider, NodeOperatorSecretProvider>();
+        // The persisted desktop node.key is a password-wrapped vault only when the host set NodeVault:Managed (it generated or
+        // unwrapped the secret itself); an env/secrets-file/Aspire secret stays operator custody, so the null vault answers.
+        if (configuration.GetValue<bool>(NodeVault.ManagedConfigurationKey))
+        {
+            builder.Services.AddSingleton<INodeVault, NodeVault>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<INodeVault, NullNodeVault>();
+        }
+
         builder.Services.AddSingleton<INodeJwtKeyProvider, NodeJwtKeyProvider>();
         builder.Services.AddSingleton<INodeTokenService, NodeTokenService>();
         // Persistence boundary for the identity database. Scoped, and sharing its scope's context with Identity's own

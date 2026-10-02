@@ -313,6 +313,26 @@ esac
         $env:XE_ADMIN_PASSWORD | Should -BeExactly 'never-print-this'
     }
 
+    It 'relays the one-time vault recovery code and unlocks the key mint with the password' -Skip:(-not $IsLinux) {
+        $engine = Join-Path $script:TempRoot 'engine.exe'
+        @'
+#!/usr/bin/env bash
+case "$1" in
+  --setup) echo XE_SETUP=created; echo "XE_ADMIN_EMAIL=$XE_ADMIN_EMAIL"; echo XE_RECOVERY_CODE=ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-23456-77ABC-DEFGH ;;
+  --mcp-key) [[ "$XE_ADMIN_PASSWORD" == 'never-print-this' ]] || exit 5; echo XE_MCP_KEY=xemcp_fixture ;;
+esac
+'@ | Set-Content -LiteralPath $engine -NoNewline
+        & chmod +x $engine
+        $env:XE_ADMIN_EMAIL = 'admin@localhost.test'
+        $env:XE_ADMIN_PASSWORD = 'never-print-this'
+
+        $output = @(Invoke-XESetup -Exe $engine -NonInteractive $true)
+
+        $output | Should -Be @('XE_SETUP=created', 'XE_ADMIN_EMAIL=admin@localhost.test',
+            'XE_RECOVERY_CODE=ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-23456-77ABC-DEFGH', 'XE_MCP_KEY=xemcp_fixture')
+        $env:XE_ADMIN_PASSWORD | Should -BeExactly 'never-print-this'
+    }
+
     It 'accepts already-configured setup without fabricating an email' -Skip:(-not $IsLinux) {
         $engine = Join-Path $script:TempRoot 'engine.exe'
         @'
@@ -398,7 +418,12 @@ exit 4
         Mock Start-Process { [pscustomobject]@{ Id = 4321; HasExited = $false } }
         Mock Invoke-WebRequest { [pscustomobject]@{ StatusCode = 200 } }
         $fakeExe = Join-Path $script:TempRoot 'XE-Local-AI-Engine.exe'
-        $output = @(Start-XEEngine -Exe $fakeExe -DataDirectory $data -TimeoutSeconds 1)
+        $env:XE_ADMIN_PASSWORD = $null
+        $script:SeenPassword = 'unset'
+        Mock Start-Process { $script:SeenPassword = $env:XE_ADMIN_PASSWORD; [pscustomobject]@{ Id = 4321; HasExited = $false } }
+        $output = @(Start-XEEngine -Exe $fakeExe -DataDirectory $data -TimeoutSeconds 1 -VaultUnlockValue 'vault-pass')
+        $script:SeenPassword | Should -BeExactly 'vault-pass'
+        $env:XE_ADMIN_PASSWORD | Should -BeNullOrEmpty
         $output[0] | Should -BeExactly "XE_READY=1 XE_VERSION=v1.0.0 XE_URL=http://127.0.0.1:5199 XE_MCP_URL=http://127.0.0.1:5199/api/local/v1/mcp/server XE_DATA_DIR=$data"
         $output[1] | Should -BeExactly 'XE_PID=4321'
         Should -Invoke Start-Process -ParameterFilter { $ArgumentList -eq '--mcp-only' -and $PassThru } -Times 1 -Exactly

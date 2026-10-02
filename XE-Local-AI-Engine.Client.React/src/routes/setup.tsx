@@ -7,6 +7,10 @@ import { restoreNodeAuthSession } from "@/core/auth/utils/SessionRestore";
 export const Route = createFileRoute("/setup")({
 	beforeLoad: async () => {
 		const status = await getNodeAuthStatus();
+		if (status.vault === "locked") {
+			throw redirect({ to: "/vault" });
+		}
+
 		if (status.setupRequired) {
 			return;
 		}
@@ -14,6 +18,10 @@ export const Route = createFileRoute("/setup")({
 		const restoreResult = await restoreNodeAuthSession();
 		if (restoreResult === "authenticated") {
 			throw redirect({ to: "/" });
+		}
+
+		if (restoreResult === "vault-setup-required") {
+			throw redirect({ to: "/vault-setup" });
 		}
 
 		throw redirect({ to: "/login" });

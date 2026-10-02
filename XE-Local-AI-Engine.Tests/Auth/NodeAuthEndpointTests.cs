@@ -31,7 +31,7 @@ public sealed class NodeAuthEndpointTests
         AssertEx.True(AssertEx.NotNull(initialStatus).SetupRequired);
 
         using var setupResponse = await SetupAsync(client);
-        AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
 
         using var loginResponse = await LoginAsync(client);
         AssertEx.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
@@ -74,7 +74,7 @@ public sealed class NodeAuthEndpointTests
         using var client = factory.CreateClient();
 
         using var setupResponse = await SetupAsync(client);
-        AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
         using var loginResponse = await LoginAsync(client);
         var originalRefreshCookie = GetRefreshCookie(loginResponse);
 
@@ -114,7 +114,7 @@ public sealed class NodeAuthEndpointTests
         using var client = factory.CreateClient();
 
         using var setupResponse = await SetupAsync(client);
-        AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
 
         using var duplicateSetupResponse = await SetupAsync(client, "other@example.test");
 
@@ -133,7 +133,7 @@ public sealed class NodeAuthEndpointTests
 
         try
         {
-            AssertEx.Equal(expected: 1, responses.Count(response => response.StatusCode == HttpStatusCode.NoContent));
+            AssertEx.Equal(expected: 1, responses.Count(response => response.StatusCode == HttpStatusCode.OK));
             AssertEx.Equal(expected: 1, responses.Count(response => response.StatusCode == HttpStatusCode.Conflict));
         }
         finally
@@ -152,7 +152,7 @@ public sealed class NodeAuthEndpointTests
         using var client = factory.CreateClient();
 
         using var setupResponse = await SetupAsync(client);
-        AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
 
         using var response = await client.PostAsJsonAsync("/api/local/v1/auth/login",
             new
@@ -174,7 +174,7 @@ public sealed class NodeAuthEndpointTests
         using var client = factory.CreateClient();
 
         using var setupResponse = await SetupAsync(client);
-        AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
 
         using var response = await client.PostAsJsonAsync("/api/local/v1/auth/login",
             new
@@ -194,7 +194,7 @@ public sealed class NodeAuthEndpointTests
         using var client = factory.CreateClient();
 
         using var setupResponse = await SetupAsync(client);
-        AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
+        AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
 
         var stored = await factory.Services.GetRequiredService<INodeSettingsStore>().LoadAsync();
         AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, stored.ExternalAccessProfile);

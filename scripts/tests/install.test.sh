@@ -58,9 +58,16 @@ case "${1:-}" in
       echo 'XE_SETUP=already-configured'
     else
       printf '%s\n' 'XE_SETUP=created' "XE_ADMIN_EMAIL=$XE_ADMIN_EMAIL"
+      case "${XE_TEST_RECOVERY_MODE:-ok}" in
+        none) ;;
+        bad) echo 'XE_RECOVERY_CODE=not-a-code' ;;
+        *) echo 'XE_RECOVERY_CODE=ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-23456-77ABC-DEFGH' ;;
+      esac
     fi
     ;;
   --mcp-key)
+    # The vault is locked at process start (ADR 0018): the one-shot needs the admin password to unwrap the node key.
+    [[ -n "${XE_ADMIN_PASSWORD:-}" ]] || { echo 'This node key is locked.' >&2; exit 5; }
     case "${XE_TEST_KEY_MODE:-ok}" in
       wrong) echo 'XE_MCP_KEY=wrong' ;;
       multiple) echo 'XE_MCP_KEY=xemcp_one'; echo 'XE_MCP_KEY=xemcp_two' ;;
@@ -70,6 +77,11 @@ case "${1:-}" in
     ;;
   --mcp-only)
     [[ "${XE_TEST_START_MODE:-ready}" != no-ready ]] || { sleep 30; exit 0; }
+    # A locked vault serves its unlock page without the password; the installer must pass it so a headless install comes up unlocked.
+    if [[ "${XE_TEST_VAULT:-}" == locked && -z "${XE_ADMIN_PASSWORD:-}" ]]; then
+      echo 'vault locked: no XE_ADMIN_PASSWORD' >&2; exit 5
+    fi
+    [[ -z "${XE_TEST_PASSWORD_SINK:-}" ]] || printf '%s' "${XE_ADMIN_PASSWORD:-}" >"$XE_TEST_PASSWORD_SINK"
     exec python3 -c '
 import http.server,json,os,pathlib,socketserver
 data=pathlib.Path(os.environ["XE_DATA_DIR"]); data.mkdir(parents=True,exist_ok=True)
@@ -305,6 +317,10 @@ setup_output="$(TMPDIR="$key_temp" XE_ADMIN_EMAIL=admin@localhost.test XE_ADMIN_
   "$installer" "${common[@]}" --setup --install-dir "$stable_dir" 2>&1)"
 assert_contains "$setup_output" 'XE_SETUP=created'
 assert_contains "$setup_output" 'XE_ADMIN_EMAIL=admin@localhost.test'
+[[ "$(grep -c '^XE_RECOVERY_CODE=ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-23456-77ABC-DEFGH$' <<<"$setup_output")" -eq 1 ]] \
+  || fail 'setup did not relay exactly one recovery code'
+assert_contains "$setup_output" 'It is shown only once'
+if grep -R -Fq 'ABCDE-FGHIJ' "$key_temp"; then fail 'recovery code was written to an installer-created temp file'; fi
 [[ "$(grep -c '^XE_MCP_KEY=' <<<"$setup_output")" -eq 1 ]] || fail 'setup did not relay exactly one MCP key'
 if grep -Fq 'never-print-this' <<<"$setup_output" || grep -Fq 'never-print-this' "$XE_EXECUTION_MARKER"; then
   fail 'administrator password leaked to output or engine argv'
@@ -315,10 +331,29 @@ if grep -Fq 'key_output="$(mktemp)' "$installer" \
   fail 'MCP key capture is not memory-only'
 fi
 if grep -Fq -- '--setup --mcp-only' "$XE_EXECUTION_MARKER"; then fail 'setup and serve were combined'; fi
+none_output="$(XE_ADMIN_EMAIL=admin@localhost.test XE_ADMIN_PASSWORD=secret XE_TEST_RECOVERY_MODE=none \
+  "$installer" "${common[@]}" --setup --install-dir "$stable_dir" 2>&1)"
+if grep -Fq 'XE_RECOVERY_CODE' <<<"$none_output"; then fail 'installer fabricated a recovery code for an external-secret node'; fi
+assert_status 11 env XE_ADMIN_EMAIL=admin@localhost.test XE_ADMIN_PASSWORD=secret XE_TEST_RECOVERY_MODE=bad \
+  "$installer" "${common[@]}" --setup --install-dir "$stable_dir"
+assert_contains "$command_output" 'invalid XE_RECOVERY_CODE contract'
 already_output="$(XE_ADMIN_EMAIL=admin@localhost.test XE_ADMIN_PASSWORD=secret XE_TEST_SETUP_MODE=already \
   "$installer" "${common[@]}" --setup --install-dir "$stable_dir")"
 assert_contains "$already_output" 'XE_SETUP=already-configured'
 if grep -q '^XE_ADMIN_EMAIL=' <<<"$already_output"; then fail 'already-configured setup fabricated an email'; fi
+
+vault_data="$temp_dir/vault-data"
+vault_sink="$temp_dir/vault-sink"
+vault_output="$(XE_DATA_DIR="$vault_data" XE_START_TIMEOUT_SECONDS=5 XE_TEST_VAULT=locked XE_TEST_PASSWORD_SINK="$vault_sink" \
+  XE_ADMIN_EMAIL=admin@localhost.test XE_ADMIN_PASSWORD='vault-start-pass' \
+  "$installer" "${common[@]}" --setup --start --install-dir "$stable_dir" 2>&1)"
+assert_contains "$vault_output" 'XE_READY=1 XE_VERSION=v1.0.0'
+[[ "$(cat "$vault_sink")" == vault-start-pass ]] || fail 'served engine did not receive the admin password to unlock the vault'
+if grep -Fq 'vault-start-pass' <<<"$vault_output" || grep -Fq 'vault-start-pass' "$XE_EXECUTION_MARKER"; then
+  fail 'administrator password leaked to installer output or engine argv'
+fi
+vault_pid="$(sed -n 's/^XE_PID=//p' <<<"$vault_output")"
+[[ -z "$vault_pid" ]] || kill "$vault_pid" 2>/dev/null || true
 
 start_data="$temp_dir/start-data"
 start_output="$(XE_DATA_DIR="$start_data" XE_START_TIMEOUT_SECONDS=5 \

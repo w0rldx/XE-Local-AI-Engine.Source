@@ -14,6 +14,8 @@ import { Route as ExternalAccessRouteImport } from './routes/external-access'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as UiModeSetupRouteImport } from './routes/ui-mode-setup'
+import { Route as VaultRouteImport } from './routes/vault'
+import { Route as VaultSetupRouteImport } from './routes/vault-setup'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutAgentRunsRouteImport } from './routes/_layout/agent-runs'
 import { Route as LayoutAgentsRouteImport } from './routes/_layout/agents'
@@ -79,6 +81,16 @@ const SetupRoute = SetupRouteImport.update({
 const UiModeSetupRoute = UiModeSetupRouteImport.update({
   id: '/ui-mode-setup',
   path: '/ui-mode-setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VaultRoute = VaultRouteImport.update({
+  id: '/vault',
+  path: '/vault',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VaultSetupRoute = VaultSetupRouteImport.update({
+  id: '/vault-setup',
+  path: '/vault-setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LayoutIndexRoute = LayoutIndexRouteImport.update({
@@ -311,6 +323,8 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/ui-mode-setup': typeof UiModeSetupRoute
+  '/vault': typeof VaultRoute
+  '/vault-setup': typeof VaultSetupRoute
   '/agent-runs': typeof LayoutAgentRunsRoute
   '/agents': typeof LayoutAgentsRoute
   '/benchmarks': typeof LayoutBenchmarksRoute
@@ -358,6 +372,8 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/ui-mode-setup': typeof UiModeSetupRoute
+  '/vault': typeof VaultRoute
+  '/vault-setup': typeof VaultSetupRoute
   '/agent-runs': typeof LayoutAgentRunsRoute
   '/agents': typeof LayoutAgentsRoute
   '/benchmarks': typeof LayoutBenchmarksRoute
@@ -408,6 +424,8 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/ui-mode-setup': typeof UiModeSetupRoute
+  '/vault': typeof VaultRoute
+  '/vault-setup': typeof VaultSetupRoute
   '/_layout/agent-runs': typeof LayoutAgentRunsRoute
   '/_layout/agents': typeof LayoutAgentsRoute
   '/_layout/benchmarks': typeof LayoutBenchmarksRoute
@@ -459,6 +477,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/ui-mode-setup'
+    | '/vault'
+    | '/vault-setup'
     | '/agent-runs'
     | '/agents'
     | '/benchmarks'
@@ -506,6 +526,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/ui-mode-setup'
+    | '/vault'
+    | '/vault-setup'
     | '/agent-runs'
     | '/agents'
     | '/benchmarks'
@@ -555,6 +577,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/ui-mode-setup'
+    | '/vault'
+    | '/vault-setup'
     | '/_layout/agent-runs'
     | '/_layout/agents'
     | '/_layout/benchmarks'
@@ -605,6 +629,8 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   SetupRoute: typeof SetupRoute
   UiModeSetupRoute: typeof UiModeSetupRoute
+  VaultRoute: typeof VaultRoute
+  VaultSetupRoute: typeof VaultSetupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -642,6 +668,20 @@ declare module '@tanstack/react-router' {
       path: '/ui-mode-setup'
       fullPath: '/ui-mode-setup'
       preLoaderRoute: typeof UiModeSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vault': {
+      id: '/vault'
+      path: '/vault'
+      fullPath: '/vault'
+      preLoaderRoute: typeof VaultRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vault-setup': {
+      id: '/vault-setup'
+      path: '/vault-setup'
+      fullPath: '/vault-setup'
+      preLoaderRoute: typeof VaultSetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_layout/': {
@@ -1042,6 +1082,8 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,
   UiModeSetupRoute: UiModeSetupRoute,
+  VaultRoute: VaultRoute,
+  VaultSetupRoute: VaultSetupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

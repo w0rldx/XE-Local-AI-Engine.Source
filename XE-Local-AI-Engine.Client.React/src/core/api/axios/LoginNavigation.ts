@@ -18,3 +18,14 @@ export function registerLoginNavigator(next: LoginNavigator): void {
 export function navigateToLogin(redirect: string): Promise<unknown> {
 	return navigator(redirect);
 }
+
+// The vault-locked interceptor's way to the unlock page, registered alongside the login navigator for the same reason.
+let vaultNavigator: () => Promise<unknown> = async () => undefined;
+
+export function registerVaultNavigator(next: () => Promise<unknown>): void {
+	vaultNavigator = next;
+}
+
+export function navigateToVault(): Promise<unknown> {
+	return vaultNavigator();
+}

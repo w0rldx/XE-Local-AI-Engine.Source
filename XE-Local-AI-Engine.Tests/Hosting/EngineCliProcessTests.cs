@@ -3,8 +3,12 @@ namespace XE_Local_AI_Engine.Tests.Hosting;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
+using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -17,6 +21,13 @@ public sealed class EngineCliProcessTests : IDisposable
 
     /// <summary>The node-settings file name owned by <c>NodeSettingsStore</c>, which keeps it private.</summary>
     private const string NodeSettingsFileName = "node-settings.json";
+
+    /// <summary>The admin password every child gets in XE_ADMIN_PASSWORD unless a test withholds it.</summary>
+    private const string AdminPassword = "!Demo1234567";
+
+    private const string ReadyPrefix = "XE_READY=1 ";
+
+    private static readonly TimeSpan HandOverDeadline = TimeSpan.FromSeconds(60);
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-engine-cli-" + Guid.NewGuid().ToString("N"));
 
@@ -171,12 +182,251 @@ public sealed class EngineCliProcessTests : IDisposable
             "Setup must not claim it created an administrator when the settings write that precedes the commit failed.");
     }
 
-    private async Task<CommandResult> RunAsync(IReadOnlyList<string> arguments, string? launchMode, string? dataDirectory = null)
+    [Test]
+    public async Task LockedVault_ServesTheUnlockPage_UnlocksOnTheSameOrigin_AndOneShotsNeedTheSecret()
+    {
+        Directory.CreateDirectory(_root);
+        await SetupLockedVaultAsync();
+
+        var withoutPassword = await RunAsync(["--mcp-key", "agentic"], launchMode: null, adminPassword: null);
+        AssertEx.Equal(expected: 5, withoutPassword.ExitCode, withoutPassword.CombinedOutput);
+        AssertEx.Contains(withoutPassword.StandardError, DesktopLaunch.AdminPasswordEnvironmentVariable);
+        // A downgrade command is a one-shot too: without the secret it must exit, never park on the unlock page.
+        var downgradeWithoutPassword = await RunAsync(["--knowledge-downgrade-preflight"], DesktopLaunch.McpOnlyModeValue, adminPassword: null);
+        AssertEx.Equal(expected: 5, downgradeWithoutPassword.ExitCode, downgradeWithoutPassword.CombinedOutput);
+        AssertEx.False(downgradeWithoutPassword.StandardOutput.Contains(ReadyPrefix, StringComparison.Ordinal), downgradeWithoutPassword.CombinedOutput);
+        var withPassword = await RunAsync(["--mcp-key", "agentic"], launchMode: null);
+        AssertEx.Equal(expected: 0, withPassword.ExitCode, withPassword.CombinedOutput);
+        AssertEx.Contains(withPassword.StandardOutput, "XE_MCP_KEY=xemcp_");
+
+        var resetWithoutCode = await RunAsync(["--mcp-only", "--reset-admin-password", "another long password"], launchMode: null);
+        AssertEx.Equal(expected: 5, resetWithoutCode.ExitCode, resetWithoutCode.CombinedOutput);
+        AssertEx.Contains(resetWithoutCode.StandardError, DesktopLaunch.RecoveryCodeStdinArgument);
+
+        await using var engine = StartServing(["--mcp-only"], adminPassword: null);
+        AssertEx.NotNull(await engine.ReadReadyLineAsync(), "The locked engine must announce readiness from the pre-host.");
+        engine.StartDraining();
+        var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(_root));
+        using var client = new HttpClient { BaseAddress = new Uri(ready.Url) };
+
+        var status = await RunAsync(["--status", "--json"], launchMode: null);
+        AssertEx.Equal(expected: 0, status.ExitCode, status.CombinedOutput);
+        using (var document = JsonDocument.Parse(status.StandardOutput))
+        {
+            AssertEx.True(document.RootElement.GetProperty("running").GetBoolean());
+            AssertEx.False(document.RootElement.GetProperty("setupRequired").GetBoolean());
+            AssertEx.Equal(NodeAuthVaultStatus.Locked, document.RootElement.GetProperty("vault").GetString());
+        }
+
+        AssertEx.Equal(NodeAuthVaultStatus.Locked, (await client.GetFromJsonAsync<NodeAuthStatusResponse>(Route(LocalApiRoutes.Auth.Status)))!.Vault);
+        using (var other = await client.GetAsync(Route(LocalApiRoutes.Auth.Login)))
+        {
+            AssertEx.Equal(HttpStatusCode.ServiceUnavailable, other.StatusCode);
+        }
+
+        using (var wrong = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new { password = "not the admin password" }))
+        {
+            AssertEx.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
+        }
+
+        using (var right = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new { password = AdminPassword }))
+        {
+            AssertEx.Equal(HttpStatusCode.NoContent, right.StatusCode);
+        }
+
+        var unlocked = await WaitForRealHostAsync(engine, client);
+        AssertEx.False(unlocked.SetupRequired);
+        AssertEx.Equal(ready.Url, AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(_root)).Url);
+        await AssertStatusVaultAsync(NodeAuthVaultStatus.Unlocked);
+    }
+
+    [Test]
+    public async Task LockedVault_ServeWithTheAdminPassword_UnlocksWithoutThePreHost_AndAWrongOneExitsFive()
+    {
+        Directory.CreateDirectory(_root);
+        await SetupLockedVaultAsync();
+
+        var wrong = await RunAsync(["--mcp-only"], launchMode: null, adminPassword: "not the admin password");
+        AssertEx.Equal(expected: 5, wrong.ExitCode, wrong.CombinedOutput);
+        AssertEx.False(wrong.StandardOutput.Contains(ReadyPrefix, StringComparison.Ordinal), "A wrong password must never fall back to the unlock page.");
+
+        var serving = await LoopbackPort.BindWithRetryAsync(async candidate =>
+        {
+            var started = StartServing(["--mcp-only", "--port", candidate.ToString(CultureInfo.InvariantCulture)]);
+            if (await started.ReadReadyLineAsync() is null)
+            {
+                await started.DisposeAsync();
+                return null;
+            }
+
+            return started;
+        });
+        await using var engine = serving;
+        engine.StartDraining();
+        var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(_root));
+        using var client = new HttpClient { BaseAddress = new Uri(ready.Url) };
+
+        var status = AssertEx.NotNull(await client.GetFromJsonAsync<NodeAuthStatusResponse>(Route(LocalApiRoutes.Auth.Status)));
+        AssertEx.Equal(NodeAuthVaultStatus.Unlocked, status.Vault);
+        AssertEx.Equal(expected: 1, engine.ReadyLineCount, "An env-password unlock must start the real host directly, never the unlock page.");
+        await AssertStatusVaultAsync(NodeAuthVaultStatus.Unlocked);
+    }
+
+    private async Task AssertStatusVaultAsync(string expected)
+    {
+        var status = await RunAsync(["--status", "--json"], launchMode: null);
+        AssertEx.Equal(expected: 0, status.ExitCode, status.CombinedOutput);
+        using var document = JsonDocument.Parse(status.StandardOutput);
+        AssertEx.Equal(expected, document.RootElement.GetProperty("vault").GetString());
+    }
+
+    [Test]
+    public async Task LockedVault_RecoveryUnlock_ResetsTheAdminPasswordForTheRealHost()
+    {
+        Directory.CreateDirectory(_root);
+        var recoveryCode = await SetupLockedVaultAsync();
+
+        await using var engine = StartServing(["--mcp-only"], adminPassword: null);
+        AssertEx.NotNull(await engine.ReadReadyLineAsync(), "The locked engine must announce readiness from the pre-host.");
+        engine.StartDraining();
+        var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(_root));
+        using var client = new HttpClient { BaseAddress = new Uri(ready.Url) };
+
+        const string newPassword = "A brand-new admin passw0rd";
+        using (var recovered = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new { recoveryCode, newPassword }))
+        {
+            AssertEx.Equal(HttpStatusCode.NoContent, recovered.StatusCode);
+        }
+
+        await WaitForRealHostAsync(engine, client);
+        using (var oldLogin = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.Login), new { password = AdminPassword }))
+        {
+            AssertEx.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode, engine.StandardOutput);
+        }
+
+        using (var newLogin = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.Login), new { password = newPassword }))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, newLogin.StatusCode, await newLogin.Content.ReadAsStringAsync());
+        }
+    }
+
+    [Test]
+    public async Task LockedVault_WhenTheUnlockPagePortIsTakenDuringTheHandOver_ExitsSevenInsteadOfMovingOrigin()
+    {
+        Directory.CreateDirectory(_root);
+        await SetupLockedVaultAsync();
+        await using var engine = StartServing(["--mcp-only"], adminPassword: null);
+        AssertEx.NotNull(await engine.ReadReadyLineAsync(), "The locked engine must announce readiness from the pre-host.");
+        engine.StartDraining();
+        var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(_root));
+        var port = new Uri(ready.Url).Port;
+        using var client = new HttpClient { BaseAddress = new Uri(ready.Url) };
+
+        // An unlock request whose body never finishes keeps the pre-host's graceful stop draining after Kestrel unbound the
+        // port, which is the gap the test takes the port in. "100 Continue" proves the handler is already reading that body.
+        using var parked = new TcpClient();
+        await parked.ConnectAsync(IPAddress.Loopback, port);
+        var stream = parked.GetStream();
+        await stream.WriteAsync(Encoding.ASCII.GetBytes(
+            $"POST /{LocalApiRoutes.Prefix}/{LocalApiRoutes.Auth.VaultUnlock} HTTP/1.1\r\nHost: 127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}\r\n"
+            + "Content-Type: application/json\r\nContent-Length: 1000\r\nExpect: 100-continue\r\n\r\n"));
+        var interim = new byte[256];
+        using (var readTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
+        {
+            var read = await stream.ReadAsync(interim, readTimeout.Token);
+            AssertEx.Contains(Encoding.ASCII.GetString(interim, 0, read), "100 Continue");
+        }
+
+        using (var right = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new { password = AdminPassword }))
+        {
+            AssertEx.Equal(HttpStatusCode.NoContent, right.StatusCode);
+        }
+
+        TcpListener? holder = null;
+        try
+        {
+            await AssertEx.EventuallyAsync(() => TryHold(port, out holder),
+                TimeSpan.FromSeconds(4),
+                "The pre-host must release its port while its stop drains the parked request.");
+            parked.Close();
+
+            var exitCode = await engine.WaitForExitAsync(TimeSpan.FromSeconds(20));
+
+            var standardError = await engine.StandardErrorAsync();
+            AssertEx.Equal(expected: 7, exitCode, standardError);
+            AssertEx.Contains(standardError, $"Port {port.ToString(CultureInfo.InvariantCulture)}");
+            AssertEx.Contains(standardError, "Start the engine again.");
+            AssertEx.Equal(1, engine.ReadyLineCount, "Only the pre-host may have announced readiness.");
+        }
+        finally
+        {
+            holder?.Dispose();
+        }
+    }
+
+    private static bool TryHold(int port, out TcpListener? holder)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, port);
+        try
+        {
+            listener.Start();
+            holder = listener;
+            return true;
+        }
+        catch (SocketException)
+        {
+            listener.Dispose();
+            holder = null;
+            return false;
+        }
+    }
+
+    /// <summary>Runs <c>--setup</c> on the fresh data dir and returns the printed recovery code; node.key is then a v2 vault.</summary>
+    private async Task<string> SetupLockedVaultAsync()
+    {
+        var setup = await RunAsync(["--setup"], DesktopLaunch.McpOnlyModeValue);
+        AssertEx.Equal(expected: 0, setup.ExitCode, setup.CombinedOutput);
+        var codeLine = setup.StandardOutput.Split(Environment.NewLine).SingleOrDefault(static line => line.StartsWith("XE_RECOVERY_CODE=", StringComparison.Ordinal));
+        var recoveryCode = AssertEx.NotNull(codeLine, "--setup must print the recovery code once.")["XE_RECOVERY_CODE=".Length..];
+        AssertEx.NotNullOrEmpty(recoveryCode);
+        var keyFile = await File.ReadAllTextAsync(Path.Combine(_root, DesktopBootstrap.KeyFileName));
+        AssertEx.True(keyFile.StartsWith('{'), "--setup must leave node.key as a v2 vault, never the raw secret.");
+        return recoveryCode;
+    }
+
+    /// <summary>Waits for the real host's own readiness line, then for it to answer auth/status as unlocked on the same client origin.</summary>
+    private static async Task<NodeAuthStatusResponse> WaitForRealHostAsync(RunningEngine engine, HttpClient client)
+    {
+        await AssertEx.EventuallyAsync(() => engine.ReadyLineCount >= 2 || engine.HasExited, HandOverDeadline,
+            "The real host never announced readiness after the unlock.");
+        AssertEx.False(engine.HasExited, $"The engine exited after the unlock: {engine.StandardOutput}");
+        NodeAuthStatusResponse? status = null;
+        await AssertEx.EventuallyAsync(async () =>
+        {
+            try
+            {
+                status = await client.GetFromJsonAsync<NodeAuthStatusResponse>(Route(LocalApiRoutes.Auth.Status));
+                return status?.Vault == NodeAuthVaultStatus.Unlocked;
+            }
+            catch (HttpRequestException)
+            {
+                return false;
+            }
+        }, HandOverDeadline, "auth/status never reported the vault unlocked on the same origin.");
+        return status!;
+    }
+
+    private static Uri Route(string route) => new($"/{LocalApiRoutes.Prefix}/{route}", UriKind.Relative);
+
+    private async Task<CommandResult> RunAsync(IReadOnlyList<string> arguments,
+        string? launchMode,
+        string? dataDirectory = null,
+        string? adminPassword = AdminPassword)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         using var process = new Process
         {
-            StartInfo = CreateStartInfo(arguments, launchMode, dataDirectory ?? _root)
+            StartInfo = CreateStartInfo(arguments, launchMode, dataDirectory ?? _root, adminPassword)
         };
         if (!process.Start())
         {
@@ -203,11 +453,11 @@ public sealed class EngineCliProcessTests : IDisposable
         };
     }
 
-    private RunningEngine StartServing(IReadOnlyList<string> arguments)
+    private RunningEngine StartServing(IReadOnlyList<string> arguments, string? adminPassword = AdminPassword)
     {
         var process = new Process
         {
-            StartInfo = CreateStartInfo(arguments, launchMode: null, _root)
+            StartInfo = CreateStartInfo(arguments, launchMode: null, _root, adminPassword)
         };
         if (!process.Start())
         {
@@ -218,7 +468,7 @@ public sealed class EngineCliProcessTests : IDisposable
         return new RunningEngine(process);
     }
 
-    private static ProcessStartInfo CreateStartInfo(IReadOnlyList<string> arguments, string? launchMode, string dataDirectory)
+    private static ProcessStartInfo CreateStartInfo(IReadOnlyList<string> arguments, string? launchMode, string dataDirectory, string? adminPassword = AdminPassword)
     {
         var startInfo = new ProcessStartInfo("dotnet")
         {
@@ -239,7 +489,14 @@ public sealed class EngineCliProcessTests : IDisposable
         startInfo.Environment["WorkerNode__NodeName"] = "engine-cli-test";
         startInfo.Environment[DesktopBootstrap.DataDirectoryEnvironmentVariable] = dataDirectory;
         startInfo.Environment[DesktopLaunch.AdminEmailEnvironmentVariable] = "agent@example.test";
-        startInfo.Environment[DesktopLaunch.AdminPasswordEnvironmentVariable] = "!Demo1234567";
+        if (adminPassword is not null)
+        {
+            startInfo.Environment[DesktopLaunch.AdminPasswordEnvironmentVariable] = adminPassword;
+        }
+        else
+        {
+            startInfo.Environment.Remove(DesktopLaunch.AdminPasswordEnvironmentVariable);
+        }
         if (launchMode is not null)
         {
             startInfo.Environment[DesktopLaunch.LaunchModeEnvironmentVariable] = launchMode;
@@ -273,6 +530,7 @@ public sealed class EngineCliProcessTests : IDisposable
         private readonly Process _process;
         private readonly Task<string> _standardError;
         private readonly List<string> _standardOutput = [];
+        private Task _drain = Task.CompletedTask;
 
         internal RunningEngine(Process process)
         {
@@ -280,7 +538,57 @@ public sealed class EngineCliProcessTests : IDisposable
             _standardError = process.StandardError.ReadToEndAsync();
         }
 
-        internal string StandardOutput => string.Join(Environment.NewLine, _standardOutput);
+        internal string StandardOutput
+        {
+            get
+            {
+                lock (_standardOutput)
+                {
+                    return string.Join(Environment.NewLine, _standardOutput);
+                }
+            }
+        }
+
+        internal int ReadyLineCount
+        {
+            get
+            {
+                lock (_standardOutput)
+                {
+                    return _standardOutput.Count(static line => line.StartsWith(ReadyPrefix, StringComparison.Ordinal));
+                }
+            }
+        }
+
+        internal bool HasExited => _process.HasExited;
+
+        internal async Task<int> WaitForExitAsync(TimeSpan timeout)
+        {
+            using var deadline = new CancellationTokenSource(timeout);
+            await _process.WaitForExitAsync(deadline.Token);
+            await _drain;
+            return _process.ExitCode;
+        }
+
+        internal Task<string> StandardErrorAsync() => _standardError;
+
+        /// <summary>
+        ///     Keeps reading stdout after readiness, so a chatty child never blocks on a full pipe and a later readiness
+        ///     line (the real host after a vault unlock) is observable.
+        /// </summary>
+        internal void StartDraining()
+        {
+            _drain = Task.Run(async () =>
+            {
+                while (await _process.StandardOutput.ReadLineAsync() is { } line)
+                {
+                    lock (_standardOutput)
+                    {
+                        _standardOutput.Add(line);
+                    }
+                }
+            });
+        }
 
         /// <summary>
         ///     Returns the canonical readiness line, or <c>null</c> when the engine exited with
@@ -318,6 +626,7 @@ public sealed class EngineCliProcessTests : IDisposable
 
             await _process.WaitForExitAsync();
             _ = await _standardError;
+            await _drain;
             _process.Dispose();
         }
     }

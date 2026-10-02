@@ -85,7 +85,7 @@ describe("node auth pages", () => {
 		});
 		useNodeAuthStore.getState().actions.clear();
 		authApiMock.loginNodeAuth.mockResolvedValue({ accessToken: "access-token", expiresAtUtc: "2026-05-25T12:15:00Z" });
-		authApiMock.setupNodeAuth.mockResolvedValue(undefined);
+		authApiMock.setupNodeAuth.mockResolvedValue({ recoveryCode: null });
 	});
 
 	it("logs in with password only and navigates to the safe redirect", async () => {
@@ -151,8 +151,60 @@ describe("node auth pages", () => {
 		);
 		expect(authApiMock.loginNodeAuth).toHaveBeenCalledWith({ email: "admin@example.test", password });
 		expect(useNodeAuthStore.getState().accessToken).toBe("access-token");
-		// Setup lands on the first-run external-access choice, not on the app.
+		// Setup lands on the first-run external-access choice, not on the app. A null recovery code (operator-supplied
+		// secret, no vault) skips the reveal step.
 		expect(navigateMock).toHaveBeenCalledWith({ to: "/external-access" });
+		expect(screen.queryByText(resolveKey("auth.vault.recoveryRevealTitle"))).toBeNull();
+	});
+
+	it("reveals the recovery code after setup and continues to external access only once it is saved", async () => {
+		authApiMock.setupNodeAuth.mockResolvedValue({ recoveryCode: "AAAAA-BBBBB-CCCCC" });
+		renderWithProviders(<Setup />);
+
+		const password = "Long-Enough-Password1";
+		fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: "admin@example.test" } });
+		fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: password } });
+		fireEvent.change(screen.getByLabelText(/^Confirm password/), { target: { value: password } });
+		fireEvent.click(screen.getByRole("button", { name: "Create admin" }));
+
+		expect(await screen.findByText("AAAAA-BBBBB-CCCCC")).toBeTruthy();
+		expect(useNodeAuthStore.getState().accessToken).toBe("access-token");
+		// The form is gone while the code is on screen, and nothing navigates until the operator acknowledges it.
+		expect(screen.queryByRole("button", { name: "Create admin" })).toBeNull();
+		expect(navigateMock).not.toHaveBeenCalled();
+		const continueButton = screen.getByRole("button", { name: resolveKey("auth.vault.continueButton") }) as HTMLButtonElement;
+		expect(continueButton.disabled).toBe(true);
+
+		fireEvent.click(screen.getByLabelText(resolveKey("auth.vault.recoverySavedLabel")));
+		fireEvent.click(continueButton);
+
+		await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/external-access" }));
+	});
+
+	// The code is the only copy and a retried setup answers AlreadyInitialized, so a failed automatic login must not
+	// lose it: the reveal still shows, with the login error, and Continue goes to the login page instead.
+	it("still reveals the recovery code when the login after setup fails and continues to login", async () => {
+		authApiMock.setupNodeAuth.mockResolvedValue({ recoveryCode: "AAAAA-BBBBB-CCCCC" });
+		authApiMock.loginNodeAuth.mockRejectedValue(new Error("network down"));
+		renderWithProviders(<Setup />);
+
+		const password = "Long-Enough-Password1";
+		fireEvent.change(screen.getByLabelText(/^Email/), { target: { value: "admin@example.test" } });
+		fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: password } });
+		fireEvent.change(screen.getByLabelText(/^Confirm password/), { target: { value: password } });
+		fireEvent.click(screen.getByRole("button", { name: "Create admin" }));
+
+		expect(await screen.findByText("AAAAA-BBBBB-CCCCC")).toBeTruthy();
+		expect(
+			screen.getByText(resolveKey("auth.setup.loginAfterSetupFailed", { reason: resolveKey("auth.setup.errorGeneric") })),
+		).toBeTruthy();
+		expect(useNodeAuthStore.getState().accessToken).toBeUndefined();
+
+		fireEvent.click(screen.getByLabelText(resolveKey("auth.vault.recoverySavedLabel")));
+		fireEvent.click(screen.getByRole("button", { name: resolveKey("auth.vault.continueButton") }));
+
+		await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/login" }));
+		expect(navigateMock).not.toHaveBeenCalledWith({ to: "/external-access" });
 	});
 
 	it("blocks setup and surfaces the policy when the password is too weak", async () => {

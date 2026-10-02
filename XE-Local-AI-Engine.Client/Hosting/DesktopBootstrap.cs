@@ -4,6 +4,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Services.Vault;
+using XE_Local_AI_Engine.Client.Services.Vault.Implementation;
 
 /// <summary>
 ///     Fills the two configuration values a packaged desktop launch needs but that no env/Aspire source supplies: the
@@ -66,13 +68,10 @@ internal static class DesktopBootstrap
     ///     injected (mirroring <see cref="DesktopLaunch.ResolveLaunchMode(string[], Func{string, string?}, bool)" />)
     ///     so tests never touch the real <c>%LOCALAPPDATA%</c>.
     /// </remarks>
-    /// <param name="configuration">
-    ///     The builder configuration. A <c>WebApplicationBuilder.Configuration</c> is an
-    ///     <see cref="IConfigurationManager" />, which is both an <see cref="IConfiguration" /> (read) and an
-    ///     <see cref="IConfigurationBuilder" /> (layer-in), so this method can both inspect and append.
-    /// </param>
+    /// <param name="configuration">The builder configuration, both read and appended to.</param>
     /// <param name="folderResolver">Resolves a <see cref="Environment.SpecialFolder" /> to an absolute path.</param>
-    internal static void EnsureLocalDataConfiguration(IConfigurationManager configuration,
+    /// <returns>External (operator secret), Pending (generated or legacy key injected) or Locked (v2 vault, nothing injected).</returns>
+    internal static VaultState EnsureLocalDataConfiguration(IConfigurationManager configuration,
         Func<Environment.SpecialFolder, string> folderResolver)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -100,10 +99,21 @@ internal static class DesktopBootstrap
             }.ToString();
         }
 
+        var vaultState = VaultState.External;
         if (string.IsNullOrWhiteSpace(ResolveExistingOperatorSecret(configuration)))
         {
+            // The vault manages only the persisted key; an operator-supplied secret leaves NodeVault:Managed unset (NullNodeVault).
+            overrides[NodeVault.ManagedConfigurationKey] = "true";
             var keyPath = Path.Combine(dataDirectory, KeyFileName);
-            overrides[NodeOperatorSecretProvider.EnvVarName] = EnsureOperatorSecret(keyPath);
+            if (IsVaultFile(keyPath))
+            {
+                vaultState = VaultState.Locked;
+            }
+            else
+            {
+                overrides[NodeOperatorSecretProvider.EnvVarName] = EnsureOperatorSecret(keyPath);
+                vaultState = VaultState.Pending;
+            }
         }
 
         if (string.IsNullOrWhiteSpace(configuration[HuggingFaceModelsDirectoryKey]))
@@ -122,6 +132,28 @@ internal static class DesktopBootstrap
         if (overrides.Count > 0)
         {
             configuration.AddInMemoryCollection(overrides);
+        }
+
+        return vaultState;
+    }
+
+    /// <summary>Whether <paramref name="keyPath" /> holds a passphrase-wrapped v2 vault rather than a legacy raw/DPAPI key.</summary>
+    /// <remarks>
+    ///     A v2 file is only ever written by an atomic move, so a torn read here is a legacy first-launch race, which the
+    ///     legacy path below already retries.
+    /// </remarks>
+    private static bool IsVaultFile(string keyPath)
+    {
+        try
+        {
+#pragma warning disable MA0045 // Synchronous configuration step, like the rest of the operator-key bootstrap.
+            return File.Exists(keyPath) && VaultFileCodec.Detect(File.ReadAllBytes(keyPath)) == VaultFileFormat.V2;
+#pragma warning restore MA0045
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException($"The desktop operator key file '{keyPath}' exists but could not be read. Check filesystem permissions.",
+                exception);
         }
     }
 
@@ -151,9 +183,9 @@ internal static class DesktopBootstrap
     }
 
     /// <summary>Convenience overload reading from the real process environment. Used by <c>Program.cs</c>.</summary>
-    internal static void EnsureLocalDataConfiguration(IConfigurationManager configuration)
+    internal static VaultState EnsureLocalDataConfiguration(IConfigurationManager configuration)
     {
-        EnsureLocalDataConfiguration(configuration, Environment.GetFolderPath);
+        return EnsureLocalDataConfiguration(configuration, Environment.GetFolderPath);
     }
 
     /// <summary>
@@ -299,9 +331,9 @@ internal static class DesktopBootstrap
                 exception);
         }
 
-        // At-rest format: Windows wraps the raw secret with DPAPI (CurrentUser), *nix stores raw base64 guarded by 0600.
-        // A legacy install holds the PLAINTEXT secret, so unwrap first and fall back to the decoded bytes (migrated below).
-        var (secret, wasProtected) = UnwrapSecretBytes(fileBytes);
+        // Legacy at-rest format: Windows wrapped the raw secret with DPAPI (CurrentUser), *nix stored raw base64 guarded by 0600.
+        // Read once here so the first password wraps it into the v2 vault (ADR 0018), which drops the DPAPI layer.
+        var secret = UnwrapSecretBytes(fileBytes);
 
         if (secret.Length != NodeOperatorSecretProvider.ExpectedSecretLength)
         {
@@ -309,13 +341,6 @@ internal static class DesktopBootstrap
                                                 + $"{NodeOperatorSecretProvider.ExpectedSecretLength} bytes. Restore the original key or delete the "
                                                 + "encrypted database to start fresh; the file will not be regenerated automatically to avoid silently "
                                                 + "losing data.");
-        }
-
-        // A legacy install stored an unwrapped plaintext key: on Windows re-write it DPAPI-wrapped so it is encrypted at
-        // rest. Best-effort — the in-memory secret is already valid, so a failed re-wrap leaves the plaintext key working.
-        if (!wasProtected && OperatingSystem.IsWindows())
-        {
-            TryRewriteProtected(keyPath, secret);
         }
 
         return Convert.ToBase64String(secret);
@@ -454,84 +479,27 @@ internal static class DesktopBootstrap
     }
 
     /// <summary>
-    ///     Decodes the persisted key file into the raw operator secret.
+    ///     Decodes a legacy key file into the raw operator secret.
     /// </summary>
     /// <remarks>
-    ///     On Windows the file is DPAPI-wrapped, so unwrap first; a legacy plaintext file (or any non-Windows file)
-    ///     fails the unwrap and is returned verbatim as the raw secret. The boolean reports whether the bytes were
-    ///     DPAPI-protected, so the caller can migrate legacy files.
+    ///     On Windows a DPAPI-wrapped file is unwrapped; a plaintext file (or any non-Windows file) fails the unwrap and
+    ///     is returned verbatim as the raw secret.
     /// </remarks>
-    private static UnwrappedSecret UnwrapSecretBytes(byte[] fileBytes)
+    private static byte[] UnwrapSecretBytes(byte[] fileBytes)
     {
         if (OperatingSystem.IsWindows())
         {
             try
             {
-                var unprotected = ProtectedData.Unprotect(fileBytes, optionalEntropy: null, DataProtectionScope.CurrentUser);
-                return new UnwrappedSecret(unprotected, WasProtected: true);
+                return ProtectedData.Unprotect(fileBytes, optionalEntropy: null, DataProtectionScope.CurrentUser);
             }
             catch (CryptographicException)
             {
-                // Legacy plaintext key written before the at-rest wrap; treat the decoded bytes as the raw secret and
-                // let the caller migrate it to the protected format.
+                // A plaintext key written before the DPAPI wrap: the decoded bytes are the raw secret.
             }
         }
 
-        return new UnwrappedSecret(fileBytes, WasProtected: false);
-    }
-
-    /// <summary>
-    ///     Overwrites the key file in place, used only by the legacy plaintext to DPAPI at-rest upgrade.
-    /// </summary>
-    /// <remarks>
-    ///     The key already exists, so this deliberately overwrites rather than create-new; fresh-key creation goes
-    ///     through <see cref="TryCreateNewSecretFile" />. On Windows the secret is DPAPI-wrapped (CurrentUser) before
-    ///     encoding so it is encrypted at rest; on *nix the raw secret is written and protected by 0600 owner-only
-    ///     perms. Written atomically (temp file + move) so a crash mid-write can never leave a torn key that bricks
-    ///     the DB.
-    /// </remarks>
-    private static void WriteSecretFile(string keyPath, byte[] secret)
-    {
-        var fileContent = Convert.ToBase64String(ProtectSecretForAtRest(secret));
-
-        var tempPath = keyPath + ".tmp";
-        try
-        {
-#pragma warning disable MA0045 // The desktop operator-key bootstrap runs from the synchronous EnsureLocalDataConfiguration configuration step, and its retry reads through a SpinWait.SpinUntil(Func<bool>) predicate that cannot await.
-            File.WriteAllText(tempPath, fileContent);
-#pragma warning restore MA0045
-            ProtectKeyFile(tempPath);
-            File.Move(tempPath, keyPath, overwrite: true);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            TryDeleteTemp(tempPath);
-            throw new InvalidOperationException($"The desktop operator key file '{keyPath}' could not be written. Check filesystem permissions.",
-                exception);
-        }
-    }
-
-    private static void TryRewriteProtected(string keyPath, byte[] secret)
-    {
-        try
-        {
-            WriteSecretFile(keyPath, secret);
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or CryptographicException)
-        {
-            // Best-effort at-rest upgrade: the legacy plaintext key still works for this run, so a failed re-wrap is
-            // non-fatal and is retried on the next launch.
-        }
-    }
-
-    private static void ProtectKeyFile(string path)
-    {
-        // On non-Windows restrict to owner read/write (0600). On Windows the key file is DPAPI-wrapped at rest (see
-        // WriteSecretFile) on top of the per-user %LOCALAPPDATA% ACL.
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
+        return fileBytes;
     }
 
     private static void TryDeleteTemp(string tempPath)
@@ -548,12 +516,6 @@ internal static class DesktopBootstrap
             // Best-effort cleanup of the temp file; the original write failure is already being surfaced.
         }
     }
-
-    /// <summary>
-    ///     The raw operator secret decoded from the key file, and whether the file was DPAPI-protected (a legacy
-    ///     plaintext file reads as not protected and is migrated by the caller).
-    /// </summary>
-    private sealed record UnwrappedSecret(byte[] Secret, bool WasProtected);
 }
 
 internal sealed class DesktopDataDirectoryException : InvalidOperationException

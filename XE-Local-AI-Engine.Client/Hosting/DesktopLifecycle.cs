@@ -201,17 +201,9 @@ internal sealed class DesktopLifecycle : IDisposable
 
             // Persist the port Kestrel actually bound so the next launch re-binds it for a stable browser origin; a :0 launch
             // records its assigned port too. Best-effort and inside this try, so persistence can never abort startup.
-            if (_dataDirectory is not null && Uri.TryCreate(url, UriKind.Absolute, out var boundUri))
+            if (_dataDirectory is not null)
             {
-                DesktopPortStore.Persist(_dataDirectory, boundUri.Port, _logger);
-                var canonicalUrl = url.TrimEnd('/');
-                var mcpUrl = $"{canonicalUrl}/api/local/v1/mcp/server";
-                DesktopPortStore.PersistReady(_dataDirectory,
-                    new ReadyInfo(_version, canonicalUrl, mcpUrl, _dataDirectory, Environment.ProcessId, _timeProvider.GetUtcNow()),
-                    _logger);
-#pragma warning disable MA0045 // OnApplicationStarted is the synchronous Action registered on IHostApplicationLifetime.ApplicationStarted.
-                _standardOutput.WriteLine($"XE_READY=1 XE_VERSION={_version} XE_URL={canonicalUrl} XE_MCP_URL={mcpUrl} XE_DATA_DIR={_dataDirectory}");
-#pragma warning restore MA0045
+                DesktopReadyPublisher.Publish(_dataDirectory, url, _version, _timeProvider, _standardOutput, _logger);
             }
         }
         catch (Exception exception)

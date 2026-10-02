@@ -656,6 +656,7 @@ export type XeLocalAiEngineClientEndpointsAuthV1NodeAccessTokenResponse = {
 export type XeLocalAiEngineClientEndpointsAuthV1NodeAuthStatusResponse = {
 	setupRequired: boolean;
 	authenticated: boolean;
+	vault: string;
 };
 
 export type XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest = {
@@ -677,6 +678,18 @@ export type XeLocalAiEngineClientEndpointsAuthV1NodeLoginRequest = {
 export type XeLocalAiEngineClientEndpointsAuthV1NodeSetupRequest = {
 	email: string;
 	password: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAuthV1NodeSetupResponse = {
+	recoveryCode?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsAuthV1NodeVaultConfirmRequest = {
+	password: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAuthV1NodeVaultConfirmResponse = {
+	recoveryCode: string;
 };
 
 export type XeLocalAiEngineClientEndpointsAutomationV1CreateSlashCommandRequest = {
@@ -7987,9 +8000,9 @@ export type NodeSetupError = NodeSetupErrors[keyof NodeSetupErrors];
 
 export type NodeSetupResponses = {
 	/**
-	 * No Content
+	 * Success
 	 */
-	204: void;
+	200: XeLocalAiEngineClientEndpointsAuthV1NodeSetupResponse;
 };
 
 export type NodeSetupResponse = NodeSetupResponses[keyof NodeSetupResponses];
@@ -8016,6 +8029,39 @@ export type NodeAuthStatusResponses = {
 };
 
 export type NodeAuthStatusResponse = NodeAuthStatusResponses[keyof NodeAuthStatusResponses];
+
+export type NodeVaultConfirmData = {
+	body: XeLocalAiEngineClientEndpointsAuthV1NodeVaultConfirmRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/auth/vault/confirm";
+};
+
+export type NodeVaultConfirmErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type NodeVaultConfirmError = NodeVaultConfirmErrors[keyof NodeVaultConfirmErrors];
+
+export type NodeVaultConfirmResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAuthV1NodeVaultConfirmResponse;
+};
+
+export type NodeVaultConfirmResponse = NodeVaultConfirmResponses[keyof NodeVaultConfirmResponses];
 
 export type ListSlashCommandsData = {
 	body?: never;

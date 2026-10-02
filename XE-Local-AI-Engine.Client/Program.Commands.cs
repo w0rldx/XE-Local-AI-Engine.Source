@@ -11,10 +11,17 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Persistence;
+using XE_Local_AI_Engine.Client.Services.Vault;
 
 public sealed partial class Program
 {
-    private static async Task<int> ResetAdminPasswordAsync(IServiceProvider services, string? newPassword)
+    /// <param name="services">The built host's services.</param>
+    /// <param name="newPassword">The new admin password from argv.</param>
+    /// <param name="recoveryCode">
+    ///     The vault recovery code, read ONCE by the caller via <see cref="DesktopLaunch.GetRecoveryCode(string[])" />
+    ///     (the locked-vault unlock before the host is built needs the same code). Required when a v2 node.key exists.
+    /// </param>
+    private static async Task<int> ResetAdminPasswordAsync(IServiceProvider services, string? newPassword, string? recoveryCode = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
@@ -27,9 +34,16 @@ public sealed partial class Program
         }
 
         await using var scope = services.CreateAsyncScope();
+        if (scope.ServiceProvider.GetRequiredService<INodeVault>().State.HasWrappedKey() && string.IsNullOrWhiteSpace(recoveryCode))
+        {
+            Log.Error("This node's key is protected by the admin password. Resetting it requires the recovery code shown at setup: "
+                      + "pipe it on stdin and add {Flag}.", DesktopLaunch.RecoveryCodeStdinArgument);
+            return 5;
+        }
+
         var authService = scope.ServiceProvider.GetRequiredService<INodeAuthService>();
 
-        var result = await authService.ResetAdminPasswordAsync(newPassword, CancellationToken.None);
+        var result = await authService.ResetAdminPasswordAsync(newPassword, recoveryCode, CancellationToken.None);
         if (!result.Succeeded)
         {
             Log.Error("Admin password reset failed: {Errors}", string.Join(" ", result.Errors));
@@ -100,6 +114,11 @@ public sealed partial class Program
 
         await standardOutput.WriteLineAsync("XE_SETUP=created");
         await standardOutput.WriteLineAsync($"XE_ADMIN_EMAIL={command.Email}");
+        if (result.RecoveryCode is not null)
+        {
+            // Printed once, here only; the node keeps no copy. Installers must surface it to the operator.
+            await standardOutput.WriteLineAsync($"XE_RECOVERY_CODE={result.RecoveryCode}");
+        }
         return 0;
     }
 
@@ -134,7 +153,7 @@ public sealed partial class Program
         await standardOutput.WriteLineAsync("XE Local AI Engine");
         await standardOutput.WriteLineAsync("Serve: --desktop | --browser | --headless | --mcp-only [--no-browser] [--port <1-65535>]");
         await standardOutput
-            .WriteLineAsync("Commands: --setup [--admin-email <email>] [--admin-password <password> | --admin-password-stdin] | --mcp-key <delegate|agentic> | --status [--json] | --help");
+            .WriteLineAsync("Commands: --setup [--admin-email <email>] [--admin-password <password> | --admin-password-stdin] | --reset-admin-password <password> [--recovery-code-stdin] | --mcp-key <delegate|agentic> | --status [--json] | --help");
         await standardOutput.WriteLineAsync("Maintenance: --reset-admin-password <password> | --knowledge-downgrade-preflight | --knowledge-downgrade-export");
         await standardOutput
             .WriteLineAsync("Credentials: scripts and installers must use XE_ADMIN_PASSWORD or --admin-password-stdin, never --admin-password on argv; argv exposes the password in process listings.");
@@ -178,6 +197,7 @@ public sealed partial class Program
         var ready = evidence.Info;
         var running = ready is not null && IsProcessRunning(ready.Pid);
         bool? setupRequired = null;
+        string? vault = null;
 
         if (running && ready is not null)
         {
@@ -208,6 +228,7 @@ public sealed partial class Program
                         else
                         {
                             setupRequired = authStatus.SetupRequired;
+                            vault = authStatus.Vault;
                         }
                     }
                 }
@@ -226,6 +247,7 @@ public sealed partial class Program
             McpUrl = ready?.McpUrl,
             DataDir = dataDirectory,
             SetupRequired = running ? setupRequired : null,
+            Vault = running ? vault : null,
             InstallKind = ResolveInstallKind(isManagedInstall)
         };
 
@@ -287,6 +309,9 @@ public sealed partial class Program
         public required string DataDir { get; init; }
 
         public required bool? SetupRequired { get; init; }
+
+        /// <summary>The host's <c>auth/status</c> vault field (pending, locked, unlocked); JSON output only, null when not running.</summary>
+        public string? Vault { get; init; }
 
         public required string InstallKind { get; init; }
     }

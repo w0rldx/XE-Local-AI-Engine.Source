@@ -117,6 +117,23 @@ public sealed class DesktopLaunchTests
     }
 
     [Test]
+    public void StdinPassword_IsReturnedVerbatim_WithItsSurroundingSpaces()
+    {
+        const string spaced = "  StrongPass123! with spaces  ";
+
+        _ = DesktopLaunch.TryGetSetupCommand(["--setup", "--admin-email=agent@example.test", DesktopLaunch.AdminPasswordStdinArgument],
+            static _ => null,
+            static () => spaced,
+            out var setup,
+            out var setupError);
+
+        AssertEx.Null(setupError);
+        AssertEx.Equal(spaced, AssertEx.NotNull(setup).Password);
+        AssertEx.Equal(spaced, DesktopLaunch.GetCommandPassword([DesktopLaunch.AdminPasswordStdinArgument], static _ => null, static () => spaced));
+        AssertEx.Null(DesktopLaunch.GetCommandPassword([DesktopLaunch.AdminPasswordStdinArgument], static _ => null, static () => string.Empty));
+    }
+
+    [Test]
     public void SetupParser_MalformedExplicitEmailNeverFallsBackToEnvironment()
     {
         foreach (var args in new[]
@@ -195,6 +212,23 @@ public sealed class DesktopLaunchTests
         AssertEx.Null(trailingValue);
         AssertEx.True(bareEquals);
         AssertEx.Null(bareEqualsValue);
+    }
+
+    [Test]
+    public void RecoveryCode_IsReadFromStdinOnlyWhenTheFlagIsPresent()
+    {
+        var stdinReads = 0;
+        string? Stdin()
+        {
+            stdinReads++;
+            return "  abcde-fghij  ";
+        }
+
+        AssertEx.Null(DesktopLaunch.GetRecoveryCode(["--reset-admin-password", "N3w!Passw0rd123"], Stdin));
+        AssertEx.Equal(expected: 0, stdinReads);
+        AssertEx.Equal("abcde-fghij", DesktopLaunch.GetRecoveryCode(["--reset-admin-password", "N3w!Passw0rd123", "--recovery-code-stdin"], Stdin));
+        AssertEx.Equal(expected: 1, stdinReads);
+        AssertEx.Null(DesktopLaunch.GetRecoveryCode(["--recovery-code-stdin"], static () => "   "));
     }
 
     [Test]

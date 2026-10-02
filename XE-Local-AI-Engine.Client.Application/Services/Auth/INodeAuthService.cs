@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Auth;
 
 using System.Security.Claims;
+using XE_Local_AI_Engine.Client.Services.Vault;
 
 public interface INodeAuthService
 {
@@ -23,9 +24,18 @@ public interface INodeAuthService
     /// <remarks>
     ///     This is the "forgot password" recovery path: it is exposed only to the local, operator-run CLI (see
     ///     <c>--reset-admin-password</c> in Program.cs), never over the loopback HTTP surface, because the trust
-    ///     boundary is the machine itself. Fails when no administrator account exists yet.
+    ///     boundary is the machine itself. Fails when no administrator account exists yet. When a v2 <c>node.key</c>
+    ///     exists the machine is no longer enough: <paramref name="recoveryCode" /> must unwrap the vault, which is then
+    ///     re-wrapped under <paramref name="newPassword" /> before Identity is touched.
     /// </remarks>
-    Task<NodePasswordChangeResult> ResetAdminPasswordAsync(string newPassword, CancellationToken cancellationToken);
+    Task<NodePasswordChangeResult> ResetAdminPasswordAsync(string newPassword, string? recoveryCode, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Wraps a legacy (pre-vault) <c>node.key</c> under the signed-in admin's password once Identity has verified
+    ///     it, returning the one-time recovery code. Valid only while the vault is <see cref="VaultState.Pending" />
+    ///     and setup is complete.
+    /// </summary>
+    Task<NodeVaultConfirmResult> ConfirmLegacyVaultAsync(ClaimsPrincipal principal, string password, CancellationToken cancellationToken);
 }
 
 public sealed class NodeAuthStatus
@@ -33,6 +43,9 @@ public sealed class NodeAuthStatus
     public required bool SetupRequired { get; init; }
 
     public required bool Authenticated { get; init; }
+
+    /// <summary>The node vault state; <see cref="VaultState.External" /> when the secret is in operator custody.</summary>
+    public VaultState Vault { get; init; } = VaultState.External;
 }
 
 /// <summary>A token-issuing outcome.</summary>
@@ -63,6 +76,21 @@ public sealed class NodeSetupResult
     public required bool AlreadyInitialized { get; init; }
 
     public required IReadOnlyList<string> Errors { get; init; }
+
+    /// <summary>The one-time vault recovery code; <c>null</c> when the vault is not managed (operator-custody secret).</summary>
+    public string? RecoveryCode { get; init; }
+}
+
+public sealed class NodeVaultConfirmResult
+{
+    public required bool Succeeded { get; init; }
+
+    /// <summary>The vault is not waiting for a confirmation (already wrapped, external custody, or setup incomplete).</summary>
+    public bool NotPending { get; init; }
+
+    public string? RecoveryCode { get; init; }
+
+    public IReadOnlyList<string> Errors { get; init; } = [];
 }
 
 public sealed class NodePasswordChangeResult

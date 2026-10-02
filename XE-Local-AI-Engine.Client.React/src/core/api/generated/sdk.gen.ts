@@ -1008,6 +1008,9 @@ import type {
 	NodeSetupData,
 	NodeSetupErrors,
 	NodeSetupResponses,
+	NodeVaultConfirmData,
+	NodeVaultConfirmErrors,
+	NodeVaultConfirmResponses,
 	OverrideTrainingArtifactQualityData,
 	OverrideTrainingArtifactQualityErrors,
 	OverrideTrainingArtifactQualityResponses,
@@ -2004,6 +2007,8 @@ import {
 	zNodeRefreshResponse,
 	zNodeSetupBody,
 	zNodeSetupResponse,
+	zNodeVaultConfirmBody,
+	zNodeVaultConfirmResponse,
 	zOverrideTrainingArtifactQualityBody,
 	zOverrideTrainingArtifactQualityPath,
 	zOverrideTrainingArtifactQualityResponse,
@@ -3608,6 +3613,7 @@ export const nodeSetup = <ThrowOnError extends boolean = false>(
 					query: z.never().optional(),
 				})
 				.parseAsync(data),
+		responseType: "json",
 		responseValidator: async (data) => await zNodeSetupResponse.parseAsync(data),
 		url: "/api/local/v1/auth/setup",
 		...options,
@@ -3633,6 +3639,40 @@ export const nodeAuthStatus = <ThrowOnError extends boolean = false>(
 		responseValidator: async (data) => await zNodeAuthStatusResponse.parseAsync(data),
 		url: "/api/local/v1/auth/status",
 		...options,
+	});
+
+export const nodeVaultConfirm = <ThrowOnError extends boolean = false>(
+	options: Options<NodeVaultConfirmData, ThrowOnError>,
+): RequestResult<NodeVaultConfirmResponses, NodeVaultConfirmErrors, ThrowOnError> =>
+	(options.client ?? client).post<NodeVaultConfirmResponses, NodeVaultConfirmErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zNodeVaultConfirmBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zNodeVaultConfirmResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/auth/vault/confirm",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const listSlashCommands = <ThrowOnError extends boolean = false>(

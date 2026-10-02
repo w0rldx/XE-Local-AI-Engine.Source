@@ -405,7 +405,7 @@ function Get-XESanitizedDiagnostic {
     $sanitized = @()
     foreach ($lineValue in @($Lines)) {
         $line = [string]$lineValue
-        if ($line -match '^XE_(SETUP|ADMIN_EMAIL|MCP_KEY)=') { continue }
+        if ($line -match '^XE_(SETUP|ADMIN_EMAIL|MCP_KEY|RECOVERY_CODE)=') { continue }
         if ($Secret) { $line = $line -replace [regex]::Escape($Secret), '[REDACTED]' }
         $line = $line -replace 'xemcp_[^\s]+', '[REDACTED]'
         if ($line.Length -gt 500) { $line = $line.Substring(0, 500) }
@@ -441,8 +441,6 @@ function Invoke-XESetup {
         $passwordForRedaction = $null
         throw "Engine --setup exited with engine code $setupCode`: $diagnostic"
     }
-    $credentials.Password = $null
-    $passwordForRedaction = $null
     $setupLines = @($setupOutput | Where-Object { $_ -match '^XE_SETUP=(created|already-configured)$' })
     if ($setupLines.Count -ne 1) { throw 'Engine --setup did not return exactly one valid XE_SETUP line.' }
     $emailLines = @($setupOutput | Where-Object { $_ -match '^XE_ADMIN_EMAIL=[^\p{C}]+$' })
@@ -453,12 +451,36 @@ function Invoke-XESetup {
     $setupLines[0] | Write-Output
     $emailLines | Write-Output
 
-    $keyOutput = @(& $Exe '--mcp-key' 'agentic' 2>&1 | ForEach-Object { [string]$_ })
-    $keyCode = $LASTEXITCODE
+    # ADR 0018: a fresh node prints a one-time vault recovery code. Relay it once; it is never persisted. An external
+    # secret (XE_NODE_SQLITE_KEY) prints none.
+    $recoveryPattern = '^XE_RECOVERY_CODE=([A-Z2-7]{5}-){7}[A-Z2-7]{5}$'
+    $recoveryLines = @($setupOutput | Where-Object { $_ -match $recoveryPattern })
+    $anyRecovery = @($setupOutput | Where-Object { $_ -match '^XE_RECOVERY_CODE=' })
+    if ($setupLines[0] -ceq 'XE_SETUP=created' -and $recoveryLines.Count -eq 1 -and $anyRecovery.Count -eq 1) {
+        $recoveryLines[0] | Write-Output
+        [Console]::Error.WriteLine('SAVE THE RECOVERY CODE above (XE_RECOVERY_CODE). It is shown only once and is not stored anywhere.')
+        [Console]::Error.WriteLine('Without the admin password or this code, the encrypted data on this node cannot be recovered.')
+    }
+    elseif ($anyRecovery.Count -ne 0) { throw 'Engine --setup returned an invalid XE_RECOVERY_CODE contract.' }
+
+    # The vault is locked at process start: --mcp-key needs the admin password to unwrap the node key.
+    # Kept for Start-XEEngine (ADR 0018), which hands it to the served engine the same way; the main flow clears it.
+    $script:XEStartPassword = $credentials.Password
+    $env:XE_ADMIN_PASSWORD = $credentials.Password
+    try {
+        $keyOutput = @(& $Exe '--mcp-key' 'agentic' 2>&1 | ForEach-Object { [string]$_ })
+        $keyCode = $LASTEXITCODE
+    }
+    finally {
+        $env:XE_ADMIN_PASSWORD = $oldPassword
+        $credentials.Password = $null
+    }
     if ($keyCode -ne 0) {
-        $diagnostic = Get-XESanitizedDiagnostic -Lines $keyOutput -Secret $null
+        $diagnostic = Get-XESanitizedDiagnostic -Lines $keyOutput -Secret $passwordForRedaction
+        $passwordForRedaction = $null
         throw "Engine --mcp-key agentic exited with engine code $keyCode`: $diagnostic"
     }
+    $passwordForRedaction = $null
     $keyLines = @($keyOutput | Where-Object { $_ -match '^XE_MCP_KEY=xemcp_[^\s\p{C}]+$' })
     if ($keyLines.Count -ne 1) { throw 'Engine --mcp-key agentic did not return exactly one XE_MCP_KEY line.' }
     $keyLines[0] | Write-Output
@@ -485,14 +507,21 @@ function Start-XEEngine {
     param(
         [Parameter(Mandatory)][string]$Exe,
         [Parameter(Mandatory)][string]$DataDirectory,
-        [int]$TimeoutSeconds = 60
+        [int]$TimeoutSeconds = 60,
+        [AllowNull()][string]$VaultUnlockValue
     )
     if (-not $PSCmdlet.ShouldProcess($Exe, 'Start in MCP-only mode')) { return }
     if ($TimeoutSeconds -lt 0) { throw 'The readiness timeout must be a non-negative integer.' }
     $logOut = Join-Path (Split-Path -Parent $Exe) 'xe-mcp-only.stdout.log'
     $logError = Join-Path (Split-Path -Parent $Exe) 'xe-mcp-only.stderr.log'
-    $process = Start-Process -FilePath $Exe -ArgumentList '--mcp-only' -WindowStyle Hidden -PassThru `
-        -RedirectStandardOutput $logOut -RedirectStandardError $logError
+    # A locked vault unlocks non-interactively from XE_ADMIN_PASSWORD (ADR 0018); the child inherits it, nothing is written to disk.
+    $oldAdminPassword = $env:XE_ADMIN_PASSWORD
+    try {
+        if ($VaultUnlockValue) { $env:XE_ADMIN_PASSWORD = $VaultUnlockValue }
+        $process = Start-Process -FilePath $Exe -ArgumentList '--mcp-only' -WindowStyle Hidden -PassThru `
+            -RedirectStandardOutput $logOut -RedirectStandardError $logError
+    }
+    finally { $env:XE_ADMIN_PASSWORD = $oldAdminPassword }
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     $readyPath = Join-Path $DataDirectory 'ready.json'
     while ([DateTime]::UtcNow -le $deadline) {
@@ -819,6 +848,7 @@ function Invoke-XEPostInstallAction {
         [bool]$DoInstallSkill,
         [bool]$NonInteractive
     )
+    $script:XEStartPassword = $null
     $usesDataDirectory = $DoSetup -or $DoStart -or $DoAutostart
     $oldDataDirectory = $env:XE_DATA_DIR
     $dataDirectory = if ($usesDataDirectory) { Get-XEDataDirectory } else { $null }
@@ -839,7 +869,8 @@ function Invoke-XEPostInstallAction {
         if ($DoStart) {
             try {
                 $timeout = if ($env:XE_START_TIMEOUT_SECONDS) { [int]$env:XE_START_TIMEOUT_SECONDS } else { 60 }
-                Start-XEEngine -Exe $Exe -DataDirectory $dataDirectory -TimeoutSeconds $timeout
+                Start-XEEngine -Exe $Exe -DataDirectory $dataDirectory -TimeoutSeconds $timeout -VaultUnlockValue $script:XEStartPassword
+                $script:XEStartPassword = $null
             }
             catch {
                 $code = if ($_.Exception -is [TimeoutException]) { 12 } else { 1 }

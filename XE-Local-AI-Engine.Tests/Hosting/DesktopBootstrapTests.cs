@@ -4,6 +4,8 @@ using System.Runtime.Versioning;
 using Microsoft.Extensions.Configuration;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Services.Vault;
+using XE_Local_AI_Engine.Client.Services.Vault.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
@@ -290,6 +292,72 @@ public sealed class DesktopBootstrapTests : IDisposable
 
         var keyPath = Path.Combine(temp.DataDirectory, DesktopBootstrap.KeyFileName);
         AssertEx.False(File.Exists(keyPath), "An already-supplied operator secret must not trigger key-file generation.");
+    }
+
+    [Test]
+    public void EnsureLocalDataConfiguration_FreshDataDirectory_GeneratesKeyAndReportsPendingManagedVault()
+    {
+        using var temp = new TempDirectory();
+        using var configuration = new ConfigurationManager();
+
+        var state = DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
+
+        AssertEx.Equal(VaultState.Pending, state);
+        AssertEx.Equal("true", configuration[NodeVault.ManagedConfigurationKey]);
+        AssertEx.NotNullOrEmpty(configuration[NodeOperatorSecretProvider.EnvVarName]);
+    }
+
+    [Test]
+    public async Task EnsureLocalDataConfiguration_LegacyRawKeyFile_InjectsItsSecretAndReportsPendingManagedVault()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(temp.DataDirectory);
+        var legacySecret = Convert.ToBase64String(Enumerable.Range(1, NodeOperatorSecretProvider.ExpectedSecretLength).Select(static value => (byte)value).ToArray());
+        await File.WriteAllTextAsync(Path.Combine(temp.DataDirectory, DesktopBootstrap.KeyFileName), legacySecret);
+        using var configuration = new ConfigurationManager();
+
+        var state = DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
+
+        AssertEx.Equal(VaultState.Pending, state);
+        AssertEx.Equal("true", configuration[NodeVault.ManagedConfigurationKey]);
+        AssertEx.Equal(legacySecret, configuration[NodeOperatorSecretProvider.EnvVarName]);
+    }
+
+    [Test]
+    public async Task EnsureLocalDataConfiguration_V2VaultFile_InjectsNoSecretAndReportsLocked()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(temp.DataDirectory);
+        var keyPath = Path.Combine(temp.DataDirectory, DesktopBootstrap.KeyFileName);
+        var (file, _) = VaultFileCodec.Create(new byte[VaultKdf.KeyLength], "correct horse battery", DateTimeOffset.UnixEpoch, VaultKdf.MinimumIterations);
+        var vaultBytes = VaultFileCodec.Serialize(file);
+        await File.WriteAllBytesAsync(keyPath, vaultBytes);
+        using var configuration = new ConfigurationManager();
+
+        var state = DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
+
+        AssertEx.Equal(VaultState.Locked, state);
+        AssertEx.Equal("true", configuration[NodeVault.ManagedConfigurationKey]);
+        AssertEx.Null(configuration[NodeOperatorSecretProvider.EnvVarName]);
+        var onDisk = await File.ReadAllBytesAsync(keyPath);
+        AssertEx.True(vaultBytes.AsSpan().SequenceEqual(onDisk), "Bootstrap must leave a v2 vault file untouched.");
+    }
+
+    [Test]
+    public void EnsureLocalDataConfiguration_OperatorSuppliedSecret_ReportsExternalAndLeavesTheVaultUnmanaged()
+    {
+        using var temp = new TempDirectory();
+        using var configuration = new ConfigurationManager();
+        configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            [NodeOperatorSecretProvider.EnvVarName] = Convert.ToBase64String(new byte[NodeOperatorSecretProvider.ExpectedSecretLength])
+        });
+
+        var state = DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
+
+        AssertEx.Equal(VaultState.External, state);
+        AssertEx.Null(configuration[NodeVault.ManagedConfigurationKey]);
+        AssertEx.Null(configuration[NodeVault.UnlockedConfigurationKey]);
     }
 
     /// <summary>

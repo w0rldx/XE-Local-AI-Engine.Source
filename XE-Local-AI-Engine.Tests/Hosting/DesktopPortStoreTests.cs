@@ -16,6 +16,56 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class DesktopPortStoreTests
 {
     [Test]
+    public async Task WaitForPort_ReturnsTrueOnTheFirstFreeProbe_WaitingOnlyBetweenTakenOnes()
+    {
+        var answers = new Queue<bool>([false, false, true]);
+        var probes = 0;
+        var waits = 0;
+
+        var free = await DesktopPortStore.WaitForPortAsync(41234,
+            attempts: 5,
+            port =>
+            {
+                AssertEx.Equal(41234, port);
+                probes++;
+                return answers.Dequeue();
+            },
+            () =>
+            {
+                waits++;
+                return Task.CompletedTask;
+            });
+
+        AssertEx.True(free);
+        AssertEx.Equal(3, probes);
+        AssertEx.Equal(2, waits);
+    }
+
+    [Test]
+    public async Task WaitForPort_GivesUpAfterTheLastAttempt_WithoutAFinalWait()
+    {
+        var probes = 0;
+        var waits = 0;
+
+        var free = await DesktopPortStore.WaitForPortAsync(41234,
+            attempts: 3,
+            _ =>
+            {
+                probes++;
+                return false;
+            },
+            () =>
+            {
+                waits++;
+                return Task.CompletedTask;
+            });
+
+        AssertEx.False(free);
+        AssertEx.Equal(3, probes);
+        AssertEx.Equal(2, waits);
+    }
+
+    [Test]
     public async Task ResolveBindUrl_WhenPortFileMissing_FallsBackToDynamicBind()
     {
         using var directory = new TempDirectory();

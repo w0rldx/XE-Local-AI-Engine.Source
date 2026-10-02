@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { authApiMock, routerMock } = vi.hoisted(() => ({
 	authApiMock: {
 		refreshNodeAuthToken: vi.fn(),
+		getNodeAuthStatus: vi.fn(),
 	},
 	routerMock: {
 		navigate: vi.fn(),
@@ -18,11 +19,14 @@ import {
 	addAuthRequestInterceptor,
 	addFormDataContentTypeInterceptor,
 	addUnauthorizedErrorInterceptor,
+	addVaultLockedInterceptor,
 } from "@/core/api/axios/Interceptors";
-import { registerLoginNavigator } from "@/core/api/axios/LoginNavigation";
+import { registerLoginNavigator, registerVaultNavigator } from "@/core/api/axios/LoginNavigation";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { getPendingVaultStep } from "@/core/auth/utils/SessionRestore";
 
 registerLoginNavigator((redirect) => routerMock.navigate({ to: "/login", search: { redirect } }));
+registerVaultNavigator(() => routerMock.navigate({ to: "/vault" }));
 
 function okResponse(config: InternalAxiosRequestConfig): AxiosResponse {
 	return {
@@ -144,5 +148,63 @@ describe("auth axios interceptors", () => {
 
 		expect(useNodeAuthStore.getState().accessToken).toBeUndefined();
 		expect(routerMock.navigate).toHaveBeenCalledWith({ to: "/login", search: { redirect: "/" } });
+	});
+});
+
+function serviceUnavailable(config: InternalAxiosRequestConfig, title: string): AxiosError {
+	return new AxiosError("Service Unavailable", AxiosError.ERR_BAD_RESPONSE, config, undefined, {
+		data: { title, status: 503 },
+		status: 503,
+		statusText: "Service Unavailable",
+		headers: {},
+		config,
+	});
+}
+
+// A tab that stays open across an engine restart holds a token and a settled vault cache; the relaunched, still
+// locked engine answers every protected route with 503 "Vault locked", which must send the tab to the unlock page.
+describe("vault-locked interceptor", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		useNodeAuthStore.getState().actions.clear();
+	});
+
+	it("clears auth, resets the settled vault cache and navigates to the unlock page", async () => {
+		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: true, vault: "unlocked" });
+		await getPendingVaultStep();
+		await getPendingVaultStep();
+		// Settled after the first unlocked read: the second call skipped the status endpoint.
+		expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(1);
+
+		const instance = axios.create({
+			adapter: async (config) => {
+				throw serviceUnavailable(config, "Vault locked");
+			},
+		});
+		addVaultLockedInterceptor(instance);
+		useNodeAuthStore.getState().actions.setToken({ accessToken: "old-token", expiresAtUtc: "2026-05-25T12:00:00Z" });
+
+		await expect(instance.get("/api/local/v1/protected")).rejects.toBeInstanceOf(AxiosError);
+
+		expect(useNodeAuthStore.getState().accessToken).toBeUndefined();
+		expect(routerMock.navigate).toHaveBeenCalledWith({ to: "/vault" });
+		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false, vault: "locked" });
+		await expect(getPendingVaultStep()).resolves.toBe("vault-locked");
+		expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(2);
+	});
+
+	it("leaves any other 503 alone", async () => {
+		const instance = axios.create({
+			adapter: async (config) => {
+				throw serviceUnavailable(config, "Service Unavailable");
+			},
+		});
+		addVaultLockedInterceptor(instance);
+		useNodeAuthStore.getState().actions.setToken({ accessToken: "old-token", expiresAtUtc: "2026-05-25T12:00:00Z" });
+
+		await expect(instance.get("/api/local/v1/protected")).rejects.toBeInstanceOf(AxiosError);
+
+		expect(useNodeAuthStore.getState().accessToken).toBe("old-token");
+		expect(routerMock.navigate).not.toHaveBeenCalled();
 	});
 });

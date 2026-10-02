@@ -23,6 +23,10 @@ export const Route = createFileRoute("/login")({
 	beforeLoad: async ({ search }) => {
 		const safeRedirect = getSafeRedirectPath(search.redirect);
 		const status = await getNodeAuthStatus();
+		if (status.vault === "locked") {
+			throw redirect({ to: "/vault" });
+		}
+
 		if (status.setupRequired) {
 			throw redirect({ to: "/setup" });
 		}
@@ -34,6 +38,10 @@ export const Route = createFileRoute("/login")({
 		const restoreResult = await restoreNodeAuthSession();
 		if (restoreResult === "authenticated") {
 			throw redirect({ to: safeRedirect });
+		}
+
+		if (restoreResult === "vault-setup-required") {
+			throw redirect({ to: "/vault-setup" });
 		}
 	},
 	component: Login,

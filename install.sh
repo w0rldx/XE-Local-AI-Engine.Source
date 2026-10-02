@@ -321,7 +321,7 @@ resolve_setup_credentials() {
 sanitize_engine_diagnostic() {
   local text="$1" secret="${2:-}" line sanitized="" count=0 key
   while IFS= read -r line; do
-    [[ "$line" != XE_SETUP=* && "$line" != XE_ADMIN_EMAIL=* && "$line" != XE_MCP_KEY=* ]] || continue
+    [[ "$line" != XE_SETUP=* && "$line" != XE_ADMIN_EMAIL=* && "$line" != XE_MCP_KEY=* && "$line" != XE_RECOVERY_CODE=* ]] || continue
     [[ -z "$secret" ]] || line="${line//"$secret"/[REDACTED]}"
     while [[ "$line" =~ (xemcp_[^[:space:]]+) ]]; do
       key="${BASH_REMATCH[1]}"
@@ -361,7 +361,21 @@ run_setup() {
   printf '%s\n' "$setup_value"
   [[ "$email_count" -eq 0 ]] || grep -E '^XE_ADMIN_EMAIL=[^[:cntrl:]]+$' <<<"$setup_output"
 
-  if key_output="$("$exe" --mcp-key agentic 2>&1)"; then
+  # ADR 0018: a fresh node wraps its key under the admin password and prints a one-time recovery code. Relay it on stdout
+  # once and never persist it; an external secret (XE_NODE_SQLITE_KEY) prints none.
+  local recovery_count recovery_any
+  recovery_count="$(grep -Ec '^XE_RECOVERY_CODE=([A-Z2-7]{5}-){7}[A-Z2-7]{5}$' <<<"$setup_output" || true)"
+  recovery_any="$(grep -Ec '^XE_RECOVERY_CODE=' <<<"$setup_output" || true)"
+  if [[ "$setup_value" == XE_SETUP=created && "$recovery_count" -eq 1 && "$recovery_any" -eq 1 ]]; then
+    grep -E '^XE_RECOVERY_CODE=([A-Z2-7]{5}-){7}[A-Z2-7]{5}$' <<<"$setup_output"
+    log "SAVE THE RECOVERY CODE above (XE_RECOVERY_CODE). It is shown only once and is not stored anywhere."
+    log "Without the admin password or this code, the encrypted data on this node cannot be recovered."
+  elif [[ "$recovery_any" -ne 0 ]]; then
+    die 11 "Engine --setup returned an invalid XE_RECOVERY_CODE contract."
+  fi
+
+  # The vault is locked at process start: --mcp-key needs the admin password to unwrap the node key.
+  if key_output="$(XE_ADMIN_PASSWORD="$ADMIN_PASSWORD" "$exe" --mcp-key agentic 2>&1)"; then
     key_status=0
   else
     key_status=$?
@@ -374,22 +388,23 @@ run_setup() {
   key_count="$(grep -Ec '^XE_MCP_KEY=xemcp_[^[:space:][:cntrl:]]+$' <<<"$key_output" || true)"
   [[ "$key_count" -eq 1 ]] || die 11 "Engine --mcp-key agentic did not return exactly one XE_MCP_KEY line."
   grep -E '^XE_MCP_KEY=xemcp_[^[:space:][:cntrl:]]+$' <<<"$key_output"
-  ADMIN_PASSWORD=""
+  # ADMIN_PASSWORD stays set for run_start (ADR 0018): the served engine needs it to unlock the vault non-interactively.
+  # run_post_install_actions clears it.
 }
 
 launch_detached() {
   local exe="$1" log_file="$2" extract_and_run="${3:-false}"
   if command -v setsid >/dev/null 2>&1; then
     if [[ "$extract_and_run" == true ]]; then
-      APPIMAGE_EXTRACT_AND_RUN=1 setsid nohup "$exe" --mcp-only >"$log_file" 2>&1 </dev/null &
+      XE_ADMIN_PASSWORD="${ADMIN_PASSWORD:-${XE_ADMIN_PASSWORD:-}}" APPIMAGE_EXTRACT_AND_RUN=1 setsid nohup "$exe" --mcp-only >"$log_file" 2>&1 </dev/null &
     else
-      setsid nohup "$exe" --mcp-only >"$log_file" 2>&1 </dev/null &
+      XE_ADMIN_PASSWORD="${ADMIN_PASSWORD:-${XE_ADMIN_PASSWORD:-}}" setsid nohup "$exe" --mcp-only >"$log_file" 2>&1 </dev/null &
     fi
   else
     if [[ "$extract_and_run" == true ]]; then
-      APPIMAGE_EXTRACT_AND_RUN=1 nohup "$exe" --mcp-only >"$log_file" 2>&1 </dev/null &
+      XE_ADMIN_PASSWORD="${ADMIN_PASSWORD:-${XE_ADMIN_PASSWORD:-}}" APPIMAGE_EXTRACT_AND_RUN=1 nohup "$exe" --mcp-only >"$log_file" 2>&1 </dev/null &
     else
-      nohup "$exe" --mcp-only >"$log_file" 2>&1 </dev/null &
+      XE_ADMIN_PASSWORD="${ADMIN_PASSWORD:-${XE_ADMIN_PASSWORD:-}}" nohup "$exe" --mcp-only >"$log_file" 2>&1 </dev/null &
     fi
   fi
   ENGINE_PID=$!
@@ -951,6 +966,7 @@ run_post_install_actions() {
   [[ "$INSTALL_SKILL" == false ]] || install_skill_tree "$scratch"
   [[ "$AUTOSTART" == false ]] || register_autostart "$exe"
   [[ "$START" == false ]] || run_start "$exe"
+  ADMIN_PASSWORD=""
 }
 
 main() {

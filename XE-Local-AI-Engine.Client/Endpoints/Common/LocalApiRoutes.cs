@@ -19,6 +19,11 @@ public static class LocalApiRoutes
         public const string Refresh = "auth/refresh";
         public const string Logout = "auth/logout";
         public const string ChangePassword = "auth/change-password";
+        public const string VaultConfirm = "auth/vault/confirm";
+
+        // Served only by the locked pre-host, before the real host exists.
+        public const string VaultUnlock = "auth/vault/unlock";
+        public const string VaultUnlockRecovery = "auth/vault/unlock-recovery";
     }
 
     public static class LocalChat

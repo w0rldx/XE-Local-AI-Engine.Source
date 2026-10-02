@@ -63,12 +63,25 @@ Piped Bash and PowerShell installs have no usable prompt input. Set `XE_ADMIN_EM
 
 The password reaches the engine only through `XE_ADMIN_PASSWORD`, never argv. Existing setup is an
 idempotent success and prints `XE_SETUP=already-configured`; it does not compare or change the
-existing credentials. A new setup prints:
+existing credentials. Because the node key is wrapped by the admin password (ADR 0018), a re-run must pass the
+**original** `XE_ADMIN_PASSWORD`: a password that does not unlock the key makes `--setup` (and `--mcp-key`) exit 5
+with "The admin password does not unlock this node's key." instead of reporting `already-configured`. A new setup
+prints:
 
 ```text
 XE_SETUP=created
 XE_ADMIN_EMAIL=admin@example.test
+XE_RECOVERY_CODE=ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-23456-77ABC-DEFGH
 ```
+
+A served engine (`--start`, or any serve mode including `--mcp-only`) starts **locked** and waits for the admin password.
+The installer hands `XE_ADMIN_PASSWORD` to the `--start` process, so a headless install comes up unlocked and never
+shows the unlock page. A wrong password exits 5 with "The admin password does not unlock this node's key."; started
+without a password (a later manual start, a reboot, autostart) the engine serves the unlock page and MCP answers 503
+until the password is entered in a browser.
+
+The recovery code is shown once and the node keeps no copy; save it. The installers relay it and never write it to a
+file. It is absent when an operator-supplied secret (`XE_NODE_SQLITE_KEY`) is in use.
 
 After engine setup, the installer's `--setup` workflow mints exactly one `agentic` key and prints it
 exactly once:
@@ -138,10 +151,11 @@ It is removed on graceful shutdown. Treat it as stale whenever `pid` is not live
 `--status --json` never starts the engine or creates the data directory. Its exact fields are:
 
 ```json
-{"running":true,"version":"<semver>","url":"http://127.0.0.1:<port>","mcpUrl":"http://127.0.0.1:<port>/api/local/v1/mcp/server","dataDir":"<absolute-path>","setupRequired":false,"installKind":"velopack-managed"}
+{"running":true,"version":"<semver>","url":"http://127.0.0.1:<port>","mcpUrl":"http://127.0.0.1:<port>/api/local/v1/mcp/server","dataDir":"<absolute-path>","setupRequired":false,"vault":"unlocked","installKind":"velopack-managed"}
 ```
 
-`version`, `url`, `mcpUrl`, and `setupRequired` can be `null` when no healthy process is available;
+`version`, `url`, `mcpUrl`, `setupRequired`, and `vault` can be `null` when no healthy process is available;
+`vault` is `pending` (no passphrase-wrapped key yet), `locked` (the node waits for the admin password) or `unlocked`;
 `installKind` is `velopack-managed` or `unmanaged`. Status exits 0 only when the process, health
 endpoint, and anonymous auth-status probe agree that the node is running; otherwise it exits 1.
 

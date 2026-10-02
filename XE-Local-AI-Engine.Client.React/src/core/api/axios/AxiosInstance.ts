@@ -6,6 +6,7 @@ import {
 	addFormDataContentTypeInterceptor,
 	addRateLimitingInterceptor,
 	addUnauthorizedErrorInterceptor,
+	addVaultLockedInterceptor,
 } from "@/core/api/axios/Interceptors";
 import { addDiagnosticsNetworkInterceptor } from "@/core/diagnostics/collectors/Network.axios";
 
@@ -28,6 +29,7 @@ addFormDataContentTypeInterceptor(axiosInstance);
 addAuthRequestInterceptor(axiosInstance);
 
 addUnauthorizedErrorInterceptor(axiosInstance);
+addVaultLockedInterceptor(axiosInstance);
 addRateLimitingInterceptor(axiosInstance);
 addApiProblemDetailsInterceptor(axiosInstance);
 

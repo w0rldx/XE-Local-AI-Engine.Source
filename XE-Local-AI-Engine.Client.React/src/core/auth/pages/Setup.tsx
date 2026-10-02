@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { loginNodeAuth, setupNodeAuth } from "@/core/auth/api/NodeAuthApi";
+import { RecoveryCodeReveal } from "@/core/auth/components/RecoveryCodeReveal";
 import type { NodeAuthErrorResponse } from "@/core/auth/models/NodeAuthModels";
 import { unmetPasswordRules } from "@/core/auth/models/PasswordPolicy";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
@@ -79,6 +80,10 @@ export function Setup() {
 	const [touched, setTouched] = useState<Partial<Record<keyof SetupFormValues, boolean>>>({});
 	const [error, setError] = useState<string | undefined>();
 	const [submitting, setSubmitting] = useState(false);
+	// Shown once after setup; component state only, so a reload drops it like any other show-once secret.
+	const [recoveryCode, setRecoveryCode] = useState<string | undefined>();
+	// Set when setup succeeded but the automatic login did not: the reveal still shows, and Continue goes to /login.
+	const [loginFailure, setLoginFailure] = useState<string | undefined>();
 	const errors = useMemo(() => validate(values, t), [values, t]);
 	const hasErrors = Object.keys(errors).length > 0;
 	const visibleError = (field: keyof SetupFormValues): string | undefined =>
@@ -97,6 +102,16 @@ export function Setup() {
 		t("auth.setup.passwordRuleSymbol"),
 	];
 
+	// The first-run external-access choice comes between setup and the app; its own route redirects home once the
+	// profile is decided, so this is not a detour for a node that already has one.
+	const goToExternalAccess = async (): Promise<void> => {
+		await navigate({ to: "/external-access" });
+	};
+
+	const goToLogin = async (): Promise<void> => {
+		await navigate({ to: "/login" });
+	};
+
 	const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
 		event.preventDefault();
 		setError(undefined);
@@ -108,12 +123,29 @@ export function Setup() {
 		setSubmitting(true);
 		try {
 			const email = values.email.trim();
-			await setupNodeAuth({ email, password: values.password });
-			const token = await loginNodeAuth({ email, password: values.password });
-			setToken(token);
-			// The first-run external-access choice comes between setup and the app; its own route redirects home once the
-			// profile is decided, so this is not a detour for a node that already has one.
-			await navigate({ to: "/external-access" });
+			const setup = await setupNodeAuth({ email, password: values.password });
+			// A node on an operator-supplied secret has no vault and so no recovery code to reveal. The code is the only
+			// copy and a retried setup answers AlreadyInitialized, so it is kept before the login that may still fail.
+			if (setup.recoveryCode) {
+				setRecoveryCode(setup.recoveryCode);
+			}
+
+			try {
+				setToken(await loginNodeAuth({ email, password: values.password }));
+			} catch (loginError) {
+				if (!setup.recoveryCode) {
+					throw loginError;
+				}
+
+				setLoginFailure(t("auth.setup.loginAfterSetupFailed", { reason: getErrorMessage(loginError, t) }));
+			}
+
+			if (setup.recoveryCode) {
+				setValues({ email: "", password: "", confirmPassword: "" });
+				return;
+			}
+
+			await goToExternalAccess();
 		} catch (submitError) {
 			setError(getErrorMessage(submitError, t));
 		} finally {
@@ -133,63 +165,77 @@ export function Setup() {
 							<Text c="dimmed">{t("auth.setup.subtitle")}</Text>
 						</Stack>
 
-						{error ? <InlineErrorAlert message={error} /> : null}
+						{recoveryCode ? (
+							<>
+								{loginFailure ? <InlineErrorAlert message={loginFailure} /> : null}
+								<RecoveryCodeReveal
+									recoveryCode={recoveryCode}
+									onContinue={() => {
+										(loginFailure ? goToLogin() : goToExternalAccess()).catch(() => undefined);
+									}}
+								/>
+							</>
+						) : (
+							<>
+								{error ? <InlineErrorAlert message={error} /> : null}
 
-						<form onSubmit={handleSubmit}>
-							<Stack gap="md">
-								<TextInput
-									label={t("auth.setup.emailLabel")}
-									description={t("auth.setup.emailLocalOnlyNote")}
-									type="email"
-									autoComplete="email"
-									required={true}
-									value={values.email}
-									onChange={(event) => {
-										const value = event.currentTarget.value;
-										setValues((current) => ({ ...current, email: value }));
-										markTouched("email");
-									}}
-									onBlur={() => markTouched("email")}
-									error={visibleError("email")}
-								/>
-								<Stack gap={4}>
-									<PasswordInput
-										label={t("auth.setup.passwordLabel")}
-										autoComplete="new-password"
-										required={true}
-										value={values.password}
-										onChange={(event) => {
-											const value = event.currentTarget.value;
-											setValues((current) => ({ ...current, password: value }));
-											markTouched("password");
-										}}
-										onBlur={() => markTouched("password")}
-										error={visibleError("password")}
-									/>
-									<List size="xs" c="dimmed" spacing={0} withPadding={true}>
-										{passwordRules.map((rule) => (
-											<List.Item key={rule}>{rule}</List.Item>
-										))}
-									</List>
-								</Stack>
-								<PasswordInput
-									label={t("auth.setup.confirmPasswordLabel")}
-									autoComplete="new-password"
-									required={true}
-									value={values.confirmPassword}
-									onChange={(event) => {
-										const value = event.currentTarget.value;
-										setValues((current) => ({ ...current, confirmPassword: value }));
-										markTouched("confirmPassword");
-									}}
-									onBlur={() => markTouched("confirmPassword")}
-									error={visibleError("confirmPassword")}
-								/>
-								<Button type="submit" loading={submitting} disabled={hasErrors} fullWidth={true}>
-									{t("auth.setup.createButton")}
-								</Button>
-							</Stack>
-						</form>
+								<form onSubmit={handleSubmit}>
+									<Stack gap="md">
+										<TextInput
+											label={t("auth.setup.emailLabel")}
+											description={t("auth.setup.emailLocalOnlyNote")}
+											type="email"
+											autoComplete="email"
+											required={true}
+											value={values.email}
+											onChange={(event) => {
+												const value = event.currentTarget.value;
+												setValues((current) => ({ ...current, email: value }));
+												markTouched("email");
+											}}
+											onBlur={() => markTouched("email")}
+											error={visibleError("email")}
+										/>
+										<Stack gap={4}>
+											<PasswordInput
+												label={t("auth.setup.passwordLabel")}
+												autoComplete="new-password"
+												required={true}
+												value={values.password}
+												onChange={(event) => {
+													const value = event.currentTarget.value;
+													setValues((current) => ({ ...current, password: value }));
+													markTouched("password");
+												}}
+												onBlur={() => markTouched("password")}
+												error={visibleError("password")}
+											/>
+											<List size="xs" c="dimmed" spacing={0} withPadding={true}>
+												{passwordRules.map((rule) => (
+													<List.Item key={rule}>{rule}</List.Item>
+												))}
+											</List>
+										</Stack>
+										<PasswordInput
+											label={t("auth.setup.confirmPasswordLabel")}
+											autoComplete="new-password"
+											required={true}
+											value={values.confirmPassword}
+											onChange={(event) => {
+												const value = event.currentTarget.value;
+												setValues((current) => ({ ...current, confirmPassword: value }));
+												markTouched("confirmPassword");
+											}}
+											onBlur={() => markTouched("confirmPassword")}
+											error={visibleError("confirmPassword")}
+										/>
+										<Button type="submit" loading={submitting} disabled={hasErrors} fullWidth={true}>
+											{t("auth.setup.createButton")}
+										</Button>
+									</Stack>
+								</form>
+							</>
+						)}
 					</Stack>
 				</Card>
 			</Container>

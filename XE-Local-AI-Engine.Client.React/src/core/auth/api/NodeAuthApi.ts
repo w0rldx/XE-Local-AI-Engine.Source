@@ -7,6 +7,10 @@ import type {
 	NodeChangePasswordRequest,
 	NodeLoginRequest,
 	NodeSetupRequest,
+	NodeSetupResponse,
+	NodeVaultConfirmResponse,
+	NodeVaultPasswordRequest,
+	NodeVaultRecoveryUnlockRequest,
 } from "@/core/auth/models/NodeAuthModels";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
@@ -38,8 +42,9 @@ export async function getNodeAuthStatus(config?: AxiosRequestConfig): Promise<No
 	return data;
 }
 
-export async function setupNodeAuth(request: NodeSetupRequest, config?: AxiosRequestConfig): Promise<void> {
-	await authClient.post(buildLocalApiUrl("auth/setup"), request, config);
+export async function setupNodeAuth(request: NodeSetupRequest, config?: AxiosRequestConfig): Promise<NodeSetupResponse> {
+	const { data } = await authClient.post<NodeSetupResponse>(buildLocalApiUrl("auth/setup"), request, config);
+	return data;
 }
 
 export async function loginNodeAuth(request: NodeLoginRequest, config?: AxiosRequestConfig): Promise<NodeAccessTokenResponse> {
@@ -71,4 +76,29 @@ export async function logoutNodeAuth(config?: AxiosRequestConfig): Promise<void>
 // resolved promise as a sign-out, not as a session that continues.
 export async function changeNodePassword(request: NodeChangePasswordRequest, config?: AxiosRequestConfig): Promise<void> {
 	await authClient.post(buildLocalApiUrl("auth/change-password"), request, withBearer(config));
+}
+
+// Legacy data dir: wraps the existing node key with the operator's (re-entered) login password. 409 once not pending.
+export async function confirmNodeVault(
+	request: NodeVaultPasswordRequest,
+	config?: AxiosRequestConfig,
+): Promise<NodeVaultConfirmResponse> {
+	const { data } = await authClient.post<NodeVaultConfirmResponse>(
+		buildLocalApiUrl("auth/vault/confirm"),
+		request,
+		withBearer(config),
+	);
+	return data;
+}
+
+// Answered by the locked pre-host. 204 starts the hand-over to the real host on the same origin; it issues no token.
+export async function unlockNodeVault(request: NodeVaultPasswordRequest, config?: AxiosRequestConfig): Promise<void> {
+	await authClient.post(buildLocalApiUrl("auth/vault/unlock"), request, config);
+}
+
+export async function unlockNodeVaultWithRecovery(
+	request: NodeVaultRecoveryUnlockRequest,
+	config?: AxiosRequestConfig,
+): Promise<void> {
+	await authClient.post(buildLocalApiUrl("auth/vault/unlock-recovery"), request, config);
 }

@@ -26,6 +26,7 @@ internal static class DesktopLaunch
     internal const string JsonArgument = "--json";
     internal const string HelpArgument = "--help";
     internal const string ResetAdminPasswordArgument = "--reset-admin-password";
+    internal const string RecoveryCodeStdinArgument = "--recovery-code-stdin";
     internal const string KnowledgeDowngradePreflightArgument = "--knowledge-downgrade-preflight";
     internal const string KnowledgeDowngradeExportArgument = "--knowledge-downgrade-export";
     internal const string LoopbackBindUrl = "http://" + LoopbackHost + ":0";
@@ -207,7 +208,7 @@ internal static class DesktopLaunch
         }
 
         var passwordFromEnvironment = !passwordPresent && !stdinRequested;
-        password = stdinRequested ? stdinReader()?.Trim() : password ?? environmentReader(AdminPasswordEnvironmentVariable);
+        password = stdinRequested ? stdinReader() : password ?? environmentReader(AdminPasswordEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
         {
             command = null;
@@ -269,6 +270,58 @@ internal static class DesktopLaunch
         }
 
         return present;
+    }
+
+    /// <summary>
+    ///     Reads the vault recovery code from one stdin line when <c>--recovery-code-stdin</c> is present; <c>null</c>
+    ///     when the flag is absent or the line is blank.
+    /// </summary>
+    /// <remarks>Never argv: a process listing would expose it. Call it once: stdin is consumed.</remarks>
+    internal static string? GetRecoveryCode(string[] args) =>
+#pragma warning disable MA0045 // Func<string?> stdin-reader seam, as for TryGetSetupCommand.
+        GetRecoveryCode(args, static () => Console.In.ReadLine());
+#pragma warning restore MA0045
+
+    internal static string? GetRecoveryCode(string[] args, Func<string?> stdinReader)
+    {
+        ArgumentNullException.ThrowIfNull(stdinReader);
+        if (!HasArgument(args, RecoveryCodeStdinArgument))
+        {
+            return null;
+        }
+
+        var code = stdinReader()?.Trim();
+        return string.IsNullOrEmpty(code) ? null : code;
+    }
+
+    /// <summary>
+    ///     The admin password a non-setup command unlocks a locked vault with: a stdin line with
+    ///     <c>--admin-password-stdin</c>, else <c>XE_ADMIN_PASSWORD</c> (then cleared, as <c>--setup</c> does).
+    /// </summary>
+    internal static string? GetCommandPassword(string[] args)
+    {
+#pragma warning disable MA0045 // Func<string?> stdin-reader seam, as for TryGetSetupCommand.
+        var password = GetCommandPassword(args, Environment.GetEnvironmentVariable, static () => Console.In.ReadLine());
+#pragma warning restore MA0045
+        Environment.SetEnvironmentVariable(AdminPasswordEnvironmentVariable, null);
+        return password;
+    }
+
+    internal static string? GetCommandPassword(string[] args, Func<string, string?> environmentReader, Func<string?> stdinReader)
+    {
+        ArgumentNullException.ThrowIfNull(environmentReader);
+        ArgumentNullException.ThrowIfNull(stdinReader);
+        string? password;
+        if (HasArgument(args, AdminPasswordStdinArgument))
+        {
+            password = stdinReader();
+        }
+        else
+        {
+            password = environmentReader(AdminPasswordEnvironmentVariable);
+        }
+
+        return string.IsNullOrEmpty(password) ? null : password;
     }
 
     internal static KnowledgeDowngradeCommand GetKnowledgeDowngradeCommand(string[] args)

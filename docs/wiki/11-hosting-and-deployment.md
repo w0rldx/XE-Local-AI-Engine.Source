@@ -260,7 +260,8 @@ signal, Aspire/CI headless behavior is unchanged. The shell binary honours the s
    ├─ DesktopBootstrap.EnsureLocalDataConfiguration(config)
    │     • NodeData:Directory   → %LOCALAPPDATA%/XE-Local-AI-Engine  (or $XDG_DATA_HOME)
    │     • ConnectionStrings:node-sqlite → Data Source=<dir>/node.sqlite   (if absent)
-   │     • operator secret      → generated once, persisted to <dir>/node.key  (if absent)
+   │     • operator secret      → generated once, persisted to <dir>/node.key  (if absent); a v2 node.key
+   │                              is the locked vault: nothing is injected, the pre-host runs first (ADR 0018)
    │     • HuggingFace:ModelsDirectory → <dir>/models                  (if absent)
    │     • Agent:LocalChat:DefaultModel → FirstRunModel repo:quant     (if configured)
    │     (each key filled ONLY when not already supplied → env/Aspire always wins)
@@ -285,7 +286,29 @@ requires observation on the target OS; this flow description is not a retained s
 canonical `ready.json` with `{version,url,mcpUrl,dataDir,pid,startedAtUtc}`. Graceful shutdown removes
 the file; consumers must reject it when the PID is dead and poll `/health/ready` before trusting it.
 `--status --json` is one-shot, never starts the host or creates the data directory, and returns
-`{running,version,url,mcpUrl,dataDir,setupRequired,installKind}`.
+`{running,version,url,mcpUrl,dataDir,setupRequired,vault,installKind}`, where `vault` is `pending`, `locked` or `unlocked` (null when not running).
+
+**Locked start ([ADR 0018](../adr/0018-local-vault-passphrase-wrapped-node-key.md)).** When `node.key` is a v2 vault
+(`DesktopBootstrap.EnsureLocalDataConfiguration` returns `VaultState.Locked`), `Program` holds the single-instance
+lease and then runs the unlock pre-host (`Hosting/Vault/VaultUnlockHost`, sequenced in `Program.Vault.cs`) on the
+resolved bind URL **before** the real host is built. The pre-host publishes readiness itself through
+`DesktopReadyPublisher.Publish`, the helper `DesktopLifecycle` also uses: the port file, `ready.json` (same pid) and
+the `XE_READY=1 …` line, so the shell's 2-minute start deadline, attach logic and `--status --json` see a running
+engine; the lock is visible as `vault: "locked"` in both `auth/status` and `--status --json`. After a
+successful unlock the pre-host stops, the real host re-binds the same URL, probing the port for about 5 s; if it stays taken the engine exits **7** with a
+"start the engine again" message rather than move to a new origin the shell and the open tab would never find. It prints a second `XE_READY` line over a rewritten `ready.json`. A pre-host
+that ends without an unlock (SIGTERM, or the shell's parent pipe closing) exits 0 and removes `ready.json`. Because the
+real host does not exist while locked, no scheduler, inbound MCP, integration API or retention work runs; every update
+restart returns to the unlock page.
+
+**Unattended serve start.** A locked host started in any serve mode (including `--mcp-only`) with `XE_ADMIN_PASSWORD` set or `--admin-password-stdin` unlocks non-interactively, never shows the unlock page and goes straight to the real host; a wrong password exits 5 with "The admin password does not unlock this node's key.". Without a password it serves the unlock page as above. `install.sh --setup --start` and `install.ps1` pass the setup password to the started engine this way (environment only, never argv or disk); autostart units and launchers carry no credentials, so an autostarted node waits on the unlock page.
+
+**CLI one-shots against a locked vault** never start a pre-host. They unlock from what they are given and exit **5**
+with a stderr message, building nothing, when it is missing or wrong:
+
+- `--setup` and `--mcp-key` read the admin password from `XE_ADMIN_PASSWORD` (cleared after reading) or one stdin line with `--admin-password-stdin`.
+- `--reset-admin-password <new>` needs the recovery code on stdin with `--recovery-code-stdin`; it also exits 5 when a v2 vault exists and no code was piped. It resets the Identity hash and the vault's password wrap together.
+- A fresh `--setup` creates the vault and prints one `XE_RECOVERY_CODE=<code>` line on stdout after `XE_SETUP=created` and `XE_ADMIN_EMAIL=`; the node keeps no copy. Under an operator-supplied secret (`XE_NODE_SQLITE_KEY`, secrets file, Aspire) no vault exists and no line is printed. `install.sh` and `install.ps1` relay the line once and never write it to a file.
 
 The repo-root installers can register user-scoped MCP-only autostart only through explicit
 `--autostart`/`-Autostart`: a systemd user service on Linux or limited current-user Scheduled Task on
@@ -299,7 +322,7 @@ Windows. Installation never enables autostart by default.
 
 ### Persistent per-user data + operator key
 
-`DesktopBootstrap` (`Client/Hosting/DesktopBootstrap.cs`) exists because a double-click launch supplies neither a DB connection string nor the operator secret. It targets `Environment.SpecialFolder.LocalApplicationData` (Windows `%LOCALAPPDATA%`, Linux `$XDG_DATA_HOME`/`~/.local/share`) so portable application replacement and Linux single-file extraction never relocate persistent data. The operator key is **generated once and persisted** to `node.key` (atomic temp-file write, `0600` on non-Windows); a torn/corrupt or wrong-length key **fails loudly** rather than regenerating (regenerating would brick the encrypted DB).
+`DesktopBootstrap` (`Client/Hosting/DesktopBootstrap.cs`) exists because a double-click launch supplies neither a DB connection string nor the operator secret. It targets `Environment.SpecialFolder.LocalApplicationData` (Windows `%LOCALAPPDATA%`, Linux `$XDG_DATA_HOME`/`~/.local/share`) so portable application replacement and Linux single-file extraction never relocate persistent data. The operator key is **generated once and persisted** to `node.key` (atomic temp-file write, `0600` on non-Windows); a torn/corrupt or wrong-length key **fails loudly** rather than regenerating (regenerating would brick the encrypted DB). A freshly generated or legacy raw/DPAPI key is the `pending` state: it is injected as the in-memory operator secret and the first admin setup (or, for a legacy key, the SPA's password-confirm step) replaces the file with the passphrase-wrapped v2 vault, after which the raw key is no longer on disk. The Windows re-wrap of a legacy plaintext key with DPAPI no longer exists. A v2 file injects nothing and starts the locked pre-host (see above). See [Security & Privacy](12-security-and-privacy.md) §2.1.
 
 ### No-orphan shutdown (the load-bearing invariant)
 

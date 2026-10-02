@@ -5,6 +5,44 @@ public sealed record NodeAuthStatusResponse
     public required bool SetupRequired { get; init; }
 
     public required bool Authenticated { get; init; }
+
+    /// <summary>
+    ///     The node vault state: <c>pending</c>, <c>locked</c> or <c>unlocked</c> (see <see cref="NodeAuthVaultStatus" />).
+    ///     An operator-custody secret reports <c>unlocked</c>.
+    /// </summary>
+    public required string Vault { get; init; }
+}
+
+/// <summary>The <c>auth/setup</c> success body.</summary>
+public sealed record NodeSetupResponse
+{
+    /// <summary>The one-time vault recovery code (8 dash-separated base32 groups); <c>null</c> under operator custody.</summary>
+    public string? RecoveryCode { get; init; }
+}
+
+/// <summary>The <c>auth/vault/confirm</c> body: the signed-in admin re-enters the password to wrap a legacy key.</summary>
+public sealed record NodeVaultConfirmRequest
+{
+    public string Password { get; init; } = string.Empty;
+}
+
+public sealed record NodeVaultConfirmResponse
+{
+    public required string RecoveryCode { get; init; }
+}
+
+/// <summary>The locked pre-host's <c>auth/vault/unlock</c> body.</summary>
+public sealed record VaultUnlockRequest
+{
+    public string Password { get; init; } = string.Empty;
+}
+
+/// <summary>The locked pre-host's <c>auth/vault/unlock-recovery</c> body: prove the code, set a new password.</summary>
+public sealed record VaultRecoveryUnlockRequest
+{
+    public string RecoveryCode { get; init; } = string.Empty;
+
+    public string NewPassword { get; init; } = string.Empty;
 }
 
 public sealed record NodeSetupRequest
