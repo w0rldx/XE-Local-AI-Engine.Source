@@ -114,6 +114,7 @@ public sealed class OllamaModelService : IOllamaModelService, IDisposable
         }
         catch
         {
+            // swallowed: availability is a verdict, and any failure to list models means "not available".
             return false;
         }
     }

@@ -4,6 +4,7 @@ import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
+import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import "@/i18n";
@@ -51,6 +52,11 @@ vi.mock("@/features/diagnostics/UseSnapshots", () => ({
 
 import { DiagnosticsPanel } from "@/features/diagnostics/components/DiagnosticsPanel";
 import { testMantineTheme } from "@/test/MantineTestRender";
+import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
+import { setupMswServer } from "@/test/UseMswServer";
+
+// The header reads the node's log level on every render; it is ambient to the snapshot tests, so it is a file default.
+const server = setupMswServer(jsonRoute("get", "diagnostics/log-level", { verbose: false }));
 
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
 	return {
@@ -199,5 +205,25 @@ describe("DiagnosticsPanel", () => {
 		renderPanel(<DiagnosticsPanel />);
 
 		expect(screen.queryByRole("link", { name: "Open GitHub issue" })).toBeNull();
+	});
+
+	it("shows the verbose-logging switch from the node and PUTs the toggled value", async () => {
+		const bodies: unknown[] = [];
+		server.use(
+			http.put(localApiPath("diagnostics/log-level"), async ({ request }) => {
+				bodies.push(await request.json());
+				return HttpResponse.json({ verbose: true });
+			}),
+		);
+
+		renderPanel(<DiagnosticsPanel />);
+
+		const toggle = screen.getByRole("switch", { name: "Verbose logging until restart" });
+		await waitFor(() => expect((toggle as HTMLInputElement).disabled).toBe(false));
+		expect((toggle as HTMLInputElement).checked).toBe(false);
+
+		fireEvent.click(toggle);
+
+		await waitFor(() => expect(bodies).toEqual([{ verbose: true }]));
 	});
 });

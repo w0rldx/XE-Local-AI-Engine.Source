@@ -93,6 +93,7 @@ public sealed class NodeInfoService : INodeInfoService
     private readonly ILlamaServerProcessSupervisor _llamaSupervisor;
     private readonly NodeLaunchContext _launchContext;
     private readonly ILiveMemorySampler _liveMemorySampler;
+    private readonly NodeLogLevelSwitch _logLevel;
     private readonly ILogger<NodeInfoService> _logger;
     private readonly RuntimeResidentsService _residents;
     private readonly INodeSettingsAdministrationService _settings;
@@ -114,6 +115,7 @@ public sealed class NodeInfoService : INodeInfoService
         IOptions<AppUpdateChannelOptions> updateOptions,
         NodeLaunchContext launchContext,
         TimeProvider timeProvider,
+        NodeLogLevelSwitch logLevel,
         ILogger<NodeInfoService> logger)
     {
         ArgumentNullException.ThrowIfNull(hardwareProfiler);
@@ -129,6 +131,7 @@ public sealed class NodeInfoService : INodeInfoService
         ArgumentNullException.ThrowIfNull(updateOptions);
         ArgumentNullException.ThrowIfNull(launchContext);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(logLevel);
         ArgumentNullException.ThrowIfNull(logger);
         _hardwareProfiler = hardwareProfiler;
         _deviceAudit = deviceAudit;
@@ -143,6 +146,7 @@ public sealed class NodeInfoService : INodeInfoService
         _updateOptions = updateOptions;
         _launchContext = launchContext;
         _timeProvider = timeProvider;
+        _logLevel = logLevel;
         _logger = logger;
     }
 
@@ -185,6 +189,7 @@ public sealed class NodeInfoService : INodeInfoService
             RepositoryUrl = options.SourcePolicy?.GitHubRepositoryUrl,
             IsLocalMode = _launchContext.IsLocalMode,
             IsShellOwned = isShellOwned,
+            VerboseLogging = _logLevel.Verbose,
             OsDescription = RuntimeInformation.OSDescription,
             OsArchitecture = RuntimeInformation.OSArchitecture.ToString(),
             ProcessArchitecture = RuntimeInformation.ProcessArchitecture.ToString(),

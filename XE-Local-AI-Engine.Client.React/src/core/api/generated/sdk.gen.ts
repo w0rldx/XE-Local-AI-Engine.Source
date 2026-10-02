@@ -621,6 +621,9 @@ import type {
 	GetLocalModelProxyApiKeyData,
 	GetLocalModelProxyApiKeyErrors,
 	GetLocalModelProxyApiKeyResponses,
+	GetLogLevelData,
+	GetLogLevelErrors,
+	GetLogLevelResponses,
 	GetManagedPythonStatusData,
 	GetManagedPythonStatusErrors,
 	GetManagedPythonStatusResponses,
@@ -1197,6 +1200,9 @@ import type {
 	SetHfTokenData,
 	SetHfTokenErrors,
 	SetHfTokenResponses,
+	SetLogLevelData,
+	SetLogLevelErrors,
+	SetLogLevelResponses,
 	SetMcpServerEnabledData,
 	SetMcpServerEnabledErrors,
 	SetMcpServerEnabledResponses,
@@ -1795,6 +1801,7 @@ import {
 	zGetLocalModelDetailsPath,
 	zGetLocalModelDetailsResponse,
 	zGetLocalModelProxyApiKeyResponse,
+	zGetLogLevelResponse,
 	zGetManagedPythonStatusResponse,
 	zGetMcpServerApiKeyResponse,
 	zGetMcpServerPath,
@@ -2148,6 +2155,8 @@ import {
 	zSetAppUpdateChannelResponse,
 	zSetHfTokenBody,
 	zSetHfTokenResponse,
+	zSetLogLevelBody,
+	zSetLogLevelResponse,
 	zSetMcpServerEnabledBody,
 	zSetMcpServerEnabledPath,
 	zSetMcpServerEnabledResponse,
@@ -7726,6 +7735,70 @@ export const unhandledExceptionProbe = <ThrowOnError extends boolean = false>(
 		],
 		url: "/api/local/v1/diagnostics/exception-probe",
 		...options,
+	});
+
+export const getLogLevel = <ThrowOnError extends boolean = false>(
+	options?: Options<GetLogLevelData, ThrowOnError>,
+): RequestResult<GetLogLevelResponses, GetLogLevelErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetLogLevelResponses, GetLogLevelErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetLogLevelResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/diagnostics/log-level",
+		...options,
+	});
+
+export const setLogLevel = <ThrowOnError extends boolean = false>(
+	options: Options<SetLogLevelData, ThrowOnError>,
+): RequestResult<SetLogLevelResponses, SetLogLevelErrors, ThrowOnError> =>
+	(options.client ?? client).put<SetLogLevelResponses, SetLogLevelErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zSetLogLevelBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zSetLogLevelResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/diagnostics/log-level",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const getNodeInfo = <ThrowOnError extends boolean = false>(

@@ -2572,6 +2572,10 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkf
 	request: z.string().min(0).max(8000).nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsDiagnosticsV1LogLevelResponse = z.object({
+	verbose: z.boolean(),
+});
+
 export const zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoGpuMemoryResponse = z.object({
 	index: z
 		.int()
@@ -2629,6 +2633,7 @@ export const zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoResponse = z.ob
 	repositoryUrl: z.string().nullable(),
 	isLocalMode: z.boolean(),
 	isShellOwned: z.boolean(),
+	verboseLogging: z.boolean(),
 	osDescription: z.string(),
 	osArchitecture: z.string(),
 	processArchitecture: z.string(),
@@ -2654,6 +2659,10 @@ export const zXeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoResponse = z.ob
 	settings: z.record(z.string(), z.string().nullable()).nullable(),
 	uptimeSeconds: z.int(),
 	warnings: z.array(z.string()),
+});
+
+export const zXeLocalAiEngineClientEndpointsDiagnosticsV1SetLogLevelRequest = z.object({
+	verbose: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppApplicationRequest = z.record(z.string(), z.never());
@@ -10040,6 +10049,18 @@ export const zRemoveDevelopmentTemplateResponse = z.void();
  * No Content
  */
 export const zUnhandledExceptionProbeResponse = z.void();
+
+/**
+ * Success
+ */
+export const zGetLogLevelResponse = zXeLocalAiEngineClientEndpointsDiagnosticsV1LogLevelResponse;
+
+export const zSetLogLevelBody = zXeLocalAiEngineClientEndpointsDiagnosticsV1SetLogLevelRequest;
+
+/**
+ * Success
+ */
+export const zSetLogLevelResponse = zXeLocalAiEngineClientEndpointsDiagnosticsV1LogLevelResponse;
 
 /**
  * Success

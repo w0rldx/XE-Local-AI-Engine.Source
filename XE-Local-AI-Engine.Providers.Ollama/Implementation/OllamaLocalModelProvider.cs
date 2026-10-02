@@ -260,6 +260,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
         }
         catch
         {
+            // swallowed: the context length is optional metadata; a failed show call leaves it unknown.
             return null;
         }
     }

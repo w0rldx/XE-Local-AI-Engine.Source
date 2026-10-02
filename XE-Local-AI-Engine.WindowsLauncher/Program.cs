@@ -9,6 +9,7 @@ internal static class Program
     private static int Main(string[] args)
     {
         VelopackApp.Build().Run();
+        StartupDiagnostics.RegisterCrashHooks();
 
 #pragma warning disable MA0045 // Velopack requires a synchronous Main (see above); the async work is awaited here by design.
         return WindowsLauncherApplication.RunAsync(args).GetAwaiter().GetResult();

@@ -64,6 +64,23 @@ public sealed class StartupDiagnosticsTests
     }
 
     [Test]
+    public async Task RecordCrash_AppendsTheContextAndTheException()
+    {
+        var directory = Directory.CreateTempSubdirectory("xe-launcher-crash-").FullName;
+        try
+        {
+            StartupDiagnostics.RecordCrash(directory, "Unobserved task exception", new InvalidOperationException("synthetic-task"));
+
+            var text = await File.ReadAllTextAsync(Path.Combine(directory, "launcher.log"));
+            AssertEx.Contains(text, "Unobserved task exception: System.InvalidOperationException: synthetic-task");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
     public void RecordTo_NeverThrows_OnAnUnusablePath()
     {
         // A path that cannot be created (a file standing where a directory segment must be) must be swallowed: a

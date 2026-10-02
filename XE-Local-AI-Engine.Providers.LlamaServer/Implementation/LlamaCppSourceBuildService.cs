@@ -966,7 +966,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     }
 
     // nvidia-smi compute_cap → whitelisted CUDA architecture list, else the conservative default set. [secMED-1]
-    private static async Task<string> ResolveCudaArchitecturesAsync(IReadOnlyDictionary<string, string> environment, string workDir, CancellationToken ct)
+    private async Task<string> ResolveCudaArchitecturesAsync(IReadOnlyDictionary<string, string> environment, string workDir, CancellationToken ct)
     {
         try
         {
@@ -987,8 +987,9 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            _logger.LogDebug(exception, "nvidia-smi compute-capability query failed; building for the default CUDA architectures.");
             return SourceBuildPolicy.DefaultCudaArchitectures;
         }
     }

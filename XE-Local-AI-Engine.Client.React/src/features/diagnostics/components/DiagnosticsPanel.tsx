@@ -1,11 +1,11 @@
 // Diagnostics panel.
 //
-// Lists locally-stored snapshots (newest first) and drills into a detail view. Header actions cover
-// importing a previously exported bundle, clearing all snapshots and opening a prefilled GitHub issue; each row can be
-// viewed, exported or deleted. Export merges the node's scrubbed server bundle into the snapshot zip. Nothing leaves the
-// machine: the issue button only opens a link, and the operator attaches the zip themselves.
+// Lists locally-stored snapshots (newest first) and drills into a detail view. Header actions cover the session-only
+// verbose-logging switch, importing a previously exported bundle, clearing all snapshots and opening a prefilled GitHub
+// issue; each row can be viewed, exported or deleted. Export merges the node's scrubbed server bundle into the snapshot
+// zip. Nothing leaves the machine: the issue button only opens a link, and the operator attaches the zip themselves.
 
-import { Alert, Badge, Button, FileButton, Group, Loader, Table, Text, Tooltip } from "@mantine/core";
+import { Alert, Badge, Button, FileButton, Group, Loader, Switch, Table, Text, Tooltip } from "@mantine/core";
 import { useMutation } from "@tanstack/react-query";
 import {
 	IconAlertTriangle,
@@ -32,6 +32,7 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { ReportProblemButton } from "@/features/diagnostics/components/ReportProblemButton";
 import { SnapshotDetail } from "@/features/diagnostics/components/SnapshotDetail";
 import { buildIssueUrl } from "@/features/diagnostics/IssueUrl";
+import { useLogLevel, useSetLogLevel } from "@/features/diagnostics/queries/useLogLevel";
 import { useNodeInfo } from "@/features/diagnostics/queries/useNodeInfo";
 import { exportSupportBundle } from "@/features/diagnostics/SupportBundle";
 import { useClearSnapshots, useDeleteSnapshot, useImportSnapshot, useSnapshots } from "@/features/diagnostics/UseSnapshots";
@@ -52,6 +53,8 @@ export function DiagnosticsPanel() {
 	const importSnapshot = useImportSnapshot();
 	const exportBundle = useMutation({ mutationFn: exportSupportBundle });
 	const { data: nodeInfo } = useNodeInfo();
+	const { data: logLevel } = useLogLevel();
+	const setLogLevel = useSetLogLevel();
 	const { confirm } = useConfirm();
 	const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
 
@@ -94,6 +97,19 @@ export function DiagnosticsPanel() {
 				subtitle={t("diagnostics.description")}
 				actions={
 					<>
+						<Tooltip label={t("diagnostics.verboseLoggingHint")} multiline={true} w={280}>
+							<Switch
+								label={t("diagnostics.verboseLogging")}
+								checked={logLevel?.verbose ?? false}
+								disabled={!logLevel || setLogLevel.isPending}
+								onChange={(event) =>
+									setLogLevel.mutate(
+										{ body: { verbose: event.currentTarget.checked } },
+										{ onError: () => toast.error(t("diagnostics.verboseLoggingError")) },
+									)
+								}
+							/>
+						</Tooltip>
 						<ReportProblemButton variant="button" />
 						{issueUrl && (
 							<Tooltip label={t("diagnostics.openIssueTooltip")} multiline={true} w={280}>

@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -27,14 +29,17 @@ public sealed class ChatInvocationStatePump
     private readonly ChatStreamBudgetOptions _options;
     private readonly INodeChatInvocationPump _invocationPump;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<ChatInvocationStatePump> _logger;
 
     public ChatInvocationStatePump(INodeChatInvocationPump invocationPump,
         TimeProvider timeProvider,
-        IOptions<ChatStreamBudgetOptions>? options = null)
+        IOptions<ChatStreamBudgetOptions>? options = null,
+        ILogger<ChatInvocationStatePump>? logger = null)
     {
         _invocationPump = invocationPump;
         _timeProvider = timeProvider;
         _options = options?.Value ?? new ChatStreamBudgetOptions();
+        _logger = logger ?? NullLogger<ChatInvocationStatePump>.Instance;
     }
 
     public async Task PumpAsync(ChannelReader<InvocationState> stateReader,
@@ -270,10 +275,13 @@ public sealed class ChatInvocationStatePump
 
             await eventSink.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            // Swallowed deliberately: nothing more can be persisted or emitted here. The caller rethrows the original
+            // Swallowed after logging: nothing more can be persisted or emitted here. The caller rethrows the original
             // fault so the run is cancelled and the fault surfaced; restart recovery reconciles the row on next launch.
+            _logger.LogWarning(exception,
+                "Could not terminalize the faulted chat stream for conversation {ConversationId}; restart recovery will reconcile the row.",
+                correlation.ConversationId);
         }
     }
 

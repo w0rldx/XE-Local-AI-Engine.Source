@@ -511,6 +511,12 @@ The full exception is logged server-side with method, path, trace id, user id (o
 
 **`traceId` is the W3C trace id everywhere.** Every exception handler that logs uses the W3C trace id (`ProblemDetailsExtensions.ResolveTraceId`, never the connection id): the line's `{TraceId}` equals the problem body's `traceId` and the `[trace:…]` field of the file log. FastEndpoints' own validator 400s do too, because `FastEndpointsProblemWriter.Build` is the host's `ResponseBuilder`. The id a user reads out of an error therefore matches the `[trace:…]` field of the node log line.
 
+### Verbose logging and the silent-catch policy
+
+Turning on verbose logging (`diagnostics/log-level`, Operator policy) widens what the node log records: Debug detail, including for third-party categories without a configured override. Scrubbing is unchanged, so the bundle's `SupportBundleScrubber` still runs over every log entry, but more text means more for the user to skim before attaching. The bundle's `node-info.json` records `verboseLogging`, so a maintainer can see that a log was captured in verbose mode. The switch never outlives the process.
+
+Silent catches follow one policy, kept here because no conventions page owns it: every unfiltered `catch` or `catch (Exception)` carries either a log line or a one-line `// swallowed:` reason. The 2026-10-02 review covered 58 sites, added a log line at 2 and a reason at 5, and found the rest already documented or not a swallow. Narrowing the filter was rejected everywhere, because each candidate was a native callback that must not unwind, a security path that must fail closed, or a `Try*` helper whose callers rely on it never throwing.
+
 ### Support bundle redaction
 
 The support bundle (`diagnostics/support-bundle`, see [Hosting & Deployment](11-hosting-and-deployment.md)) is meant to be attached to a public issue, so `SupportBundleScrubber` runs over every log and `processes/*` entry, line by line with 1 s regex timeouts (a line that times out is dropped whole), and over the free-text values of `node-info.json` (warnings, CPU model, settings values) before that file is serialized. It is idempotent. Dense-token masking skips hex-only runs (trace ids, SHAs), compact timestamps (`20260913T134250067Z`), semantic versions with build metadata and anything directly under a `~`/`<data>` prefix, so those stay readable.

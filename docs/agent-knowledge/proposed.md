@@ -67,3 +67,7 @@ reproductions: the forking `.NET TP Worker` tid and bwrap vanished in the same 1
 ### FastEndpoints validator 400s carried a trace id that never joined the log
 
 **Rule:** FastEndpoints' default `ProblemDetails` `ResponseBuilder` writes `HttpContext.TraceIdentifier` (the Kestrel connection id), not the W3C trace id the log template prints, so any 400 the framework writes itself needs `FastEndpointsProblemWriter.Build` set as `ResponseBuilder` (`UseProblemDetails` in `Program.cs`). **Prevents:** a user quoting the `traceId` of a validation error and no `[trace:…]` log line ever matching it, while handler-written problems did match. **Authority:** `FastEndpointsProblemWriter.Build`, `ProblemDetailsExtensions.ResolveTraceId`; logging checkup 2026-10-02. Target: runtime.md.
+
+### `MinimumLevel.ControlledBy` must come after `ReadFrom.Configuration`
+
+**Rule:** in `ConfigureServices.AddServices`, the Serilog `MinimumLevel.ControlledBy(NodeLogLevelSwitch.Level)` call goes after `ReadFrom.Configuration` and before `ReadFrom.Services`; never reorder it. **Prevents:** the verbose switch silently doing nothing, because the configured `Serilog:MinimumLevel:Default` is applied last and wins over the switch. The configured `Microsoft*`/`System` Warning overrides are unaffected either way, so nothing else breaks and only the switch test notices. **Authority:** break proof in logging scope C (2026-10-02): with `ControlledBy` moved before `ReadFrom.Configuration`, the Debug switch test failed. Target: runtime.md.

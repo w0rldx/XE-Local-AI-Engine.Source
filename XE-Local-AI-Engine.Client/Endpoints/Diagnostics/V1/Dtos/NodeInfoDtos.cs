@@ -29,6 +29,8 @@ public sealed record NodeInfoResponse
 
     public required bool IsShellOwned { get; init; }
 
+    public required bool VerboseLogging { get; init; }
+
     public required string OsDescription { get; init; }
 
     public required string OsArchitecture { get; init; }

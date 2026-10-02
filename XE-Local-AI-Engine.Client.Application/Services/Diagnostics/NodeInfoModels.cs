@@ -32,6 +32,9 @@ public sealed record NodeInfo
 
     public required bool IsShellOwned { get; init; }
 
+    /// <summary>Whether the operator's session-only verbose (Debug) logging switch was on at capture time.</summary>
+    public required bool VerboseLogging { get; init; }
+
     public required string OsDescription { get; init; }
 
     public required string OsArchitecture { get; init; }

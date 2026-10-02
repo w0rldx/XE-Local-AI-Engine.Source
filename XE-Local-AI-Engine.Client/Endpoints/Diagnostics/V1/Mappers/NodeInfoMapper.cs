@@ -18,6 +18,7 @@ internal static class NodeInfoMapper
             RepositoryUrl = info.RepositoryUrl,
             IsLocalMode = info.IsLocalMode,
             IsShellOwned = info.IsShellOwned,
+            VerboseLogging = info.VerboseLogging,
             OsDescription = info.OsDescription,
             OsArchitecture = info.OsArchitecture,
             ProcessArchitecture = info.ProcessArchitecture,

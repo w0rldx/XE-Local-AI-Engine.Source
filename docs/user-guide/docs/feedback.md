@@ -59,6 +59,14 @@ folders, e-mail addresses and token-shaped values are scrubbed automatically. Th
 guarantee: a bare user name or computer name, and text a model process printed (prompts, file names), can
 remain. Open the zip and skim it before attaching it to a public issue.
 
+**If the problem is reproducible**, capture more detail first:
+
+1. On the **Diagnostics** page, turn on **Verbose logging until restart**.
+2. Reproduce the problem.
+3. Export the zip as above.
+
+Verbose logging turns itself off the next time the engine restarts.
+
 If the engine cannot be reached, the export still works but contains only the browser snapshot, and a
 message says so.
 

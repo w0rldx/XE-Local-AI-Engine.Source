@@ -4,6 +4,7 @@ using XE_Local_AI_Engine.Client.Hosting;
 // IMPORTANT: Velopack hook dispatch must be the first executable statement and stay outside the top-level catch, because hook-driven exits must not be
 // logged as startup failures. The Windows distribution uses the adjacent C# launcher as its managed executable locator; Linux and dev keep the default.
 FrameworkDependentVelopackBootstrap.Run(args);
+ProcessCrashHooks.Register();
 
 // Everything above, and the desktop bootstrap inside CreateAppAsync, runs while Log.Logger is still the silent default, so an exception there would be caught
 // but never written to disk — the "flashes then closes, empty logs folder" report. Program.StartupLoggerReady is what routes that window to StartupCrashLog.

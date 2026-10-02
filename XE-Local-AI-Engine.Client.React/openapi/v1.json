@@ -9940,6 +9940,85 @@
         ]
       }
     },
+    "/api/local/v1/diagnostics/log-level": {
+      "get": {
+        "tags": [
+          "Diagnostics"
+        ],
+        "operationId": "getLogLevel",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDiagnosticsV1LogLevelResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Diagnostics"
+        ],
+        "operationId": "setLogLevel",
+        "requestBody": {
+          "x-name": "SetLogLevelRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDiagnosticsV1SetLogLevelRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDiagnosticsV1LogLevelResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/diagnostics/node-info": {
       "get": {
         "tags": [
@@ -33222,6 +33301,18 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsDiagnosticsV1LogLevelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "verbose"
+        ],
+        "properties": {
+          "verbose": {
+            "type": "boolean"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsDiagnosticsV1NodeInfoGpuMemoryResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -33329,6 +33420,7 @@
           "repositoryUrl",
           "isLocalMode",
           "isShellOwned",
+          "verboseLogging",
           "osDescription",
           "osArchitecture",
           "processArchitecture",
@@ -33380,6 +33472,9 @@
             "type": "boolean"
           },
           "isShellOwned": {
+            "type": "boolean"
+          },
+          "verboseLogging": {
             "type": "boolean"
           },
           "osDescription": {
@@ -33554,6 +33649,18 @@
             "nullable": true
           },
           "isValid": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDiagnosticsV1SetLogLevelRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "verbose"
+        ],
+        "properties": {
+          "verbose": {
             "type": "boolean"
           }
         }

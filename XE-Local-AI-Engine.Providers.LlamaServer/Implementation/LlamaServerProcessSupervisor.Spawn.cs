@@ -743,6 +743,7 @@ public sealed partial class LlamaServerProcessSupervisor
         }
         catch (Exception)
         {
+            // swallowed: the hash is optional evidence; a gone process, a denied module read or an unreadable image records none.
             return null;
         }
     }

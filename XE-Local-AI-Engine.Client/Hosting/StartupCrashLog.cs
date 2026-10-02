@@ -83,7 +83,19 @@ internal static class StartupCrashLog
     internal static Task RecordAsync(string context, Exception exception, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        return RecordAsync($"{context}: {exception.GetType().FullName}: {exception.Message}{Environment.NewLine}{exception.StackTrace}",
-            cancellationToken);
+        return RecordAsync(Describe(context, exception), cancellationToken);
     }
+
+    /// <summary>Synchronous form for <c>ProcessCrashHooks</c>: an <c>UnhandledException</c> handler cannot await, and the process
+    ///     ends when it returns. Swallows the same I/O failures as <see cref="RecordToAsync" />.</summary>
+    internal static void Record(string directory, string context, Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+#pragma warning disable MA0045 // Forced sync: the caller is a synchronous AppDomain event handler on a terminating process.
+        RecordToAsync(directory, Describe(context, exception), CancellationToken.None).GetAwaiter().GetResult();
+#pragma warning restore MA0045
+    }
+
+    private static string Describe(string context, Exception exception) =>
+        $"{context}: {exception.GetType().FullName}: {exception.Message}{Environment.NewLine}{exception.StackTrace}";
 }

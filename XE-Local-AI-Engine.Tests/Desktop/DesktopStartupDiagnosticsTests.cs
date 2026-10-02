@@ -28,6 +28,16 @@ public sealed class DesktopStartupDiagnosticsTests
     }
 
     [Test]
+    public async Task RecordCrash_AppendsTheContextAndTheException()
+    {
+        using var directory = new TempDirectory();
+        DesktopStartupDiagnostics.RecordCrash(directory.Path, "Unhandled exception; the process is terminating", new InvalidOperationException("synthetic-crash"));
+
+        var text = await File.ReadAllTextAsync(Path.Combine(directory.Path, "desktop.log"));
+        AssertEx.Contains(text, "Unhandled exception; the process is terminating: System.InvalidOperationException: synthetic-crash");
+    }
+
+    [Test]
     public void ResolveLogDirectory_DefaultsToThePerUserRootTheHostAlreadyLogsInto()
     {
         var expected = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

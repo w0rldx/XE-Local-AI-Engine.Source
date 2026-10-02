@@ -38,6 +38,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.Diagnostics;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Images;
@@ -70,9 +71,14 @@ public static class ConfigureServices
         // Serilog: console always on, a date-rolled file sink under the per-user data dir, and writeToProviders MUST stay true — its false default makes
         // Serilog the terminus and dead-ends every ILogger call before the OTLP exporter. See docs/wiki/11-hosting-and-deployment.md ("Logging and the Data Protection key-ring at registration time").
         var logFileDirectory = LoggerExtensions.ResolveLogFileDirectory(builder.Environment, configuration);
+        // The operator's session-only verbose switch must be applied after the configuration is read, or the configured default level
+        // wins. The configured Microsoft and System overrides keep applying either way.
+        var logLevelSwitch = new NodeLogLevelSwitch(configuration);
+        builder.Services.AddSingleton(logLevelSwitch);
         _ = builder.Services.AddSerilog((serviceCollection, lc) =>
             {
                 _ = lc.ReadFrom.Configuration(configuration)
+                      .MinimumLevel.ControlledBy(logLevelSwitch.Level)
                       .ReadFrom.Services(serviceCollection)
                       .Enrich.FromLogContext()
                       .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate);

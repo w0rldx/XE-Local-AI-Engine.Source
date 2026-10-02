@@ -21,6 +21,7 @@ internal static class Program
             VelopackApp.Build().Run();
         }
 
+        DesktopStartupDiagnostics.RegisterCrashHooks();
         try
         {
             if (DesktopCommandLine.RunsEngine(args))

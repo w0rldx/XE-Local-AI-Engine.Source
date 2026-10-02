@@ -123,7 +123,14 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         if (_linux is not null)
         {
             try { await _linux.RevokeForBlockedNavigationAsync(); }
-            catch (Exception exception) { _ready.TrySetException(exception); }
+            catch (Exception exception)
+            {
+                // Once the window is ready TrySetException is a no-op, so the desktop log is the only record left.
+                if (!_ready.TrySetException(exception))
+                {
+                    DesktopStartupDiagnostics.Record($"Revoking the bridge for a blocked navigation failed ({exception.GetType().Name}). {exception.Message}");
+                }
+            }
         }
 
         if (disposition == NavigationDisposition.External)

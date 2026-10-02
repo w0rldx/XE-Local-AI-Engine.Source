@@ -33,6 +33,29 @@ internal static class StartupDiagnostics
         }
     }
 
+    /// <summary>
+    ///     Hand copy of the Client's <c>ProcessCrashHooks</c> (this project takes no project references): an unhandled
+    ///     exception and an unobserved task exception each append one line here; the task exception is marked observed.
+    /// </summary>
+    internal static void RegisterCrashHooks()
+    {
+        AppDomain.CurrentDomain.UnhandledException += static (_, e) =>
+            RecordCrash(ResolveLogDirectory(Environment.GetEnvironmentVariable("XE_DATA_DIR")), "Unhandled exception; the process is terminating", e.ExceptionObject);
+        TaskScheduler.UnobservedTaskException += static (_, e) =>
+        {
+            e.SetObserved();
+            RecordCrash(ResolveLogDirectory(Environment.GetEnvironmentVariable("XE_DATA_DIR")), "Unobserved task exception", e.Exception);
+        };
+    }
+
+    internal static void RecordCrash(string? directory, string context, object exceptionObject)
+    {
+        if (directory is not null)
+        {
+            RecordTo(directory, $"{context}: {exceptionObject}");
+        }
+    }
+
     internal static string? ResolveLogDirectory(string? configured)
     {
         if (configured is null)

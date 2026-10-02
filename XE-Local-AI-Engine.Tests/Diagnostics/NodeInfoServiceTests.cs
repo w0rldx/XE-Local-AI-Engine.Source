@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Diagnostics;
 
 using System.Reflection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -245,6 +246,7 @@ public sealed class NodeInfoServiceTests
             }),
             new NodeLaunchContext { IsLocalMode = false },
             _clock,
+            new NodeLogLevelSwitch(new ConfigurationBuilder().Build()),
             new RecordingLogger<NodeInfoService>());
     }
 }

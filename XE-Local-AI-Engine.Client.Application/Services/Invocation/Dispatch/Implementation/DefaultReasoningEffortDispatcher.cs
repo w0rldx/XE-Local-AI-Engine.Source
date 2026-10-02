@@ -261,6 +261,7 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
         }
         catch (Exception)
         {
+            // swallowed: fail-soft, a capacity lookup that throws refuses the swap and never fails the turn.
             return SwapResolution.Refused(ReasoningDispatchReasons.FastModelUnavailable);
         }
     }

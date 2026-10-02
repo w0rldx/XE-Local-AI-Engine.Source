@@ -214,6 +214,7 @@ import {
 	getLlamaCppSourceBuildStatus,
 	getLocalModelDetails,
 	getLocalModelProxyApiKey,
+	getLogLevel,
 	getManagedPythonStatus,
 	getMcpServer,
 	getMcpServerApiKey,
@@ -407,6 +408,7 @@ import {
 	sendGraphWorkflowChatMessage,
 	setAppUpdateChannel,
 	setHfToken,
+	setLogLevel,
 	setMcpServerEnabled,
 	setNodeChatConversationMemoryExcluded,
 	setNodeChatMessageFeedback,
@@ -970,6 +972,8 @@ import type {
 	GetLocalModelDetailsResponse,
 	GetLocalModelProxyApiKeyData,
 	GetLocalModelProxyApiKeyResponse,
+	GetLogLevelData,
+	GetLogLevelResponse,
 	GetManagedPythonStatusData,
 	GetManagedPythonStatusResponse,
 	GetMcpServerApiKeyData,
@@ -1434,6 +1438,8 @@ import type {
 	SetAppUpdateChannelResponse,
 	SetHfTokenData,
 	SetHfTokenResponse,
+	SetLogLevelData,
+	SetLogLevelResponse,
 	SetMcpServerEnabledData,
 	SetMcpServerEnabledResponse,
 	SetNodeChatConversationMemoryExcludedData,
@@ -5550,6 +5556,38 @@ export const unhandledExceptionProbeMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await unhandledExceptionProbe({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getLogLevelQueryKey = (options?: Options<GetLogLevelData>) => createQueryKey("getLogLevel", options);
+
+export const getLogLevelOptions = (options?: Options<GetLogLevelData>) =>
+	queryOptions<GetLogLevelResponse, AxiosError<DefaultError>, GetLogLevelResponse, ReturnType<typeof getLogLevelQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getLogLevel({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getLogLevelQueryKey(options),
+	});
+
+export const setLogLevelMutation = (
+	options?: Partial<Options<SetLogLevelData>>,
+): UseMutationOptions<SetLogLevelResponse, AxiosError<DefaultError>, Options<SetLogLevelData>> => {
+	const mutationOptions: UseMutationOptions<SetLogLevelResponse, AxiosError<DefaultError>, Options<SetLogLevelData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await setLogLevel({
 				...options,
 				...fnOptions,
 				throwOnError: true,

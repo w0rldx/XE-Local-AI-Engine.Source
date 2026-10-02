@@ -2311,6 +2311,10 @@ export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflo
 	request?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsDiagnosticsV1LogLevelResponse = {
+	verbose: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoGpuMemoryResponse = {
 	index: number;
 	totalVramBytes: number;
@@ -2347,6 +2351,7 @@ export type XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoResponse = {
 	repositoryUrl: string | null;
 	isLocalMode: boolean;
 	isShellOwned: boolean;
+	verboseLogging: boolean;
 	osDescription: string;
 	osArchitecture: string;
 	processArchitecture: string;
@@ -2388,6 +2393,10 @@ export type XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoRuntimeResponse =
 	installedAtUtc: string;
 	sourceCommit: string | null;
 	isValid: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsDiagnosticsV1SetLogLevelRequest = {
+	verbose: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppApplicationRequest = {
@@ -12474,6 +12483,60 @@ export type UnhandledExceptionProbeResponses = {
 };
 
 export type UnhandledExceptionProbeResponse = UnhandledExceptionProbeResponses[keyof UnhandledExceptionProbeResponses];
+
+export type GetLogLevelData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/diagnostics/log-level";
+};
+
+export type GetLogLevelErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetLogLevelResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDiagnosticsV1LogLevelResponse;
+};
+
+export type GetLogLevelResponse = GetLogLevelResponses[keyof GetLogLevelResponses];
+
+export type SetLogLevelData = {
+	body: XeLocalAiEngineClientEndpointsDiagnosticsV1SetLogLevelRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/diagnostics/log-level";
+};
+
+export type SetLogLevelErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type SetLogLevelResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDiagnosticsV1LogLevelResponse;
+};
+
+export type SetLogLevelResponse = SetLogLevelResponses[keyof SetLogLevelResponses];
 
 export type GetNodeInfoData = {
 	body?: never;

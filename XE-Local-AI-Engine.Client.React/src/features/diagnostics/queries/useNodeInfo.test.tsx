@@ -43,6 +43,7 @@ const nodeInfo: XeLocalAiEngineClientEndpointsDiagnosticsV1NodeInfoResponse = {
 	runningModels: null,
 	settings: null,
 	uptimeSeconds: 42,
+	verboseLogging: false,
 	warnings: [],
 };
 

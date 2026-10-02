@@ -345,6 +345,7 @@ public sealed partial class LlamaCppBinaryManager
         }
         catch (Exception)
         {
+            // swallowed: a device listing that cannot run is a failed self-check, not a crash.
             return false;
         }
         finally
