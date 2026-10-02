@@ -1,6 +1,6 @@
 # Architecture Overview
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 XE Local AI Engine (product name **XE AI-Engine**) is a self-contained local AI node: a single ASP.NET Core process
 (`XE-Local-AI-Engine.Client`) that hosts the React management UI, serves local APIs and SignalR hubs,
@@ -47,9 +47,15 @@ loop, and the model runtime supervisor — lives inside the `XE-Local-AI-Engine.
 | React management UI (one directory per feature) | `XE-Local-AI-Engine.Client.React` | `Client.React/src/features/` |
 | Dev orchestration only | `XE-Local-AI-Engine.AppHost` | `AppHost/AppHost.cs` |
 | Packaged Windows bootstrap | `XE-Local-AI-Engine.WindowsLauncher` | `WindowsLauncherApplication.RunAsync`; hands off to the `Client` host after Velopack lifecycle handling |
+| Native desktop shell (Avalonia window over the SPA) | `XE-Local-AI-Engine.Desktop` | `DesktopEngineSession.cs`, `DesktopCommandLine.cs`; talks to the engine over REST/SignalR only |
+| Local speech-to-text runtime (`whisper-server`) | `XE-Local-AI-Engine.Providers.WhisperCpp` | `WhisperCppServiceCollectionExtensions.cs`, `WhisperCppReleasePins.cs` |
+| Operator-declared OpenAI-compatible providers | `XE-Local-AI-Engine.Providers.OpenAICompat` (+ leaf `Providers.OpenAICompatible.Core`) | `ExternalOpenAiModelProviderServiceCollectionExtensions.cs`, `OpenAICompatibleClientFactory.cs` |
+| Shared managed Python (pinned uv) | `XE-Local-AI-Engine.Providers.Python` | `ManagedPythonToolchain.cs`, `ManagedPythonPins.cs` |
+| Shared child-process containment | `XE-Local-AI-Engine.Providers.ProcessSupervision` | `StaleProcessReaper.cs`, `LinuxProcessGroupHandle.cs`, `WindowsJobObjectProcessHandle.cs` |
+| Training runtime | `XE-Local-AI-Engine.Providers.Training` | `TrainingServiceCollectionExtensions.cs`, `TrainingRuntimePins.cs` |
 
 > Aspire (`AppHost.cs`) is a **development-only** orchestrator (`app` project + Vite `client-react` + a
-> dev SQLite resource). It is not part of the shipped runtime — production/desktop launches the `Client` host directly on non-Windows packages; the packaged Windows path enters through `WindowsLauncher`, which then starts `Client`. See [Hosting & Deployment](11-hosting-and-deployment.md). For the full project inventory see
+> dev SQLite resource). It is not part of the shipped runtime — packaged Windows and Ubuntu launches default to the `XE-Local-AI-Engine.Desktop` shell, which attaches to or starts the `Client` host (`DesktopEngineSession`); the packaged Windows path enters through `WindowsLauncher` first, and `--browser`/`--headless` bypass the native window. See [Hosting & Deployment](11-hosting-and-deployment.md). For the full project inventory see
 > [Project Layout](02-project-layout.md).
 
 ---
@@ -59,7 +65,9 @@ loop, and the model runtime supervisor — lives inside the `XE-Local-AI-Engine.
 The node holds **no outbound control connection at all**. Every inbound surface is loopback-bound
 (`/api/local/v1`, the SignalR hubs, the inbound MCP server), and the only traffic that leaves the machine
 is what an operator configured a feature to fetch: a model download, an operator-declared cloud or
-OpenAI-compatible provider, an operator-registered MCP server.
+OpenAI-compatible provider, an operator-registered MCP server, web search and page fetches once the operator
+turns on Web access, and update checks on the shipped update channel. The full table is in
+[Security & Privacy §1](12-security-and-privacy.md#1-egress-invariant-the-node-has-no-control-plane-channel).
 
 An earlier design paired the node with a central platform over an outbound `WorkerHub` SignalR
 connection, with device binding, a token refresh loop, an auto-connect hosted service and
@@ -313,7 +321,7 @@ re-selects local vs cloud and the target llama-server process by `ChatOptions.Mo
 is the optional secondary runtime and the shipped default model is a GGUF, so a name with no map row — a
 pre-existing GGUF install, or a registry/map divergence — still routes to llama.cpp. Genuine Ollama models are
 mapped to `ollama` at pull time by the symmetric upsert on the Ollama pull endpoints, and a model pulled before
-that upsert existed is repaired once at startup by `OllamaProviderMapBackfill`, so the default only ever governs
+that upsert existed is repaired once at startup by `OllamaProviderMapBackfillService` (`OllamaProviderMapBackfillCoordinator`), so the default only ever governs
 truly unmapped names. The resolver constructor validates that its default provider is registered, and `llamacpp`
 always is. The supervisor's loaded-cap is surfaced through the same resolver for the preview reject-at-start check.
 See [Chat](05-chat.md) and [Agent Mode](04-agent-mode.md).
@@ -348,7 +356,8 @@ A maintainer must preserve these. Each is enforced or anchored in code today:
 
 1. **No control-plane link.** The node opens no outbound connection to a control plane. Outbound traffic
    exists only where an operator configured a feature to fetch something (model downloads, a declared
-   cloud or OpenAI-compatible provider, a registered MCP server).
+   cloud or OpenAI-compatible provider, a registered MCP server, operator-enabled web search/fetch, update
+   checks); see [Security & Privacy §1](12-security-and-privacy.md#1-egress-invariant-the-node-has-no-control-plane-channel).
 2. **Secrets stay local.** Worker creds, cloud-provider creds, and HMAC/endpoint tokens are never
    returned to the browser and never logged (request-log query redaction in `Program.cs`,
    `AccessTokenQueryRedactor`). See [Security & Privacy](12-security-and-privacy.md).
@@ -394,13 +403,22 @@ A maintainer must preserve these. Each is enforced or anchored in code today:
 
 ## Startup sequence (host boot order)
 
-From `Client/Program.cs`, the host performs a deterministic startup before serving traffic:
+From `Client/Program.cs` (`CreateAppCoreAsync`) and its partials — `Program.Vault.cs` (vault unlock),
+`Program.Startup.cs` (migrations and startup recovery), `Program.Commands.cs` (one-shot operator commands such as
+`--status` and the admin-password reset) and `Program.Logging.cs` (request logging) — the host performs a
+deterministic startup before serving traffic:
 
-1. Resolve desktop mode (opt-in), optionally bind loopback + fill per-user data config.
-2. `AddServiceDefaults()` (Aspire/OTel) + `AddServices()` (the whole node — see `ConfigureServices.cs`).
-3. Apply EF migrations: node chat DB, then node identity DB; recover interrupted chat messages; reconcile
+1. Resolve desktop mode (opt-in), optionally bind loopback + fill per-user data config
+   (`DesktopBootstrap.EnsureLocalDataConfiguration`).
+2. Unlock the vault: when `node.key` is the passphrase-wrapped vault
+   ([ADR 0018](../adr/0018-local-vault-passphrase-wrapped-node-key.md)), `UnlockVaultAsync` unwraps it before any
+   service is built, from a supplied password or recovery code or by serving the `VaultUnlockHost` pre-host unlock
+   page until the operator unlocks. See [Security & Privacy](12-security-and-privacy.md).
+3. `AddServiceDefaults()` (Aspire/OTel) + `AddServices()` (the whole node — see `ConfigureServices.cs`) +
+   `AddAppUpdate()` (desktop-mode self-update only).
+4. Apply EF migrations: node chat DB, then node identity DB; recover interrupted chat messages; reconcile
    stale scheduled runs; activate the invocation resume registry; register the worker shutdown drain.
-4. Build the HTTP pipeline: exception handler (RFC7807), HTTPS/HSTS (skipped in desktop), antiforgery,
+5. Build the HTTP pipeline: exception handler (RFC7807), HTTPS/HSTS (skipped in desktop), antiforgery,
    static files, health checks, `LocalApiSecurityMiddleware`, auth, FastEndpoints, hubs, (dev) Scalar, SPA fallback.
 
 Persistence specifics (selected per-column encryption, the migrations under
@@ -417,6 +435,8 @@ Persistence specifics (selected per-column encryption, the migrations under
 - Chat send path, streaming, per-send routing: [Chat](05-chat.md)
 - Scheduler (Quartz) and model-fit advisor: [Scheduler](06-scheduler.md), [Model Fit](07-model-fit.md)
 - The full project inventory and folder conventions: [Project Layout](02-project-layout.md)
+- Sandboxed code execution, benchmarks, graph workflows, External Apps, transcription and Dev Workflows:
+  pages 19–25 below
 
 ---
 
@@ -440,4 +460,11 @@ Persistence specifics (selected per-column encryption, the migrations under
 - [Code Organization Conventions](16-code-conventions.md)
 - [Writing Tests](17-writing-tests.md)
 - [Training](18-training.md)
+- [Compute Tools](19-compute-tools.md)
+- [Benchmarks](20-benchmarks.md)
+- [Graph Workflows](21-graph-workflows.md)
+- [Workflow Engines Divergence Register](22-workflow-engines-divergence-register.md)
+- [External Apps](23-external-apps.md)
+- [Audio Transcription](24-audio-transcription.md)
+- [Dev Workflows](25-dev-workflows.md)
 - ADRs: [0001 — Development Mode restart recovery](../adr/0001-development-mode-restart-recovery.md), [0002 — Development cloud-egress carrier](../adr/0002-development-cloud-egress-carrier.md), [0003 — Six-plan implementation scope](../adr/0003-six-plan-operator-decisions.md), [0004 — Development Mode container execution](../adr/0004-development-mode-container-execution-docker-stopgap.md), [0005 — Training runtime Python exclusivity](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md)

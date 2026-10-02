@@ -76,8 +76,12 @@ you to guess.*
 
 A graphics card is **optional**. Without one the app still works; answers just arrive more slowly.
 
-> **Windows prerequisite:** install the x64 ASP.NET Core Runtime 10.0.11 or a newer .NET 10 servicing patch. The
+> **Windows prerequisite:** install the x64 ASP.NET Core Runtime 10.0.12 or a newer .NET 10 servicing patch. The
 > Windows Portable ZIP does not bundle .NET. Linux remains self-contained and needs no system .NET installation.
+
+> **Windows prerequisite:** install the Microsoft Edge **WebView2 Evergreen Runtime** as well. The app's own window
+> is built on it, and the app does not download it for you. Without it the window cannot open; starting the app with
+> `--browser` opens it in your web browser instead.
 
 > **Windows and Linux, both x64.** Both official downloads are portable Velopack applications and can update
 > themselves. Windows ships as a Portable ZIP; Linux ships as an AppImage. There is no macOS or ARM build.
@@ -98,7 +102,7 @@ page instead. This is the single most common mistake.
 You will see a list like this:
 
 ```
-▼ Assets                                                    7
+▼ Assets
 
    XE-Local-AI-Engine-win-Portable.zip                  ✅ WINDOWS — download this
    XE-Local-AI-Engine-<version>-linux.AppImage       ✅ LINUX — download the .AppImage
@@ -106,6 +110,7 @@ You will see a list like this:
    XE-Local-AI-Engine-<version>-delta.nupkg          ❌ updater file; ignore
    XE-Local-AI-Engine-<version>-full.nupkg           ❌ updater file; ignore
    releases.win.json / releases.linux.json           ❌ updater feeds; ignore
+   RELEASE-MANIFEST.json / RELEASE.spdx.json         ❌ release records; ignore
 
    Source code (zip)                                       ❌ ignore
    Source code (tar.gz)                                    ❌ ignore
@@ -169,6 +174,12 @@ Everything below runs **on your own machine** unless you deliberately connect an
   on AMD/Intel under Windows yet, so advice there is less precise.)*
 - **Documents & knowledge bases** — add your own files, or index a Git repository, and ask questions
   about them
+- **Its own app window** — on Windows and Linux the app opens in a native window rather than a browser
+  tab. On Windows, the first time you close it, it asks whether to exit or keep running in the tray
+- **Memory at a glance** — the top bar shows how much RAM and graphics memory (VRAM) is in use and which
+  models are loaded, and lets you eject one
+- **Updates you choose** — pick **Stable** (released versions only), **Preview** (also release candidates)
+  or **Development** (also daily test builds) on the **About** page. [Details →](docs/updating.md)
 
 </details>
 
@@ -182,6 +193,9 @@ Everything below runs **on your own machine** unless you deliberately connect an
   Candidates go through a **best-effort scan for things that look like secrets** first — pattern-based,
   so treat it as a safety net rather than a guarantee
 - **MCP servers** — connect external tool servers to your agents
+- **Web search and page fetching** — let a model search the web (DuckDuckGo, or your own SearXNG) and
+  read public pages. Off by default; when on, the app asks you before each request is sent and shows you
+  what came back before the model reads it
 - **Agentic Support** — let a trusted same-machine external agent install and operate the node over
   its loopback-only inbound MCP server. The restricted `delegate` key exposes 8 shared tools; the
   `agentic` key additionally exposes the administration tools listed in the shipped
@@ -209,7 +223,8 @@ Everything below runs **on your own machine** unless you deliberately connect an
   score the result against the original on held-back samples. **Linux with an NVIDIA graphics card
   only**, and a run takes the whole GPU while it works.
 - **Graph Workflows** — draw a workflow as a diagram (agent steps, tool calls, conditions, and a step
-  that waits for your approval), then start runs of it and follow each one
+  that waits for your approval), then start runs of it and follow each one. A **Chat workflow** runs
+  inside a conversation: pick it in Chat and it may ask you questions as it goes
 - **Audio transcription** — local speech-to-text with whisper.cpp: upload a recording, or transcribe
   a microphone or shared-screen audio live in the browser. The audio is never stored
 - **Read answers aloud** — text-to-speech through voices exposed by your browser and operating system.
@@ -244,6 +259,10 @@ read these before you start, so nothing comes as a surprise:
 - **Expect rough edges.** This is early, actively-developed software.
 - **Your database is not fully encrypted.** Sensitive fields are individually encrypted, but extracted
   document text is not. [Details →](docs/privacy-and-data.md)
+- **Your password unlocks your data — don't lose both it and the recovery code.** The key that encrypts
+  your data is protected by your admin password, so the app asks for it every time it starts. Setup shows
+  a one-time recovery code for a forgotten password. **Lose both and the data cannot be recovered**, by
+  anyone. [Details →](docs/faq.md#i-see-an-unlock-this-node-page)
 - **Keep backups of anything you care about.** Do not make this app the only place important data lives.
 
 ---

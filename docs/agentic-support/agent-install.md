@@ -10,7 +10,7 @@ from the in-app skills assigned to saved agents.
 - Windows x64 or Linux x64. macOS and ARM release assets are not shipped.
 - Linux: `curl`, `jq`, `sha256sum`, and Python 3 when `--install-skill` is used. FUSE is preferred;
   a real AppImage launch failure is retried with `APPIMAGE_EXTRACT_AND_RUN=1`.
-- Windows: x64 ASP.NET Core Runtime 10.0.11 or a newer .NET 10 servicing patch. The installer checks
+- Windows: x64 ASP.NET Core Runtime 10.0.12 or a newer .NET 10 servicing patch. The installer checks
   it and prints the official download URL plus a non-authoritative `winget` hint; it never elevates.
 - A secret store for the administrator password and one-time `xemcp_...` key.
 
@@ -63,7 +63,7 @@ Piped Bash and PowerShell installs have no usable prompt input. Set `XE_ADMIN_EM
 
 The password reaches the engine only through `XE_ADMIN_PASSWORD`, never argv. Existing setup is an
 idempotent success and prints `XE_SETUP=already-configured`; it does not compare or change the
-existing credentials. Because the node key is wrapped by the admin password (ADR 0018), a re-run must pass the
+existing credentials. Because the node key is wrapped by the admin password (design record ADR 0018, status Proposed), a re-run must pass the
 **original** `XE_ADMIN_PASSWORD`: a password that does not unlock the key makes `--setup` (and `--mcp-key`) exit 5
 with "The admin password does not unlock this node's key." instead of reporting `already-configured`. A new setup
 prints:
@@ -112,14 +112,20 @@ Use the installed executable while the app is stopped:
 ```text
 --setup [--admin-email <email>] [--admin-password-stdin]
 --mcp-key <delegate|agentic>
+--reset-admin-password <new-password> [--recovery-code-stdin]
 --status [--json]
 --mcp-only [--port <1-65535>]
---desktop [--no-browser] [--port <1-65535>]
+--desktop | --browser | --headless [--no-browser] [--port <1-65535>]
 ```
 
-`--admin-password <value>` exists for interactive compatibility but exposes the value in process
-listings; automation must use `XE_ADMIN_PASSWORD` or `--admin-password-stdin`. One-shot commands exit
-instead of starting the web host unless `--mcp-only` or `--desktop` is explicitly present.
+`--help` prints the full list. `--browser` serves the engine and opens a browser instead of the native shell;
+`--headless` serves it with no UI. `--admin-password <value>` exists for interactive compatibility but exposes the
+value in process listings; automation must use `XE_ADMIN_PASSWORD` or `--admin-password-stdin`. One-shot commands exit
+instead of starting the web host unless a serve mode is explicitly present.
+
+On a locked node, `--mcp-key` reads the admin password from `XE_ADMIN_PASSWORD` or `--admin-password-stdin`, and
+`--reset-admin-password` needs the recovery code as one stdin line with `--recovery-code-stdin`; a missing or wrong
+secret exits 5 and changes nothing. The recovery code never goes on argv.
 
 There is one inbound key row. `--mcp-key delegate` or `--mcp-key agentic` atomically replaces the
 previous key, prints one `XE_MCP_KEY=` line, and invalidates every client still using the old value.

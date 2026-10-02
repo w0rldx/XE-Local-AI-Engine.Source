@@ -32,9 +32,9 @@ Paste that into the File Explorer address bar to open it.
 | Inside | What it is |
 |---|---|
 | `node.sqlite` | Your account, chats, agents, settings |
-| `node.key` | The encryption key for the sensitive fields |
+| `node.key` | The encryption key for the sensitive fields, locked with your admin password and recovery code |
 | `models/` | Downloaded AI models (usually the bulk of the size) |
-| `llama.cpp/`, `stable-diffusion.cpp/` | The downloaded engines |
+| `llama.cpp/`, `stable-diffusion.cpp/`, `whisper.cpp/` | The downloaded engines |
 | `logs/` | Log files |
 
 This folder is **separate from the app folder**, which is why updating never touches your data and
@@ -94,13 +94,22 @@ That closes the gap properly, and is good practice regardless.
 > `node.sqlite`; removing it without the database leaves your chats permanently unreadable. Deleting
 > both together is a clean reset and is fine.
 
-> ### ⚠️ Your backup only works on this machine, under this Windows account
+> ### Your password locks the key
 >
-> On Windows, `node.key` is itself protected with **DPAPI, tied to your Windows user account**. That is
-> a real security benefit — it is why someone who walks off with your hard drive still cannot read your
-> chats.
+> `node.key` does not hold the key in readable form. On Windows and Linux alike it is locked with your
+> **admin password**, and separately with the one-time **recovery code** shown at setup. A stolen disk
+> or a copied data folder therefore does not reveal your chats without one of them. That is also why
+> the app asks for your password every time it starts.
 >
-> But it also means a copy of the data folder **will not open**:
+> **Lose both the password and the recovery code, and the data cannot be recovered** — by anyone.
+>
+> This protects the key while the app is stopped. While the app is running and unlocked, another
+> program running as your user can still read the app's memory.
+
+> ### ⚠️ On Windows, a backup only works under this Windows account
+>
+> Windows also ties part of the app's key store (the part that protects sign-in tokens for connected
+> services) to your **Windows user account**. A copy of the data folder therefore **will not open**:
 >
 > - under a different Windows account
 > - on a different PC
@@ -110,21 +119,13 @@ That closes the gap properly, and is good practice regardless.
 > *same-machine, same-account rollback only*. If you need conversations you can carry elsewhere, copy
 > the text out instead.
 
-> ### On Linux, `node.key` is protected differently — and more weakly
+> ### On Linux, a data-folder copy does move
 >
-> There is no DPAPI equivalent, so on Linux `node.key` is written as **plain key bytes**, with file
-> permissions restricted to your user only (`0600`). The app does not yet use a system keyring.
+> On Linux the same folder opens on another machine or under another account, once you enter the admin
+> password or the recovery code. The files are also restricted to your user only (`0600`).
 >
-> Both directions of that trade-off are real:
->
-> - **A data-folder copy does move.** Unlike Windows, the same folder will open on another Linux
->   machine or under another account, because the key travels with it.
-> - **Anything that can read the file can read your data.** That includes another process running as
->   your user, a backup tool, or anyone who takes the disk. On Windows the DPAPI wrap makes the stolen
->   disk useless; on Linux it doesn't.
->
-> **Full-disk encryption is doing more work on Linux than it is on Windows.** If the data matters,
-> turn it on.
+> Extracted knowledge-base text is still stored unencrypted on both systems. **If the data matters,
+> turn on full-disk encryption.**
 
 ---
 

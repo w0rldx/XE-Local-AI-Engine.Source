@@ -1,6 +1,6 @@
 # Agent Mode & the AI Agent Runtime
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 Agent Mode is XE Local AI Engine's governed agentic layer. It is split across two assemblies:
 `XE-Local-AI-Engine.AI.Agent` owns the Microsoft Agent Framework (MAF) / `Microsoft.Extensions.AI`
@@ -19,18 +19,22 @@ references MAF workflow primitives directly.
 ### 1.1 `AddLocalAiAgentRuntime` — the composition root
 
 `AgentServiceCollectionExtensions.AddLocalAiAgentRuntime` is the single registration entry point
-(`XE-Local-AI-Engine.AI.Agent/DependencyInjection/AgentServiceCollectionExtensions.cs`). It does
-five things, in order:
+(`XE-Local-AI-Engine.AI.Agent/DependencyInjection/AgentServiceCollectionExtensions.cs`). In order, it:
 
 1. **Binds + validates options** — `LocalChatAgentOptions`, `InvocationAgentOptions`,
-   `OrchestrationAgentOptions`, each `Bind` → `ValidateDataAnnotations` → `ValidateOnStart`, with a
-   dedicated `IValidateOptions<>` validator (`Configuration/Validation/*Validator.cs`). The root config
-   key is `"Agent"` (`AgentRuntimeOptions.Section`).
+   `OrchestrationAgentOptions`, `AgentToolPipelineOptions`, `ProviderCallBudgetOptions` and
+   `ToolRelevanceOptions`, each `Bind` → `ValidateDataAnnotations` → `ValidateOnStart`, plus
+   `AgentTelemetryOptions` (`Bind` → `ValidateOnStart`). The first four have a dedicated `IValidateOptions<>`
+   validator (`Configuration/Validation/*Validator.cs`). The root config key is `"Agent"`
+   (`AgentRuntimeOptions.Section`).
 2. **Decorates the `IChatClient` pipeline** via `DecorateChatClientPipeline` (see §1.2). The host
-   **must** register a base `IChatClient` *before* calling this method — the decorator wraps it.
-3. **Registers the three in-memory tool registries** as singletons (see §1.3):
+   **must** register a base `IChatClient` *before* calling this method — the decorator wraps it. The
+   pipeline also registers `ITokenEstimatorCalibrationStore` (`TryAddSingleton`).
+3. **Registers the instruction provider and the three in-memory tool registries** as singletons (see §1.3):
+   `IAgentInstructionProvider → AgentInstructionProvider`,
    `IAgentToolRegistry → LocalAgentToolRegistry`, `IClientLocalToolRegistry → ClientLocalToolRegistry`,
-   `IMcpToolRegistry → McpToolRegistry`.
+   `IMcpToolRegistry → McpToolRegistry`, plus `TryAddSingleton` floors the node composition root replaces:
+   `IToolApprovalPolicy → PermissiveToolApprovalPolicy` and `IToolRelevanceSelector → LexicalToolRelevanceSelector`.
 4. **Registers the agent factories** — `IInvocationAgentFactory → InvocationAgentFactory` (single
    agent) and `IOrchestrationAgentFactory → OrchestrationAgentFactory` (multi-agent handoff).
 5. **Registers the gated runner** — `IPlaybookEvalAgentRunner → MafPlaybookEvalAgentRunner` (golden
@@ -593,7 +597,7 @@ approval-required tool from their offer before execution. See [Scheduler](06-sch
 `InvocationAgentFactory.CreateAsync` (`Invocation/Implementation/InvocationAgentFactory.cs`) builds
 an `InvocationAgentContext` from an `InvocationAgentDefinition`. It:
 
-- resolves executable tools from the registries and custom-tool catalog (`ResolveExecutableTools`),
+- resolves executable tools from the registries and custom-tool catalog (`ResolveExecutableToolsAsync`),
 - builds the `ChatClientAgent` (`BuildAgent`) with resolved skills (MAF progressive disclosure),
 - builds seed messages (`BuildSeedMessages` — a leading `System(instructions)` message), and
 - assembles a `ChatOptions` carrying `ModelId` and a reasoning `think` option computed from the
@@ -666,7 +670,7 @@ kept — with temperature accepted in `[0, 2]` and the penalties in `[-2, 2]` (t
 `-1`, which is Ollama's "random seed" sentinel.
 
 Those shared keys reach **both** runtimes. OllamaSharp's `AbstractionMapper` maps all four onto the Ollama
-wire (verified against the installed OllamaSharp 5.4.25 assembly), and
+wire (verified against the installed OllamaSharp assembly; the pin is in `Directory.Packages.props`), and
 `DeferredLlamaServerChatClient.ApplySamplingPassthrough` patches `min_p`, `repeat_penalty` and
 `repeat_last_n` — plus the strongly-typed `TopK`, which the MEAI OpenAI adapter drops — onto the outbound
 llama-server body. `num_ctx` is deliberately **not** sent to llama-server, whose window is fixed at process
@@ -1876,9 +1880,10 @@ is the operator's own text and the one instruction in the block meant to be foll
 #### The transcript bound at the step boundary
 
 Rebuilding the state block bounds what the model *needs*; it does not bound what the send path *sends*.
-A step is an ordinary chat turn, so `BuildConversationContext` replays every earlier step's state block,
-answer and **reasoning** verbatim (tool calls and results are not replayed — they live in ordered parts,
-never in `Content`), and the transcript grows for the life of the session. Meanwhile the step's own tool
+A step is an ordinary chat turn, so `ConversationContextBuilder.Build` replays every earlier step's state block,
+answer and **reasoning** verbatim (tool calls and results live in ordered parts, never in `Content`, and replay
+only as excerpts capped at `ConversationContextBudgetOptions.DefaultHistoricalToolResultExcerptChars`, and only
+when the turn stays node-local or `KnowledgeBaseOptions.AllowCloudModelAccess` is on — `NodeChatStreamService.AreAttachmentsAllowed`), and the transcript grows for the life of the session. Meanwhile the step's own tool
 loop is the expensive half: one `read_document` result is capped at 50,000 characters — some 16k tokens —
 and `Agent:ToolPipeline:MaxToolResultCharacters` (65,536) is larger than that cap, so nothing clips it.
 

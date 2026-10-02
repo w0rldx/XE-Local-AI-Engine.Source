@@ -43,9 +43,16 @@ Canonical `<data-dir>/ready.json` contains `version`, `url`, `mcpUrl`, `dataDir`
 `startedAtUtc`. Require its PID to be live and `<url>/health/ready` to return 200. `--status --json`
 provides a later one-shot check and exits 0 only for a live healthy process.
 
+The node key is wrapped by the admin password, so every start is **locked** until it is unlocked. A locked node
+still prints `XE_READY` and answers readiness, but serves only the unlock page: the MCP endpoint answers `503`
+and `--status --json` reports `"vault":"locked"`. Start MCP-only mode with the password in `XE_ADMIN_PASSWORD` or on
+stdin with `--admin-password-stdin` to come up unlocked (a wrong password exits 5), or enter it in a browser at
+`XE_URL`.
+
 ## 3. Mint or rotate the key
 
-With the app stopped:
+With the app stopped, and the admin password in `XE_ADMIN_PASSWORD` or piped on stdin with
+`--admin-password-stdin` (the command unlocks the node key with it):
 
 ```bash
 /path/to/XE-Local-AI-Engine.Client --mcp-key delegate
@@ -53,7 +60,9 @@ With the app stopped:
 ```
 
 On Windows invoke `XE-Local-AI-Engine.exe` with the same arguments. The command prints exactly one
-`XE_MCP_KEY=xemcp_...` line. Store the value in a secret manager and never log it.
+`XE_MCP_KEY=xemcp_...` line. Store the value in a secret manager and never log it. Without the password, or with a
+wrong one, it prints "This node's key is locked. …" or "The admin password does not unlock this node's key." and
+exits 5 without minting a key.
 
 With the app running, an Operator can instead `POST /api/local/v1/mcp/server-key` with JSON
 `{"scope":"delegate"}` or `{"scope":"agentic"}`. A body-less POST remains the delegate-compatible
@@ -299,6 +308,7 @@ or Tailscale path separately; the engine still authenticates the MCP bearer key.
 | symptom | meaning and action |
 |---|---|
 | `401` | Missing, malformed, rotated, or revoked key: load the current key and reconnect. Also seen with a valid key when the client followed a redirect and dropped the header (the development host's http origin; use the https `endpointUrl`). A client configured without an `Authorization` header gets the bearer challenge and may start an OAuth discovery / dynamic client registration attempt, which this node does not offer; configure the header instead. |
+| `503` | The node is locked: it started without the admin password and serves only the unlock page. Unlock it in a browser at `XE_URL`, or restart it with `XE_ADMIN_PASSWORD` / `--admin-password-stdin`. `--status --json` shows `"vault":"locked"`. |
 | `403` | Loopback peer/Host/Origin gate failed. Use the exact local or tunnel endpoint; do not widen the listener. |
 | `405` / `415` | The endpoint accepts only `POST` with `Content-Type: application/json`; another verb is 405 (`Allow: POST`), another body type 415. Both are answered before authentication. |
 | `429` | Rate limit: 120 requests per minute for requests that present a bearer header, and a separate 20 per minute for requests without one, so discovery probes cannot spend a key holder's budget. Wait for the window (`Retry-After`). |

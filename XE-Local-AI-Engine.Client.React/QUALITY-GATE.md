@@ -12,7 +12,7 @@ It chains four scripts that cover the **Biome → TypeScript → Knip → Signal
 
 | Stage | Command | Catches |
 | --- | --- | --- |
-| 1. Lint | `pnpm run lint` (Biome + TypeScript + stylelint + custom check) | Type errors (`tsc --noEmit`), lint-rule violations (Biome), CSS issues (stylelint), and the `event.currentTarget`-in-updater guard. |
+| 1. Lint | `pnpm run lint` (tsc + five custom check scripts + Biome lint and format + stylelint) | Type errors (`tsc --noEmit`), the `event.currentTarget`-in-updater, tests-have-assertions, i18n-defaults and Mantine-test-theme guards, lint and format violations (Biome), and CSS issues (stylelint). |
 | 2. Knip | `pnpm run knip` | Growth beyond the committed unused-file/export/dependency baseline. |
 | 3. SignalR sync | `pnpm run signalr:check` | A backend `Program.cs` `MapHub` registration missing from Vite, or a stale Vite WebSocket proxy. |
 | 4. dependency-cruiser | `pnpm run depcruise` | Enforced architecture errors plus growth beyond the committed per-rule warning baseline. |
@@ -26,7 +26,7 @@ pnpm run lint && pnpm run knip && pnpm run signalr:check && pnpm run depcruise
 ## Running each tool individually
 
 ```bash
-pnpm run lint        # Biome + tsc --noEmit + stylelint + currentTarget guard
+pnpm run lint        # tsc --noEmit + custom guards + Biome + stylelint
 pnpm run knip        # dead-code no-growth baseline (config: Knip.ts + config/knip-baseline.json)
 pnpm run knip:report # full Knip diagnostics, including the existing debt and config hints
 pnpm run signalr:check # Vite websocket proxies match Program.cs hubs
@@ -36,7 +36,7 @@ pnpm run depcruise:report # full dependency-cruiser diagnostics
 
 dependency-cruiser's native exit code counts **only `error`-severity** violations. The wrapper additionally fingerprints every violation by rule/from/to and fails on any fingerprint absent from `config/dependency-baseline.json`. Paying debt down passes immediately; replacing one removed edge with a different edge still fails even when the total count is unchanged.
 
-Knip follows the same incremental policy: each issue is fingerprinted by file/category/symbol against `config/knip-baseline.json`. The current baseline contains **26 fingerprints**; the separate `pnpm run knip:report` command continues to print every symbol plus configuration hints. Removing debt passes without a baseline edit, while replacement debt fails even when the total count is unchanged. The committed baseline file, rather than this explanatory count, is the gate's authority.
+Knip follows the same incremental policy: each issue is fingerprinted by file/category/symbol against `config/knip-baseline.json`. The committed baseline is currently empty; the separate `pnpm run knip:report` command continues to print every symbol plus configuration hints. Removing debt passes without a baseline edit, while replacement debt fails even when the total count is unchanged. The committed baseline file, rather than this explanatory count, is the gate's authority.
 
 React Doctor is separately available as an offline, non-blocking advisory through `pnpm run doctor`; it
 intentionally remains outside `validate`. See `REACT-DOCTOR.md` for its exact artifact, license, security, privacy,
@@ -53,7 +53,7 @@ and overlap evaluation.
 **Informational (`warn` — surfaced but non-blocking):**
 
 - `no-orphans` — modules imported by nothing (excludes generated/`.d.ts`/config files).
-- `no-core-to-features`, `no-core-to-legacy`, `no-cross-feature`, `no-feature-to-routes` — see tracked debt below.
+- `no-core-to-features`, `no-core-to-legacy`, `no-cross-feature`, `no-feature-to-routes` — only `no-cross-feature` and `no-core-to-features` hold tracked debt today (below); the rest are currently clean.
 
 ## Tracked architecture debt (warn-level rules to promote to error later)
 
@@ -65,13 +65,13 @@ much debt exists; run `pnpm run depcruise:report` for the current violations in 
 deliberately does not restate their counts.
 
 - **`no-cross-feature`** — one feature importing another feature's internals; shared
-  code belongs in `core/`. Examples: `model-fit` <-> `models`, `agents` -> `chat`/`tools`/`skills`,
-  `mcp` -> `tools`, `preview` -> `chat`/`agents`, `chat` -> `tools`/`agents`.
-- **`no-core-to-legacy`** — `core/` reaching into a top-level `pages`, `data`, `components` or
+  code belongs in `core/`. Examples: `model-fit` <-> `models`, `agents` -> `assist`/`skills`/`tools`,
+  `mcp` -> `tools`, `workSessions` -> `chat`/`agents`, `chat` -> `tools`/`agents`.
+- **`no-core-to-legacy`** (currently clean) — `core/` reaching into a top-level `pages`, `data`, `components` or
   `modules` tree. Shared code lives under `core/`; feature-owned code under its feature.
 - **`no-core-to-features`** — `core/` depending on feature-owned UI or diagnostics.
-- **`no-orphans`** — modules imported by nothing in the current graph.
-- **`no-feature-to-routes`** — features stay route-agnostic.
+- **`no-orphans`** (currently clean) — modules imported by nothing in the current graph.
+- **`no-feature-to-routes`** (currently clean) — features stay route-agnostic.
 
 ## Browser and bundle feedback
 

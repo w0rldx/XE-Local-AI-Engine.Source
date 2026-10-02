@@ -1,6 +1,6 @@
 # Local Runtime & Model Providers
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 This page is the heart of the 2026-06-17 runtime re-architecture. It explains how XE Local AI Engine runs models through node-owned host child processes: the provider-neutral seams in `Providers.Abstractions`, the host **llama.cpp** process supervisor that spawns and tree-kills `llama-server` children, runtime-binary acquisition (prebuilt download, operator bring-your-own override, and the in-app **source build**), and the satellite providers (Ollama, HuggingFace GGUF store, capability detection, Codex OAuth cloud chat). Model *recommendation* (hardware-aware GGUF fit) is owned by [07-model-fit.md](07-model-fit.md); this page covers only how a model gets selected, loaded, and served.
 
@@ -299,7 +299,7 @@ This is the safety property the launcher exists for. `LlamaServerProcessLauncher
 | Linux | `LinuxProcessGroupHandle` | child launched under `setsid` (new session/process-group); teardown does `kill(-pgid)` |
 | macOS / other Unix | `PlainProcessHandle` | plain process; own-tree-kill (CPU floor only — no dedicated primitive) |
 
-Each native path is reached only under its own `OperatingSystem.Is*` guard, so no cross-OS native call leaks. `TeardownProcess` (called from `DisposeAsync`, the reaper, eviction, and prune) removes the process from the map, tree-kills + disposes the handle, and releases the port. `DisposeAsync` cancels the reaper, tears down every remaining process, and disposes all gates — guaranteeing no orphaned `llama-server` survives a clean node shutdown.
+Each native path is reached only under its own `OperatingSystem.Is*` guard, so no cross-OS native call leaks. Teardown is two steps in `LlamaServerIdleReaper`: `DetachProcess` removes the process from the map, retires its layer placement and releases the port, then `KillDetachedProcess` tree-kills + disposes the handle; `RemoveProcessAsync` runs both for eviction (`EvictCoreAsync`), the reaper and prune. `DisposeAsync` cancels the reaper, takes the runtime gate exclusively (`EnterExclusiveForTeardownAsync`), detaches and kills every remaining process, and disposes all gates — guaranteeing no orphaned `llama-server` survives a clean node shutdown.
 
 ### Startup orphan reap and spawn receipts
 
@@ -791,3 +791,4 @@ Swapped-out clients are **not** disposed. The singleton chat client is called by
 - [12-security-and-privacy.md](12-security-and-privacy.md) — local-only secrets, node-local AI ops
 - [14-image-generation.md](14-image-generation.md) — `sd-server`, the node's second supervised runtime
 - [18-training.md](18-training.md) — `Providers.Training`, the uv-provisioned Python fine-tuning runtime the node spawns as a supervised child process (Linux only)
+- [19-compute-tools.md](19-compute-tools.md) and [ADR 0016](../adr/0016-managed-python-shared-uv-layer.md) — `Providers.Python`, the shared managed-Python layer (pinned uv acquisition, `ManagedPythonToolchain`) that training and `run_python` sit on

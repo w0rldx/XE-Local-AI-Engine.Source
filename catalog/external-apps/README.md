@@ -12,7 +12,7 @@ This README is for whoever adds the next application. It is not a description of
 ```
 catalog/external-apps/
   README.md                          this file
-  applications/<id>/
+  applications/<id>/                 absent today (the catalog ships empty); created with the first application
     compose.yml                      byte-verbatim copy of the upstream compose, pinned to a commit
     variables.json                   every upstream environment name, in one of three buckets
     manifest.overrides.json          metadata, digests, provenance, ports, storage, files

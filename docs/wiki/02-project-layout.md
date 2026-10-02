@@ -1,6 +1,6 @@
 # Solution & Project Layout
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 This page is the inventory and dependency map of the .NET side of XE Local AI Engine. It lists every `.csproj` registered in `XE-Local-AI-Engine.slnx`, explains each project's role, draws the project reference graph (who references whom), and states the layering rule that keeps the runtime, applications, and providers decoupled. The React client (`XE-Local-AI-Engine.Client.React`) is a separate Vite/pnpm tree wired in by Aspire and is documented on [10-react-client.md](10-react-client.md).
 
@@ -58,7 +58,7 @@ Provider projects reference `Providers.Abstractions` and, for the two that speak
 | Project | Role | Key symbols |
 |---|---|---|
 | `XE-Local-AI-Engine.Providers.Abstractions` | The seam layer. Defines `ILocalModelProvider`, `IRerankerClient`, `IModelCapabilityClient`, GGUF contracts (`IGgufModelStore`, `IGgufModelRegistry`, `IHfTokenStore`, `IHuggingFaceGgufDiscovery`), hardware-profile + capability contracts, and `INodeDataDirectory`. `Gguf/` is also the single source of truth for quant logic — `QuantLadder.cs` + `GgufQuantQuality.cs` feed the Model Advisor's quant recommendation. It also holds the few shared concrete helpers a provider may not duplicate: `SecureFilePermissions`, `SetsidLocator`, `DriveInfoFreeSpaceProbe` — the one free-disk measurement in the node, next to the `IFreeSpaceProbe` it implements — and `PathContainment`, the one "is this path under a root we own?" rule the process reapers, the sandbox orphan reaper and the generated-image store all decide to kill or delete through; because every provider may reference this project and nothing else. | `ILocalModelProvider.cs`, `Contracts/IRerankerClient.cs`, `DriveInfoFreeSpaceProbe.cs`, `PathContainment.cs`, `Gguf/`, `Capabilities/` |
-| `XE-Local-AI-Engine.Providers.LlamaServer` | **The default inference runtime.** Host llama.cpp process: `LlamaServerLocalModelProvider`, `LlamaServerProcessSupervisor`, binary manager/updater (`LlamaCppBinaryManager`), GitHub release catalog + pins (`GitHubLlamaCppReleaseCatalog`, `LlamaCppReleasePins`), GPU variant selection (`GpuVariantSelector`, `ProcessGpuVendorProbe`), cross-platform process-group handles (Windows job object / Linux process group). | `LlamaServerProcessSupervisor.cs` (56 sym), `LlamaCppBinaryManager.cs` (44) |
+| `XE-Local-AI-Engine.Providers.LlamaServer` | **The default inference runtime.** Host llama.cpp process: `LlamaServerLocalModelProvider`, `LlamaServerProcessSupervisor`, binary manager/updater (`LlamaCppBinaryManager`), GitHub release catalog + pins (`GitHubLlamaCppReleaseCatalog`, `LlamaCppReleasePins`), GPU variant selection (`GpuVariantSelector`, `ProcessGpuVendorProbe`), cross-platform process-group handles (Windows job object / Linux process group). | `LlamaServerProcessSupervisor.cs`, `LlamaCppBinaryManager.cs` |
 | `XE-Local-AI-Engine.Providers.HuggingFace` | HuggingFace GGUF discovery + download store (feeds the Model Advisor). See [07-model-fit.md](07-model-fit.md). | — |
 | `XE-Local-AI-Engine.Providers.Ollama` | Ollama provider — still **present** as an `ILocalModelProvider` implementation, but **de-orchestrated** from Aspire dev (llama.cpp is the dev runtime; `AppHost.cs` has no Ollama resource). | — |
 | `XE-Local-AI-Engine.Providers.OpenAICompat` | Operator-registered external OpenAI-compatible endpoints (self-hosted llama-server/vLLM/LM Studio, or a hosted OpenAI-compatible API). ONE multiplexer `ILocalModelProvider` with provider name `external`, dispatching per connection by parsing the namespaced model id `ext:{connectionId}/{wireId}` through `IExternalProviderRegistry`. Adds the outbound endpoint guard, the reasoning-output rewriter (vLLM `reasoning` field + inline `<think>` fallback) and typed `reasoning_effort` injection. No pull/delete/embeddings. | `ExternalOpenAiModelProvider.cs`, `ExternalOpenAiChatClient.cs`, `ExternalEndpointGuardHandler.cs` |
@@ -75,7 +75,7 @@ Provider projects reference `Providers.Abstractions` and, for the two that speak
 
 | Project | SDK / kind | Role |
 |---|---|---|
-| `XE-Local-AI-Engine.Tests` | `Exe`, MTP | Main unit suite. References `Client`, `WindowsLauncher`, `Client.Application`, `ServiceDefaults`, every concrete provider project (`Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `StableDiffusionCpp`, `Training`, `WhisperCpp`), `Testing.FakeOllama` and `Testing.FakeDocker`. |
+| `XE-Local-AI-Engine.Tests` | `Exe`, MTP | Main unit suite. References `Client`, `WindowsLauncher`, `Desktop`, `Client.Application`, `Client.Testing`, `ServiceDefaults`, every concrete provider project (`Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `OpenAICompat`, `StableDiffusionCpp`, `Python`, `Training`, `WhisperCpp`), the leaf `OpenAICompatible.Core`, `Testing.FakeOllama` and `Testing.FakeDocker`. |
 | `XE-Local-AI-Engine.Tests.E2ETests` | `Exe`, MTP | End-to-end suite. References `Client`, `Client.Application`, `Client.Persistence`, `Providers.Abstractions`, `Providers.Ollama`, plus `Testing.FakeOllama` and `Client.Testing` fixtures. See [13-testing-and-validation.md](13-testing-and-validation.md). |
 | `XE-Local-AI-Engine.AI.Agent.Tests` | `Exe`, MTP | Unit suite scoped to `AI.Agent`. |
 | `XE-Local-AI-Engine.Client.Persistence.Tests` | `Exe`, MTP | Persistence/migration suite. References `Client.Application`, `Client.Persistence`, `Client`, `Providers.LlamaServer`. |
@@ -100,7 +100,7 @@ Solid arrows are `ProjectReference` edges (verified from each `.csproj`).
             │  │  └────► AI.Agent ◄─────────┘  │  │  │  │
             │  └───────► Client.Persistence ◄──┘  │  │  │
             │                                      │  │  │
-            └► Providers.Ollama ──┐   Providers.{Llama,HF,Codex,Capabilities,Ollama,SDcpp,Python,Training,WhisperCpp}
+            └► Providers.Ollama ──┐   Providers.{Llama,HF,Codex,Capabilities,Ollama,OpenAICompat,OpenAICompatible.Core,SDcpp,Python,Training,WhisperCpp}
                                   ▼                │  │  │
                        Providers.Abstractions ◄────┴──┴──┘ ◄── Client.Persistence (benchmark contracts)
                                   ▲

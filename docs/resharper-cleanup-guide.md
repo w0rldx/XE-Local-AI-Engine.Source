@@ -54,9 +54,10 @@ Build with warnings-as-errors and run the suites before committing:
 ```bash
 # --configuration Release is MANDATORY here, not a preference.
 dotnet build XE-Local-AI-Engine.slnx --configuration Release   # must be 0 errors / 0 warnings
-dotnet test  XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj
-# …and the other test projects, one at a time — never a build and a test run concurrently
-#   (see AGENTS.md: use scripts/with-build-lock.sh + scripts/assembly-guard.sh; exit 75 = void, re-run).
+scripts/run-backend-tests.sh   # the backend gate: every enrolled test project; it takes the build lock itself (exit 75 = void, re-run)
+# scope while iterating, never with --filter:
+#   scripts/run-tests-memory-safe.sh --treenode-filter '/*/*/(ClassA|ClassB)/*'
+# (see AGENTS.md §Validation; never overlap a build with a --no-build test run)
 ```
 
 > **`HandoffWorkflowSpikeTests` is not part of that run, despite what older copies of this note said.**

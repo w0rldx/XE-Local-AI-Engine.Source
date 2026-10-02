@@ -6,15 +6,21 @@ public GitHub release feed.
 Update checks are **anonymous**. You do not need a GitHub account, device-code sign-in, access token, or repository
 invitation.
 
-## Release tracks and operating-system channels
+## Choose an update channel
 
-Two independent settings select an update:
+On the **About** page, **Update channel** decides which builds the app offers you:
 
-- **Main flavor:** follows stable releases.
-- **Tester flavor:** follows stable releases and release candidates.
-- **Windows/Linux channel:** Velopack automatically selects packages for the installed operating system.
+- **Stable — Recommended:** released versions only. The right choice for everyday use.
+- **Preview:** release candidates as well as released versions. Newer, and tested less.
+- **Development:** daily builds from the development branch, on top of everything Preview offers. Less stable
+  than Preview and not tested for release — expect defects.
 
-Choosing the tester flavor does not change the operating-system channel.
+Changing the channel only changes what the app looks for; nothing is installed until you choose to update. The
+app never offers an older version than the one you run, so leaving **Development** for **Stable** means installing
+a Stable build manually (see [Manual replacement](#manual-replacement)).
+
+Until you pick one, the app follows the channel its download was built for. Windows or Linux packages are
+selected automatically for the installed operating system; the channel does not change that.
 
 ## Update inside the app
 
@@ -27,6 +33,11 @@ On Windows, Velopack updates the extracted portable application and restarts thr
 
 On Linux, Velopack replaces the AppImage itself. If the AppImage is in a directory your user cannot write, the update
 may require `pkexec`. Keeping it in `~/Applications` normally avoids elevation.
+
+After the restart the app shows **"Unlock this node"**, as on every start: enter your admin password to continue.
+Updating from a build that did not yet have the unlock page? Once you are signed in, the app asks you to confirm
+your password once (**"Protect this node's data"**) and then shows your one-time **recovery code**. Save it — see
+[Your first run](first-run.md#save-your-recovery-code).
 
 <details>
 <summary><b>The updater says this build is not managed</b></summary>
@@ -119,6 +130,10 @@ rewrite any knowledge document. Re-run the preflight after operator-directed cle
 Then download and verify the older platform artifact and run it from a separate location. If it cannot open the
 migrated data, stop it and restore the complete pre-update backup or return to the newer version. Do not delete
 `node.sqlite` as a downgrade technique.
+
+Builds from before the unlock page cannot read the password-protected `node.key` and refuse to start, reporting
+the key file as corrupt. **Do not delete `node.key` because of that message** — without it your encrypted data is
+lost. Restore the complete pre-update backup instead.
 
 ## Signing warnings after an update
 

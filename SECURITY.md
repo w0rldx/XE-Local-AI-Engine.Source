@@ -23,7 +23,7 @@ Please include, where you can:
 XE Local AI Engine is a local-first desktop application: it runs a local web server on loopback, supervises local inference runtimes, and stores data in a per-user directory. Areas of particular interest:
 
 - The local admin API surface (`/api/local/v1`) and its loopback/`Host`/`Origin` guarding.
-- Handling of secrets at rest (node key, Data Protection key ring, encrypted columns/blobs).
+- Handling of secrets at rest (node key, Data Protection key ring, encrypted columns/blobs). The persisted `node.key` is wrapped under the admin password and a recovery code ([ADR 0018](docs/adr/0018-local-vault-passphrase-wrapped-node-key.md)).
 - The agent process/container sandbox and Development Mode's code-execution boundary.
 - Model/skill import and any path-traversal or untrusted-content handling.
 

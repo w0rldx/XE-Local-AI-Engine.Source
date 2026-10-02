@@ -179,9 +179,12 @@ Extraction has **no OCR**, so scanned/image-only PDFs extract poorly.
 
 Everything lives in one directory (`%LOCALAPPDATA%\XE-Local-AI-Engine`), separate from the binaries.
 
-- **Field-level encryption**, not whole-database: AES-256-GCM over sensitive columns. `node.key` is
-  **DPAPI-wrapped to your Windows user account** — which is why disk theft doesn't yield your chats,
-  and also why **a copied data folder will not open under another account or machine.** The app fails
+- **Field-level encryption**, not whole-database: AES-256-GCM over sensitive columns. `node.key` holds
+  that key wrapped twice — by the admin password (PBKDF2-SHA512) and by a one-time recovery code — so
+  disk theft doesn't yield your chats, every start waits on an unlock page, and **losing both
+  credentials loses the data**. Headless starts unlock from `XE_ADMIN_PASSWORD` or
+  `--admin-password-stdin`. On Windows the Data Protection key ring stays **DPAPI-bound to your user
+  account**, so **a copied data folder will not open under another account or machine**; the app fails
   closed rather than pretending.
 - **Single-instance lease** per data directory. A second launch refuses to start and exits — it can't
   race or corrupt the database.

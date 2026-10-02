@@ -1,6 +1,6 @@
 # Compute Tools — Sandboxed Code Execution for Agents
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 The **compute tools** subsystem allows governed agents to execute short scripts in a **sandboxed, offline interpreter** for numeric and symbolic computation. The first and only v1 tool is `run_python`, which runs arbitrary Python 3 code with numpy, scipy, and sympy available — no network, no host filesystem, no filesystem persistence, no conversation access.
 
@@ -229,13 +229,9 @@ Set `Compute:Enabled=true` in configuration:
 }
 ```
 
-**Desktop** (via UI settings or `node-settings.json`):
-```json
-{
-  "compute": {
-    "enabled": true
-  }
-}
+**Desktop and any other host**: `Compute` binds from configuration only (`ComputeOptions.SectionName`); `StoredNodeSettings` has no compute field and there is no UI toggle. Use the environment variable form:
+```bash
+Compute__Enabled=true
 ```
 
 Restart the node afterwards: the `Mathematician` agent (§3.2) is seeded at startup only when this switch is on, so it appears in the agent list on the next start.

@@ -1,14 +1,14 @@
 # XE Local AI Engine Node Web Server
 
 `XE-Local-AI-Engine.Client` is the node-side web server for the local AI engine. It hosts the React management UI from `XE-Local-AI-Engine.Client.React`, exposes node-local FastEndpoints APIs under
-`/api/local/v1`, maps local SignalR hubs, persists node chat state in SQLite, and connects to the central platform through the existing `WorkerHub` channel.
+`/api/local/v1`, maps local SignalR hubs, persists node chat state in SQLite, and serves an inbound MCP server at `/api/local/v1/mcp/server`.
 
 ## Current UI shape
 
 - The React Web UI owns the web root.
 - Legacy Razor component dependencies have been removed from this host.
 - The SPA shell is served as a static `index.html`; browser requests authenticate with the node JWT flow.
-- Cloud-provider credentials and platform worker credentials stay server-side; they are never returned to the React client or written to logs.
+- Cloud-provider credentials stay server-side; they are never returned to the React client or written to logs.
 
 ## Main responsibilities
 
@@ -16,8 +16,10 @@
 - Expose node JWT-authenticated APIs for chat, agents, settings, models, knowledge, logs, scheduling, and invocations.
 - Stream local chat and runtime-log events over local SignalR endpoints.
 - Apply SQLite migrations and recover interrupted chat messages at startup.
-- Supervise the node-local llama.cpp and Stable Diffusion runtime processes. There is no HostAgent, Tray, or container-runtime project in the current architecture.
-- Connect or disconnect from the platform through `WorkerHub` based on the node's configured remote opt-in state.
+- Supervise the node-local llama.cpp, Stable Diffusion and whisper.cpp runtime processes. There is no HostAgent, Tray, or container-runtime project in the current architecture.
+- Serve the inbound MCP server (`app.MapMcp` in `Program.cs`) and the local hubs mapped there.
+- Unlock the vault before the host is built: `Program.Vault.cs` unwraps a password-protected `node.key` or serves an unlock page (ADR 0018).
+- Start as the engine behind the native desktop shell (`XE-Local-AI-Engine.Desktop`, ADR 0013), which talks to it over REST and SignalR only.
 
 ## Development notes
 

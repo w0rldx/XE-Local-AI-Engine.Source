@@ -1,7 +1,7 @@
 # Linux CUDA bring-your-own llama-server — operator runbook
 
 **Date:** 2026-06-29
-**Last validated against the repository:** 2026-08-08 (`9405df91`)
+**Last validated against the repository:** 2026-10-02 (`eea44543f`)
 **Audience:** operator running the engine on a Linux + NVIDIA host who wants the **CUDA** inference path (not the default Vulkan fallback).
 **Authoritative sources:** the [environment contract](../../XE-Local-AI-Engine.Providers.LlamaServer/Options/LlamaServerRuntimeOverrideOptions.cs), [binary validation path](../../XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaCppBinaryManager.Override.cs), [current llama.cpp pin](../../XE-Local-AI-Engine.Providers.LlamaServer/LlamaCppReleasePins.cs), and [live GPU smoke](../../scripts/run-gpu-smoke-local.sh).
 
@@ -13,15 +13,19 @@ Upstream llama.cpp (`ggml-org/llama.cpp`) ships **no Linux CUDA prebuilt** — o
 
 It is **off by default**. When the override environment variable is unset, acquisition uses the pinned download and SHA256 verification path. The override **skips** download and hash verification (an operator-built binary has no publisher digest) and instead validates the binary you supply.
 
-> **Preferred managed alternative — in-app CUDA build.** If you have the toolchain installed (nvcc/cmake/gcc/g++/make-or-ninja/git + an NVIDIA driver + free disk) but do not want to hand-build llama.cpp, use **Node Settings ▸ llama.cpp runtime ▸ "CUDA (build from source)"** (Linux only; visible to every operator since
-2026-09-19, and inert until you press Build). It clones the engine's pinned tag, verifies the checked-out commit equals `LlamaCppReleasePins.PinnedSourceCommitSha`, builds under a scrubbed environment, validates the result, and adopts it as a managed CUDA runtime. It needs no environment override, survives restart, appears in runtime status, and can be removed or rebuilt from the same card. The build option shows an itemized prerequisite checklist when unavailable. The bring-your-own override below remains the operator-managed alternative.
+> **Preferred managed alternative — in-app CUDA build.** If you have the toolchain installed (nvcc/cmake/gcc/g++/make-or-ninja/git + an NVIDIA driver + free disk) but do not want to hand-build llama.cpp, use **Node Settings ▸ Runtimes & builds ▸ "llama.cpp build from source"** and set **Backend** to **CUDA** (Linux only; inert until you press **Build**). The card offers:
+>
+> - **Source:** **Official upstream** (`ggml-org/llama.cpp`) or **Custom public fork** (a canonical public GitHub HTTPS URL; you must tick the acknowledgement that the fork's code runs with the app user's privileges, unsandboxed).
+> - **Commit SHA (optional):** an official build uses the engine-pinned commit (`LlamaCppReleasePins.PinnedSourceCommitSha`, the commit behind `PinnedTag`) unless you enter a full 40-character SHA; a custom fork without a SHA resolves the repository's default branch.
+>
+> The build verifies the checked-out commit against the pinned or entered SHA before any CMake step, builds under a scrubbed environment, validates the result, and adopts it as a managed runtime. It needs no environment override, survives restart, appears in runtime status, and can be rebuilt or removed from the same card. When prerequisites are missing the card lists each one as available or missing. The bring-your-own override below remains the operator-managed alternative.
 
 ### Choose one ownership model
 
 | | Managed in-app source build | Bring-your-own override (this runbook) |
 |---|---|---|
 | Selection | Installed runtime record; selected automatically | `XE_LLAMACPP_SERVER_PATH` process environment |
-| Source/version | Engine pin and verified source commit | Operator chooses and builds, preferably from the engine pin |
+| Source/version | Engine-pinned commit by default, or an entered commit / custom fork; checked-out commit verified | Operator chooses and builds, preferably from the engine pin |
 | Integrity | Source identity plus managed install validation | Filesystem trust checks and runtime self/device probes; no publisher digest |
 | Updates | Remove/rebuild from Node Settings when the engine pin changes | Operator replaces the binary; in-app runtime updates return 409 while override is active |
 | Removal | Eject/remove from the runtime card | Unset the environment variable and restart |
@@ -121,7 +125,7 @@ export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 2. **Startup log** — confirm the Warning appears once:
    > `Using operator-supplied llama-server at /opt/llama-cuda/bin/llama-server (variant Cuda); integrity hash verification is skipped.`
    No warning = the override was not picked up (env var not exported in this process). 
-3. **Runtime version card** (Model management → llama.cpp version) shows the version as `override`.
+3. **Node Settings ▸ Runtimes & builds** shows the llama.cpp runtime panel's notice: "A bring-your-own CUDA llama-server is serving models on this node. The installed runtime below is not in use while the override is set." (the variant name follows `XE_LLAMACPP_VARIANT`).
 4. **Run a chat** with a local GGUF model and confirm GPU offload:
    - `nvidia-smi` shows VRAM usage rise while the model loads,
    - the spawned `llama-server` logs show CUDA devices + offloaded layers,
@@ -131,7 +135,7 @@ export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 - [ ] `nvidia-smi` lists the GPU on the host.
 - [ ] `<binary> --list-devices` shows a CUDA device locally (Step 1).
 - [ ] Startup Warning logged once.
-- [ ] Version card reads `override`.
+- [ ] Node Settings ▸ Runtimes & builds shows the bring-your-own override notice.
 - [ ] Chat serves with VRAM consumed (GPU, not CPU).
 
 ---

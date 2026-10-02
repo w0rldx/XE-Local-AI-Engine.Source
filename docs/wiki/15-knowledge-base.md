@@ -1,6 +1,6 @@
 # Knowledge Base / RAG
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 The Knowledge Base is a **fully offline** document store with hybrid retrieval. An operator uploads documents; the node extracts their text, chunks them on header boundaries, embeds each chunk with a local embedding model, and indexes everything into local SQLite with **selective encryption** — source document blobs and display names are encrypted at rest, while the extracted chunk text and its FTS search index are stored unencrypted locally. Retrieval fuses a **lexical** arm (SQLite FTS5 / BM25) and a **semantic** arm (vector cosine similarity) with Reciprocal Rank Fusion, optionally rescoring with a **local cross-encoder reranker**, and exposes the result to agents as a tool.
 
@@ -30,7 +30,7 @@ The gate keys on the **EFFECTIVE model** — the one that actually runs the turn
 | Document text extraction | `…/Services/DocumentIngestion/Implementation/DocumentTextExtractor.cs` + `Extraction/` |
 | Registered-repository import | `…/Services/Knowledge/Implementation/KnowledgeRepositoryImportService.cs` |
 | Scheduled stale-model reindex | `…/Services/Knowledge/Implementation/KnowledgeScheduledModelReindexWorker.cs` |
-| Agent-facing tools | `…/Services/Knowledge/Tools/Implementation/SearchKnowledgeBaseToolHandler.cs`, `ReadSurroundingChunksToolHandler.cs` |
+| Agent-facing tools | `…/Services/Knowledge/Tools/Implementation/SearchKnowledgeBaseToolHandler.cs`, `ReadDocumentToolHandler.cs`, `ReadSurroundingChunksToolHandler.cs` |
 | SignalR notifier + hub | `XE-Local-AI-Engine.Client/Hubs/KnowledgeIndexingNotifier.cs`, `KnowledgeBaseHub.cs` |
 | Local endpoints | `XE-Local-AI-Engine.Client/Endpoints/Knowledge/V1/` |
 | React feature | `XE-Local-AI-Engine.Client.React/src/features/knowledge/` |
@@ -121,7 +121,7 @@ These make the KB a **retrieval-augmented generation (RAG)** source the agent ca
 
 ## Endpoints
 
-Routes under `knowledge/*`, one endpoint class per file in `Endpoints/Knowledge/V1/`:
+Routes under `knowledge-base/*` (`LocalApiRoutes.KnowledgeBase` in `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs`), one endpoint class per file in `Endpoints/Knowledge/V1/`:
 
 | Endpoint | Role |
 |---|---|
@@ -133,6 +133,7 @@ Routes under `knowledge/*`, one endpoint class per file in `Endpoints/Knowledge/
 | `ImportKnowledgeRepositoryEndpoint` | Import supported files from a registered local Git repository into one collection. |
 | `ReindexKnowledgeDocumentEndpoint` | Re-run ingestion for one document. |
 | `ReindexCorpusEndpoint` | Re-run ingestion for the whole corpus (e.g. after an embedding-model change). |
+| `DownloadRecommendedEmbeddingEndpoint` | POST `knowledge-base/embedding/download-recommended`: one-click download of the recommended embedding model; without an embedding model the knowledge base cannot index anything. |
 | `DownloadRecommendedRerankerEndpoint` | POST: one-click download of the recommended cross-encoder reranker via the same GGUF download coordinator operator HF downloads use; idempotent no-op if already installed or in flight. |
 
 All endpoints are loopback/local-only, operator-authenticated, and secret-redacted — see [Security & Privacy](12-security-and-privacy.md). They are surfaced to React via OpenAPI → hey-api; see [API & Hubs](09-api-and-hubs.md).

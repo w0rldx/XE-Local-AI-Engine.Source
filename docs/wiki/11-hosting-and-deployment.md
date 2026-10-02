@@ -1,6 +1,6 @@
 # Hosting, AppHost & Deployment
 
-> Reviewed: 2026-09-22 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, packaged **desktop mode** (`XE_LAUNCH_MODE=desktop`), the asymmetric Windows/Linux publish profiles, the Windows C# launcher, and the legacy/manual cleanup scripts.
 
@@ -103,11 +103,11 @@ Registered via `AddHostedService<>` in `XE-Local-AI-Engine.Client/ConfigureServi
 | Service | Role |
 |---------|------|
 | `ModelRecommendationScheduleSeeder` | seeds the model-fit recommendation schedule (see [Model-Fit](07-model-fit.md)) |
-| `DefaultAgentSeeder`, `CoderAgentSeeder` | seed built-in agent definitions (see [Agent Mode](04-agent-mode.md)) |
+| `DefaultAgentSeeder`, `CoderAgentSeeder`, `MathematicianAgentSeeder` | seed built-in agent definitions (see [Agent Mode](04-agent-mode.md)) |
 | `ToolCallCleanupService` | clears stale tool-call state |
 | `NodeChatContentEncryptionBackfillService` | one-shot backfill upgrading legacy plaintext message/metadata rows to the encrypted at-rest envelope |
 | `KnowledgeVectorNormalizationBackfillService` | one-shot backfill L2-normalizing legacy (pre-normalization) KB chunk vectors so cosine search can score with a plain dot product |
-| `NodeChatTitleEncryptionBackfillService`, `OllamaProviderMapBackfillService` | one-shot data backfills |
+| `NodeChatTitleEncryptionBackfillService`, `OllamaProviderMapBackfillService`, `ExternalAccessProfileBackfillService`, `UiModeBackfillService` | one-shot data backfills (the last two: see [Upgrade backfills](#upgrade-backfills-and-their-discriminators)) |
 | `FirstRunModelProvisioningService` | desktop first-run GGUF starter-model download |
 | `BenchmarkRunHubEventRelay`, `DatasetGenerationHubEventRelay`, `TrainingRunHubEventRelay` | drain each feature's in-process event buffer onto its SignalR hub, keeping `Client.Application` free of a SignalR dependency (see [API & Hubs](09-api-and-hubs.md)) |
 
@@ -128,6 +128,18 @@ Module-owned workers worth knowing about, registered alongside their feature rat
 | `StaleProcessReaper` (llama-server instance), `CudaBuildStartupService`, `LlamaServerRuntimeOverrideStartupNotice` | `Providers.LlamaServer` | see [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | `StaleProcessReaper` (sd-server instance), `StableDiffusionCppSourceBuildLifecycle` | `Providers.StableDiffusionCpp` | see [Image Generation](14-image-generation.md) |
 | `GgufAcquisitionArtifactStartupReaper` | `Providers.HuggingFace` | sweeps partial GGUF acquisition artifacts left by a previous run |
+| `AppUpdateCheckService` | `AddAppUpdateExtensions` (local mode only) | one app self-update check per start, off the startup path (see [In-app self-update](#in-app-self-update-velopack)) |
+| `AgentHomeRunRetentionService` | `AddNodeAgentHomeExtensions` | retention sweep for the on-disk AgentHome run directories |
+| `DevWorkflowDefinitionSeeder`, `DevWorkflowStartupReconciler` | `AddNodeDevWorkflowsExtensions` | seed the shipped definition templates by slug; make node runs a crashed host left mid-flight dispatchable again (see [Dev Workflows](25-dev-workflows.md)) |
+| `GraphWorkflowStartupReconciler` | `AddNodeGraphWorkflowsExtensions` | make node runs a crashed host left in flight judgeable again (see [Graph Workflows](21-graph-workflows.md)) |
+| `WorkSessionStartupReconciler`, `WorkSessionAgentSeeder` | `AddNodeWorkSessionsExtensions` | collapse sessions a crashed host left mid-flight to `Interrupted`; seed the General and Research work-session personas |
+| `DockerSandboxOrphanSweeper` | `AddNodeContainerSandboxExtensions` | remove Development Mode containers orphaned by a previous run of this installation |
+| `ExternalAppStateObserver` | `AddNodeExternalAppsExtensions` | notice that a container the engine believes is running has stopped (see [External Apps](23-external-apps.md)) |
+| `ExternalProviderStartupReconciler` | `AddNodeExternalProvidersExtensions` | one external-provider reconciliation pass at startup, priming the registry snapshot |
+| `IntegrationExecutionCoordinator` | `AddNodeIntegrationsExtensions` | single consumer of the integration accept queue and sole producer of an execution's terminal event |
+| `ToolCapableModelBackfillService`, `McpServerStartupConnector` | `AddNodeModelCapabilitiesAndMcpExtensions` | back-fill the tool-capable model allow-list from installed models; connect enabled MCP servers once, off the hot path |
+| `TranscriptionSessionLifecycleService` | `AddNodeTranscriptionExtensions` | fail sessions a dead process left `Transcribing`; end live sessions on graceful stop (see [Audio Transcription](24-audio-transcription.md)) |
+| `WhisperCppSourceBuildLifecycle` | `Providers.WhisperCpp` | reconcile managed source-build state before the host is ready; drain an in-flight build on shutdown |
 
 ### First-run model provisioning (desktop)
 
@@ -435,7 +447,7 @@ alternatives. See [`docs/velopack-release-install-guide.md`](../velopack-release
 
 **OS-native installers (MSI / DEB / RPM) are deferred.** Official binaries are Velopack-managed portable applications:
 Windows `Portable.zip` produced with `--noInst` (no `Setup.exe`) and a Linux AppImage. Both self-update. Windows requires
-the separately installed x64 ASP.NET Core Runtime 10.0.11+; Linux bundles .NET. The application still self-provisions
+the separately installed x64 ASP.NET Core Runtime 10.0.12+; Linux bundles .NET. The application still self-provisions
 its llama.cpp binary and GGUF models into the per-user data directory.
 
 ### Legacy manual-bundle cleanup scripts

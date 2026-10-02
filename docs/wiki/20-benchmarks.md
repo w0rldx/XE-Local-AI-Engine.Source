@@ -1,6 +1,6 @@
 # Benchmarks — Task Suites, Frozen Runs, Discriminating Scores
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 The **benchmark** module measures a frozen suite of questions against many local models and ranks the results. Quant fidelity, server-side verifiers and pairwise judging make the scores discriminating; task suites make the module a real harness: a project asks **N questions**, a launch fans out over them, the unit that ranks is a **combination of model settings** rather than a single run, and the difference between two combinations comes with an interval.
 
@@ -488,6 +488,7 @@ Rules the UI is built on, all of them consequences of the backend contracts abov
 | Entities, configurations, hashing, store | `XE-Local-AI-Engine.Client.Persistence/{Entities,Configurations,Implementation,Stores}/` |
 | Endpoints, DTOs, mappers | `XE-Local-AI-Engine.Client/Endpoints/Benchmarks/V1/` |
 | Routes | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (`LocalApiRoutes.Benchmarks`; the hand-off is `LocalApiRoutes.Training.ComparisonBenchmark`) |
+| Run-progress SignalR hub | `XE-Local-AI-Engine.Client/Hubs/BenchmarkRunHub.cs` (`BenchmarkRunHub`, mapped at `/api/local/v1/benchmarks/hub`) |
 | React feature | `XE-Local-AI-Engine.Client.React/src/features/benchmarks/` |
 | Fidelity + NIAH corpus and licence | `tools/benchmark/corpus/`, `third-party/data/` |
 

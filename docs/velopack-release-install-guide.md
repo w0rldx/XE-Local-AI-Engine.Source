@@ -1,6 +1,6 @@
 # Velopack release, install, and update guide
 
-> Last reviewed: 2026-08-07 against Velopack 1.2.0, `.github/workflows/release.yml`, the publish profiles, and the app-update source policy.
+> Last reviewed: 2026-10-02 against Velopack 1.2.0, `.github/workflows/release.yml`, `.github/workflows/dev-build.yml`, the publish profiles, the app-update channel policy, and the node vault (ADR 0018).
 
 XE Local AI Engine distributes official binaries as **Velopack-managed portable applications** for Windows x64 and
 Linux x64. There is no OS installer.
@@ -75,11 +75,17 @@ Release selection and platform selection are independent:
 
 | Selector | Values | Purpose |
 |---|---|---|
-| Build flavor | `main`, `tester` | `main` follows stable releases; `tester` also sees release candidates |
-| Velopack OS channel | `win`, `linux` | Selects packages compatible with the installed operating system |
+| Update channel (chosen in the app, About page) | Stable, Preview, Development | Stable sees released versions only; Preview also sees release candidates; Development also sees daily Development builds |
+| Velopack OS feed | `win`, `linux`; plus `win-dev`, `linux-dev` for Development | Selects packages compatible with the installed operating system |
 
-The OS channel is recorded in Velopack package metadata. Choosing the RC track does not allow Windows to consume
-Linux packages or vice versa.
+The channel is node state and is sent with every check. The packaging flavour baked into a build (`main`, `tester`,
+`dev`) is internal and only sets the default channel (Stable, Preview, Development) until the user picks one.
+Development builds are GitHub prereleases tagged `dev/<version>` that carry only the `-dev` feeds, so Stable and
+Preview reads never see them. No channel offers a lower version: moving from Development back to Stable means
+installing a Stable artifact manually.
+
+The OS feed is recorded in Velopack package metadata. No channel allows Windows to consume Linux packages or vice
+versa.
 
 ### Applying an update
 
@@ -90,6 +96,10 @@ Linux packages or vice versa.
 
 The per-user data directory is separate from the application files, so normal updates do not replace chats, settings,
 models, or local runtime downloads.
+
+The restart is a fresh, locked start: the app shows the **Unlock this node** page until the admin password is
+entered (ADR 0018). A headless install restarted without `XE_ADMIN_PASSWORD` or `--admin-password-stdin` serves that
+page and answers `503` on every other local API route until someone unlocks it in a browser.
 
 ## Release integrity and publication
 
@@ -122,6 +132,9 @@ forward-only, so an older binary may not understand data already migrated by a n
 Close the app, download and verify the older platform artifact, then run it from a separate writable location. If the
 older build cannot open the migrated data, stop it and restore the complete pre-update backup or return to the newer
 build. Do not delete or hand-edit `node.sqlite` as a rollback technique.
+
+A build from before the node vault cannot read the password-wrapped `node.key` and refuses to start, calling the key
+file corrupt. Do not delete `node.key` in response; restore the complete pre-update backup instead.
 
 ## Historical scripts and releases
 

@@ -1,6 +1,6 @@
 # Writing Tests
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 [Testing & Validation](13-testing-and-validation.md) is the map of what exists and what counts as validated.
 This page is the **authoring guide**: where a new test goes, which harness seam to use, and the traps that
@@ -197,7 +197,7 @@ the construction site.
 | `AdditionalConfiguration` | Last-wins overlay of configuration keys |
 | `EnableDevelopmentMode` | Turn Development Mode on/off for this host |
 | `EnvironmentName` | Override the host environment — the way to exercise **production-only middleware** such as the rate limiter, which the `Testing` environment skips |
-| `SkipDefaultBaseUrlOverride` | Let the platform base URL be missing/invalid, to assert startup validation |
+| `UsePreMigratedDatabase` | Default `true`: seed the host's SQLite file from the process-wide migrated template. Set `false` for a test that asserts on the migration path itself (empty database, pre-migration backup, pending-migration set); ignored when `AdditionalConfiguration` repoints `ConnectionStrings:node-sqlite` |
 
 Auth helpers: `CreateNodeAccessToken()` / `AddNodeBearerToken(request)` mint an **operator** JWT;
 `CreateNonOperatorAccessToken()` / `AddNonOperatorBearerToken(request)` mint an authenticated principal that
@@ -357,7 +357,7 @@ because a component reaching the API through TanStack Query catches it into `que
 elsewhere would stay green over a call it never stubbed. Declare the route, never widen the guard.
 `src/test/PinLocale.ts` is already wired as a Vitest `setupFiles` entry, so locale is deterministic; so is
 `src/test/Cleanup.ts`, which runs React Testing Library's `cleanup` after every test (Vitest does not register it
-for you without `globals`). `restoreMocks`, `unstubEnvs` and `unstubGlobals` are on in `vite.config.ts`, so spies
+for you without `globals`); `src/test/NoNetwork.ts` is the global guard that fails any network call a test file did not stub. `restoreMocks`, `unstubEnvs` and `unstubGlobals` are on in `vite.config.ts`, so spies
 and env stubs reset themselves — store and `localStorage` state does not. Every test needs a visible `expect(…)`:
 `pnpm run validate` runs `CheckTestsHaveAssertions.mjs` and fails on a test without one.
 

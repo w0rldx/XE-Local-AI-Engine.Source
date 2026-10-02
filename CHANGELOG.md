@@ -72,7 +72,7 @@ Both were published as GitHub **pre-releases** carrying `XE-Local-AI-Engine-win-
 
 ## [Unreleased]
 
-Work on `develop` since `v1.0.0-rc.2`: 1,283 commits through 2026-09-15. Nothing in this section is tagged or
+Work on `develop` since `v1.0.0-rc.2`: 1,486 commits through 2026-10-02. Nothing in this section is tagged or
 published.
 
 > The source version identity in `eng/ReleaseVersion.props` still reads `1.0.0-rc.2` — the version that has already
@@ -156,6 +156,16 @@ published.
   into the frozen replay; the `draft-dflash` and `draft-dspark` speculative modes; and multi-head latent attention
   KV lengths clamping the model-fit KV estimate.
 
+- **Chat workflows** — Chat graph workflows run from the chat composer with ChatInput and DecisionModel nodes, stream a node's live reasoning into the chat, can be steered mid-run, read the chat's attachments, and come with sample workflows in the New workflow dialog.
+- **Direct LLM call nodes** in Graph Workflows.
+- **Update channels and daily Development builds** — Stable, Preview and Development channels; `dev-build.yml` publishes a daily `dev/` snapshot. ADR 0014.
+- **Native desktop shells** — Avalonia Windows and Ubuntu shells (`XE-Local-AI-Engine.Desktop`) that talk to the engine over REST and SignalR, following the SPA's language. ADR 0013.
+- **Conversation state distillation and auto-compaction** — a provenance-aware conversation state, and conversations compacted automatically after a turn with folds sized to the model window.
+- **`web_search` and `web_fetch`** with a review gate against prompt injection and an ask-before-send consent for each web request. ADR 0017.
+- **Managed Python layer** — one shared, `uv`-managed Python acquisition and runner layer for Training and Compute, plus a shared child-process supervision layer. ADR 0016.
+- **Runtime RAM/VRAM widget** — live RAM and VRAM in the top bar, with image and transcription residents listed and draft-only models unloaded sooner.
+- **Vault key custody** — the persisted `node.key` is wrapped under the admin password and a one-time recovery code; a locked node serves only an unlock page. ADR 0018.
+
 ### Changed
 
 - **Launching the packaged app with no arguments opens the native desktop window instead of a browser.** That is
@@ -182,6 +192,10 @@ published.
 - A UI unification and responsive pass across the app, followed by a React cleanup: dead dependencies dropped, the
   largest pages decomposed behind unchanged export and prop contracts, and shared primitives — an inline error
   alert, a label/value row, shared form fields — adopted across the tree.
+
+- **Node Settings** are regrouped into sections and the curated limits are now node settings.
+- **MCP hardening** — the outbound MCP client and the inbound MCP server are tightened (`feat(mcp)`, 2026-09-30).
+- **Playbook memory** is gated on cloud egress and bounded in size; a turn notice says when it is withheld.
 
 ### Removed
 
@@ -218,6 +232,10 @@ published.
   name is rejected before `save_pretrained` (CVE-2026-9856).
 - Seven endpoint files were named after something other than the single endpoint they declare, so the type name was
   not enough to find the file. Each is now named after its type; no behaviour, route or namespace changed.
+
+- **Tester rounds 3 to 5** — draft-dialog model picker, orphaned chat Stop, image VRAM eviction, flaky idle tests, transcription recovery after a dead CUDA `whisper-server`, graph editor handles, resident-model reuse and Docker probe handling.
+- **Compute venv** is rebuilt through a staged swap, and web page extraction is bounded.
+- **Knowledge reranking** no longer cold-spawns or backlogs, and search hits name their score kind.
 
 ### Internal
 

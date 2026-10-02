@@ -1,6 +1,6 @@
 # AI runtime developer notes
 
-Last reviewed: 2026-08-08 against repository base `9405df91`
+Last reviewed: 2026-10-02 against repository base `eea44543f`
 
 > For the full, current runtime architecture (host llama.cpp supervisor, provider seams, agent mode),
 > see the [Developer Wiki](wiki/Home.md) — especially
@@ -26,6 +26,7 @@ For comment cleanup and AI-agent retrieval, use stable runtime terms instead of 
 - `XE-Local-AI-Engine.Client.Application` owns application decisions: persisted credentials, local model selection, runtime-package projection, AgentHome tools, MCP discovery, playbook actions, and chat persistence.
 - `XE-Local-AI-Engine.Providers.*` owns provider adapters. Provider-specific SDK types should stay inside provider projects; application code should depend on `ILocalModelProvider`, `IChatClient`, or `IEmbeddingGenerator`.
 - `XE-Local-AI-Engine.Providers.LlamaServer` owns the host model-runtime lifecycle (supervising the `llama-server` child process, GPU variant selection, and binary acquisition). The former `XE-Local-AI-Engine.HostAgent.*` connection layer and the Docker/container sandbox were removed in the 2026-06-17 runtime re-architecture, and **the model-runtime path carries no container dependency** — inference is a supervised host child process with a driver-only footprint. ([ADR 0004](adr/0004-development-mode-container-execution-docker-stopgap.md) later permitted Docker for **Development Mode execution only**; that is a separate feature behind the `ISandboxRuntimeProvider` seam and does not reach any runtime boundary on this page.) Browser/API DTOs must not expose provider secrets, worker credentials, HMAC secrets, or host-only paths.
+- `XE-Local-AI-Engine.Providers.Python` (managed uv Python layer) and `XE-Local-AI-Engine.Providers.ProcessSupervision` (child-process containment) now also sit under the runtime boundary: `LlamaServer`, `StableDiffusionCpp`, `WhisperCpp` and `Python` supervise their children through the latter, and `Providers.Python` references only `Providers.Abstractions` and `Providers.ProcessSupervision`.
 
 ## External library expectations
 
@@ -34,7 +35,7 @@ The AI stack changes quickly. Re-check upstream docs before changing these seams
 | Area | Current repository usage | Upstream reference |
 | --- | --- | --- |
 | Microsoft.Extensions.AI 10.10.0 | Provider-neutral `IChatClient` and `IEmbeddingGenerator<string, Embedding<float>>` abstractions. The repository composes `IChatClient` decorators for tool invocation and observability. | <https://learn.microsoft.com/en-us/dotnet/ai/microsoft-extensions-ai> and the official [10.10.0 package artifact](https://api.nuget.org/v3-flatcontainer/microsoft.extensions.ai/10.10.0/microsoft.extensions.ai.nuspec) |
-| Microsoft Agent Framework 1.21.0 | `AIAgent` / `ChatClientAgent` integration, handoff workflows, tool invocation, approval, and workflow-event streaming. Framework types remain behind this repository's orchestration-session boundary. | <https://learn.microsoft.com/en-us/agent-framework/> and the official [1.21.0 package artifact](https://api.nuget.org/v3-flatcontainer/microsoft.agents.ai/1.21.0/microsoft.agents.ai.nuspec) |
+| Microsoft Agent Framework 1.22.0 | `AIAgent` / `ChatClientAgent` integration, handoff workflows, tool invocation, approval, and workflow-event streaming. Framework types remain behind this repository's orchestration-session boundary. | <https://learn.microsoft.com/en-us/agent-framework/> and the official [1.22.0 package artifact](https://api.nuget.org/v3-flatcontainer/microsoft.agents.ai/1.22.0/microsoft.agents.ai.nuspec) |
 | llama.cpp `llama-server` b10201 | Primary local runtime, supervised as a host child process. The provider uses its `/v1/chat/completions` and `/v1/embeddings` OpenAI-compatible endpoints; compatibility is endpoint/feature-specific, not a guarantee for arbitrary OpenAI clients. | The pinned [b10201 server README](https://github.com/ggml-org/llama.cpp/blob/8f4646a63ee29f2e0ab971b0290b141938769762/tools/server/README.md) and [release](https://github.com/ggml-org/llama.cpp/releases/tag/b10201) |
 | HuggingFace | GGUF model discovery + download (`XE-Local-AI-Engine.Providers.HuggingFace`). | <https://huggingface.co/docs/hub/gguf> |
 | Ollama | Optional/legacy local provider (present but de-orchestrated from Aspire dev): inventory, pull/delete/warm/unload, chat, embeddings via OllamaSharp. | <https://docs.ollama.com/api> and <https://docs.ollama.com/capabilities/embeddings> |
@@ -49,7 +50,7 @@ The AI stack changes quickly. Re-check upstream docs before changing these seams
 5. Treat Ollama model names, context-length metadata, and embedding dimensions as provider observations, not hard-coded invariants.
 6. Treat cloud-provider credentials (Codex OAuth tokens) and the HuggingFace token as local secrets. They may configure a chat client or download path but must not be logged, returned to the browser, or included in transcripts.
 7. Preserve cancellation-token flow through chat, embedding, tool, MCP, and sandbox operations.
-8. Treat current online snippets as version-sensitive. At the repository's MAF 1.21.0 / MEAI 10.10.0 pins, verify approval and workflow types against the resolved package artifacts before copying framework examples.
+8. Treat current online snippets as version-sensitive. At the repository's MAF 1.22.0 / MEAI 10.10.0 pins, verify approval and workflow types against the resolved package artifacts before copying framework examples.
 
 ## Validation after AI changes
 

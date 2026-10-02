@@ -48,6 +48,8 @@ Solution: `XE-Local-AI-Engine.slnx`. Full layout and dependency rules: `docs/wik
   (reviewed exceptions: `LlamaServer` and `OpenAICompat` also use the leaf `Providers.OpenAICompatible.Core`;
   `Training` also uses `Providers.Python`; `LlamaServer`, `StableDiffusionCpp`, `WhisperCpp` and `Python` also use
   `Providers.ProcessSupervision`, which references only `Providers.Abstractions`; `Python` references just those two).
+- Other provider projects: `Providers.Capabilities`, `CodexOAuth`, `HuggingFace`, `Ollama` and the leaf
+  `OpenAICompatible.Core`; `Client` and `Client.Application` reference `Providers.Ollama` directly.
 - `XE-Local-AI-Engine.Providers.Python` — shared managed-Python layer: pinned uv acquisition, uv environment
   allowlist, scrubbed tree-killed runner (ADR 0016). No feature semantics.
 - `XE-Local-AI-Engine.Providers.ProcessSupervision` — shared child-process containment: Linux process-group, Windows
@@ -60,6 +62,7 @@ Solution: `XE-Local-AI-Engine.slnx`. Full layout and dependency rules: `docs/wik
 - `XE-Local-AI-Engine.Tests`, `AI.Agent.Tests`, `Client.Persistence.Tests` — TUnit; `Tests.E2ETests` — Playwright, opt-in.
 - `Client.Testing` — shared host fixtures; `Testing.FakeOllama` — in-memory fake model server used by tests;
   `Testing.FakeDocker` — in-memory fake Docker Engine API so the container tests need no daemon.
+- `.github/workflows/` — besides `build-and-test.yml` and `release.yml`: `dev-build.yml` (daily Development snapshots), `e2e.yml`, `package-velopack.yml`.
 - `scripts/` — dev lifecycle, validation gates, smoke runners. `publish/` — packaging. `tools/training/` — the
   shipped Python training runtime (own `pyproject.toml`; never `uv sync` inside it).
 

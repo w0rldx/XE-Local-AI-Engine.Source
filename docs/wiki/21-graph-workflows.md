@@ -1,6 +1,6 @@
 # Graph Workflows — Operator-Authored DAGs
 
-> Reviewed: 2026-09-22 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 **Graph Workflows** let an operator draw a directed acyclic graph of LLM calls, agent turns, tool calls, conditions and human
 pauses, save it, and start runs of it. The engine executes the run from the database: every node run is a row, every
@@ -939,10 +939,12 @@ calibrated score, and inventing one would route on noise. Out-edges route on `ou
 Full route table and hub inventory: [API & Hubs](09-api-and-hubs.md). `LocalApiRoutes.GraphWorkflows` is the family;
 the whole surface, hub path included, sits behind request-path middleware in `Program.cs` that answers **404** when
 `GraphWorkflows:Enabled` is false — ahead of the security middleware, so the switch cannot be probed by status code.
+The one carve-out is `GET graph-workflows/capability` (`LocalApiRoutes.GraphWorkflows.Capability`, `GetGraphWorkflowCapabilityEndpoint`), which stays reachable and answers `enabled: false` so the SPA can hide the feature instead of reading a bodyless 404 as a load failure.
 Every route is Operator-gated.
 
 | Route | Notes |
 |---|---|
+| `graph-workflows/capability` | GET, reachable even when the feature is disabled (the only route exempt from the 404 above); reports whether the feature is enabled. |
 | `graph-workflows/definitions` | GET lists **without** the graph blob (it is the encrypted column), each row carrying its denormalised `kind`; POST creates. |
 | `graph-workflows/definitions/{definitionId}` | GET / PUT with the version it was edited from / DELETE, which 409s while a live run pins the definition. |
 | `graph-workflows/definitions/validate` | POST a graph and get its errors **and warnings** back without saving. The editor asks the runtime's own parser. `valid` is still zero ERRORS: a graph that only warns passes here and saves. |
@@ -1175,8 +1177,8 @@ budget (a `MaxNodesPerDefinition` of 1 passes `[Range(1, …)]` and still admits
 Start and an End), the `MaxNodeRunsPerRun ≥ MaxNodesPerDefinition` relation, and the replay ceiling. An operator meets
 these at boot rather than once per node run.
 
-Two limits that are **not** options, because they are not runtime budgets: the 1 MiB request-body cap on the five
-routes that carry one (create, update, validate, start-run and the chat send), and the 200-row cap on a run list page.
+Two limits that are **not** options, because they are not runtime budgets: the 1 MiB request-body cap on the six
+routes that carry one (create, update, validate, start-run, the chat send and the steer), and the 200-row cap on a run list page.
 
 One ceiling that lives outside this module: an `Agent` node's `responseJsonSchema` goes down the same llama.cpp GBNF
 path as a tool schema, which has an empirical combined repetition bound

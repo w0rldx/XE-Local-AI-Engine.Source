@@ -11,7 +11,7 @@ require a maintainer PAT.
 
 | Platform | User-facing artifact | Install model | Self-update |
 |---|---|---|---|
-| Windows x64 | Velopack `Portable.zip` | Install ASP.NET Core Runtime 10.0.11+ (x64) and WebView2 Evergreen Runtime, extract to a writable directory, and run the top-level launcher | Yes |
+| Windows x64 | Velopack `Portable.zip` | Install ASP.NET Core Runtime 10.0.12+ (x64) and WebView2 Evergreen Runtime, extract to a writable directory, and run the top-level launcher | Yes |
 | Linux x64 | Velopack `.AppImage` | Mark executable and run the AppImage | Yes; Velopack replaces the AppImage in place |
 
 Windows packing passes `--noInst` to Velopack 1.2.0, so the release must contain exactly one Windows
@@ -89,13 +89,29 @@ success with an incomplete package inventory. `scripts/compliance/sbom-tool.sh` 
 
 ## Update channels
 
-Two independent selectors are involved:
+Users choose the update channel in the app (About page), and the choice is node state that survives updates
+([ADR 0014](../docs/adr/0014-update-channels-and-development-builds.md)):
 
-- **Release track:** `main` follows stable releases; `tester` can also see release candidates.
-- **OS channel:** Velopack selects the Windows or Linux feed from the package metadata.
+- **Stable** reads the OS feed (`win` / `linux`) for released versions only.
+- **Preview** reads the same feed and also accepts release candidates.
+- **Development** additionally reads the `win-dev` / `linux-dev` feed, which only Development builds publish.
 
-The track does not override the OS channel. Both build flavors read the public repository anonymously; users do not
-need a GitHub account, device login, token, or repository invitation to check for updates.
+The baked packaging flavour (`-p:UpdateChannel=main|tester|dev`) is internal: it only sets the default channel a node
+follows until its operator picks one (`main` = Stable, `tester` = Preview, `dev` = Development). Velopack's OS
+channel still comes from the package metadata, and no channel ever offers a lower version. Every flavour reads the
+public repository anonymously; users do not need a GitHub account, device login, token, or repository invitation to
+check for updates.
+
+### Development builds
+
+[`.github/workflows/dev-build.yml`](../.github/workflows/dev-build.yml) runs daily (03:17 UTC, or by manual dispatch
+on `develop`) and skips an unchanged `develop` tip. It packages through the same
+[`package-velopack.yml`](../.github/workflows/package-velopack.yml) as a tag release with `UpdateChannel=dev`, and
+publishes one GitHub **prerelease** tagged `dev/<version>` carrying only `releases.win-dev.json` and
+`releases.linux-dev.json`, so Stable and Preview feed reads skip it. The version extends the newest reachable `v*`
+tag (`1.0.0-rc.2` becomes `1.0.0-rc.2.dev.<yyyymmdd>.<n>`; a stable anchor bumps the patch). There is no
+`open-source-release` approval gate; every technical gate of a tag release still runs. After a successful publish
+the workflow prunes all but the newest 30 Development releases and keeps their tags.
 
 ## Signing and verification
 

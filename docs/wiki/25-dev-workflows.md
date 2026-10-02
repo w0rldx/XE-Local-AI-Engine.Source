@@ -1,6 +1,6 @@
 # Dev Workflows — The Development Runtime
 
-> Reviewed: 2026-09-20 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 **Dev Workflows** run an operator's work item through a graph of agent turns, sandbox command passes, coder
 rounds and human gates. The engine executes a run from the database: every node run is a row, every change is

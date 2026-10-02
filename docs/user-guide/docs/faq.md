@@ -35,7 +35,7 @@ top-level entry selects the current version and preserves the portable update co
 ### Nothing happens when I run it — the window flashes and disappears
 On the **Windows portable build, this is almost always a missing .NET runtime.** The Windows ZIP is
 framework-dependent — it deliberately does **not** bundle .NET — so it needs the **x64 ASP.NET Core Runtime
-10.0.11** (or a newer .NET 10 servicing patch) installed on your machine.
+10.0.12** (or a newer .NET 10 servicing patch) installed on your machine.
 
 > **This can fail _silently_ on the portable build — no message, no log.** If .NET 10 is missing
 > **entirely** (for example, you only have .NET 8), the small launcher is itself a .NET 10 program, so it
@@ -54,7 +54,7 @@ are not required.
 dotnet --list-runtimes
 ```
 
-You need a line beginning `Microsoft.AspNetCore.App 10.0.11` (or higher). If you only see `8.0.x`, or the
+You need a line beginning `Microsoft.AspNetCore.App 10.0.12` (or higher). If you only see `8.0.x`, or the
 command is not found, that is the cause. → [Windows install prerequisites](install-windows.md#before-you-start--install-net-10)
 
 Once .NET 10 is installed, if it still won't start:
@@ -65,7 +65,7 @@ Once .NET 10 is installed, if it still won't start:
 - **Look for a startup log.** Recent builds record why the launcher stopped to
   `%LOCALAPPDATA%\XE-Local-AI-Engine\logs\launcher.log` (and `startup-crash.log`). An empty or missing
   `logs` folder points back at the missing-.NET-10 case above.
-- If .NET 10 **is** present but ASP.NET Core is missing or older than 10.0.11, the launcher can run: it
+- If .NET 10 **is** present but ASP.NET Core is missing or older than 10.0.12, the launcher can run: it
   prints the exact requirement in the console and opens the download page — but that console closes fast
   on a double-click, so check the log above too.
 - Wait a minute — the first launch is slow and quiet.
@@ -358,20 +358,26 @@ One unmet rule is almost always the reason. → [Setup walkthrough](first-run.md
 address works. It isn't even your username: **signing in afterwards asks for the password only.**
 
 ### I forgot my password
-You can set a new one **without losing anything** — your chats, models and settings all stay. There's no
-"forgot password" email (there's no server to send one), so instead you run a short one-line command on
-your own computer.
+You can set a new one **without losing anything** — your chats, models and settings all stay — as long
+as you still have the **recovery code** the app showed you once at setup. There's no "forgot password"
+email (there's no server to send one).
 
-**First, stop the app** — close its console window. The reset won't run while the app is still open.
+**The easy way: on the unlock page.** Start the app. On the **"Unlock this node"** page, click
+**"Forgot your password? Use your recovery code"**, enter the recovery code, choose a new password and
+click **"Unlock and set new password"**.
+
+**The command-line way.** First, stop the app — close its console window. The reset won't run while the
+app is still open. The recovery code goes in through the keyboard input (piped in), never as part of the
+command itself, so it doesn't show up in the list of running programs.
 
 **On Windows**
 
 1. Open the folder you start the app from (the one containing `XE-Local-AI-Engine.exe`).
 2. Click into the address bar, type `powershell`, and press **Enter** — a blue window opens.
-3. Paste the two lines below, change the password to the one you want, and press **Enter**:
+3. Paste the line below, put in your recovery code and the new password you want, and press **Enter**:
 
    ```powershell
-   & ".\XE-Local-AI-Engine.exe" --reset-admin-password "YourNewPassw0rd!"
+   "YOUR-RECOVERY-CODE" | & ".\XE-Local-AI-Engine.exe" --reset-admin-password "YourNewPassw0rd!" --recovery-code-stdin
    ```
 
 **On Linux**
@@ -379,16 +385,40 @@ your own computer.
 In a terminal, in the folder you start the app from:
 
 ```bash
-XE_LAUNCH_MODE=desktop ./XE-Local-AI-Engine.Client --reset-admin-password 'YourNewPassw0rd!'
+printf '%s\n' 'YOUR-RECOVERY-CODE' | XE_LAUNCH_MODE=desktop ./XE-Local-AI-Engine.Client --reset-admin-password 'YourNewPassw0rd!' --recovery-code-stdin
 ```
 
 When it prints **`Admin password reset succeeded`** it's finished and closes on its own. Start the app
-again and sign in with the new password. Anywhere that was signed in gets signed out.
+again and unlock it with the new password. Anywhere that was signed in gets signed out. **Your recovery
+code stays the same** — keep it.
+
+If the command stops with *"Resetting it requires the recovery code shown at setup"* or *"The recovery
+code does not unlock this node's key"* (exit code 5), the code was missing or wrong, and **nothing was
+changed**. Check that you added `--recovery-code-stdin` and copied the code exactly.
 
 > **The new password must meet the same rules as setup** — at least 12 characters with an uppercase
 > letter, a lowercase letter, a digit and a symbol. If it doesn't, the command tells you and **changes
 > nothing**, so your old password still works. (The reset also clears a lockout from too many wrong
 > sign-in attempts.)
+
+### I see an "Unlock this node" page
+That's normal. Your data is encrypted with a key that only your admin password can open, so the app
+asks for it **every time it starts** — including the restart after an update. Enter your admin password
+and click **Unlock**. Until you do, the engine waits: scheduled jobs don't run and connected programs
+(such as MCP clients) are turned away.
+
+Forgot it? Use your recovery code — see [I forgot my password](#i-forgot-my-password).
+
+### I lost my recovery code
+**If you still know your password, nothing is lost.** Keep using the app, and store the password
+especially carefully: the recovery code is shown only once (at setup, or on the **"Protect this node's
+data"** step after upgrading an older installation), the app keeps no copy, and there is no way to show
+it again or get a new one.
+
+**If you have lost both the password and the recovery code, your data cannot be recovered** — not by
+you, and not by anyone else. That is the point of the encryption: there is no back door. The only way
+forward is to [start fresh](#how-do-i-completely-reset-the-app), which deletes your account, chats and
+settings.
 
 Prefer to wipe everything and start fresh instead? See
 [How do I completely reset the app?](#how-do-i-completely-reset-the-app) above.

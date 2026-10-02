@@ -11,9 +11,19 @@ Everything the app creates — database, keys, settings, downloaded model runtim
 | Windows | `%LOCALAPPDATA%\XE-Local-AI-Engine` |
 | Linux | `~/.local/share/XE-Local-AI-Engine` (or `$XDG_DATA_HOME/XE-Local-AI-Engine`) |
 
-Inside it you'll find `node.sqlite` (your chats/settings), `node.key` (the encryption key), `models/` (downloaded models), `llama.cpp/` and `stable-diffusion.cpp/` (downloaded runtimes), and `logs/` (log files).
+Inside it you'll find `node.sqlite` (your chats/settings), `node.key` (the encryption key, itself locked by your admin password and recovery code), `models/` (downloaded models), `llama.cpp/`, `stable-diffusion.cpp/` and `whisper.cpp/` (downloaded runtimes), and `logs/` (log files).
 
 > **Always stop the app before editing or deleting anything in this folder.** Close the console/terminal window first.
+
+## The app shows "Unlock this node"
+
+This is expected on **every** start, including the restart after an update. `node.key` no longer holds the encryption key in plain form: it is wrapped by your admin password and by the one-time recovery code shown at setup. Until someone unlocks it, the engine serves only the unlock page; scheduled jobs do not run, and every other local API route, MCP included, answers `503`.
+
+- **You know the password:** enter it and click **Unlock**.
+- **You forgot the password:** click **"Forgot your password? Use your recovery code"**, enter the code and a new password. From the command line instead (app stopped), pipe the code in: `--reset-admin-password '<new password>' --recovery-code-stdin`. Without the code, or with a wrong one, the command exits `5` and changes nothing. The recovery code itself stays the same. Full steps: [FAQ — I forgot my password](user-guide/docs/faq.md#i-forgot-my-password).
+- **You lost both the password and the recovery code:** the data cannot be recovered. The only way forward is a fresh start (delete `node.sqlite` and `node.key` together, see below).
+- **Headless or scripted start:** pass the password in `XE_ADMIN_PASSWORD` or on stdin with `--admin-password-stdin`, and the engine unlocks without the page. A wrong password exits `5`. See the [Agentic Support guide](agentic-support/agent-install.md).
+- **An older build says `node.key` is corrupt:** builds from before the unlock page cannot read the protected key. Do **not** delete `node.key`; go back to the newer build or restore a complete backup.
 
 ## A model won't load (out of memory / VRAM)
 
@@ -51,12 +61,12 @@ In desktop mode the app binds an automatically chosen free loopback port (`127.0
 If the app's chat/settings state is corrupted or you want a clean slate:
 
 1. **Stop the app** (close the console/terminal window).
-2. Delete `node.sqlite` from your data dir.
-3. Restart. The app recreates an empty database on next launch.
+2. Delete `node.sqlite` from your data dir, and `node.key` with it. If `node.key` stays, the next start still asks for the old admin password on the unlock page.
+3. Restart. The app recreates an empty database on next launch and runs setup again.
 
 This wipes chats, agents, scheduler jobs, and settings, but **keeps** your downloaded models and runtimes.
 
-> **Do not delete `node.key`** unless you are also deleting `node.sqlite`. The database file itself is ordinary SQLite, but the sensitive **columns** inside it are encrypted with that key (per-column AES-256-GCM) — removing the key without the database leaves those columns permanently unreadable. If you delete `node.sqlite`, deleting `node.key` too is fine (a fresh key is generated).
+> **Do not delete `node.key`** unless you are also deleting `node.sqlite`. The database file itself is ordinary SQLite, but the sensitive **columns** inside it are encrypted with the key that `node.key` protects (per-column AES-256-GCM) — removing the key without the database leaves those columns permanently unreadable. If you delete `node.sqlite`, deleting `node.key` too is fine: setup runs again, creates a fresh key and shows a new recovery code.
 
 ## Fully remove the app
 

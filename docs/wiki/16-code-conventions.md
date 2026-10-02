@@ -1,6 +1,6 @@
 # Code Organization Conventions
 
-> Reviewed: 2026-09-17 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 > Updated 2026-08-07: endpoint areas now fold DTOs/mappers/validators into `V1/{Dtos,Mappers,Validators}/`
 > subfolders (only endpoints stay at the top level); `Dtos/` keeps a flat namespace by design.
 > Updated 2026-09-17: the backend sections below state the **C# baseline** — conventional constructors,
@@ -543,17 +543,17 @@ Two sanctioned exceptions:
   `features/chat/components/MessageParts.tsx`, `core/ui/components/CodeBlock/CodeBlock.tsx`.
 - **A Zustand store hook stays `export const useFooStore = create<T>()(…)`** — it is a factory invocation,
   not a declaration; do not "fix" one back to `function`. Every other hook is `export function useFoo()`
-  (121 files against one stray const hook, `core/theme/hooks/useTheme.ts`).
+  (the one stray const hook is `core/theme/hooks/useTheme.ts`).
 
 ### Props are an `interface <Component>Props`, colocated
 
-**The props type is an `interface` named after the component, declared in the component's own file** — 204
-files do this and `type FooProps = …` appears zero times, so do not introduce it. A bare `interface Props`
+**The props type is an `interface` named after the component, declared in the component's own file** —
+nearly every component does this and `type FooProps = …` does not appear, so do not introduce it. A bare `interface Props`
 is drift: name it after the component.
 
-Export the interface only when another file imports it. **Open decision:** 72 of the 204 are exported and
+Export the interface only when another file imports it. **Open decision:** many of them are exported and
 nothing mechanical separates a genuinely shared one from a leftover, so this page states no rule on pruning
-them. Likewise `Readonly<Props>` is a minority stricter-typing choice (18 of 204) with no majority behind
+them. Likewise `Readonly<Props>` is a minority stricter-typing choice with no majority behind
 it — neither adding nor removing it is a violation today.
 
 ### Feature-folder layout
@@ -566,22 +566,22 @@ it — neither adding nor removing it is a violation today.
   colocated in each feature's **`queries/`** folder alongside reads.
 - **No API/data-fetch logic inside components** — it lives in `queries/`, `stores/`, or the generated
   client.
-- **A feature's `components/` folder is flat: `components/Foo.tsx`** (289 flat against 2 nested). A
+- **A feature's `components/` folder is flat: `components/Foo.tsx`**. A
   `components/<Parent>/` folder exists only to hold the sub-parts of a decomposed parent component, not as
   the default shape for a single component.
 - **A shared `core/` component gets its own folder: `core/**/components/<Name>/<Name>.tsx`**, with its test
-  and any `.module.css` beside it (28 nested, zero flat). Reference:
+  and any `.module.css` beside it. Reference:
   `core/ui/components/FullHeightPage/FullHeightPage.tsx`. The two halves of the tree follow different rules
   on purpose — match the half you are editing.
 - **No `index.ts` barrels** anywhere under `src/features` — import the file directly.
 - **There is no `types/`, `utils/`, or `constants/` folder** in any feature, and adding one starts a fourth
-  category. A domain type goes in `models/` (present in 33 of 35 features), a helper sits beside its only
+  category. A domain type goes in `models/`, a helper sits beside its only
   caller or in `core/` when shared. `api/` exists in four features only.
 
 ### Imports use the `@/` alias; their order is Biome's output
 
-**Import across folders through the `@/` alias, never a `../../` climb** — 3895 alias occurrences against
-zero two-level relative imports. A single `../` to a sibling inside the same feature is fine.
+**Import across folders through the `@/` alias, never a `../../` climb** — the codebase has no two-level relative
+imports. A single `../` to a sibling inside the same feature is fine.
 
 **Import order and `import type` placement are `biome check --write` output, not a style choice.**
 `organizeImports` is on with explicit `:PACKAGE:`/`:ALIAS:`/`:PATH:` groups and `useImportType` is an error,
@@ -608,12 +608,12 @@ validate-then-submit. Reference: `features/agents/components/AgentDefinitionForm
 ### State: server in TanStack Query, UI-only in Zustand
 
 Server data lives in TanStack Query and is **never mirrored** into a store. Zustand stores hold only
-ephemeral UI state, use a **nested `actions: { … }`** object (16 of the 22 Zustand stores, and the shape to
-write for a new store anywhere), and are read with **one atomic selector per value**
+ephemeral UI state, use a **nested `actions: { … }`** object (the shape to write for a new store
+anywhere), and are read with **one atomic selector per value**
 (`useStore((s) => s.actions.x)`). `useShallow` is **deliberately unused** (0 occurrences) — avoid object
 selectors rather than reaching for it. Reference: `features/mcp/stores/McpManagementStore.ts`.
 
-Six stores predate the nested shape and expose flat top-level action fields — `core/layout/stores/SidebarStore`,
+Some stores predate the nested shape and expose flat top-level action fields — `core/layout/stores/SidebarStore`,
 `core/locales/stores/UserLanguageStore`, `core/theme/stores/ThemeStore`,
 `core/ui/components/TablePagination/useTablePaginationStore`, `features/model-fit/stores/CpuFallbackBannerStore`,
 `features/node-settings/stores/RuntimeUpdateBannerStore`. **Open decision:** converting them is an API change at
@@ -668,8 +668,8 @@ order of magnitude. Escalate only when they cannot express the thing:
 1. **`.module.css`** for pseudo-selectors, keyframes, and React Flow node styling — the handful of modules in
    the tree are almost all canvas nodes in `devWorkflows`/`graphWorkflows`.
 2. **Inline `style={{ … }}` only for a genuinely computed value** (a measured offset, a progress width). A
-   static inline style object is a Mantine prop that has not been written yet, and 319 such sites across 24 of
-   35 features make this the app's largest style drift.
+   static inline style object is a Mantine prop that has not been written yet, and such sites are the app's largest
+   style drift.
 
 **UnoCSS utility classNames are not this app's convention.** They belong to the standalone
 `src/core/theme/theme-configurator/` and to the app shell's static layout classes
@@ -714,7 +714,7 @@ deliberately clips X, so a table or diagram wider than its pane must carry its o
 
 **A component test needing Mantine theme or TanStack Query context uses `renderWithProviders` from
 `src/test/RenderWithProviders.tsx`.** A hand-rolled `MantineProvider` + `QueryClientProvider` wrapper
-duplicates it; the 121 test files that still do are the drift, not the pattern.
+duplicates it; the test files that still do are the drift, not the pattern.
 
 **In a new or touched test, prefer `getByRole`/`findByRole` where the element has a semantic role** and keep
 `getByTestId` for elements that genuinely have none. This is forward-looking only: existing `*ByTestId` sites

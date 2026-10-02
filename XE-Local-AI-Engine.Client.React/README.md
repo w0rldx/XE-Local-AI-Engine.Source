@@ -12,7 +12,7 @@ pnpm install --frozen-lockfile
 pnpm run build
 ```
 
-`pnpm run build` also enforces recursive deployed-script budgets for application, TTS-worker, and ORT `.js`/`.mjs` output and prints the five largest emitted scripts.
+`pnpm run build` also enforces recursive deployed-script budgets for application and lazy-editor `.js`/`.mjs` output and prints the five largest emitted scripts.
 
 ## Standalone development server
 

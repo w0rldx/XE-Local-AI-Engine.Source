@@ -1,6 +1,6 @@
 # React Client (Frontend)
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 The React management UI lives in `XE-Local-AI-Engine.Client.React` and is the operator console for a single node: chat, agent mode, model management/advisor, scheduler, MCP, skills, settings, and dashboards. It is a Vite + React 19 + Mantine SPA, served same-origin from the Node Web Server's `wwwroot`. All server state flows through TanStack Query over a **generated hey-api SDK** that is the single source of truth for REST; SignalR drives the streaming/live surfaces. This page maps the directory layout, the state strategy, the transport plumbing, the shared UI primitives, i18n, and how the bundle is hosted.
 
@@ -22,7 +22,7 @@ Source: `XE-Local-AI-Engine.Client.React/package.json`.
 | UI/session state | `zustand` 5 | Auth token, theme, sidebar, language, dev mode, pagination prefs. |
 | HTTP | `axios` 1 | One shared instance behind the generated client. |
 | Validation | `zod` 4 | Boundary parsing of API responses + form schemas. |
-| Realtime | `@microsoft/signalr` 10 | Shared connections for the hub paths the backend maps (chat, scheduler, benchmark runs, dataset generation, training runtime, training runs, GGUF download, CUDA build, llama.cpp source build, runtime acquisition, knowledge base, image jobs, stable-diffusion.cpp source build, work sessions, development workflows, graph workflows) plus Development attempts when enabled. The `MapHub<>` calls in `Program.cs` are the inventory — see [API & Hubs](09-api-and-hubs.md). |
+| Realtime | `@microsoft/signalr` 10 | Shared connections for the hub paths the backend maps (chat, scheduler, benchmark runs, dataset generation, training runtime, training runs, GGUF download, llama.cpp source build, runtime acquisition, knowledge base, image jobs, stable-diffusion.cpp source build, work sessions, transcription, development workflows, graph workflows, external apps) plus Development attempts when enabled. The `MapHub<>` calls in `Program.cs` are the inventory — see [API & Hubs](09-api-and-hubs.md). |
 | Markdown | `react-markdown` + `remark-gfm` + `react-syntax-highlighter` | Chat + editor rendering. |
 | i18n | `i18next` + `react-i18next` + browser language detector | `en` / `de`. |
 | Canvas | `@xyflow/react` | The Graph Workflows editor and its read-only run view (see [Graph Workflows](21-graph-workflows.md)), and the Development Workflows definition form. |
@@ -109,7 +109,7 @@ Source: the first-level directories under `XE-Local-AI-Engine.Client.React/src/f
 | `mcp` | MCP server registration + tooling | [API & Hubs](09-api-and-hubs.md) |
 | `model-fit` | Hardware-aware GGUF recommendation + quant pick, plus the per-machine inference-profile panel (`InferenceProfilePanel`, explore/benchmark/freeze) | [Model Fit](07-model-fit.md) |
 | `models` | Model management (HF GGUF discovery/download, classification) | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
-| `node-settings` | **Node Settings** at `/node-settings`: one page, eleven intent-based sections behind a left nav (`?section=` search param, so a section is linkable), one sticky save bar for every node-stored field, the **runtime build cards**, and `RuntimeAcquisitionBanner`: `useRuntimeAcquisitionHub` hydrates `GET model-fit/llamacpp/acquisition`, merges `runtimeAcquisition.statusChanged` pushes by monotonic sequence, and rehydrates after reconnect. See [§ Node Settings: one draft, one save bar](#node-settings-one-draft-one-save-bar) below | [Hosting & Deployment](11-hosting-and-deployment.md), [Local Runtime & Providers](03-local-runtime-and-providers.md#26-in-app-source-builds-linux) |
+| `node-settings` | **Node Settings** at `/node-settings`: one page, intent-based sections behind a left nav (`?section=` search param, so a section is linkable), one sticky save bar for every node-stored field, the **runtime build cards**, and `RuntimeAcquisitionBanner`: `useRuntimeAcquisitionHub` hydrates `GET model-fit/llamacpp/acquisition`, merges `runtimeAcquisition.statusChanged` pushes by monotonic sequence, and rehydrates after reconnect. See [§ Node Settings: one draft, one save bar](#node-settings-one-draft-one-save-bar) below | [Hosting & Deployment](11-hosting-and-deployment.md), [Local Runtime & Providers](03-local-runtime-and-providers.md#26-in-app-source-builds-linux) |
 | `onboarding` | First-response guided tour (React Joyride) + welcome dialog with language picker + showcase panel | — |
 | `runtime-resources` | Top-bar resource widget in the `HeaderBar` spacer: live RAM and VRAM bars from `GET model-fit/resources` (5 s poll, paused while the tab is hidden; an empty GPU list reads "VRAM usage unavailable", never an empty bar) and a "Loaded models" popover listing the residents of all three runtimes, each row with a runtime badge (llama.cpp, Images, Transcription): llama.cpp from `model-fit/running` as idle, busy or transient; image and whisper daemons from `model-fit/runtime-residents` (same 5 s poll), image rows only with the `images` capability and transcription rows only with `transcription`. Eject is graceful everywhere: image and whisper rows reuse `POST images/runtime/eject` / `POST transcription/runtime/eject`, the button is disabled while `canEject` is false, and a 409 shows the server's message. The collapsed count totals all three; a link leads to Loaded Models. Gated on `modelFit`, hidden below `md`; no route of its own | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | `scheduler` | Quartz job management + run history | [Scheduler](06-scheduler.md) |
@@ -266,16 +266,20 @@ second browser-side secret store.
 
 ### Interceptors & 401 handling
 
-`core/api/axios/Interceptors.ts` registers four interceptors on the shared instance:
+`core/api/axios/Interceptors.ts` defines the interceptors `core/api/axios/AxiosInstance.ts` registers on the shared instance:
 
 | Interceptor | Behavior |
 |---|---|
+| `addFormDataContentTypeInterceptor` | Drops the instance's JSON `Content-Type` for a `FormData` body so the browser sends `multipart/form-data` with its boundary. |
 | `addAuthRequestInterceptor` | Attaches `Authorization: Bearer <token>` from `useNodeAuthStore` on every request. |
 | `addUnauthorizedErrorInterceptor` | On `401`: refresh once via `refreshNodeAuthToken()`, set the new token, replay the original request (tracked in a `WeakSet` so it never loops). On refresh failure or a second 401: clear auth and `redirectToLoginOnce()`. |
+| `addVaultLockedInterceptor` | On `503` with the problem title `"Vault locked"` (a locked engine answers every protected route that way): reset the settled vault state, clear auth and `redirectToVaultOnce()` to `/vault`. Any other 503 stays an ordinary error. |
 | `addRateLimitingInterceptor` | On `429`: shows a translated toast (`errorMessages.tooManyRequests`). |
 | `addApiProblemDetailsInterceptor` | Maps non-2xx/401/429 responses to a typed `ApiError(status, ProblemDetails)`; turns `ERR_NETWORK` into a `"Network error"`. |
 
-The 401 refresh/redirect path is deliberately isolated: it calls a dedicated `refreshNodeAuthToken()` (not a generic SDK call) and guards redirects with `isRedirectingToLogin` plus a `/login`/`/setup` short-circuit, so it cannot recurse through the same interceptor. Response boundary parsing uses Zod (`core/api/ResponseValidation.ts`) — never trust raw server JSON shape.
+The 401 refresh/redirect path is deliberately isolated: it calls a dedicated `refreshNodeAuthToken()` (not a generic SDK call) and guards redirects with `isRedirectingToLogin` plus a `/login`/`/setup`/`/vault`/`/vault-setup` short-circuit, so it cannot recurse through the same interceptor.
+
+**Vault pages** ([ADR 0018](../adr/0018-local-vault-passphrase-wrapped-node-key.md)). Two file routes sit beside `/login` and `/setup`. `/vault` (`routes/vault.tsx`, `core/auth/pages/VaultUnlock.tsx`) opens only while `auth/status` reports the vault `locked`, which only the pre-host does; it unlocks with the admin password or with a recovery code plus a new password. `/vault-setup` (`routes/vault-setup.tsx`, `core/auth/pages/VaultSetup.tsx`) opens only for a signed-in operator whose vault is still `pending` and wraps the legacy key after the password is confirmed. First-run setup and vault setup both show the one-time recovery code through `core/auth/components/RecoveryCodeReveal.tsx`. The routes and the backend contract are in [API & Hubs](09-api-and-hubs.md) and [Security & Privacy](12-security-and-privacy.md). Response boundary parsing uses Zod (`core/api/ResponseValidation.ts`) — never trust raw server JSON shape.
 
 ---
 

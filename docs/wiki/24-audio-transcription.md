@@ -1,6 +1,6 @@
 # Audio Transcription (whisper.cpp)
 
-> Reviewed: 2026-09-23 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 The node transcribes audio **locally** with [whisper.cpp](https://github.com/ggml-org/whisper.cpp), supervised as a
 `whisper-server` child process exactly the way `llama-server` and `sd-server` are. A **transcription session** is a
@@ -239,9 +239,10 @@ Routes under `transcription/*` (`LocalApiRoutes.Transcription`), one endpoint cl
 | `StopProcessCaptureEndpoint` | `DELETE transcription/sessions/{sessionId}/capture/process` | Stops that capture: 204, or 404 when the session was not capturing. It does **not** end the session. |
 
 The runtime and model-catalogue routes of the same family — `transcription/runtime*`, `transcription/models*` and the
-three source-build routes — are listed in [API & Hubs](09-api-and-hubs.md). The whole prefix is gated: with
+five source-build routes (start, prerequisites, status, cancel, remove) — are listed in [API & Hubs](09-api-and-hubs.md). The whole prefix is gated: with
 `Transcription:Enabled` off, a request-path middleware in `Program.cs` answers 404 while the endpoints stay
 *discovered*, so the OpenAPI document and the generated client are identical on every node.
+The whisper child process is contained through the shared `XE-Local-AI-Engine.Providers.ProcessSupervision` handles, which the `Providers.WhisperCpp` project references.
 
 ## Live sessions
 

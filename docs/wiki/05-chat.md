@@ -1,6 +1,6 @@
 # Chat Subsystem
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 The chat subsystem is the node's interactive conversation surface: a React feature (`src/features/chat`) that streams turns over a local SignalR hub into a backend pipeline (`Client.Application/Services/Chat`) which resolves a model + agent per turn, runs the Microsoft Agent Framework loop through a single re-selecting `IChatClient`, and persists every turn to SQLite with titles and content protected by per-column AEAD. This page traces a turn end-to-end: model resolution (including the "local default → installed GGUF chat model" rule), the streaming/persistence pump, ordered reasoning↔tool↔answer parts, opt-in knowledge-base grounding and source attribution, per-send sampling, per-message agent attribution, reasoning-effort clamping for cloud models, file attachments (encrypted upload → pure-.NET extraction → plain-chat inlining or agent-mode sandbox staging), browser-side voice / text-to-speech output, the client stream watchdog + provider self-heal, and the at-rest encryption of titles and content. Provider plumbing lives in [Local runtime & providers](03-local-runtime-and-providers.md); agent resolution in [Agent Mode](04-agent-mode.md); persistence/migrations in [Data & persistence](08-data-and-persistence.md); hubs/endpoints in [API & hubs](09-api-and-hubs.md).
 
@@ -39,14 +39,35 @@ React Chat.tsx
             NodeChatStreamService.SendMessageAsync
               1. mutationGuard.EnsureMutableAsync        (reject remote-origin convo)
               2. persist user message  ─▶ UserMessagePersisted
-              3. ResolveTurnAsync  (active model + agent + orchestration + capabilities)
-              4. CreateAssistantPlaceholder (stamped with agent id/name/effort) ─▶ AssistantPending
-              5. MarkAssistantQueued ─▶ AssistantQueued
-              6. RunInvocationAsync (acquire collision lease) ─▶ AssistantStreaming
+              3. ResolveTurnAsync  (active model, then ChatTurnResolver: capabilities + agent + orchestration)
+              4. PersistAssistantPlaceholderAsync (stamped with agent id/name/effort) ─▶ AssistantPending
+              5. MarkAssistantQueuedAsync ─▶ AssistantQueued
+              6. ResolveToolOfferAsync + BuildTurnContextAsync + ConversationContextBuilder.Build
+                   └─ BuildRuntimePackageAsync  (the package the invocation runs from)
+              7. RunInvocationAsync (acquire collision lease) ─▶ AssistantStreaming
                    └─ invocationRunner.RunAsync  ──▶ MAF loop on RuntimeChatClient
-              7. PumpInvocationStatesAsync: delta-only frames ─▶ AssistantDelta, tool events ─▶ ToolCall*
-              8. terminal ─▶ AssistantCompleted | Failed | Cancelled | Interrupted
+              8. ChatInvocationStatePump.PumpAsync: delta-only frames ─▶ AssistantDelta, tool events ─▶ ToolCall*
+              9. terminal ─▶ AssistantCompleted | Failed | Cancelled | Interrupted
 ```
+
+The send path is split across `Services/Chat/` and `Services/Chat/Implementation/`; `NodeChatStreamService`
+orchestrates, and each step has one owner:
+
+| Concern | Owner |
+|---|---|
+| Per-turn capabilities, effective agent, orchestration spec (shared with regenerate) | `ChatTurnResolver` |
+| Thinking/tools/locality per model (shared with orchestration participants) | `IModelCapabilityResolver` → `ModelCapabilityResolver` |
+| Cloud-vs-local routing decision | `CloudRoutingClassifier` |
+| Which tools the turn offers | `ChatToolOfferResolver` |
+| Synthetic attachment, image, knowledge and agent-hint messages | `IChatTurnContextBuilder` → `ChatTurnContextBuilder` |
+| The ordered history the turn sends (selected path, compaction, tool history) | `ConversationContextBuilder.Build` |
+| Runtime package assembly | `LocalChatRuntimePackageBuilder` |
+| Dispatcher events into the turn's stream | `ChatStreamEventForwarder` |
+| Ordering state frames onto the stream / persisting them | `ChatInvocationStatePump` / `NodeChatInvocationPump` |
+| Post-turn hooks (adaptive memory; distil then compact) | `ChatMemoryExtractionHook`, `ChatCompactionTriggerHook` |
+| Untrusted-content fence seed (HKDF from the node key) | `UntrustedContentFenceSeedProvider` |
+| Startup terminalization of interrupted turns | `NodeChatRestartRecoveryService` |
+| Retention-window conversation purge | `RetentionSweeperService` |
 
 `SendMessageAsync` (`NodeChatStreamService.cs`) validates non-empty content then delegates to the `IAsyncEnumerable` core. Each step `yield return`s a `ChatStreamEvent` tagged with a monotonic `sequence` (`NodeChatStreamSequence`) so the browser can order concurrently-produced events. The user-visible SignalR stream order is fixed: `UserMessagePersisted → AssistantPending → AssistantQueued → AssistantStreaming → (AssistantDelta | ToolCall*)* → terminal`.
 
@@ -100,11 +121,13 @@ Design note (`LocalDefaultChatModelResolver.cs`): this reads **only** `IModelCla
 
 ### Capability resolution (thinking / tools)
 
-`ResolveModelCapabilitiesAsync` decides `(SupportsThinking, SupportsTools)` once per turn, gating both the `think` field and the tool offer:
+`ChatTurnResolver.ResolveAsync` asks `IModelCapabilityResolver.ResolveAsync` (`ModelCapabilityResolver`) once per turn for a `ModelCapabilitySnapshot` — `SupportsThinking`, `SupportsTools` and the provider locality `IsCloud` — gating the `think` field, the tool offer and the egress gates. It resolves again only when an agent pin makes the effective model differ from the capability model. The orchestration path's per-participant resolution goes through the same resolver:
 
 - A Codex (cloud) model → declared matrix (`CodexProviderCapabilities.V0`): thinking on, tool-calling per matrix. It is never probed via `/api/show`.
 - A non-Ollama local model (a GGUF) → capabilities detected **offline from the chat template** via `IGgufModelCapabilityResolver` (no Ollama probe, no network — critical in desktop mode where there is no Ollama daemon).
 - An Ollama-routed model → `IModelClassificationService.ClassifyAsync` (cache-first).
+- An external OpenAI-compatible model (`ext:` id) → the operator's declared capabilities and locality, never a probe; an unresolved one is cloud and not capable.
+- A model the active cloud provider routes (`CloudRoutingClassifier`, e.g. Azure Foundry) → the declared matrix; a routing read failure fails closed to cloud and not capable.
 - Any miss → NOT-capable for both: omits `think` (avoids the Ollama HTTP 400 on a non-thinking model) and withholds tools, while still allowing a plain chat.
 
 ## Per-message agent attribution
@@ -218,10 +241,10 @@ Large pasted text takes a different, deliberately smaller path. `Security:MaxMes
 
 **Two injection modes** (`NodeChatStreamService.cs`): the synthetic prepended context differs by turn mode.
 
-- **Plain chat** inlines the extracted text directly. `BuildAttachmentContextMessageAsync` loads the `AttachmentFileIds` named on the send, keeps only `Extracted` files, reads each decrypted Markdown, and composes one capped context message via `ConversationAttachmentContextComposer.Compose(parts, MaxInlinedAttachmentChars)` prepended to the conversation history (`BuildConversationContext` adds a `historyOffset`). Returns `null` on the common no-attachment path so the prompt stays byte-identical.
+- **Plain chat** inlines the extracted text directly. `ChatTurnContextBuilder.BuildAttachmentContextAsync` loads the `AttachmentFileIds` named on the send, keeps only `Extracted` files, reads each decrypted Markdown, and composes one capped context message via `ConversationAttachmentContextComposer.Compose(parts, MaxInlinedAttachmentChars)` prepended to the conversation history (`ConversationContextBuilder.Build` places it in the first slot and shifts the history down). Returns `null` on the common no-attachment path so the prompt stays byte-identical.
 - **Agent mode** never inlines content. When the turn offers tools, the sandbox is re-staged with this conversation's attachments and the model is handed a pointer message naming the staged paths — see the sandbox-staging path below.
 
-**Agent-mode sandbox staging:** `IConversationSandboxStager.PrepareConversationAttachmentsAsync` re-stages the node sandbox so it holds **only** this conversation's extracted attachments under the workspace `attachments/` alias, then `BuildAgentAttachmentHint` emits a pointer message listing those staged paths so a weak model reads the right files with its `read_file` / `list_files` / `search_text` tools. Staging is best-effort (`PrepareConversationAttachmentsSafelyAsync` — a staging failure degrades to an un-staged run, never fails the turn). The stager lives in Agent Mode; see [Agent Mode](04-agent-mode.md).
+**Agent-mode sandbox staging:** `IConversationSandboxStager.PrepareConversationAttachmentsAsync` re-stages the node sandbox so it holds **only** this conversation's extracted attachments under the workspace `attachments/` alias, then `ChatTurnContextBuilder.BuildAgentAttachmentHint` emits a pointer message listing those staged paths so a weak model reads the right files with its `read_file` / `list_files` / `search_text` tools. `NodeChatStreamService.StageConversationAttachmentsAsync` calls the stager before the turn context is built; a workspace that cannot be prepared, or is busy, terminalizes the assistant message as failed with that reason before the run starts. The stager lives in Agent Mode; see [Agent Mode](04-agent-mode.md).
 
 The same `AttachmentFileIds` are re-sent on **every** turn from the React side (`Chat.tsx`) so the server always inlines/stages the conversation's *current* (non-deleted) set. On the React side `useConversationAttachments` calls `ensureConversationId` so a first upload attaches to the **selected** conversation rather than minting a duplicate thread; `usePaneFileDrop` adds container-level drag-and-drop over the chat pane and `ChatAttachmentChips` renders the staged set.
 
@@ -374,7 +397,7 @@ Two rules are load-bearing:
 - **Send and regenerate splice identically.** Both call the shared `CompactionContextResolver.Resolve`, which
   mints the one synthetic `[Summary of the earlier conversation, …]` user message and returns the sequence it
   covers; each caller prepends it and drops every message at or below that covered sequence
-  (`NodeChatStreamService.BuildConversationContext`, `NodeChatRegenerationService.BuildRegenerationContext`).
+  (`ConversationContextBuilder.Build` on the send path, `NodeChatRegenerationService.BuildRegenerationContext`).
   Without the shared resolver a regenerate would re-send the verbatim messages the synopsis already replaced.
 
 Two deliberate exceptions: regenerate keeps the verbatim pre-cutoff history when the synopsis already covers the
@@ -643,7 +666,7 @@ The `record_kind` rides the SQL as a literal, which must equal `(int)AgentExecut
 
 The envelope is the **cost** ledger: it takes the turn totals summed over the turn's provider rounds when the pump supplies them. The message's own token counts are the *last* round's — context occupancy, not cost — and remain the fallback for every caller that supplies no totals (the restart-recovery backfill, the thin cancel envelope, the platform path), whose rows therefore keep the values they have always had.
 
-The `metadata_json` blob (`NodeChatMessageMetadata`, serialized by `NodeChatMetadataSerializer.SerializeMetadata`) carries the fields with no dedicated column: `reasoning`, `model`, token counts (`input/output/total/reasoning`), the ordered `parts[]`, `agentDefinitionId`, `agentName`, `reasoningEffort`, and `generationDurationMs`. The conversation's `selected_path_json` stores the `{variantGroupId → selectedMessageId}` map (`SerializeSelectedPath`) that collapses variant siblings to the chosen branch when building context (`BuildConversationContext`).
+The `metadata_json` blob (`NodeChatMessageMetadata`, serialized by `NodeChatMetadataSerializer.SerializeMetadata`) carries the fields with no dedicated column: `reasoning`, `model`, token counts (`input/output/total/reasoning`), the ordered `parts[]`, `agentDefinitionId`, `agentName`, `reasoningEffort`, and `generationDurationMs`. The conversation's `selected_path_json` stores the `{variantGroupId → selectedMessageId}` map (`SerializeSelectedPath`) that collapses variant siblings to the chosen branch when building context (`ConversationContextBuilder.Build`).
 
 **Gotcha — order by the variant *anchor*, never by the raw sequence.** `Sequence` is a physical insertion counter, so regenerating an **early** turn after later turns already exist mints a sibling whose sequence lands *past* them even though it still belongs to the early turn. Ordering by the raw sequence puts that sibling at the tail (breaking user/assistant alternation) and any `Sequence <= cutoff` filter drops it outright. `SelectedPathResolver.CreateAnchorResolver` (`Services/Chat/SelectedPathResolver.cs`) is the fix: a message's anchor is its variant group's **earliest** member sequence (ungrouped messages anchor at their own), and every path that builds model context or folds history runs in anchor space — the send context, the regenerate cutoff + context, and the compaction cutoff/`CompactionSummaryCoversToSequence` alike. It must be given **all** messages including the siblings the selected path omits, since the anchor is a property of the whole group. This matches what the frontend already renders (`MessageRevisionGrouping.ts`). Backward compatibility is by construction: with no variants, anchor == raw sequence, so previously persisted covered-sequence values are unchanged, and a conversation that had both variants and a synopsis self-heals at the next compaction (no migration).
 

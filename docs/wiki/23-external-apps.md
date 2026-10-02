@@ -1,6 +1,6 @@
 # External Apps — Curated Containerised Applications
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 **External Apps** installs and runs a small set of curated, containerised applications on the node, so a user gets a
 working application on their own machine without assembling a Compose file, a registry login and a reverse proxy by
@@ -441,7 +441,7 @@ host-side afterwards and counts what is left rather than trusting the exit code.
 `catalog/external-apps/` is a non-project authoring folder, not a `.csproj`. Per application it holds the
 byte-verbatim upstream `compose.yml` pinned to a commit, a `variables.json` classifying every upstream environment
 name, a `manifest.overrides.json` with metadata, resolved digests and their provenance, and any catalog-shipped
-asset under `files/`. `tools/build_catalog.py` converts them offline into `dist/applications.json`, which is copied
+asset under `files/`. `catalog/external-apps/tools/build_catalog.py` converts them offline into `dist/applications.json`, which is copied
 byte-for-byte to the embedded seed under `Services/ExternalApps/Catalog/`; a test asserts the two are identical, so
 hand-editing either is a red build. The converter fails on an unclassified environment key, an unclaimed compose
 mount or port, and on a claimed mount or port the compose no longer declares — so an upstream bump turns the build

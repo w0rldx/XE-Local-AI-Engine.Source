@@ -25,7 +25,7 @@ Velopack AppImage. Both formats self-update. Release assets are unsigned because
 > ```
 >
 > A piped install has no usable prompt input, so set `XE_ADMIN_EMAIL` and `XE_ADMIN_PASSWORD` before requesting setup.
-> On success it prints the node's ready line and a one-time `XE_MCP_KEY=` value — save it, it is never shown again.
+> On success it prints the node's ready line and a one-time `XE_MCP_KEY=` value, and `--setup` prints a one-time `XE_RECOVERY_CODE=` for the vault — save both, neither is shown again.
 > See the [Agentic Support install guide](docs/agentic-support/agent-install.md), the
 > [MCP client runbook](docs/runbooks/connect-an-mcp-client-runbook.md), and the shipped
 > [external-agent skill](skills/xe-local-ai-engine/SKILL.md).
@@ -34,6 +34,8 @@ Velopack AppImage. Both formats self-update. Release assets are unsigned because
 
 - **Node Web Server** (`XE-Local-AI-Engine.Client`) — the host process: FastEndpoints, the SignalR hubs, the
   composition root and the SPA. See [API & hubs](docs/wiki/09-api-and-hubs.md).
+- **Desktop shell** (`XE-Local-AI-Engine.Desktop`) — the Avalonia native window; it uses the engine over REST and
+  SignalR only. See [ADR 0013](docs/adr/0013-native-desktop-shell.md).
 - **React management UI** (`XE-Local-AI-Engine.Client.React`) — the node-local browser UI for every feature below.
   See [React client](docs/wiki/10-react-client.md).
 - **Runtimes and providers** — llama.cpp is the default local runtime, supervised as `llama-server` children on a
@@ -82,6 +84,13 @@ Velopack AppImage. Both formats self-update. Release assets are unsigned because
 - **Audio transcription** — local speech-to-text through whisper.cpp, supervised as a `whisper-server` child process
   the way the other runtimes are. Audio is never persisted; transcript rows are encrypted. See
   [Audio transcription](docs/wiki/24-audio-transcription.md).
+- **Web search and fetch** — `web_search` and `web_fetch` tools for agents, with a review gate against prompt
+  injection and an ask-before-send consent for each web request unless the conversation opted into auto mode. See [ADR 0017](docs/adr/0017-web-access-tools-and-graph-allowlist.md)
+  and [Security and privacy](docs/wiki/12-security-and-privacy.md).
+- **Vault key custody** — the persisted `node.key` is wrapped under the admin password and a one-time recovery code;
+  a locked node serves only an unlock page. See [ADR 0018](docs/adr/0018-local-vault-passphrase-wrapped-node-key.md).
+- **Update channels** — Stable, Preview and Development channels for the self-updating packages. See
+  [ADR 0014](docs/adr/0014-update-channels-and-development-builds.md).
 - **Tests and fixtures** — backend, persistence and agent test projects, shared host fixtures, an opt-in Playwright
   E2E harness, and in-memory fakes for Ollama and the Docker Engine API. See [Testing](docs/wiki/13-testing-and-validation.md).
 
@@ -164,7 +173,7 @@ pnpm run acceptance                       # validate + coverage thresholds + too
 ## Publishing and releases
 
 The desktop package is deliberately asymmetric: Linux ships a self-contained single-file AppImage, Windows a
-framework-dependent Velopack `Portable.zip` needing the x64 ASP.NET Core Runtime 10.0.11 or a newer .NET 10 servicing
+framework-dependent Velopack `Portable.zip` needing the x64 ASP.NET Core Runtime 10.0.12 or a newer .NET 10 servicing
 patch. Desktop mode is opt-in through the launcher (`XE_LAUNCH_MODE=desktop` or `--desktop`); headless, Aspire and CI
 runs are unaffected. A console window opens with live logs, and closing it shuts the whole app down including the
 supervised child processes. Run one instance per user-data directory — a second races on the SQLite database. The

@@ -1,6 +1,6 @@
 # Native desktop 1.0 — delivery and evidence
 
-Status: implementation delivered as a merge candidate; final validation and review are recorded below. Merge requires operator approval; real Ubuntu GUI acceptance remains waived.
+Status: merged on develop (first desktop commit `c97fb0ee5`, `feat(desktop): deliver native Windows and Ubuntu shells`); final validation and review are recorded below; real Ubuntu GUI acceptance remains waived.
 
 Decision record: [ADR 0013](../adr/0013-native-desktop-shell.md)
 

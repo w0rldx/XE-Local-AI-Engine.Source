@@ -42,12 +42,33 @@ you click it, check the list — one unmet rule is usually why.
 
 > ### ⚠️ Write this password down somewhere safe
 >
-> There is **no "forgot password" email**, because there is no server that could send one. If you do
-> lose it, you can set a new one with a short one-line command **without losing your data**.
-> → [I forgot my password](faq.md#i-forgot-my-password)
+> There is **no "forgot password" email**, because there is no server that could send one. Your password
+> also protects the key that encrypts your data, so the app needs it every time it starts.
+
+### Save your recovery code
+
+Right after you click **Create admin**, the app shows **"Save your recovery code now"**. This is the
+**only time** the code is shown, and the app keeps no copy. Store it somewhere safe, away from this
+computer if you can, then tick **"I have saved this recovery code"** and continue.
+
+If you ever forget your password, the recovery code lets you set a new one **without losing your
+data**. → [I forgot my password](faq.md#i-forgot-my-password)
+
+> **If you lose both the password and the recovery code, your data cannot be recovered** — not by you,
+> and not by anyone else. There is no back door.
 
 **After this, signing in asks for the password only** — not the email. The email is not your username;
 it is just stored with the account.
+
+### Every later start begins with "Unlock this node"
+
+Each time the app starts (including the restart after an update), it first shows **"Unlock this
+node"**. Enter your admin password and the engine starts. Until you do, the engine waits:
+scheduled jobs do not run, and programs that connect to the app (such as MCP clients) are turned away.
+Forgot the password? Click **"Forgot your password? Use your recovery code"** on that page.
+
+Running the app without a screen (a server or an automated install)? See
+[Agentic Support](../../agentic-support/agent-install.md) for passing the password at start-up.
 
 <p align="center">
   <img src="../media/screenshots/login@2x.png" alt="Signing back in with the password only" width="800">

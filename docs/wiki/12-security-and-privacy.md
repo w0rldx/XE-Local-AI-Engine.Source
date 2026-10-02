@@ -1,6 +1,6 @@
 # Security & Privacy Model
 
-> Reviewed: 2026-09-15 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 This page documents the cross-cutting security and privacy controls implemented in the XE Local AI
 Engine node and the invariants contributors are expected to preserve. It is code-and-test evidence
@@ -94,7 +94,7 @@ Several redactors enforce "secrets never surface":
 | `AccessTokenQueryRedactor` | strips `access_token=` from request query strings before Serilog logs them | `Services/Auth/AccessTokenQueryRedactor.cs`, wired by the `UseSerilogRequestLogging` request-path projection in `Program.cs` |
 | `MemoryProposalSecretScanner` | rejects/redacts secrets in agent-memory proposals before persistence (PEM keys, GitHub/AWS/Azure/Slack tokens, JWTs, high-entropy bearers; ReDoS-guarded with a 2s regex timeout) | `Services/AgentHome/Implementation/MemoryProposalSecretScanner.cs` |
 | `McpServerConnectionManager.SafeMessage` | clamps MCP connection failures, sandbox refusals included, to one fixed message per failure reason so a command path/URL/protected host path/secret never reaches the UI; the exception is logged at Warning. Two reasons show text written for the operator instead: a Sandboxed command missing from the jail `PATH` (`ServerNotFound`, the message names the jail `PATH`) and a server that exited during or after startup (`ServerStartupFailed`/`ServerExited`, with its `stderr` tail). That text is scrubbed of the registration's own environment, header and argument values of 8 or more characters (`SecretValueRedactor`), and the sandbox already redacts environment values as it captures the tail (`SandboxStderrTail`); host paths a server prints are **not** stripped | `McpServerConnectionManager.SafeMessage` / `DescribeFailure` in `Services/Mcp/Implementation/McpServerConnectionManager.cs` |
-| `InvocationRunner.RedactAgentRuntimeMessage` | sanitizes agent runtime failure messages before surfacing | `InvocationRunner.RedactAgentRuntimeMessage` in `Services/Invocation/Implementation/InvocationRunner.FailureClassification.cs` |
+| `InvocationFailureClassifier.RedactAgentRuntimeMessage` | sanitizes agent runtime failure messages before surfacing | `InvocationFailureClassifier.RedactAgentRuntimeMessage` (private) in `Services/Invocation/Implementation/InvocationFailureClassifier.cs` |
 | `NodePatchApplyService.Redact` | redacts patch-apply output (AgentHome) | `NodePatchApplyService.Redact` in `Services/AgentHome/Implementation/NodePatchApplyService.cs` |
 
 The request-logging enricher is the canonical example — it replaces the raw query with a redacted one before anything is written:
@@ -327,7 +327,7 @@ itself is an ordinary Operator-gated FastEndpoints family, so key management sta
 JWT posture. Requests are forwarded verbatim to the resolved `llama-server` child and never route
 through the operator's cloud credentials. See [API & Hubs](09-api-and-hubs.md).
 
-Local endpoints are still authenticated and policy-gated; loopback is necessary but not sufficient. `NodeAuthorizationPolicies` (`Services/Auth/NodeAuthorizationPolicies.cs`) defines the `NodeOperator` policy (claim type `role`, `Admin`), and endpoints apply it — e.g. `ListAgentExecutionLogsEndpoint.Configure()` calls `Policies(NodeAuthorizationPolicies.Operator)` (see `ListAgentExecutionLogsEndpoint.Configure()`). JWTs are signed with the separately-derived node JWT key (§2.1). Auth wiring lives in `AddNodeAuthAndConnectionExtensions`. See [API & Hubs](09-api-and-hubs.md) for the full endpoint inventory.
+Local endpoints are still authenticated and policy-gated; loopback is necessary but not sufficient. `NodeAuthorizationPolicies` (`Services/Auth/NodeAuthorizationPolicies.cs`) defines the `NodeOperator` policy (claim type `role`, `Admin`), and endpoints apply it — e.g. `ListAgentExecutionLogsEndpoint.Configure()` calls `Policies(NodeAuthorizationPolicies.Operator)` (see `ListAgentExecutionLogsEndpoint.Configure()`). JWTs are signed with the separately-derived node JWT key (§2.1). Auth wiring lives in `AddNodeAuthExtensions`. See [API & Hubs](09-api-and-hubs.md) for the full endpoint inventory.
 
 **The Simple / Advanced interface mode is not part of this gate.** `uiMode` in `node-settings.json` decides which
 entries the SPA's navigation renders and nothing more: every route stays reachable by its own address in either mode,
@@ -519,15 +519,14 @@ schema and migrations; the security-relevant cryptography is summarized here.
 |---|---|---|
 | `AesGcmNodeAeadCipher` | the *only* `AesGcm` owner: AES-256-GCM, 12-byte nonce, 16-byte tag | `XE-Local-AI-Engine.Client.Persistence/Cryptography/AesGcmNodeAeadCipher.cs` |
 | `VaultFileCodec` | the v2 `node.key` vault codec: wraps the master key under a PBKDF2-SHA512 password KEK and an HKDF recovery-code KEK, both through `AesGcmNodeAeadCipher` with distinct AAD per wrap; the only reader and writer of the v2 format | `XE-Local-AI-Engine.Client.Application/Services/Vault/VaultFileCodec.cs` |
-| `INodeAeadCipher` | the AEAD seam both at-rest and streaming-envelope crypto delegate to | `.../Cryptography/INodeAeadCipher.cs` |
+| `INodeAeadCipher` | the AEAD seam every at-rest protector and the vault codec delegate to | `.../Cryptography/INodeAeadCipher.cs` |
 | `NodePayloadProtector` | at-rest column protector: random nonce per value, AAD binds `conversationId + recordId + columnName + schemaVersion` | `.../Cryptography/NodePayloadProtector.cs` |
 | `NodeChatContentProtection` | versioned read-both envelope over `NodePayloadProtector` for the two columns with legacy plaintext rows (message `content` + `metadata_json`): a `0xFE 0x01` header — bytes that can never begin valid UTF-8 — marks ciphertext, so reads tell it apart from legacy plaintext without guessing | `.../Cryptography/NodeChatContentProtection.cs` |
 | `NodeEncryptionSaveChangesInterceptor` | encrypts tracked payloads on `SavingChanges`, restores plaintext on the tracked entity after save | `XE-Local-AI-Engine.Client.Persistence/NodeEncryptionSaveChangesInterceptor.cs` |
 | `UploadedFileBlobProtector` | at-rest protection for chat **uploaded-file blobs** stored on disk (raw bytes + extracted Markdown); re-uses `AesGcmNodeAeadCipher` + the same `nonce ‖ ciphertext ‖ tag` framing/AAD, binding each blob with a distinct column name (`file_bytes`/`file_md`) | `Client.Application/Services/DocumentIngestion/Implementation/UploadedFileBlobProtector.cs` |
-| `EnvelopeCryptoService` | streaming chat envelopes (chunk/completed/reasoning) with per-kind AAD (`c0re-…` info strings) | `Services/Invocation/Envelope/Implementation/EnvelopeCryptoService.cs` |
 
 Key properties worth preserving:
-- **Single AEAD owner.** `AesGcmNodeAeadCipher` is the sole place `AesGcm` is constructed and the tag size lives — both the at-rest protector and the streaming envelope route through it. Don't construct `AesGcm` elsewhere.
+- **Single AEAD owner.** `AesGcmNodeAeadCipher` is the sole place `AesGcm` is constructed and the tag size lives — the column protector, the blob protectors and the vault codec all route through it. Don't construct `AesGcm` elsewhere.
 - **Associated data binds context.** `NodePayloadProtector.BuildAssociatedData` mixes the conversation id, record id, column name, and a schema version into the AAD, so a ciphertext can't be replayed into a different row/column. Don't drop a component from the AAD.
 - **Interceptor restores plaintext post-save** so the in-memory entity stays usable after `SaveChanges` (the DB row is ciphertext, the tracked object is plaintext again).
 - **Content/metadata are read-both.** Message `content` and `metadata_json` are the only encrypted columns that ever held plaintext on disk, so their reader accepts both forms and a startup migration (`NodeChatContentEncryptionBackfillService`) rewrites legacy plaintext rows into the envelope in resumable, idempotent batches. Don't remove the header check or the read-both fallback — a partially-migrated table depends on it.

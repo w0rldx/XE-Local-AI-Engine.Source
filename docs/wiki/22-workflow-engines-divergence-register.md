@@ -1,6 +1,6 @@
 # Workflow Engines Divergence Register
 
-> Reviewed: 2026-09-22 · Code-grounded.
+> Reviewed: 2026-10-02 · Code-grounded.
 
 Two workflow engines live in this codebase: [Dev Workflows](../../XE-Local-AI-Engine.Client.Application/Services/DevWorkflows)
 (`Services/DevWorkflows/`, Dev Mode's graph runtime) and [Graph Workflows](21-graph-workflows.md)
