@@ -67,6 +67,7 @@ public sealed class ProcessCrashHooksTests : IDisposable
     {
         public ConcurrentQueue<LogEvent> Events { get; } = new();
 
-        public void Emit(LogEvent logEvent) => Events.Enqueue(logEvent);
+        public void Emit(LogEvent logEvent) =>
+            Events.Enqueue(logEvent);
     }
 }

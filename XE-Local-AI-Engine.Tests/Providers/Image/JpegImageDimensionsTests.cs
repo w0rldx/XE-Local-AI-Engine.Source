@@ -93,8 +93,16 @@ public sealed class JpegImageDimensionsTests
         var frameLength = 8 + (3 * components);
         var frame = new List<byte>
         {
-            0xFF, frameMarker, (byte)(frameLength >> 8), (byte)frameLength, 0x08,
-            (byte)(height >> 8), (byte)height, (byte)(width >> 8), (byte)width, components
+            0xFF,
+            frameMarker,
+            (byte)(frameLength >> 8),
+            (byte)frameLength,
+            0x08,
+            (byte)(height >> 8),
+            (byte)height,
+            (byte)(width >> 8),
+            (byte)width,
+            components
         };
         for (var component = 1; component <= components; component++)
         {

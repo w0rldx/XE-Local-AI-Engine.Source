@@ -732,8 +732,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         return details switch
         {
             StdioClientCompletionDetails stdio => (McpConnectionFailureReason.ServerExited,
-                AppendStderrTail(
-                    string.Create(CultureInfo.InvariantCulture,
+                AppendStderrTail(string.Create(CultureInfo.InvariantCulture,
                         $"{SafeMessage(McpConnectionFailureReason.ServerExited)} Exit code {stdio.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}."),
                     JoinTail(stdio.StandardErrorTail), record)),
             HttpClientCompletionDetails { HttpStatusCode: HttpStatusCode.NotFound } => (McpConnectionFailureReason.SessionLost, SafeMessage(McpConnectionFailureReason.SessionLost)),

@@ -569,20 +569,20 @@ public sealed class McpExecutionBindingResolverTests
                         .Returns(definition);
             var effectiveModel = definition.ModelProfile ?? Model;
             AgentResolver.ResolveAsync(definition.Id,
-                              effectiveModel,
-                              Arg.Any<string?>(),
-                              Arg.Any<bool>(),
-                              Arg.Any<bool>(),
-                              Arg.Any<bool>(),
-                              Arg.Any<CancellationToken>())
-                          .Returns(new ResolvedAgentRuntime("resolved instructions",
-                              tools,
-                              definition.ModelProfile,
-                              ReasoningEffort: null,
-                              definition.Version,
-                              definition.Id,
-                              definition.Name,
-                              Skills: [new ResolvedSkill(Guid.NewGuid(), "repo-context", "Repository context", "skill body", 1)]));
+                             effectiveModel,
+                             Arg.Any<string?>(),
+                             Arg.Any<bool>(),
+                             Arg.Any<bool>(),
+                             Arg.Any<bool>(),
+                             Arg.Any<CancellationToken>())
+                         .Returns(new ResolvedAgentRuntime("resolved instructions",
+                             tools,
+                             definition.ModelProfile,
+                             ReasoningEffort: null,
+                             definition.Version,
+                             definition.Id,
+                             definition.Name,
+                             Skills: [new ResolvedSkill(Guid.NewGuid(), "repo-context", "Repository context", "skill body", 1)]));
         }
     }
 

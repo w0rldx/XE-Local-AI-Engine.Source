@@ -48,7 +48,10 @@ public sealed class VaultUnlockHostTests : IDisposable
     public async Task Locked_ServesReadinessStatusAnd503_RejectsAWrongPassword_ThenUnlocksWithTheRightOne()
     {
         var (run, url) = await StartAsync();
-        using var client = new HttpClient { BaseAddress = new Uri(url) };
+        using var client = new HttpClient
+        {
+            BaseAddress = new Uri(url)
+        };
 
         using (var health = await client.GetAsync(new Uri("/health/ready", UriKind.Relative)))
         {
@@ -68,21 +71,30 @@ public sealed class VaultUnlockHostTests : IDisposable
         }
 
         var started = Stopwatch.GetTimestamp();
-        using (var wrong = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new { password = "not the password" }))
+        using (var wrong = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new
+               {
+                   password = "not the password"
+               }))
         {
             AssertEx.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
         }
 
         AssertEx.True(Stopwatch.GetElapsedTime(started) >= VaultUnlockHost.MinimumFailureLatency, "A failed unlock must not answer faster than the minimum latency.");
 
-        using (var empty = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new { password = string.Empty }))
+        using (var empty = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new
+               {
+                   password = string.Empty
+               }))
         {
             AssertEx.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
         }
 
         AssertEx.False(run.IsCompleted, "A failed unlock must leave the pre-host serving.");
 
-        using (var right = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new { password = Password }))
+        using (var right = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new
+               {
+                   password = Password
+               }))
         {
             AssertEx.Equal(HttpStatusCode.NoContent, right.StatusCode);
         }
@@ -97,22 +109,37 @@ public sealed class VaultUnlockHostTests : IDisposable
     public async Task RecoveryUnlock_AcceptsALooselyTypedCode_AndHandsTheResetToTheRealHost()
     {
         var (run, url) = await StartAsync();
-        using var client = new HttpClient { BaseAddress = new Uri(url) };
+        using var client = new HttpClient
+        {
+            BaseAddress = new Uri(url)
+        };
 
-        using (var weak = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new { recoveryCode = _recoveryCode, newPassword = "short" }))
+        using (var weak = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new
+               {
+                   recoveryCode = _recoveryCode,
+                   newPassword = "short"
+               }))
         {
             AssertEx.Equal(HttpStatusCode.BadRequest, weak.StatusCode);
             var body = await weak.Content.ReadFromJsonAsync<JsonElement>();
             AssertEx.True(body.GetProperty("errors").GetArrayLength() > 0, "A policy violation must name its errors.");
         }
 
-        using (var simple = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new { recoveryCode = _recoveryCode, newPassword = "long but lower case only" }))
+        using (var simple = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new
+               {
+                   recoveryCode = _recoveryCode,
+                   newPassword = "long but lower case only"
+               }))
         {
             AssertEx.Equal(HttpStatusCode.BadRequest, simple.StatusCode, "The pre-host must refuse a password the real host's Identity policy would reject.");
         }
 
         var wrongCode = new string('A', 40);
-        using (var wrong = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new { recoveryCode = wrongCode, newPassword = NewPassword }))
+        using (var wrong = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new
+               {
+                   recoveryCode = wrongCode,
+                   newPassword = NewPassword
+               }))
         {
             AssertEx.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
         }
@@ -121,7 +148,11 @@ public sealed class VaultUnlockHostTests : IDisposable
 #pragma warning disable CA1308 // Lower case is the point: the code is displayed upper case and must be accepted as typed.
         var typed = _recoveryCode.Replace("-", " ", StringComparison.Ordinal).ToLowerInvariant();
 #pragma warning restore CA1308
-        using (var right = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new { recoveryCode = typed, newPassword = NewPassword }))
+        using (var right = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new
+               {
+                   recoveryCode = typed,
+                   newPassword = NewPassword
+               }))
         {
             AssertEx.Equal(HttpStatusCode.NoContent, right.StatusCode);
         }
@@ -136,15 +167,24 @@ public sealed class VaultUnlockHostTests : IDisposable
     public async Task UnlockAttempts_BeyondTheWindowLimit_Answer429()
     {
         var (run, url) = await StartAsync();
-        using var client = new HttpClient { BaseAddress = new Uri(url) };
+        using var client = new HttpClient
+        {
+            BaseAddress = new Uri(url)
+        };
 
         for (var attempt = 0; attempt < VaultUnlockHost.AttemptLimit; attempt++)
         {
-            using var wrong = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new { password = "not the password" });
+            using var wrong = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new
+            {
+                password = "not the password"
+            });
             AssertEx.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
         }
 
-        using (var limited = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new { password = Password }))
+        using (var limited = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new
+               {
+                   password = Password
+               }))
         {
             AssertEx.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
         }
@@ -165,7 +205,8 @@ public sealed class VaultUnlockHostTests : IDisposable
         AssertEx.Null(await DesktopPortStore.ReadReadyAsync(_dataDirectory));
     }
 
-    private static Uri Route(string route) => new($"/{LocalApiRoutes.Prefix}/{route}", UriKind.Relative);
+    private static Uri Route(string route) =>
+        new($"/{LocalApiRoutes.Prefix}/{route}", UriKind.Relative);
 
     private async Task<(Task<VaultUnlockOutcome?> Run, string Url)> StartAsync()
     {

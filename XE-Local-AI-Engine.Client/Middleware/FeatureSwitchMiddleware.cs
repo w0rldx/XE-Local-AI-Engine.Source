@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Middleware;
 
-using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Template;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -83,7 +82,8 @@ public sealed class FeatureSwitchMiddleware
         Array.Exists(TranscriptionStopRoutes, stop =>
             HttpMethods.Equals(request.Method, stop.Method) && stop.Route.TryMatch(request.Path, new RouteValueDictionary()));
 
-    private static PathString Route(string relative) => new($"/{LocalApiRoutes.Prefix}/{relative}");
+    private static PathString Route(string relative) =>
+        new($"/{LocalApiRoutes.Prefix}/{relative}");
 
     private static TemplateMatcher Template(string relative) =>
         new(TemplateParser.Parse($"{LocalApiRoutes.Prefix}/{relative}"), new RouteValueDictionary());

@@ -31,6 +31,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using ApplicationGenerationProvenance = XE_Local_AI_Engine.Client.Services.Drafting.GenerationProvenance;
 using DevWorkflowNodeRunStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowNodeRunStatus;
 using DevWorkflowNodeType = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowNodeType;
@@ -38,7 +39,6 @@ using DevWorkflowRunStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevW
 using DevWorkflowWorkItemStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowWorkItemStatus;
 // System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
 using CategoryAttribute = CategoryAttribute;
-using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class NodeAdminMcpToolsTests

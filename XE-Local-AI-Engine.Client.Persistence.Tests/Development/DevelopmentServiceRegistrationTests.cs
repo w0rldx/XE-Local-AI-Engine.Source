@@ -22,7 +22,10 @@ public sealed class DevelopmentServiceRegistrationTests
         {
             ["Development:Enabled"] = "false"
         }).Build();
-        builder.AddNodeDevelopment(configuration, new NodeStartupSettings { DevelopmentEnabled = false });
+        builder.AddNodeDevelopment(configuration, new NodeStartupSettings
+        {
+            DevelopmentEnabled = false
+        });
         using var provider = builder.Services.BuildServiceProvider();
         AssertEx.Null(provider.GetService<IDevelopmentCoordinator>());
         AssertEx.Null(provider.GetService<IDevelopmentArtifactBlobStore>());

@@ -9,10 +9,11 @@ public static class NodeAuthVaultStatus
     public const string Locked = "locked";
     public const string Unlocked = "unlocked";
 
-    public static string From(VaultState state) => state switch
-    {
-        VaultState.Pending => Pending,
-        VaultState.Locked => Locked,
-        _ => Unlocked
-    };
+    public static string From(VaultState state) =>
+        state switch
+        {
+            VaultState.Pending => Pending,
+            VaultState.Locked => Locked,
+            _ => Unlocked
+        };
 }

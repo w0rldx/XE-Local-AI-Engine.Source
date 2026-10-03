@@ -1601,7 +1601,10 @@ public sealed class DevWorkflowDevTaskTests
 
     /// <summary>The operator's live switch, written where every consumer reads it: the stored node setting.</summary>
     private static async Task SwitchDevelopmentOffAsync(DevWorkflowHarness harness) =>
-        _ = await harness.Services.GetRequiredService<INodeSettingsStore>().UpdateAsync(static settings => settings with { DevelopmentEnabled = false });
+        _ = await harness.Services.GetRequiredService<INodeSettingsStore>().UpdateAsync(static settings => settings with
+        {
+            DevelopmentEnabled = false
+        });
 
     /// <summary>Lands the held attempt the way its runner would have, so the drain has nothing left to wait for.</summary>
     private static async Task LandTheHeldAttemptAsync(DevWorkflowHarness harness, Guid taskId)

@@ -6,9 +6,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -348,15 +348,66 @@ public sealed class ImageJobEndpointTests
 
         (object Body, string Message)[] cases =
         [
-            (new { modelName = "m", prompt = "p", width = 4096 }, "Width and height must be between 64 and 2048 pixels."),
-            (new { modelName = "m", prompt = "p", height = 32 }, "Width and height must be between 64 and 2048 pixels."),
-            (new { modelName = "m", prompt = "p", steps = 0 }, "Steps must be at least 1."),
-            (new { modelName = "m", prompt = "p", editMode = "inpaint", sourceImageId = source }, "The edit mode must be 'img2img' or 'reference'."),
-            (new { modelName = "m", prompt = "p", editMode = "IMG2IMG", sourceImageId = source }, "The edit mode must be 'img2img' or 'reference'."),
-            (new { modelName = "m", prompt = "p", editMode = "img2img" }, "An edit mode requires a source image."),
-            (new { modelName = "m", prompt = "p", sourceImageId = source }, "A source image requires an edit mode."),
-            (new { modelName = "m", prompt = "p", editMode = "reference", sourceImageId = source, strength = 0.5 }, "Strength applies only to img2img edits."),
-            (new { modelName = "m", prompt = "p", editMode = "img2img", sourceImageId = source, strength = 1.5 }, "Strength must be between 0 and 1.")
+            (new
+            {
+                modelName = "m",
+                prompt = "p",
+                width = 4096
+            }, "Width and height must be between 64 and 2048 pixels."),
+            (new
+            {
+                modelName = "m",
+                prompt = "p",
+                height = 32
+            }, "Width and height must be between 64 and 2048 pixels."),
+            (new
+            {
+                modelName = "m",
+                prompt = "p",
+                steps = 0
+            }, "Steps must be at least 1."),
+            (new
+            {
+                modelName = "m",
+                prompt = "p",
+                editMode = "inpaint",
+                sourceImageId = source
+            }, "The edit mode must be 'img2img' or 'reference'."),
+            (new
+            {
+                modelName = "m",
+                prompt = "p",
+                editMode = "IMG2IMG",
+                sourceImageId = source
+            }, "The edit mode must be 'img2img' or 'reference'."),
+            (new
+            {
+                modelName = "m",
+                prompt = "p",
+                editMode = "img2img"
+            }, "An edit mode requires a source image."),
+            (new
+            {
+                modelName = "m",
+                prompt = "p",
+                sourceImageId = source
+            }, "A source image requires an edit mode."),
+            (new
+            {
+                modelName = "m",
+                prompt = "p",
+                editMode = "reference",
+                sourceImageId = source,
+                strength = 0.5
+            }, "Strength applies only to img2img edits."),
+            (new
+            {
+                modelName = "m",
+                prompt = "p",
+                editMode = "img2img",
+                sourceImageId = source,
+                strength = 1.5
+            }, "Strength must be between 0 and 1.")
         ];
 
         foreach (var (body, message) in cases)
@@ -471,7 +522,7 @@ public sealed class ImageJobEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         var items = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("items").EnumerateArray()
-                                                                                         .ToDictionary(static m => m.GetProperty("modelName").GetString()!);
+                                                                                        .ToDictionary(static m => m.GetProperty("modelName").GetString()!);
         AssertEx.True(EditModesOf(items["sd-1.5"]).SequenceEqual(["img2img"]), "Sd15 offers img2img only.");
         AssertEx.Equal(expected: 512 * 512, items["sd-1.5"].GetProperty("nativePixels").GetInt32());
         AssertEx.True(EditModesOf(items["qwen-plain"]).SequenceEqual(["img2img"]), "A Qwen-Image install without the vision tower offers img2img only.");
@@ -490,7 +541,16 @@ public sealed class ImageJobEndpointTests
                 RepoId = "unsloth/Qwen-Image-2.1-GGUF",
                 Family = ImageModelFamily.QwenImage,
                 Kind = ImageModelKind.Txt2Img,
-                Parts = [.. roles.Select(static role => new ImageModelPart { Role = role, FileName = $"{role}.gguf", LocalPath = $"/m/{role}.gguf", SizeBytes = 1 })],
+                Parts =
+                [
+                    .. roles.Select(static role => new ImageModelPart
+                    {
+                        Role = role,
+                        FileName = $"{role}.gguf",
+                        LocalPath = $"/m/{role}.gguf",
+                        SizeBytes = 1
+                    })
+                ],
                 SizeBytes = 1,
                 SourceRevision = "main",
                 DownloadedAtUtc = DateTimeOffset.UnixEpoch

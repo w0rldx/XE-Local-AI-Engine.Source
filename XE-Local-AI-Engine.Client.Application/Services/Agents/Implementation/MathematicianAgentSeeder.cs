@@ -67,8 +67,7 @@ public sealed class MathematicianAgentSeeder : IHostedService
         {
             // One line per start, not per call: an operator who wonders where the agent went gets the reason and the
             // fix, and a node that never enables compute pays a single Information line at boot.
-            _logger.LogInformation(
-                "Skipped seeding the Mathematician agent definition because the compute tool is disabled on this node; it is seeded on the next start after compute is enabled.");
+            _logger.LogInformation("Skipped seeding the Mathematician agent definition because the compute tool is disabled on this node; it is seeded on the next start after compute is enabled.");
             return;
         }
 

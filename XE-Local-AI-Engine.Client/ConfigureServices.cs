@@ -474,6 +474,7 @@ public static class ConfigureServices
         {
             builder.Services.AddHostedService<ModelRecommendationScheduleSeeder>();
         }
+
         // Seeds the node-local "Default Assistant" agent definition (mode-off persona) so every send resolves through a
         // real, uniformly-selectable definition. Idempotent by slug and self-healing across boots.
         builder.Services.AddHostedService<DefaultAgentSeeder>();

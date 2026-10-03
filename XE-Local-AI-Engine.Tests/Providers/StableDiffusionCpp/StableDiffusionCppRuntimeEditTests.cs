@@ -91,7 +91,12 @@ public sealed class StableDiffusionCppRuntimeEditTests
         await Runtime(http).GenerateAsync(Request(), new Progress<ImageGenProgress>(), CancellationToken.None);
 
         using var body = JsonDocument.Parse(handler.ImgGenBody!);
-        foreach (var key in new[] { "init_image", "ref_images", "strength" })
+        foreach (var key in new[]
+                 {
+                     "init_image",
+                     "ref_images",
+                     "strength"
+                 })
         {
             AssertEx.False(body.RootElement.TryGetProperty(key, out _), $"txt2img must not send {key}.");
         }
@@ -147,11 +152,11 @@ public sealed class StableDiffusionCppRuntimeEditTests
     {
         var supervisor = Substitute.For<IImageServerSupervisor>();
         supervisor.EnsureRunningAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(call => new ImageServerEndpoint
-            {
-                ModelName = call.Arg<string>(),
-                BaseAddress = BaseAddress
-            });
+                  .Returns(call => new ImageServerEndpoint
+                  {
+                      ModelName = call.Arg<string>(),
+                      BaseAddress = BaseAddress
+                  });
         supervisor.TryAcquireJobLease(Arg.Any<string>()).Returns((IImageServerJobLease?)null);
         return supervisor;
     }

@@ -18,9 +18,9 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
-using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 /// <summary>
 ///     Integration tests for <see cref="Client.Services.Scheduler.Implementation.ScheduledJobManagementService" />.
@@ -1157,7 +1157,10 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
 
         var config = BuildConfig($"Data Source={dbPath}");
         services.AddSingleton(config);
-        new MinimalHostApplicationBuilder(services).AddNodeScheduler(config, new NodeStartupSettings { SchedulerEnabled = config.GetValue("Scheduler:Enabled", defaultValue: true) });
+        new MinimalHostApplicationBuilder(services).AddNodeScheduler(config, new NodeStartupSettings
+        {
+            SchedulerEnabled = config.GetValue("Scheduler:Enabled", defaultValue: true)
+        });
 
         // Override the no-op publisher registered by AddNodeScheduler (last registration wins) when a test supplies one.
         if (eventPublisher is not null)

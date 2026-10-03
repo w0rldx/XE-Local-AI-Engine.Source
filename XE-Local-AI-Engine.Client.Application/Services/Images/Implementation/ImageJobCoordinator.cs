@@ -4,9 +4,9 @@ using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
-using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
@@ -347,8 +347,14 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
                 }
 
                 request = request.Mode == ImageEditMode.Reference
-                    ? request with { ReferenceImage = source.Bytes }
-                    : request with { InitImage = source.Bytes };
+                    ? request with
+                    {
+                        ReferenceImage = source.Bytes
+                    }
+                    : request with
+                    {
+                        InitImage = source.Bytes
+                    };
             }
 
             // A training run holds the whole GPU (decision #13). Admission sits here, after the slot is held and before the runtime is called: a run can begin while this job

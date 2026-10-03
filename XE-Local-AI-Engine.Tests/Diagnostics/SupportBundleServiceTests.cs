@@ -5,7 +5,6 @@ using System.Text;
 using System.Text.Json;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Diagnostics;
-using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.Abstractions.Diagnostics;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -62,7 +61,14 @@ public sealed class SupportBundleServiceTests : IDisposable
         var statuses = manifest.RootElement.GetProperty("entries").EnumerateArray()
                                .ToDictionary(static entry => entry.GetProperty("path").GetString()!, static entry => entry.GetProperty("status").GetString());
         AssertEx.Equal(expected: 1, manifest.RootElement.GetProperty("schemaVersion").GetInt32());
-        foreach (var log in new[] { "logs/xe-node.log", "logs/xe-node.previous.log", "logs/startup-crash.log", "logs/desktop.log", "logs/launcher.log" })
+        foreach (var log in new[]
+                 {
+                     "logs/xe-node.log",
+                     "logs/xe-node.previous.log",
+                     "logs/startup-crash.log",
+                     "logs/desktop.log",
+                     "logs/launcher.log"
+                 })
         {
             AssertEx.Equal("absent", statuses[log]);
         }

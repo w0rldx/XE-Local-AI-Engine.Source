@@ -9,9 +9,9 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
-using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 // AddServices builds the full service graph with ValidateOnBuild, which eagerly constructs NodeOperatorSecretProvider and
 // so resolves the operator secret. That secret is read process-env-first (XE_NODE_SQLITE_KEY) before configuration, so

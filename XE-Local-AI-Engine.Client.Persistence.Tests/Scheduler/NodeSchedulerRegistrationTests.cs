@@ -12,8 +12,8 @@ using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
-using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
+using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
 ///     Integration tests for <see cref="NodeSchedulerServiceCollectionExtensions.AddNodeScheduler" />.
@@ -44,7 +44,10 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         var services = new ServiceCollection();
         var config = BuildConfig(enabled: false, "Data Source=:memory:");
 
-        new MinimalHostApplicationBuilder(services).AddNodeScheduler(config, new NodeStartupSettings { SchedulerEnabled = config.GetValue("Scheduler:Enabled", defaultValue: true) });
+        new MinimalHostApplicationBuilder(services).AddNodeScheduler(config, new NodeStartupSettings
+        {
+            SchedulerEnabled = config.GetValue("Scheduler:Enabled", defaultValue: true)
+        });
 
         var provider = services.BuildServiceProvider();
         var schedulerFactory = provider.GetService<ISchedulerFactory>();
@@ -59,7 +62,10 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         var services = new ServiceCollection();
         var config = BuildConfig(enabled: false, "Data Source=:memory:");
 
-        new MinimalHostApplicationBuilder(services).AddNodeScheduler(config, new NodeStartupSettings { SchedulerEnabled = config.GetValue("Scheduler:Enabled", defaultValue: true) });
+        new MinimalHostApplicationBuilder(services).AddNodeScheduler(config, new NodeStartupSettings
+        {
+            SchedulerEnabled = config.GetValue("Scheduler:Enabled", defaultValue: true)
+        });
 
         var provider = services.BuildServiceProvider();
 
@@ -76,7 +82,10 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         var services = new ServiceCollection();
         var config = BuildConfig(enabled: false, "Data Source=:memory:");
 
-        new MinimalHostApplicationBuilder(services).AddNodeScheduler(config, new NodeStartupSettings { SchedulerEnabled = config.GetValue("Scheduler:Enabled", defaultValue: true) });
+        new MinimalHostApplicationBuilder(services).AddNodeScheduler(config, new NodeStartupSettings
+        {
+            SchedulerEnabled = config.GetValue("Scheduler:Enabled", defaultValue: true)
+        });
 
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
@@ -208,7 +217,10 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         // db.ConnectionStringName). The real application host always has IConfiguration registered, so this
         // hand-rolled provider must register it too for the named lookup to succeed.
         services.AddSingleton(config);
-        new MinimalHostApplicationBuilder(services).AddNodeScheduler(config, new NodeStartupSettings { SchedulerEnabled = config.GetValue("Scheduler:Enabled", defaultValue: true) });
+        new MinimalHostApplicationBuilder(services).AddNodeScheduler(config, new NodeStartupSettings
+        {
+            SchedulerEnabled = config.GetValue("Scheduler:Enabled", defaultValue: true)
+        });
 
         return services.BuildServiceProvider();
     }

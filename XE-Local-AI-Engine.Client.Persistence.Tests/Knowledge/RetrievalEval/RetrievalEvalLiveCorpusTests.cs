@@ -165,9 +165,8 @@ public sealed class RetrievalEvalLiveCorpusTests : IDisposable
             }
         }
 
-        AssertEx.True(
-            crossLanguage.Any(static query => string.Equals(query.Language, "de", StringComparison.Ordinal)) &&
-            crossLanguage.Any(static query => string.Equals(query.Language, "en", StringComparison.Ordinal)),
+        AssertEx.True(crossLanguage.Any(static query => string.Equals(query.Language, "de", StringComparison.Ordinal)) &&
+                      crossLanguage.Any(static query => string.Equals(query.Language, "en", StringComparison.Ordinal)),
             "Cross-language queries must run in both directions.");
     }
 

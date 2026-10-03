@@ -244,8 +244,7 @@ public sealed class ChatInvocationStatePumpTests
         var sink = new CollectingSink();
         InvocationState? memoryHookState = null;
 
-        await new ChatInvocationStatePump(recordingPump, clock).PumpAsync(new SteppingStateReader(
-                [
+        await new ChatInvocationStatePump(recordingPump, clock).PumpAsync(new SteppingStateReader([
                     NewState(correlation, interim, string.Empty, InvocationStatus.Running),
                     NewState(correlation, interim + "The answer", string.Empty, InvocationStatus.Running),
                     NewState(correlation, interim + "The answer is 42.", string.Empty, InvocationStatus.Completed)
@@ -290,8 +289,7 @@ public sealed class ChatInvocationStatePumpTests
         var sink = new CollectingSink();
         InvocationState? memoryHookState = null;
 
-        await new ChatInvocationStatePump(recordingPump, clock).PumpAsync(new SteppingStateReader(
-                [
+        await new ChatInvocationStatePump(recordingPump, clock).PumpAsync(new SteppingStateReader([
                     NewState(correlation, interim, string.Empty, InvocationStatus.Running),
                     NewState(correlation, interim, string.Empty, InvocationStatus.Completed)
                 ],

@@ -372,9 +372,9 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             // The capability gate, for a bound agent only: the default persona lists no tools and requires none.
             if (definition is not null
                 && AgentModelRequirements.ToolRefusal(definition.Name,
-                       effectiveModel,
-                       capabilities.SupportsTools,
-                       AgentModelRequirements.RequiresTools(definition.AllowedToolNames, definition.Kind)) is { } toolRefusal)
+                    effectiveModel,
+                    capabilities.SupportsTools,
+                    AgentModelRequirements.RequiresTools(definition.AllowedToolNames, definition.Kind)) is { } toolRefusal)
             {
                 return Invalid(toolRefusal);
             }

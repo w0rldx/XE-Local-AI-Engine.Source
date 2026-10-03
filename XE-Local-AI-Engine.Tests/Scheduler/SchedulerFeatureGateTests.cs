@@ -6,9 +6,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
-using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 /// <summary>
 ///     <c>Scheduler:Enabled=false</c> registers no Quartz runtime, yet the Scheduler endpoints stay discovered and
@@ -31,7 +31,12 @@ public sealed class SchedulerFeatureGateTests
         };
         using var client = factory.CreateClient();
 
-        foreach (var route in new[] { $"{ApiPrefix}/scheduler/jobs", $"{ApiPrefix}/scheduler/templates", $"{ApiPrefix}/scheduler/runs" })
+        foreach (var route in new[]
+                 {
+                     $"{ApiPrefix}/scheduler/jobs",
+                     $"{ApiPrefix}/scheduler/templates",
+                     $"{ApiPrefix}/scheduler/runs"
+                 })
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, route);
             factory.AddNodeBearerToken(request);

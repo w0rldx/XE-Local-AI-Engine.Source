@@ -545,7 +545,11 @@ public sealed class WorkSessionServiceTests
 
         // The real store-to-DTO mapping must drop the blob path: neither the single read nor the list carries it on the wire.
         var listed = await service.ListArtifactsAsync(sessionId, sinceSequence: 0);
-        foreach (var json in new[] { JsonSerializer.Serialize(artifact, JsonSerializerOptions.Web), JsonSerializer.Serialize(listed, JsonSerializerOptions.Web) })
+        foreach (var json in new[]
+                 {
+                     JsonSerializer.Serialize(artifact, JsonSerializerOptions.Web),
+                     JsonSerializer.Serialize(listed, JsonSerializerOptions.Web)
+                 })
         {
             AssertEx.True(json.Contains("report.md", StringComparison.Ordinal), "the serialized DTO must be the artifact under test");
             AssertEx.False(json.Contains("work-session-artifact:report", StringComparison.Ordinal), "an artifact DTO must never carry its blob path");

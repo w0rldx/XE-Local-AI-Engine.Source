@@ -41,8 +41,8 @@ public sealed class ChildProcessOutputTailRegistryTests
     {
         var registry = new ChildProcessOutputTailRegistry(new ManualClock());
         var tails = Enumerable.Range(0, ChildProcessOutputTailRegistry.MaxEntries)
-            .Select(i => registry.Register(string.Create(CultureInfo.InvariantCulture, $"p{i}")))
-            .ToArray();
+                              .Select(i => registry.Register(string.Create(CultureInfo.InvariantCulture, $"p{i}")))
+                              .ToArray();
         registry.MarkExited(tails[5]);
         registry.MarkExited(tails[3]);
 
@@ -108,8 +108,10 @@ public sealed class ChildProcessOutputTailRegistryTests
         public static readonly DateTimeOffset Start = new(2026, 10, 2, 12, 0, 0, TimeSpan.Zero);
         private DateTimeOffset _now = Start;
 
-        public override DateTimeOffset GetUtcNow() => _now;
+        public override DateTimeOffset GetUtcNow() =>
+            _now;
 
-        public void Advance(TimeSpan by) => _now += by;
+        public void Advance(TimeSpan by) =>
+            _now += by;
     }
 }

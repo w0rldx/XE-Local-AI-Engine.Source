@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Threading.Channels;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Models;

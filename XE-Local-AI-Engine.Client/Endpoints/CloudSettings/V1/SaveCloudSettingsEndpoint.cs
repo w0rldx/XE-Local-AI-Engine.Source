@@ -49,7 +49,7 @@ public sealed class SaveCloudSettingsEndpoint : Endpoint<SaveCloudSettingsReques
         // Case-insensitive, because Azure routing matches deployment names ignoring case: an ordinal check would let
         // `Qwen3-8B` through and then capture every send to the installed `qwen3-8b`.
         var installedNames = (await _ggufModelStore.ListInstalledModelsAsync(ct)).Select(static model => model.ModelName)
-                                                                               .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                                                                                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
         nameErrors.AddRange(deploymentNames.Where(name => !string.IsNullOrEmpty(name) && installedNames.Contains(name))
                                            .Select(static name => $"Deployment name '{name}' is an installed local model and would shadow it."));
 

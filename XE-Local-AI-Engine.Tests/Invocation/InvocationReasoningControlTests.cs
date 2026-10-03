@@ -47,7 +47,11 @@ public sealed class InvocationReasoningControlTests
     public async Task EndReasoning_WhileTheArmedCompletionReasons_EndsItOnTheAdvertisedServer()
     {
         var (control, native) = Create();
-        native.EndReasoningAsync(ServerBase, "chatcmpl-1", Arg.Any<CancellationToken>()).Returns(new LlamaServerReasoningControlResult { Success = true, Message = "ok" });
+        native.EndReasoningAsync(ServerBase, "chatcmpl-1", Arg.Any<CancellationToken>()).Returns(new LlamaServerReasoningControlResult
+        {
+            Success = true,
+            Message = "ok"
+        });
         var messageId = Guid.NewGuid();
         using var turn = control.Track(messageId);
 
@@ -74,7 +78,11 @@ public sealed class InvocationReasoningControlTests
     public async Task EndReasoning_OnTheNextToolRoundsCompletion_AddressesTheNewId()
     {
         var (control, native) = Create();
-        native.EndReasoningAsync(Arg.Any<Uri>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new LlamaServerReasoningControlResult { Success = true, Message = null });
+        native.EndReasoningAsync(Arg.Any<Uri>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new LlamaServerReasoningControlResult
+        {
+            Success = true,
+            Message = null
+        });
         var messageId = Guid.NewGuid();
         using var turn = control.Track(messageId);
 
@@ -92,7 +100,11 @@ public sealed class InvocationReasoningControlTests
         var (control, native) = Create();
         var refused = Guid.NewGuid();
         var gone = Guid.NewGuid();
-        native.EndReasoningAsync(ServerBase, "chatcmpl-refused", Arg.Any<CancellationToken>()).Returns(new LlamaServerReasoningControlResult { Success = false, Message = "not armed" });
+        native.EndReasoningAsync(ServerBase, "chatcmpl-refused", Arg.Any<CancellationToken>()).Returns(new LlamaServerReasoningControlResult
+        {
+            Success = false,
+            Message = "not armed"
+        });
         native.EndReasoningAsync(ServerBase, "chatcmpl-gone", Arg.Any<CancellationToken>())
               .Returns<Task<LlamaServerReasoningControlResult>>(_ => throw new HttpRequestException("connection refused"));
         using var refusedTurn = control.Track(refused);
@@ -144,11 +156,15 @@ public sealed class InvocationReasoningControlTests
         return (new InvocationReasoningControl(native, NullLogger<InvocationReasoningControl>.Instance), native);
     }
 
-    private static ChatResponseUpdate Advertised(string completionId) => new(ChatRole.Assistant, string.Empty)
-    {
-        ResponseId = completionId,
-        AdditionalProperties = new AdditionalPropertiesDictionary { [LlamaServerReasoningControl.EndpointKey] = ServerBase }
-    };
+    private static ChatResponseUpdate Advertised(string completionId) =>
+        new(ChatRole.Assistant, string.Empty)
+        {
+            ResponseId = completionId,
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                [LlamaServerReasoningControl.EndpointKey] = ServerBase
+            }
+        };
 
     private sealed class RecordingHandler : HttpMessageHandler
     {
@@ -169,7 +185,10 @@ public sealed class InvocationReasoningControlTests
         {
             RequestUri = request.RequestUri;
             Body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
-            return new HttpResponseMessage(_status) { Content = new StringContent(_responseBody, Encoding.UTF8, "application/json") };
+            return new HttpResponseMessage(_status)
+            {
+                Content = new StringContent(_responseBody, Encoding.UTF8, "application/json")
+            };
         }
     }
 }

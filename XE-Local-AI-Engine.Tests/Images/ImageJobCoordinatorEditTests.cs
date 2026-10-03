@@ -309,7 +309,10 @@ public sealed class ImageJobCoordinatorEditTests
 
             return new ImageGenerationResult
             {
-                ImageBytes = new byte[] { 1 },
+                ImageBytes = new byte[]
+                {
+                    1
+                },
                 Width = request.Width,
                 Height = request.Height,
                 Seed = 1
@@ -324,9 +327,11 @@ public sealed class ImageJobCoordinatorEditTests
 
         public ConcurrentDictionary<Guid, ImageJobCreate> Created { get; } = new();
 
-        public ImageJobStatus? StatusOf(Guid jobId) => _state.TryGetValue(jobId, out var state) ? state.Status : null;
+        public ImageJobStatus? StatusOf(Guid jobId) =>
+            _state.TryGetValue(jobId, out var state) ? state.Status : null;
 
-        public string? FailureOf(Guid jobId) => _state.TryGetValue(jobId, out var state) ? state.Error : null;
+        public string? FailureOf(Guid jobId) =>
+            _state.TryGetValue(jobId, out var state) ? state.Error : null;
 
         public Task CreateQueuedAsync(ImageJobCreate create, CancellationToken cancellationToken)
         {
@@ -335,17 +340,20 @@ public sealed class ImageJobCoordinatorEditTests
             return Task.CompletedTask;
         }
 
-        public Task<ImageJobView?> GetAsync(Guid jobId, CancellationToken cancellationToken) => Task.FromResult<ImageJobView?>(null);
+        public Task<ImageJobView?> GetAsync(Guid jobId, CancellationToken cancellationToken) =>
+            Task.FromResult<ImageJobView?>(null);
 
         public Task<IReadOnlyList<ImageJobView>> ListAsync(int limit, int offset, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<ImageJobView>>([]);
 
-        public Task<int> CountAsync(CancellationToken cancellationToken) => Task.FromResult(Created.Count);
+        public Task<int> CountAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(Created.Count);
 
         public Task<IReadOnlyList<string>?> DeleteAsync(Guid jobId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<string>?>(null);
 
-        public Task MarkGeneratingAsync(Guid jobId, long startedAtUtc, CancellationToken cancellationToken) => Set(jobId, ImageJobStatus.Generating, error: null);
+        public Task MarkGeneratingAsync(Guid jobId, long startedAtUtc, CancellationToken cancellationToken) =>
+            Set(jobId, ImageJobStatus.Generating, error: null);
 
         public Task MarkSucceededAsync(Guid jobId,
             Guid imageId,
@@ -354,14 +362,17 @@ public sealed class ImageJobCoordinatorEditTests
             int outputWidth,
             int outputHeight,
             long resolvedSeed,
-            CancellationToken cancellationToken) => Set(jobId, ImageJobStatus.Succeeded, error: null);
+            CancellationToken cancellationToken) =>
+            Set(jobId, ImageJobStatus.Succeeded, error: null);
 
         public Task MarkFailedAsync(Guid jobId, string sanitizedError, long completedAtUtc, CancellationToken cancellationToken) =>
             Set(jobId, ImageJobStatus.Failed, sanitizedError);
 
-        public Task MarkCancelledAsync(Guid jobId, long completedAtUtc, CancellationToken cancellationToken) => Set(jobId, ImageJobStatus.Cancelled, error: null);
+        public Task MarkCancelledAsync(Guid jobId, long completedAtUtc, CancellationToken cancellationToken) =>
+            Set(jobId, ImageJobStatus.Cancelled, error: null);
 
-        public Task MarkCancellationRequestedAsync(Guid jobId, long requestedAtUtc, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task MarkCancellationRequestedAsync(Guid jobId, long requestedAtUtc, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
 
         public Task<IReadOnlyList<Guid>> MarkInterruptedFailedAsync(string sanitizedError, long completedAtUtc, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<Guid>>([]);

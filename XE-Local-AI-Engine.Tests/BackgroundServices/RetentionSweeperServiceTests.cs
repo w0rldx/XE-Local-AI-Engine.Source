@@ -175,9 +175,9 @@ public sealed class RetentionSweeperServiceTests : IDisposable
 
         // Two ticks have read the switch as off, so a sweep that ignored it would already have deleted the conversation.
         await AssertEx.EventuallyAsync(() => runtimeSettings.ReceivedCalls()
-                                                             .Count(static call => string.Equals(call.GetMethodInfo().Name,
-                                                                 nameof(INodeRuntimeSettings.GetChatRetentionEnabledAsync),
-                                                                 StringComparison.Ordinal)) >= 2,
+                                                            .Count(static call => string.Equals(call.GetMethodInfo().Name,
+                                                                nameof(INodeRuntimeSettings.GetChatRetentionEnabledAsync),
+                                                                StringComparison.Ordinal)) >= 2,
             TimeSpan.FromSeconds(5),
             "The sweeper should keep re-reading the retention switch while it is off.");
         AssertEx.NotNull(await service.GetConversationAsync(conversationId));

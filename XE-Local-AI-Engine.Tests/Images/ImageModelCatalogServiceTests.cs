@@ -89,7 +89,16 @@ public sealed class ImageModelCatalogServiceTests
             RepoId = "owner/repo",
             Family = ImageModelFamily.Sd15,
             Kind = ImageModelKind.Txt2Img,
-            Parts = [.. roles.Select(static role => new ImageModelPart { Role = role, FileName = $"{role}.gguf", LocalPath = $"/m/{role}.gguf", SizeBytes = 1 })],
+            Parts =
+            [
+                .. roles.Select(static role => new ImageModelPart
+                {
+                    Role = role,
+                    FileName = $"{role}.gguf",
+                    LocalPath = $"/m/{role}.gguf",
+                    SizeBytes = 1
+                })
+            ],
             SizeBytes = 0,
             SourceRevision = "0000000",
             DownloadedAtUtc = DateTimeOffset.UnixEpoch

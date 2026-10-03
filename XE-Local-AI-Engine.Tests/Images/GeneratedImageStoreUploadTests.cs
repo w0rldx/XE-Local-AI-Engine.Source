@@ -183,7 +183,11 @@ public sealed class GeneratedImageStoreUploadTests : IDisposable
         var images = NewImageStore(provider, keyHolder, TimeProvider.System);
 
         _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() =>
-            images.AddUploadAsync(Encoding.UTF8.GetBytes("cancelled upload"), new GeneratedImageMetadata { Width = 8, Height = 8 }, cancellation.Token));
+            images.AddUploadAsync(Encoding.UTF8.GetBytes("cancelled upload"), new GeneratedImageMetadata
+            {
+                Width = 8,
+                Height = 8
+            }, cancellation.Token));
 
         await rows.ReceivedWithAnyArgs(1).InsertAsync(default!, default!, default);
         AssertEx.Empty(Directory.GetFiles(UploadsDirectory()), "A cancelled upload must not leave its blob behind.");

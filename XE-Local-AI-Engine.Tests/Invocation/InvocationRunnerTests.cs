@@ -3430,7 +3430,10 @@ public sealed class InvocationRunnerTests
     {
         var native = Substitute.For<ILlamaServerNativeClient>();
         native.EndReasoningAsync(Arg.Any<Uri>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-              .Returns(new LlamaServerReasoningControlResult { Success = true });
+              .Returns(new LlamaServerReasoningControlResult
+              {
+                  Success = true
+              });
         var reasoningControl = new InvocationReasoningControl(native, NullLogger<InvocationReasoningControl>.Instance);
         var reasoning = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -3454,9 +3457,15 @@ public sealed class InvocationRunnerTests
         var armed = new ChatResponseUpdate(ChatRole.Assistant, [new TextReasoningContent("thinking")])
         {
             ResponseId = "chatcmpl-runner",
-            AdditionalProperties = new AdditionalPropertiesDictionary { [LlamaServerReasoningControl.EndpointKey] = new Uri("http://127.0.0.1:5812/v1") }
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                [LlamaServerReasoningControl.EndpointKey] = new Uri("http://127.0.0.1:5812/v1")
+            }
         };
-        yield return new AgentResponseUpdate(armed) { RawRepresentation = armed };
+        yield return new AgentResponseUpdate(armed)
+        {
+            RawRepresentation = armed
+        };
         reasoning.SetResult();
         await release.Task;
         yield return new AgentResponseUpdate(ChatRole.Assistant, "answer");
@@ -3470,7 +3479,10 @@ public sealed class InvocationRunnerTests
             await Task.Yield();
         }
 
-        yield return new AgentResponseUpdate(ChatRole.Assistant, []) { FinishReason = new ChatFinishReason(finishReason) };
+        yield return new AgentResponseUpdate(ChatRole.Assistant, [])
+        {
+            FinishReason = new ChatFinishReason(finishReason)
+        };
     }
 
     [Test]

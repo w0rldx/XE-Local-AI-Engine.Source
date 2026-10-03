@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Diagnostics;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -56,7 +55,15 @@ public sealed class NodeInfoServiceTests
             InferenceBackend = "cuda",
             GpuExpected = true,
             CpuFallback = false,
-            Devices = [new RuntimeAuditDevice { Name = "RTX Test", TotalBytes = 32, FreeBytes = 30 }]
+            Devices =
+            [
+                new RuntimeAuditDevice
+                {
+                    Name = "RTX Test",
+                    TotalBytes = 32,
+                    FreeBytes = 30
+                }
+            ]
         });
         _sampler.SampleAsync(Arg.Any<CancellationToken>()).Returns(new LiveMemorySample
         {
@@ -244,7 +251,10 @@ public sealed class NodeInfoServiceTests
                 Channel = "tester",
                 GitHubRepositoryUrl = "https://github.com/acme/xe"
             }),
-            new NodeLaunchContext { IsLocalMode = false },
+            new NodeLaunchContext
+            {
+                IsLocalMode = false
+            },
             _clock,
             new NodeLogLevelSwitch(new ConfigurationBuilder().Build()),
             new RecordingLogger<NodeInfoService>());

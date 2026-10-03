@@ -11,8 +11,8 @@ using XE_Local_AI_Engine.Providers.Python.Implementation;
 using XE_Local_AI_Engine.Providers.Training;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
-using static Providers.Training.TrainingRuntimeTestInfrastructure;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
+using static Providers.Training.TrainingRuntimeTestInfrastructure;
 
 /// <summary>
 ///     State derivation of the Managed Python status surface over temp directories and a substituted Training service:

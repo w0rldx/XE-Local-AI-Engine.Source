@@ -895,7 +895,10 @@ public sealed class InvocationResumeRegistryTests
         var conversationId = Guid.NewGuid();
 
         RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, interim));
-        RaiseToolCall(dispatcher, NewToolCall(invocationId, "call-1", "web_search", ToolCallLifecyclePhase.Requested) with { ContentOffset = interim.Length });
+        RaiseToolCall(dispatcher, NewToolCall(invocationId, "call-1", "web_search", ToolCallLifecyclePhase.Requested) with
+        {
+            ContentOffset = interim.Length
+        });
         RaiseToolCall(dispatcher, NewToolCall(invocationId, "call-1", "web_search", ToolCallLifecyclePhase.Completed, result: "hits"));
 
         var events = new List<ChatStreamEvent>();
@@ -924,7 +927,10 @@ public sealed class InvocationResumeRegistryTests
         var consumer = ConsumeAsync(registry, invocationId, events);
         await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.AssistantSnapshot), TimeSpan.FromSeconds(5));
 
-        RaiseToolCall(dispatcher, NewToolCall(invocationId, "call-1", "web_search", ToolCallLifecyclePhase.Requested) with { ContentOffset = interim.Length });
+        RaiseToolCall(dispatcher, NewToolCall(invocationId, "call-1", "web_search", ToolCallLifecyclePhase.Requested) with
+        {
+            ContentOffset = interim.Length
+        });
         await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.ToolCallRequested), TimeSpan.FromSeconds(5));
         RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, interim + " \n"));
         await consumer;

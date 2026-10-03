@@ -6,8 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client;
-using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
+using XE_Local_AI_Engine.Tests.Testing;
 
 // Regression guard for the OTLP log-export path.
 //

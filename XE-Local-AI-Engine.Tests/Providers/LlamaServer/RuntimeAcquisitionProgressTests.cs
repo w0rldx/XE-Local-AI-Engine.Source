@@ -6,7 +6,6 @@ using System.Net;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -641,7 +640,10 @@ public sealed class RuntimeAcquisitionProgressTests
                 await _release.WaitAsync(cancellationToken);
             }
 
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray()) };
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray())
+            };
         }
 
         protected override void Dispose(bool disposing)
@@ -696,11 +698,20 @@ public sealed class RuntimeAcquisitionProgressTests
             return ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
         }
 
-        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-        public override void Flush() => throw new NotSupportedException();
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override void Flush() =>
+            throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
     }
 
     private sealed class TempCacheDir : IDisposable

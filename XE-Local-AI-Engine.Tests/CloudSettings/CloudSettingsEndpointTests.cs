@@ -670,8 +670,7 @@ public sealed class CloudSettingsEndpointTests
         // Azure routing matches deployment names ignoring case, so a case variant shadows just the same.
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
         var ggufModelStore = Substitute.For<IGgufModelStore>();
-        _ = ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(
-        [
+        _ = ggufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns([
             new LocalModelDescriptor
             {
                 ModelName = installedName,

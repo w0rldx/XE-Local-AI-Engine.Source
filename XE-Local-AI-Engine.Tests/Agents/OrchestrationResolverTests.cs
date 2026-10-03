@@ -314,7 +314,7 @@ public sealed class OrchestrationResolverTests
             NullCustomToolScopeFactory.Instance,
             new FakeModelTrustResolver());
         var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel)
-                                                      .WithAllowCloudModelAccess(allowCloudKnowledgeAccess).Build();
+                                                     .WithAllowCloudModelAccess(allowCloudKnowledgeAccess).Build();
 
         var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
         capabilityResolver.ResolveAsync(ToolCapableModel, Arg.Any<CancellationToken>())

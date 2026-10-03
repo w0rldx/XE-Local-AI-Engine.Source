@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ExternalApps;
 
+using System.Globalization;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
@@ -107,8 +108,8 @@ public sealed class ExternalAppContainerIdentityTests
     // /proc/self/status lists "Uid:\treal\teffective\tsaved\tfs"; the effective id is the second column.
     private static int ProcSelfEffectiveId(string field) =>
         int.Parse(File.ReadLines("/proc/self/status").First(line => line.StartsWith(field, StringComparison.Ordinal))
-                .Split('\t', StringSplitOptions.RemoveEmptyEntries)[2],
-            System.Globalization.CultureInfo.InvariantCulture);
+                      .Split('\t', StringSplitOptions.RemoveEmptyEntries)[2],
+            CultureInfo.InvariantCulture);
 
     private static int HostUser()
     {

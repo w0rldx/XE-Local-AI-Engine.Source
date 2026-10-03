@@ -5,7 +5,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
-using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -74,7 +73,10 @@ public sealed class NodeStartupSettingsTests : IDisposable
         var content = Dir("content");
         Write(content, """{ "schedulerEnabled": false, "enableTools": true }""");
 
-        var sut = Read(contentRoot: content, seeds: new() { ["ExternalApps:Enabled"] = "true" });
+        var sut = Read(contentRoot: content, seeds: new()
+        {
+            ["ExternalApps:Enabled"] = "true"
+        });
 
         AssertEx.True(sut.DevelopmentEnabled);
         AssertEx.False(sut.SchedulerEnabled);
@@ -88,7 +90,10 @@ public sealed class NodeStartupSettingsTests : IDisposable
         Write(content, "{ not json");
         var logger = new RecordingLogger<NodeSettingsStore>();
 
-        var sut = Read(contentRoot: content, seeds: new() { ["Development:Enabled"] = "false" }, logger: logger);
+        var sut = Read(contentRoot: content, seeds: new()
+        {
+            ["Development:Enabled"] = "false"
+        }, logger: logger);
 
         AssertEx.False(sut.DevelopmentEnabled);
         AssertEx.True(sut.SchedulerEnabled);

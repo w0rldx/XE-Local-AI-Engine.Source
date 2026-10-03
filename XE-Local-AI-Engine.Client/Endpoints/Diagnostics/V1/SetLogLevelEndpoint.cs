@@ -30,6 +30,9 @@ public sealed class SetLogLevelEndpoint : Endpoint<SetLogLevelRequest, LogLevelR
         ArgumentNullException.ThrowIfNull(req);
         _logLevel.Set(req.Verbose);
         _logger.LogInformation("Verbose logging {State} by the operator", req.Verbose ? "enabled" : "disabled");
-        return Send.OkAsync(new LogLevelResponse { Verbose = _logLevel.Verbose }, ct);
+        return Send.OkAsync(new LogLevelResponse
+        {
+            Verbose = _logLevel.Verbose
+        }, ct);
     }
 }

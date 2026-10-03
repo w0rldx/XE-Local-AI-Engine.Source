@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Diagnostics;
 
+using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -74,7 +75,11 @@ public sealed class SupportBundleService : ISupportBundleService
         {
             // Structured entries are scrubbed per value, never as serialized text, which a text rule could make invalid JSON.
             await WriteEntryAsync(zip, NodeInfoEntry, JsonSerializer.Serialize(ScrubFreeText(nodeInfo), JsonOptions), ct);
-            entries.Add(new ManifestEntryInfo { Path = NodeInfoEntry, Status = "included" });
+            entries.Add(new ManifestEntryInfo
+            {
+                Path = NodeInfoEntry,
+                Status = "included"
+            });
 
             var nodeLogs = FindNodeLogs();
             await AddLogAsync(zip, entries, "logs/xe-node.log", nodeLogs.ElementAtOrDefault(0), NodeLogTailBytes, ct);
@@ -147,9 +152,9 @@ public sealed class SupportBundleService : ISupportBundleService
     {
         var builder = new StringBuilder();
         builder.Append("label: ").Append(tail.Label).Append('\n');
-        builder.Append("started: ").Append(tail.StartedUtc.ToString("O", System.Globalization.CultureInfo.InvariantCulture)).Append('\n');
+        builder.Append("started: ").Append(tail.StartedUtc.ToString("O", CultureInfo.InvariantCulture)).Append('\n');
         builder.Append("exited: ")
-               .Append(tail.ExitedUtc?.ToString("O", System.Globalization.CultureInfo.InvariantCulture) ?? "running")
+               .Append(tail.ExitedUtc?.ToString("O", CultureInfo.InvariantCulture) ?? "running")
                .Append("\n\n");
         foreach (var line in tail.Lines)
         {
@@ -218,7 +223,11 @@ public sealed class SupportBundleService : ISupportBundleService
     {
         if (path is null)
         {
-            entries.Add(new ManifestEntryInfo { Path = entry, Status = "absent" });
+            entries.Add(new ManifestEntryInfo
+            {
+                Path = entry,
+                Status = "absent"
+            });
             return;
         }
 
@@ -230,7 +239,11 @@ public sealed class SupportBundleService : ISupportBundleService
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            entries.Add(new ManifestEntryInfo { Path = entry, Status = "unreadable" });
+            entries.Add(new ManifestEntryInfo
+            {
+                Path = entry,
+                Status = "unreadable"
+            });
             return;
         }
 
@@ -240,7 +253,12 @@ public sealed class SupportBundleService : ISupportBundleService
     private async Task AddTextAsync(ZipArchive zip, List<ManifestEntryInfo> entries, string entry, string text, bool truncated, CancellationToken ct)
     {
         await WriteEntryAsync(zip, entry, _scrubber.Scrub(text), ct);
-        entries.Add(new ManifestEntryInfo { Path = entry, Status = "included", Truncated = truncated });
+        entries.Add(new ManifestEntryInfo
+        {
+            Path = entry,
+            Status = "included",
+            Truncated = truncated
+        });
     }
 
     private sealed record ManifestEntryInfo

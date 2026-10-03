@@ -73,11 +73,11 @@ public sealed class ImageJobCoordinatorTests
         using var harness = Harness.Create(blockRuntime: false, llamaSupervisor: supervisor);
         var callsBeforeEject = new ConcurrentBag<int>();
         supervisor.EjectAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns(_ =>
-            {
-                callsBeforeEject.Add(harness.Runtime.CallCount);
-                return LlamaServerEjectOutcome.Ejected;
-            });
+                  .Returns(_ =>
+                  {
+                      callsBeforeEject.Add(harness.Runtime.CallCount);
+                      return LlamaServerEjectOutcome.Ejected;
+                  });
 
         var jobId = await harness.Coordinator.EnqueueAsync(NewInput("free the vram"), CancellationToken.None);
 

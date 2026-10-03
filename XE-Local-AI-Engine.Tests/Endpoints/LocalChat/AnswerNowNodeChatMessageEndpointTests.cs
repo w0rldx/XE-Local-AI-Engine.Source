@@ -45,7 +45,11 @@ public sealed class AnswerNowNodeChatMessageEndpointTests
     {
         var native = Substitute.For<ILlamaServerNativeClient>();
         native.EndReasoningAsync(ServerBase, "chatcmpl-b", Arg.Any<CancellationToken>())
-              .Returns(new LlamaServerReasoningControlResult { Success = false, Message = "control not armed for /srv/models/secret.gguf" });
+              .Returns(new LlamaServerReasoningControlResult
+              {
+                  Success = false,
+                  Message = "control not armed for /srv/models/secret.gguf"
+              });
         await using var factory = CreateFactory(native);
         var messageId = Guid.NewGuid();
         using var turn = factory.Services.GetRequiredService<InvocationReasoningControl>().Track(messageId);
@@ -63,7 +67,10 @@ public sealed class AnswerNowNodeChatMessageEndpointTests
     {
         var native = Substitute.For<ILlamaServerNativeClient>();
         native.EndReasoningAsync(ServerBase, "chatcmpl-c", Arg.Any<CancellationToken>())
-              .Returns(new LlamaServerReasoningControlResult { Success = true });
+              .Returns(new LlamaServerReasoningControlResult
+              {
+                  Success = true
+              });
         await using var factory = CreateFactory(native);
         var messageId = Guid.NewGuid();
         using var turn = factory.Services.GetRequiredService<InvocationReasoningControl>().Track(messageId);
@@ -73,10 +80,11 @@ public sealed class AnswerNowNodeChatMessageEndpointTests
         await native.Received(1).EndReasoningAsync(ServerBase, "chatcmpl-c", Arg.Any<CancellationToken>());
     }
 
-    private static TestServerWebAppFactory CreateFactory(ILlamaServerNativeClient native) => new()
-    {
-        ConfigureAdditionalTestServices = services => services.AddSingleton(native)
-    };
+    private static TestServerWebAppFactory CreateFactory(ILlamaServerNativeClient native) =>
+        new()
+        {
+            ConfigureAdditionalTestServices = services => services.AddSingleton(native)
+        };
 
     private static async Task<HttpStatusCode> PostAsync(TestServerWebAppFactory factory, Guid messageId)
     {
@@ -92,9 +100,13 @@ public sealed class AnswerNowNodeChatMessageEndpointTests
         return await client.SendAsync(request);
     }
 
-    private static ChatResponseUpdate Advertised(string completionId) => new(ChatRole.Assistant, string.Empty)
-    {
-        ResponseId = completionId,
-        AdditionalProperties = new AdditionalPropertiesDictionary { [LlamaServerReasoningControl.EndpointKey] = ServerBase }
-    };
+    private static ChatResponseUpdate Advertised(string completionId) =>
+        new(ChatRole.Assistant, string.Empty)
+        {
+            ResponseId = completionId,
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                [LlamaServerReasoningControl.EndpointKey] = ServerBase
+            }
+        };
 }

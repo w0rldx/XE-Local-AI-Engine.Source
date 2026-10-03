@@ -100,6 +100,8 @@ public sealed class NodeStartupSettingsHostTests
         [.. routes.Where(endpoint => endpoint.Metadata.GetMetadata<HubMetadata>()?.HubType == hubType)];
 
     private static List<RouteEndpoint> DevelopmentEndpointRoutes(List<RouteEndpoint> routes) =>
-        [.. routes.Where(static endpoint => endpoint.Metadata.GetMetadata<EndpointDefinition>()?.EndpointType is { } type
-                                            && typeof(IDevelopmentEndpoint).IsAssignableFrom(type))];
+    [
+        .. routes.Where(static endpoint => endpoint.Metadata.GetMetadata<EndpointDefinition>()?.EndpointType is { } type
+                                           && typeof(IDevelopmentEndpoint).IsAssignableFrom(type))
+    ];
 }

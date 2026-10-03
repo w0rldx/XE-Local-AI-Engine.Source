@@ -148,12 +148,13 @@ public static class ImageEditModeNames
     public const string Img2Img = "img2img";
     public const string Reference = "reference";
 
-    public static string ToName(ImageEditMode mode) => mode switch
-    {
-        ImageEditMode.Img2Img => Img2Img,
-        ImageEditMode.Reference => Reference,
-        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, message: null)
-    };
+    public static string ToName(ImageEditMode mode) =>
+        mode switch
+        {
+            ImageEditMode.Img2Img => Img2Img,
+            ImageEditMode.Reference => Reference,
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, message: null)
+        };
 
     /// <summary>Parses a stored or wire name; anything else, including a differently cased one, is refused.</summary>
     public static bool TryParse(string? name, out ImageEditMode mode)

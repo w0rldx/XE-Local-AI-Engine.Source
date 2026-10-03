@@ -24,5 +24,6 @@ public sealed class NodeLogLevelSwitch
     public bool Verbose => Level.MinimumLevel <= LogEventLevel.Debug;
 
     /// <summary><see langword="true" /> lowers the minimum level to Debug; <see langword="false" /> restores the configured level.</summary>
-    public void Set(bool verbose) => Level.MinimumLevel = verbose && _configured > LogEventLevel.Debug ? LogEventLevel.Debug : _configured;
+    public void Set(bool verbose) =>
+        Level.MinimumLevel = verbose && _configured > LogEventLevel.Debug ? LogEventLevel.Debug : _configured;
 }

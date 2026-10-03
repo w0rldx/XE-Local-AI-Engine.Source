@@ -219,6 +219,7 @@ public sealed class DesktopLaunchTests
     public void RecoveryCode_IsReadFromStdinOnlyWhenTheFlagIsPresent()
     {
         var stdinReads = 0;
+
         string? Stdin()
         {
             stdinReads++;

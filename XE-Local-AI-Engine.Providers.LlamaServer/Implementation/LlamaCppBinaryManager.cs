@@ -77,6 +77,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     Entries are never removed: one semaphore per (tag, variant) dir is a handful per process. Prune them if tags ever churn.
     /// </remarks>
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _acquisitionLocks = new(StringComparer.Ordinal);
+
     private readonly TimeProvider _timeProvider;
 
     /// <summary>

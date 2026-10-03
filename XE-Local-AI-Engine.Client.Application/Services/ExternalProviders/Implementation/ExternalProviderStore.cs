@@ -476,7 +476,8 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     /// </summary>
     private static StoredExternalProviderConfig LiftSchema1(StoredExternalProviderConfig config)
     {
-        static bool? Lift(bool? value) => value == true ? true : null;
+        static bool? Lift(bool? value) =>
+            value == true ? true : null;
 
         return config with
         {

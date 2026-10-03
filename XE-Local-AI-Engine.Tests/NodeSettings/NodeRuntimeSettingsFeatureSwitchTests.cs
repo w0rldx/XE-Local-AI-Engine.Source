@@ -22,23 +22,50 @@ public sealed class NodeRuntimeSettingsFeatureSwitchTests
 {
     private static readonly Switch[] Switches =
     [
-        new("Development:Enabled", new DevelopmentOptions().Enabled, static (s, v) => s with { DevelopmentEnabled = v },
+        new("Development:Enabled", new DevelopmentOptions().Enabled, static (s, v) => s with
+            {
+                DevelopmentEnabled = v
+            },
             static (r, ct) => r.GetDevelopmentEnabledAsync(ct), static r => r.GetDevelopmentEnabled(), static e => e.DevelopmentEnabled),
-        new("WorkSessions:Enabled", new WorkSessionOptions().Enabled, static (s, v) => s with { WorkSessionsEnabled = v },
+        new("WorkSessions:Enabled", new WorkSessionOptions().Enabled, static (s, v) => s with
+            {
+                WorkSessionsEnabled = v
+            },
             static (r, ct) => r.GetWorkSessionsEnabledAsync(ct), static r => r.GetWorkSessionsEnabled(), static e => e.WorkSessionsEnabled),
-        new("GraphWorkflows:Enabled", new GraphWorkflowOptions().Enabled, static (s, v) => s with { GraphWorkflowsEnabled = v },
+        new("GraphWorkflows:Enabled", new GraphWorkflowOptions().Enabled, static (s, v) => s with
+            {
+                GraphWorkflowsEnabled = v
+            },
             static (r, ct) => r.GetGraphWorkflowsEnabledAsync(ct), static r => r.GetGraphWorkflowsEnabled(), static e => e.GraphWorkflowsEnabled),
-        new("Transcription:Enabled", new TranscriptionOptions().Enabled, static (s, v) => s with { TranscriptionEnabled = v },
+        new("Transcription:Enabled", new TranscriptionOptions().Enabled, static (s, v) => s with
+            {
+                TranscriptionEnabled = v
+            },
             static (r, ct) => r.GetTranscriptionEnabledAsync(ct), static r => r.GetTranscriptionEnabled(), static e => e.TranscriptionEnabled),
-        new("ExternalApps:Enabled", new ExternalAppsOptions().Enabled, static (s, v) => s with { ExternalAppsEnabled = v },
+        new("ExternalApps:Enabled", new ExternalAppsOptions().Enabled, static (s, v) => s with
+            {
+                ExternalAppsEnabled = v
+            },
             static (r, ct) => r.GetExternalAppsEnabledAsync(ct), static r => r.GetExternalAppsEnabled(), static e => e.ExternalAppsEnabled),
-        new("Compute:Enabled", new ComputeOptions().Enabled, static (s, v) => s with { ComputeEnabled = v },
+        new("Compute:Enabled", new ComputeOptions().Enabled, static (s, v) => s with
+            {
+                ComputeEnabled = v
+            },
             static (r, ct) => r.GetComputeEnabledAsync(ct), static r => r.GetComputeEnabled(), static e => e.ComputeEnabled),
-        new("AgentHome:Enabled", new AgentHomeOptions().Enabled, static (s, v) => s with { AgentHomeEnabled = v },
+        new("AgentHome:Enabled", new AgentHomeOptions().Enabled, static (s, v) => s with
+            {
+                AgentHomeEnabled = v
+            },
             static (r, ct) => r.GetAgentHomeEnabledAsync(ct), static r => r.GetAgentHomeEnabled(), static e => e.AgentHomeEnabled),
-        new("Scheduler:Enabled", new SchedulerOptions().Enabled, static (s, v) => s with { SchedulerEnabled = v },
+        new("Scheduler:Enabled", new SchedulerOptions().Enabled, static (s, v) => s with
+            {
+                SchedulerEnabled = v
+            },
             static (r, ct) => r.GetSchedulerEnabledAsync(ct), static r => r.GetSchedulerEnabled(), static e => e.SchedulerEnabled),
-        new("DevWorkflows:Enabled", new DevWorkflowOptions().Enabled, static (s, v) => s with { DevWorkflowsEnabled = v },
+        new("DevWorkflows:Enabled", new DevWorkflowOptions().Enabled, static (s, v) => s with
+            {
+                DevWorkflowsEnabled = v
+            },
             static (r, ct) => r.GetDevWorkflowsEnabledAsync(ct), static r => r.GetDevWorkflowsEnabled(), static e => e.DevWorkflowsEnabled)
     ];
 

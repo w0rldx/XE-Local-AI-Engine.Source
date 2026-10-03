@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
 using System.Collections.Concurrent;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>The outcome of an "Answer now" request.</summary>
@@ -141,14 +140,19 @@ public sealed partial class InvocationReasoningControl
             var reasoning = !sawAnswer && (sawReasoning || current.Reasoning);
             if (reasoning != current.Reasoning)
             {
-                current = current with { Reasoning = reasoning };
+                current = current with
+                {
+                    Reasoning = reasoning
+                };
             }
 
             Volatile.Write(ref _armed, current);
         }
 
-        internal ArmedCompletion? Snapshot() => Volatile.Read(ref _armed);
+        internal ArmedCompletion? Snapshot() =>
+            Volatile.Read(ref _armed);
 
-        public void Dispose() => _owner._turns.TryRemove(new KeyValuePair<Guid, Turn>(_messageId, this));
+        public void Dispose() =>
+            _owner._turns.TryRemove(new KeyValuePair<Guid, Turn>(_messageId, this));
     }
 }

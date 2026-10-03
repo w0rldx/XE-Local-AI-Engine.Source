@@ -434,7 +434,8 @@ public sealed class NodeAuthVaultTests
         public Task<VaultChange?> RewrapWithRecoveryAsync(string recoveryCode, string newPassword, CancellationToken cancellationToken) =>
             _inner.RewrapWithRecoveryAsync(recoveryCode, newPassword, cancellationToken);
 
-        public Task RestoreAsync(VaultChange change, CancellationToken cancellationToken) => _inner.RestoreAsync(change, cancellationToken);
+        public Task RestoreAsync(VaultChange change, CancellationToken cancellationToken) =>
+            _inner.RestoreAsync(change, cancellationToken);
 
         public sealed class Gate
         {

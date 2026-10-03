@@ -207,7 +207,10 @@ public sealed class EngineCliProcessTests : IDisposable
         AssertEx.NotNull(await engine.ReadReadyLineAsync(), "The locked engine must announce readiness from the pre-host.");
         engine.StartDraining();
         var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(_root));
-        using var client = new HttpClient { BaseAddress = new Uri(ready.Url) };
+        using var client = new HttpClient
+        {
+            BaseAddress = new Uri(ready.Url)
+        };
 
         var status = await RunAsync(["--status", "--json"], launchMode: null);
         AssertEx.Equal(expected: 0, status.ExitCode, status.CombinedOutput);
@@ -224,12 +227,18 @@ public sealed class EngineCliProcessTests : IDisposable
             AssertEx.Equal(HttpStatusCode.ServiceUnavailable, other.StatusCode);
         }
 
-        using (var wrong = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new { password = "not the admin password" }))
+        using (var wrong = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new
+               {
+                   password = "not the admin password"
+               }))
         {
             AssertEx.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
         }
 
-        using (var right = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new { password = AdminPassword }))
+        using (var right = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new
+               {
+                   password = AdminPassword
+               }))
         {
             AssertEx.Equal(HttpStatusCode.NoContent, right.StatusCode);
         }
@@ -264,7 +273,10 @@ public sealed class EngineCliProcessTests : IDisposable
         await using var engine = serving;
         engine.StartDraining();
         var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(_root));
-        using var client = new HttpClient { BaseAddress = new Uri(ready.Url) };
+        using var client = new HttpClient
+        {
+            BaseAddress = new Uri(ready.Url)
+        };
 
         var status = AssertEx.NotNull(await client.GetFromJsonAsync<NodeAuthStatusResponse>(Route(LocalApiRoutes.Auth.Status)));
         AssertEx.Equal(NodeAuthVaultStatus.Unlocked, status.Vault);
@@ -290,21 +302,34 @@ public sealed class EngineCliProcessTests : IDisposable
         AssertEx.NotNull(await engine.ReadReadyLineAsync(), "The locked engine must announce readiness from the pre-host.");
         engine.StartDraining();
         var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(_root));
-        using var client = new HttpClient { BaseAddress = new Uri(ready.Url) };
+        using var client = new HttpClient
+        {
+            BaseAddress = new Uri(ready.Url)
+        };
 
         const string newPassword = "A brand-new admin passw0rd";
-        using (var recovered = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new { recoveryCode, newPassword }))
+        using (var recovered = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new
+               {
+                   recoveryCode,
+                   newPassword
+               }))
         {
             AssertEx.Equal(HttpStatusCode.NoContent, recovered.StatusCode);
         }
 
         await WaitForRealHostAsync(engine, client);
-        using (var oldLogin = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.Login), new { password = AdminPassword }))
+        using (var oldLogin = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.Login), new
+               {
+                   password = AdminPassword
+               }))
         {
             AssertEx.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode, engine.StandardOutput);
         }
 
-        using (var newLogin = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.Login), new { password = newPassword }))
+        using (var newLogin = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.Login), new
+               {
+                   password = newPassword
+               }))
         {
             AssertEx.Equal(HttpStatusCode.OK, newLogin.StatusCode, await newLogin.Content.ReadAsStringAsync());
         }
@@ -320,16 +345,18 @@ public sealed class EngineCliProcessTests : IDisposable
         engine.StartDraining();
         var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(_root));
         var port = new Uri(ready.Url).Port;
-        using var client = new HttpClient { BaseAddress = new Uri(ready.Url) };
+        using var client = new HttpClient
+        {
+            BaseAddress = new Uri(ready.Url)
+        };
 
         // An unlock request whose body never finishes keeps the pre-host's graceful stop draining after Kestrel unbound the
         // port, which is the gap the test takes the port in. "100 Continue" proves the handler is already reading that body.
         using var parked = new TcpClient();
         await parked.ConnectAsync(IPAddress.Loopback, port);
         var stream = parked.GetStream();
-        await stream.WriteAsync(Encoding.ASCII.GetBytes(
-            $"POST /{LocalApiRoutes.Prefix}/{LocalApiRoutes.Auth.VaultUnlock} HTTP/1.1\r\nHost: 127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}\r\n"
-            + "Content-Type: application/json\r\nContent-Length: 1000\r\nExpect: 100-continue\r\n\r\n"));
+        await stream.WriteAsync(Encoding.ASCII.GetBytes($"POST /{LocalApiRoutes.Prefix}/{LocalApiRoutes.Auth.VaultUnlock} HTTP/1.1\r\nHost: 127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}\r\n"
+                                                        + "Content-Type: application/json\r\nContent-Length: 1000\r\nExpect: 100-continue\r\n\r\n"));
         var interim = new byte[256];
         using (var readTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
         {
@@ -337,7 +364,10 @@ public sealed class EngineCliProcessTests : IDisposable
             AssertEx.Contains(Encoding.ASCII.GetString(interim, 0, read), "100 Continue");
         }
 
-        using (var right = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new { password = AdminPassword }))
+        using (var right = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new
+               {
+                   password = AdminPassword
+               }))
         {
             AssertEx.Equal(HttpStatusCode.NoContent, right.StatusCode);
         }
@@ -416,7 +446,8 @@ public sealed class EngineCliProcessTests : IDisposable
         return status!;
     }
 
-    private static Uri Route(string route) => new($"/{LocalApiRoutes.Prefix}/{route}", UriKind.Relative);
+    private static Uri Route(string route) =>
+        new($"/{LocalApiRoutes.Prefix}/{route}", UriKind.Relative);
 
     private async Task<CommandResult> RunAsync(IReadOnlyList<string> arguments,
         string? launchMode,
@@ -497,6 +528,7 @@ public sealed class EngineCliProcessTests : IDisposable
         {
             startInfo.Environment.Remove(DesktopLaunch.AdminPasswordEnvironmentVariable);
         }
+
         if (launchMode is not null)
         {
             startInfo.Environment[DesktopLaunch.LaunchModeEnvironmentVariable] = launchMode;
@@ -570,7 +602,8 @@ public sealed class EngineCliProcessTests : IDisposable
             return _process.ExitCode;
         }
 
-        internal Task<string> StandardErrorAsync() => _standardError;
+        internal Task<string> StandardErrorAsync() =>
+            _standardError;
 
         /// <summary>
         ///     Keeps reading stdout after readiness, so a chatty child never blocks on a full pipe and a later readiness

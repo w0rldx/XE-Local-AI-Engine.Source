@@ -60,7 +60,13 @@ public sealed class VaultFileCodecTests
         var (file, _) = VaultFileCodec.Create(RandomNumberGenerator.GetBytes(32), Password, Now, FastIterations);
         var tamperedCt = file.Password.Ct.ToArray();
         tamperedCt[0] ^= 0x01;
-        var tampered = file with { Password = file.Password with { Ct = tamperedCt } };
+        var tampered = file with
+        {
+            Password = file.Password with
+            {
+                Ct = tamperedCt
+            }
+        };
 
         _ = AssertEx.Throws<VaultUnlockException>(() => VaultFileCodec.UnwrapWithPassword(tampered, Password));
     }
@@ -111,7 +117,13 @@ public sealed class VaultFileCodecTests
         AssertEx.Equal(expected: 1_000, read.Kdf.Iterations);
         SameBytes(masterKey, VaultFileCodec.UnwrapWithPassword(read, Password));
         // The same file read with the default count would derive a different KEK; prove the count is load-bearing.
-        var lied = read with { Kdf = read.Kdf with { Iterations = 1_001 } };
+        var lied = read with
+        {
+            Kdf = read.Kdf with
+            {
+                Iterations = 1_001
+            }
+        };
         _ = AssertEx.Throws<VaultUnlockException>(() => VaultFileCodec.UnwrapWithPassword(lied, Password));
     }
 
@@ -128,7 +140,13 @@ public sealed class VaultFileCodecTests
     public void Read_RejectsAnIterationCountOutsideTheBounds()
     {
         var (file, _) = VaultFileCodec.Create(RandomNumberGenerator.GetBytes(32), Password, Now, FastIterations);
-        var huge = file with { Kdf = file.Kdf with { Iterations = VaultKdf.MaximumIterations + 1 } };
+        var huge = file with
+        {
+            Kdf = file.Kdf with
+            {
+                Iterations = VaultKdf.MaximumIterations + 1
+            }
+        };
 
         _ = AssertEx.Throws<InvalidDataException>(() => VaultFileCodec.Read(VaultFileCodec.Serialize(huge)));
     }

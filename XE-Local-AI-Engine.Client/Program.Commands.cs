@@ -119,6 +119,7 @@ public sealed partial class Program
             // Printed once, here only; the node keeps no copy. Installers must surface it to the operator.
             await standardOutput.WriteLineAsync($"XE_RECOVERY_CODE={result.RecoveryCode}");
         }
+
         return 0;
     }
 
@@ -153,7 +154,8 @@ public sealed partial class Program
         await standardOutput.WriteLineAsync("XE Local AI Engine");
         await standardOutput.WriteLineAsync("Serve: --desktop | --browser | --headless | --mcp-only [--no-browser] [--port <1-65535>]");
         await standardOutput
-            .WriteLineAsync("Commands: --setup [--admin-email <email>] [--admin-password <password> | --admin-password-stdin] | --reset-admin-password <password> [--recovery-code-stdin] | --mcp-key <delegate|agentic> | --status [--json] | --help");
+            .WriteLineAsync(
+                "Commands: --setup [--admin-email <email>] [--admin-password <password> | --admin-password-stdin] | --reset-admin-password <password> [--recovery-code-stdin] | --mcp-key <delegate|agentic> | --status [--json] | --help");
         await standardOutput.WriteLineAsync("Maintenance: --reset-admin-password <password> | --knowledge-downgrade-preflight | --knowledge-downgrade-export");
         await standardOutput
             .WriteLineAsync("Credentials: scripts and installers must use XE_ADMIN_PASSWORD or --admin-password-stdin, never --admin-password on argv; argv exposes the password in process listings.");

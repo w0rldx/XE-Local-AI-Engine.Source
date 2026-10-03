@@ -241,7 +241,10 @@ public sealed partial class WorkerEventDispatcher
             {
                 if (CurrentInvocation?.InvocationId == payload.InvocationId)
                 {
-                    payload = payload with { ContentOffset = CurrentInvocation.ContentAccumulator.Length };
+                    payload = payload with
+                    {
+                        ContentOffset = CurrentInvocation.ContentAccumulator.Length
+                    };
                 }
             }
         }

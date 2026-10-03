@@ -124,7 +124,16 @@ public sealed class ModelTrustResolverTests
         var resolver = new ModelTrustResolver(registry, registry, cloudFactory, NullLogger<ModelTrustResolver>.Instance);
 
         // One gates the send, the other the tools offered to that same send: they must never disagree.
-        foreach (var modelId in new[] { "qwen3-27b.gguf", "azure-gpt", "gpt-5.5", "ext:local-box/qwen3", "ext:cloud-box/qwen3", "ext:gone/qwen3", null })
+        foreach (var modelId in new[]
+                 {
+                     "qwen3-27b.gguf",
+                     "azure-gpt",
+                     "gpt-5.5",
+                     "ext:local-box/qwen3",
+                     "ext:cloud-box/qwen3",
+                     "ext:gone/qwen3",
+                     null
+                 })
         {
             AssertEx.Equal(await resolver.ResolveAsync(modelId), resolver.Classify(modelId), $"'{modelId}'");
         }

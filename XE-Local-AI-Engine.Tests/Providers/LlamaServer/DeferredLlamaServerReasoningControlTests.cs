@@ -23,7 +23,10 @@ public sealed class DeferredLlamaServerReasoningControlTests
     public async Task Streaming_WithABudget_ArmsTheControlAndAdvertisesTheCompletionOnce()
     {
         using var server = DeferredLlamaServerResponseSchemaEntryPointTests.CapturingServer.Start(ReasoningStream, "text/event-stream");
-        using var client = new DeferredLlamaServerChatClient(new FakeProcessSupervisor { EnsureEndpoint = server.BaseAddress }, "qwen3:8b", TimeSpan.FromSeconds(30));
+        using var client = new DeferredLlamaServerChatClient(new FakeProcessSupervisor
+        {
+            EnsureEndpoint = server.BaseAddress
+        }, "qwen3:8b", TimeSpan.FromSeconds(30));
 
         var advertised = new List<(Uri BaseAddress, string CompletionId)>();
         await foreach (var update in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")], BudgetOptions(8192), CancellationToken.None))
@@ -48,7 +51,10 @@ public sealed class DeferredLlamaServerReasoningControlTests
     public async Task Streaming_WithoutABudget_NeitherArmsNorAdvertises()
     {
         using var server = DeferredLlamaServerResponseSchemaEntryPointTests.CapturingServer.Start(ReasoningStream, "text/event-stream");
-        using var client = new DeferredLlamaServerChatClient(new FakeProcessSupervisor { EnsureEndpoint = server.BaseAddress }, "qwen3:8b", TimeSpan.FromSeconds(30));
+        using var client = new DeferredLlamaServerChatClient(new FakeProcessSupervisor
+        {
+            EnsureEndpoint = server.BaseAddress
+        }, "qwen3:8b", TimeSpan.FromSeconds(30));
 
         var advertisedCount = 0;
         await foreach (var update in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")], new ChatOptions(), CancellationToken.None))
@@ -72,13 +78,14 @@ public sealed class DeferredLlamaServerReasoningControlTests
         AssertEx.Null(DeferredLlamaServerChatClient.ApplyReasoningControl(null));
     }
 
-    private static ChatOptions BudgetOptions(int budgetTokens) => new()
-    {
-        AdditionalProperties = new AdditionalPropertiesDictionary
+    private static ChatOptions BudgetOptions(int budgetTokens) =>
+        new()
         {
-            [DeferredLlamaServerChatClient.ReasoningBudgetMarkerKey] = budgetTokens
-        }
-    };
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                [DeferredLlamaServerChatClient.ReasoningBudgetMarkerKey] = budgetTokens
+            }
+        };
 
     private const string ReasoningStream =
         "data: {\"id\":\"" + CompletionId + "\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"qwen3:8b\","

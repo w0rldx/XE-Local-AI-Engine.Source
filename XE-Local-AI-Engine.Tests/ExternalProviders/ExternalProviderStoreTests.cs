@@ -128,7 +128,13 @@ public sealed class ExternalProviderStoreTests : IDisposable
                     DisplayName = "LAN box",
                     BaseUrl = "http://192.168.1.40:8080/v1/",
                     Locality = ExternalProviderLocality.Local,
-                    Models = [new StoredExternalProviderModel { WireId = "qwen3" }]
+                    Models =
+                    [
+                        new StoredExternalProviderModel
+                        {
+                            WireId = "qwen3"
+                        }
+                    ]
                 }
             ]
         }, RawSerializerOptions)!;
@@ -655,17 +661,17 @@ public sealed class ExternalProviderStoreTests : IDisposable
 
         // The revision read off the schema-1 file is what the CAS compares against across the lift.
         _ = await SaveAsync(store, Request(models:
-        [
-            Model("qwen3") with
+            [
+                Model("qwen3") with
+                {
+                    SupportsTools = false,
+                    SupportsVision = null,
+                    SupportsReasoning = true
+                }
+            ]) with
             {
-                SupportsTools = false,
-                SupportsVision = null,
-                SupportsReasoning = true
-            }
-        ]) with
-        {
-            ExpectedRevision = "r"
-        });
+                ExpectedRevision = "r"
+            });
 
         var onDisk = JsonSerializer.Deserialize<StoredExternalProviderConfig>(new MockDataProtector().Unprotect(await File.ReadAllBytesAsync(StorePath)),
             RawSerializerOptions)!;

@@ -2,8 +2,8 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
 using System.Runtime.Versioning;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -180,7 +180,8 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
     }
 
     /// <summary>Whether a forwarded line is a marker kept at Information: errors, warnings, CUDA, backend, load summary and readiness lines.</summary>
-    internal static bool IsMarkerLine(string line) => MarkerLineRegex().IsMatch(line);
+    internal static bool IsMarkerLine(string line) =>
+        MarkerLineRegex().IsMatch(line);
 
     /// <summary>
     ///     Whether a non-marker line is kept at Information: only <c>slot</c>-module lines (prompt progress, timings, release), at most one per

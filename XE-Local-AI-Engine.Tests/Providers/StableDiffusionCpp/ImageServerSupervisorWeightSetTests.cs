@@ -13,13 +13,14 @@ public sealed class ImageServerSupervisorWeightSetTests
 {
     private const string ModelName = "qwen-image";
 
-    private static ImageModelPart Part(ImageModelPartRole role, string fileName) => new()
-    {
-        Role = role,
-        FileName = fileName,
-        LocalPath = "/fake/models/qwen/" + fileName,
-        SizeBytes = 1024
-    };
+    private static ImageModelPart Part(ImageModelPartRole role, string fileName) =>
+        new()
+        {
+            Role = role,
+            FileName = fileName,
+            LocalPath = "/fake/models/qwen/" + fileName,
+            SizeBytes = 1024
+        };
 
     private static readonly ImageModelPart Diffusion = Part(ImageModelPartRole.Diffusion, "diffusion.gguf");
     private static readonly ImageModelPart Vae = Part(ImageModelPartRole.Vae, "vae.safetensors");
@@ -30,7 +31,10 @@ public sealed class ImageServerSupervisorWeightSetTests
     public async Task EnsureRunning_SameWeightSet_ReusesDaemon()
     {
         var launcher = new FakeImageProcessLauncher();
-        var store = new FakeImageModelStore { Parts = [Diffusion, Vae, Llm] };
+        var store = new FakeImageModelStore
+        {
+            Parts = [Diffusion, Vae, Llm]
+        };
         await using var supervisor = ImageSupervisorFactory.Create(launcher, modelStore: store);
 
         var first = await supervisor.EnsureRunningAsync(ModelName, CancellationToken.None);
@@ -44,7 +48,10 @@ public sealed class ImageServerSupervisorWeightSetTests
     public async Task EnsureRunning_SameWeightSetInDifferentOrder_ReusesDaemon()
     {
         var launcher = new FakeImageProcessLauncher();
-        var store = new FakeImageModelStore { Parts = [Diffusion, Vae, Llm, LlmVision] };
+        var store = new FakeImageModelStore
+        {
+            Parts = [Diffusion, Vae, Llm, LlmVision]
+        };
         await using var supervisor = ImageSupervisorFactory.Create(launcher, modelStore: store);
 
         await supervisor.EnsureRunningAsync(ModelName, CancellationToken.None);
@@ -59,7 +66,10 @@ public sealed class ImageServerSupervisorWeightSetTests
     public async Task EnsureRunning_InstallGainedLlmVisionPart_EvictsAndRespawnsWithLlmVision()
     {
         var launcher = new FakeImageProcessLauncher();
-        var store = new FakeImageModelStore { Parts = [Diffusion, Vae, Llm] };
+        var store = new FakeImageModelStore
+        {
+            Parts = [Diffusion, Vae, Llm]
+        };
         await using var supervisor = ImageSupervisorFactory.Create(launcher, modelStore: store);
 
         await supervisor.EnsureRunningAsync(ModelName, CancellationToken.None);
@@ -82,7 +92,10 @@ public sealed class ImageServerSupervisorWeightSetTests
     public async Task EnsureRunning_WeightSetChangedUnderJobLease_FailsClosedAndLeavesDaemon()
     {
         var launcher = new FakeImageProcessLauncher();
-        var store = new FakeImageModelStore { Parts = [Diffusion, Vae, Llm] };
+        var store = new FakeImageModelStore
+        {
+            Parts = [Diffusion, Vae, Llm]
+        };
         await using var supervisor = ImageSupervisorFactory.Create(launcher, modelStore: store);
 
         await supervisor.EnsureRunningAsync(ModelName, CancellationToken.None);

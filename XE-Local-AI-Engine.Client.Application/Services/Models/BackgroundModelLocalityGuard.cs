@@ -42,7 +42,8 @@ internal static class BackgroundModelLocalityGuard
             return true;
         }
 
-        logger.LogWarning("Skipped a background step: model {ModelName} selected by node setting {SettingName} is not node-local, and background analysis, eval and memory extraction never leave the node.",
+        logger.LogWarning(
+            "Skipped a background step: model {ModelName} selected by node setting {SettingName} is not node-local, and background analysis, eval and memory extraction never leave the node.",
             modelName, settingName);
         return false;
     }

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Logging;
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,8 +11,8 @@ using Serilog.Core;
 using Serilog.Events;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Services.Diagnostics;
-using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
+using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The verbose switch on the real <c>AddServices</c> Serilog pipeline: it must be applied after
@@ -63,7 +64,10 @@ public sealed class NodeLogLevelSwitchTests : IDisposable
     public void Set_False_RestoresTheConfiguredLevel(string? configured, bool verbose, LogEventLevel level)
     {
         var configuration = new ConfigurationBuilder()
-                            .AddInMemoryCollection(new Dictionary<string, string?> { ["Serilog:MinimumLevel:Default"] = configured })
+                            .AddInMemoryCollection(new Dictionary<string, string?>
+                            {
+                                ["Serilog:MinimumLevel:Default"] = configured
+                            })
                             .Build();
         var levelSwitch = new NodeLogLevelSwitch(configuration);
 
@@ -101,11 +105,12 @@ public sealed class NodeLogLevelSwitchTests : IDisposable
     {
         private readonly ConcurrentQueue<LogEvent> _events = new();
 
-        public void Emit(LogEvent logEvent) => _events.Enqueue(logEvent);
+        public void Emit(LogEvent logEvent) =>
+            _events.Enqueue(logEvent);
 
         public string[] Messages() =>
             _events.Where(static e => e.Properties.TryGetValue("SourceContext", out var source) && source.ToString().Contains("Probe", StringComparison.Ordinal))
-                   .Select(static e => e.RenderMessage(System.Globalization.CultureInfo.InvariantCulture))
+                   .Select(static e => e.RenderMessage(CultureInfo.InvariantCulture))
                    .ToArray();
     }
 }

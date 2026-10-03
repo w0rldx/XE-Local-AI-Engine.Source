@@ -22,5 +22,9 @@ public sealed class GetLogLevelEndpoint : EndpointWithoutRequest<LogLevelRespons
         Policies(NodeAuthorizationPolicies.Operator);
     }
 
-    public override Task HandleAsync(CancellationToken ct) => Send.OkAsync(new LogLevelResponse { Verbose = _logLevel.Verbose }, ct);
+    public override Task HandleAsync(CancellationToken ct) =>
+        Send.OkAsync(new LogLevelResponse
+        {
+            Verbose = _logLevel.Verbose
+        }, ct);
 }

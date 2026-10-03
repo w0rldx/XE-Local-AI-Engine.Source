@@ -17,5 +17,6 @@ public sealed class NullNodeVault : INodeVault
     public Task<VaultChange?> RewrapWithRecoveryAsync(string recoveryCode, string newPassword, CancellationToken cancellationToken) =>
         Task.FromResult<VaultChange?>(null);
 
-    public Task RestoreAsync(VaultChange change, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task RestoreAsync(VaultChange change, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 }

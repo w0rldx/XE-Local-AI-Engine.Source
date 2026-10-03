@@ -485,7 +485,10 @@ public sealed class AgentHomeRunRetentionServiceTests : IDisposable
             new FakeNodeDataDirectory(_dataRoot.Path),
             new AgentHomeRunExecutionRegistry(),
             new AgentHomeRunApplyGuard(),
-            LimitsOf(new AgentHomeRunRetentionOptions { RetentionDays = 30 }).Build(),
+            LimitsOf(new AgentHomeRunRetentionOptions
+            {
+                RetentionDays = 30
+            }).Build(),
             new ThrowOnceClock(clock),
             logger);
 

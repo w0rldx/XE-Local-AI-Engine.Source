@@ -65,7 +65,8 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         return CheckForUpdatesSerializedAsync(minInterval, ct);
     }
 
-    public Task<AppUpdateSnapshot> GetStatusAsync(CancellationToken ct) => WithLiveChannelAsync(_state.Current, ct);
+    public Task<AppUpdateSnapshot> GetStatusAsync(CancellationToken ct) =>
+        WithLiveChannelAsync(_state.Current, ct);
 
     /// <summary>The snapshot as the operator should see it: stamped with the channel stored NOW.</summary>
     /// <remarks>

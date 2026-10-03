@@ -30,12 +30,10 @@ public sealed class AddImageEditColumnsMigrationTests
         await using var probe = await SeededProbeAsync("image-edit-columns.sqlite");
 
         AssertEx.Equal(2L, (await probe.LongsAsync("SELECT COUNT(*) FROM image_jobs;")).Single(), "Every job must survive the image_jobs rebuild.");
-        AssertEx.Equal(
-            "/data/generated-images/a/a.png,/data/generated-images/b/b.png",
+        AssertEx.Equal("/data/generated-images/a/a.png,/data/generated-images/b/b.png",
             await ConcatAsync(probe, "SELECT storage_path AS v FROM generated_images ORDER BY storage_path"),
             "Every generated image row and its storage path must survive both rebuilds.");
-        AssertEx.Equal(
-            $"{JobA},{JobB}",
+        AssertEx.Equal($"{JobA},{JobB}",
             await ConcatAsync(probe, "SELECT job_id AS v FROM generated_images ORDER BY job_id"),
             "Each image keeps its owning job.");
 
@@ -44,7 +42,8 @@ public sealed class AddImageEditColumnsMigrationTests
             "The migration must add edit_mode, source_image_id and strength.");
         AssertEx.Equal(0L, (await probe.LongsAsync("SELECT COUNT(*) FROM image_jobs WHERE edit_mode IS NOT NULL OR source_image_id IS NOT NULL OR strength IS NOT NULL;")).Single(),
             "Existing jobs migrate as plain text-to-image jobs.");
-        AssertEx.Equal(0L, (await probe.LongsAsync(
+        AssertEx.Equal(0L,
+            (await probe.LongsAsync(
                 "SELECT COUNT(*) FROM pragma_table_info('image_jobs') WHERE name IN ('edit_mode', 'source_image_id', 'strength') AND (\"notnull\" <> 0 OR dflt_value IS NOT NULL);")).Single(),
             "The edit columns are nullable with no default.");
         AssertEx.Equal(0L, (await probe.LongsAsync("SELECT \"notnull\" FROM pragma_table_info('generated_images') WHERE name = 'job_id';")).Single(),
@@ -75,8 +74,8 @@ public sealed class AddImageEditColumnsMigrationTests
 
         AssertEx.Equal(0L, (await probe.LongsAsync($"SELECT COUNT(*) FROM generated_images WHERE image_id = '{ImageA}';")).Single(),
             "Deleting a job still cascades to its image.");
-        AssertEx.Equal(1L, (await probe.LongsAsync(
-                "SELECT COUNT(*) FROM image_jobs WHERE id = '0A1E0000-0000-4000-8000-00000000000D' AND source_image_id IS NULL AND edit_mode = 'img2img';")).Single(),
+        AssertEx.Equal(1L,
+            (await probe.LongsAsync("SELECT COUNT(*) FROM image_jobs WHERE id = '0A1E0000-0000-4000-8000-00000000000D' AND source_image_id IS NULL AND edit_mode = 'img2img';")).Single(),
             "The derived job survives its source's deletion with source_image_id cleared.");
     }
 
@@ -93,8 +92,7 @@ public sealed class AddImageEditColumnsMigrationTests
 
         AssertEx.Equal(0L, (await probe.LongsAsync("SELECT COUNT(*) FROM pragma_foreign_key_check;")).Single(),
             "The rollback must leave no foreign-key violation behind.");
-        AssertEx.Equal(
-            $"{ImageA},{ImageB}",
+        AssertEx.Equal($"{ImageA},{ImageB}",
             await ConcatAsync(probe, "SELECT image_id AS v FROM generated_images ORDER BY image_id"),
             "Job-backed images survive the rollback and the upload is dropped.");
         AssertEx.Equal(1L, (await probe.LongsAsync("SELECT \"notnull\" FROM pragma_table_info('generated_images') WHERE name = 'job_id';")).Single(),
@@ -155,9 +153,7 @@ public sealed class AddImageEditColumnsMigrationTests
 
     private static async Task<string?> OnDeleteAsync(MigrationSchemaProbe probe, string table, string column, string principal)
     {
-        return Convert.ToString(
-            await probe.ScalarAsync(
-                "SELECT on_delete FROM pragma_foreign_key_list($table) WHERE \"from\" = $column AND \"table\" = $principal;",
+        return Convert.ToString(await probe.ScalarAsync("SELECT on_delete FROM pragma_foreign_key_list($table) WHERE \"from\" = $column AND \"table\" = $principal;",
                 command =>
                 {
                     command.Parameters.AddWithValue("$table", table);

@@ -184,7 +184,8 @@ internal sealed class FakeGraphWorkflowModelCapabilities : IModelCapabilityResol
         }
 
         var thinking = name.Contains(GraphWorkflowModels.ThinkingMarker, StringComparison.Ordinal);
-        return new ModelCapabilitySnapshot(thinking, !name.Contains(GraphWorkflowModels.NoToolsMarker, StringComparison.Ordinal), name.Contains(GraphWorkflowModels.CloudMarker, StringComparison.Ordinal))
+        return new ModelCapabilitySnapshot(thinking, !name.Contains(GraphWorkflowModels.NoToolsMarker, StringComparison.Ordinal),
+            name.Contains(GraphWorkflowModels.CloudMarker, StringComparison.Ordinal))
         {
             ReasoningBudgetEnforceable = thinking,
             SupportsVision = name.Contains(GraphWorkflowModels.VisionMarker, StringComparison.Ordinal)

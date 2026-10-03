@@ -81,7 +81,13 @@ public sealed partial class DiagnosticsEndpointTests
     {
         await using var factory = new TestServerWebAppFactory();
         using var client = factory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Put, LogLevelPath) { Content = JsonContent.Create(new { verbose = true }) };
+        using var request = new HttpRequestMessage(HttpMethod.Put, LogLevelPath)
+        {
+            Content = JsonContent.Create(new
+            {
+                verbose = true
+            })
+        };
         request.Headers.Add("Origin", "http://localhost");
 
         using var response = await client.SendAsync(request);
@@ -106,7 +112,10 @@ public sealed partial class DiagnosticsEndpointTests
     private static async Task<bool> PutVerboseAsync(TestServerWebAppFactory factory, HttpClient client, bool verbose)
     {
         using var request = Authorized(factory, LogLevelPath, HttpMethod.Put);
-        request.Content = JsonContent.Create(new { verbose });
+        request.Content = JsonContent.Create(new
+        {
+            verbose
+        });
         using var response = await client.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, body);

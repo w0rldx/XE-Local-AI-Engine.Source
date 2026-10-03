@@ -125,7 +125,10 @@ public sealed class NodeSettingsPolicyTests
     {
         var runtimeSettings = StubNodeRuntimeSettings.Create().WithAgentHomeEnabled(true).WithToolCapableModels("stored.gguf").WithToolCapableModelsSeed().Build();
 
-        var errors = await NodeSettingsPolicy.ValidateMergedAsync(new StoredNodeSettings { ToolCapableModels = [] }, runtimeSettings, CancellationToken.None);
+        var errors = await NodeSettingsPolicy.ValidateMergedAsync(new StoredNodeSettings
+        {
+            ToolCapableModels = []
+        }, runtimeSettings, CancellationToken.None);
 
         AssertEx.ContainsSingle(errors,
             error => error.Field == NodeSettingsField.ToolCapableModels
@@ -137,7 +140,10 @@ public sealed class NodeSettingsPolicyTests
     {
         var runtimeSettings = StubNodeRuntimeSettings.Create().WithAgentHomeEnabled(true).WithToolCapableModels("stored.gguf").WithToolCapableModelsSeed("seed.gguf").Build();
 
-        var errors = await NodeSettingsPolicy.ValidateMergedAsync(new StoredNodeSettings { ToolCapableModels = [] }, runtimeSettings, CancellationToken.None);
+        var errors = await NodeSettingsPolicy.ValidateMergedAsync(new StoredNodeSettings
+        {
+            ToolCapableModels = []
+        }, runtimeSettings, CancellationToken.None);
 
         AssertEx.Empty(errors);
     }
