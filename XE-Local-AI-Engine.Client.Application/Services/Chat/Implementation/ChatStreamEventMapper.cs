@@ -206,6 +206,9 @@ internal static class ChatStreamEventMapper
             ToolName = payload.ToolName,
             Arguments = payload.Phase == ToolCallLifecyclePhase.Requested ? payload.Arguments : null,
             RequiresApproval = payload.Phase == ToolCallLifecyclePhase.Requested ? payload.RequiresApproval : null,
+            // On a requested call: the global content offset the interim text before it ends at, so the client splits
+            // that text off the answer at the right character even when this event overtakes the trailing delta.
+            ContentOffset = payload.Phase == ToolCallLifecyclePhase.Requested ? payload.ContentOffset : null,
             Result = payload.Phase == ToolCallLifecyclePhase.Completed ? payload.Result : null,
             IsError = payload.Phase == ToolCallLifecyclePhase.Completed ? payload.IsError : null
         };
@@ -215,7 +218,7 @@ internal static class ChatStreamEventMapper
     {
         if (payload.Phase == ToolCallLifecyclePhase.Requested)
         {
-            parts.AppendToolRequested(payload.ToolCallId, payload.ToolName, payload.Arguments, payload.RequiresApproval, sequence);
+            parts.AppendToolRequested(payload.ToolCallId, payload.ToolName, payload.Arguments, payload.RequiresApproval, sequence, payload.ContentOffset);
             return;
         }
 

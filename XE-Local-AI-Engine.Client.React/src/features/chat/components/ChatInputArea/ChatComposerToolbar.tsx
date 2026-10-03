@@ -12,6 +12,7 @@ import type { ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
+import { AnswerNowButton } from "@/features/chat/components/ChatInputArea/AnswerNowButton";
 import { WebContentAutoAcceptToggle } from "@/features/chat/components/ChatInputArea/WebContentAutoAcceptToggle";
 import { CompactButton } from "@/features/chat/components/CompactButton";
 import { ContextStateButton } from "@/features/chat/components/ContextStatePanel";
@@ -60,6 +61,8 @@ interface ChatComposerToolbarProps {
 	showContextUsage: boolean;
 	contextUsage?: ContextUsageModel;
 	sendDisabled: boolean;
+	// The streaming message "Answer now" targets; undefined hides the button.
+	answerNowMessageId?: string;
 	onCancel: () => void;
 	onSubmit: () => void;
 }
@@ -108,6 +111,7 @@ export function ChatComposerToolbar({
 	showContextUsage,
 	contextUsage,
 	sendDisabled,
+	answerNowMessageId,
 	onCancel,
 	onSubmit,
 }: ChatComposerToolbarProps) {
@@ -272,6 +276,7 @@ export function ChatComposerToolbar({
 					</Group>
 				) : null}
 			</Group>
+			{isSending && answerNowMessageId ? <AnswerNowButton messageId={answerNowMessageId} /> : null}
 			<Button
 				data-testid="chat-send-button"
 				onClick={() => {

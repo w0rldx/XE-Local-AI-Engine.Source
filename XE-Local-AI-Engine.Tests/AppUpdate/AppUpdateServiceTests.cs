@@ -942,6 +942,45 @@ public sealed class AppUpdateServiceTests
         await dev.Received(1).CheckForUpdateAsync(Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task RefreshIfStale_WhenTheChannelIsSetMidCheck_ReportsTheStoredChannel()
+    {
+        // The About-dialog race: the refresh resolves Stable when its check starts, the operator then picks Development,
+        // and the refresh answers last; reporting the channel the check STARTED with would swap the picker back.
+        var checkEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCheck = new TaskCompletionSource<VelopackCheckResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var main = NewManager();
+        main.CheckForUpdateAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            checkEntered.TrySetResult();
+            return releaseCheck.Task;
+        });
+        var store = StoreWith(AppUpdateChannelNames.Stable);
+        using var service = CreateService(DevelopmentFactory(main, UpToDate()), isDesktop: true, settingsStore: store);
+
+        var refreshTask = service.RefreshIfStaleAsync(TimeSpan.FromMinutes(10), CancellationToken.None);
+        await checkEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var setTask = service.SetChannelAsync(AppUpdateChannel.Development, CancellationToken.None);
+        AssertEx.Equal(AppUpdateChannelNames.Development, (await store.LoadAsync()).UpdateChannel);
+        AssertEx.False(setTask.IsCompleted);
+
+        releaseCheck.SetResult(new VelopackCheckResult
+        {
+            Outcome = VelopackCheckOutcome.UpdateAvailable,
+            AvailableVersion = "1.0.0"
+        });
+        var refreshed = await refreshTask.WaitAsync(TimeSpan.FromSeconds(5));
+        var set = await setTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssertEx.Equal(AppUpdateChannel.Development, refreshed.SelectedChannel);
+        // The offer was found under Stable, so it must not be shown as Development's.
+        AssertEx.False(refreshed.UpdateAvailable);
+        AssertEx.Null(refreshed.AvailableVersion);
+        AssertEx.Null(refreshed.AvailableChannel);
+        AssertEx.Equal(AppUpdateChannel.Development, set.SelectedChannel);
+    }
+
     /// <summary>The REAL node-settings store over a throwaway directory, for the on-disk round trip.</summary>
     private static NodeSettingsStore NewNodeSettingsStore(TempDirectory root)
     {

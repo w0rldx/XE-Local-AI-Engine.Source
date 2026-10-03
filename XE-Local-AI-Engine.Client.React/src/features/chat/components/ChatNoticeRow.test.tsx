@@ -53,6 +53,23 @@ describe("ChatNoticeRow", () => {
 		expect(screen.getByText("Switched to a smaller model.")).toBeTruthy();
 	});
 
+	it("localizes the stopped-while-thinking sentence and still shows the finish reason", () => {
+		renderWithProviders(
+			<ChatNoticeRow
+				part={noticePart({
+					noticeKind: "EmptyAnswer",
+					text: "The model stopped while thinking before it could answer; its thoughts are kept above.",
+					detail: "length",
+				})}
+			/>,
+		);
+
+		expect(
+			screen.getByText("The model stopped while thinking before it could answer; its thoughts are kept above."),
+		).toBeTruthy();
+		expect(screen.getByTestId("chat-notice-detail").textContent).toBe("length");
+	});
+
 	it("tags the row with the notice kind for each known kind", () => {
 		const { rerender } = renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "ModelSubstituted" })} />);
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("ModelSubstituted");

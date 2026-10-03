@@ -167,7 +167,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
-        options = ApplyToolSchemaCompatibility(ApplyResponseSchemaPassthrough(ApplySamplingPassthrough(ApplyReasoningBudget(ApplyThinkingSwitch(options)))));
+        options = ApplyToolSchemaCompatibility(ApplyResponseSchemaPassthrough(ApplySamplingPassthrough(ApplyReasoningControl(ApplyReasoningBudget(ApplyThinkingSwitch(options))))));
+        var reasoningControlArmed = IsReasoningControlArmed(options);
         var healed = false;
         var profilingReEnsures = 0;
         while (true)
@@ -209,6 +210,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             var enumerator =
                 resolved.Client.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
             var retry = false;
+            var reasoningControlAdvertised = false;
             try
             {
                 var first = true;
@@ -248,7 +250,17 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                         yield break;
                     }
 
-                    yield return enumerator.Current;
+                    var update = enumerator.Current;
+
+                    // Once per request (a self-healed retry is a new completion with a new id): advertise where the armed completion can be told
+                    // to stop reasoning. The id is MEAI's ResponseId, which the OpenAI adapter copies from the chunk's chatcmpl id.
+                    if (reasoningControlArmed && !reasoningControlAdvertised && !string.IsNullOrEmpty(update.ResponseId))
+                    {
+                        (update.AdditionalProperties ??= [])[LlamaServerReasoningControl.EndpointKey] = resolved.BaseAddress;
+                        reasoningControlAdvertised = true;
+                    }
+
+                    yield return update;
                     first = false;
                 }
             }
@@ -349,6 +361,30 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         return OpenAICompatibleRequestBody.Chain(options!,
             body => OpenAICompatibleRequestBody.SetField(body, "$.reasoning_budget_tokens", budgetTokens));
     }
+
+    /// <summary>
+    ///     When the turn carries a reasoning budget, returns a clone of <paramref name="options" /> whose body arms
+    ///     <c>reasoning_control: true</c>, so "Answer now" can end the reasoning early.
+    /// </summary>
+    /// <remarks>
+    ///     Gated on the budget marker because that marker is already emitted only when thinking is ON and the template
+    ///     is <c>ReasoningBudgetEnforceable</c> — the same end-of-reasoning tag the control needs to force. Streaming
+    ///     only: a non-streaming caller has no way to press the button. Without the marker the options are returned
+    ///     unchanged.
+    /// </remarks>
+    internal static ChatOptions? ApplyReasoningControl(ChatOptions? options)
+    {
+        if (!IsReasoningControlArmed(options))
+        {
+            return options;
+        }
+
+        return OpenAICompatibleRequestBody.Chain(options!,
+            static body => OpenAICompatibleRequestBody.SetRawField(body, "$.reasoning_control", "true"u8));
+    }
+
+    private static bool IsReasoningControlArmed(ChatOptions? options) =>
+        TryReadInt32(options?.AdditionalProperties, ReasoningBudgetMarkerKey) is > 0;
 
     /// <summary>
     ///     Caps the marker's budget at HALF the room this turn can actually generate into, so the reasoning phase can

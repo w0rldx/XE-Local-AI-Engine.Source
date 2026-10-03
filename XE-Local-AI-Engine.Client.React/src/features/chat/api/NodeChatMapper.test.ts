@@ -308,6 +308,28 @@ describe("node chat mapper", () => {
 		]);
 	});
 
+	it("maps interim text parts between tool parts in persisted order, with only the answer as content", () => {
+		// The node persists each interim text part at its tool call's sequence, ahead of the card.
+		const message = mapSingleMessage({
+			content: "The answer.",
+			parts: [
+				{ kind: "text", sequence: 3, text: "Let me search. " },
+				{ kind: "tool", sequence: 3, toolCallId: "call-1", name: "web_search", state: "received", result: "a" },
+				{ kind: "text", sequence: 7, text: "One more lookup. " },
+				{ kind: "tool", sequence: 7, toolCallId: "call-2", name: "web_fetch", state: "received", result: "b" },
+			],
+		});
+
+		expect(message.content).toBe("The answer.");
+		expect(message.parts?.map((part) => [part.kind, part.id])).toEqual([
+			["text", "message-1:3"],
+			["tool", "call-1"],
+			["text", "message-1:7"],
+			["tool", "call-2"],
+		]);
+		expect(message.parts?.[2]).toMatchObject({ kind: "text", text: "One more lookup. " });
+	});
+
 	it("keys a tool part on the message id + sequence when the wire omits the tool-call id", () => {
 		const message = mapSingleMessage({
 			parts: [{ kind: "tool", sequence: 4, name: "noop", state: "requesting" }],

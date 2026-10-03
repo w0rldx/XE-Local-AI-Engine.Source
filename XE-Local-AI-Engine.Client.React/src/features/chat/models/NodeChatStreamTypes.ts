@@ -85,8 +85,9 @@ export interface NodeChatStreamEventDto {
 	reasoningDelta?: string | null;
 	// Character index (UTF-16 code units, the same space as JS `String.length`) in the accumulated content /
 	// reasoning at which this event's `delta` / `reasoningDelta` begins. Set on `assistant-delta` (where it is
-	// the gap/overlap check) and on `assistant-snapshot` (where it equals the carried text's length); absent
-	// everywhere else. `NodeChatAdapter` is the only reader — it repairs a mismatch via ResumeMessage.
+	// the gap/overlap check) and on `assistant-snapshot` (where it equals the carried text's length). On
+	// `tool-call-requested`, `contentOffset` is the content length when the call was requested: the reducer splits the
+	// text before it off as an interim `text` part. Absent everywhere else.
 	contentOffset?: number | null;
 	reasoningOffset?: number | null;
 	// `content`/`reasoning` carry the FULL accumulated text and are populated only on `assistant-snapshot`,

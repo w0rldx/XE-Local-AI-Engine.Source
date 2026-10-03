@@ -885,6 +885,53 @@ public sealed class InvocationResumeRegistryTests
         AssertEx.Equal(ChatStreamEventTypes.AssistantDelta, events[1].Type);
     }
 
+    [Test]
+    public async Task ResumeAsync_WhenAReplayedToolCallSplitTheText_TheTerminalCarriesOnlyTheAnswerLikeThePersistedRow()
+    {
+        const string interim = "Let me search for that. ";
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, interim));
+        RaiseToolCall(dispatcher, NewToolCall(invocationId, "call-1", "web_search", ToolCallLifecyclePhase.Requested) with { ContentOffset = interim.Length });
+        RaiseToolCall(dispatcher, NewToolCall(invocationId, "call-1", "web_search", ToolCallLifecyclePhase.Completed, result: "hits"));
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = ConsumeAsync(registry, invocationId, events);
+        await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.AssistantSnapshot), TimeSpan.FromSeconds(5));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, interim + "The answer is 42."));
+        await consumer;
+
+        // The snapshot and deltas stay in the global offset space; only the terminal re-states the answer.
+        AssertEx.Equal(interim, events.Single(evt => evt.Type == ChatStreamEventTypes.AssistantSnapshot).Content);
+        AssertEx.Equal(ChatStreamEventTypes.AssistantCompleted, events[^1].Type);
+        AssertEx.Equal("The answer is 42.", events[^1].Content);
+    }
+
+    [Test]
+    public async Task ResumeAsync_WhenNoAnswerFollowsALiveToolCall_TheTerminalKeepsTheWholeText()
+    {
+        const string interim = "Let me search for that. ";
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, interim));
+        var events = new List<ChatStreamEvent>();
+        var consumer = ConsumeAsync(registry, invocationId, events);
+        await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.AssistantSnapshot), TimeSpan.FromSeconds(5));
+
+        RaiseToolCall(dispatcher, NewToolCall(invocationId, "call-1", "web_search", ToolCallLifecyclePhase.Requested) with { ContentOffset = interim.Length });
+        await AssertEx.EventuallyAsync(() => events.Any(evt => evt.Type == ChatStreamEventTypes.ToolCallRequested), TimeSpan.FromSeconds(5));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, interim + " \n"));
+        await consumer;
+
+        AssertEx.Equal(interim + " \n", events[^1].Content);
+    }
+
     /// <summary>Drains a resume stream into <paramref name="events" /> on a background task, so the test can publish into it.</summary>
     private static Task ConsumeAsync(InvocationResumeRegistry registry, Guid invocationId, List<ChatStreamEvent> events)
     {

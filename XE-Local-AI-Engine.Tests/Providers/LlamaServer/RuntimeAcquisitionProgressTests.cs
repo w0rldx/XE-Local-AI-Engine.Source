@@ -6,6 +6,7 @@ using System.Net;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -134,11 +135,12 @@ public sealed class RuntimeAcquisitionProgressTests
     }
 
     [Test]
-    public async Task EnsureBinary_WhenCancelled_ReportsNoTerminalStatus()
+    public async Task EnsureBinary_WhenCancelled_ReturnsTheBannerToIdle_NeverFailed()
     {
         // The supervisor passes a REQUEST-scoped token into EnsureBinaryAsync, so abandoning a chat mid-download must
         // not persist a terminal Failed: the banner would stick on a network diagnosis for something that never broke,
         // behind a retry attached to a non-failure. Host shutdown (the first-run service's stoppingToken) is the same.
+        // Nor may it stay silent: the registry latches the last write, so the banner froze at its last percentage.
         using var cache = new TempCacheDir();
         using var cts = new CancellationTokenSource();
         using var handler = new CancellingHandler(cts);
@@ -151,10 +153,108 @@ public sealed class RuntimeAcquisitionProgressTests
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, cts.Token));
 
         // Acquisition DID start, so the guard being tested is the cancellation filter — not the "reported nothing" one.
-        AssertEx.NotEmpty(registry.Writes);
-        AssertEx.Equal(nameof(RuntimeAcquisitionPhase.Downloading), registry.Writes[^1].Phase);
+        AssertEx.Contains(registry.Writes, status => status.Phase == nameof(RuntimeAcquisitionPhase.Downloading));
+        AssertEx.Equal(nameof(RuntimeAcquisitionPhase.Idle), registry.Writes[^1].Phase);
         AssertEx.False(registry.Writes.Any(status => status.Phase is nameof(RuntimeAcquisitionPhase.Failed) or nameof(RuntimeAcquisitionPhase.Completed)),
-            "A cancelled acquisition must never report a terminal status.");
+            "A cancelled acquisition must never report Failed or Completed.");
+    }
+
+    [Test]
+    public async Task EnsureBinary_WhenTheDownloadStalls_FailsNamingTheStall()
+    {
+        // A half-open connection delivers nothing and never errors, so without an inactivity bound the acquisition and its
+        // banner sit at one percentage forever. The stall must surface as Failed with a reason, not as a silent cancel.
+        using var cache = new TempCacheDir();
+        var time = new ManualTimeProvider();
+        using var hung = new SemaphoreSlim(initialCount: 0);
+        using var handler = new ScriptedHandler(() => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new StallingStream(hung))
+        });
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var registry = new RecordingRegistry();
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64,
+            time,
+            acquisitionStatus: registry);
+
+        var ensure = manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+
+        // Two attempts (the pipeline retries once); each gets a full silent minute only once its read is truly blocked.
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            AssertEx.True(await hung.WaitAsync(TimeSpan.FromSeconds(30)), $"Attempt {attempt + 1} never reached its blocked read.");
+            time.Advance(TimeSpan.FromSeconds(60));
+        }
+
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => ensure.WaitAsync(TimeSpan.FromSeconds(30)));
+
+        AssertEx.Contains(exception.Message, "stalled", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal(expected: 2, handler.CallCount);
+        var terminal = registry.Writes[^1];
+        AssertEx.Equal(nameof(RuntimeAcquisitionPhase.Failed), terminal.Phase);
+        AssertEx.Contains(terminal.SanitizedError, "stalled", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Test]
+    public async Task EnsureBinary_ConcurrentCallers_ShareOneAcquisitionOfTheVariantDir()
+    {
+        // Every model spawn ensures the binary; without single-flight a second spawn mid-download started its own
+        // download into the same variant dir. The second caller must wait, then serve what the first left on disk.
+        using var cache = new TempCacheDir();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var handler = new GatedHandler(release.Task);
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var registry = new RecordingRegistry();
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64,
+            TimeProvider.System,
+            acquisitionStatus: registry);
+
+        var first = manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+        AssertEx.True(await handler.FirstRequestArrived.WaitAsync(TimeSpan.FromSeconds(30)), "The first caller never started downloading.");
+        // Without the lock this call checks the (still empty) cache synchronously and starts a second download now.
+        var second = manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+
+        // Stand in for the first caller's extract landing the server, then let its (hash-failing) download finish.
+        var serverPath = WriteCachedCpuServer(cache.Path);
+        release.SetResult();
+
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => first.WaitAsync(TimeSpan.FromSeconds(30)));
+        var binary = await second.WaitAsync(TimeSpan.FromSeconds(30));
+
+        AssertEx.Equal(serverPath, binary.ServerExecutablePath);
+        // The first caller's attempt plus its one retry; the second caller downloaded nothing.
+        AssertEx.Equal(expected: 2, handler.CallCount);
+    }
+
+    [Test]
+    public async Task EnsureBinary_AWaiterThatIsCancelled_LeavesTheInFlightAcquisitionAndItsBannerAlone()
+    {
+        // A cancelled waiter just stops waiting: it never reported, so it must not reset the banner, and the first
+        // caller's download must not observe the waiter's token.
+        using var cache = new TempCacheDir();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var handler = new GatedHandler(release.Task);
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var registry = new RecordingRegistry();
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64,
+            TimeProvider.System,
+            acquisitionStatus: registry);
+
+        var first = manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+        AssertEx.True(await handler.FirstRequestArrived.WaitAsync(TimeSpan.FromSeconds(30)), "The first caller never started downloading.");
+        using var waiterCts = new CancellationTokenSource();
+        var waiter = manager.EnsureBinaryAsync(GpuVariant.Cpu, waiterCts.Token);
+
+        await waiterCts.CancelAsync();
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => waiter.WaitAsync(TimeSpan.FromSeconds(30)));
+        AssertEx.False(first.IsCompleted, "Cancelling a waiter must not end the in-flight acquisition.");
+        AssertEx.False(registry.Writes.Any(status => status.Phase == nameof(RuntimeAcquisitionPhase.Idle)),
+            "A waiter that never reported must not reset the banner.");
+
+        release.SetResult();
+        // The first caller ran to its own (hash-failure) end, not a cancellation.
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => first.WaitAsync(TimeSpan.FromSeconds(30)));
+        AssertEx.Equal(nameof(RuntimeAcquisitionPhase.Failed), registry.Writes[^1].Phase);
     }
 
     [Test]
@@ -321,6 +421,16 @@ public sealed class RuntimeAcquisitionProgressTests
             CancellationToken.None));
 
         AssertEx.Empty(registry.Writes);
+    }
+
+    /// <summary>Writes a stub server where a pinned Linux CPU ensure resolves its cached binary, and returns that path.</summary>
+    private static string WriteCachedCpuServer(string cacheRoot)
+    {
+        var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
+        var serverPath = Path.Combine(cacheRoot, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
+        File.WriteAllText(serverPath, "fake-llama-server");
+        return serverPath;
     }
 
     /// <summary>A tar.gz carrying an executable <c>llama-server</c> stub, so the post-install smoke test can pass on POSIX.</summary>
@@ -502,6 +612,95 @@ public sealed class RuntimeAcquisitionProgressTests
             cancellationToken.ThrowIfCancellationRequested();
             return new HttpResponseMessage(HttpStatusCode.OK);
         }
+    }
+
+    /// <summary>
+    ///     Holds the FIRST request open until the test releases it (honouring the request token), then serves a body that
+    ///     fails the pinned hash; every later request answers at once.
+    /// </summary>
+    private sealed class GatedHandler : HttpMessageHandler
+    {
+        private readonly Task _release;
+        private readonly SemaphoreSlim _firstRequestArrived = new(initialCount: 0);
+        private int _callCount;
+
+        public GatedHandler(Task release)
+        {
+            _release = release;
+        }
+
+        public SemaphoreSlim FirstRequestArrived => _firstRequestArrived;
+
+        public int CallCount => Volatile.Read(ref _callCount);
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (Interlocked.Increment(ref _callCount) == 1)
+            {
+                _firstRequestArrived.Release();
+                await _release.WaitAsync(cancellationToken);
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray()) };
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _firstRequestArrived.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+    }
+
+    /// <summary>Serves a few bytes, then blocks every later read until its token fires — a half-open connection.</summary>
+    private sealed class StallingStream : Stream
+    {
+        private readonly SemaphoreSlim _hung;
+        private bool _served;
+
+        public StallingStream(SemaphoreSlim hung)
+        {
+            _hung = hung;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (!_served)
+            {
+                _served = true;
+                buffer.Span[0] = 0x42;
+                return 1;
+            }
+
+            _hung.Release();
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return 0;
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            return ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Flush() => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     private sealed class TempCacheDir : IDisposable

@@ -147,6 +147,14 @@ Ordering model ("Option A"):
 
 In the pump (`NodeChatStreamService.cs`) a reasoning delta is fed into the accumulator under the *same* sequence as its `AssistantDelta` SignalR event, keeping reasoning segments correctly ordered against the concurrently-stamped tool parts. On a terminal, an empty interleave (a plain-text answer) is passed as `null` so persisted parts are left untouched rather than overwritten. The accumulated `parts[]` is serialized into the message's `metadata_json` (see persistence below) and re-rendered by the React `MessageParts` / `ThoughtsSection` / `ToolCallCard` components.
 
+Interim text segments. Text the model streams before a tool call ("Let me search for …") is narration, not the answer:
+
+- `WorkerEventDispatcher.ReportToolCallLifecycleAsync` stamps a requested call's `ToolCallLifecyclePayload.ContentOffset` with the streamed-content length, under the lock that orders the content appends. The split is therefore exact even when the pump's debounced emit of the narration's tail trails the tool event.
+- `NodeChatPartAccumulator.AppendToolRequested` closes the content since the previous boundary into a `text` part at the tool's sequence, inserted just ahead of the tool part. Whitespace-only narration produces no part; a repeated requested phase moves nothing.
+- At the terminal, `ChatInvocationStatePump` persists `parts` sliced from the full streamed content and `Content` = `NodeChatPartAccumulator.FinalSegment`, the text after the last tool call. Previews, history (`ConversationContextBuilder`), regeneration/variants and memory extraction keep reading `Content` and so see only the answer; the model's later turns never see the narration. An interrupted/cancelled terminal still persists the whole cursor text with no parts (unchanged).
+- The wire keeps ONE global content-offset space: deltas, snapshots and the gap detector are unchanged. `tool-call-requested` carries the split offset in `contentOffset` (live and in the resume replay). The React reducer (`NodeChatStreamState.ts`) tracks the whole streamed text in `ChatMessageModel.streamedContent` once a tool carries an offset and re-derives the `text` parts and the answer from the tools' offsets on every event, so a late tail delta, a snapshot repair and a resume replay all land on the same split. A terminal whose content differs from the derived answer (an interrupted turn) wins and drops the derived parts.
+- `buildMessageParts` breaks a sequence tie as reasoning < text < tool < notice, so a text part renders before its card; `MessageParts` renders it muted (`c="dimmed"`). Old rows (one `Content`, no text parts) render exactly as before; no migration.
+
 ## MCP & local tools offered during a chat run
 
 Tools are offered to the turn only when **all three** hold (`NodeChatStreamService.cs`): the client asked (`request.UseLocalTools`), the node has the tool engine enabled (`runtimeSettings.GetEnableToolsAsync`), and the active model advertises the `tools` capability (`resolution.SupportsTools`).
@@ -302,7 +310,23 @@ marker emitters — `InvocationAgentFactory` (single-agent) and `ParticipantReas
 (orchestration participants, MCP-bound children, spawned sub-agents) — put it on the in-process marker
 `xe.llama.reasoning_budget_tokens`, which `DeferredLlamaServerChatClient.ApplyReasoningBudget` patches onto the
 outbound body as `reasoning_budget_tokens` (clamped to the launched window by `ClampToGenerationRoom`). An
-unspecified effort resolves to `null` and sends nothing, so the no-effort request stays byte-identical.
+unspecified effort gets the `medium` rung (8192) since tester round 6 — before that it sent nothing and a hard prompt
+thought until `finish_reason: length` with no answer. Explicit `none` still turns thinking off and sends no budget.
+
+**Answer now.** A streaming request that carries the budget also carries `reasoning_control: true`
+(`DeferredLlamaServerChatClient.ApplyReasoningControl`), which arms llama-server's realtime reasoning control (pin
+b10201). The client stamps the stream's first update with the server address (`LlamaServerReasoningControl`); its
+`ResponseId` is the `chatcmpl-…` id. `InvocationRunner` tracks the turn under its assistant message id in
+`InvocationReasoningControl` and records whether the armed completion is still reasoning. The composer's "Answer
+now" button (shown beside Stop while a Thoughts segment streams on a local llama.cpp model whose template is
+budget-enforceable) posts `chat/messages/{messageId}/answer-now`, which sends
+`{"id", "action": "reasoning_end"}` to `/v1/chat/completions/control`: 204 ended, 404 no running turn, 409 not
+reasoning, not armed, or refused (the server's own text is logged, never returned). The turn keeps streaming; the
+model closes its reasoning and answers.
+
+When a turn still ends with no answer, finish reason `length` and non-empty reasoning, the `EmptyAnswer` notice reads
+"The model stopped while thinking before it could answer; its thoughts are kept above." — the reasoning is
+persisted (`Reasoning`) and rendered as the Thoughts segment above the notice. The SPA localizes that sentence.
 
 **llama-server honours that field only for templates it can find a thinking END tag for.** Its gate writes the
 budget onto the sampler only when the chat-template classification produced a non-empty think-end-tag set —

@@ -64,6 +64,9 @@ export interface ChatToolPart {
 	// Images the tool returned (an MCP image block), persisted as `image` parts keyed to this call. Present only on a
 	// reloaded turn: the live stream carries the result text, which names each image by a placeholder.
 	images?: ChatToolImage[];
+	// Live only: the global streamed-content offset at which this call was requested. The text before it is interim
+	// narration the reducer splits into a `text` part; never present on a reloaded turn.
+	contentOffset?: number;
 }
 
 /** One image a tool call returned. `src` is always a `data:image/` URI. */
@@ -73,9 +76,9 @@ export interface ChatToolImage {
 }
 
 /**
- * Forward-compat: an interleaved mid-turn answer/narration segment. The primary local-model case is
- * reasoning↔tool interleave plus a single trailing answer (rendered from `message.content`), so `text`
- * parts are rare; they exist so multi-step narration round-trips cleanly when the backend emits it.
+ * Interim narration the model streamed before a tool call ("Let me search for …"), closed at that call and ordered
+ * just before its card. Rendered muted; the trailing answer still renders from `message.content`, which holds only
+ * the text after the last tool call.
  */
 export interface ChatTextPart {
 	kind: "text";
@@ -155,6 +158,9 @@ export interface ChatMessageModel {
 	// Ordered interleave (reasoning → tool → reasoning → …) for an assistant turn. Drives the in-order render of
 	// the reasoning/tool region; the trailing answer still renders from `content`. Absent for user/legacy turns.
 	parts?: ChatMessagePart[];
+	// Live only, while a turn with tool calls streams: the whole streamed text in the wire's global offset space.
+	// `content` and the `text` parts are re-derived from it at the tools' `contentOffset`s; cleared at the terminal.
+	streamedContent?: string;
 	// Node-local feedback on this assistant turn, carried on the message read DTO (feedback flow). Undefined when
 	// no feedback has been recorded; presence drives the feedback control's active state.
 	feedbackRating?: ChatFeedbackRating;
@@ -310,6 +316,9 @@ export interface ModelOption {
 	// entries do nothing. Undefined means "not declared" — every non-external provider, whose effort vocabulary is
 	// decided by `isCloud` and `isReasoningModel` exactly as before.
 	isReasoningEffortCapable?: boolean;
+	// Whether "Answer now" can end this model's reasoning early: a graded-reasoning llama.cpp model whose template
+	// has a reasoning end tag. Undefined (cloud, Ollama, external) is "no".
+	isReasoningControllable?: boolean;
 	// Whether the model advertises the Ollama `tools` capability. Drives whether the composer offers the
 	// local-tool controls (gated together with the node-wide capability). Undefined on the local-default
 	// option (the runtime picks a concrete model later), so callers treat undefined as "not tool-capable".

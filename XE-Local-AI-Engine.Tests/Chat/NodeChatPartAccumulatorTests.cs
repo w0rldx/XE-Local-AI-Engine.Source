@@ -33,6 +33,88 @@ public sealed class NodeChatPartAccumulatorTests
     }
 
     [Test]
+    public void AppendToolRequested_WithAContentOffset_ClosesTheInterimTextIntoATextPartAheadOfTheTool()
+    {
+        // Two model rounds with a tool call between: narration, then the call, then the answer.
+        const string interim = "Let me search for that. ";
+        const string content = interim + "The answer is 42.";
+        var acc = new NodeChatPartAccumulator();
+
+        acc.AppendReasoning("plan", sequence: 1);
+        acc.AppendToolRequested("call-1", "web_search", "{}", requiresApproval: false, sequence: 2, contentOffset: interim.Length);
+        acc.CompleteToolCall("call-1", "web_search", "results", isError: false, sequence: 3);
+
+        var parts = acc.Snapshot(content);
+
+        AssertEx.Equal(expected: 3, parts.Count);
+        AssertEx.Equal(NodeChatMessagePartKinds.Reasoning, parts[0].Kind);
+        AssertEx.Equal(NodeChatMessagePartKinds.Text, parts[1].Kind);
+        AssertEx.Equal(interim, parts[1].Text);
+        AssertEx.Equal(expected: 2, parts[1].Sequence);
+        AssertEx.Equal(NodeChatMessagePartKinds.Tool, parts[2].Kind);
+        AssertEx.Equal(expected: 2, parts[2].Sequence);
+        AssertEx.Equal("The answer is 42.", acc.FinalSegment(content));
+    }
+
+    [Test]
+    public void FinalSegment_WithoutAnyToolCall_IsTheWholeContentAndNoTextPartIsEmitted()
+    {
+        var acc = new NodeChatPartAccumulator();
+        acc.AppendReasoning("thinking", sequence: 1);
+
+        AssertEx.Equal("Plain answer.", acc.FinalSegment("Plain answer."));
+        AssertEx.False(acc.Snapshot("Plain answer.").Any(static part => part.Kind == NodeChatMessagePartKinds.Text));
+    }
+
+    [Test]
+    public void AppendToolRequested_SplitsOncePerNewText_SkipsBlankNarration_AndIgnoresARepeatedRequest()
+    {
+        // A call with nothing before it, a whitespace-only gap, a repeated requested phase with a later offset, and a
+        // second call after real narration: only the narration becomes a part, and the answer starts after the last call.
+        const string content = "\n\nNow the second lookup. Final.";
+        var acc = new NodeChatPartAccumulator();
+
+        acc.AppendToolRequested("call-0", "web_search", "{}", requiresApproval: false, sequence: 1, contentOffset: 0);
+        acc.AppendToolRequested("call-1", "web_search", "{}", requiresApproval: false, sequence: 2, contentOffset: 2);
+        acc.AppendToolRequested("call-1", "web_search", "{}", requiresApproval: false, sequence: 3, contentOffset: 10);
+        acc.AppendToolRequested("call-2", "web_fetch", "{}", requiresApproval: false, sequence: 4, contentOffset: "\n\nNow the second lookup. ".Length);
+
+        var parts = acc.Snapshot(content);
+
+        AssertEx.Equal("tool,tool,text,tool", string.Join(',', parts.Select(static part => part.Kind)));
+        AssertEx.Equal("Now the second lookup. ", parts[2].Text);
+        AssertEx.Equal(expected: 4, parts[2].Sequence);
+        AssertEx.Equal("Final.", acc.FinalSegment(content));
+    }
+
+    [Test]
+    public void Snapshot_WithoutContent_EmitsNoTextPart_ForCallersThatKeepTheWholeText()
+    {
+        var acc = new NodeChatPartAccumulator();
+        acc.AppendToolRequested("call-1", "web_search", "{}", requiresApproval: false, sequence: 1, contentOffset: 12);
+
+        var parts = acc.Snapshot();
+
+        AssertEx.Equal(expected: 1, parts.Count);
+        AssertEx.Equal(NodeChatMessagePartKinds.Tool, parts[0].Kind);
+    }
+
+    [Test]
+    public void FinalSegment_WhenNoAnswerFollowsTheLastCall_KeepsTheWholeTextAndSnapshotEmitsNoTextPart()
+    {
+        // The turn ended right after a tool call (or a faulted terminal's persisted text ends before the offset): the
+        // pre-split behaviour holds, so history, previews and memory see the whole text and no narration part exists.
+        const string interim = "Let me search for that. ";
+        var acc = new NodeChatPartAccumulator();
+        acc.AppendToolRequested("call-1", "web_search", "{}", requiresApproval: false, sequence: 1, contentOffset: interim.Length);
+
+        AssertEx.Equal(interim + "  \n", acc.FinalSegment(interim + "  \n"));
+        AssertEx.Equal("tool", string.Join(',', acc.Snapshot(interim + "  \n").Select(static part => part.Kind)));
+        AssertEx.Equal("Let me", acc.FinalSegment("Let me"));
+        AssertEx.Equal("tool", string.Join(',', acc.Snapshot("Let me").Select(static part => part.Kind)));
+    }
+
+    [Test]
     public void AccumulateToolPart_WithAnImageResult_PersistsTheImageAsItsOwnPartAfterTheCard()
     {
         var acc = new NodeChatPartAccumulator();

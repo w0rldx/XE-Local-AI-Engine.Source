@@ -2,11 +2,12 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageJobCard } from "@/features/images/components/ImageJobCard";
 import type { ImageEditSource, ImageJobProgressView, ImageJobView } from "@/features/images/models/ImageModels";
+import en from "@/locales/en.json";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 // The card reads the live timeline through this hook; driving it directly keeps the test on the rendering contract
@@ -79,6 +80,7 @@ function progress(overrides: Partial<ImageJobProgressView>): ImageJobProgressVie
 		totalSteps: null,
 		secondsPerIteration: null,
 		estimatedRemainingMs: null,
+		decodeStartedAtUtc: null,
 		...overrides,
 	};
 }
@@ -138,8 +140,45 @@ describe("ImageJobCard generation timeline", () => {
 
 		renderCard();
 
-		expect(screen.getByTestId("image-job-phase").textContent).toContain("decoding");
+		expect(screen.getByTestId("image-job-phase").textContent).toContain("Decoding image");
 		expect(screen.queryByTestId("image-job-eta")).toBeNull();
+	});
+
+	// sd-server reports no decode progress, so pushes stop for the whole decode: the line counts UP from the decode
+	// start on its own clock, and a later push carrying the same start does not reset it. Never a countdown.
+	it("counts the decode up in seconds from its start, across a later push", () => {
+		const template = en.pages.images.job.finishing;
+		vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+		try {
+			vi.setSystemTime(1_700_000_100_000);
+			currentProgress = progress({ seq: 7, generationPhase: "Decoding", decodeStartedAtUtc: 1_700_000_088_000 });
+			const view = renderCard();
+			const phase = (): string | null => screen.getByTestId("image-job-phase").textContent;
+
+			expect(phase()).toBe(template.replace("{{seconds}}", "12"));
+
+			act(() => {
+				vi.advanceTimersByTime(3_000);
+			});
+			expect(phase()).toBe(template.replace("{{seconds}}", "15"));
+
+			currentProgress = progress({ seq: 8, generationPhase: "Decoding", decodeStartedAtUtc: 1_700_000_088_000 });
+			act(() => {
+				vi.advanceTimersByTime(2_000);
+			});
+			view.rerender(
+				<QueryClientProvider client={new QueryClient()}>
+					<MantineProvider env="test" theme={testMantineTheme}>
+						<ImageJobCard job={job()} isCancelling={false} onCancel={() => undefined} />
+					</MantineProvider>
+				</QueryClientProvider>,
+			);
+			expect(phase()).toBe(template.replace("{{seconds}}", "17"));
+			expect(phase()).not.toMatch(/left/i);
+			expect(screen.queryByTestId("image-job-eta")).toBeNull();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("shows a preparing message and no countdown while the model loads", () => {

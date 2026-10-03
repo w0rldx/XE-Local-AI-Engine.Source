@@ -78,6 +78,13 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 	}
 }
 
+// Server notice sentences the SPA localizes, keyed by their exact English text (InvocationRunner's
+// StoppedWhileThinkingNoticeMessage — change both together). Any other text renders verbatim.
+const localizedNoticeKeys: Readonly<Record<string, string>> = {
+	"The model stopped while thinking before it could answer; its thoughts are kept above.":
+		"chat.notices.stoppedWhileThinkingText",
+};
+
 /**
  * A small muted system-style row for a non-fatal "turn notice" (model substitution, tool disabled, history
  * truncated, orchestration degraded to a single agent) — rendered inline in the ordered parts interleave, visually distinct from both the plain answer
@@ -94,6 +101,8 @@ export const ChatNoticeRow = memo(function ChatNoticeRow({ part }: ChatNoticeRow
 	const Icon = noticeIcon(part.noticeKind);
 	const labelKey = noticeLabelKey(part.noticeKind);
 	const label = labelKey ? t(labelKey) : undefined;
+	const textKey = localizedNoticeKeys[part.text];
+	const text = textKey ? t(textKey, part.text) : part.text;
 
 	return (
 		<Group gap="xs" wrap="nowrap" align="center" data-testid="chat-notice-row" data-notice-kind={part.noticeKind}>
@@ -101,7 +110,7 @@ export const ChatNoticeRow = memo(function ChatNoticeRow({ part }: ChatNoticeRow
 				<Icon size={12} />
 			</ThemeIcon>
 			<Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }}>
-				{part.text}
+				{text}
 				{part.detail ? (
 					<Text component="span" size="xs" c="dimmed" ff="monospace" opacity={0.7} ml={6} data-testid="chat-notice-detail">
 						{part.detail}

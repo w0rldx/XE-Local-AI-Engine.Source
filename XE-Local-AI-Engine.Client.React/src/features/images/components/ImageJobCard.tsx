@@ -38,9 +38,12 @@ function useElapsedSeconds(startedAtUtc: number | null, active: boolean): number
 
 // The live generation timeline, rendered from the phase the runtime reports rather than from the elapsed clock.
 // Loading/encoding show a "preparing" line with NO countdown, sampling shows the step bar with the remaining time,
-// and the decode that follows the last step shows "finishing" — never a countdown resting at zero.
+// and the decode that follows the last step shows "finishing" with seconds elapsed since decode began — never a
+// countdown resting at zero.
 function GenerationTimeline({ display }: { display: ImageProgressDisplay }) {
 	const { t } = useTranslation();
+	const decodeStartedAtUtc = display.kind === "finishing" ? display.decodeStartedAtUtc : null;
+	const decodeSeconds = useElapsedSeconds(decodeStartedAtUtc, decodeStartedAtUtc !== null);
 
 	if (display.kind === "queued") {
 		return display.queuePosition === null ? null : (
@@ -63,7 +66,7 @@ function GenerationTimeline({ display }: { display: ImageProgressDisplay }) {
 			<Stack gap={4}>
 				<Progress value={100} size="sm" radius="xl" animated={true} aria-hidden={true} />
 				<Text size="xs" c="dimmed" data-testid="image-job-phase">
-					{t("pages.images.job.finishing", "Finishing (decoding image)…")}
+					{t("pages.images.job.finishing", "Decoding image… {{seconds}} s", { seconds: decodeSeconds })}
 				</Text>
 			</Stack>
 		);

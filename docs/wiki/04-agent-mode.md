@@ -721,9 +721,11 @@ model switch) cannot honour it, but the user still asked to reason: the caller o
 entirely so the model's chat-template-baked reasoning runs, and only `none` or unspecified sends
 `think: false`.
 
-**The budget ladder** is `minimal` 1024, `low` 2048, `medium` 8192, `high`/`xhigh` 24576 tokens, and anything
-else — blank, `none` (reasoning is being turned off, so a budget is meaningless), the binary `on` sentinel, an
-unrecognized value — sends no budget at all, leaving the no-effort request byte-identical. The levels are
+**The budget ladder** is `minimal` 1024, `low` 2048, `medium` 8192, `high`/`xhigh` 24576 tokens. A blank
+(unspecified) effort gets the `medium` rung (`ReasoningOptionsResolver.DefaultReasoningBudgetTokens`, since tester
+round 6): uncapped, a hard prompt reasoned until `finish_reason: length` and the turn had no answer. Anything
+else — `none` (reasoning is being turned off, so a budget is meaningless), the binary `on` sentinel, an
+unrecognized value — sends no budget at all. The marker is inert off the llama.cpp path. The levels are
 sized so a capped reasoning phase still leaves room for a real final answer inside the 64k windows local
 runtimes are launched with: low is a short scratchpad, medium the everyday cap, and `high` still leaves well
 over half the window for the answer plus the prompt. Without a cap a Qwen3-class model can spend the whole

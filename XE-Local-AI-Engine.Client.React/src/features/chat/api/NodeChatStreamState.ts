@@ -161,6 +161,7 @@ function decomposeParts(parts: readonly ChatMessagePart[] | undefined): {
 				pendingWebReview: part.pendingWebReview,
 				pendingQuestion: part.pendingQuestion,
 				images: part.images,
+				contentOffset: part.contentOffset,
 			});
 		} else if (part.kind === "text") {
 			textSegments.push({ id: part.id, sequence: part.sequence, text: part.text });
@@ -176,6 +177,35 @@ function decomposeParts(parts: readonly ChatMessagePart[] | undefined): {
 	}
 
 	return { reasoningSegments, toolEntries, textSegments, noticeEntries };
+}
+
+/**
+ * Re-derives the interim `text` segments and the answer from the whole streamed text: each distinct tool
+ * `contentOffset` closes the text since the previous one into a segment sharing that call's `sequence`, and only the
+ * text after the last offset stays the answer. Derived rather than accumulated, so a delta that trails its tool event,
+ * a snapshot replacement and a resume replay all land on the same split the backend persists.
+ */
+function splitInterimText(
+	messageId: string,
+	streamedContent: string,
+	toolEntries: readonly ToolEntryInput[],
+): { textSegments: TextSegmentInput[]; content: string } {
+	const boundaries = new Map<number, number>();
+	for (const entry of toolEntries) {
+		const offset = entry.contentOffset;
+		if (offset !== undefined && offset > 0) {
+			boundaries.set(offset, Math.min(boundaries.get(offset) ?? Number.POSITIVE_INFINITY, entry.sequence));
+		}
+	}
+
+	const textSegments: TextSegmentInput[] = [];
+	let start = 0;
+	for (const [offset, sequence] of [...boundaries].toSorted(([left], [right]) => left - right)) {
+		textSegments.push({ id: `${messageId}:text:${offset}`, sequence, text: streamedContent.slice(start, offset) });
+		start = offset;
+	}
+
+	return { textSegments, content: streamedContent.slice(start) };
 }
 
 /** The highest `sequence` across all accumulated parts — i.e. the wire position of the most recent part. */
@@ -384,8 +414,11 @@ function nextReasoningParts(
 	existing: ChatMessageModel | undefined,
 	event: NodeChatStreamEventDto,
 	reasoning: string | undefined,
+	derivedTextSegments?: TextSegmentInput[],
 ): ChatMessagePart[] | undefined {
-	const { reasoningSegments, toolEntries, textSegments, noticeEntries } = decomposeParts(existing?.parts);
+	const decomposed = decomposeParts(existing?.parts);
+	const { reasoningSegments, toolEntries, noticeEntries } = decomposed;
+	const textSegments = derivedTextSegments ?? decomposed.textSegments;
 
 	let nextReasoningSegments = reasoningSegments;
 	if (event.reasoningDelta) {
@@ -446,6 +479,33 @@ function clearPendingPromptWaitingCards(parts: ChatMessagePart[] | undefined): C
 	});
 
 	return changed ? next : parts;
+}
+
+/**
+ * For a turn whose tool calls split its text (`streamedContent` is tracked): folds the event into the whole streamed
+ * text and re-derives the answer and the interim segments. A terminal re-states the persisted answer; when it is not
+ * the answer this split produced (an interrupted turn keeps its whole text), the server wins and the segments drop.
+ * Undefined for a turn with no split, which keeps the plain `content` merge.
+ */
+function splitStreamedContent(
+	existing: ChatMessageModel | undefined,
+	event: NodeChatStreamEventDto,
+	textMerge: StreamTextMerge,
+	isTerminal: boolean,
+): { content: string; textSegments: TextSegmentInput[]; streamedContent?: string } | undefined {
+	if (existing?.streamedContent === undefined) {
+		return undefined;
+	}
+
+	const { toolEntries } = decomposeParts(existing.parts);
+	if (isTerminal) {
+		const split = splitInterimText(event.messageId, existing.streamedContent, toolEntries);
+		const persisted = event.content ?? split.content;
+		return persisted === split.content ? split : { content: persisted, textSegments: [] };
+	}
+
+	const streamedContent = mergeStreamText(textMerge, existing.streamedContent, event.content, event.delta) ?? "";
+	return { ...splitInterimText(event.messageId, streamedContent, toolEntries), streamedContent };
 }
 
 function normalizeStatus(status: string | null | undefined, fallback: MessageStatus): MessageStatus {
@@ -585,17 +645,34 @@ export function applyNodeChatStreamEvent(
 		// turn renders the tool card in its real wire slot and the result shows the instant the completed event lands.
 		const toolCall = mapToolCallEvent(event);
 		const { reasoningSegments, toolEntries, textSegments, noticeEntries } = decomposeParts(current?.parts);
-		const nextToolEntries = toolCall ? mergeToolEntry(toolEntries, toolCall, event.sequence) : toolEntries;
-		const nextParts = buildMessageParts(reasoningSegments, nextToolEntries, textSegments, noticeEntries);
-		const nextConversation = current
-			? { ...conversation, messages: replaceMessage(conversation.messages, { ...current, parts: nextParts }) }
+		const mergedToolEntries = toolCall ? mergeToolEntry(toolEntries, toolCall, event.sequence) : toolEntries;
+		// A requested call carries the global content offset it was requested at: the text before it is interim
+		// narration. The first offset starts tracking the whole streamed text, which `content` held until now.
+		const contentOffset = event.type === nodeChatStreamEventTypes.toolCallRequested ? event.contentOffset : undefined;
+		const nextToolEntries =
+			toolCall && typeof contentOffset === "number"
+				? mergedToolEntries.map((entry) =>
+						entry.id === toolCall.id && entry.contentOffset === undefined ? { ...entry, contentOffset } : entry,
+					)
+				: mergedToolEntries;
+		const streamedContent =
+			current?.streamedContent ??
+			(nextToolEntries.some((entry) => entry.contentOffset !== undefined) ? (current?.content ?? "") : undefined);
+		const split = streamedContent === undefined ? undefined : splitInterimText(event.messageId, streamedContent, nextToolEntries);
+		const nextContent = split?.content ?? current?.content ?? "";
+		const nextParts = buildMessageParts(reasoningSegments, nextToolEntries, split?.textSegments ?? textSegments, noticeEntries);
+		const nextMessage = current
+			? { ...current, content: nextContent, parts: nextParts, ...(streamedContent === undefined ? {} : { streamedContent }) }
+			: undefined;
+		const nextConversation = nextMessage
+			? { ...conversation, messages: replaceMessage(conversation.messages, nextMessage) }
 			: conversation;
 		return {
 			conversation: nextConversation,
 			streamingMessage: {
 				conversationId: event.conversationId,
 				messageId: event.messageId,
-				content: current?.content ?? "",
+				content: nextContent,
 				reasoning: current?.reasoning,
 				parts: nextParts,
 				startedAt: current?.createdAt ?? isoFromUnixMilliseconds(event.occurredAtUtc),
@@ -758,9 +835,10 @@ export function applyNodeChatStreamEvent(
 	// (and, once the server stops sending them, silently blank the turn). A snapshot or a terminal carries the
 	// authoritative full text and replaces the accumulation wholesale; every other event leaves the text alone.
 	const textMerge = streamTextMergeFor(event.type, isTerminal);
-	const content = mergeStreamText(textMerge, existing?.content, event.content, event.delta) ?? "";
+	const split = splitStreamedContent(existing, event, textMerge, isTerminal);
+	const content = split?.content ?? mergeStreamText(textMerge, existing?.content, event.content, event.delta) ?? "";
 	const reasoning = mergeStreamText(textMerge, existing?.reasoning, event.reasoning, event.reasoningDelta);
-	const rebuiltParts = nextReasoningParts(existing, event, reasoning ?? undefined);
+	const rebuiltParts = nextReasoningParts(existing, event, reasoning ?? undefined, split?.textSegments);
 	// On a terminal turn, clear any lingering pending-approval waiting card: an API-tool DENY leaves a waiting card
 	// with no completing tool-call event, and it must not survive the terminal into a dead "awaiting decision" prompt.
 	const parts = isTerminal ? clearPendingPromptWaitingCards(rebuiltParts) : rebuiltParts;
@@ -771,6 +849,7 @@ export function applyNodeChatStreamEvent(
 		content,
 		reasoning: reasoning ?? undefined,
 		parts,
+		...(split?.streamedContent === undefined ? {} : { streamedContent: split.streamedContent }),
 		status,
 		createdAt: existing?.createdAt ?? eventTime,
 		updatedAt: eventTime,

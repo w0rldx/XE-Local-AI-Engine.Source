@@ -106,6 +106,21 @@ describe("MessageParts", () => {
 		expectDocumentOrder(parts.map(markerFor));
 	});
 
+	it("renders interim text between tool cards in order, muted apart from the answer", () => {
+		const parts: ChatMessagePart[] = [
+			text("m4:2", 2, "Let me search for that."),
+			tool("call-1", 2, "web_search"),
+			text("m4:5", 5, "Now I fetch the top hit."),
+			tool("call-2", 5, "web_fetch"),
+		];
+
+		renderWithProviders(<MessageParts parts={parts} />);
+
+		expectDocumentOrder(parts.map(markerFor));
+		const interim = screen.getByText("Now I fetch the top hit.").closest<HTMLElement>("[data-part-kind='text']");
+		expect(interim?.style.color).toContain("dimmed");
+	});
+
 	it("streams only the trailing reasoning run and folds the earlier one", () => {
 		const parts: ChatMessagePart[] = [
 			reasoning("m3:0", 0, "Completed thought before the tool."),

@@ -44,9 +44,11 @@ export interface ToolEntryInput {
 	// posts back. Cleared on the same terms as the approval prompt above.
 	pendingQuestion?: PendingUserQuestion;
 	images?: ChatToolImage[];
+	// Live only: the global content offset at which the call was requested (see `ChatToolPart.contentOffset`).
+	contentOffset?: number;
 }
 
-/** A mid-turn answer/narration run (rare for local models; here for forward-compat round-trips). */
+/** Interim narration streamed before a tool call; it shares that call's `sequence` and orders just before it. */
 export interface TextSegmentInput {
 	id: string;
 	sequence: number;
@@ -81,6 +83,7 @@ function toToolPart(entry: ToolEntryInput): ChatToolPart {
 		pendingWebReview: entry.pendingWebReview,
 		pendingQuestion: entry.pendingQuestion,
 		images: entry.images,
+		contentOffset: entry.contentOffset,
 	};
 }
 
@@ -103,7 +106,8 @@ function toNoticePart(entry: NoticeEntryInput): ChatNoticePart {
  * Merges ordered reasoning segments, tool entries, (optional) text segments and (optional) notice entries into one
  * `ChatMessagePart[]` sorted by wire `sequence`. Empty reasoning/text segments are dropped so a freshly
  * opened-but-not-yet-filled segment never renders an empty Thoughts block. Ties on `sequence` keep input order
- * (reasoning, then tool, then notice, then text) so an unlikely collision stays deterministic.
+ * (reasoning, then text, then tool, then notice): an interim text segment shares its tool call's sequence and must
+ * render before the card, matching the persisted order the backend writes.
  */
 export function buildMessageParts(
 	reasoningSegments: readonly ReasoningSegmentInput[],
@@ -119,6 +123,12 @@ export function buildMessageParts(
 		}
 	}
 
+	for (const segment of textSegments) {
+		if (segment.text.trim().length > 0) {
+			parts.push(toTextPart(segment));
+		}
+	}
+
 	for (const entry of toolEntries) {
 		parts.push(toToolPart(entry));
 	}
@@ -127,13 +137,7 @@ export function buildMessageParts(
 		parts.push(toNoticePart(entry));
 	}
 
-	for (const segment of textSegments) {
-		if (segment.text.trim().length > 0) {
-			parts.push(toTextPart(segment));
-		}
-	}
-
 	// Stable sort by sequence: Array.prototype.sort is stable in every supported engine, so equal sequences keep
-	// the push order above (reasoning < tool < notice < text).
+	// the push order above (reasoning < text < tool < notice).
 	return parts.sort((left, right) => left.sequence - right.sequence);
 }

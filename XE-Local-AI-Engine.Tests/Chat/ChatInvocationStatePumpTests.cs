@@ -225,6 +225,92 @@ public sealed class ChatInvocationStatePumpTests
         AssertEx.Null(phases[0].RuntimePhaseChangedAtUtc);
     }
 
+    [Test]
+    public async Task PumpAsync_WhenAToolCallSplitTheContent_PersistsTheInterimTextAsAPartAndOnlyTheAnswerAsContent()
+    {
+        // Two model rounds: the narration streams, the forwarder records the call at its offset, then the answer streams.
+        const string interim = "Let me search for that. ";
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var recordingPump = new RecordingInvocationPump();
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        var parts = new NodeChatPartAccumulator();
+        parts.AppendToolRequested("call-1", "web_search", "{}", requiresApproval: false, sequence: 2, contentOffset: interim.Length);
+        parts.CompleteToolCall("call-1", "web_search", "results", isError: false, sequence: 3);
+        var sink = new CollectingSink();
+        InvocationState? memoryHookState = null;
+
+        await new ChatInvocationStatePump(recordingPump, clock).PumpAsync(new SteppingStateReader(
+                [
+                    NewState(correlation, interim, string.Empty, InvocationStatus.Running),
+                    NewState(correlation, interim + "The answer", string.Empty, InvocationStatus.Running),
+                    NewState(correlation, interim + "The answer is 42.", string.Empty, InvocationStatus.Completed)
+                ],
+                clock,
+                TimeSpan.FromMilliseconds(50)),
+            sink,
+            correlation,
+            "model-x",
+            new NodeChatStreamSequence(),
+            parts,
+            onTerminal: (state, _) => memoryHookState = state,
+            CancellationToken.None);
+
+        AssertEx.Equal("The answer is 42.", AssertEx.NotNull(recordingPump.TerminalState).StreamedContent);
+        var persistedParts = AssertEx.NotNull(recordingPump.TerminalParts);
+        AssertEx.Equal("text,tool", string.Join(',', persistedParts.Select(static part => part.Kind)));
+        AssertEx.Equal(interim, persistedParts[0].Text);
+        AssertEx.Equal("The answer is 42.", AssertEx.NotNull(memoryHookState).StreamedContent, "Memory extraction reads the answer, as Content does.");
+
+        // The live deltas keep the GLOBAL offset space: the client splits them itself at the tool event's offset.
+        var deltas = sink.Events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantDelta).ToList();
+        AssertEx.Equal(interim + "The answer is 42.", string.Concat(deltas.Select(delta => delta.Delta)));
+        AssertEx.Equal((long)interim.Length, deltas[1].ContentOffset);
+        AssertEx.Equal("The answer is 42.", sink.Events[^1].Content);
+    }
+
+    [Test]
+    public async Task PumpAsync_WhenTheTurnEndsRightAfterAToolCall_PersistsTheWholeTextAndNoTextPart()
+    {
+        const string interim = "Let me search for that. ";
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var recordingPump = new RecordingInvocationPump();
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        var parts = new NodeChatPartAccumulator();
+        parts.AppendToolRequested("call-1", "web_search", "{}", requiresApproval: false, sequence: 2, contentOffset: interim.Length);
+        var sink = new CollectingSink();
+        InvocationState? memoryHookState = null;
+
+        await new ChatInvocationStatePump(recordingPump, clock).PumpAsync(new SteppingStateReader(
+                [
+                    NewState(correlation, interim, string.Empty, InvocationStatus.Running),
+                    NewState(correlation, interim, string.Empty, InvocationStatus.Completed)
+                ],
+                clock,
+                TimeSpan.FromMilliseconds(50)),
+            sink,
+            correlation,
+            "model-x",
+            new NodeChatStreamSequence(),
+            parts,
+            onTerminal: (state, _) => memoryHookState = state,
+            CancellationToken.None);
+
+        AssertEx.Equal(interim, AssertEx.NotNull(recordingPump.TerminalState).StreamedContent);
+        AssertEx.Equal("tool", string.Join(',', AssertEx.NotNull(recordingPump.TerminalParts).Select(static part => part.Kind)));
+        AssertEx.Equal(interim, AssertEx.NotNull(memoryHookState).StreamedContent);
+        AssertEx.Equal(interim, sink.Events[^1].Content, "The terminal re-states the whole text, which collapses the client's live split.");
+    }
+
     private static async Task<(List<ChatStreamEvent> Events, List<string> Flushes)> DriveAsync(TimeSpan step,
         IReadOnlyList<string> contentSnapshots,
         string terminalContent)
@@ -372,6 +458,10 @@ public sealed class ChatInvocationStatePumpTests
     {
         public List<string> Flushes { get; } = [];
 
+        public InvocationState? TerminalState { get; private set; }
+
+        public IReadOnlyList<NodeChatMessagePart>? TerminalParts { get; private set; }
+
         public Task<NodeChatPumpFlushResult> FlushDeltaAsync(NodeChatMessageCorrelation correlation,
             InvocationState state,
             NodeChatPumpCursor cursor,
@@ -407,6 +497,8 @@ public sealed class ChatInvocationStatePumpTests
             IReadOnlyList<NodeChatMessagePart>? parts = null,
             IReadOnlyList<NodeChatMessageSource>? sources = null)
         {
+            TerminalState = state;
+            TerminalParts = parts;
             return Task.FromResult(new NodeChatPumpTerminalResult
             {
                 Persisted = NewPersisted(correlation, state.StreamedContent, state.StreamedThinkingContent, NodeChatMessageStatusValues.Completed),

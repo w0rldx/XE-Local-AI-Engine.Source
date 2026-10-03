@@ -264,6 +264,7 @@
 			"effortDispatched": "Reasoning effort resolved",
 			"playbookWithheld": "Playbook withheld",
 			"emptyAnswer": "No answer",
+			"stoppedWhileThinkingText": "The model stopped while thinking before it could answer; its thoughts are kept above.",
 			"toolHistoryWithheld": "Tool history withheld",
 			"toolsWithheld": "Tools not offered"
 		},
@@ -1284,6 +1285,9 @@
 			"reasoningLabel": "Reasoning",
 			"retryConnection": "Retry",
 			"stop": "Stop",
+			"answerNow": "Answer now",
+			"answerNowHint": "Stop thinking and answer with what the model has so far",
+			"answerNowUnavailable": "The model can't be asked to answer early right now.",
 			"stopped": "Generation stopped",
 			"stepBudgetReached": "Step ended — call budget reached, continuing.",
 			"loadError": {
@@ -4495,7 +4499,7 @@
 				"meta": "{{model}} · {{width}}×{{height}} · {{steps}} steps · {{sampler}}",
 				"queuePosition": "Waiting — position {{position}} in the queue",
 				"preparing": "Preparing model…",
-				"finishing": "Finishing (decoding image)…",
+				"finishing": "Decoding image… {{seconds}} s",
 				"steps": "Step {{step}} of {{totalSteps}}",
 				"stepProgressLabel": "Generation progress",
 				"eta": "~{{seconds}}s left",

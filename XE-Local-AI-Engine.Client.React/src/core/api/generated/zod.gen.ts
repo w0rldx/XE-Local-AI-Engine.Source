@@ -3997,6 +3997,8 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRe
 	collectionId: z.string().optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsLocalChatV1AnswerNowNodeChatMessageRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest = z.object({
 	archived: z.boolean().optional(),
 });
@@ -10054,6 +10056,15 @@ export const zDeleteConversationFilePath = z.object({
  * No Content
  */
 export const zDeleteConversationFileResponse = z.void();
+
+export const zAnswerNowNodeChatMessagePath = z.object({
+	messageId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zAnswerNowNodeChatMessageResponse = z.void();
 
 export const zResolveUserQuestionBody = zXeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionRequest;
 

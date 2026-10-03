@@ -202,6 +202,12 @@ public sealed class CancelNodeChatMessageRequest
     public Guid RequestId { get; init; }
 }
 
+/// <summary>The assistant message whose running turn should stop reasoning and answer.</summary>
+public sealed class AnswerNowNodeChatMessageRequest
+{
+    public Guid MessageId { get; init; }
+}
+
 /// <summary>
 ///     The operator's decision on a pending tool-approval request.
 /// </summary>

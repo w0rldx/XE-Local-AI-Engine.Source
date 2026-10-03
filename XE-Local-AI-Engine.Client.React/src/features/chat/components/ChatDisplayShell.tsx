@@ -10,6 +10,7 @@ import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
 import { ChatMessageList } from "@/features/chat/components/ChatMessageList";
 import { ConversationList } from "@/features/chat/components/ConversationList";
 import { usePaneFileDrop } from "@/features/chat/hooks/usePaneFileDrop";
+import { answerNowMessageId } from "@/features/chat/models/ChatAnswerNow";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
 
@@ -89,6 +90,11 @@ export function ChatDisplayShell({
 }: ChatDisplayShellProps) {
 	const { t } = useTranslation();
 	const conversation = conversations.find((item) => item.id === selectedConversationId);
+	const answerNowTarget = answerNowMessageId(
+		streamingMessage,
+		modelOptions.find((option) => option.value === selectedModel),
+		reasoningEffort,
+	);
 	// The app shell shows a persistent expanded sidebar from DESKTOP_NAV_BREAKPOINT up, so the two-pane grid does not
 	// have room to breathe until TWO_PANE_BREAKPOINT. Below that, the conversation list moves into a drawer.
 	const { width } = useWindowDimensions();
@@ -295,6 +301,7 @@ export function ChatDisplayShell({
 					onUploadFiles={onUploadFiles}
 					onRemoveAttachment={onRemoveAttachment}
 					onCancel={onCancel}
+					answerNowMessageId={answerNowTarget}
 					onModelChange={onModelChange}
 					onReasoningEffortChange={onReasoningEffortChange}
 					onToggleTools={onToggleTools}

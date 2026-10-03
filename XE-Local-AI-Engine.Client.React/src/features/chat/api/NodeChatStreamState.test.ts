@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	type AppliedNodeChatStreamEvent,
 	accumulateToolTimelineEntry,
 	appendOptimisticNodeChatSend,
 	applyNodeChatStreamEvent,
@@ -1712,5 +1713,257 @@ describe("node chat stream state", () => {
 		expect(delta.streamingMessage.runtimePhaseChangedAtUtc).toBeUndefined();
 		expect(terminal.streamingMessage.runtimePhase).toBeUndefined();
 		expect(terminal.streamingMessage.runtimePhaseChangedAtUtc).toBeUndefined();
+	});
+});
+
+describe("interim text segments split at tool calls", () => {
+	function optimisticTurn(): ChatConversationModel {
+		return appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"search the web",
+			"2026-05-24T00:00:01.000Z",
+		);
+	}
+
+	function delta(sequence: number, contentOffset: number, text: string): NodeChatStreamEventDto {
+		return streamEvent({ sequence, delta: text, content: null, contentOffset, reasoningDelta: null });
+	}
+
+	function requested(sequence: number, toolCallId: string, contentOffset?: number): NodeChatStreamEventDto {
+		return streamEvent({
+			type: nodeChatStreamEventTypes.toolCallRequested,
+			sequence,
+			toolCallId,
+			toolName: "web_search",
+			arguments: "{}",
+			content: null,
+			delta: null,
+			contentOffset,
+		});
+	}
+
+	function completed(sequence: number, toolCallId: string): NodeChatStreamEventDto {
+		return streamEvent({
+			type: nodeChatStreamEventTypes.toolCallCompleted,
+			sequence,
+			toolCallId,
+			toolName: "web_search",
+			result: "ok",
+			content: null,
+			delta: null,
+		});
+	}
+
+	function apply(start: ChatConversationModel, events: NodeChatStreamEventDto[]): AppliedNodeChatStreamEvent {
+		let current = start;
+		let applied: AppliedNodeChatStreamEvent | undefined;
+		for (const event of events) {
+			applied = applyNodeChatStreamEvent(current, event, applied?.streamingMessage);
+			current = applied.conversation;
+		}
+
+		if (!applied) {
+			throw new Error("apply needs at least one event");
+		}
+
+		return applied;
+	}
+
+	const interim = "Let me search for that. ";
+
+	it("moves the text before a tool call into a text part ordered before the card, leaving only the answer", () => {
+		const applied = apply(optimisticTurn(), [
+			delta(1, 0, interim),
+			requested(2, "call-1", interim.length),
+			completed(3, "call-1"),
+			delta(4, interim.length, "The answer is 42."),
+		]);
+
+		expect(applied.streamingMessage.content).toBe("The answer is 42.");
+		expect(applied.streamingMessage.parts?.map((part) => [part.kind, part.sequence])).toEqual([
+			["text", 2],
+			["tool", 2],
+		]);
+		expect(applied.streamingMessage.parts?.[0]).toMatchObject({ kind: "text", text: interim });
+	});
+
+	it("splits at the event's offset even when the tool event overtakes the trailing interim delta", () => {
+		// The node emits on a debounce, so the tail of the narration can arrive after the tool card it precedes.
+		const applied = apply(optimisticTurn(), [
+			delta(1, 0, "Let me "),
+			requested(2, "call-1", interim.length),
+			delta(3, "Let me ".length, `search for that. The answer`),
+			delta(4, `${interim}The answer`.length, " is 42."),
+		]);
+
+		expect(applied.streamingMessage.parts?.[0]).toMatchObject({ kind: "text", text: interim });
+		expect(applied.streamingMessage.content).toBe("The answer is 42.");
+	});
+
+	it("keeps one bubble and no text part when the tool event carries no offset (an older node)", () => {
+		const applied = apply(optimisticTurn(), [delta(1, 0, interim), requested(2, "call-1"), delta(3, interim.length, "Done.")]);
+
+		expect(applied.streamingMessage.content).toBe(`${interim}Done.`);
+		expect(applied.streamingMessage.parts?.map((part) => part.kind)).toEqual(["tool"]);
+		expect(applied.conversation.messages.at(-1)?.streamedContent).toBeUndefined();
+	});
+
+	it("rebuilds the same split from a resume replay: tool events first, then the full-text snapshot", () => {
+		// A reloaded page holds the persisted partial row (whole text so far, no parts) and resumes the run.
+		const reloaded: ChatConversationModel = {
+			...conversation,
+			messages: [
+				{
+					id: "assistant-1",
+					conversationId: conversation.id,
+					role: "assistant",
+					content: interim,
+					status: "streaming",
+					createdAt: "2026-05-24T00:00:01.000Z",
+					sortOrder: 1,
+				},
+			],
+		};
+
+		const applied = apply(reloaded, [
+			requested(0, "call-1", interim.length),
+			completed(1, "call-1"),
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantSnapshot,
+				sequence: 2,
+				content: `${interim}The answer`,
+				delta: null,
+				contentOffset: `${interim}The answer`.length,
+			}),
+			delta(3, `${interim}The answer`.length, " is 42."),
+		]);
+
+		expect(applied.streamingMessage.content).toBe("The answer is 42.");
+		expect(applied.streamingMessage.parts?.map((part) => part.kind)).toEqual(["text", "tool"]);
+		expect(applied.streamingMessage.parts?.[0]).toMatchObject({ kind: "text", text: interim });
+	});
+
+	it("keeps the split on a terminal that re-states the answer, and drops the tracking", () => {
+		const applied = apply(optimisticTurn(), [
+			delta(1, 0, interim),
+			requested(2, "call-1", interim.length),
+			delta(3, interim.length, "The answer."),
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantCompleted,
+				status: "completed",
+				sequence: 4,
+				content: "The answer.",
+				delta: null,
+			}),
+		]);
+
+		expect(applied.isTerminal).toBe(true);
+		expect(applied.streamingMessage.content).toBe("The answer.");
+		expect(applied.streamingMessage.parts?.map((part) => part.kind)).toEqual(["text", "tool"]);
+		expect(applied.conversation.messages.at(-1)?.streamedContent).toBeUndefined();
+	});
+
+	it("lets an interrupted terminal that keeps the whole text win over the split", () => {
+		const applied = apply(optimisticTurn(), [
+			delta(1, 0, interim),
+			requested(2, "call-1", interim.length),
+			delta(3, interim.length, "The answer."),
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantInterrupted,
+				status: "interrupted",
+				sequence: 4,
+				content: `${interim}The answer.`,
+				delta: null,
+			}),
+		]);
+
+		expect(applied.streamingMessage.content).toBe(`${interim}The answer.`);
+		expect(applied.streamingMessage.parts?.map((part) => part.kind)).toEqual(["tool"]);
+	});
+
+	it("keeps the split when a resumed turn completes with the answer-only content the node persisted", () => {
+		const reloaded: ChatConversationModel = {
+			...conversation,
+			messages: [
+				{
+					id: "assistant-1",
+					conversationId: conversation.id,
+					role: "assistant",
+					content: interim,
+					status: "streaming",
+					createdAt: "2026-05-24T00:00:01.000Z",
+					sortOrder: 1,
+				},
+			],
+		};
+
+		const applied = apply(reloaded, [
+			requested(0, "call-1", interim.length),
+			completed(1, "call-1"),
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantSnapshot,
+				sequence: 2,
+				content: interim,
+				delta: null,
+				contentOffset: interim.length,
+			}),
+			delta(3, interim.length, "The answer."),
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantCompleted,
+				status: "completed",
+				sequence: 4,
+				content: "The answer.",
+				delta: null,
+			}),
+		]);
+
+		expect(applied.isTerminal).toBe(true);
+		expect(applied.streamingMessage.content).toBe("The answer.");
+		expect(applied.streamingMessage.parts?.map((part) => part.kind)).toEqual(["text", "tool"]);
+		expect(applied.streamingMessage.parts?.[0]).toMatchObject({ kind: "text", text: interim });
+	});
+
+	it("collapses the split when a turn ends right after a tool call and the terminal re-states the whole text", () => {
+		const applied = apply(optimisticTurn(), [
+			delta(1, 0, interim),
+			requested(2, "call-1", interim.length),
+			completed(3, "call-1"),
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantCompleted,
+				status: "completed",
+				sequence: 4,
+				content: interim,
+				delta: null,
+			}),
+		]);
+
+		expect(applied.streamingMessage.content).toBe(interim);
+		expect(applied.streamingMessage.parts?.map((part) => part.kind)).toEqual(["tool"]);
+		expect(applied.conversation.messages.at(-1)?.streamedContent).toBeUndefined();
+	});
+
+	it("opens one text part per tool call that follows new text, and none for a call with nothing before it", () => {
+		const second = "Now the second lookup. ";
+		const applied = apply(optimisticTurn(), [
+			requested(1, "call-0", 0),
+			completed(2, "call-0"),
+			delta(3, 0, interim),
+			requested(4, "call-1", interim.length),
+			requested(5, "call-2", interim.length),
+			delta(6, interim.length, second),
+			requested(7, "call-3", interim.length + second.length),
+			delta(8, interim.length + second.length, "Final."),
+		]);
+
+		expect(applied.streamingMessage.parts?.map((part) => [part.kind, part.sequence])).toEqual([
+			["tool", 1],
+			["text", 4],
+			["tool", 4],
+			["tool", 5],
+			["text", 7],
+			["tool", 7],
+		]);
+		expect(applied.streamingMessage.content).toBe("Final.");
 	});
 });

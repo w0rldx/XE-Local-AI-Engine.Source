@@ -32,6 +32,22 @@ describe("buildMessageParts", () => {
 		expect(parts[0]).toMatchObject({ kind: "reasoning", text: "kept" });
 	});
 
+	it("orders an interim text segment before the tool call whose sequence it shares", () => {
+		const parts = buildMessageParts(
+			[],
+			[
+				{ id: "call-1", sequence: 2, name: "web_search", state: "received" },
+				{ id: "call-2", sequence: 5, name: "web_fetch", state: "received" },
+			],
+			[
+				{ id: "m:text:10", sequence: 2, text: "Let me search." },
+				{ id: "m:text:30", sequence: 5, text: "Now fetch the page." },
+			],
+		);
+
+		expect(parts.map((part) => part.id)).toEqual(["m:text:10", "call-1", "m:text:30", "call-2"]);
+	});
+
 	it("interleaves optional text segments by sequence", () => {
 		const parts = buildMessageParts(
 			[{ id: "m:0", sequence: 0, text: "reason" }],

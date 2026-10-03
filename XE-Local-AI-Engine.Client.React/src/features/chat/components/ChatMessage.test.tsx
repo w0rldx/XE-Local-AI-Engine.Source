@@ -198,6 +198,38 @@ describe("ChatMessage actions", () => {
 		expect(screen.queryByTestId("chat-message-reasoning-bypass-assistant-1")).toBeNull();
 	});
 
+	// Tester round 6, item 8: a turn that stopped while thinking has no answer text, and its Thoughts must still render
+	// above the notice that points at them — including when the persisted parts carry only the notice.
+	it.each([
+		["the persisted reasoning part", true],
+		["the flat reasoning blob beside a notice-only parts list", false],
+	])("renders the Thoughts of an empty-content turn from %s", (_case, withReasoningPart) => {
+		const notice = {
+			kind: "notice" as const,
+			id: "assistant-1:9",
+			sequence: 9,
+			noticeKind: "EmptyAnswer",
+			text: "The model stopped while thinking before it could answer; its thoughts are kept above.",
+			detail: "length",
+		};
+		const reasoningPart = { kind: "reasoning" as const, id: "assistant-1:1", sequence: 1, text: "Weighing the options." };
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({
+					content: "",
+					reasoning: "Weighing the options.",
+					parts: withReasoningPart ? [reasoningPart, notice] : [notice],
+				})}
+			/>,
+		);
+
+		const thoughts = screen.getByTestId(
+			withReasoningPart ? "chat-message-reasoning-assistant-1:1" : "chat-message-reasoning-assistant-1",
+		);
+		const noticeRow = screen.getByTestId("chat-notice-row");
+		expect(thoughts.compareDocumentPosition(noticeRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	});
+
 	it("does not flag a bypass when 'none' is selected but no reasoning was emitted", () => {
 		renderWithProviders(<ChatMessage message={assistantMessage()} reasoningEffort="none" />);
 

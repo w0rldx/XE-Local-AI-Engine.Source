@@ -201,3 +201,86 @@ describe("useSetAppUpdateChannel", () => {
 		expect(queryClient.getQueryData(key)).toBeUndefined();
 	});
 });
+
+describe("channel change racing a refresh", () => {
+	const status = (selectedChannel: string) => ({
+		currentVersion: "1.0.0",
+		availableVersion: null,
+		updateAvailable: false,
+		isConfigured: true,
+		isDesktop: true,
+		checkStatus: "ready",
+		lastCheckedUtc: 1_700_000_000_000,
+		selectedChannel,
+		defaultChannel: "stable",
+		availableChannels: ["stable", "preview", "development"],
+		recommendedVersion: null,
+		availableChannel: null,
+	});
+
+	// The server's stored channel; the local GET (refresh:null) always answers with it, like GetStatusAsync.
+	function mockServer(stored: { channel: string }, refreshResponse: Promise<unknown>) {
+		statusMock.mockImplementation(
+			(opts) =>
+				({
+					queryKey: [{ _id: "getAppUpdateStatus", query: opts?.query }],
+					queryFn: async () => (opts?.query?.refresh ? refreshResponse : status(stored.channel)),
+				}) as never,
+		);
+		vi.mocked(getAppUpdateStatusQueryKey).mockImplementation(
+			(opts) => [{ _id: "getAppUpdateStatus", query: opts?.query }] as never,
+		);
+	}
+
+	function renderAll() {
+		const { wrapper } = makeWrapper();
+		return renderHook(
+			() => ({ status: useAppUpdateStatus(), refresh: useRefreshAppUpdateStatus(), channel: useSetAppUpdateChannel() }),
+			{ wrapper },
+		);
+	}
+
+	it("keeps the new channel when a refresh started under the old one answers after the change", async () => {
+		const stored = { channel: "stable" };
+		let answerRefresh: (value: unknown) => void = () => undefined;
+		mockServer(stored, new Promise((resolve) => (answerRefresh = resolve)));
+		vi.mocked(setAppUpdateChannelMutation).mockReturnValue({
+			mutationFn: async () => {
+				stored.channel = "development";
+				return status("development");
+			},
+		} as never);
+		const { result } = renderAll();
+		await waitFor(() => expect(result.current.status.data?.selectedChannel).toBe("stable"));
+
+		result.current.refresh.mutate();
+		await result.current.channel.mutateAsync({ body: { channel: "development" } } as never);
+		await waitFor(() => expect(result.current.status.data?.selectedChannel).toBe("development"));
+
+		answerRefresh(status("stable"));
+		await waitFor(() => expect(result.current.refresh.isSuccess).toBe(true));
+
+		expect(result.current.status.data?.selectedChannel).toBe("development");
+		await waitFor(() => expect(result.current.status.isFetching).toBe(false));
+		expect(result.current.status.data?.selectedChannel).toBe("development");
+	});
+
+	it("reconciles the stored channel when the change's own check fails", async () => {
+		const stored = { channel: "stable" };
+		mockServer(stored, new Promise(() => undefined));
+		vi.mocked(setAppUpdateChannelMutation).mockReturnValue({
+			mutationFn: async () => {
+				// The server persists first, then its check throws: the node moved even though the PUT failed.
+				stored.channel = "development";
+				throw new Error("check failed");
+			},
+		} as never);
+		const { result } = renderAll();
+		await waitFor(() => expect(result.current.status.data?.selectedChannel).toBe("stable"));
+
+		result.current.channel.mutate({ body: { channel: "development" } } as never);
+
+		await waitFor(() => expect(result.current.channel.isError).toBe(true));
+		await waitFor(() => expect(result.current.status.data?.selectedChannel).toBe("development"));
+	});
+});

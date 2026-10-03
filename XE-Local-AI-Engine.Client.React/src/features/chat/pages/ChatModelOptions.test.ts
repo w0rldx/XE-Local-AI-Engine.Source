@@ -93,6 +93,24 @@ describe("toChatModelOptions capability mapping", () => {
 	});
 });
 
+describe("reasoning control (Answer now)", () => {
+	it.each<[string, Partial<LocalModelDto>, boolean]>([
+		["a graded llama.cpp model with a reasoning end tag", { provider: "llamacpp", isReasoningCapable: true }, true],
+		[
+			"a template without a reasoning end tag",
+			{ provider: "llamacpp", isReasoningCapable: true, reasoningBudgetEnforceable: false },
+			false,
+		],
+		["a model that does not reason", { provider: "llamacpp", isReasoningCapable: false }, false],
+		["an Ollama model", { provider: "Ollama", isReasoningCapable: true }, false],
+	])("is offered only for %s", (_case, overrides, expected) => {
+		expect(toModelOption(model(overrides), true).isReasoningControllable).toBe(expected);
+		expect(resolveLocalDefaultModelCapabilities([model({ ...overrides, isSelected: true })]).isReasoningControllable).toBe(
+			expected,
+		);
+	});
+});
+
 describe("resolveLocalDefaultModelCapabilities", () => {
 	it("uses the node default (isSelected) chat model's capabilities", () => {
 		const capabilities = resolveLocalDefaultModelCapabilities([
@@ -101,6 +119,7 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 		]);
 
 		expect(capabilities).toEqual({
+			isReasoningControllable: false,
 			isReasoningModel: true,
 			isNativeReasoningModel: false,
 			isToolCapable: true,
@@ -116,6 +135,7 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 		]);
 
 		expect(capabilities).toEqual({
+			isReasoningControllable: false,
 			isReasoningModel: false,
 			isNativeReasoningModel: false,
 			isToolCapable: true,
@@ -131,6 +151,7 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 		]);
 
 		expect(capabilities).toEqual({
+			isReasoningControllable: false,
 			isReasoningModel: true,
 			isNativeReasoningModel: false,
 			isToolCapable: true,
@@ -145,6 +166,7 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 		]);
 
 		expect(capabilities).toEqual({
+			isReasoningControllable: false,
 			isReasoningModel: true,
 			isNativeReasoningModel: false,
 			isToolCapable: false,
@@ -159,6 +181,7 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 		]);
 
 		expect(capabilities).toEqual({
+			isReasoningControllable: false,
 			isReasoningModel: false,
 			isNativeReasoningModel: false,
 			isToolCapable: false,
@@ -170,6 +193,7 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 		const capabilities = resolveLocalDefaultModelCapabilities([]);
 
 		expect(capabilities).toEqual({
+			isReasoningControllable: false,
 			isReasoningModel: false,
 			isNativeReasoningModel: false,
 			isToolCapable: false,

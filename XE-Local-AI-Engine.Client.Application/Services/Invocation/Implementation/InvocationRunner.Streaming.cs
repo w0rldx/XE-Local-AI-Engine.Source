@@ -68,6 +68,9 @@ public sealed partial class InvocationRunner
         // "tool_calls". Verbatim, because llama-server's "length" covers both n_predict and a filled window.
         public string? FinishReason { get; set; }
 
+        // The turn's "Answer now" handle; null on paths that never track one.
+        public InvocationReasoningControl.Turn? ReasoningControl { get; set; }
+
         public long Sequence { get; set; }
 
         public long ReasoningSequence { get; set; }

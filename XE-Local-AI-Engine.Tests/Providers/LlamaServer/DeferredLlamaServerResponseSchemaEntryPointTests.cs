@@ -119,7 +119,7 @@ public sealed class DeferredLlamaServerResponseSchemaEntryPointTests
     ///     probe as <c>DeferredLlamaServerEmbeddingGeneratorFailureTests.StubServer</c>, which cannot be reused directly
     ///     because it captures nothing.
     /// </summary>
-    private sealed class CapturingServer : IDisposable
+    internal sealed class CapturingServer : IDisposable
     {
         private readonly HttpListener _listener;
         private readonly CancellationTokenSource _cts = new();

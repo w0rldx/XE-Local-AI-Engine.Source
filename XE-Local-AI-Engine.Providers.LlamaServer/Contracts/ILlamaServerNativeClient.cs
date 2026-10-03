@@ -49,6 +49,16 @@ public interface ILlamaServerNativeClient
         CancellationToken ct);
 
     /// <summary>
+    ///     Asks <c>/v1/chat/completions/control</c> to end the reasoning block of the streaming completion
+    ///     <paramref name="completionId" />, which must have been sent with <c>reasoning_control: true</c>.
+    /// </summary>
+    /// <remarks>
+    ///     Body <c>{"id", "action": "reasoning_end"}</c>, over the same guarded transport as <see cref="TokenizeAsync" />. A non-success status or a body without <c>success: true</c> reads as a failed result carrying the server's
+    ///     message; the server answers that way for an unknown or unarmed id. Transport failures propagate.
+    /// </remarks>
+    Task<LlamaServerReasoningControlResult> EndReasoningAsync(Uri baseAddress, string completionId, CancellationToken ct);
+
+    /// <summary>
     ///     POSTs <paramref name="inputs" /> to <c>{baseAddress}/embeddings</c> and returns one vector per input, in
     ///     input order.
     /// </summary>

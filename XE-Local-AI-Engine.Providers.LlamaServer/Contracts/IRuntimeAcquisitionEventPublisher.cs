@@ -25,7 +25,10 @@ public interface IRuntimeAcquisitionEventPublisher
 /// </remarks>
 public enum RuntimeAcquisitionPhase
 {
-    /// <summary>No acquisition has been attempted in this process lifetime. The initial registry state.</summary>
+    /// <summary>
+    ///     No acquisition is in progress: none has been attempted in this process lifetime (the initial registry state),
+    ///     or the last one was cancelled by its caller. Never a failure, so the UI hides on it.
+    /// </summary>
     Idle = 0,
 
     /// <summary>Indeterminate: probing for the GPU vendor to choose the runtime variant.</summary>

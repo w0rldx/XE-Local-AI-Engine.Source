@@ -23,6 +23,9 @@ public sealed class NodeChatPartAccumulator
     private readonly Lock _syncRoot = new();
     private readonly Dictionary<string, MutablePart> _toolPartsByCallId = new(StringComparer.Ordinal);
 
+    // Where the answer starts in the streamed content: the offset of the last requested tool call that moved it.
+    private int _textBoundary;
+
     /// <summary>
     ///     Whether any part was accumulated. The caller persists an empty interleave only when the turn produced no
     ///     parts at all (a plain-text answer) by passing the snapshot regardless; this lets it skip the call cheaply.
@@ -70,7 +73,11 @@ public sealed class NodeChatPartAccumulator
     ///     Records a tool call entering the requested phase: a new tool part in <c>waiting</c> state keyed by
     ///     <paramref name="toolCallId" />. A duplicate requested phase for the same id is ignored (idempotent).
     /// </summary>
-    public void AppendToolRequested(string toolCallId, string toolName, string? args, bool requiresApproval, long sequence)
+    /// <param name="contentOffset">
+    ///     The streamed-content length when the call was requested; the interim text before it becomes a text part
+    ///     ordered just ahead of this tool.
+    /// </param>
+    public void AppendToolRequested(string toolCallId, string toolName, string? args, bool requiresApproval, long sequence, int? contentOffset = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(toolCallId);
 
@@ -79,6 +86,16 @@ public sealed class NodeChatPartAccumulator
             if (_toolPartsByCallId.ContainsKey(toolCallId))
             {
                 return;
+            }
+
+            if (contentOffset > _textBoundary)
+            {
+                _parts.Add(new MutablePart(NodeChatMessagePartKinds.Text, sequence)
+                {
+                    ContentStart = _textBoundary,
+                    ContentEnd = contentOffset.Value
+                });
+                _textBoundary = contentOffset.Value;
             }
 
             var part = new MutablePart(NodeChatMessagePartKinds.Tool, sequence)
@@ -186,17 +203,73 @@ public sealed class NodeChatPartAccumulator
     }
 
     /// <summary>
+    ///     Returns the turn's answer: the part of <paramref name="content" /> after the last requested tool call's
+    ///     offset, or all of it when no call split it. The persisted <c>Content</c> and every reader of it see only this.
+    /// </summary>
+    /// <remarks>
+    ///     A turn that ended right after a tool call has no answer text; it keeps the whole text as its content and
+    ///     <see cref="Snapshot" /> emits no text part, exactly as before the split existed.
+    /// </remarks>
+    public string FinalSegment(string content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+
+        lock (_syncRoot)
+        {
+            return FinalSegment(content, _textBoundary);
+        }
+    }
+
+    /// <summary>
+    ///     The answer after <paramref name="boundary" />, the last requested call's content offset, with the same
+    ///     no-answer fallback. Shared with the resume replay so its terminal re-states what the pump persisted.
+    /// </summary>
+    public static string FinalSegment(string content, int boundary)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        return content[EffectiveBoundary(content, boundary)..];
+    }
+
+    // The offset the answer starts at in this content, or 0 (no split) when nothing but whitespace follows it.
+    private static int EffectiveBoundary(string content, int boundary)
+    {
+        var clamped = Math.Min(boundary, content.Length);
+        return clamped > 0 && string.IsNullOrWhiteSpace(content[clamped..]) ? 0 : clamped;
+    }
+
+    /// <summary>
     ///     Returns an immutable snapshot of the accumulated parts ordered by their opening sequence. Safe to call from
     ///     the terminal persist while producers may still race; the lock and the copy make it a consistent view.
     /// </summary>
-    public IReadOnlyList<NodeChatMessagePart> Snapshot()
+    /// <param name="content">
+    ///     The full streamed content the text parts are sliced from; without it, or with no answer after the last
+    ///     call, none is emitted.
+    /// </param>
+    public IReadOnlyList<NodeChatMessagePart> Snapshot(string? content = null)
     {
         lock (_syncRoot)
         {
-            return _parts
-                   .OrderBy(static part => part.Sequence)
-                   .Select(static part => part.ToPart())
-                   .ToList();
+            var splits = content is not null && EffectiveBoundary(content, _textBoundary) > 0;
+            var parts = new List<NodeChatMessagePart>(_parts.Count);
+            foreach (var part in _parts.OrderBy(static part => part.Sequence))
+            {
+                if (part.Kind != NodeChatMessagePartKinds.Text)
+                {
+                    parts.Add(part.ToPart());
+                    continue;
+                }
+
+                // Clamped: a faulted terminal slices the last-PERSISTED content, which may end before the offset.
+                var text = !splits || content is null
+                    ? null
+                    : content[Math.Min(part.ContentStart, content.Length)..Math.Min(part.ContentEnd, content.Length)];
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    parts.Add(part.ToPart(text));
+                }
+            }
+
+            return parts;
         }
     }
 
@@ -228,17 +301,22 @@ public sealed class NodeChatPartAccumulator
 
         public bool? RequiresApproval { get; init; }
 
+        // A text part's slice of the streamed content, materialized at Snapshot from the terminal's content.
+        public int ContentStart { get; init; }
+
+        public int ContentEnd { get; init; }
+
         public void AppendText(string delta)
         {
             (_text ??= new StringBuilder()).Append(delta);
         }
 
-        public NodeChatMessagePart ToPart()
+        public NodeChatMessagePart ToPart(string? text = null)
         {
             // Sequence is bounded by the per-turn stream counter (int range in practice); cast keeps the wire shape int.
             return new NodeChatMessagePart(Kind,
                 (int)Sequence,
-                _text?.ToString(),
+                text ?? _text?.ToString(),
                 ToolCallId,
                 Name,
                 State,

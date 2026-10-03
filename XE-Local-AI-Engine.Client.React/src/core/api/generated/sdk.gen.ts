@@ -15,6 +15,9 @@ import type {
 	AnalyzePlaybookData,
 	AnalyzePlaybookErrors,
 	AnalyzePlaybookResponses,
+	AnswerNowNodeChatMessageData,
+	AnswerNowNodeChatMessageErrors,
+	AnswerNowNodeChatMessageResponses,
 	ApplyAgentHomePatchData,
 	ApplyAgentHomePatchErrors,
 	ApplyAgentHomePatchResponses,
@@ -1402,6 +1405,8 @@ import type {
 import {
 	zAnalyzePlaybookPath,
 	zAnalyzePlaybookResponse,
+	zAnswerNowNodeChatMessagePath,
+	zAnswerNowNodeChatMessageResponse,
 	zApplyAgentHomePatchBody,
 	zApplyAgentHomePatchPath,
 	zApplyAgentHomePatchResponse,
@@ -5664,6 +5669,35 @@ export const deleteConversationFile = <ThrowOnError extends boolean = false>(
 			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/uploads/{fileId}",
+		...options,
+	});
+
+export const answerNowNodeChatMessage = <ThrowOnError extends boolean = false>(
+	options: Options<AnswerNowNodeChatMessageData, ThrowOnError>,
+): RequestResult<AnswerNowNodeChatMessageResponses, AnswerNowNodeChatMessageErrors, ThrowOnError> =>
+	(options.client ?? client).post<AnswerNowNodeChatMessageResponses, AnswerNowNodeChatMessageErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zAnswerNowNodeChatMessagePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zAnswerNowNodeChatMessageResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/chat/messages/{messageId}/answer-now",
 		...options,
 	});
 

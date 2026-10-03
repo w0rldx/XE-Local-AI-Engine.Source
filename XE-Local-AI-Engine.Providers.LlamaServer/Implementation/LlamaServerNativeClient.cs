@@ -109,6 +109,44 @@ internal sealed class LlamaServerNativeClient : ILlamaServerNativeClient
         return new LlamaServerTokenizeResponse(response);
     }
 
+    public async Task<LlamaServerReasoningControlResult> EndReasoningAsync(Uri baseAddress, string completionId, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(baseAddress);
+        ArgumentException.ThrowIfNullOrEmpty(completionId);
+
+        // A sibling of the chat route under /v1, addressed from the root so a base address with or without /v1 resolves the same.
+        var controlUri = new Uri($"{baseAddress.Scheme}://{baseAddress.Authority}/v1/chat/completions/control");
+        using var response = await _tokenizeClient.PostAsJsonAsync(controlUri,
+                                                      new
+                                                      {
+                                                          id = completionId,
+                                                          action = "reasoning_end"
+                                                      },
+                                                      ct)
+                                                  .ConfigureAwait(false);
+        var text = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        var success = false;
+        string? message;
+        try
+        {
+            // {success, message} on the documented path; llama-server's usual {error: {message}} envelope on a refusal.
+            using var document = JsonDocument.Parse(text);
+            var root = document.RootElement;
+            success = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("success", out var flag) && flag.ValueKind == JsonValueKind.True;
+            message = ReadString(root, "message") ?? (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("error", out var error) ? ReadString(error, "message") : null);
+        }
+        catch (JsonException)
+        {
+            message = text;
+        }
+
+        return new LlamaServerReasoningControlResult
+        {
+            Success = response.IsSuccessStatusCode && success,
+            Message = message
+        };
+    }
+
     public async Task<IReadOnlyList<IReadOnlyList<double>>> PostEmbeddingsAsync(Uri baseAddress,
         string modelName,
         IReadOnlyList<string> inputs,
@@ -181,6 +219,11 @@ internal sealed class LlamaServerNativeClient : ILlamaServerNativeClient
 
         return scores;
     }
+
+    private static string? ReadString(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     internal static HttpClientHandler CreateTokenizeHandler()
     {

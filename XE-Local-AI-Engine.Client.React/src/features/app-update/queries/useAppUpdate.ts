@@ -27,7 +27,15 @@ export function useRefreshAppUpdateStatus() {
 	return useMutation({
 		mutationFn: () => queryClient.fetchQuery(withResponseValidation(getAppUpdateStatusOptions({ query: { refresh: true } }))),
 		onSuccess: (data) => {
-			queryClient.setQueryData(getAppUpdateStatusQueryKey({ query: { refresh: null } }), data);
+			const statusKey = getAppUpdateStatusQueryKey({ query: { refresh: null } });
+			const cached = queryClient.getQueryData<GetAppUpdateStatusResponse>(statusKey);
+			// A channel change that landed while this check ran makes the two disagree, and either side may be the
+			// newer one. Seeding would swap the picker back, so reconcile with one local GET instead.
+			if (cached && cached.selectedChannel !== data.selectedChannel) {
+				queryClient.invalidateQueries({ queryKey: statusKey }).catch(() => undefined);
+				return;
+			}
+			queryClient.setQueryData(statusKey, data);
 		},
 	});
 }
@@ -71,9 +79,12 @@ export function useSetAppUpdateChannel() {
 			// The endpoint answers with the status it just recomputed, so seeding the key the About dialog observes
 			// renders the new channel on the next commit with no round-trip and no flicker.
 			queryClient.setQueryData<GetAppUpdateStatusResponse>(statusKey, fresh);
-			// Reconciles the 60 s poll, at the cost of one local GET. The `refresh: true` key differs in its second
+		},
+		onSettled: () => {
+			// Also on error: the server persists the channel BEFORE its check, so a failed check still moved the
+			// node. One local GET reconciles that and the 60 s poll. The `refresh: true` key differs in its second
 			// element so prefix matching leaves it alone; nothing subscribes to it as a query. Not awaited and not
-			// returned: `onSuccess` must not make `mutateAsync` wait for a refetch.
+			// returned: the callback must not make `mutateAsync` wait for a refetch.
 			queryClient.invalidateQueries({ queryKey: statusKey }).catch(() => undefined);
 		},
 	});

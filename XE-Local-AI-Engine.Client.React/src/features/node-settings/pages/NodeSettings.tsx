@@ -11,11 +11,13 @@ import type {
 	SaveNodeSettingsResponse,
 } from "@/core/api/generated";
 import {
+	getDefaultAssistantToolOfferQueryKey,
 	getDevelopmentCapabilityQueryKey,
 	getDevWorkflowCapabilityQueryKey,
 	getGraphWorkflowCapabilityQueryKey,
 	getNodeSettingsOptions,
 	getNodeSettingsQueryKey,
+	getToolCatalogQueryKey,
 	getTranscriptionRuntimeStatusQueryKey,
 	getWorkSessionCapabilityQueryKey,
 	saveNodeSettingsMutation,
@@ -232,6 +234,14 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector }
 			// voice runtime reads its gate from.
 			queryClient.setQueryData(getNodeSettingsQueryKey(), updatedSettings);
 			await queryClient.invalidateQueries({ queryKey: getNodeSettingsQueryKey() });
+			// The Default Assistant's tool offer and the tool catalog are computed from the live switches (web access,
+			// tools, custom tools); a cached pre-save answer would show the old offer until it went stale. Every model
+			// variant of the offer is matched by its operation id.
+			await Promise.all(
+				[getDefaultAssistantToolOfferQueryKey(), getToolCatalogQueryKey()].map(([{ _id }]) =>
+					queryClient.invalidateQueries({ queryKey: [{ _id }] }),
+				),
+			);
 			// The capability probes the nav and the gated pages read answer from the live switches; a cached answer from
 			// before the save would keep a re-enabled feature hidden (or a disabled one offered) until it went stale.
 			if (featureSwitchFields.some((field) => field in variables.body)) {

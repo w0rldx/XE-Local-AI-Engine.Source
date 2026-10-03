@@ -233,6 +233,19 @@ public sealed partial class WorkerEventDispatcher
     {
         ArgumentNullException.ThrowIfNull(payload);
 
+        // Stamped under the lock that orders the content appends, so the offset is exactly the text streamed before this
+        // call no matter how far behind a consumer's own emit cadence runs.
+        if (payload.Phase == ToolCallLifecyclePhase.Requested)
+        {
+            lock (_syncRoot)
+            {
+                if (CurrentInvocation?.InvocationId == payload.InvocationId)
+                {
+                    payload = payload with { ContentOffset = CurrentInvocation.ContentAccumulator.Length };
+                }
+            }
+        }
+
         ToolCallLifecycleChanged?.Invoke(this, new ToolCallLifecycleChangedEventArgs(payload));
 
         return Task.CompletedTask;

@@ -79,6 +79,8 @@ const { generatedMock } = vi.hoisted(() => ({
 		getGraphWorkflowCapabilityQueryKey: vi.fn(() => ["getGraphWorkflowCapability"]),
 		getWorkSessionCapabilityQueryKey: vi.fn(() => ["getWorkSessionCapability"]),
 		getTranscriptionRuntimeStatusQueryKey: vi.fn(() => ["getTranscriptionRuntimeStatus"]),
+		getDefaultAssistantToolOfferQueryKey: vi.fn(() => fakeQueryKey("getDefaultAssistantToolOffer")),
+		getToolCatalogQueryKey: vi.fn(() => fakeQueryKey("getToolCatalog")),
 	},
 }));
 
@@ -110,6 +112,8 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getGraphWorkflowCapabilityQueryKey: generatedMock.getGraphWorkflowCapabilityQueryKey,
 	getWorkSessionCapabilityQueryKey: generatedMock.getWorkSessionCapabilityQueryKey,
 	getTranscriptionRuntimeStatusQueryKey: generatedMock.getTranscriptionRuntimeStatusQueryKey,
+	getDefaultAssistantToolOfferQueryKey: generatedMock.getDefaultAssistantToolOfferQueryKey,
+	getToolCatalogQueryKey: generatedMock.getToolCatalogQueryKey,
 }));
 
 // The recommended-reranker download progress reuses the shared GgufDownload feed (SignalR hub + cancel mutation).
@@ -899,7 +903,22 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		fireEvent.click(screen.getByTestId("node-settings-save-button"));
 
 		await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["getNodeSettings"] }));
-		expect(invalidate).toHaveBeenCalledTimes(1);
+		await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(3));
+		expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ["getDevelopmentCapability"] });
+	});
+
+	it("invalidates every Default Assistant tool offer and the tool catalog when web access was saved", async () => {
+		const queryClient = renderPage("knowledge");
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
+
+		clickSwitch("node-settings-web-access-enabled");
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() => {
+			expect(invalidate).toHaveBeenCalledWith({ queryKey: fakeQueryKey("getDefaultAssistantToolOffer") });
+			expect(invalidate).toHaveBeenCalledWith({ queryKey: fakeQueryKey("getToolCatalog") });
+		});
 	});
 
 	it("refuses development workflows without work sessions, returns to General and flags the switch", async () => {

@@ -9,3 +9,6 @@
  * `externalConnectionId`). Entries carrying it are catalog registrations, not files in this node's model store.
  */
 export const EXTERNAL_PROVIDER = "external";
+
+/** The node's own llama-server runtime serving installed GGUF models (backend `LocalModelProviders.LlamaCpp`). */
+export const LLAMACPP_PROVIDER = "llamacpp";

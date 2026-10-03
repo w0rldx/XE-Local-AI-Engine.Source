@@ -54,6 +54,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // The notice for a turn whose last round produced neither text nor a tool call.
     private const string EmptyAnswerNoticeMessage = "The model stopped without an answer.";
 
+    // The EmptyAnswer variant for a turn that spent its whole generation room thinking: the reasoning IS persisted and shown, so say so
+    // (tester round 6 read the plain sentence as "the thoughts are lost"). The SPA localizes this exact sentence; change both together.
+    private const string StoppedWhileThinkingNoticeMessage = "The model stopped while thinking before it could answer; its thoughts are kept above.";
+
     /// <summary>The authored effort that opens the dispatch path, and the value persisted as <c>authored_effort</c>.</summary>
     private const string AutoReasoningEffort = "auto";
 
@@ -107,6 +111,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // Warms the reranker/embedder once per turn that offers knowledge search, since search itself never spawns the reranker.
     private readonly IKnowledgeModelPrewarmer _knowledgeModelPrewarmer;
 
+    // Tracks each turn's armed llama.cpp completion so "Answer now" can end its reasoning from another call stack.
+    private readonly InvocationReasoningControl _reasoningControl;
+
     public InvocationRunner(Lazy<IWorkerEventDispatcher> eventDispatcher,
         IInvocationAgentFactory invocationAgentFactory,
         IOrchestrationAgentFactory orchestrationAgentFactory,
@@ -129,6 +136,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IExternalProviderRegistry externalProviderRegistry,
         IServiceScopeFactory scopeFactory,
         IKnowledgeModelPrewarmer knowledgeModelPrewarmer,
+        InvocationReasoningControl reasoningControl,
         ILogger<InvocationRunner> logger,
         TimeProvider timeProvider)
     {
@@ -158,6 +166,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _knowledgeModelPrewarmer = knowledgeModelPrewarmer ?? throw new ArgumentNullException(nameof(knowledgeModelPrewarmer));
+        _reasoningControl = reasoningControl ?? throw new ArgumentNullException(nameof(reasoningControl));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -341,6 +350,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
             {
                 HarnessStartedTimestamp = harnessStartedTimestamp
             };
+
+            // Keyed by the assistant message the endpoint addresses; disposed with the turn, so a finished turn answers 404.
+            using var reasoningControlTurn = _reasoningControl.Track(context.MessageId);
+            stream.ReasoningControl = reasoningControlTurn;
 
             var transport = new StreamTransport(this, dispatcher, package);
 
@@ -839,6 +852,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 // costs one scan. Local tools run inside FunctionInvokingChatClient, so detecting the call/result content here is what puts their lifecycle events on the SSE stream.
                 StringBuilder? thinkingBuilder = null;
                 UsageDetails? usage = null;
+                // How much of this update's reasoning and whether its text were emitted ahead of a requested call in it.
+                var flushedThinkingLength = 0;
+                var textFlushed = false;
 
                 if (update.Contents is { Count: > 0 } contents)
                 {
@@ -913,6 +929,19 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                 pendingLocalToolCalls[callId] = new RequestedToolCall(callName, functionCall.Arguments, serializedArguments);
                                 openToolCalls.Open(callId);
                                 finalRoundHasOutput = true;
+
+                                // The call's content offset must include narration riding the SAME update, or it lands in the answer after the card.
+                                if (thinkingBuilder is not null && thinkingBuilder.Length > flushedThinkingLength)
+                                {
+                                    await transport.EmitReasoningAsync(stream, thinkingBuilder.ToString(flushedThinkingLength, thinkingBuilder.Length - flushedThinkingLength));
+                                    flushedThinkingLength = thinkingBuilder.Length;
+                                }
+
+                                if (!textFlushed && !string.IsNullOrEmpty(textChunk))
+                                {
+                                    await transport.EmitTextAsync(stream, textChunk);
+                                    textFlushed = true;
+                                }
 
                                 await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
                                 {
@@ -992,6 +1021,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     openToolCalls.OnProviderOutput();
                 }
 
+                // "Answer now" may only fire while the armed completion is still reasoning: answer text or a finished completion ends that phase.
+                stream.ReasoningControl?.Observe(update.RawRepresentation,
+                    sawReasoning: thinkingBuilder is { Length: > 0 },
+                    sawAnswer: !string.IsNullOrEmpty(textChunk) || update.FinishReason is not null);
+
                 if (usage is not null)
                 {
                     // ACCUMULATED, not assigned — same reason as AddSegmentTimings above: one UsageContent arrives per
@@ -1006,12 +1040,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
                         cumulativeUsage.TotalTokens);
                 }
 
-                if (thinkingBuilder is { Length: > 0 })
+                if (thinkingBuilder is not null && thinkingBuilder.Length > flushedThinkingLength)
                 {
-                    await transport.EmitReasoningAsync(stream, thinkingBuilder.ToString());
+                    await transport.EmitReasoningAsync(stream, thinkingBuilder.ToString(flushedThinkingLength, thinkingBuilder.Length - flushedThinkingLength));
                 }
 
-                if (string.IsNullOrEmpty(textChunk))
+                if (textFlushed || string.IsNullOrEmpty(textChunk))
                 {
                     continue;
                 }
@@ -1119,7 +1153,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // Not for a cancelled turn: its stream can end normally, and the caller reports the cancellation instead.
         if (!finalRoundHasOutput && !invocationToken.IsCancellationRequested)
         {
-            await transport.EmitNoticeAsync(TurnNoticeKind.EmptyAnswer, EmptyAnswerNoticeMessage, stream.FinishReason);
+            var stoppedWhileThinking = string.Equals(stream.FinishReason, "length", StringComparison.Ordinal) && stream.ReasoningBuilder.Length > 0;
+            await transport.EmitNoticeAsync(TurnNoticeKind.EmptyAnswer,
+                stoppedWhileThinking ? StoppedWhileThinkingNoticeMessage : EmptyAnswerNoticeMessage,
+                stream.FinishReason);
         }
     }
 

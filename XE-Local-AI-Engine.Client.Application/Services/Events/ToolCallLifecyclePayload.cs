@@ -27,6 +27,12 @@ public sealed record ToolCallLifecyclePayload
     public bool IsError { get; init; }
 
     /// <summary>
+    ///     The streamed-content length when a <see cref="ToolCallLifecyclePhase.Requested" /> call was reported; the
+    ///     chat stream splits the text before it off as an interim segment. Null for the completed phase.
+    /// </summary>
+    public int? ContentOffset { get; init; }
+
+    /// <summary>
     ///     The binary blocks of a completed result (an MCP image, for instance), which <see cref="Result" /> names only by
     ///     a placeholder. In-process only: never serialized onto the stream.
     /// </summary>

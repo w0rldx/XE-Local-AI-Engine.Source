@@ -264,6 +264,7 @@
 			"effortDispatched": "Reasoning-Aufwand aufgelöst",
 			"playbookWithheld": "Playbook zurückgehalten",
 			"emptyAnswer": "Keine Antwort",
+			"stoppedWhileThinkingText": "Das Modell hat beim Nachdenken aufgehört, bevor es antworten konnte; seine Gedanken bleiben oben erhalten.",
 			"toolHistoryWithheld": "Tool-Verlauf zurückgehalten",
 			"toolsWithheld": "Keine Tools angeboten"
 		},
@@ -1284,6 +1285,9 @@
 			"reasoningLabel": "Reasoning",
 			"retryConnection": "Erneut versuchen",
 			"stop": "Stopp",
+			"answerNow": "Jetzt antworten",
+			"answerNowHint": "Nachdenken beenden und mit dem bisherigen Stand antworten",
+			"answerNowUnavailable": "Das Modell kann gerade nicht vorzeitig zum Antworten gebracht werden.",
 			"stopped": "Generierung gestoppt",
 			"stepBudgetReached": "Schritt beendet — Aufruf-Budget erreicht, es geht weiter.",
 			"loadError": {
@@ -1304,18 +1308,18 @@
 				"srUsed": "Kontextfenster zu {{percent}} Prozent genutzt, {{used}} von {{max}} Tokens."
 			},
 			"compact": {
-				"tooltip": "Ältere Nachrichten zu einer Zusammenfassung verdichten, um Kontext freizugeben",
-				"aria": "Unterhaltung verdichten",
-				"confirmTitle": "Unterhaltung verdichten",
+				"tooltip": "Ältere Nachrichten zusammenfassen, um Kontext freizugeben",
+				"aria": "Unterhaltung zusammenfassen",
+				"confirmTitle": "Unterhaltung zusammenfassen",
 				"confirmDescription": "Fasse die älteren Nachrichten zu einer kompakten Übersicht zusammen, um das Kontextfenster zu entlasten. Deine ursprünglichen Nachrichten bleiben erhalten und in der Unterhaltung sichtbar.",
-				"confirm": "Verdichten",
-				"compacted": "{{count}} ältere Nachricht(en) zu einer Zusammenfassung verdichtet. Deine Originale bleiben erhalten.",
-				"nothing": "Noch nichts zu verdichten — die aktuellen Nachrichten passen weiterhin ins Kontextfenster.",
-				"noModel": "Es ist kein lokales Chat-Modell zum Zusammenfassen installiert, daher kann die Verdichtung nicht on-node laufen.",
-				"noSummary": "Die Verdichtung hat keine Zusammenfassung erzeugt. Bitte versuche es erneut.",
-				"timedOut": "Die Komprimierung hat das Zeitlimit erreicht. Deine Nachrichten und die bisherige Zusammenfassung bleiben unverändert. Versuche ein schnelleres lokales Modell oder erhöhe das Zeitlimit für Nachrichtenanfragen in den Knoteneinstellungen.",
-				"error": "Die Unterhaltung konnte nicht verdichtet werden. Bitte versuche es erneut.",
-				"compactedLocalFallback": "{{count}} ältere Nachricht(en) lokal mit {{model}} verdichtet, damit dein Chat auf dem Gerät bleibt. Deine Originale bleiben erhalten.",
+				"confirm": "Zusammenfassen",
+				"compacted": "{{count}} ältere Nachricht(en) zusammengefasst. Deine Originale bleiben erhalten.",
+				"nothing": "Noch nichts zusammenzufassen — die aktuellen Nachrichten passen weiterhin ins Kontextfenster.",
+				"noModel": "Es ist kein lokales Chat-Modell zum Zusammenfassen installiert, daher kann die Zusammenfassung nicht auf dem Node laufen.",
+				"noSummary": "Es wurde keine Zusammenfassung erzeugt. Bitte versuche es erneut.",
+				"timedOut": "Die Zusammenfassung hat das Zeitlimit erreicht. Deine Nachrichten und die bisherige Zusammenfassung bleiben unverändert. Versuche ein schnelleres lokales Modell oder erhöhe das Zeitlimit für Nachrichtenanfragen in den Knoteneinstellungen.",
+				"error": "Die Unterhaltung konnte nicht zusammengefasst werden. Bitte versuche es erneut.",
+				"compactedLocalFallback": "{{count}} ältere Nachricht(en) lokal mit {{model}} zusammengefasst, damit dein Chat auf dem Gerät bleibt. Deine Originale bleiben erhalten.",
 				"aLocalModel": "einem lokalen Modell"
 			},
 			"contextState": {
@@ -1323,8 +1327,8 @@
 				"aria": "Kontextzustand der Unterhaltung anzeigen",
 				"title": "Kontext der Unterhaltung",
 				"error": "Der Kontextzustand konnte nicht geladen werden.",
-				"empty": "Noch nichts verdichtet. Verdichte die Unterhaltung, um ihren Kontextzustand aufzubauen.",
-				"notCompacted": "Noch nicht verdichtet",
+				"empty": "Noch nichts zusammengefasst. Fasse die Unterhaltung zusammen, um ihren Kontextzustand aufzubauen.",
+				"notCompacted": "Noch nicht zusammengefasst",
 				"stateCoverage": "Zustand deckt bis Sequenz {{sequence}} ab, aktualisiert {{updatedAt}}",
 				"synopsisCoverage": "Zusammenfassung deckt bis Sequenz {{sequence}} ab, aktualisiert {{updatedAt}}",
 				"inactive": "Ersetzt und zurückgezogen ({{count}})",
@@ -2502,16 +2506,16 @@
 					"description": "Die neuesten Runden, die in einem langen Chat nie gekürzt werden."
 				},
 				"compactionAutoEnabled": {
-					"label": "Lange Chats automatisch verdichten",
+					"label": "Lange Chats automatisch zusammenfassen",
 					"description": "Den älteren Teil eines Chats zusammenfassen, sobald er den Großteil des Kontextfensters füllt."
 				},
 				"compactionAutoCompactPercent": {
-					"label": "Schwelle für die Verdichtung",
-					"description": "Verdichten, sobald der Verlauf diesen Anteil des nutzbaren Kontextfensters füllt."
+					"label": "Schwelle für die Zusammenfassung",
+					"description": "Zusammenfassen, sobald der Verlauf diesen Anteil des nutzbaren Kontextfensters füllt."
 				},
 				"compactionRecentMessagesVerbatim": {
 					"label": "Wörtlich behaltene Nachrichten",
-					"description": "Die neuesten Nachrichten, die eine Verdichtung unverändert lässt."
+					"description": "Die neuesten Nachrichten, die eine Zusammenfassung unverändert lässt."
 				},
 				"compactionDistillEnabled": {
 					"label": "Laufende Chat-Zusammenfassung führen",
@@ -2529,7 +2533,7 @@
 					"title": "Agentenlimits"
 				},
 				"contextCompaction": {
-					"title": "Kontext & Verdichtung"
+					"title": "Kontext & Zusammenfassung"
 				},
 				"tokens": "Tokens",
 				"percent": "%",
@@ -4495,7 +4499,7 @@
 				"meta": "{{model}} · {{width}}×{{height}} · {{steps}} Schritte · {{sampler}}",
 				"queuePosition": "Wartet — Position {{position}} in der Warteschlange",
 				"preparing": "Modell wird vorbereitet…",
-				"finishing": "Abschluss (Bild wird dekodiert)…",
+				"finishing": "Bild wird dekodiert … {{seconds}} s",
 				"steps": "Schritt {{step}} von {{totalSteps}}",
 				"stepProgressLabel": "Fortschritt der Generierung",
 				"eta": "noch ca. {{seconds}} s",

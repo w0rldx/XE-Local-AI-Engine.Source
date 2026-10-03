@@ -1,5 +1,5 @@
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
-import { EXTERNAL_PROVIDER } from "@/core/models/LocalModelProviders";
+import { EXTERNAL_PROVIDER, LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
 import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
 
@@ -30,6 +30,7 @@ export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): Mod
 		// Left UNDEFINED when the backend reports null, which is every provider but the external one: null means "not
 		// declared", and coalescing it to false would silently demote every graded local model to the binary control.
 		isReasoningEffortCapable: model.isReasoningEffortCapable ?? undefined,
+		isReasoningControllable: isReasoningControllable(model),
 		isToolCapable: model.isToolCapable ?? false,
 		// Vision projector (mmproj) capability — drives whether the composer offers image attachments for this model.
 		isMultimodal: model.isMultimodalCapable ?? false,
@@ -41,6 +42,12 @@ export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): Mod
 		// Data only: the picker already prefers `displayName` over `label` where it renders one.
 		displayName: model.displayLabel ?? undefined,
 	};
+}
+
+// "Answer now" reaches llama-server's reasoning control, which the backend arms only for a graded-reasoning llama.cpp
+// model whose template has a reasoning end tag (the same gate as the thinking budget).
+function isReasoningControllable(model: LocalModelDto | undefined): boolean {
+	return model?.provider === LLAMACPP_PROVIDER && model.isReasoningCapable === true && model.reasoningBudgetEnforceable !== false;
 }
 
 // Cloud-provider tags carried on list entries that render in the separate cloud sections of the picker
@@ -167,6 +174,7 @@ export function resolveLocalDefaultModelName(models: LocalModelDto[]): string | 
 // reasoning/tool controls as picking that concrete model directly. Coalesces the optional generated booleans to false.
 export function resolveLocalDefaultModelCapabilities(models: LocalModelDto[]): {
 	isReasoningModel: boolean;
+	isReasoningControllable: boolean;
 	isNativeReasoningModel: boolean;
 	isToolCapable: boolean;
 	isMultimodal: boolean;
@@ -174,6 +182,7 @@ export function resolveLocalDefaultModelCapabilities(models: LocalModelDto[]): {
 	const resolved = resolveLocalDefaultModel(models);
 	return {
 		isReasoningModel: resolved?.isReasoningCapable ?? false,
+		isReasoningControllable: isReasoningControllable(resolved),
 		isNativeReasoningModel: resolved?.isNativeReasoningCapable ?? false,
 		isToolCapable: resolved?.isToolCapable ?? false,
 		isMultimodal: resolved?.isMultimodalCapable ?? false,

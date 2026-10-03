@@ -65,23 +65,28 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         return CheckForUpdatesSerializedAsync(minInterval, ct);
     }
 
-    public async Task<AppUpdateSnapshot> GetStatusAsync(CancellationToken ct)
+    public Task<AppUpdateSnapshot> GetStatusAsync(CancellationToken ct) => WithLiveChannelAsync(_state.Current, ct);
+
+    /// <summary>The snapshot as the operator should see it: stamped with the channel stored NOW.</summary>
+    /// <remarks>
+    ///     A check resolves the channel when it starts, and <see cref="SetChannelAsync" /> persists outside the gate, so
+    ///     a check result can carry the channel the operator just left. The node-settings SAVE path likewise writes the
+    ///     channel without checking. Either way the cached offer belongs to the other channel, and dropping it keeps
+    ///     AvailableChannel null exactly when nothing is offered.
+    /// </remarks>
+    private async Task<AppUpdateSnapshot> WithLiveChannelAsync(AppUpdateSnapshot snapshot, CancellationToken ct)
     {
         var selected = await ResolveChannelAsync(ct);
-        var current = _state.Current;
+        var stale = selected != snapshot.SelectedChannel;
 
-        // The node-settings SAVE path writes the channel without checking, so the cached offer can belong to the
-        // channel the operator just left. Dropping it keeps AvailableChannel null exactly when nothing is offered.
-        var stale = selected != current.SelectedChannel;
-
-        // A record `with` on the cached snapshot: nothing is stored back, so a concurrent check cannot be clobbered.
-        return current with
+        // A record `with`: nothing is stored back, so a concurrent check cannot be clobbered.
+        return snapshot with
         {
             SelectedChannel = selected,
             DefaultChannel = _channelOptions.DefaultChannel,
-            AvailableVersion = stale ? null : current.AvailableVersion,
-            UpdateAvailable = !stale && current.UpdateAvailable,
-            AvailableChannel = stale ? null : current.AvailableChannel
+            AvailableVersion = stale ? null : snapshot.AvailableVersion,
+            UpdateAvailable = !stale && snapshot.UpdateAvailable,
+            AvailableChannel = stale ? null : snapshot.AvailableChannel
         };
     }
 
@@ -107,6 +112,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
 
     private async Task<AppUpdateSnapshot> CheckForUpdatesSerializedAsync(TimeSpan? minInterval, CancellationToken ct)
     {
+        AppUpdateSnapshot snapshot;
         await _operationGate.WaitAsync(ct);
         try
         {
@@ -114,19 +120,18 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
 
             // The channel is checked too, not only the clock: node settings expose UpdateChannel on a SAVE that
             // runs no check, and a check under a new policy is never the duplicate the floor exists to suppress.
-            if (minInterval is { } interval
-                && !IsStale(current.LastCheckedUtc, interval, _timeProvider.GetUtcNow())
-                && current.SelectedChannel == await ResolveChannelAsync(ct))
-            {
-                return current;
-            }
-
-            return await CheckForUpdatesCoreAsync(ct);
+            snapshot = minInterval is { } interval
+                       && !IsStale(current.LastCheckedUtc, interval, _timeProvider.GetUtcNow())
+                       && current.SelectedChannel == await ResolveChannelAsync(ct)
+                ? current
+                : await CheckForUpdatesCoreAsync(ct);
         }
         finally
         {
             _operationGate.Release();
         }
+
+        return await WithLiveChannelAsync(snapshot, ct);
     }
 
     /// <summary>The channel this node follows: the operator's stored choice, else the channel baked into the build.</summary>

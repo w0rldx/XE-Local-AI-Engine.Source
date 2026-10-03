@@ -3751,6 +3751,10 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentResp
 	deduplicated: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsLocalChatV1AnswerNowNodeChatMessageRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest = {
 	archived?: boolean;
 };
@@ -10526,6 +10530,46 @@ export type DeleteConversationFileResponses = {
 };
 
 export type DeleteConversationFileResponse = DeleteConversationFileResponses[keyof DeleteConversationFileResponses];
+
+export type AnswerNowNodeChatMessageData = {
+	body?: never;
+	path: {
+		messageId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/chat/messages/{messageId}/answer-now";
+};
+
+export type AnswerNowNodeChatMessageErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: FastEndpointsProblemDetails;
+};
+
+export type AnswerNowNodeChatMessageError = AnswerNowNodeChatMessageErrors[keyof AnswerNowNodeChatMessageErrors];
+
+export type AnswerNowNodeChatMessageResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type AnswerNowNodeChatMessageResponse = AnswerNowNodeChatMessageResponses[keyof AnswerNowNodeChatMessageResponses];
 
 export type ResolveUserQuestionData = {
 	body: XeLocalAiEngineClientEndpointsLocalChatV1ResolveUserQuestionRequest;

@@ -12,6 +12,7 @@ import type { AxiosError } from "axios";
 import { client } from "../client.gen";
 import {
 	analyzePlaybook,
+	answerNowNodeChatMessage,
 	applyAgentHomePatch,
 	applyAppUpdate,
 	applyDevelopmentPatch,
@@ -478,6 +479,9 @@ import {
 import type {
 	AnalyzePlaybookData,
 	AnalyzePlaybookResponse,
+	AnswerNowNodeChatMessageData,
+	AnswerNowNodeChatMessageError,
+	AnswerNowNodeChatMessageResponse,
 	ApplyAgentHomePatchData,
 	ApplyAgentHomePatchError,
 	ApplyAgentHomePatchResponse,
@@ -4152,6 +4156,30 @@ export const deleteConversationFileMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await deleteConversationFile({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const answerNowNodeChatMessageMutation = (
+	options?: Partial<Options<AnswerNowNodeChatMessageData>>,
+): UseMutationOptions<
+	AnswerNowNodeChatMessageResponse,
+	AxiosError<AnswerNowNodeChatMessageError>,
+	Options<AnswerNowNodeChatMessageData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		AnswerNowNodeChatMessageResponse,
+		AxiosError<AnswerNowNodeChatMessageError>,
+		Options<AnswerNowNodeChatMessageData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await answerNowNodeChatMessage({
 				...options,
 				...fnOptions,
 				throwOnError: true,

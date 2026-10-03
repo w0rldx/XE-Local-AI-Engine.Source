@@ -29,7 +29,12 @@ function resolveParts(message: ChatMessageModel, streamingParts: ChatMessagePart
 	}
 
 	if (message.parts && message.parts.length > 0) {
-		return message.parts;
+		// A turn that stopped while thinking keeps its reasoning; never let a parts list without it (a notice-only
+		// row) hide the Thoughts the notice points at.
+		const hasReasoningPart = message.parts.some((part) => part.kind === "reasoning");
+		return hasReasoningPart || !hasText(message.reasoning)
+			? message.parts
+			: [{ kind: "reasoning", id: message.id, sequence: 0, text: message.reasoning ?? "" }, ...message.parts];
 	}
 
 	if (message.reasoning && message.reasoning.trim().length > 0) {

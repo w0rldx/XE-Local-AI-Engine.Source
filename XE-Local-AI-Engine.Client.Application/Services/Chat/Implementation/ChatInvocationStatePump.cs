@@ -177,15 +177,16 @@ public sealed class ChatInvocationStatePump
 
                 if (isTerminal)
                 {
-                    // An empty snapshot (a plain-text turn with no reasoning/tools) is passed as null so the persisted
-                    // parts are left untouched rather than overwritten with an empty interleave.
-                    var snapshot = parts.HasParts ? parts.Snapshot() : null;
-                    var terminal = await _invocationPump.TerminalizeAsync(correlation, latest, requestedModel, snapshot, sources);
+                    // A plain-text turn passes null so the persisted parts are left untouched. Interim text before each tool
+                    // call goes into the parts and the row's Content keeps only the answer.
+                    var snapshot = parts.HasParts ? parts.Snapshot(latest.StreamedContent) : null;
+                    var terminalState = WithFinalContent(latest, parts);
+                    var terminal = await _invocationPump.TerminalizeAsync(correlation, terminalState, requestedModel, snapshot, sources);
                     terminalPersisted = true;
 
                     // Post-run adaptive memory: the just-persisted terminal goes to the fire-and-forget extraction hook
                     // before the SSE write, and the hook never blocks or throws into the pump.
-                    onTerminal?.Invoke(latest, terminal);
+                    onTerminal?.Invoke(terminalState, terminal);
 
                     await eventSink.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType,
                             correlation,
@@ -264,13 +265,13 @@ public sealed class ChatInvocationStatePump
                 InvocationId = correlation.RequestId,
                 ConversationId = correlation.ConversationId,
                 Status = InvocationStatus.Failed,
-                StreamedContent = cursor.Content,
+                StreamedContent = parts.FinalSegment(cursor.Content),
                 StreamedThinkingContent = cursor.Reasoning,
                 Error = PumpFaultError,
                 FailureCategory = FailureCategory.Unexpected
             };
 
-            var snapshot = parts.HasParts ? parts.Snapshot() : null;
+            var snapshot = parts.HasParts ? parts.Snapshot(cursor.Content) : null;
             var terminal = await _invocationPump.TerminalizeAsync(correlation, faultedState, requestedModel, snapshot, sources);
 
             await eventSink.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None);
@@ -294,6 +295,21 @@ public sealed class ChatInvocationStatePump
         var terminal = await _invocationPump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled);
 
         await eventSink.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None);
+    }
+
+    // A copy carrying only the text after the last tool call, or the state itself when no call split the content.
+    private static InvocationState WithFinalContent(InvocationState state, NodeChatPartAccumulator parts)
+    {
+        var content = state.StreamedContent;
+        var finalContent = parts.FinalSegment(content);
+        if (finalContent.Length == content.Length)
+        {
+            return state;
+        }
+
+        var trimmed = state.Clone();
+        trimmed.StreamedContent = finalContent;
+        return trimmed;
     }
 
     private long NowUnixMilliseconds()

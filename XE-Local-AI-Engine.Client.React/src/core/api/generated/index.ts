@@ -2,6 +2,7 @@
 
 export {
 	analyzePlaybook,
+	answerNowNodeChatMessage,
 	applyAgentHomePatch,
 	applyAppUpdate,
 	applyDevelopmentPatch,
@@ -470,6 +471,11 @@ export type {
 	AnalyzePlaybookErrors,
 	AnalyzePlaybookResponse,
 	AnalyzePlaybookResponses,
+	AnswerNowNodeChatMessageData,
+	AnswerNowNodeChatMessageError,
+	AnswerNowNodeChatMessageErrors,
+	AnswerNowNodeChatMessageResponse,
+	AnswerNowNodeChatMessageResponses,
 	ApplyAgentHomePatchData,
 	ApplyAgentHomePatchError,
 	ApplyAgentHomePatchErrors,
@@ -3003,6 +3009,7 @@ export type {
 	XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeResponse,
 	XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentRequest,
 	XeLocalAiEngineClientEndpointsKnowledgeV1UploadKnowledgeDocumentResponse,
+	XeLocalAiEngineClientEndpointsLocalChatV1AnswerNowNodeChatMessageRequest,
 	XeLocalAiEngineClientEndpointsLocalChatV1ArchiveNodeChatConversationRequest,
 	XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest,
 	XeLocalAiEngineClientEndpointsLocalChatV1CancelNodeChatMessageRequest,

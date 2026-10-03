@@ -20,7 +20,9 @@ public sealed class ParticipantReasoningOptionsTests
     [Arguments("low", 2048)]
     [Arguments("medium", 8192)]
     [Arguments("high", 24576)]
-    public void Build_ThinkingCapableWithGradedEffort_CarriesTheMappedReasoningBudget(string effort, int expectedBudget)
+    [Arguments(null, 8192)]
+    [Arguments("", 8192)]
+    public void Build_ThinkingCapableWithGradedEffort_CarriesTheMappedReasoningBudget(string? effort, int expectedBudget)
     {
         var properties = ParticipantReasoningOptions.Build(effort, supportsThinking: true);
 
@@ -29,9 +31,9 @@ public sealed class ParticipantReasoningOptionsTests
     }
 
     [Test]
-    [Arguments(null, true)]
     [Arguments("none", true)]
     [Arguments("high", false)]
+    [Arguments(null, false)]
     public void Build_WithoutGradedEffortOrThinkingCapability_OmitsTheReasoningBudget(string? effort, bool supportsThinking)
     {
         var properties = ParticipantReasoningOptions.Build(effort, supportsThinking);

@@ -479,6 +479,9 @@ export interface ImageJobProgressView {
 	totalSteps: number | null;
 	secondsPerIteration: number | null;
 	estimatedRemainingMs: number | null;
+	// Server wall-clock (unix ms) of the first push that reported Decoding. sd-server prints no decode progress, so
+	// pushes stop for the whole decode; the card ticks an elapsed counter off this instead. Null outside Decoding.
+	decodeStartedAtUtc: number | null;
 }
 
 export function toImageJobProgressView(push: ImageJobStatusPush): ImageJobProgressView {
@@ -491,6 +494,7 @@ export function toImageJobProgressView(push: ImageJobStatusPush): ImageJobProgre
 		totalSteps: push.totalSteps ?? null,
 		secondsPerIteration: push.secondsPerIteration ?? null,
 		estimatedRemainingMs: push.estimatedRemainingMs ?? null,
+		decodeStartedAtUtc: push.generationPhase === "Decoding" ? push.occurredAtUtc : null,
 	};
 }
 
@@ -523,6 +527,10 @@ export function keepLatestImageJobProgress(
 	if (isSameSamplingRun && (next.step as number) < (current.step as number)) {
 		return current;
 	}
+	// A repeated Decoding push must not restart the decode clock.
+	if (current.decodeStartedAtUtc !== null && next.decodeStartedAtUtc !== null) {
+		return { ...next, decodeStartedAtUtc: current.decodeStartedAtUtc };
+	}
 	return next;
 }
 
@@ -539,7 +547,7 @@ export type ImageProgressDisplay =
 			secondsPerIteration: number | null;
 			estimatedRemainingMs: number | null;
 	  }
-	| { kind: "finishing" };
+	| { kind: "finishing"; decodeStartedAtUtc: number | null };
 
 /**
  * Maps the live progress state onto what the operator is shown.
@@ -560,7 +568,8 @@ export function toProgressDisplay(progress: ImageJobProgressView | null): ImageP
 		return { kind: "none" };
 	}
 	if (progress.generationPhase === "Decoding") {
-		return { kind: "finishing" };
+		// Elapsed time since decode began, never a countdown: there is no rate to extrapolate from.
+		return { kind: "finishing", decodeStartedAtUtc: progress.decodeStartedAtUtc };
 	}
 	if (progress.generationPhase === "Sampling" && progress.step !== null && progress.totalSteps !== null) {
 		// A job queued behind another on the daemon would have that job's wait added to its own; rather than guess at

@@ -92,6 +92,8 @@ interface ChatInputAreaProps {
 	onUploadFiles?: (files: File[]) => void;
 	onRemoveAttachment?: (fileId: string) => void;
 	onCancel: () => void;
+	// The streaming message "Answer now" targets; undefined hides the button.
+	answerNowMessageId?: string;
 	onModelChange: (model: string) => void;
 	onReasoningEffortChange: (effort: ReasoningEffort) => void;
 	onToggleTools?: () => void;
@@ -138,6 +140,7 @@ export function ChatInputArea({
 	onUploadFiles,
 	onRemoveAttachment,
 	onCancel,
+	answerNowMessageId,
 	onModelChange,
 	onReasoningEffortChange,
 	onToggleTools,
@@ -346,6 +349,7 @@ export function ChatInputArea({
 			showContextUsage={showContextUsage}
 			contextUsage={contextUsage}
 			sendDisabled={sendDisabled}
+			answerNowMessageId={answerNowMessageId}
 			onCancel={onCancel}
 			onSubmit={submit}
 		/>

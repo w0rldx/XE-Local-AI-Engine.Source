@@ -126,19 +126,20 @@
          this project's implicit Content glob, so without this explicit include they do not ship at all and the runtime
          install fails on a packaged build with a missing-lockfile prerequisite. Output stays clean for dev/test runs —
          TrainingRuntimeLayout.ResolveScriptsDirectory walks up to tools/training/ when the published copy is absent.
-         Local tooling residue (a dev `uv sync`/pytest/ruff run inside tools/training) is excluded so a multi-GB .venv or
-         bytecode cache never rides along into the publish output. -->
+         Local tooling residue is excluded: every hidden (dot-prefixed) directory — a dev `uv sync` .venv, linter and
+         pytest caches, editor or agent session state — and bytecode caches never ride along into the publish output
+         (a tester build shipped one such hidden state directory under training-scripts/). -->
     <Content Include="$(MSBuildProjectDirectory)/../tools/training/**"
-             Exclude="$(MSBuildProjectDirectory)/../tools/training/.venv/**;$(MSBuildProjectDirectory)/../tools/training/**/__pycache__/**;$(MSBuildProjectDirectory)/../tools/training/.*_cache/**"
+             Exclude="$(MSBuildProjectDirectory)/../tools/training/**/.*/**;$(MSBuildProjectDirectory)/../tools/training/**/__pycache__/**"
              Link="training-scripts/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToPublishDirectory="PreserveNewest"
              CopyToOutputDirectory="Never"/>
     <!-- The pinned Python compute runtime (pyproject.toml + uv.lock) the sandboxed run_python tool provisions from.
-         Same reasoning as the training include above, including the .venv/__pycache__ exclusion for a dev `uv sync`
-         inside tools/compute; ComputePythonEnvironment.ResolveScriptsDirectory walks up to tools/compute/ when the
-         published copy is absent. -->
+         Same reasoning as the training include above, including the hidden-directory/__pycache__ exclusion for a dev
+         `uv sync` inside tools/compute; ComputePythonEnvironment.ResolveScriptsDirectory walks up to tools/compute/ when
+         the published copy is absent. -->
     <Content Include="$(MSBuildProjectDirectory)/../tools/compute/**"
-             Exclude="$(MSBuildProjectDirectory)/../tools/compute/.venv/**;$(MSBuildProjectDirectory)/../tools/compute/**/__pycache__/**;$(MSBuildProjectDirectory)/../tools/compute/.*_cache/**"
+             Exclude="$(MSBuildProjectDirectory)/../tools/compute/**/.*/**;$(MSBuildProjectDirectory)/../tools/compute/**/__pycache__/**"
              Link="compute-scripts/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToPublishDirectory="PreserveNewest"
              CopyToOutputDirectory="Never"/>

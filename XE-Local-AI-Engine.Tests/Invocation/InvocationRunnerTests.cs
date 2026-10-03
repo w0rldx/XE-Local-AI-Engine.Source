@@ -55,6 +55,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
@@ -3403,6 +3404,93 @@ public sealed class InvocationRunnerTests
             && payload.Message == "The model stopped without an answer."));
     }
 
+    /// <summary>
+    ///     Tester round 6, item 8: a turn that spent its whole room thinking read "stopped without an answer", and the
+    ///     user believed the reasoning was lost. It is persisted and shown, so the notice says so.
+    /// </summary>
+    [Test]
+    public async Task RunAsync_WhenTheTurnRanOutOfRoomWhileThinking_SaysTheThoughtsAreKept()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ThinkingThenFinish("length"));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.EmptyAnswer
+            && payload.Message == "The model stopped while thinking before it could answer; its thoughts are kept above."
+            && payload.Detail == "length"));
+    }
+
+    [Test]
+    [Arguments("stop", true)]
+    [Arguments("length", false)]
+    public async Task RunAsync_WhenTheEmptyTurnWasNotCutOffWhileThinking_KeepsThePlainNotice(string finishReason, bool withReasoning)
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ThinkingThenFinish(finishReason, withReasoning));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.EmptyAnswer
+            && payload.Message == "The model stopped without an answer."
+            && payload.Detail == finishReason));
+    }
+
+    /// <summary>
+    ///     The runner tracks the turn under its assistant message id for "Answer now": while the armed completion is
+    ///     reasoning the control reaches llama-server, and once the turn is over the message is no longer addressable.
+    /// </summary>
+    [Test]
+    public async Task RunAsync_WhileAnArmedCompletionReasons_AnswerNowReachesItsServer()
+    {
+        var native = Substitute.For<ILlamaServerNativeClient>();
+        native.EndReasoningAsync(Arg.Any<Uri>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+              .Returns(new LlamaServerReasoningControlResult { Success = true });
+        var reasoningControl = new InvocationReasoningControl(native, NullLogger<InvocationReasoningControl>.Instance);
+        var reasoning = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = CreateRunner(agentUpdates: ArmedReasoningUpdates(reasoning, release), reasoningControl: reasoningControl);
+        var messageId = Guid.NewGuid();
+
+        var run = runner.RunAsync(InvocationExecutionContext.CreatePlain(RuntimePackageBuilder.Valid().Build(), messageId));
+        await AssertEx.CompletesAsync(reasoning.Task, TimeSpan.FromSeconds(30), "the stream must reach its reasoning phase.");
+        await AssertEx.EventuallyAsync(async () => await reasoningControl.EndReasoningAsync(messageId, CancellationToken.None) == ReasoningEndOutcome.Ended,
+            TimeSpan.FromSeconds(30),
+            "the reasoning update has been folded once the next pull is parked.");
+        release.SetResult();
+        await AssertEx.CompletesAsync(run, TimeSpan.FromSeconds(30), "the turn must finish once released.");
+
+        await native.Received().EndReasoningAsync(new Uri("http://127.0.0.1:5812/v1"), "chatcmpl-runner", Arg.Any<CancellationToken>());
+        AssertEx.Equal(ReasoningEndOutcome.NotFound, await reasoningControl.EndReasoningAsync(messageId, CancellationToken.None));
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ArmedReasoningUpdates(TaskCompletionSource reasoning, TaskCompletionSource release)
+    {
+        var armed = new ChatResponseUpdate(ChatRole.Assistant, [new TextReasoningContent("thinking")])
+        {
+            ResponseId = "chatcmpl-runner",
+            AdditionalProperties = new AdditionalPropertiesDictionary { [LlamaServerReasoningControl.EndpointKey] = new Uri("http://127.0.0.1:5812/v1") }
+        };
+        yield return new AgentResponseUpdate(armed) { RawRepresentation = armed };
+        reasoning.SetResult();
+        await release.Task;
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "answer");
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ThinkingThenFinish(string finishReason, bool withReasoning = true)
+    {
+        if (withReasoning)
+        {
+            yield return new AgentResponseUpdate(ChatRole.Assistant, [new TextReasoningContent("still thinking")]);
+            await Task.Yield();
+        }
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, []) { FinishReason = new ChatFinishReason(finishReason) };
+    }
+
     [Test]
     public async Task RunAsync_WhenTheLastRoundAnswers_EmitsNoEmptyAnswerNotice()
     {
@@ -3450,6 +3538,46 @@ public sealed class InvocationRunnerTests
     }
 
     // One tool call and its result, then either a final answer or a silent round (null).
+    [Test]
+    public async Task RunAsync_WhenOneUpdateCarriesNarrationAndAToolCall_ReportsTheNarrationBeforeTheRequestedCall()
+    {
+        // The requested call's content offset is stamped at report time, so the narration riding the same update must
+        // already be streamed, or it lands in the answer after the card.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var order = new List<string>();
+        dispatcher.When(static call => call.ReportInvocationThinkingChunkAsync(Arg.Any<Guid>(), Arg.Any<string>()))
+                  .Do(call => order.Add("reasoning:" + call.ArgAt<string>(1)));
+        dispatcher.When(static call => call.ReportInvocationStreamChunkAsync(Arg.Any<Guid>(), Arg.Any<string>()))
+                  .Do(call => order.Add("text:" + call.ArgAt<string>(1)));
+        dispatcher.When(static call => call.ReportToolCallLifecycleAsync(Arg.Any<ToolCallLifecyclePayload>()))
+                  .Do(call => order.Add("tool:" + call.ArgAt<ToolCallLifecyclePayload>(0).Phase));
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: NarratedToolCallUpdates());
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build());
+
+        AssertEx.Equal("reasoning:plan|text:Let me search. |tool:Requested|tool:Completed|text:done",
+            string.Join('|', order));
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> NarratedToolCallUpdates()
+    {
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new TextReasoningContent("plan"),
+            new TextContent("Let me search. "),
+            new FunctionCallContent("call-1", "test-tool")
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionResultContent("call-1", "ok")
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "done");
+    }
+
     private static async IAsyncEnumerable<AgentResponseUpdate> ToolRoundUpdates(string result, string? finalText)
     {
         yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
@@ -5233,7 +5361,8 @@ public sealed class InvocationRunnerTests
         IConversationContextBudgeter? contextBudgeter = null,
         IKnowledgeModelPrewarmer? knowledgeModelPrewarmer = null,
         bool knowledgeToolsEnabled = true,
-        Action<INodeRuntimeSettings>? configureRuntimeSettings = null)
+        Action<INodeRuntimeSettings>? configureRuntimeSettings = null,
+        InvocationReasoningControl? reasoningControl = null)
     {
         var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
@@ -5342,6 +5471,7 @@ public sealed class InvocationRunnerTests
             // registers nothing, so a test that never sends `auto` proves — by not throwing — that no scope is used.
             CreateScopeFactory(reasoningEffortDispatcherFactory),
             knowledgeModelPrewarmer ?? Substitute.For<IKnowledgeModelPrewarmer>(),
+            reasoningControl ?? new InvocationReasoningControl(Substitute.For<ILlamaServerNativeClient>(), NullLogger<InvocationReasoningControl>.Instance),
             NullLogger<InvocationRunner>.Instance,
             resolvedTimeProvider);
     }

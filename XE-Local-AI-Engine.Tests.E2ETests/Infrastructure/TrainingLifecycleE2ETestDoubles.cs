@@ -373,6 +373,9 @@ public static class TrainingLifecycleE2ETestDoubles
             CancellationToken ct) =>
             throw new NotSupportedException();
 
+        public Task<LlamaServerReasoningControlResult> EndReasoningAsync(Uri baseAddress, string completionId, CancellationToken ct) =>
+            throw new NotSupportedException();
+
         public Task<IReadOnlyList<double>> PostRerankAsync(Uri baseAddress,
             string query,
             IReadOnlyList<string> documents,

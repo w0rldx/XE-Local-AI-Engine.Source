@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Formats.Tar;
@@ -30,6 +31,19 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private static readonly TimeSpan SmokeTestTimeout = TimeSpan.FromSeconds(15);
 
     /// <summary>
+    ///     How long a runtime download may go without receiving a single byte before it is abandoned as stalled.
+    /// </summary>
+    /// <remarks>
+    ///     Any byte resets the window, so a slow link is never cut off; only a connection that delivers NOTHING for a full
+    ///     minute is. Without it a half-open connection holds the acquisition (and the banner) at a fixed percentage forever.
+    /// </remarks>
+    private static readonly TimeSpan DownloadStallTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>The user-safe reason a stalled download surfaces with; also the marker that keeps it through the retry wrapper.</summary>
+    private const string DownloadStalledMessage =
+        "The llama.cpp runtime download stalled: no data arrived for 60 seconds. Check the network connection and try again.";
+
+    /// <summary>
     ///     Absolute hard ceiling on a single runtime download: a disk-exhaustion guard against a hostile or buggy server
     ///     streaming an unbounded body.
     /// </summary>
@@ -57,6 +71,12 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private readonly OSPlatform _os;
     private readonly LlamaServerRuntimeOverrideOptions? _overrideOptions;
     private readonly SemaphoreSlim _sourceMutationGate = new(initialCount: 1, maxCount: 1);
+
+    /// <summary>Single-flight lock per variant directory for <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" />.</summary>
+    /// <remarks>
+    ///     Entries are never removed: one semaphore per (tag, variant) dir is a handful per process. Prune them if tags ever churn.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _acquisitionLocks = new(StringComparer.Ordinal);
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
@@ -173,6 +193,24 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             resolvedTag,
             stepCount: variant == GpuVariant.Cuda && _os == OSPlatform.Windows ? 2 : 1);
 
+        // Single-flight per variant dir, taken BEFORE the reporter can arm so a cancelled waiter never touches the banner. Lock order:
+        // the caller's LlamaServerRuntimeMutationGate entry/lease → this lock → _sourceMutationGate; nothing holding the latter calls this method.
+        var acquisitionLock = _acquisitionLocks.GetOrAdd(variantDir, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
+        await acquisitionLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return await EnsureVariantDirAsync(variant, resolvedTag, pin, isPinnedFallback, variantDir, reporter, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            acquisitionLock.Release();
+        }
+    }
+
+    /// <summary>The acquisition body of <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" />, run under that variant dir's single-flight lock.</summary>
+    private async Task<LlamaBinary> EnsureVariantDirAsync(GpuVariant variant, string resolvedTag, LlamaCppAssetPin pin, bool isPinnedFallback, string variantDir,
+        AcquisitionReporter reporter, CancellationToken ct)
+    {
         try
         {
             // Offline / already-cached path: reuse a present binary without re-download.
@@ -225,8 +263,9 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            // A cancelled acquisition is not a failed one: SpawnCoreAsync passes a REQUEST-scoped token here, so a chat abandoned mid-download — or a shutdown firing
-            // the first-run service's stopping token — would otherwise persist a terminal Failed and leave the banner stuck behind a retry attached to a non-failure.
+            // A cancelled acquisition (request-scoped spawn token, first-run stopping token) is not a failure, so never Failed; but the
+            // registry latches the last write, so a silent rethrow froze the banner at its last percentage. Idle clears it.
+            reporter.Cancel();
             throw;
         }
         catch (Exception exception)
@@ -518,7 +557,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            // Cancellation is not a failure — see the matching note in EnsureBinaryAsync.
+            // Cancellation is not a failure, but the banner must still clear — see the matching note in EnsureVariantDirAsync.
+            reporter.Cancel();
             throw;
         }
         catch (Exception exception)
@@ -648,7 +688,9 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             return;
         }
 
-        throw new LlamaRuntimeException("The llama.cpp CUDA runtime archive could not be downloaded or failed integrity verification after a retry.",
+        throw new LlamaRuntimeException(IsDownloadStall(secondError)
+                ? DownloadStalledMessage
+                : "The llama.cpp CUDA runtime archive could not be downloaded or failed integrity verification after a retry.",
             secondError);
     }
 
@@ -847,9 +889,16 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             return;
         }
 
-        throw new LlamaRuntimeException("The llama.cpp runtime could not be downloaded or failed integrity verification after a retry. "
-                                        + "Check the network connection and try again.",
+        throw new LlamaRuntimeException(IsDownloadStall(secondError)
+                ? DownloadStalledMessage
+                : "The llama.cpp runtime could not be downloaded or failed integrity verification after a retry. Check the network connection and try again.",
             secondError);
+    }
+
+    /// <summary>True for the stall failure <see cref="DownloadToFileAsync" /> raises, so the retry wrapper keeps its reason instead of a generic one.</summary>
+    private static bool IsDownloadStall(Exception error)
+    {
+        return error is LlamaRuntimeException { Message: DownloadStalledMessage };
     }
 
     /// <summary>
@@ -902,6 +951,23 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
     private async Task DownloadToFileAsync(Uri url, string destination, long expectedSize, AcquisitionReporter? reporter, int stepIndex, CancellationToken ct)
     {
+        // Inactivity watchdog: re-armed on every chunk, so it fires only after DownloadStallTimeout with no bytes at all (headers included).
+        using var stallCts = new CancellationTokenSource(DownloadStallTimeout, _timeProvider);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, stallCts.Token);
+        try
+        {
+            await DownloadToFileCoreAsync(url, destination, expectedSize, reporter, stepIndex, stallCts, linkedCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception) when (stallCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            // A stall is a FAILURE with a reason, never a silent cancel: the caller did not ask to stop.
+            throw new LlamaRuntimeException(DownloadStalledMessage, exception);
+        }
+    }
+
+    private async Task DownloadToFileCoreAsync(Uri url, string destination, long expectedSize, AcquisitionReporter? reporter, int stepIndex, CancellationTokenSource stallCts,
+        CancellationToken ct)
+    {
         using var response = await _httpClient
                                    .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)
                                    .ConfigureAwait(false);
@@ -928,6 +994,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             int read;
             while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
             {
+                stallCts.CancelAfter(DownloadStallTimeout);
                 written += read;
                 if (written > limit)
                 {

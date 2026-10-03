@@ -521,14 +521,12 @@ public sealed class InvocationAgentFactoryTests
     }
 
     [Test]
-    [Arguments(null)]
-    [Arguments("")]
     [Arguments("none")]
     [Arguments("on")]
     public async Task CreateAsync_ThinkingCapableWithoutGradedEffort_OmitsTheReasoningBudget(string? effort)
     {
-        // No explicit graded effort → no budget at all, preserving the unrestricted pre-budget behavior (and, for
-        // "none", reasoning is being turned off outright, where a budget would be meaningless).
+        // "none" turns reasoning off outright, where a budget would be meaningless; the binary "on" sentinel keeps the
+        // model's own reasoning unrestricted.
         var definition = new InvocationAgentDefinition
         {
             ModelId = "qwen3:8b",
@@ -545,6 +543,35 @@ public sealed class InvocationAgentFactoryTests
 
         var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
         AssertEx.False(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey));
+    }
+
+    /// <summary>
+    ///     An UNSPECIFIED effort on a thinking model gets the medium rung: with no budget a hard prompt reasoned until
+    ///     <c>finish_reason: length</c> and the turn ended with no answer at all (tester round 6, item 8).
+    /// </summary>
+    [Test]
+    [Arguments(null)]
+    [Arguments("")]
+    [Arguments("  ")]
+    public async Task CreateAsync_ThinkingCapableWithUnspecifiedEffort_CarriesTheMediumBudget(string? effort)
+    {
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3:8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = effort
+        };
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<int>(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey, out var budget));
+        AssertEx.Equal(8192, budget);
     }
 
     [Test]
@@ -632,7 +659,7 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenSupportsThinkingTrueAndNoEffort_OmitsCodexSideChannel()
     {
-        // Blank/unspecified effort: only `think` is set (no side channel). Guards the no-override byte-identical path.
+        // Blank/unspecified effort: `think` plus the default thinking budget, and no Codex side channel.
         var definition = new InvocationAgentDefinition
         {
             ModelId = "qwen3:8b",
@@ -649,7 +676,8 @@ public sealed class InvocationAgentFactoryTests
         var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
         AssertEx.True(additionalProperties.ContainsKey("think"));
         AssertEx.False(additionalProperties.ContainsKey("codex_reasoning_effort"));
-        AssertEx.Equal(expected: 1, additionalProperties.Count);
+        AssertEx.True(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey));
+        AssertEx.Equal(expected: 2, additionalProperties.Count);
     }
 
     [Test]
@@ -980,8 +1008,8 @@ public sealed class InvocationAgentFactoryTests
     [Test]
     public async Task CreateAsync_WhenSamplingAbsent_LeavesChatOptionsByteIdentical()
     {
-        // No-override guarantee: with no sampling, the factory sets only `think` (the pre-sampling behavior) and leaves
-        // every native sampling property null and adds no Ollama option keys.
+        // No-override guarantee: with no sampling, the factory sets only the reasoning keys (`think` and the default
+        // thinking budget), leaves every native sampling property null and adds no Ollama option keys.
         var definition = new InvocationAgentDefinition
         {
             ModelId = "qwen3.5:0.8b",
@@ -1007,8 +1035,9 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.False(additionalProperties.ContainsKey("min_p"));
         AssertEx.False(additionalProperties.ContainsKey("num_ctx"));
         AssertEx.True(additionalProperties.ContainsKey("think"));
-        // Only the `think` key is present (no sampling keys leaked).
-        AssertEx.Equal(expected: 1, additionalProperties.Count);
+        AssertEx.True(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey));
+        // Only the reasoning keys are present (no sampling keys leaked).
+        AssertEx.Equal(expected: 2, additionalProperties.Count);
     }
 
     [Test]

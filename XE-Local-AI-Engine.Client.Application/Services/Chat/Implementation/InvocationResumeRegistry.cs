@@ -97,6 +97,13 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         // pending slot, and an id is minted once per prompt, so first-seen-wins is exact and scoped to this consumer.
         var replayedPrompts = new HashSet<string>(StringComparer.Ordinal);
 
+        // Where the answer starts: a terminal re-states only the text after the last requested call, as the pump persists.
+        var answerBoundary = new AnswerBoundary();
+        foreach (var toolCall in toolHistory)
+        {
+            answerBoundary.Observe(toolCall);
+        }
+
         // Replay the tool-call timeline, the notices, then the content, before live items continue. That content is an
         // AssistantSnapshot applied as a REPLACEMENT, and it resets the delta offsets, repairing a gap or an overflow.
         foreach (var toolCall in toolHistory)
@@ -163,6 +170,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 yield return ToEvent(snapshotTerminalType,
                     snapshot,
                     sequence,
+                    content: answerBoundary.FinalSegment(snapshot.StreamedContent),
                     status: snapshotTerminalStatus,
                     inputTokens: snapshot.InputTokens,
                     outputTokens: snapshot.OutputTokens,
@@ -182,6 +190,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
                 if (item.ToolCall is { } toolCall)
                 {
+                    answerBoundary.Observe(toolCall);
                     yield return ToToolCallEvent(live.LatestState, toolCall, sequence++);
                     continue;
                 }
@@ -246,6 +255,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                     yield return ToEvent(terminalType,
                         state,
                         sequence,
+                        content: answerBoundary.FinalSegment(state.StreamedContent),
                         status: terminalStatus,
                         inputTokens: state.InputTokens,
                         outputTokens: state.OutputTokens,
@@ -347,6 +357,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     private ChatStreamEvent ToEvent(string type,
         InvocationState state,
         long sequence,
+        string? content = null,
         string? status = null,
         int? inputTokens = null,
         int? outputTokens = null,
@@ -362,7 +373,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             Status = status ?? MapStatus(state.Status),
             Sequence = sequence,
             OccurredAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-            Content = state.StreamedContent,
+            Content = content ?? state.StreamedContent,
             Reasoning = string.IsNullOrEmpty(state.StreamedThinkingContent) ? null : state.StreamedThinkingContent,
             Error = state.Error,
             Model = state.ModelUsed,
@@ -463,6 +474,26 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             payload,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
             sequence);
+    }
+
+    // Mirrors the accumulator's boundary: the first requested phase of each call id moves it, a repeat does not.
+    private sealed class AnswerBoundary
+    {
+        private readonly HashSet<string> _requested = new(StringComparer.Ordinal);
+        private int _boundary;
+
+        public void Observe(ToolCallLifecyclePayload toolCall)
+        {
+            if (toolCall.Phase == ToolCallLifecyclePhase.Requested && _requested.Add(toolCall.ToolCallId) && toolCall.ContentOffset > _boundary)
+            {
+                _boundary = toolCall.ContentOffset.Value;
+            }
+        }
+
+        public string FinalSegment(string content)
+        {
+            return NodeChatPartAccumulator.FinalSegment(content, _boundary);
+        }
     }
 
     private static bool TryMapTerminal(InvocationStatus status,

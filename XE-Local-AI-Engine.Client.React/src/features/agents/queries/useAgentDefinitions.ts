@@ -22,6 +22,7 @@ import { toAgentDefinition, toAgentDefinitions } from "@/features/agents/models/
 // Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
 export const agentDefinitionsQueryIds = {
 	list: "listAgentDefinitions",
+	defaultAssistantToolOffer: "getDefaultAssistantToolOffer",
 } as const;
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one agent-definition endpoint. */
@@ -54,6 +55,8 @@ export function useDefaultAssistantToolOffer(modelProfile: string | null, enable
 		...withResponseValidation(getDefaultAssistantToolOfferOptions({ query: { modelName } })),
 		select: (data) => data.toolNames ?? [],
 		enabled,
+		// The offer follows node switches that can change in another tab; never show a cached pre-switch answer on open.
+		refetchOnMount: "always",
 	});
 }
 

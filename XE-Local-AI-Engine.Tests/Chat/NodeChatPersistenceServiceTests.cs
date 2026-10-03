@@ -186,6 +186,61 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task TerminalizeAssistantMessageAsync_WithInterimTextSplitAtAToolCall_RoundTripsTheTextPartAheadOfTheToolAndOnlyTheAnswerAsContent()
+    {
+        await using var provider = await BuildProviderAsync("parts-interim-text.sqlite");
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Interim",
+            UserId = "node",
+            CreatedAtUtc = 2000
+        });
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = assistantMessageId,
+            RequestId = Guid.NewGuid()
+        };
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = assistantMessageId,
+            RequestId = correlation.RequestId,
+            CreatedAtUtc = 2001
+        });
+
+        // Two model rounds: narration, a web search, then the answer. The accumulator closes the narration at the call.
+        const string interim = "Let me search for that. ";
+        const string streamed = interim + "It is 42.";
+        var accumulator = new NodeChatPartAccumulator();
+        accumulator.AppendToolRequested("call-1", "web_search", "{}", requiresApproval: false, sequence: 3, contentOffset: interim.Length);
+        accumulator.CompleteToolCall("call-1", "web_search", "results", isError: false, sequence: 4);
+
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = correlation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 2002,
+            Content = accumulator.FinalSegment(streamed),
+            Parts = accumulator.Snapshot(streamed)
+        });
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+        var loadedParts = AssertEx.NotNull(assistant.Parts);
+
+        AssertEx.Equal("It is 42.", assistant.Content);
+        AssertEx.Equal(expected: 2, loadedParts.Count);
+        AssertEx.Equal(NodeChatMessagePartKinds.Text, loadedParts[0].Kind);
+        AssertEx.Equal(interim, loadedParts[0].Text);
+        AssertEx.Equal(expected: 3, loadedParts[0].Sequence);
+        AssertEx.Equal(NodeChatMessagePartKinds.Tool, loadedParts[1].Kind);
+        AssertEx.Equal(expected: 3, loadedParts[1].Sequence, "The text part shares its tool's sequence; the persisted order puts it first.");
+    }
+
+    [Test]
     public async Task GetConversationAsync_WhenMetadataHasNoParts_ReturnsNullPartsWithoutError()
     {
         await using var provider = await BuildProviderAsync("parts-legacy.sqlite");

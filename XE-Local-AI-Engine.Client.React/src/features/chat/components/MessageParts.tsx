@@ -1,4 +1,4 @@
-import { Stack } from "@mantine/core";
+import { Box, Stack } from "@mantine/core";
 import { memo } from "react";
 
 import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
@@ -32,8 +32,8 @@ function lastReasoningIndex(parts: ChatMessagePart[]): number {
 
 /**
  * Renders the assistant turn's ordered interleave (reasoning → tool → reasoning → …) in `sequence` order: each
- * reasoning run as its own folded `ThoughtsSection`, each tool as a state-driven `ToolCallCard`, and any mid-turn
- * text as markdown. The single source of truth shared by the live stream and the post-reload render.
+ * reasoning run as its own folded `ThoughtsSection`, each tool as a state-driven `ToolCallCard`, and the interim
+ * text streamed before a tool call as muted markdown. The single source of truth shared by the live stream and the post-reload render.
  */
 export const MessageParts = memo(function MessageParts({
 	parts,
@@ -77,7 +77,12 @@ export const MessageParts = memo(function MessageParts({
 					return <ChatNoticeRow key={part.id} part={part} />;
 				}
 
-				return <ChatMarkdown key={part.id} content={part.text} />;
+				// Interim narration before a tool call ("Let me search for …"): muted, so the answer below stands out.
+				return (
+					<Box key={part.id} c="dimmed" data-part-kind="text">
+						<ChatMarkdown content={part.text} />
+					</Box>
+				);
 			})}
 		</Stack>
 	);

@@ -25,7 +25,7 @@ public sealed partial class LlamaCppBinaryManager
     /// </summary>
     /// <remarks>
     ///     <b>Silence is the default.</b> A cache-hit serve happens on EVERY model spawn, so an acquisition that acquired
-    ///     nothing emits nothing: <see cref="Complete" /> and <see cref="Fail" /> are suppressed unless at least one
+    ///     nothing emits nothing: <see cref="Complete" />, <see cref="Cancel" /> and <see cref="Fail" /> are suppressed unless at least one
     ///     non-terminal <see cref="Report" /> already went out, or the hub would carry a <c>Completed</c> per spawn and
     ///     the banner would flicker on a warm cache. <b>Sanitization:</b> <see cref="LlamaRuntimeException" /> messages
     ///     are user-safe by contract; any other exception is collapsed to a generic reason, never surfaced verbatim.
@@ -92,6 +92,29 @@ public sealed partial class LlamaCppBinaryManager
                 CompletedBytes = null,
                 TotalBytes = null,
                 StepIndex = _stepCount,
+                StepCount = _stepCount
+            });
+        }
+
+        /// <summary>
+        ///     Closes a reported acquisition that its caller cancelled by returning the snapshot to <see cref="RuntimeAcquisitionPhase.Idle" />,
+        ///     which hides the banner. Never <see cref="RuntimeAcquisitionPhase.Failed" />: nothing broke. Silent when nothing was reported.
+        /// </summary>
+        public void Cancel()
+        {
+            if (_registry is null || !_reported)
+            {
+                return;
+            }
+
+            _registry.Report(new RuntimeAcquisitionUpdate
+            {
+                Phase = RuntimeAcquisitionPhase.Idle,
+                Variant = _variant.ToString(),
+                Tag = _tag,
+                CompletedBytes = null,
+                TotalBytes = null,
+                StepIndex = 1,
                 StepCount = _stepCount
             });
         }

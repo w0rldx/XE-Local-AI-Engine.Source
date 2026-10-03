@@ -13,6 +13,7 @@ import {
 	imageGenerationFormSchema,
 	isTerminalStatus,
 	keepLatestImageJobProgress,
+	toImageJobProgressView,
 	toImageJobStatus,
 	toImageJobView,
 	toImageModelView,
@@ -111,6 +112,7 @@ function progress(overrides: Partial<ImageJobProgressView>): ImageJobProgressVie
 		totalSteps: null,
 		secondsPerIteration: null,
 		estimatedRemainingMs: null,
+		decodeStartedAtUtc: null,
 		...overrides,
 	};
 }
@@ -138,7 +140,13 @@ describe("toProgressDisplay", () => {
 			progress({ generationPhase: "Decoding", step: 20, totalSteps: 20, estimatedRemainingMs: 0 }),
 		);
 
-		expect(display).toEqual({ kind: "finishing" });
+		expect(display).toEqual({ kind: "finishing", decodeStartedAtUtc: null });
+	});
+
+	it("carries the decode start into the finishing display so the card can count up from it", () => {
+		const display = toProgressDisplay(progress({ generationPhase: "Decoding", decodeStartedAtUtc: 1_000 }));
+
+		expect(display).toEqual({ kind: "finishing", decodeStartedAtUtc: 1_000 });
 	});
 
 	it("withholds the estimate for a job still waiting behind another", () => {
@@ -159,7 +167,27 @@ describe("toProgressDisplay", () => {
 	});
 });
 
+describe("toImageJobProgressView", () => {
+	const push = { jobId: "job-1", phase: "Generating", seq: 3, occurredAtUtc: 5_000 };
+
+	it("stamps the decode start from the push that reports Decoding", () => {
+		expect(toImageJobProgressView({ ...push, generationPhase: "Decoding" }).decodeStartedAtUtc).toBe(5_000);
+	});
+
+	it("has no decode start outside Decoding", () => {
+		expect(toImageJobProgressView({ ...push, generationPhase: "Sampling" }).decodeStartedAtUtc).toBeNull();
+	});
+});
+
 describe("keepLatestImageJobProgress", () => {
+	// sd-server prints nothing during decode, but any repeated Decoding push must not reset the counter to zero.
+	it("keeps the first decode start across later Decoding pushes", () => {
+		const first = progress({ seq: 7, generationPhase: "Decoding", decodeStartedAtUtc: 1_000 });
+		const later = progress({ seq: 8, generationPhase: "Decoding", decodeStartedAtUtc: 9_000 });
+
+		expect(keepLatestImageJobProgress(first, later)).toEqual({ ...later, decodeStartedAtUtc: 1_000 });
+	});
+
 	it("keeps the cached state when a push is not newer", () => {
 		const current = progress({ seq: 5, step: 10 });
 

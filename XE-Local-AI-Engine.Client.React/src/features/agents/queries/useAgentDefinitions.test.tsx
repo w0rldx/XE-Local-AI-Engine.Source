@@ -6,9 +6,10 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock generated query/mutation factories to isolate the hook while retaining validation and mapping.
-const { listMock, toolCapableMock, createMutationFn, updateMutationFn, deleteMutationFn } = vi.hoisted(() => ({
+const { listMock, toolCapableMock, offerMock, createMutationFn, updateMutationFn, deleteMutationFn } = vi.hoisted(() => ({
 	listMock: vi.fn(),
 	toolCapableMock: vi.fn(),
+	offerMock: vi.fn(),
 	createMutationFn: vi.fn(),
 	updateMutationFn: vi.fn(),
 	deleteMutationFn: vi.fn(),
@@ -17,6 +18,7 @@ const { listMock, toolCapableMock, createMutationFn, updateMutationFn, deleteMut
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	listAgentDefinitionsOptions: listMock,
 	getToolCapableModelsOptions: toolCapableMock,
+	getDefaultAssistantToolOfferOptions: offerMock,
 	createAgentDefinitionMutation: vi.fn(() => ({ mutationFn: createMutationFn })),
 	updateAgentDefinitionMutation: vi.fn(() => ({ mutationFn: updateMutationFn })),
 	deleteAgentDefinitionMutation: vi.fn(() => ({ mutationFn: deleteMutationFn })),
@@ -27,6 +29,7 @@ import {
 	agentDefinitionsQueryIds,
 	useAgentDefinitions,
 	useCreateAgentDefinition,
+	useDefaultAssistantToolOffer,
 	useDeleteAgentDefinition,
 	useToolCapableModels,
 	useUpdateAgentDefinition,
@@ -148,6 +151,41 @@ describe("agent definition reads", () => {
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
 		expect(result.current.data).toEqual(["qwen3:8b", "llama3.1:8b"]);
+	});
+});
+
+describe("default assistant tool offer", () => {
+	afterEach(() => {
+		vi.clearAllMocks();
+	});
+
+	// The offer follows node switches (web access) that a Node Settings save flips; a cached answer inside the app-wide
+	// staleTime must never be what the next open of the Default Assistant shows.
+	it("refetches on every mount and on the node-settings save invalidation, for every model variant", async () => {
+		const offerFetch = vi.fn(async () => ({ toolNames: ["web_search"] }));
+		offerMock.mockImplementation((options: { query: { modelName: string | null } }) => ({
+			// The generated key shape: operation id plus the request options.
+			queryKey: [{ _id: agentDefinitionsQueryIds.defaultAssistantToolOffer, baseURL: "", query: options.query }],
+			queryFn: offerFetch,
+		}));
+		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } });
+		function Wrapper({ children }: { children: ReactNode }) {
+			return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+		}
+
+		const first = renderHook(() => useDefaultAssistantToolOffer("qwen3:8b", true), { wrapper: Wrapper });
+		await waitFor(() => expect(first.result.current.data).toEqual(["web_search"]));
+		first.unmount();
+		expect(offerFetch).toHaveBeenCalledTimes(1);
+
+		const second = renderHook(() => useDefaultAssistantToolOffer("qwen3:8b", true), { wrapper: Wrapper });
+		await waitFor(() => expect(offerFetch).toHaveBeenCalledTimes(2));
+
+		await queryClient.invalidateQueries({
+			queryKey: agentDefinitionsInvalidationKey(agentDefinitionsQueryIds.defaultAssistantToolOffer),
+		});
+		expect(offerFetch).toHaveBeenCalledTimes(3);
+		second.unmount();
 	});
 });
 
