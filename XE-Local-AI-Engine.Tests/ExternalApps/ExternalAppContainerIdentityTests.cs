@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.ExternalApps;
 
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     One case per daemon mode of the identity table, plus the operator override winning on every one of them. The
@@ -86,20 +87,28 @@ public sealed class ExternalAppContainerIdentityTests
     ///     Linux it answers the engine's own effective id, which is what a rootful daemon maps straight through.
     /// </summary>
     [Test]
+    [ExcludeOn(OS.Linux)]
     public void ReadHostUserId_IsTheDesktopDefaultOffLinux()
     {
         AssertEx.Equal(expected: 1000, ExternalAppContainerIdentity.DesktopDefaultId);
-
-        if (OperatingSystem.IsLinux())
-        {
-            AssertEx.True(ExternalAppContainerIdentity.ReadHostUserId() >= 0, "A Linux effective uid is never negative.");
-            AssertEx.True(ExternalAppContainerIdentity.ReadHostGroupId() >= 0, "A Linux effective gid is never negative.");
-            return;
-        }
-
         AssertEx.Equal(ExternalAppContainerIdentity.DesktopDefaultId, ExternalAppContainerIdentity.ReadHostUserId());
         AssertEx.Equal(ExternalAppContainerIdentity.DesktopDefaultId, ExternalAppContainerIdentity.ReadHostGroupId());
     }
+
+    /// <summary>The Linux half: the reader answers the process's own effective ids, read independently from procfs.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public void ReadHostUserId_IsTheEffectiveIdOnLinux()
+    {
+        AssertEx.Equal(ProcSelfEffectiveId("Uid:"), ExternalAppContainerIdentity.ReadHostUserId());
+        AssertEx.Equal(ProcSelfEffectiveId("Gid:"), ExternalAppContainerIdentity.ReadHostGroupId());
+    }
+
+    // /proc/self/status lists "Uid:\treal\teffective\tsaved\tfs"; the effective id is the second column.
+    private static int ProcSelfEffectiveId(string field) =>
+        int.Parse(File.ReadLines("/proc/self/status").First(line => line.StartsWith(field, StringComparison.Ordinal))
+                .Split('\t', StringSplitOptions.RemoveEmptyEntries)[2],
+            System.Globalization.CultureInfo.InvariantCulture);
 
     private static int HostUser()
     {

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ExternalApps;
 
+using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
@@ -7,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     The no-follow rules and the reuse-or-replace materialisation. Both exist because lexical confinement is not
@@ -53,18 +55,14 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
     }
 
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Prepare_OnLinux_NarrowsCreatedDirectoriesToOwnerOnly()
     {
         var layout = CreateLayout();
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", storage: [new ApplicationStorage("data", "/data")])]);
 
         var paths = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
-
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
-        {
-            AssertEx.True(Directory.Exists(paths.InstanceRoot), "Windows has no Unix mode; the directory must still be created.");
-            return;
-        }
 
         var mode = File.GetUnixFileMode(paths.VolumePath("app", "data"));
         AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, mode);
@@ -361,16 +359,12 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
     ///     image reads it as the identity the bind mount already belongs to.
     /// </summary>
     [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
     public async Task Materialize_OnLinux_WritesTheAssetOwnerOnly()
     {
         var layout = CreateLayout();
         var paths = await layout.PrepareAsync(_instanceId, ManifestWithAsset("settings.yml", "server: on"), CancellationToken.None);
-
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
-        {
-            AssertEx.True(File.Exists(paths.FilePath("app", "settings.yml")), "Windows has no Unix mode; the file must still be written.");
-            return;
-        }
 
         AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(paths.FilePath("app", "settings.yml")));
     }

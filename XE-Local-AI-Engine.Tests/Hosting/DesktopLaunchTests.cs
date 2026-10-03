@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.Mcp;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -309,12 +310,15 @@ public sealed class DesktopLaunchTests
     {
         const string url = "http://127.0.0.1:5005/";
 
-        // The launch action throws (e.g. xdg-open absent); OpenBrowser must swallow it and not propagate.
-        BrowserLauncher.OpenBrowser(url, isWindows: false, NullLogger.Instance,
-            static _ => throw new InvalidOperationException("xdg-open not found"));
+        var logger = new CapturingLogger<DesktopLaunchTests>();
 
-        // Reaching here without an exception is the assertion: a failed launch does not abort startup.
-        AssertEx.True(true);
+        // The launch action throws (e.g. xdg-open absent); OpenBrowser must swallow it and not propagate.
+        AssertEx.DoesNotThrow(() => BrowserLauncher.OpenBrowser(url, isWindows: false, logger,
+                static _ => throw new InvalidOperationException("xdg-open not found")),
+            "a failed browser launch must not abort startup");
+
+        // ...and must surface the URL so the user can open it by hand.
+        AssertEx.Contains(logger.AllText, $"Could not open the default browser automatically. Open {url} manually");
     }
 
     private sealed class FakeServerAddressesFeature : IServerAddressesFeature

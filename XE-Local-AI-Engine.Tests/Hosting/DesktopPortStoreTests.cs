@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Hosting;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -145,10 +146,13 @@ public sealed class DesktopPortStoreTests
         // A non-existent data directory must not abort startup; the write failure is swallowed (best-effort).
         var missingDirectory = Path.Combine(Path.GetTempPath(), $"xe-port-missing-{Guid.NewGuid():N}");
 
-        DesktopPortStore.Persist(missingDirectory, 50000, NullLogger.Instance);
+        var logger = new CapturingLogger<DesktopPortStoreTests>();
 
-        // Reaching here without an exception is the assertion.
-        AssertEx.True(true);
+        AssertEx.DoesNotThrow(() => DesktopPortStore.Persist(missingDirectory, 50000, logger),
+            "a port-file write failure must not abort startup");
+
+        AssertEx.Contains(logger.AllText, "Could not persist the desktop loopback port");
+        AssertEx.False(Directory.Exists(missingDirectory), "Persist must not create the data directory as a side effect.");
     }
 
     [Test]

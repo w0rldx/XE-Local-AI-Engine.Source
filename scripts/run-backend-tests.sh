@@ -102,7 +102,7 @@
 #
 # Exit codes:
 #   0    — every project green
-#   1    — one or more projects failed, or produced no MTP run summary (hollow gate)
+#   1    — one or more projects failed, produced no MTP run summary, or succeeded nothing (HOLLOW: all skipped)
 #   2    — usage error / nothing enrolled
 #   69   — could not acquire the build lock (from with-build-lock.sh); nothing was run
 #   75   — CONTAMINATED: assemblies changed under a run; the result is void, re-run it. Never a
@@ -335,9 +335,10 @@ run_sibling() {
   # its environment would let anything it spawns believe it holds a lock that it does not.
   env -u XE_BUILD_LOCK_HELD "${guard[@]}" dotnet test "$project" --configuration Release --no-build \
     --maximum-parallel-tests "$width" "${report_args[@]}" >"$log" 2>&1
-  local rc=$? p f
+  local rc=$? p f s
   p="$(grep -oE 'succeeded: *[0-9]+' "$log" | grep -oE '[0-9]+' | tail -1)"; p="${p:-0}"
   f="$(grep -oE 'failed: *[0-9]+' "$log" | grep -oE '[0-9]+' | tail -1)"; f="${f:-0}"
+  s="$(grep -oE 'skipped: *[0-9]+' "$log" | grep -oE '[0-9]+' | tail -1)"; s="${s:-0}"
   # Hollow-gate guard: MTP always prints a "Passed!"/"Failed!" run summary for a suite that actually
   # ran. A suite that enrolled nothing prints none and still exits 0 — never count that as green.
   if [[ "$rc" != 75 ]] && ! grep -qE 'Passed!|Failed!' "$log"; then
@@ -345,7 +346,7 @@ run_sibling() {
          "Check project names or IsTestingPlatformApplication." >&2
     rc=90
   fi
-  echo "$p $f $rc $((EPOCHSECONDS-t0))" >"$LANE_DIR/$module.result"
+  echo "$p $f $rc $((EPOCHSECONDS-t0)) $s" >"$LANE_DIR/$module.result"
 }
 
 run_batched_module() {
@@ -356,10 +357,11 @@ run_batched_module() {
   local -a lane_env=(NO_BUILD=1)
   [[ -n "${COVERAGE_DIR:-}" ]] && lane_env+=("COVERAGE_DIR=$COVERAGE_DIR/$module")
   env "${lane_env[@]}" "$REPO/scripts/run-tests-memory-safe.sh" >"$log" 2>&1
-  local rc=$? p f
+  local rc=$? p f s
   p="$(grep -oE 'TOTAL: pass=[0-9]+' "$log" | grep -oE '[0-9]+' | tail -1)"; p="${p:-0}"
   f="$(grep -oE 'fail=[0-9]+' "$log" | grep -oE '[0-9]+' | tail -1)"; f="${f:-0}"
-  echo "$p $f $rc $((EPOCHSECONDS-t0))" >"$LANE_DIR/$module.result"
+  s="$(grep -oE 'skip=[0-9]+' "$log" | grep -oE '[0-9]+' | tail -1)"; s="${s:-0}"
+  echo "$p $f $rc $((EPOCHSECONDS-t0)) $s" >"$LANE_DIR/$module.result"
 }
 
 # Sized here — inside the lock and after the build — so the reading is the RAM free when the lanes
@@ -420,25 +422,32 @@ for module in "${LANES[@]}"; do wait "${LANE_PIDS[$module]}"; done
 
 CONTAMINATED=0
 FAILED=()
+TOTAL_SKIP=0
 echo "======================================================================"
-printf '%-46s %7s %7s %8s %6s\n' "PROJECT" "PASS" "FAIL" "WALL" "EXIT"
+printf '%-46s %7s %7s %7s %8s %6s\n' "PROJECT" "PASS" "FAIL" "SKIP" "WALL" "EXIT"
 for module in "${LANES[@]}"; do
   rfile="$LANE_DIR/$module.result"
   if [[ ! -f "$rfile" ]]; then
-    printf '%-46s %7s %7s %8s %6s\n' "$module" "?" "?" "?" "no-result"
+    printf '%-46s %7s %7s %7s %8s %6s\n' "$module" "?" "?" "?" "?" "no-result"
     FAILED+=("$module(no-result)")
     continue
   fi
-  read -r p f rc dur <"$rfile"
-  printf '%-46s %7s %7s %7ss %6s\n' "$module" "$p" "$f" "$dur" "$rc"
+  read -r p f rc dur s <"$rfile"
+  TOTAL_SKIP=$((TOTAL_SKIP+s))
+  printf '%-46s %7s %7s %7s %7ss %6s\n' "$module" "$p" "$f" "$s" "$dur" "$rc"
   case "$rc" in
-    0)  ;;
+    # A summary with nothing succeeded: every test skipped. Never green.
+    0)  if [[ "$p" -eq 0 ]]; then
+          echo "HOLLOW: all $s tests skipped in $module (succeeded 0)" >&2
+          FAILED+=("$module(hollow)")
+        fi ;;
     75) CONTAMINATED=1 ;;
     90) FAILED+=("$module(no-summary)") ;;
     *)  FAILED+=("$module(exit=$rc)") ;;
   esac
 done
 echo "----------------------------------------------------------------------"
+echo "Skipped (all lanes): $TOTAL_SKIP"
 echo "Reports: $RESULTS_ROOT"
 
 if [[ "$CONTAMINATED" == 1 ]]; then

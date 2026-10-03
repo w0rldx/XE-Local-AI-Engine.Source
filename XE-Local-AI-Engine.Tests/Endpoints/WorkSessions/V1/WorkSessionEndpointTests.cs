@@ -380,40 +380,6 @@ public sealed class WorkSessionEndpointTests
     }
 
     [Test]
-    public async Task ArtifactResponses_NeverCarryTheBlobPath()
-    {
-        const string ManagedReference = "work-sessions/11111111/22222222.bin";
-        var service = SubstituteWithEmptyFeeds();
-        service.ListArtifactsAsync(SessionId, 0, Arg.Any<CancellationToken>()).Returns([Artifact()]);
-        service.GetArtifactAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact());
-        service.ReadArtifactContentAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>())
-               .Returns(new WorkSessionArtifactContent
-               {
-                   Artifact = Artifact(),
-                   Content = "# report",
-                   IsBase64 = false
-               });
-        await using var factory = EnabledFactory(service);
-
-        using var listResponse = await SendAsync(factory, "GET", $"{Session}/artifacts");
-        var listJson = await listResponse.Content.ReadAsStringAsync();
-        using var contentResponse = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content");
-        var contentJson = await contentResponse.Content.ReadAsStringAsync();
-
-        AssertEx.Equal(HttpStatusCode.OK, listResponse.StatusCode);
-        AssertEx.Equal(HttpStatusCode.OK, contentResponse.StatusCode);
-        foreach (var json in new[]
-                 {
-                     listJson,
-                     contentJson
-                 })
-        {
-            AssertEx.False(json.Contains(ManagedReference, StringComparison.Ordinal));
-            AssertEx.False(json.Contains("managedReference", StringComparison.OrdinalIgnoreCase));
-        }
-    }
-
-    [Test]
     public async Task ArtifactContent_WhenTheBytesNoLongerVerify_ReturnsNotFound()
     {
         var service = SubstituteWithEmptyFeeds();

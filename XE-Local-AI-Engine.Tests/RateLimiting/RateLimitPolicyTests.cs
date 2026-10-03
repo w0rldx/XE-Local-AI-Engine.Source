@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using TUnit.Core.Interfaces;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -200,9 +201,9 @@ public sealed class RateLimitPolicyTests
     {
         using var client = Host.Factory.CreateClient();
 
-        // The rate limiter runs BEFORE authentication, so an unauthenticated request still forces the middleware to
-        // resolve the endpoint's policy. An unregistered policy surfaces there as a 500; a 401 proves it resolved.
-        using var mcpRequest = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/mcp")
+        // Rate limiting runs BEFORE auth: an unregistered policy is a 500, the exact 401 proves route + policy (not a 404).
+        // The bearer keys the MCP probe to the key-holder bucket, not the anonymous one another test deliberately exhausts.
+        using var mcpRequest = new HttpRequestMessage(HttpMethod.Post, $"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Mcp.ServerEndpoint}")
         {
             Content = JsonContent.Create(new
             {
@@ -211,13 +212,14 @@ public sealed class RateLimitPolicyTests
                 method = "tools/list"
             })
         };
+        mcpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "xemcp_not-a-real-key");
         using var mcpResponse = await client.SendAsync(mcpRequest);
-        AssertEx.NotEqual(HttpStatusCode.InternalServerError,
+        AssertEx.Equal(HttpStatusCode.Unauthorized,
             mcpResponse.StatusCode,
             $"{NodeAuthRateLimits.McpPolicy} must resolve; a 500 means it is referenced but not registered.");
 
-        using var proxyResponse = await client.GetAsync(new Uri("/api/local/v1/proxy/v1/models", UriKind.Relative));
-        AssertEx.NotEqual(HttpStatusCode.InternalServerError,
+        using var proxyResponse = await client.GetAsync(new Uri($"/{LocalApiRoutes.Prefix}/proxy/v1/models", UriKind.Relative));
+        AssertEx.Equal(HttpStatusCode.Unauthorized,
             proxyResponse.StatusCode,
             $"{NodeAuthRateLimits.LocalModelProxyPolicy} must resolve; a 500 means it is referenced but not registered.");
     }

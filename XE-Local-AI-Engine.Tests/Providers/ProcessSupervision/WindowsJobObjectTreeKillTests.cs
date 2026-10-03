@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Providers.ProcessSupervision;
 
 using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -140,21 +139,21 @@ public sealed class WindowsJobObjectTreeKillTests
     }
 
     /// <summary>
-    ///     Inert on a normal suite run. Only when <see cref="HardKillMarkerVariable" /> is set — which happens solely on
-    ///     the child host the hard-kill test spawns — does it contain a descendant, publish its PID, and then park,
-    ///     waiting to be terminated. It deliberately never disposes the handle: the point is that no managed cleanup
-    ///     runs.
+    ///     The child host's entry point, not a test of its own. It stays a <c>[Test]</c> only because the hard-kill
+    ///     test reaches it through <c>--treenode-filter</c>; on every other run it reports a visible skip rather than a
+    ///     pass. Only when <see cref="HardKillMarkerVariable" /> is set — which happens solely on the child host the
+    ///     hard-kill test spawns — does it contain a descendant, publish its PID, and then park, waiting to be
+    ///     terminated. It deliberately never disposes the handle: the point is that no managed cleanup runs.
     /// </summary>
     [Test]
+    [RunOn(OS.Windows)]
+    [SupportedOSPlatform("windows")]
     public async Task HardKillHelper_ContainsDescendantThenWaitsToBeKilled()
     {
         var markerFile = Environment.GetEnvironmentVariable(HardKillMarkerVariable);
-
-        // Not a platform skip: this is the helper's entry point, and it only acts inside the child host the hard-kill
-        // test spawns with the marker variable set. Returning is what it does on every other run, by design.
-        if (string.IsNullOrWhiteSpace(markerFile) || !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (string.IsNullOrWhiteSpace(markerFile))
         {
-            return;
+            Skip.Test($"Child-host helper for {nameof(HardKillOfOwningProcess_ReapsDescendants_NoOrphan)}; it runs only with {HardKillMarkerVariable} set.");
         }
 
         _ = ContainDescendantSpawner(markerFile);

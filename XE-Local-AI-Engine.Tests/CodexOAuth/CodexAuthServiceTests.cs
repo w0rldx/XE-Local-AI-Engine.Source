@@ -133,7 +133,9 @@ public sealed class CodexAuthServiceTests : IDisposable
 
         await DeliverCallbackAsync(options, "code=auth-code-xyz&state=not-the-expected-state");
 
-        await AssertEx.ThrowsAsync<CodexAuthException>(() => handle.Completion);
+        var ex = await AssertEx.ThrowsAsync<CodexAuthException>(() => handle.Completion);
+        AssertEx.Contains(ex.Message, "state did not match");
+        AssertEx.Empty(handler.Requests, "a mismatched state must never reach the token exchange");
     }
 
     [Test]

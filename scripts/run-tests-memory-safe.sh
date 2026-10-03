@@ -151,7 +151,7 @@
 #
 # Exit codes:
 #   0   — every namespace batch green
-#   1   — one or more batches had failures
+#   1   — one or more batches had failures, no summary, or nothing succeeded (HOLLOW: all skipped)
 #   69  — could not acquire the build lock (from scripts/with-build-lock.sh); nothing was run
 #   75  — CONTAMINATED: the build output changed mid-run; the result is void, re-run it
 set -uo pipefail
@@ -287,23 +287,23 @@ run_ns() {
     avail="$(free -m | awk '/^Mem:/{print $7}')"
     if [[ "${avail:-9999}" -lt "$AVAIL_FLOOR" ]]; then
       echo "   !! SAFETY-KILL $ns: avail ${avail}MB < ${AVAIL_FLOOR}MB (rss ${rss}KB)"; kill -9 "$pid" 2>/dev/null
-      echo "0 1 $peak oom $((EPOCHSECONDS-t0)) 0 0" >"$RESULTS_DIR/$ns.result"; rm -f "$out"
+      echo "0 1 $peak oom $((EPOCHSECONDS-t0)) 0 0 0" >"$RESULTS_DIR/$ns.result"; rm -f "$out"
       release_slot "$slot"; return
     fi
     sleep 1
   done
   wait "$pid"; local rc=$?
-  local p f
+  local p f s
   p="$(grep -oE 'succeeded: *[0-9]+' "$out" | grep -oE '[0-9]+' | tail -1)"; p="${p:-0}"
   f="$(grep -oE 'failed: *[0-9]+' "$out" | grep -oE '[0-9]+' | tail -1)"; f="${f:-0}"
+  s="$(grep -oE 'skipped: *[0-9]+' "$out" | grep -oE '[0-9]+' | tail -1)"; s="${s:-0}"
   # Hollow-gate guard, same semantics as the CI loop: MTP always prints a "Passed!"/"Failed!" run
   # summary for a batch that actually ran. A batch that enrolled nothing — or died before the
   # summary — prints none, and must never be counted as green just because pass=0 fail=0.
-  # Two limits worth knowing: it fires per UNIT, so under TEST_GROUPS that is per group and not per
-  # namespace; and an all-SKIPPED unit does print "Passed!" and reads green either way (the
-  # compensating control there is XE_REQUIRE_DOCKER_TESTS=1).
+  # It fires per UNIT, so under TEST_GROUPS that is per group and not per namespace. An all-SKIPPED
+  # unit does print "Passed!", so the verdict below separately requires succeeded > 0 (HOLLOW).
   local sum=0; grep -qE 'Test run summary: (Passed|Failed)!' "$out" && sum=1
-  printf "   %-52s pass=%-4s fail=%-3s peakRSS=%sMB exit=%s dur=%ss\n" "$ns" "$p" "$f" "$((peak/1024))" "$rc" "$((EPOCHSECONDS-t0))"
+  printf "   %-52s pass=%-4s fail=%-3s skip=%-3s peakRSS=%sMB exit=%s dur=%ss\n" "$ns" "$p" "$f" "$s" "$((peak/1024))" "$rc" "$((EPOCHSECONDS-t0))"
   if [[ "$f" -gt 0 ]]; then grep -E 'failed|error' "$out" | grep -viE 'failed: 0' | head -3 >"$RESULTS_DIR/$ns.fails"; fi
   rm -f "$out"
   # A unit whose collector wrote no report (or an empty one) would otherwise be merged as silently
@@ -319,7 +319,7 @@ run_ns() {
     # once).
     rm -f "$COVERAGE_DIR/$ns"/_*/In/*/coverage.cobertura.xml
   fi
-  echo "$p $f $peak $rc $((EPOCHSECONDS-t0)) $sum $cov" >"$RESULTS_DIR/$ns.result"
+  echo "$p $f $peak $rc $((EPOCHSECONDS-t0)) $sum $cov $s" >"$RESULTS_DIR/$ns.result"
   release_slot "$slot"
 }
 
@@ -539,13 +539,13 @@ for unit in "${UNITS[@]}"; do
 done
 wait
 
-TOTAL_PASS=0; TOTAL_FAIL=0; FAILED=(); PEAK_ALL=0
+TOTAL_PASS=0; TOTAL_FAIL=0; TOTAL_SKIP=0; FAILED=(); PEAK_ALL=0
 for unit in "${UNITS[@]}"; do
   ns="${unit%%$'\t'*}"
   rfile="$RESULTS_DIR/$ns.result"
   if [[ ! -f "$rfile" ]]; then FAILED+=("$ns(no-result)"); continue; fi
-  read -r p f peak rc _dur sum cov <"$rfile"
-  TOTAL_PASS=$((TOTAL_PASS+p)); TOTAL_FAIL=$((TOTAL_FAIL+f))
+  read -r p f peak rc _dur sum cov s <"$rfile"
+  TOTAL_PASS=$((TOTAL_PASS+p)); TOTAL_FAIL=$((TOTAL_FAIL+f)); TOTAL_SKIP=$((TOTAL_SKIP+s))
   [[ "$peak" -gt "$PEAK_ALL" ]] && PEAK_ALL="$peak"
   if [[ "$rc" == "oom" ]]; then
     FAILED+=("$ns(oom)")
@@ -558,6 +558,10 @@ for unit in "${UNITS[@]}"; do
   elif [[ "$rc" != 0 ]]; then
     # A reporter/process error after partial successes must not read as green.
     FAILED+=("$ns(exit=$rc)")
+  elif [[ "$p" -eq 0 ]]; then
+    # A summary with nothing succeeded: every test skipped (a broken capability probe, say). Never green.
+    echo "HOLLOW: all $s tests skipped in $ns (succeeded 0)" >&2
+    FAILED+=("$ns(hollow)")
   elif [[ "$cov" != 1 ]]; then
     FAILED+=("$ns(no-coverage-report)")
   fi
@@ -567,13 +571,13 @@ done
 if [[ -n "$GUARD_STATE" ]]; then
   if ! "$REPO/scripts/assembly-guard.sh" verify "$GUARD_STATE"; then
     echo "======================================================================"
-    echo "RESULT VOID (pass=$TOTAL_PASS fail=$TOTAL_FAIL was measured against assemblies that changed)"
+    echo "RESULT VOID (pass=$TOTAL_PASS fail=$TOTAL_FAIL skip=$TOTAL_SKIP was measured against assemblies that changed)"
     exit 75
   fi
 fi
 
 echo "======================================================================"
-echo "TOTAL: pass=$TOTAL_PASS fail=$TOTAL_FAIL  peakRSS(any batch)=$((PEAK_ALL/1024))MB"
+echo "TOTAL: pass=$TOTAL_PASS fail=$TOTAL_FAIL skip=$TOTAL_SKIP  peakRSS(any batch)=$((PEAK_ALL/1024))MB"
 echo "(pass may exceed the ~4.9k unique tests: a few tests live in a parent namespace also matched by a child batch.)"
 if [[ ${#FAILED[@]} -gt 0 ]]; then echo "FAILED namespaces: ${FAILED[*]}"; exit 1; fi
 echo "ALL NAMESPACE BATCHES GREEN"

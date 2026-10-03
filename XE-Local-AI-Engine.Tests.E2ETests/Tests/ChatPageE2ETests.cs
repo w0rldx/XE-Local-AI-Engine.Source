@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Tests;
 
+using System.Runtime.CompilerServices;
 using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
@@ -34,6 +35,18 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
     // Placeholder value comes from the en.json key "pages.chat.inputPlaceholder".
     private const string ChatInputPlaceholder = "Type your message";
     private const string SendButtonTestId = "chat-send-button";
+    private const string GatedAnswerText = "this answer must never arrive";
+
+    // Holds the fake's answer open until the after-hook releases it; only the cancel test installs it.
+    private readonly TaskCompletionSource<bool> _answerGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    [After(Test)]
+    public void ResetChatScript()
+    {
+        // Release first so a parked FakeOllama request never holds a connection on the shared session.
+        _answerGate.TrySetResult(true);
+        Factory.FakeOllamaState.ChatScript = null;
+    }
 
     /// <summary>
     ///     Navigates to /chat and waits until the chat input area is visible and the
@@ -185,61 +198,35 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
     [Category("Page")]
     public async Task Chat_Cancel_While_Streaming_Reverts_SendButton_To_Send()
     {
+        // The fake's answer parks on a gate this test never opens, so the stream is in flight for as long as the test
+        // needs: Stop is always observable, and only the cancel can end the turn.
+        Factory.FakeOllamaState.ChatScript = _ => GatedAnswerAsync(_answerGate.Task, CancellationToken.None);
         var (chatInput, sendButton) = await NavigateAndWaitForChatAsync();
 
-        // FakeOllama's default chat script yields several chunks with a small delay, which
-        // gives us enough time to click Stop before it finishes.  If FakeOllama is
-        // instantaneous the button may already show "Send" again — that is an acceptable
-        // terminal state (stream already completed).
         await chatInput.FillAsync("Stream then cancel");
         await Expect(sendButton).ToBeEnabledAsync();
-
         await sendButton.ClickAsync();
 
-        // Wait up to 3 s for the button to enter the streaming ("Stop") state.
-        // If it never enters that state the stream completed before we could cancel,
-        // which still satisfies the test's post-condition (no active stream).
-        var streamingStarted = false;
-        try
+        await Expect(sendButton).ToHaveTextAsync("Stop", new LocatorAssertionsToHaveTextOptions
         {
-            await Expect(sendButton).ToHaveTextAsync("Stop", new LocatorAssertionsToHaveTextOptions
-            {
-                Timeout = 3000
-            });
-            streamingStarted = true;
-        }
-        catch (PlaywrightException)
-        {
-            // Stream completed before we could observe the Stop state — fall through.
-        }
+            Timeout = 10000
+        });
+        await sendButton.ClickAsync();
 
-        if (streamingStarted)
-        {
-            // Attempt to cancel by clicking the Stop button. Under parallel load the Stop button
-            // may be briefly disabled (React isSending race) or already transitioned to the
-            // disabled "Send" state. Swallow any exception — the post-condition below covers
-            // both "cancelled" and "completed naturally" outcomes.
-            // Note: Playwright's TimeoutException does not inherit PlaywrightException in all
-            // versions; catch Exception to be safe.
-            try
-            {
-                await sendButton.ClickAsync(new LocatorClickOptions
-                {
-                    Timeout = 2000
-                });
-            }
-            catch (Exception)
-            {
-                // Stream finished or button not interactable before cancel — acceptable.
-            }
-        }
-
-        // Regardless of whether we cancelled or the stream finished naturally, the button
-        // must ultimately show "Send" (isSending = false), proving no active stream remains.
+        // The cancel, not a natural completion, ended the turn: the button is back to Send and the parked answer never
+        // reached the page.
         await Expect(sendButton).ToHaveTextAsync("Send", new LocatorAssertionsToHaveTextOptions
         {
             Timeout = 10000
         });
+        await Expect(Page.GetByText(GatedAnswerText)).ToHaveCountAsync(0);
+    }
+
+    // ChatScript hands over no token, so the [After(Test)] hook releasing the gate is what frees a parked request.
+    private static async IAsyncEnumerable<string> GatedAnswerAsync(Task gate, [EnumeratorCancellation] CancellationToken ct)
+    {
+        await gate.WaitAsync(ct);
+        yield return GatedAnswerText;
     }
 
     [Test]

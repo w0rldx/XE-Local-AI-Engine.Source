@@ -316,7 +316,7 @@ XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatLocalToolsE2ETests.cs|block|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatLocalToolsE2ETests.cs|run|7
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatLocalToolsE2ETests.cs|summary|2
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatPageE2ETests.cs|block|1
-XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatPageE2ETests.cs|run|6
+XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatPageE2ETests.cs|run|3
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatPageE2ETests.cs|summary|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/CloudSettingsPageE2ETests.cs|run|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/CloudSettingsPageE2ETests.cs|summary|1

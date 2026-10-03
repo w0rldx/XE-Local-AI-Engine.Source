@@ -76,6 +76,10 @@ EOF
 # Stands in for the whole `dotnet` CLI: only `test` is interesting, the rest just has to succeed.
 cat >"$FAKE/bin/dotnet" <<'EOF'
 #!/usr/bin/env bash
+if [[ "$1" == "build" ]]; then
+  echo "build $2" >>"$FAKE_LOG"
+  exit "${FAKE_BUILD_EXIT:-0}"
+fi
 [[ "$1" == "test" ]] || exit 0
 project="$2"; max=""; results=""; coverage=""
 while (($#)); do
@@ -100,11 +104,16 @@ if [[ -n "${FAKE_SLEEP:-}" ]]; then
   exit 0
 fi
 [[ -n "${FAKE_NO_SUMMARY:-}" ]] && exit 1
+if [[ -n "${FAKE_ALL_SKIPPED:-}" ]]; then
+  printf 'Test run summary: Passed!\n  total: 3\n  failed: 0\n  succeeded: 0\n  skipped: 3\n'
+  exit 0
+fi
 cat <<'SUMMARY'
 Test run summary: Passed!
   total: 3
   failed: 0
   succeeded: 3
+  skipped: 0
 SUMMARY
 exit "${FAKE_TEST_EXIT:-0}"
 EOF
@@ -245,6 +254,22 @@ run_gate hollow env FAKE_NO_SUMMARY=1
 [[ "$status" -eq 1 ]]
 grep -Fq 'produced no test-suite summary' <<<"$output"
 grep -Fq 'no-summary' <<<"$output"
+
+# --- hollow-gate guard: a suite whose tests all skipped (succeeded 0) is never green ---
+run_gate all-skipped env FAKE_ALL_SKIPPED=1
+[[ "$status" -eq 1 ]] || { echo "all-skipped run exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq 'HOLLOW: all 3 tests skipped in XE-Local-AI-Engine.AI.Agent.Tests' <<<"$output"
+grep -Fq 'FAILED: XE-Local-AI-Engine.Client.Persistence.Tests(hollow)' <<<"$output"
+grep -Fq 'Skipped (all lanes): 6' <<<"$output"
+refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
+
+# --- a failed Release build exits before any lane starts ---
+run_gate build-fails env NO_BUILD= FAKE_BUILD_EXIT=1
+[[ "$status" -eq 1 ]] || { echo "build-failure run exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq 'BUILD FAILED' <<<"$output"
+grep -q '^build .*XE-Local-AI-Engine.slnx$' "$TMP/build-fails.log"
+refute_grep -E '^(test project=|runner )' "$TMP/build-fails.log"
+refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
 
 # --- exit codes: a failing suite is red, contamination (75) outranks it and is neither ---
 run_gate failing env FAKE_TEST_EXIT=1

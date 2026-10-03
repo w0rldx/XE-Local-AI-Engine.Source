@@ -61,10 +61,11 @@ public sealed class TranscriptionSourceBuildEndpointTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Start_WhileBusy_Returns409RuntimeBusy()
     {
-        // The 409 carries the activity snapshot, which is what lets the UI say "wait for the running transcription"
-        // rather than only "failed".
+        // The 409 carries the activity snapshot that lets the UI say "wait for the running transcription". Linux-only:
+        // off Linux the endpoint answers not-linux before the service is reached (Start_OnNonLinux_Returns409NotLinux).
         var build = new StubSourceBuildService
         {
             StartResult = new WhisperCppSourceBuildStartResult
@@ -87,12 +88,6 @@ public sealed class TranscriptionSourceBuildEndpointTests
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/source-build", OfficialCudaBody);
         using var response = await client.SendAsync(request);
 
-        if (!OperatingSystem.IsLinux())
-        {
-            AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-            return;
-        }
-
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await ReadJsonAsync(response);
         AssertEx.Equal("runtime-busy", body.GetProperty("reason").GetString());
@@ -101,10 +96,11 @@ public sealed class TranscriptionSourceBuildEndpointTests
     }
 
     [Test]
+    [RunOn(OS.Linux)]
     public async Task Start_MissingPrerequisites_Returns409PrerequisitesRatherThanRuntimeBusy()
     {
         // A missing compiler and a busy runtime are different problems with different fixes, so they must not share
-        // a reason code.
+        // a reason code. Linux-only for the same reason as Start_WhileBusy_Returns409RuntimeBusy.
         var build = new StubSourceBuildService
         {
             StartResult = new WhisperCppSourceBuildStartResult
@@ -132,11 +128,8 @@ public sealed class TranscriptionSourceBuildEndpointTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        if (OperatingSystem.IsLinux())
-        {
-            var body = await ReadJsonAsync(response);
-            AssertEx.Equal("prerequisites", body.GetProperty("reason").GetString());
-        }
+        var body = await ReadJsonAsync(response);
+        AssertEx.Equal("prerequisites", body.GetProperty("reason").GetString());
     }
 
     [Test]

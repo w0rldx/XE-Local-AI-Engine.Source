@@ -182,24 +182,6 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
-    public async Task RunAsync_WhenLoopbackInvocation_SkipsHubMessagesAndStillReportsDispatcherProgress()
-    {
-        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var package = RuntimePackageBuilder.Valid()
-                                           .Build();
-        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Hello", " world"));
-
-        await RunAsync(runner, package);
-
-        await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
-        // Match the new wall-clock duration arg with Arg.Any (non-deterministic); the token args remain null-checked.
-        await dispatcher.Received(1)
-                        .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null),
-                            Arg.Is<int?>(static value => value == null), Arg.Is<int?>(static value => value == null), Arg.Any<long?>(),
-                            Arg.Any<string?>(), Arg.Any<InvocationThroughput?>());
-    }
-
-    [Test]
     public async Task RunAsync_WhenPlainContextReceivesUsageContent_SendsAuthoritativeTokenCounts()
     {
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -5307,12 +5289,23 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task Dispatch_WhenEffortIsAuto_ResolvesTheDispatcherFromTheTurnScope()
     {
-        var runner = CreateRunner(agentUpdates: CreateUpdates("ok"),
-            reasoningEffortDispatcherFactory: static _ => throw new InvalidOperationException("resolved-on-auto"));
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var resolveCount = 0;
+        var runner = CreateRunner(eventDispatcher: dispatcher,
+            agentUpdates: CreateUpdates("ok"),
+            reasoningEffortDispatcherFactory: _ =>
+            {
+                Interlocked.Increment(ref resolveCount);
+                throw new InvalidOperationException("resolved-on-auto");
+            });
         var package = RuntimePackageBuilder.Valid().WithReasoningEffort("auto").Build();
 
-        // The resolution failure surfaces as the turn's failure, which is what proves the resolve happened.
         await RunAsync(runner, package);
+
+        // The resolve happened exactly once, and its failure became the turn's failure instead of a completed turn.
+        AssertEx.Equal(expected: 1, Volatile.Read(ref resolveCount), "an `auto` turn must resolve the dispatcher from its scope");
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), Arg.Any<FailureCategory>());
+        await dispatcher.DidNotReceiveWithAnyArgs().ReportInvocationCompletedAsync(Arg.Any<Guid>());
     }
 
     // The approval card's opaque request id used to ride the hub send (MockHubMessageSender.SentApprovals); the

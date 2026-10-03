@@ -839,10 +839,6 @@ public sealed class InvocationAgentFactoryTests
         var mcpRegistry = new FakeMcpToolRegistry();
         mcpRegistry.ReplaceSnapshot(snapshot);
 
-        var resolved = mcpRegistry.TryResolve("mcp__files__write_file", out var executable);
-        AssertEx.True(resolved);
-        AssertEx.True(executable is ApprovalRequiredAIFunction, "the MCP tool must resolve approval-wrapped");
-
         var definition = new InvocationAgentDefinition
         {
             ModelId = "qwen3.5:0.8b",
@@ -851,13 +847,19 @@ public sealed class InvocationAgentFactoryTests
             ConversationContext = []
         };
 
-        using var chatClient = new FakeChatClient();
+        using var chatClient = new CapturingChatClient();
         var sut = CreateSut(chatClient, mcpToolRegistry: mcpRegistry);
 
         await using var context = await sut.CreateAsync(definition);
+        await DriveAsync(context.Agent, context);
 
-        AssertEx.NotNull(context.Agent);
+        // Assert on what the built agent hands the model, not on the registry's seed: the offer placeholder must have
+        // been swapped for the registry's approval-wrapped executable, not unwrapped and not passed through.
         AssertEx.Equal(expected: true, context.Items["toolsEnabled"]);
+        var tools = AssertEx.NotNull(chatClient.CapturedOptions?.Tools);
+        AssertEx.Equal(expected: 1, tools.Count);
+        var offered = tools[0];
+        AssertEx.True(ReferenceEquals(wrapped, offered), $"the agent must carry the approval-wrapped MCP executable, got {offered.GetType().Name}");
     }
 
     [Test]

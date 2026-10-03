@@ -242,9 +242,11 @@ public sealed class SupervisorSpawnArgsTests
             ContentIdentity = "llama3:0",
             CacheKey = "cache"
         };
+        // Neither the initial 65536 nor LlamaServerLaunchPolicyOptions.DefaultChatContextTokens (16384), so the -c below
+        // can only have come from the committed admission allocation.
         var selected = initial with
         {
-            ProcessContextTokens = 16384
+            ProcessContextTokens = 12288
         };
         var stored = initial;
         var allocationResolver = Substitute.For<IProcessContextAllocationResolver>();
@@ -289,7 +291,7 @@ public sealed class SupervisorSpawnArgsTests
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
 
         AssertEx.True(launcher.Launches.TryDequeue(out var spec));
-        AssertEx.Equal("16384", spec!.Arguments[IndexOf(spec.Arguments, "-c") + 1]);
+        AssertEx.Equal("12288", spec!.Arguments[IndexOf(spec.Arguments, "-c") + 1]);
         AssertEx.Contains(spec.Arguments, "--fit");
         AssertEx.False(spec.Arguments.Contains("--n-gpu-layers"), "the post-admission frozen profile must not replace admitted Explore args");
         consumer!.Dispose();

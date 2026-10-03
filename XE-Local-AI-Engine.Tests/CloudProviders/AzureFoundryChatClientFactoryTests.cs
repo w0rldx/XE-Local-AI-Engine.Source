@@ -18,8 +18,7 @@ public sealed class AzureFoundryChatClientFactoryTests
 
         var chatClient = factory.Create(CreateConnection(), "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -73,8 +72,7 @@ public sealed class AzureFoundryChatClientFactoryTests
             ]
         }, "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -96,8 +94,7 @@ public sealed class AzureFoundryChatClientFactoryTests
 
         var chatClient = factory.Create(connection, "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -128,8 +125,7 @@ public sealed class AzureFoundryChatClientFactoryTests
 
         var chatClient = factory.Create(connection, "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -152,8 +148,7 @@ public sealed class AzureFoundryChatClientFactoryTests
 
         var chatClient = factory.Create(connection, "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -171,8 +166,7 @@ public sealed class AzureFoundryChatClientFactoryTests
 
         var chatClient = factory.Create(CreateEntraConnection(clientSecret: "test-client-secret"), "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -248,8 +242,7 @@ public sealed class AzureFoundryChatClientFactoryTests
 
         var chatClient = factory.Create(CreateEntraConnection(signInMethod: EntraSignInMethod.InteractiveBrowser), "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -259,8 +252,7 @@ public sealed class AzureFoundryChatClientFactoryTests
 
         var chatClient = factory.Create(CreateEntraConnection(signInMethod: EntraSignInMethod.DeviceCode), "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -278,8 +270,7 @@ public sealed class AzureFoundryChatClientFactoryTests
 
         var chatClient = factory.Create(connection, "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -339,8 +330,7 @@ public sealed class AzureFoundryChatClientFactoryTests
             EntraTokenScope = "api://backend-app/.default"
         }, "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -353,8 +343,7 @@ public sealed class AzureFoundryChatClientFactoryTests
             EntraTokenScope = "api://backend-app/.DEFAULT"
         }, "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -435,8 +424,7 @@ public sealed class AzureFoundryChatClientFactoryTests
 
         var chatClient = factory.Create(connection, "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -480,8 +468,7 @@ public sealed class AzureFoundryChatClientFactoryTests
 
         var chatClient = factory.Create(connection, "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -494,8 +481,7 @@ public sealed class AzureFoundryChatClientFactoryTests
             ApiSurface = AzureFoundryApiSurface.OpenAiV1
         }, "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -529,8 +515,7 @@ public sealed class AzureFoundryChatClientFactoryTests
             ]
         }, "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -544,8 +529,7 @@ public sealed class AzureFoundryChatClientFactoryTests
             EntraTokenScope = "api://backend-app/.default"
         }, "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -593,8 +577,7 @@ public sealed class AzureFoundryChatClientFactoryTests
 
         var chatClient = factory.Create(connection, "gpt-4o");
 
-        AssertEx.NotNull(chatClient);
-        AssertEx.True(chatClient is IChatClient);
+        AssertIsTheErrorTranslatingAdapterForTheDeployment(chatClient);
     }
 
     [Test]
@@ -607,6 +590,14 @@ public sealed class AzureFoundryChatClientFactoryTests
                 ApiSurface = AzureFoundryApiSurface.OpenAiV1
             },
             "gpt-4o"));
+    }
+
+    // Create's contract: the provider client is wrapped in the error-translating adapter (so SDK failures reach the
+    // caller as typed AzureFoundryProviderException) and is bound to the requested deployment.
+    private static void AssertIsTheErrorTranslatingAdapterForTheDeployment(IChatClient chatClient)
+    {
+        AssertEx.True(chatClient is AzureFoundryErrorTranslatingChatClient, $"expected the error-translating adapter, got {chatClient.GetType().Name}");
+        AssertEx.Equal("gpt-4o", chatClient.GetService<ChatClientMetadata>()?.DefaultModelId);
     }
 
     private static void ThrowsConfig(Action action)

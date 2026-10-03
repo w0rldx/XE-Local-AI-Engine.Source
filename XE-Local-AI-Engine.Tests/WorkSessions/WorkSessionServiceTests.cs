@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -541,6 +542,14 @@ public sealed class WorkSessionServiceTests
         var artifact = await service.GetArtifactAsync(sessionId, artifactId);
         AssertEx.Equal("report.md", artifact.Name);
         AssertEx.Equal(expected: 12L, artifact.SizeBytes);
+
+        // The real store-to-DTO mapping must drop the blob path: neither the single read nor the list carries it on the wire.
+        var listed = await service.ListArtifactsAsync(sessionId, sinceSequence: 0);
+        foreach (var json in new[] { JsonSerializer.Serialize(artifact, JsonSerializerOptions.Web), JsonSerializer.Serialize(listed, JsonSerializerOptions.Web) })
+        {
+            AssertEx.True(json.Contains("report.md", StringComparison.Ordinal), "the serialized DTO must be the artifact under test");
+            AssertEx.False(json.Contains("work-session-artifact:report", StringComparison.Ordinal), "an artifact DTO must never carry its blob path");
+        }
 
         // Asked through another session's route, the artifact reads as absent — an id is not an authorization.
         _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.GetArtifactAsync(otherSessionId, artifactId));
