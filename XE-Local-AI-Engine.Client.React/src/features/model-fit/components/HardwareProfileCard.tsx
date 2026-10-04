@@ -31,13 +31,15 @@ function Stat({ label, value, testId }: { label: string; value: string; testId: 
 // Narrows the measured layer-placement fields to the case where BOTH counts are present and self-consistent. The
 // backend sends them together or not at all, but the wire type makes each independently nullable, so the guard keeps a
 // half-populated payload from rendering "38 / null on GPU".
-function layerPlacement(profile: HardwareProfile): { offloaded: number; total: number; isPartial: boolean } | null {
+function layerPlacement(
+	profile: HardwareProfile,
+): { offloaded: number; total: number; isPartial: boolean; expertsOffloaded: boolean } | null {
 	const { gpuOffloadedLayers: offloaded, gpuTotalLayers: total } = profile;
 	if (offloaded === null || total === null || total <= 0 || offloaded < 0 || offloaded > total) {
 		return null;
 	}
 
-	return { offloaded, total, isPartial: offloaded < total };
+	return { offloaded, total, isPartial: offloaded < total, expertsOffloaded: profile.gpuExpertsOffloaded };
 }
 
 // Hardware-profile summary card: RAM / VRAM (or "VRAM unknown") / GPU vendor / CPU cores / disk / measured GPU layer
@@ -158,6 +160,24 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 					</Alert>
 				) : null}
 
+				{showRuntimeAlerts && placement?.expertsOffloaded && !placement.isPartial ? (
+					<Alert
+						color="orange"
+						variant="light"
+						icon={<IconAlertTriangle size={16} />}
+						title={t("pages.modelFit.hardware.expertOffloadAlert.title", "This model's experts are running from system RAM")}
+						data-testid="model-fit-hardware-expert-offload-alert"
+					>
+						<Text size="sm">
+							{t("pages.modelFit.hardware.expertOffloadAlert.reason", {
+								defaultValue:
+									"{{model}} counts all its layers as on the GPU, but its mixture-of-experts weights stay in system RAM, which is substantially slower. A smaller context window or freeing VRAM used by other processes usually lets the whole model fit on the GPU.",
+								model: profile?.gpuOffloadModelName ?? t("pages.modelFit.hardware.thisModel", "this model"),
+							})}
+						</Text>
+					</Alert>
+				) : null}
+
 				{profile && !isLoading && !error ? (
 					<SimpleGrid cols={{ base: 2, sm: 3, md: 5 }} spacing="lg">
 						<Stat
@@ -198,7 +218,13 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 							label={t("pages.modelFit.hardware.gpuLayers", "Layers on GPU")}
 							value={
 								placement
-									? `${placement.offloaded} / ${placement.total}`
+									? placement.expertsOffloaded
+										? t("pages.modelFit.hardware.gpuLayersExpertsInRam", {
+												defaultValue: "{{offloaded}} / {{total}}, experts in RAM",
+												offloaded: placement.offloaded,
+												total: placement.total,
+											})
+										: `${placement.offloaded} / ${placement.total}`
 									: t("pages.modelFit.hardware.gpuLayersUnknown", "Not measured yet")
 							}
 							testId="model-fit-hardware-gpu-layers"

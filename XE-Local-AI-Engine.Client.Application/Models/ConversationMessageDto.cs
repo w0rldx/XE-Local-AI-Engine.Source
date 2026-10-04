@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Models;
 
+using System.Text.Json.Serialization;
+
 /// <summary>
 ///     Transport DTO for conversation message data.
 /// </summary>
@@ -37,6 +39,13 @@ public sealed record ConversationMessageDto
     ///     session.
     /// </remarks>
     public IReadOnlyList<ConversationToolExchange>? ToolExchanges { get; init; }
+
+    /// <summary>
+    ///     TRANSIENT, set only on the plain-chat attachment message: recomposes its content under a smaller character budget,
+    ///     or returns null when nothing fits, so the runner can fit the attachment to the launched window (model-matrix F6).
+    /// </summary>
+    [JsonIgnore]
+    public Func<int, string?>? ShortenAttachment { get; init; }
 }
 
 /// <summary>

@@ -837,6 +837,33 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    [Arguments("cap", "cap")]
+    [Arguments(" notice ", "notice")]
+    [Arguments("off", "off")]
+    [Arguments("Cap", null)]
+    [Arguments("none", null)]
+    public async Task Normalize_KeepsOnlyAKnownChatOutputCapMode(string stored, string? expected)
+    {
+        await WriteSettingsJsonAsync($"{{ \"chatOutputCapMode\": \"{stored}\" }}");
+
+        AssertEx.Equal<string?>(expected, (await LoadAsync()).ChatOutputCapMode);
+    }
+
+    [Test]
+    [Arguments("minimal", "minimal")]
+    [Arguments(" high ", "high")]
+    [Arguments("none", null)]
+    [Arguments("Low", null)]
+    [Arguments("xhigh", null)]
+    public async Task Normalize_KeepsOnlyABudgetedDefaultReasoningEffort(string stored, string? expected)
+    {
+        // "none" sends no budget at all, so it cannot name a rung; the comparison is ordinal like every other literal.
+        await WriteSettingsJsonAsync($"{{ \"defaultReasoningEffort\": \"{stored}\" }}");
+
+        AssertEx.Equal<string?>(expected, (await LoadAsync()).DefaultReasoningEffort);
+    }
+
+    [Test]
     [Arguments(StoredNodeSettings.UiModeSimple)]
     [Arguments(StoredNodeSettings.UiModeAdvanced)]
     public async Task Normalize_KeepsAValidUiMode(string mode)
@@ -1256,7 +1283,17 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         (nameof(StoredNodeSettings.AgentHomePatchApplyTimeoutSeconds), static s => s.AgentHomePatchApplyTimeoutSeconds,
             (StoredNodeSettings.MinAgentHomePatchApplyTimeoutSeconds, StoredNodeSettings.MaxAgentHomePatchApplyTimeoutSeconds)),
         (nameof(StoredNodeSettings.AgentHomeRunRetentionMaxRuns), static s => s.AgentHomeRunRetentionMaxRuns,
-            (StoredNodeSettings.MinAgentHomeRunRetentionMaxRuns, StoredNodeSettings.MaxAgentHomeRunRetentionMaxRuns))
+            (StoredNodeSettings.MinAgentHomeRunRetentionMaxRuns, StoredNodeSettings.MaxAgentHomeRunRetentionMaxRuns)),
+        (nameof(StoredNodeSettings.ReasoningBudgetMinimalTokens), static s => s.ReasoningBudgetMinimalTokens,
+            (StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens)),
+        (nameof(StoredNodeSettings.ReasoningBudgetLowTokens), static s => s.ReasoningBudgetLowTokens,
+            (StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens)),
+        (nameof(StoredNodeSettings.ReasoningBudgetMediumTokens), static s => s.ReasoningBudgetMediumTokens,
+            (StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens)),
+        (nameof(StoredNodeSettings.ReasoningBudgetHighTokens), static s => s.ReasoningBudgetHighTokens,
+            (StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens)),
+        (nameof(StoredNodeSettings.ChatOutputCapMaxTokens), static s => s.ChatOutputCapMaxTokens,
+            (StoredNodeSettings.MinChatOutputCapMaxTokens, StoredNodeSettings.MaxChatOutputCapMaxTokens))
     ];
 
     private static StoredNodeSettings TunablesAt(Func<(int Min, int Max), int> pick)
@@ -1316,7 +1353,12 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
             DevelopmentMaxOutputTokens = Value(47),
             AgentHomeMaxInnerToolCalls = Value(48),
             AgentHomePatchApplyTimeoutSeconds = Value(49),
-            AgentHomeRunRetentionMaxRuns = Value(50)
+            AgentHomeRunRetentionMaxRuns = Value(50),
+            ReasoningBudgetMinimalTokens = Value(51),
+            ReasoningBudgetLowTokens = Value(52),
+            ReasoningBudgetMediumTokens = Value(53),
+            ReasoningBudgetHighTokens = Value(54),
+            ChatOutputCapMaxTokens = Value(55)
         };
     }
 

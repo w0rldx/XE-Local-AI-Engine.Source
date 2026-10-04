@@ -201,7 +201,7 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
                        .ThenBy(static scored => scored.Index)
                        .Take(rankedSlots)
                        .Select(static scored => scored.Index)
-                       .ToHashSet();
+                       .ToList();
 
         return ToolRelevanceSelection.Compose(candidates, selected);
 

@@ -19,10 +19,11 @@ internal static class SearchKnowledgeBaseToolDefinition
 
     public const string Description =
         "Search the node-local knowledge base (the operator's own uploaded documents) for passages relevant to a "
-        + "question, and use ONLY the returned passages to ground a document-specific answer. Prefer this tool whenever "
-        + "the question is about the operator's documents or local knowledge. Answering policy: rely solely on the "
-        + "retrieved passages for document-grounded claims; do not invent facts or fill gaps from prior knowledge; if the "
-        + "results do not contain enough information to answer, say so plainly instead of guessing. Typical flow: search "
+        + "question about those documents. Prefer this tool whenever the question is about the operator's documents or "
+        + "local knowledge; a general question does not need it. Answering policy for questions about the operator's "
+        + "documents: rely solely on the retrieved passages for document-grounded claims; do not invent what the documents "
+        + "say; if the results do not contain enough information to answer, say so plainly instead of guessing. Questions "
+        + "that are not about the operator's documents are answered as usual, from general knowledge. Typical flow: search "
         + "first, then pass the returned collectionId to read_surrounding_chunks around a promising hit, or to "
         + "read_document to read a whole document. Returns compact JSON hits with collectionId, documentId, chunkId, content, score, "
         + "scoreKind (Fusion or Rerank: the scale of score, comparable only within one result, not a probability), and "

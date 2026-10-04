@@ -23,6 +23,9 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
     private const double HeadroomFraction = 0.15d; // Not derived from ModelFitSafetyMarginPercent: that cannot reproduce max(15 %, 1 GiB).
     private const long MinHeadroomBytes = 1024L * 1024 * 1024; // ~1 GiB floor for fixed KV/runtime overhead.
 
+    // The unquantized float formats GgufQuantQuality grades NearLossless: the ladder's F32/F16 plus its float aliases.
+    private static readonly HashSet<string> UnquantizedFloatQuants = new(["F32", "F16", "FP32", "FP16", "BF16", "F64"], StringComparer.OrdinalIgnoreCase);
+
     private readonly IKnowledgeCompanionReserve _companionReserve;
     private readonly ILogger<GgufVariantRecommender> _logger;
     private readonly IProcessVramBudgetProbe _processVramBudgetProbe;
@@ -138,8 +141,8 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
     ///     When some files fit, the highest quality tier among them wins, ties broken by larger size; otherwise the
     ///     best Tight file by the same order. When free VRAM is known but nothing fits, the smallest file wins. When
     ///     VRAM is unknown (no probe ran), a SweetSpot file is preferred, then a Balanced one, then the median file by
-    ///     size. Drafters are excluded from every branch: a drafter is a companion of the base weights, not a runnable
-    ///     chat model, and being tiny yet high-quality-looking would otherwise win the fit-first ordering outright.
+    ///     size. Drafters (companions, not chat models) never compete; neither do F32/F16/BF16 files while a quantized
+    ///     file remains, since they tie Q8_0's tier and would win on size at 2-4x the download.
     /// </remarks>
     private static int PickRecommendedIndex(IReadOnlyList<GgufRepoFile> files,
         IReadOnlyList<GgufQuantTier> tiers,
@@ -151,6 +154,12 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         if (selectable.Count == 0)
         {
             return -1;
+        }
+
+        var quantized = selectable.Where(i => !IsUnquantizedFloat(files[i].Quant)).ToList();
+        if (quantized.Count > 0)
+        {
+            selectable = quantized;
         }
 
         var fits = IndicesWith(selectable, verdicts, GgufFitVerdict.Fits);
@@ -188,6 +197,11 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         // No sweet-spot/balanced file → the median by size (a conservative middle pick).
         var bySize = selectable.OrderBy(i => files[i].SizeBytes).ToList();
         return bySize[bySize.Count / 2];
+    }
+
+    private static bool IsUnquantizedFloat(string? quant)
+    {
+        return !string.IsNullOrWhiteSpace(quant) && UnquantizedFloatQuants.Contains(GgufQuantParser.StripDynamicPrefix(quant.Trim()));
     }
 
     private static int BestByTierThenSize(IReadOnlyList<GgufRepoFile> files,

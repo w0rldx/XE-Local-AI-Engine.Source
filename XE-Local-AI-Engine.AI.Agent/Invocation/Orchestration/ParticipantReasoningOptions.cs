@@ -38,11 +38,13 @@ internal static class ParticipantReasoningOptions
     /// </param>
     /// <param name="logger">Receives the one-per-model skip notice; omit it to skip silently (no other logging).</param>
     /// <param name="modelId">The participant's resolved model id, the de-duplication key for that notice.</param>
+    /// <param name="reasoningBudgets">The node's budget per effort level; null takes the shipped defaults.</param>
     internal static AdditionalPropertiesDictionary Build(string? reasoningEffort,
         bool supportsThinking,
         bool reasoningBudgetEnforceable = true,
         ILogger? logger = null,
-        string? modelId = null)
+        string? modelId = null,
+        ReasoningBudgets? reasoningBudgets = null)
     {
         var properties = new AdditionalPropertiesDictionary();
 
@@ -68,7 +70,7 @@ internal static class ParticipantReasoningOptions
 
             // Per-request thinking budget for the llama.cpp path, so a participant cannot burn its whole window
             // thinking and answer nothing. Skipped where llama.cpp cannot enforce it, since it would advertise no cap.
-            if (ReasoningOptionsResolver.ResolveReasoningBudgetTokens(reasoningEffort) is { } budgetTokens)
+            if (ReasoningOptionsResolver.ResolveReasoningBudgetTokens(reasoningEffort, reasoningBudgets) is { } budgetTokens)
             {
                 if (reasoningBudgetEnforceable)
                 {

@@ -25,7 +25,7 @@ public interface ILlamaLayerPlacementReport
     LlamaLayerPlacement? Current { get; }
 
     /// <summary>Records what a load of this <c>(model, role, variant)</c> measurably did, replacing any prior reading for it.</summary>
-    void Record(ModelRole role, GpuVariant variant, string modelName, int offloadedLayers, int totalLayers);
+    void Record(ModelRole role, GpuVariant variant, string modelName, int offloadedLayers, int totalLayers, bool expertsOffloaded = false);
 
     /// <summary>
     ///     Drops every reading for this <c>(model, role)</c> because the process that produced it is gone — evicted,

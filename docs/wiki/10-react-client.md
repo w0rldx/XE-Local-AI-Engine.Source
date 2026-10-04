@@ -181,6 +181,14 @@ mirrors the server's two couplings so the refusal lands on the field: developmen
 fires only when `useEffectiveToolCapableModels` reports the effective list empty, because the server falls back from an
 empty stored list to the appsettings seed.
 
+**Chat holds the Thinking budgets card** (`NodeSettingsReasoningBudgetsCard` in `components/NodeSettingsTunableCards.tsx`):
+the llama.cpp thinking budget per reasoning effort and the effort whose budget a turn with none gets. All five are read
+per turn, so none is restart-gated; the effort choices are `defaultReasoningEffortSelectValues`, which leaves out
+`none` because it sends no budget. Semantics: [Agent Mode](04-agent-mode.md) ("The reasoning-effort matrix and the
+thinking budget"). Beside it the **Answer length** card (`NodeSettingsOutputCapCard`) holds the chat output-cap
+variant (`chatOutputCapModeSelectValues`: cap, notice, off) and the cap's ceiling, both read per turn; semantics:
+[Chat](05-chat.md) ("Output cap and the "stopped at length" notice").
+
 **The draft is `fieldsForm`; `fieldsBaseline` is the server state it was last seeded from.** `buildNodeSettingsRequest`
 diffs the two and sends only the changed fields, matching the PUT DTO's optional-field-keeps-current-value contract
 (`08-data-and-persistence.md`'s save protocol). That diff also drives `NodeSettingsSaveBar` — one sticky bar at the

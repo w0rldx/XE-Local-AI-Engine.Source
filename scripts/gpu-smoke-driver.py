@@ -203,30 +203,39 @@ def command_runtime(args: argparse.Namespace) -> int:
     return 0
 
 
-def command_audit(args: argparse.Namespace) -> int:
-    """Report IRuntimeDeviceAudit's verdict, flattened onto the hardware profile.
+AUDIT_KEYS = (
+    "inferenceBackend",
+    "gpuExpected",
+    "cpuFallback",
+    "cpuFallbackReason",
+    "cpuFallbackRemediation",
+    "gpuVendor",
+    "gpuAccelAvailable",
+    "vramBytes",
+    "vramKnown",
+)
+
+
+def device_audit(client: NodeClient) -> dict:
+    """IRuntimeDeviceAudit's verdict, flattened onto the hardware profile; also used by model-matrix-driver.py.
 
     ``refresh=true`` matters: the audit caches only a *determinate* probe, so a stale
     determinate result would otherwise outlive the condition that produced it.
     """
-    client = NodeClient(args.base_url, args.token, args.timeout)
     payload = require_mapping(client.get_json(f"{API}/model-fit/hardware-profile?refresh=true"), "hardware-profile")
-    for key in (
-        "inferenceBackend",
-        "gpuExpected",
-        "cpuFallback",
-        "cpuFallbackReason",
-        "cpuFallbackRemediation",
-        "gpuVendor",
-        "gpuAccelAvailable",
-        "vramBytes",
-        "vramKnown",
-    ):
+    for key in AUDIT_KEYS:
         if key not in payload:
             raise DriverError(
                 f"hardware-profile is missing '{key}'. The device-audit block is the whole "
                 "point of this step; a changed contract must fail loudly, not silently pass."
             )
+    return payload
+
+
+def command_audit(args: argparse.Namespace) -> int:
+    """Report the device audit as records."""
+    payload = device_audit(NodeClient(args.base_url, args.token, args.timeout))
+    for key in AUDIT_KEYS:
         emit(key, payload[key])
     return 0
 

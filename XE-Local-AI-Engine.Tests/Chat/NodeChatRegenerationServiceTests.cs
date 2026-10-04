@@ -3734,6 +3734,17 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             return Task.CompletedTask;
         }
 
+        public Task ReportInvocationTextReclassifiedAsync(Guid invocationId, string content, string reasoningSuffix)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.StreamedContent = content;
+                CurrentInvocation.StreamedThinkingContent += reasoningSuffix;
+            }
+
+            return Task.CompletedTask;
+        }
+
         public Task ReportInvocationThinkingChunkAsync(Guid invocationId, string chunk)
         {
             if (CurrentInvocation is null)

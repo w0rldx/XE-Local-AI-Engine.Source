@@ -50,6 +50,12 @@ public interface IChatTurnContextBuilder
     Task<KnowledgeChatGrounding?> BuildKnowledgeContextAsync(string query, bool isRegeneratedTurn = false, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Whether an embedding model is installed for the knowledge base, resolved exactly as ingestion and search
+    ///     resolve it. Without one no document is indexed, so a grounded turn finds nothing (model-matrix F13).
+    /// </summary>
+    Task<bool> IsKnowledgeEmbeddingAvailableAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     The agent-mode pointer message naming the staged attachment paths, so a weak model reads the exact file
     ///     through its tools rather than guessing a name.
     /// </summary>

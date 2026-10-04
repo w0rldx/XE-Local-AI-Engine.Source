@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 [Category(TestCategories.Unit)]
 public sealed class FirstRunModelProvisioningServiceTests
 {
-    private const string DefaultGguf = "bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M";
+    private const string DefaultGguf = "unsloth/granite-4.1-3b-GGUF:Q4_K_M";
 
     // A path-shaped fragment planted in a probe exception message, so the sanitization assertion has something concrete
     // to prove was stripped rather than merely checking the text is non-empty.
@@ -42,7 +42,7 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         AssertEx.True(binaryManager.EnsureCalled, "the llama.cpp binary must be ensured before download");
         AssertEx.Equal(expected: 1, coordinator.StartCalls.Count);
-        AssertEx.Equal("bartowski/Qwen2.5-0.5B-Instruct-GGUF", coordinator.StartCalls[0].RepoId);
+        AssertEx.Equal("unsloth/granite-4.1-3b-GGUF", coordinator.StartCalls[0].RepoId);
         AssertEx.Equal("Q4_K_M", coordinator.StartCalls[0].Quant);
         AssertEx.Equal(GgufRole.Chat, coordinator.StartCalls[0].Role);
         AssertEx.Equal(DefaultGguf, settingsStore.Saved?.DefaultModelName);
@@ -423,7 +423,7 @@ public sealed class FirstRunModelProvisioningServiceTests
                             .AddInMemoryCollection(new Dictionary<string, string?>
                             {
                                 ["FirstRunModel:Enabled"] = "true",
-                                ["FirstRunModel:RepoId"] = "bartowski/Qwen2.5-0.5B-Instruct-GGUF",
+                                ["FirstRunModel:RepoId"] = "unsloth/granite-4.1-3b-GGUF",
                                 ["FirstRunModel:Quant"] = "Q4_K_M",
                                 ["Agent:LocalChat:DefaultModel"] = "qwen3:0.6b"
                             })

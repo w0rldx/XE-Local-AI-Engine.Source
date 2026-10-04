@@ -170,7 +170,8 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
                 SlidingWindow = header?.SlidingWindow,
                 SlidingWindowPattern = header?.SlidingWindowPattern,
                 AttentionKeyLengthMla = header?.AttentionKeyLengthMla,
-                AttentionValueLengthMla = header?.AttentionValueLengthMla
+                AttentionValueLengthMla = header?.AttentionValueLengthMla,
+                FullAttentionInterval = header?.FullAttentionInterval
             });
         }
 

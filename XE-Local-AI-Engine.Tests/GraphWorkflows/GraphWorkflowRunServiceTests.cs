@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -358,6 +359,37 @@ public sealed class GraphWorkflowRunServiceTests
 
         AssertEx.Equal(GraphWorkflowRunStatus.Pending, started.Run.Status, "no dispatcher in this slice, so a started run sits Pending.");
         AssertEx.Contains(started.NodeRuns, nodeRun => nodeRun.Kind == GraphWorkflowNodeKind.Tool);
+    }
+
+    /// <summary>
+    ///     F10: a start without input runs on the Start node's <c>defaultInput</c>, as the SPA pre-fills it, or the first
+    ///     node binding <c>run.input.*</c> fails. An explicit input still wins over the default.
+    /// </summary>
+    [Test]
+    public async Task StartAsync_WithoutInput_AppliesTheStartNodesDefaultInput_AndAnExplicitInputWins()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd.Replace("""
+                                                                                               "kind": "Start", "label": "Start", "config": {}
+                                                                                               """,
+            """
+            "kind": "Start", "label": "Start", "config": { "defaultInput": { "message": "from the default" } }
+            """,
+            StringComparison.Ordinal));
+
+        var defaulted = await StartAsync(definitionId, Guid.NewGuid());
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        var explicitRun = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>()
+                                     .StartAsync(definitionId, Guid.NewGuid(), """{"message":"explicit"}""", definitionVersion: null);
+
+        var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
+        AssertEx.Equal("from the default", Message((await store.GetRunAsync(defaulted.Run.Id)).InputJson));
+        AssertEx.Equal("explicit", Message((await store.GetRunAsync(explicitRun.Run.Id)).InputJson));
+
+        static string? Message(string? inputJson)
+        {
+            using var document = JsonDocument.Parse(AssertEx.NotNull(inputJson));
+            return document.RootElement.GetProperty("message").GetString();
+        }
     }
 
     /// <summary>A run input over the cap is refused BEFORE the insert, so no half-started run survives the refusal.</summary>

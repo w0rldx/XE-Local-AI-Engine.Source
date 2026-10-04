@@ -263,6 +263,12 @@ public sealed class HardwareProfileResponse
     /// <summary>Total layers in <see cref="GpuOffloadModelName" />, or null when no load has been observed.</summary>
     public int? GpuTotalLayers { get; init; }
 
+    /// <summary>
+    ///     True when <see cref="GpuOffloadModelName" /> keeps its expert weights in system RAM: llama.cpp still counts those layers as
+    ///     offloaded, so the layer counts alone would read as fully on the GPU.
+    /// </summary>
+    public bool GpuExpertsOffloaded { get; init; }
+
     /// <summary>The model the offload figures describe, or null when no load has been observed.</summary>
     public string? GpuOffloadModelName { get; init; }
 

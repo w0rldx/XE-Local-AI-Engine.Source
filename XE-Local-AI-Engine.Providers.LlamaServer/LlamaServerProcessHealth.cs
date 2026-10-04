@@ -41,4 +41,10 @@ public sealed class LlamaServerProcessHealth
     ///     interactively since, so it is reaped after the short transient idle lifetime.
     /// </summary>
     public bool IsTransient { get; init; }
+
+    /// <summary>The context window the running server reported from <c>/props</c>; <see langword="null" /> when it could not be read.</summary>
+    public int? EffectiveContextTokens { get; init; }
+
+    /// <summary>Whether the launch pinned Mixture-of-Experts weights to system RAM, so generation streams experts from RAM.</summary>
+    public bool ExpertsOffloaded { get; init; }
 }

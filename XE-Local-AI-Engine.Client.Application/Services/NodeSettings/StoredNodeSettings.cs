@@ -265,6 +265,28 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxWebFetchMaxContentChars = 100_000;
 
+    /// <summary>Lower bound for each per-effort reasoning budget; the shipped defaults are <c>ReasoningBudgets.Default</c>.</summary>
+    public const int MinReasoningBudgetTokens = 128;
+
+    /// <summary>Upper bound for each per-effort reasoning budget; the launched window narrows it further per turn.</summary>
+    public const int MaxReasoningBudgetTokens = 131_072;
+
+    /// <summary>Chat output-cap variant: cap the answer and say when it stopped at length (the shipped default).</summary>
+    public const string ChatOutputCapModeCap = "cap";
+
+    /// <summary>Chat output-cap variant: no cap, but say when the answer stopped at length.</summary>
+    public const string ChatOutputCapModeNotice = "notice";
+
+    /// <summary>Chat output-cap variant: no cap and no notice.</summary>
+    public const string ChatOutputCapModeOff = "off";
+
+    /// <summary>Ceiling on the chat output cap, which is otherwise half the launched window.</summary>
+    public const int DefaultChatOutputCapMaxTokens = 16_384;
+
+    public const int MinChatOutputCapMaxTokens = 256;
+
+    public const int MaxChatOutputCapMaxTokens = 131_072;
+
     /// <summary>Default <c>search_knowledge_base</c> hit count when the model names none.</summary>
     public const int DefaultKnowledgeSearchDefaultResults = 5;
 
@@ -789,6 +811,25 @@ public sealed partial record StoredNodeSettings
     }
 
     /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="effort" /> is a level with a reasoning budget:
+    ///     <c>minimal</c>, <c>low</c>, <c>medium</c> or <c>high</c>.
+    /// </summary>
+    /// <remarks>Ordinal, like the other literals; <c>none</c> is excluded because it sends no budget at all.</remarks>
+    public static bool IsValidDefaultReasoningEffort(string? effort)
+    {
+        return effort is "minimal" or "low" or "medium" or "high";
+    }
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="mode" /> is a chat output-cap variant: <c>cap</c> (cap
+    ///     plus notice), <c>notice</c> (notice only, no cap) or <c>off</c>.
+    /// </summary>
+    public static bool IsValidChatOutputCapMode(string? mode)
+    {
+        return mode is ChatOutputCapModeCap or ChatOutputCapModeNotice or ChatOutputCapModeOff;
+    }
+
+    /// <summary>
     ///     Returns <see langword="true" /> when <paramref name="channel" /> is one of the three update-channel
     ///     literals: <c>stable</c>, <c>preview</c> or <c>development</c>.
     /// </summary>
@@ -1133,6 +1174,37 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>Ceiling on the <c>search_knowledge_base</c> hit count. Seed: 20. Read per call.</summary>
     public int? KnowledgeSearchMaxResults { get; init; }
+
+    /// <summary>llama.cpp thinking budget for effort <c>minimal</c>, in tokens. Default: 1024. Read per turn.</summary>
+    public int? ReasoningBudgetMinimalTokens { get; init; }
+
+    /// <summary>llama.cpp thinking budget for effort <c>low</c>, in tokens. Default: 2048. Read per turn.</summary>
+    public int? ReasoningBudgetLowTokens { get; init; }
+
+    /// <summary>llama.cpp thinking budget for effort <c>medium</c>, in tokens. Default: 8192. Read per turn.</summary>
+    public int? ReasoningBudgetMediumTokens { get; init; }
+
+    /// <summary>llama.cpp thinking budget for efforts <c>high</c> and <c>xhigh</c>, in tokens. Default: 24576. Read per turn.</summary>
+    public int? ReasoningBudgetHighTokens { get; init; }
+
+    /// <summary>
+    ///     Whose budget a turn that names no effort gets: <c>minimal</c>, <c>low</c>, <c>medium</c> or <c>high</c>.
+    ///     Default: <c>low</c>. Read per turn.
+    /// </summary>
+    /// <remarks>
+    ///     Only the budget follows it: the turn still sends no effort, so an external model keeps its registered default
+    ///     and Ollama its own. Unknown falls back to <see langword="null" /> in <c>NodeSettingsStore.Normalize</c>.
+    /// </remarks>
+    public string? DefaultReasoningEffort { get; init; }
+
+    /// <summary>
+    ///     Chat output-cap variant: <c>cap</c>, <c>notice</c> or <c>off</c>. Default: <c>cap</c>. Read per turn.
+    /// </summary>
+    /// <remarks>An explicit per-request output limit always wins. Unknown falls back to <see langword="null" /> in <c>NodeSettingsStore.Normalize</c>.</remarks>
+    public string? ChatOutputCapMode { get; init; }
+
+    /// <summary>Ceiling on the chat output cap (half the launched window), in tokens. Default: 16384. Read per turn.</summary>
+    public int? ChatOutputCapMaxTokens { get; init; }
 
     /// <summary>
     ///     Parallel range connections per large model download. Seed: <c>HuggingFace:DownloadConnections</c> (4).

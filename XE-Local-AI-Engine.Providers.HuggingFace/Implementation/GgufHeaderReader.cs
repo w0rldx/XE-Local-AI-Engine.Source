@@ -300,6 +300,10 @@ internal sealed class GgufHeaderReader
         var slidingWindowPattern = TryGetLong(values, Arch("attention.sliding_window_pattern"))
                                    ?? GgufAttentionDefaults.SlidingWindowPattern(architecture);
 
+        // Hybrid recurrent/attention stacks (qwen3next, qwen35, qwen35moe): only every Nth layer holds a KV cache, the rest keep a fixed-size recurrent state. Deliberately NO per-architecture
+        // default (llama.cpp assumes 4 when the key is absent): without the key the estimator keeps charging every layer, the conservative side.
+        var fullAttentionInterval = TryGetLong(values, Arch("full_attention_interval"));
+
         // The Jinja chat template (when present) reveals the model's real tool / reasoning surface for capability
         // detection. Architecture-independent key; null when the GGUF was written without one (a raw base model).
         var chatTemplate = GetString(values, "tokenizer.chat_template");
@@ -322,7 +326,8 @@ internal sealed class GgufHeaderReader
             SlidingWindow = slidingWindow,
             SlidingWindowPattern = slidingWindowPattern,
             AttentionKeyLengthMla = attentionKeyLengthMla,
-            AttentionValueLengthMla = attentionValueLengthMla
+            AttentionValueLengthMla = attentionValueLengthMla,
+            FullAttentionInterval = fullAttentionInterval
         };
     }
 

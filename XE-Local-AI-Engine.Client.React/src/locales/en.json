@@ -266,7 +266,14 @@
 			"emptyAnswer": "No answer",
 			"stoppedWhileThinkingText": "The model stopped while thinking before it could answer; its thoughts are kept above.",
 			"toolHistoryWithheld": "Tool history withheld",
-			"toolsWithheld": "Tools not offered"
+			"toolsWithheld": "Tools not offered",
+			"outputLimitReached": "Answer cut off",
+			"knowledgeUnavailable": "Knowledge base unavailable",
+			"attachmentShortened": "Attachment shortened",
+			"attachmentShortenedText": "The attached file was shortened to fit this model's context window; the model was told it is incomplete.",
+			"knowledgeUnavailableText": "Your knowledge base was not used for this message because no embedding model is installed, so your documents could not be indexed.",
+			"outputLimitReachedText": "The answer stopped at the length limit before the model finished.",
+			"toolCallInReasoningText": "The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer."
 		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting.",
 		"webReview": {
@@ -2436,6 +2443,48 @@
 				"knowledgeSearchMaxResults": {
 					"label": "Maximum results"
 				},
+				"reasoningBudgets": {
+					"title": "Thinking budgets"
+				},
+				"defaultReasoningEffort": {
+					"label": "Budget when no effort is chosen",
+					"description": "Which budget a local thinking model gets when a turn names no reasoning effort.",
+					"options": {
+						"minimal": "Minimal",
+						"low": "Low",
+						"medium": "Medium",
+						"high": "High"
+					}
+				},
+				"reasoningBudgetMinimalTokens": {
+					"label": "Minimal effort"
+				},
+				"reasoningBudgetLowTokens": {
+					"label": "Low effort"
+				},
+				"reasoningBudgetMediumTokens": {
+					"label": "Medium effort"
+				},
+				"reasoningBudgetHighTokens": {
+					"label": "High effort",
+					"description": "How long a local model may think before it must answer. The model's window can lower it further."
+				},
+				"chatOutputCap": {
+					"title": "Answer length"
+				},
+				"chatOutputCapMode": {
+					"label": "Answer length limit",
+					"description": "Stops a local model that keeps repeating itself. A limit a request sets itself always wins.",
+					"options": {
+						"cap": "Limit and tell me when an answer is cut off",
+						"notice": "No limit, but tell me when an answer is cut off",
+						"off": "No limit and no notice"
+					}
+				},
+				"chatOutputCapMaxTokens": {
+					"label": "Longest answer",
+					"description": "The answer may use half the model's context window, but never more than this. A thinking model's thinking budget comes on top, so this is not the total."
+				},
 				"webFetch": {
 					"title": "Page fetching"
 				},
@@ -4292,6 +4341,11 @@
 					"reason": "Only {{offloaded}} of {{model}}'s {{total}} layers fit on the GPU. The remaining {{remaining}} run from system RAM, which is substantially slower — the model still answers correctly, just at a fraction of the speed.",
 					"remediation": "A smaller quantization, a shorter context, or freeing VRAM used by other processes will usually fit the whole model."
 				},
+				"expertOffloadAlert": {
+					"title": "This model's experts are running from system RAM",
+					"reason": "{{model}} counts all its layers as on the GPU, but its mixture-of-experts weights stay in system RAM, which is substantially slower. A smaller context window or freeing VRAM used by other processes usually lets the whole model fit on the GPU."
+				},
+				"gpuLayersExpertsInRam": "{{offloaded}} / {{total}}, experts in RAM",
 				"thisModel": "this model",
 				"gpuLayers": "Layers on GPU",
 				"gpuLayersUnknown": "Not measured yet",
@@ -4405,6 +4459,9 @@
 				"empty": "No models are currently running.",
 				"responsive": "Responsive",
 				"unresponsive": "Starting / unresponsive",
+				"contextWindow": "Context window: {{tokens}} tokens",
+				"expertsOffloaded": "Experts in system RAM",
+				"expertsOffloadedHint": "This mixture-of-experts model keeps its expert weights in system RAM instead of on the GPU, so it generates noticeably slower.",
 				"details": {
 					"responsive": "Responding to health checks.",
 					"unresponsive": "Not responding to health checks.",

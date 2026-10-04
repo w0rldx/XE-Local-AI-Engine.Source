@@ -46,6 +46,9 @@ public sealed class DeferredLlamaServerThinkingSwitchTests
         using var doc = JsonDocument.Parse(body);
         var kwargs = doc.RootElement.GetProperty("chat_template_kwargs");
         AssertEx.Equal(expected: false, kwargs.GetProperty("enable_thinking").GetBoolean());
+
+        // The zero budget is the off switch for a template that renders <think> but never reads enable_thinking (LFM2.5).
+        AssertEx.Equal(expected: 0, doc.RootElement.GetProperty("reasoning_budget_tokens").GetInt32());
     }
 
     [Test]
@@ -65,6 +68,8 @@ public sealed class DeferredLlamaServerThinkingSwitchTests
         var body = AssertEx.NotNull(handler.CapturedBody);
         AssertEx.False(body.Contains("chat_template_kwargs", StringComparison.Ordinal),
             "a request without the disable-thinking marker must never carry chat_template_kwargs.");
+        AssertEx.False(body.Contains("reasoning_budget_tokens", StringComparison.Ordinal),
+            "a request without the disable-thinking marker must never carry a zero reasoning budget.");
     }
 
     private static IChatClient BuildOpenAiChatClient(HttpClient http)

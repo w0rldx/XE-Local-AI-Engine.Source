@@ -179,6 +179,31 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
         RuleFor(static request => request.KnowledgeSearchMaxResults)
             .InclusiveBetween(StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults);
 
+        RuleFor(static request => request.ReasoningBudgetMinimalTokens)
+            .InclusiveBetween(StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens);
+
+        RuleFor(static request => request.ReasoningBudgetLowTokens)
+            .InclusiveBetween(StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens);
+
+        RuleFor(static request => request.ReasoningBudgetMediumTokens)
+            .InclusiveBetween(StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens);
+
+        RuleFor(static request => request.ReasoningBudgetHighTokens)
+            .InclusiveBetween(StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens);
+
+        RuleFor(static request => request.DefaultReasoningEffort)
+            .Must(static effort => StoredNodeSettings.IsValidDefaultReasoningEffort(effort?.Trim()))
+            .When(static request => request.DefaultReasoningEffort is not null)
+            .WithMessage("Default reasoning effort must be minimal, low, medium or high.");
+
+        RuleFor(static request => request.ChatOutputCapMode)
+            .Must(static mode => StoredNodeSettings.IsValidChatOutputCapMode(mode?.Trim()))
+            .When(static request => request.ChatOutputCapMode is not null)
+            .WithMessage("Chat output cap mode must be cap, notice or off.");
+
+        RuleFor(static request => request.ChatOutputCapMaxTokens)
+            .InclusiveBetween(StoredNodeSettings.MinChatOutputCapMaxTokens, StoredNodeSettings.MaxChatOutputCapMaxTokens);
+
         RuleFor(static request => request.HuggingFaceDownloadConnections)
             .InclusiveBetween(StoredNodeSettings.MinHuggingFaceDownloadConnections, StoredNodeSettings.MaxHuggingFaceDownloadConnections);
 

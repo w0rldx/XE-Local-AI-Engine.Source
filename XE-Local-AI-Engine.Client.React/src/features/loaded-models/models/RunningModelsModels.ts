@@ -19,6 +19,10 @@ export interface RunningModel {
 	readonly lastUsedUtc: string | null;
 	// Cold-loaded only for an AI Assist draft, so it runs on the short transient idle lifetime.
 	readonly isTransient: boolean;
+	// The context window the running server loaded; null when it could not be read.
+	readonly effectiveContextTokens: number | null;
+	// The launch keeps this mixture-of-experts model's expert weights in system RAM instead of on the GPU (much slower).
+	readonly expertsOffloaded: boolean;
 }
 
 const runningModelDetailCodes = ["responsive", "unresponsive", "exited"] as const;
@@ -40,6 +44,8 @@ export function toRunningModel(dto: XeLocalAiEngineClientEndpointsModelFitV1Runn
 		isBusy: dto.isBusy ?? false,
 		lastUsedUtc: dto.lastUsedUtc ?? null,
 		isTransient: dto.isTransient ?? false,
+		effectiveContextTokens: dto.effectiveContextTokens ?? null,
+		expertsOffloaded: dto.expertsOffloaded ?? false,
 	};
 }
 

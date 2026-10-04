@@ -2,10 +2,13 @@ namespace XE_Local_AI_Engine.Tests.Memory;
 
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Memory;
@@ -44,6 +47,7 @@ public sealed class DefaultMemoryExtractionAgentTests
             Options.Create(new MemoryExtractionOptions()),
             StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("qwen3:8b").Build(),
             Substitute.For<IModelTrustResolver>(),
+            Scopes(Substitute.For<IModelCapabilityResolver>()),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run());
@@ -66,6 +70,7 @@ public sealed class DefaultMemoryExtractionAgentTests
             Options.Create(new MemoryExtractionOptions()),
             StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName(string.Empty).Build(),
             Substitute.For<IModelTrustResolver>(),
+            Scopes(Substitute.For<IModelCapabilityResolver>()),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run());
@@ -85,6 +90,7 @@ public sealed class DefaultMemoryExtractionAgentTests
             Options.Create(new MemoryExtractionOptions()),
             StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("gpt-5-codex").Build(),
             trust,
+            Scopes(Substitute.For<IModelCapabilityResolver>()),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run());
@@ -112,12 +118,49 @@ public sealed class DefaultMemoryExtractionAgentTests
             Options.Create(new MemoryExtractionOptions()),
             StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("qwen3:8b").Build(),
             Substitute.For<IModelTrustResolver>(),
+            Scopes(Substitute.For<IModelCapabilityResolver>()),
             NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run(failed: false));
 
         AssertEx.Empty(proposals);
     }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task MemoryExtraction_CapsOutputAndTurnsThinkingOffOnAThinkingModel(bool supportsThinking)
+    {
+        // Uncapped with thinking on, one job decoded 64k tokens on the only slot while chat stalled. The marker is gated
+        // like the summarizer's: never on a model that cannot think, where Ollama refuses a think field.
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        var provider = Substitute.For<ILocalModelProvider>();
+#pragma warning disable CA2000 // Ownership transfers to the agent, which disposes it via `using`.
+        var nodeLocalClient = new EnvelopeChatClient("""{ "memories": [] }""");
+#pragma warning restore CA2000
+        provider.CreateChatClient(Arg.Any<LocalModelSelection>()).Returns(nodeLocalClient);
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(provider));
+        var capabilities = Substitute.For<IModelCapabilityResolver>();
+        capabilities.ResolveAsync("qwen3:8b", Arg.Any<CancellationToken>())
+                    .Returns(new ModelCapabilitySnapshot(supportsThinking, SupportsTools: false, IsCloud: false));
+
+        var agent = new DefaultMemoryExtractionAgent(resolver,
+            Options.Create(new MemoryExtractionOptions()),
+            StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("qwen3:8b").Build(),
+            Substitute.For<IModelTrustResolver>(),
+            Scopes(capabilities),
+            NullLogger<DefaultMemoryExtractionAgent>.Instance);
+
+        await agent.ProposeAsync(Run());
+
+        var options = AssertEx.NotNull(nodeLocalClient.LastOptions);
+        AssertEx.Equal(expected: 1024, options.MaxOutputTokens);
+        var marker = options.AdditionalProperties?.TryGetValue(InvocationAgentFactory.LlamaDisableThinkingMarkerKey, out var raw) == true && raw is true;
+        AssertEx.Equal(supportsThinking, marker);
+    }
+
+    private static IServiceScopeFactory Scopes(IModelCapabilityResolver capabilities) =>
+        new ServiceCollection().AddScoped(_ => capabilities).BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
     private static MemoryExtractionRunInput Run(bool failed = false)
     {
@@ -157,11 +200,14 @@ public sealed class DefaultMemoryExtractionAgentTests
 
         public bool IsDisposed { get; private set; }
 
+        public ChatOptions? LastOptions { get; private set; }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
             WasCalled = true;
+            LastOptions = options;
             return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, _json)));
         }
 

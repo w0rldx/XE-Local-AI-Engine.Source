@@ -41,9 +41,49 @@ describe("RunningModelsPanel detail", () => {
 			isBusy: false,
 			lastUsedUtc: null,
 			isTransient: false,
+			effectiveContextTokens: null,
+			expertsOffloaded: false,
 		});
 
 		expect(screen.getByTestId("loaded-models-llamacpp-detail-m").textContent).toBe("Antwortet auf Statusprüfungen.");
+	});
+
+	it("shows the loaded window and an expert offload in the operator's language", async () => {
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage("de");
+		renderPanel({
+			modelName: "m",
+			role: "chat",
+			isResponsive: true,
+			detail: "Responsive.",
+			detailCode: "responsive",
+			isBusy: false,
+			lastUsedUtc: null,
+			isTransient: false,
+			effectiveContextTokens: 65536,
+			expertsOffloaded: true,
+		});
+
+		expect(screen.getByTestId("loaded-models-llamacpp-context-m").textContent).toBe("Kontextfenster: 65.536 Tokens");
+		expect(screen.getByTestId("loaded-models-llamacpp-experts-offloaded-m").textContent).toBe("Experten im Arbeitsspeicher");
+	});
+
+	it("claims neither a window nor an offload it was not told about", () => {
+		renderPanel({
+			modelName: "m",
+			role: "chat",
+			isResponsive: true,
+			detail: "Responsive.",
+			detailCode: "responsive",
+			isBusy: false,
+			lastUsedUtc: null,
+			isTransient: false,
+			effectiveContextTokens: null,
+			expertsOffloaded: false,
+		});
+
+		expect(screen.queryByTestId("loaded-models-llamacpp-context-m")).toBeNull();
+		expect(screen.queryByTestId("loaded-models-llamacpp-experts-offloaded-m")).toBeNull();
 	});
 
 	it("falls back to the raw detail for a code this build does not know", () => {
@@ -56,6 +96,8 @@ describe("RunningModelsPanel detail", () => {
 			isBusy: false,
 			lastUsedUtc: null,
 			isTransient: false,
+			effectiveContextTokens: null,
+			expertsOffloaded: false,
 		});
 
 		expect(screen.getByTestId("loaded-models-llamacpp-detail-m").textContent).toBe("Something new.");

@@ -82,4 +82,17 @@ public sealed class InvocationAgentDefinition
     ///     and pre-existing callers byte-identical.
     /// </remarks>
     public bool ReasoningBudgetEnforceable { get; init; } = true;
+
+    /// <summary>The node's thinking budget per effort level; null takes <see cref="ReasoningBudgets.Default" />.</summary>
+    public ReasoningBudgets? ReasoningBudgets { get; init; }
+
+    /// <summary>
+    ///     In-process marker on <see cref="ChatOptions.AdditionalProperties" /> saying <see cref="ChatOptions.MaxOutputTokens" />
+    ///     is the node's default cap, so the provider-round budgeter does not reserve it out of the input.
+    /// </summary>
+    internal const string DefaultOutputCapMarkerKey = "xe.default_output_cap";
+
+    /// <summary>The node's answer cap for this turn, added to the reasoning budget; null (the default) leaves the output uncapped.</summary>
+    /// <remarks>An explicit <see cref="InvocationSamplingOptions.MaxOutputTokens" /> wins over it.</remarks>
+    public int? DefaultMaxOutputTokens { get; init; }
 }

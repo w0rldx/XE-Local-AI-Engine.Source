@@ -50,6 +50,8 @@ public sealed class LocalChatRuntimePackageRequest
 
     public int? ReservedOutputTokensOverride { get; init; }
 
+    public bool UsesFrozenBenchmarkPolicy { get; init; }
+
     public bool DisableToolRelevanceFilter { get; init; }
 
     public bool AllowAutoModelSwap { get; init; }

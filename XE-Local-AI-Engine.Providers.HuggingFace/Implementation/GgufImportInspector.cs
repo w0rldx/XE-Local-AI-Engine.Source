@@ -30,7 +30,9 @@ internal sealed class GgufImportInspector : IGgufImportInspector
         "gpt2",
         "gptneox",
         "starcoder2",
-        "internlm2"
+        "internlm2",
+        "granite",
+        "lfm2moe"
     };
 
     private readonly HuggingFaceOptions _options;

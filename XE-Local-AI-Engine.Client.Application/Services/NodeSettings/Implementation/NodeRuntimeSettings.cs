@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
@@ -475,6 +476,30 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     {
         var stored = await LoadAsync(cancellationToken);
         return stored.KnowledgeSearchMaxResults ?? StoredNodeSettings.DefaultKnowledgeSearchMaxResults;
+    }
+
+    public async Task<ReasoningBudgets> GetReasoningBudgetsAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken);
+        var shipped = ReasoningBudgets.Default;
+        return shipped with
+        {
+            Minimal = stored.ReasoningBudgetMinimalTokens ?? shipped.Minimal,
+            Low = stored.ReasoningBudgetLowTokens ?? shipped.Low,
+            Medium = stored.ReasoningBudgetMediumTokens ?? shipped.Medium,
+            High = stored.ReasoningBudgetHighTokens ?? shipped.High,
+            UnspecifiedEffort = stored.DefaultReasoningEffort ?? shipped.UnspecifiedEffort
+        };
+    }
+
+    public async Task<ChatOutputCap> GetChatOutputCapAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken);
+        return new ChatOutputCap
+        {
+            Mode = stored.ChatOutputCapMode ?? StoredNodeSettings.ChatOutputCapModeCap,
+            MaxTokens = stored.ChatOutputCapMaxTokens ?? StoredNodeSettings.DefaultChatOutputCapMaxTokens
+        };
     }
 
     public async Task<int> GetAgentHomeMaxRunSecondsAsync(CancellationToken cancellationToken = default)

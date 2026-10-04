@@ -152,6 +152,8 @@ export interface HardwareProfile {
 	// role are carried so the figures are never attributed to the wrong model on a multi-model node.
 	readonly gpuOffloadedLayers: number | null;
 	readonly gpuTotalLayers: number | null;
+	// llama.cpp counts a --cpu-moe layer as offloaded, so "41 / 41" alone hides experts streaming from system RAM.
+	readonly gpuExpertsOffloaded: boolean;
 	readonly gpuOffloadModelName: string | null;
 	readonly gpuOffloadRole: string | null;
 }

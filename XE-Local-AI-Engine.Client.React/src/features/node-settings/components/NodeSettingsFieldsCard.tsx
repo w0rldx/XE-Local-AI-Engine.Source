@@ -26,6 +26,8 @@ import {
 	NodeSettingsDownloadLimitsCard,
 	NodeSettingsKnowledgeRetrievalCard,
 	NodeSettingsKnowledgeSearchCard,
+	NodeSettingsOutputCapCard,
+	NodeSettingsReasoningBudgetsCard,
 	NodeSettingsRetentionCard,
 	NodeSettingsToolLimitsCard,
 	NodeSettingsTranscriptionCard,
@@ -99,6 +101,8 @@ export function NodeSettingsFieldsCard(props: NodeSettingsFieldsCardProps) {
 			return (
 				<>
 					<LocalChatCard {...props} />
+					<NodeSettingsReasoningBudgetsCard {...tunable} />
+					<NodeSettingsOutputCapCard {...tunable} />
 					<NodeSettingsToolLimitsCard {...tunable} />
 					<NodeSettingsAgentRunLimitsCard {...tunable} />
 					<NodeSettingsContextCompactionCard {...tunable} />

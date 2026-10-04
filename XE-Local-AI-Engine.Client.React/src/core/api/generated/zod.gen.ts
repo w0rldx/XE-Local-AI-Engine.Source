@@ -4501,6 +4501,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = 
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	gpuExpertsOffloaded: z.boolean().optional(),
 	gpuOffloadModelName: z.string().nullish(),
 	gpuOffloadRole: z.string().nullish(),
 });
@@ -4837,6 +4838,12 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = z.o
 	isBusy: z.boolean(),
 	lastUsedUtc: z.iso.datetime({ offset: true }).nullable(),
 	isTransient: z.boolean(),
+	effectiveContextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	expertsOffloaded: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse = z.object({
@@ -7847,6 +7854,53 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	reasoningBudgetMinimalTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningBudgetLowTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningBudgetMediumTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningBudgetHighTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minReasoningBudgetTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedReasoningBudgetTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	defaultReasoningEffort: z.string().nullish(),
+	chatOutputCapMode: z.string().nullish(),
+	chatOutputCapMaxTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minChatOutputCapMaxTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedChatOutputCapMaxTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 	huggingFaceDownloadConnections: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -8457,6 +8511,13 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	webFetchMaxContentChars: z.int().gte(1000).lte(100000).nullish(),
 	knowledgeSearchDefaultResults: z.int().gte(1).lte(20).nullish(),
 	knowledgeSearchMaxResults: z.int().gte(1).lte(20).nullish(),
+	reasoningBudgetMinimalTokens: z.int().gte(128).lte(131072).nullish(),
+	reasoningBudgetLowTokens: z.int().gte(128).lte(131072).nullish(),
+	reasoningBudgetMediumTokens: z.int().gte(128).lte(131072).nullish(),
+	reasoningBudgetHighTokens: z.int().gte(128).lte(131072).nullish(),
+	defaultReasoningEffort: z.string().nullish(),
+	chatOutputCapMode: z.string().nullish(),
+	chatOutputCapMaxTokens: z.int().gte(256).lte(131072).nullish(),
 	huggingFaceDownloadConnections: z.int().gte(1).lte(16).nullish(),
 	transcriptionInferenceTimeoutMinutes: z.int().gte(1).lte(480).nullish(),
 	agentHomeMaxRunSeconds: z.int().gte(60).lte(86400).nullish(),
@@ -8960,6 +9021,7 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsRespon
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	expertsOffloaded: z.boolean().nullish(),
 	displayLabel: z.string().nullish(),
 	externalConnectionId: z.string().nullish(),
 	externalConnectionName: z.string().nullish(),

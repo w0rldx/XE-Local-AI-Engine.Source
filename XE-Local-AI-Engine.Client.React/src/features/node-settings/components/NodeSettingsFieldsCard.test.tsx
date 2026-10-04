@@ -687,6 +687,69 @@ describe("NodeSettingsFieldsCard — chat knobs", () => {
 		expect(onChange).toHaveBeenCalledWith("knowledgeChatTopK", 9);
 	});
 
+	it("shows the thinking budgets per effort and reports edits through the generic onChange", () => {
+		const { onChange } = renderCard({ section: "chat" });
+		const card = screen.getByTestId("node-settings-reasoning-budgets-card");
+		expect(within(card).getByText("Thinking budgets")).toBeTruthy();
+		expect((within(card).getByTestId("node-settings-reasoning-budget-minimal") as HTMLInputElement).value).toBe("1024 tokens");
+		expect((within(card).getByTestId("node-settings-reasoning-budget-high") as HTMLInputElement).value).toBe("24576 tokens");
+		expect((within(card).getByTestId("node-settings-default-reasoning-effort") as HTMLInputElement).value).toBe("low");
+		// Read per turn: no restart badge on any of them.
+		expect(screen.queryByTestId("node-settings-restart-badge-reasoningBudgetLowTokens")).toBeNull();
+		expect(screen.queryByTestId("node-settings-restart-badge-defaultReasoningEffort")).toBeNull();
+
+		fireEvent.change(within(card).getByTestId("node-settings-reasoning-budget-medium"), { target: { value: "4096" } });
+
+		expect(onChange).toHaveBeenCalledWith("reasoningBudgetMediumTokens", 4096);
+	});
+
+	it("shows the answer-length limit next to the thinking budgets and reports edits through the generic onChange", () => {
+		const { onChange } = renderCard({ section: "chat" });
+		const card = screen.getByTestId("node-settings-output-cap-card");
+		expect(within(card).getByText("Answer length")).toBeTruthy();
+		expect((within(card).getByTestId("node-settings-chat-output-cap-max-tokens") as HTMLInputElement).value).toBe("16384 tokens");
+		expect((within(card).getByTestId("node-settings-chat-output-cap-mode") as HTMLInputElement).value).toBe("cap");
+		// Read per turn: no restart badge.
+		expect(screen.queryByTestId("node-settings-restart-badge-chatOutputCapMode")).toBeNull();
+		expect(screen.queryByTestId("node-settings-restart-badge-chatOutputCapMaxTokens")).toBeNull();
+
+		fireEvent.change(within(card).getByTestId("node-settings-chat-output-cap-max-tokens"), { target: { value: "4096" } });
+
+		expect(onChange).toHaveBeenCalledWith("chatOutputCapMaxTokens", 4096);
+	});
+
+	it("ships the answer-length strings in en and de", () => {
+		const de = nonEnglishLocales.find((locale) => locale.code === "de")?.resource;
+		const lookup = (bundle: unknown, key: string) =>
+			key.split(".").reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], bundle);
+		for (const [key, en, german] of [
+			["pages.nodeSettings.fields.chatOutputCapMaxTokens.label", "Longest answer", "Längste Antwort"],
+			// The ceiling bounds the answer; the thinking budget adds to it, so the help text must not read it as the total.
+			[
+				"pages.nodeSettings.fields.chatOutputCapMaxTokens.description",
+				"The answer may use half the model's context window, but never more than this. A thinking model's thinking budget comes on top, so this is not the total.",
+				"Die Antwort darf das halbe Kontextfenster des Modells nutzen, aber nie mehr als diesen Wert. Das Denkbudget eines Denkmodells kommt hinzu, dies ist also nicht die Gesamtgrenze.",
+			],
+			[
+				"chat.notices.outputLimitReachedText",
+				"The answer stopped at the length limit before the model finished.",
+				"Die Antwort wurde an der Längengrenze beendet, bevor das Modell fertig war.",
+			],
+		] as const) {
+			expect(i18next.getFixedT("en")(key)).toBe(en);
+			expect(lookup(de, key)).toBe(german);
+		}
+	});
+
+	it("ships the thinking-budget strings in en and de", () => {
+		const de = nonEnglishLocales.find((locale) => locale.code === "de")?.resource;
+		const lookup = (bundle: unknown, key: string) =>
+			key.split(".").reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], bundle);
+		const key = "pages.nodeSettings.fields.defaultReasoningEffort.label";
+		expect(i18next.getFixedT("en")(key)).toBe("Budget when no effort is chosen");
+		expect(lookup(de, key)).toBe("Budget ohne gewählte Denkintensität");
+	});
+
 	it("badges only the restart-gated tool-pipeline limits", () => {
 		renderCard({ section: "chat" });
 

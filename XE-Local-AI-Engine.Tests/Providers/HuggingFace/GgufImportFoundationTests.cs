@@ -244,6 +244,25 @@ public sealed class GgufImportFoundationTests
         AssertEx.True((ValidatedGgufImportSource.WindowsOpenFlags & ValidatedGgufImportSource.WindowsSequentialScan) != 0);
     }
 
+    // Both load at the pinned llama.cpp (model-matrix round, 2026-10-04); an architecture the pin was never seen loading stays out of the list.
+    [Test]
+    [Arguments("granite")]
+    [Arguments("lfm2moe")]
+    public async Task Inspector_AcceptsArchitecturesProvenAtThePin(string architecture)
+    {
+        using var paths = new ImportPaths();
+        var source = paths.WriteSource(BuildCausalGguf(architecture), "model.gguf");
+        var result = await new GgufImportInspector(Infra.Options(paths.ModelsDirectory))
+            .InspectAsync(new GgufImportSource
+            {
+                AbsolutePath = source
+            }, CancellationToken.None);
+
+        AssertEx.True(result.IsAccepted);
+        AssertEx.Equal(GgufImportWorkload.CausalChat, result.Workload);
+        AssertEx.Equal(architecture, result.Architecture);
+    }
+
     [Test]
     [Arguments("model-00001-of-00002.gguf", "llama", GgufImportRejectionCode.SplitModel)]
     [Arguments("embedding.gguf", "bert", GgufImportRejectionCode.UnsupportedArchitecture)]

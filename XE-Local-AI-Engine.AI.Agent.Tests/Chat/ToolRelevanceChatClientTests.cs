@@ -272,6 +272,92 @@ public sealed class ToolRelevanceChatClientTests
         AssertEx.Equal(expected: 14, AssertEx.NotNull(listTools.BoundDecision).HiddenNames.Count);
     }
 
+    /// <summary>
+    ///     Model-matrix F5: an offer that does not fit the window is narrowed to the fitted token budget even below the
+    ///     threshold, and the node core no longer pins tools past it; list_tools stays so the rest can be revealed.
+    /// </summary>
+    [Test]
+    public async Task GetResponseAsync_WithAWindowFittedBudget_NarrowsBelowTheThresholdAndKeepsListTools()
+    {
+        string[] core = [.. Enumerable.Range(0, 8).Select(static index => $"core_{index}")];
+        var fillers = FillerNames(3);
+        var (tools, listTools) = BuildArray([.. core, .. fillers]);
+
+        var sent = await SendAsync(tools, coreNames: core, query: "zzzz", fittedOffer: Fitted(20, [.. core, .. fillers]));
+
+        AssertEx.False(sent.PassedThrough, "eleven tools plus list_tools exceed the fitted budget");
+        AssertEx.Equal(expected: 3, sent.Names.Count, "list_tools plus the two ten-token tools the budget holds; the node core is not pinned");
+        AssertEx.Contains(sent.Names, ListToolsFunction.ToolName);
+        AssertEx.Equal(expected: 9, AssertEx.NotNull(listTools.BoundDecision).HiddenNames.Count);
+    }
+
+    /// <summary>
+    ///     Model-matrix V4: the fit is by size in rank order. The best match that does not fit is skipped, not the whole
+    ///     offer, and the next ranked tool takes its place before any unrelated one.
+    /// </summary>
+    [Test]
+    public async Task GetResponseAsync_WithAWindowFittedBudget_SkipsARankedToolThatDoesNotFitAndFillsInRankOrder()
+    {
+        var (tools, listTools) = BuildArray([AskUserTool.ToolName, .. FillerNames(4), "weather_now", "forecast"]);
+        var costs = FillerNames(4).ToDictionary(static name => name, static _ => 10, StringComparer.Ordinal);
+        costs["weather_now"] = 50;
+        costs["forecast"] = 25;
+
+        var sent = await SendAsync(tools, query: "weather forecast", fittedOffer: new FittedToolOffer { RankedTokenBudget = 30, TokenCosts = costs });
+
+        AssertEx.Equal(string.Join(",", ListToolsFunction.ToolName, AskUserTool.ToolName, "forecast"), string.Join(",", sent.Names));
+        AssertEx.Contains(AssertEx.NotNull(listTools.BoundDecision).HiddenNames, "weather_now");
+    }
+
+    /// <summary>
+    ///     A query with nothing to rank by (function words only, or no user text) takes every selector's offer-everything
+    ///     path, which must still honour the fitted budget, or the turn overflows the window it was fitted to.
+    /// </summary>
+    [Test]
+    [Arguments("and the of a")]
+    [Arguments("   ")]
+    public async Task GetResponseAsync_WithAWindowFittedBudgetAndNoRankableQuery_StillSendsOnlyWhatFits(string query)
+    {
+        var (tools, listTools) = BuildArray([AskUserTool.ToolName, .. FillerNames(10)]);
+
+        var sent = await SendAsync(tools, query: query, fittedOffer: Fitted(45, FillerNames(10)));
+
+        AssertEx.False(sent.PassedThrough);
+        AssertEx.Equal(expected: 6, sent.Names.Count, "list_tools, ask_user and the four ten-token tools that fit 45");
+        AssertEx.Contains(sent.Names, ListToolsFunction.ToolName);
+        AssertEx.Contains(sent.Names, AskUserTool.ToolName);
+        AssertEx.Equal(expected: 6, AssertEx.NotNull(listTools.BoundDecision).HiddenNames.Count);
+    }
+
+    /// <summary>
+    ///     After list_tools a window-fitted turn stays inside its budget: the revealed tool displaces the last ranked one, the
+    ///     pinned tools stay, and a hidden tool too large for the budget is listed as not callable instead of overflowing.
+    /// </summary>
+    [Test]
+    public async Task GetResponseAsync_WithAWindowFittedBudget_FitsRevealedToolsIntoTheBudgetAfterListTools()
+    {
+        var (tools, listTools) = BuildArray([AskUserTool.ToolName, .. FillerNames(4), "huge_tool"]);
+        var costs = FillerNames(4).ToDictionary(static name => name, static _ => 10, StringComparer.Ordinal);
+        costs["huge_tool"] = 100;
+        var fitted = new FittedToolOffer { RankedTokenBudget = 30, TokenCosts = costs };
+        using var inner = new CapturingChatClient();
+        using var sut = BuildSut(inner);
+
+        using (ToolRelevanceScope.BeginScope(active: true, Core(), fitted))
+        {
+            _ = await sut.GetResponseAsync(Conversation("zzzz"), OptionsFor(tools));
+            var listing = AssertEx.NotNull(await listTools.InvokeAsync(new AIFunctionArguments()) as string);
+            _ = await sut.GetResponseAsync(Conversation("zzzz"), OptionsFor(tools));
+
+            AssertEx.Contains(listing, "\"name\":\"tool_3\",\"description\":\"The tool_3 tool.\"");
+            AssertEx.Contains(listing, $"\"name\":\"huge_tool\",\"description\":\"{ListToolsFunction.DoesNotFitDescription}\"");
+        }
+
+        AssertEx.Equal(string.Join(",", ListToolsFunction.ToolName, AskUserTool.ToolName, "tool_0", "tool_1", "tool_2"), string.Join(",", NamesOf(inner.ReceivedOptions[0])));
+        AssertEx.Equal(string.Join(",", ListToolsFunction.ToolName, AskUserTool.ToolName, "tool_0", "tool_1", "tool_3"), string.Join(",", NamesOf(inner.ReceivedOptions[1])),
+            "the revealed tool_3 displaces tool_2 within the budget of 30; huge_tool is never sent");
+    }
+
     [Test]
     public async Task GetResponseAsync_PinsAToolNamedInTheSystemSeedMessage()
     {
@@ -726,13 +812,14 @@ public sealed class ToolRelevanceChatClientTests
         bool active = true,
         string[]? coreNames = null,
         string query = Query,
-        IReadOnlyList<ChatMessage>? messages = null)
+        IReadOnlyList<ChatMessage>? messages = null,
+        FittedToolOffer? fittedOffer = null)
     {
         using var inner = new CapturingChatClient();
         using var sut = BuildSut(inner);
         var options = OptionsFor(tools);
 
-        using (ToolRelevanceScope.BeginScope(active, Core(coreNames ?? [])))
+        using (ToolRelevanceScope.BeginScope(active, Core(coreNames ?? []), fittedOffer))
         {
             _ = await sut.GetResponseAsync(messages ?? Conversation(query), options);
         }
@@ -744,6 +831,13 @@ public sealed class ToolRelevanceChatClientTests
             Names = NamesOf(received)
         };
     }
+
+    private static FittedToolOffer Fitted(int budget, IEnumerable<string> names) =>
+        new()
+        {
+            RankedTokenBudget = budget,
+            TokenCosts = names.ToDictionary(static name => name, static _ => 10, StringComparer.Ordinal)
+        };
 
     private static (List<AITool> Tools, ListToolsFunction ListTools) BuildArray(IReadOnlyList<string> names)
     {

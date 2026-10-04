@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.ClientModel.Primitives;
 using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Globalization;
@@ -17,6 +18,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using OpenAI.Chat;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
@@ -1120,6 +1122,141 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
         AssertEx.Null(GetActiveInvocationCancellationTokenSource(runner));
+    }
+
+    /// <summary>The per-effort budgets are node settings read per turn (model-matrix F3, operator decision 3).</summary>
+    [Test]
+    public async Task RunAsync_HandsTheNodeReasoningBudgetsToTheAgentDefinition()
+    {
+        var budgets = ReasoningBudgets.Default with
+        {
+            Medium = 3000,
+            UnspecifiedEffort = "medium"
+        };
+        InvocationAgentDefinition? captured = null;
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Do<InvocationAgentDefinition>(definition => captured = definition), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("stop after the definition")));
+
+        var runner = CreateRunner(factory,
+            configureRuntimeSettings: settings => settings.GetReasoningBudgetsAsync(Arg.Any<CancellationToken>()).Returns(budgets));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.Equal(budgets, AssertEx.NotNull(captured).ReasoningBudgets);
+    }
+
+    /// <summary>
+    ///     Model-matrix F2 (operator decision 4): with no cap a 0.8B repeated "000…" until the 65k window ran out. The
+    ///     shipped variant caps at half the launched window, at most the node ceiling; notice-only and off do not cap.
+    /// </summary>
+    [Test]
+    [Arguments("cap", 16_384, 65_536, 16_384)]
+    [Arguments("cap", 16_384, 4_096, 2_048)]
+    [Arguments("cap", 1_000, 65_536, 1_000)]
+    [Arguments("notice", 16_384, 65_536, null)]
+    [Arguments("off", 16_384, 65_536, null)]
+    public async Task RunAsync_HandsTheNodeOutputCapForTheLaunchedWindowToTheAgentDefinition(string mode, int ceiling, int window, int? expectedCap)
+    {
+        InvocationAgentDefinition? captured = null;
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Do<InvocationAgentDefinition>(definition => captured = definition), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("stop after the definition")));
+
+        var runner = CreateRunner(factory,
+            providerResolver: CreateLlamaCppResolver(window),
+            configureRuntimeSettings: settings => settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(new ChatOutputCap { Mode = mode, MaxTokens = ceiling }));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.Equal(expectedCap, AssertEx.NotNull(captured).DefaultMaxOutputTokens);
+    }
+
+    /// <summary>
+    ///     A frozen benchmark replays what it sent before the cap and the thinking ladder became node settings: no default
+    ///     output cap, and 1024/2048/8192/24576 with a blank effort on medium, whatever the node has saved since.
+    /// </summary>
+    [Test]
+    public async Task RunAsync_ForABenchmarkPackage_IgnoresTheNodeOutputCapAndThinkingBudgets()
+    {
+        InvocationAgentDefinition? captured = null;
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Do<InvocationAgentDefinition>(definition => captured = definition), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException("stop after the definition")));
+        var runner = CreateRunner(factory,
+            providerResolver: CreateLlamaCppResolver(65_536),
+            configureRuntimeSettings: settings =>
+            {
+                settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(new ChatOutputCap { Mode = "cap", MaxTokens = 1_000 });
+                settings.GetReasoningBudgetsAsync(Arg.Any<CancellationToken>()).Returns(ReasoningBudgets.Default with
+                {
+                    Medium = 3000,
+                    UnspecifiedEffort = "minimal"
+                });
+            });
+        var package = BenchmarkRunExecutor.BuildPrimaryPackage(new LocalChatRuntimePackageBuilder(),
+            new ResolvedAgentRuntime("Be helpful.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1),
+            "What is 2+2?",
+            "bench-model",
+            BenchmarkFrozenPolicies.DeterministicSampling(),
+            requestedContextTokens: 65_536,
+            invocationTimeoutSeconds: 600);
+
+        await RunAsync(runner, package);
+
+        var definition = AssertEx.NotNull(captured);
+        AssertEx.Null(definition.DefaultMaxOutputTokens, "a context-limited benchmark takes no default output cap");
+        AssertEx.Equal(new ReasoningBudgets
+        {
+            Minimal = 1024,
+            Low = 2048,
+            Medium = 8192,
+            High = 24576,
+            UnspecifiedEffort = "medium"
+        }, definition.ReasoningBudgets);
+    }
+
+    /// <summary>Model-matrix F2: an answer cut off at the cap or the window said nothing, so it read as complete.</summary>
+    [Test]
+    [Arguments("cap", true)]
+    [Arguments("notice", true)]
+    [Arguments("off", false)]
+    public async Task RunAsync_WhenTheAnswerEndsOnLength_EmitsTheOutputLimitNoticeUnlessOff(string mode, bool expectNotice)
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher,
+            agentUpdates: ReasoningThenContentFinishing("length", "thought", "0000"),
+            configureRuntimeSettings: settings => settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(new ChatOutputCap { Mode = mode, MaxTokens = 16_384 }));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(expectNotice ? 1 : 0).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.OutputLimitReached
+            && payload.Message == "The answer stopped at the length limit before the model finished."
+            && payload.Detail == "length"));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheAnswerEndsOnStop_EmitsNoOutputLimitNotice()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ReasoningThenContentFinishing("stop", "thought", "Hello."));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.OutputLimitReached));
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ReasoningThenContentFinishing(string finishReason, string reasoning, string content)
+    {
+        yield return new AgentResponseUpdate(ChatRole.Assistant, [new TextReasoningContent(reasoning)]);
+        await Task.Yield();
+        yield return new AgentResponseUpdate(ChatRole.Assistant, content);
+        await Task.Yield();
+        yield return new AgentResponseUpdate(ChatRole.Assistant, [])
+        {
+            FinishReason = new ChatFinishReason(finishReason)
+        };
     }
 
     [Test]
@@ -2427,6 +2564,281 @@ public sealed class InvocationRunnerTests
             FailureCategory.ContextWindowExceeded);
     }
 
+    /// <summary>
+    ///     Model-matrix F5: at a 4096 window about 19 tool schemas alone overflowed, and every first message failed with
+    ///     advice to compact a conversation that had no history. The offer is now narrowed to what fits.
+    /// </summary>
+    [Test]
+    public async Task RunAsync_WhenTheToolOfferAloneOverflowsTheWindow_NarrowsItToFitInsteadOfFailing()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        FittedToolOffer? fittedOffer = null;
+        var factory = CreateFactory(CreateUpdates("Jupiter"), onCreate: _ => fittedOffer = ToolRelevanceScope.Current?.FittedOffer);
+        var runner = CreateRunner(factory,
+            eventDispatcher: dispatcher,
+            contextBudgetOptions: new ConversationContextBudgetOptions
+            {
+                DefaultContextTokens = 6000,
+                ReservedOutputTokenFloor = 0
+            });
+
+        var package = WithLargeTools(RuntimePackageBuilder.Valid(), count: 20).Build();
+        await RunAsync(runner, package);
+
+        await dispatcher.DidNotReceiveWithAnyArgs().ReportInvocationFailedAsync(Guid.Empty, string.Empty, FailureCategory.Unexpected);
+        var fitted = AssertEx.NotNull(fittedOffer, "the offer is narrowed for this turn");
+        AssertEx.Equal(20, fitted.TokenCosts.Count, "every offered tool is costed");
+        AssertEx.True(fitted.RankedTokenBudget >= fitted.TokenCosts.Values.Min(), "at least one ranked tool fits");
+        AssertEx.True(fitted.RankedTokenBudget < fitted.TokenCosts.Values.Sum(), "not every tool fits, or the offer would not need narrowing");
+    }
+
+    /// <summary>Model-matrix V4: at a 4,096 window the real Default Assistant offer runs a turn with ranked tools.</summary>
+    /// <remarks>
+    ///     The count-based fit refused even its minimum there, so every agent turn failed with the tool message. The
+    ///     provider-round budgeter must accept exactly what the relevance hop then sends.
+    /// </remarks>
+    [Test]
+    public async Task RunAsync_WithTheRealDefaultAssistantOfferAtA4096Window_SendsRankedToolsInsideTheProviderBudget()
+    {
+        const string Model = "qwen3.5:0.8b";
+        const string Question = "What is 17 * 23? Use the calculator.";
+        var offer = await DefaultAssistantOfferAsync(Model);
+        var systemPrompt = string.Concat(await ReadAgentInstructionsAsync("BaseScaffold.txt"), "\n\n", await ReadAgentInstructionsAsync("LocalChatDefault.txt"));
+
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        FittedToolOffer? fittedOffer = null;
+        var factory = CreateFactory(CreateUpdates("Jupiter"), onCreate: _ => fittedOffer = ToolRelevanceScope.Current?.FittedOffer);
+        var budgetOptions = new ConversationContextBudgetOptions { DefaultContextTokens = 4096 };
+        var contextBudgeter = new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(budgetOptions), StubNodeRuntimeSettings.Create().Build());
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher, contextBudgetOptions: budgetOptions, contextBudgeter: contextBudgeter);
+        var package = RuntimePackageBuilder.Valid().WithSystemPrompt(systemPrompt).WithUserMessage(Question).Build() with { AllowedTools = [.. offer] };
+
+        await RunAsync(runner, package);
+
+        await dispatcher.DidNotReceiveWithAnyArgs().ReportInvocationFailedAsync(Guid.Empty, string.Empty, FailureCategory.Unexpected);
+        var fitted = AssertEx.NotNull(fittedOffer, "the full offer does not fit 4,096, so the turn runs on a fitted one");
+
+        // Live C2: the round after one Calculate call and its result overflowed the window the first round filled. Checked for
+        // the costliest selection the hop could make inside the budget, measured as the fit measured it.
+        var rankable = fitted.TokenCosts.Keys.ToList();
+        var costliest = Enumerable.Range(0, 1 << rankable.Count)
+                                  .Select(mask => rankable.Where((_, index) => (mask & (1 << index)) != 0).ToList())
+                                  .Where(subset => subset.Sum(name => fitted.TokenCosts[name]) <= fitted.RankedTokenBudget)
+                                  .MaxBy(subset => subset.Sum(name => fitted.TokenCosts[name]))!;
+        var offered = costliest.Append(AskUserTool.ToolName).ToHashSet(StringComparer.Ordinal);
+        List<ChatMessage> toolRoundTrip =
+        [
+            new(ChatRole.Assistant, [new FunctionCallContent("call_0", "Calculate", new Dictionary<string, object?>(StringComparer.Ordinal) { ["expression"] = "17 * 23" })]),
+            new(ChatRole.Tool, [new FunctionResultContent("call_0", "17 * 23 = 391")])
+        ];
+        var secondRound = contextBudgeter.Budget([new ChatMessage(ChatRole.User, Question), .. toolRoundTrip],
+            4096,
+            budgetOptions.ReservedOutputTokenFloor,
+            systemPrompt,
+            [ListToolsFunction.BudgetDefinition, .. InvocationRunner.BuildToolBudgetDefinitions([.. offer.Where(tool => offered.Contains(tool.Name))])],
+            Model);
+        // Charged as if the selection used the whole budget: which tools fill it depends on the model's per-tool costs.
+        var unusedBudget = fitted.RankedTokenBudget - costliest.Sum(name => fitted.TokenCosts[name]);
+        AssertEx.True(secondRound.EstimatedTokensBefore <= secondRound.EffectiveBudgetTokens - unusedBudget,
+            $"one tool round-trip fits after a full fitted offer without trimming the turn ({secondRound.EstimatedTokensBefore} > {secondRound.EffectiveBudgetTokens} - {unusedBudget})");
+
+        // The provider call the turn makes: the real offer as executable tools plus list_tools, through the relevance hop
+        // and the provider-round budgeter, which throws when the request does not fit the window.
+        List<AITool> tools = [.. offer.Select(static tool => new MetadataToolFunction(tool.Name, tool.Description, MetadataToolFunction.ParseSchema(tool.ParameterSchema!), static (_, _) => Task.FromResult("ok")))];
+        tools.Add(new ListToolsFunction(tools));
+        ChatOptions? sent = null;
+        var provider = Substitute.For<IChatClient>();
+        provider.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Do<ChatOptions?>(options => sent = options), Arg.Any<CancellationToken>())
+                .Returns(new ChatResponse(new ChatMessage(ChatRole.Assistant, "Jupiter")));
+        using var budgeter = new ProviderCallBudgetChatClient(provider, NullLogger<ProviderCallBudgetChatClient>.Instance);
+        using var hop = new ToolRelevanceChatClient(budgeter,
+            new LexicalToolRelevanceSelector(),
+            new ToolRelevanceOptions(),
+            NullLogger<ToolRelevanceChatClient>.Instance);
+        List<string> sentNames;
+        using (ToolRelevanceScope.BeginScope(active: true, FrozenSet<string>.Empty, fitted))
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { DefaultContextTokens = 4096 }))
+        {
+            var options = new ChatOptions
+            {
+                ModelId = Model,
+                Tools = tools,
+                AdditionalProperties = new AdditionalPropertiesDictionary { ["num_ctx"] = 4096 }
+            };
+            List<ChatMessage> round = [new ChatMessage(ChatRole.System, systemPrompt), new ChatMessage(ChatRole.User, Question)];
+            _ = await hop.GetResponseAsync(round, options);
+            sentNames = [.. AssertEx.NotNull(sent).Tools!.Select(static tool => tool.Name)];
+
+            // The next provider round, after the call and its result, for this query's selection and the costliest one.
+            round.AddRange(toolRoundTrip);
+            _ = await hop.GetResponseAsync(round, options);
+            _ = await budgeter.GetResponseAsync(round, new ChatOptions
+            {
+                ModelId = Model,
+                Tools = [.. tools.Where(tool => offered.Contains(tool.Name) || tool is ListToolsFunction)],
+                AdditionalProperties = new AdditionalPropertiesDictionary { ["num_ctx"] = 4096 }
+            });
+        }
+
+        AssertEx.Contains(sentNames, ListToolsFunction.ToolName);
+        AssertEx.Contains(sentNames, AskUserTool.ToolName);
+        AssertEx.True(sentNames.Count > 2, $"at least one ranked tool beside list_tools and ask_user, sent: {string.Join(", ", sentNames)}");
+        AssertEx.True(sentNames.Count < tools.Count, "the offer was narrowed");
+    }
+
+    /// <summary>
+    ///     The attachment is sized against the costliest offer the hop can send, whatever the rank order: with room 1000 the
+    ///     hop can send both 500s, so the largest-first 600 is an underestimate.
+    /// </summary>
+    [Test]
+    [Arguments(new[] { 600, 500, 500 }, 1000, 1000)]
+    [Arguments(new[] { 300, 700, 250, 400 }, 1000, 1000)]
+    [Arguments(new[] { 1200, 900 }, 1000, 900)]
+    [Arguments(new[] { 1200 }, 1000, 0)]
+    public void CostliestWithin_ReturnsTheLargestTotalCostTheHopCanSendWithinTheRoom(int[] costs, int room, int expectedTotal)
+    {
+        var subset = InvocationRunner.CostliestWithin(costs, room);
+
+        AssertEx.Equal(subset.Count, subset.Distinct().Count(), "each tool counted once");
+        AssertEx.Equal(expectedTotal, subset.Sum(index => costs[index]));
+    }
+
+    // The send path's whole offer for a tool-capable local model with the knowledge tools on, from the product's provider.
+    private static Task<IReadOnlyList<AllowedToolDto>> DefaultAssistantOfferAsync(string model)
+    {
+        return new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
+                   new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+                   StubNodeRuntimeSettings.Create().WithToolCapableModels(model).WithKnowledgeAgentToolsEnabled(true).Build(),
+                   NullCustomToolScopeFactory.Instance,
+                   new FakeModelTrustResolver())
+               .GetOfferedToolsAsync(model, isCloudModel: false);
+    }
+
+    private static async Task<string> ReadAgentInstructionsAsync(string fileName)
+    {
+        await using var stream = typeof(LocalChatAgentOptions).Assembly.GetManifestResourceStream($"XE_Local_AI_Engine.AI.Agent.Instructions.{fileName}")
+                                 ?? throw new InvalidOperationException($"Embedded instructions '{fileName}' not found.");
+        using var reader = new StreamReader(stream);
+        return await reader.ReadToEndAsync();
+    }
+
+    [Test]
+    public async Task RunAsync_WhenEvenTheNarrowedToolOfferOverflows_NamesTheToolsInsteadOfAdvisingCompaction()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher,
+            contextBudgetOptions: new ConversationContextBudgetOptions
+            {
+                DefaultContextTokens = 1500,
+                ReservedOutputTokenFloor = 0
+            });
+
+        // Every tool alone is larger than the window: not even list_tools plus one ranked tool fits.
+        var package = WithLargeTools(RuntimePackageBuilder.Valid(), count: 20, paddingChars: 8_000).Build();
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            "The tools offered with this message do not fit this model's context window — Turn off tools for this chat, or switch to a larger-context model.",
+            FailureCategory.ContextWindowExceeded);
+    }
+
+    /// <summary>A pasted message that overflows the window on its own must not be blamed on the tools: turning them off would not help.</summary>
+    [Test]
+    public async Task RunAsync_WhenTheTurnOverflowsEvenWithNoTools_FailsWithTheGenericMessageNotTheToolOne()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher,
+            contextBudgetOptions: new ConversationContextBudgetOptions
+            {
+                DefaultContextTokens = 6000,
+                ReservedOutputTokenFloor = 0
+            });
+
+        var package = WithLargeTools(RuntimePackageBuilder.Valid().WithUserMessage(new string('x', 40_000)), count: 20).Build();
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            "Conversation exceeds the model's context window even after truncation — Compact the conversation to summarize older messages, start a new chat, or switch to a larger-context model.",
+            FailureCategory.ContextWindowExceeded);
+    }
+
+    /// <summary>Model-matrix F6: a 30k-character attachment failed the first turn at 4k and 8k instead of being trimmed.</summary>
+    [Test]
+    public async Task RunAsync_WhenTheAttachmentOverflowsTheWindow_ShortensItAndTellsTheUser()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        IReadOnlyList<ChatMessage>? sent = null;
+        var factory = CreateFactory(CreateUpdates("summary"), onCreate: definition => sent = definition.ConversationContext);
+        var runner = CreateRunner(factory,
+            eventDispatcher: dispatcher,
+            contextBudgetOptions: new ConversationContextBudgetOptions
+            {
+                DefaultContextTokens = 4096,
+                ReservedOutputTokenFloor = 0
+            });
+        var parts = new[] { new AttachmentTextPart("notes.txt", new string('a', 30_000)) };
+        var package = WithAttachment(RuntimePackageBuilder.Valid().Build(), parts);
+
+        await RunAsync(runner, package);
+
+        await dispatcher.DidNotReceiveWithAnyArgs().ReportInvocationFailedAsync(Guid.Empty, string.Empty, FailureCategory.Unexpected);
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.AttachmentShortened
+            && payload.Message == "The attached file was shortened to fit this model's context window; the model was told it is incomplete."));
+        var attachmentText = AssertEx.NotNull(sent).Single(message => message.Text.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal)).Text;
+        AssertEx.True(attachmentText.Length < 16_000, $"shortened to the window, was {attachmentText.Length} chars");
+        AssertEx.Contains(attachmentText, ConversationAttachmentContextComposer.TruncationNotice);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenNoShortenedAttachmentFits_NamesTheAttachment()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher,
+            contextBudgetOptions: new ConversationContextBudgetOptions
+            {
+                DefaultContextTokens = 800,
+                ReservedOutputTokenFloor = 0
+            });
+        // The file name rides inside the fence, so even the emptiest recomposition outgrows the window while the turn alone fits.
+        var package = WithAttachment(RuntimePackageBuilder.Valid().Build(), [new AttachmentTextPart(new string('n', 6_000), new string('a', 30_000))]);
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            "The attached file does not fit this model's context window, even shortened — Remove the attachment, or switch to a larger-context model.",
+            FailureCategory.ContextWindowExceeded);
+    }
+
+    private static RuntimePackageBuilder WithLargeTools(RuntimePackageBuilder builder, int count, int paddingChars = 1800)
+    {
+        for (var index = 0; index < count; index++)
+        {
+            var padding = new string('x', paddingChars);
+            builder.WithAllowedTool($"tool_{index}", parameterSchema: $$"""{"type":"object","description":"{{padding}}"}""");
+        }
+
+        return builder;
+    }
+
+    // The attachment message exactly as ChatTurnContextBuilder builds it, composed at the default 48,000-character cap.
+    private static RuntimePackage WithAttachment(RuntimePackage package, IReadOnlyList<AttachmentTextPart> parts)
+    {
+        const string Seed = "seed";
+        var attachment = new ConversationMessageDto
+        {
+            Id = Guid.NewGuid(),
+            Role = MessageRole.User,
+            Content = ConversationAttachmentContextComposer.Compose(parts, 48_000, Seed)!,
+            SortOrder = -1,
+            ShortenAttachment = budget => ConversationAttachmentContextComposer.Compose(parts, budget, Seed)
+        };
+        return package with
+        {
+            ConversationContext = [attachment, .. package.ConversationContext]
+        };
+    }
+
     [Test]
     public async Task RunAsync_WhenTheApprovalResumeOverrunsOnReasoningAlone_FailsTheTurnWithoutPass4()
     {
@@ -3390,11 +3802,17 @@ public sealed class InvocationRunnerTests
     ///     Tester round 6, item 8: a turn that spent its whole room thinking read "stopped without an answer", and the
     ///     user believed the reasoning was lost. It is persisted and shown, so the notice says so.
     /// </summary>
+    /// <remarks>
+    ///     "stop" is the reasoning budget: llama-server closes the block when the budget runs out and the model can end
+    ///     there with no answer (model-matrix F3). The plain notice blamed nothing the user could act on.
+    /// </remarks>
     [Test]
-    public async Task RunAsync_WhenTheTurnRanOutOfRoomWhileThinking_SaysTheThoughtsAreKept()
+    [Arguments("length")]
+    [Arguments("stop")]
+    public async Task RunAsync_WhenTheTurnRanOutOfRoomWhileThinking_SaysTheThoughtsAreKept(string finishReason)
     {
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
-        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ThinkingThenFinish("length"));
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ThinkingThenFinish(finishReason));
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -3402,11 +3820,244 @@ public sealed class InvocationRunnerTests
         await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
             payload.Kind == TurnNoticeKind.EmptyAnswer
             && payload.Message == "The model stopped while thinking before it could answer; its thoughts are kept above."
-            && payload.Detail == "length"));
+            && payload.Detail == finishReason));
+    }
+
+    /// <summary>
+    ///     Model-matrix F4: after one Calculate call the 9B wrote the next call as <c>&lt;tool_call&gt;</c> inside its
+    ///     reasoning and the turn ended "stopped without an answer". The runner re-prompts exactly once, replaying the
+    ///     executed call and its result.
+    /// </summary>
+    [Test]
+    public async Task RunAsync_WhenTheFinalRoundReasonsAToolCall_RepromptsOnceAndTheRetryAnswers()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var segments = new List<IReadOnlyList<ChatMessage>>();
+        var thinkingOffRounds = new List<bool>();
+        var calls = 0;
+        var factory = CreateMessageCapturingFactory(
+            _ =>
+            {
+                // What the provider-round hop (ProviderCallBudgetChatClient) reads as each segment starts and ends.
+                thinkingOffRounds.Add(ProviderCallBudget.Current?.IsThinkingOff == true);
+                return RecordThinkingOffAtEnd(Interlocked.Increment(ref calls) == 1 ? ToolRoundThenReasonedToolCall() : CreateUpdates("7105417"), thinkingOffRounds);
+            },
+            messages => segments.Add([.. messages]));
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build());
+
+        AssertEx.Equal(2, segments.Count);
+        var retry = segments[1];
+        AssertEx.Equal(ChatRole.User, retry[^1].Role);
+        AssertEx.Contains(retry[^1].Text, "tool call inside your reasoning");
+        AssertEx.True(retry.Any(static message => message.Contents.OfType<FunctionResultContent>().Any(static result => result.CallId == "call-1")),
+            "the executed call's result is replayed");
+        AssertEx.False(retry.Any(static message => message.Contents.OfType<TextReasoningContent>().Any(static reasoning => reasoning.Text.Contains("<tool_call>", StringComparison.Ordinal))),
+            "the silent round's reasoning is not replayed");
+        AssertEx.Equal("False,False,True,True", string.Join(",", thinkingOffRounds), "thinking goes off at the re-prompt and stays off to the end of the turn");
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EmptyAnswer));
     }
 
     [Test]
-    [Arguments("stop", true)]
+    public async Task RunAsync_WhenTheRepromptAlsoReasonsAToolCall_StopsAfterOneRetryWithTheToolCallNotice()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var calls = 0;
+        var factory = CreateMessageCapturingFactory(cancellationToken =>
+            {
+                _ = Interlocked.Increment(ref calls);
+                return ToolRoundThenReasonedToolCall();
+            },
+            _ => { });
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build());
+
+        AssertEx.Equal(2, calls, "bounded to one retry");
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.EmptyAnswer
+            && payload.Message == "The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer."));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheSilentRoundReasonsNoToolCall_DoesNotReprompt()
+    {
+        var calls = 0;
+        var factory = CreateMessageCapturingFactory(cancellationToken =>
+            {
+                _ = Interlocked.Increment(ref calls);
+                return ToolRoundUpdates("ok", finalText: null);
+            },
+            _ => { });
+        var runner = CreateRunner(factory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build());
+
+        AssertEx.Equal(1, calls);
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> RecordThinkingOffAtEnd(IAsyncEnumerable<AgentResponseUpdate> updates, List<bool> record)
+    {
+        await foreach (var update in updates)
+        {
+            yield return update;
+        }
+
+        record.Add(ProviderCallBudget.Current?.IsThinkingOff == true);
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolRoundThenReasonedToolCall()
+    {
+        await foreach (var update in ToolRoundUpdates("1234 * 5678 = 7006652", finalText: null))
+        {
+            yield return update;
+        }
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant,
+            [new TextReasoningContent("Now add 98765.\n\n<tool_call>\n<function=Calculate>\n<parameter=expression>\n7006652 + 98765\n</parameter>\n</function>\n</tool_call>")]);
+        await Task.Yield();
+        yield return new AgentResponseUpdate(ChatRole.Assistant, [])
+        {
+            FinishReason = new ChatFinishReason("stop")
+        };
+    }
+
+    /// <summary>
+    ///     Model-matrix F19: after the budget closed the reasoning block the 9B kept deliberating in content and closed it
+    ///     with a literal <c>&lt;/think&gt;</c>. The persisted answer is what follows the tag; the text before it is reasoning.
+    /// </summary>
+    [Test]
+    public async Task RunAsync_WhenTheAnswerCarriesAStrayCloseTag_ReclassifiesTheTextBeforeItAsReasoning()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher,
+            agentUpdates: ReasoningThenContent("budget ran out", "Another option: hi.\nI will answer.\n", "</think>", "\n\nHello there."));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationTextReclassifiedAsync(package.InvocationId,
+            "Hello there.",
+            "\n\nAnother option: hi.\nI will answer.");
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EmptyAnswer));
+    }
+
+    /// <summary>Live on LFM2.5 at effort none: the whole reply was "Okay." and a stray close tag. The text stays the answer.</summary>
+    [Test]
+    public async Task RunAsync_WhenTheOnlyTextPrecedesAStrayCloseTag_KeepsItAsTheAnswerWithoutTheTag()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdates("Okay.\n", "</think>"));
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("none").Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationTextReclassifiedAsync(package.InvocationId, "Okay.", string.Empty);
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EmptyAnswer));
+    }
+
+    /// <summary>The same rule after reasoning, and for a whole block with nothing outside it: the round never loses its only text.</summary>
+    [Test]
+    [Arguments("still deliberating", "</think>")]
+    [Arguments("<think>still deliberating", "</think>")]
+    public async Task RunAsync_WhenMovingTheLeakedTextWouldLeaveNoAnswer_KeepsItAsTheAnswer(string first, string second)
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ReasoningThenContent("budget ran out", first, second));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationTextReclassifiedAsync(package.InvocationId, "still deliberating", string.Empty);
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EmptyAnswer));
+    }
+
+    /// <summary>Model-matrix V2: the 0.8B reopened the think block in content after the budget. The block is reasoning.</summary>
+    [Test]
+    public async Task RunAsync_WhenAThinkingModelsAnswerCarriesAWholeThinkBlock_ReclassifiesTheBlockAsReasoning()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher,
+            agentUpdates: ReasoningThenContent("budget ran out", "<think>\n\nThinking Process: greet back.", "\n</think>\n\n", "Hello there."));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationTextReclassifiedAsync(package.InvocationId, "Hello there.", "\n\nThinking Process: greet back.");
+    }
+
+    /// <summary>Model-matrix W3: LFM2.5 at effort none closed in-content deliberation with a literal close tag and reasoned nothing.</summary>
+    [Test]
+    public async Task RunAsync_WhenAThinkingModelLeaksAStrayCloseTagWithThinkingOff_ReclassifiesTheTextBeforeIt()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdates("User asks: 17 + 25. Provide final.\n", "</think>", "\n42"));
+        var package = RuntimePackageBuilder.Valid().WithReasoningEffort("none").Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationTextReclassifiedAsync(package.InvocationId, "42", "User asks: 17 + 25. Provide final.");
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EmptyAnswer));
+    }
+
+    /// <summary>A model that cannot think and explains the tags keeps its answer, quoted block or stray close tag alike.</summary>
+    [Test]
+    [Arguments("<think>a tag</think> is markup")]
+    [Arguments("A closing </think> ends the block.")]
+    public async Task RunAsync_WhenANonThinkingModelWritesThinkTags_LeavesTheAnswerAlone(string answer)
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdates(answer));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build() with { SupportsThinking = false });
+
+        await dispatcher.DidNotReceive().ReportInvocationTextReclassifiedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    /// <summary>A thinking model that explains the tags after answer text keeps them: only a block that opens the answer is residue.</summary>
+    [Test]
+    [Arguments("Use <think>analysis</think> before the answer.")]
+    [Arguments("The template:\n```\n<think>analysis</think>\nanswer\n```")]
+    public async Task RunAsync_WhenAThinkingModelQuotesAThinkBlockAfterAnswerText_LeavesTheAnswerAlone(string answer)
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ReasoningThenContent("thought", answer));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.DidNotReceive().ReportInvocationTextReclassifiedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheAnswerHasNoThinkTag_LeavesItAlone()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ReasoningThenContent("thought", "No tag at all."));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.DidNotReceive().ReportInvocationTextReclassifiedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ReasoningThenContent(string reasoning, params string[] content)
+    {
+        yield return new AgentResponseUpdate(ChatRole.Assistant, [new TextReasoningContent(reasoning)]);
+        await Task.Yield();
+        foreach (var chunk in content)
+        {
+            yield return new AgentResponseUpdate(ChatRole.Assistant, chunk);
+            await Task.Yield();
+        }
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, [])
+        {
+            FinishReason = new ChatFinishReason("stop")
+        };
+    }
+
+    [Test]
+    [Arguments("stop", false)]
     [Arguments("length", false)]
     public async Task RunAsync_WhenTheEmptyTurnWasNotCutOffWhileThinking_KeepsThePlainNotice(string finishReason, bool withReasoning)
     {

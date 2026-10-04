@@ -129,6 +129,13 @@ public sealed class GgufAttentionShape
     public long? ValueLengthMla { get; init; }
 
     /// <summary>
+    ///     <c>{arch}.full_attention_interval</c> — in a hybrid recurrent/attention stack (qwen3next, qwen35, qwen35moe) only
+    ///     every Nth layer is attention and holds a KV cache; the others keep a fixed-size recurrent state.
+    /// </summary>
+    /// <value>Read from the header only; <see langword="null" /> charges every layer as attention, a conservative over-estimate.</value>
+    public long? FullAttentionInterval { get; init; }
+
+    /// <summary>
     ///     True when the header declares BOTH positive MLA lengths — llama.cpp's <c>is_mla()</c>. The single detection
     ///     authority; no architecture name is ever consulted.
     /// </summary>

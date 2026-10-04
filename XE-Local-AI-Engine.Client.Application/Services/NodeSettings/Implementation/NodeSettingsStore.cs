@@ -363,6 +363,22 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
                 StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults),
             KnowledgeSearchMaxResults = ClampToRange(settings.KnowledgeSearchMaxResults,
                 StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults),
+            ReasoningBudgetMinimalTokens = ClampToRange(settings.ReasoningBudgetMinimalTokens,
+                StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens),
+            ReasoningBudgetLowTokens = ClampToRange(settings.ReasoningBudgetLowTokens,
+                StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens),
+            ReasoningBudgetMediumTokens = ClampToRange(settings.ReasoningBudgetMediumTokens,
+                StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens),
+            ReasoningBudgetHighTokens = ClampToRange(settings.ReasoningBudgetHighTokens,
+                StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens),
+            DefaultReasoningEffort = StoredNodeSettings.IsValidDefaultReasoningEffort(TrimToNull(settings.DefaultReasoningEffort))
+                ? TrimToNull(settings.DefaultReasoningEffort)
+                : null,
+            ChatOutputCapMode = StoredNodeSettings.IsValidChatOutputCapMode(TrimToNull(settings.ChatOutputCapMode))
+                ? TrimToNull(settings.ChatOutputCapMode)
+                : null,
+            ChatOutputCapMaxTokens = ClampToRange(settings.ChatOutputCapMaxTokens,
+                StoredNodeSettings.MinChatOutputCapMaxTokens, StoredNodeSettings.MaxChatOutputCapMaxTokens),
             HuggingFaceDownloadConnections = ClampToRange(settings.HuggingFaceDownloadConnections,
                 StoredNodeSettings.MinHuggingFaceDownloadConnections, StoredNodeSettings.MaxHuggingFaceDownloadConnections),
             TranscriptionInferenceTimeoutMinutes = ClampToRange(settings.TranscriptionInferenceTimeoutMinutes,

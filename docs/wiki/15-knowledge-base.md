@@ -115,6 +115,18 @@ The knowledge base is exposed to the agent loop as tools:
 
 These make the KB a **retrieval-augmented generation (RAG)** source the agent can consult mid-conversation. See [Agent Mode](04-agent-mode.md) for the tool registry.
 
+**The answering policy is scoped to the operator's documents.** `SearchKnowledgeBaseToolDefinition.Description` tells
+the model to rely only on retrieved passages for questions about those documents and to answer other questions as
+usual; an empty search returns `SearchKnowledgeBaseToolHandler.EmptyResultNote`, which says the model may answer a
+question that is not about the documents from general knowledge. The earlier unconditional "do not fill gaps from prior
+knowledge" made Qwen3.5 9B and LFM2.5 refuse general questions after one empty search and keep refusing for the rest of
+the conversation (model-matrix F18). Only the description changed; the parameter schema, and so the llama.cpp tool
+grammar, did not. A non-empty search carries `RankedResultsNote` in the same `note` field: the hits are ranked matches
+that may not address the question, and a question not about the documents may be answered from general knowledge.
+With one document indexed every query returns that document's chunk at fusion rank 1, so the empty note never fired
+and LFM2.5 kept reading an unrelated hit as "no information" (7 of 21 answered). There is deliberately no threshold on
+the fused score: a reciprocal-rank fusion score is a rank, not a relevance measure.
+
 ## SignalR notifications
 
 `KnowledgeBaseHub` (`KnowledgeIndexingNotifier`) is a **server-push-only** hub: clients receive sanitized document status-change events; there are no client-callable server methods. It is protected with the same operator policy as the other local hubs because the indexing stream reveals which documents exist and are being processed. The React feature invalidates its document-list query on each event (notification-only). See [API & Hubs](09-api-and-hubs.md).

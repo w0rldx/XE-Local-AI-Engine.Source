@@ -4,6 +4,8 @@ using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Chat;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Insights;
@@ -22,7 +24,12 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 /// </remarks>
 internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
 {
+    // A structured answer of a few short candidates needs a few hundred tokens; the cap only stops a runaway generation
+    // from holding the single llama-server slot to the window while chat waits behind it.
+    private const int MaxOutputTokens = 1024;
+
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<DefaultPlaybookAnalysisAgent> _logger;
     private readonly IModelTrustResolver _modelTrustResolver;
     private readonly PlaybookAnalysisOptions _options;
@@ -34,6 +41,7 @@ internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
         IOptions<PlaybookAnalysisOptions> options,
         INodeRuntimeSettings runtimeSettings,
         IModelTrustResolver modelTrustResolver,
+        IServiceScopeFactory scopeFactory,
         ILogger<DefaultPlaybookAnalysisAgent> logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
@@ -43,6 +51,7 @@ internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
         _providerResolver = providerResolver;
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
     }
 
     public async Task<IReadOnlyList<ProposedPlaybookAction>> ProposeAsync(FeedbackInsightsResult aggregate, CancellationToken cancellationToken = default)
@@ -76,8 +85,22 @@ internal sealed class DefaultPlaybookAnalysisAgent : IPlaybookAnalysisAgent
 
         var chatOptions = new ChatOptions
         {
-            Temperature = 0f
+            Temperature = 0f,
+            MaxOutputTokens = MaxOutputTokens
         };
+
+        // Reasoning OFF, both halves at once and only on a thinking-capable model, exactly as the summarizer sends it.
+        // The capability resolver is scoped and this agent a singleton, so it is resolved in a scope of its own.
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var capabilities = await scope.ServiceProvider.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(modelName, cancellationToken);
+        if (capabilities.SupportsThinking)
+        {
+            chatOptions.AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["think"] = false,
+                [InvocationAgentFactory.LlamaDisableThinkingMarkerKey] = true
+            };
+        }
 
         var response = await chatClient
             .GetResponseAsync<AnalysisEnvelope>(messages, chatOptions, cancellationToken: cancellationToken);

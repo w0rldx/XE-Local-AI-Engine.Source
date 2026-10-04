@@ -600,8 +600,10 @@ two rows each, which is what makes the timing of a fan-out visible in the event 
 
 ### 4.1 `Start`
 
-Config: `inputSchema`, `defaultInput` — both optional raw JSON, and both authoring metadata in v1 (the run's input is
-validated for size, not against the schema).
+Config: `inputSchema`, `defaultInput` — both optional raw JSON. `inputSchema` is authoring metadata in v1 (the run's input
+is validated for size, not against the schema). `defaultInput` is the run's input when a start carries none
+(`GraphWorkflowRunService.StartAsync` applies it before the size cap, so an API or trigger start behaves like the SPA,
+which pre-fills it); an explicit input always wins.
 
 Output: `{ "input": <the run's start payload> }`, handed to everything downstream.
 

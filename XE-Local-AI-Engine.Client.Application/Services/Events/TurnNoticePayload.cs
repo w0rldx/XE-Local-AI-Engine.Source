@@ -125,5 +125,18 @@ public enum TurnNoticeKind
     ///     An external model whose tool support is Unknown reads as unsupported here. <see cref="TurnNoticePayload.Detail" />
     ///     names the effective model.
     /// </remarks>
-    ToolsWithheld = 11
+    ToolsWithheld = 11,
+
+    /// <summary>The answer ended on the output cap or the context window instead of where the model chose to stop.</summary>
+    /// <remarks>Gated by the node's chat output-cap variant (off silences it). <see cref="TurnNoticePayload.Detail" /> carries the finish reason.</remarks>
+    OutputLimitReached = 12,
+
+    /// <summary>
+    ///     The turn asked for knowledge-base grounding, but no embedding model is installed, so no document is indexed and
+    ///     the answer is not grounded in them.
+    /// </summary>
+    KnowledgeUnavailable = 13,
+
+    /// <summary>The inlined attachment text was shortened to fit the model's launched context window; the model is told too.</summary>
+    AttachmentShortened = 14
 }

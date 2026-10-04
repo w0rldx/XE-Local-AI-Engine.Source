@@ -266,7 +266,14 @@
 			"emptyAnswer": "Keine Antwort",
 			"stoppedWhileThinkingText": "Das Modell hat beim Nachdenken aufgehört, bevor es antworten konnte; seine Gedanken bleiben oben erhalten.",
 			"toolHistoryWithheld": "Tool-Verlauf zurückgehalten",
-			"toolsWithheld": "Keine Tools angeboten"
+			"toolsWithheld": "Keine Tools angeboten",
+			"outputLimitReached": "Antwort abgeschnitten",
+			"knowledgeUnavailable": "Wissensdatenbank nicht verfügbar",
+			"attachmentShortened": "Anhang gekürzt",
+			"attachmentShortenedText": "Die angehängte Datei wurde gekürzt, damit sie in das Kontextfenster dieses Modells passt; das Modell wurde darauf hingewiesen, dass sie unvollständig ist.",
+			"knowledgeUnavailableText": "Ihre Wissensdatenbank wurde für diese Nachricht nicht verwendet, weil kein Einbettungsmodell installiert ist und Ihre Dokumente daher nicht indiziert werden konnten.",
+			"outputLimitReachedText": "Die Antwort wurde an der Längengrenze beendet, bevor das Modell fertig war.",
+			"toolCallInReasoningText": "Das Modell hat versucht, ein Tool innerhalb seiner Überlegungen aufzurufen, wo der Aufruf nicht ausgeführt werden kann, und hat ohne Antwort aufgehört."
 		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus.",
 		"webReview": {
@@ -2436,6 +2443,48 @@
 				"knowledgeSearchMaxResults": {
 					"label": "Maximale Trefferzahl"
 				},
+				"reasoningBudgets": {
+					"title": "Denkbudgets"
+				},
+				"defaultReasoningEffort": {
+					"label": "Budget ohne gewählte Denkintensität",
+					"description": "Welches Budget ein lokales Denkmodell erhält, wenn eine Runde keine Denkintensität angibt.",
+					"options": {
+						"minimal": "Minimal",
+						"low": "Niedrig",
+						"medium": "Mittel",
+						"high": "Hoch"
+					}
+				},
+				"reasoningBudgetMinimalTokens": {
+					"label": "Minimale Intensität"
+				},
+				"reasoningBudgetLowTokens": {
+					"label": "Niedrige Intensität"
+				},
+				"reasoningBudgetMediumTokens": {
+					"label": "Mittlere Intensität"
+				},
+				"reasoningBudgetHighTokens": {
+					"label": "Hohe Intensität",
+					"description": "Wie lange ein lokales Modell nachdenken darf, bevor es antworten muss. Das Kontextfenster des Modells kann es weiter senken."
+				},
+				"chatOutputCap": {
+					"title": "Antwortlänge"
+				},
+				"chatOutputCapMode": {
+					"label": "Begrenzung der Antwortlänge",
+					"description": "Stoppt ein lokales Modell, das sich endlos wiederholt. Eine Begrenzung, die eine Anfrage selbst setzt, hat immer Vorrang.",
+					"options": {
+						"cap": "Begrenzen und Hinweis bei abgeschnittener Antwort",
+						"notice": "Nicht begrenzen, aber Hinweis bei abgeschnittener Antwort",
+						"off": "Nicht begrenzen, kein Hinweis"
+					}
+				},
+				"chatOutputCapMaxTokens": {
+					"label": "Längste Antwort",
+					"description": "Die Antwort darf das halbe Kontextfenster des Modells nutzen, aber nie mehr als diesen Wert. Das Denkbudget eines Denkmodells kommt hinzu, dies ist also nicht die Gesamtgrenze."
+				},
 				"webFetch": {
 					"title": "Seitenabruf"
 				},
@@ -4292,6 +4341,11 @@
 					"reason": "Nur {{offloaded}} von {{total}} Schichten von {{model}} passen auf die GPU. Die restlichen {{remaining}} laufen aus dem Arbeitsspeicher, was deutlich langsamer ist — das Modell antwortet weiterhin korrekt, aber mit einem Bruchteil der Geschwindigkeit.",
 					"remediation": "Eine kleinere Quantisierung, ein kürzerer Kontext oder das Freigeben von VRAM anderer Prozesse lässt das Modell meist vollständig passen."
 				},
+				"expertOffloadAlert": {
+					"title": "Die Experten dieses Modells laufen aus dem Arbeitsspeicher",
+					"reason": "{{model}} zählt alle Schichten als auf der GPU, seine Mixture-of-Experts-Gewichte bleiben aber im Arbeitsspeicher, was deutlich langsamer ist. Ein kleineres Kontextfenster oder das Freigeben von VRAM anderer Prozesse lässt das ganze Modell meist auf die GPU passen."
+				},
+				"gpuLayersExpertsInRam": "{{offloaded}} / {{total}}, Experten im RAM",
 				"thisModel": "dieses Modell",
 				"gpuLayers": "Schichten auf der GPU",
 				"gpuLayersUnknown": "Noch nicht gemessen",
@@ -4405,6 +4459,9 @@
 				"empty": "Derzeit laufen keine Modelle.",
 				"responsive": "Reagiert",
 				"unresponsive": "Startet / reagiert nicht",
+				"contextWindow": "Kontextfenster: {{tokens}} Tokens",
+				"expertsOffloaded": "Experten im Arbeitsspeicher",
+				"expertsOffloadedHint": "Dieses Mixture-of-Experts-Modell hält seine Experten-Gewichte im Arbeitsspeicher statt auf der GPU und generiert daher spürbar langsamer.",
 				"details": {
 					"responsive": "Antwortet auf Statusprüfungen.",
 					"unresponsive": "Antwortet nicht auf Statusprüfungen.",

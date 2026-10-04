@@ -14,6 +14,8 @@ describe("toRunningModel", () => {
 				isBusy: true,
 				lastUsedUtc: "2026-09-29T10:00:00Z",
 				isTransient: true,
+				effectiveContextTokens: 65536,
+				expertsOffloaded: true,
 			}),
 		).toEqual({
 			modelName: "qwen3:8b",
@@ -24,7 +26,24 @@ describe("toRunningModel", () => {
 			isBusy: true,
 			lastUsedUtc: "2026-09-29T10:00:00Z",
 			isTransient: true,
+			effectiveContextTokens: 65536,
+			expertsOffloaded: true,
 		});
+	});
+
+	it("reads an absent window as unknown and an absent placement as not offloaded", () => {
+		const model = toRunningModel({
+			modelName: "m",
+			role: "chat",
+			isResponsive: true,
+			detail: "",
+			detailCode: "responsive",
+			isBusy: false,
+			lastUsedUtc: null,
+			isTransient: false,
+		});
+		expect(model.effectiveContextTokens).toBeNull();
+		expect(model.expertsOffloaded).toBe(false);
 	});
 
 	it("keeps a known detail code and drops an unknown one", () => {

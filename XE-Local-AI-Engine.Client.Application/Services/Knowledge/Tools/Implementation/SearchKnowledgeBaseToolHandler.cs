@@ -21,6 +21,14 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
 
     private const int MinLimit = 1;
 
+    // Model-matrix F18: a bare "no information" made small models refuse general questions for the rest of the conversation.
+    internal const string EmptyResultNote =
+        "The knowledge base has no information matching this query. If the question is not about the operator's documents, answer it from your general knowledge.";
+
+    // The live F18 case the empty note never reached: with one document indexed, an unrelated chunk is still rank 1 of the fusion.
+    internal const string RankedResultsNote =
+        "These are the closest matches in the knowledge base, ranked, and they may not address the question. If they do not and the question is not about the operator's documents, answer it from your general knowledge.";
+
     /// <summary>
     ///     Upper bound on the total hit-content characters serialized into one response, so a wide search cannot dump an
     ///     unbounded payload into the model context.
@@ -122,7 +130,7 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             return JsonSerializer.Serialize(new
                 {
                     results = Array.Empty<object>(),
-                    note = "The knowledge base has no information matching this query."
+                    note = EmptyResultNote
                 },
                 SerializerOptions);
         }
@@ -174,7 +182,8 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             results = hits,
             returnedResults = hits.Count,
             totalResults = result.Results.Count,
-            truncated
+            truncated,
+            note = RankedResultsNote
         };
 
         return JsonSerializer.Serialize(payload, SerializerOptions);

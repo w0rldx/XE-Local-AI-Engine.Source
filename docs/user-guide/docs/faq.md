@@ -75,7 +75,7 @@ Once .NET 10 is installed, if it still won't start:
 - Try extracting to a simpler path such as `C:\Apps\XE-Local-AI-Engine`.
 
 ### The first-time setup seems stuck — it's been 20 minutes
-First launch downloads the AI engine plus a ~400 MB starter model, so **5–15 minutes is normal**, and
+First launch downloads the AI engine plus a ~2 GB starter model, so **5–15 minutes is normal**, and
 longer on a slow connection.
 
 **Check the console window**, not the browser. If lines are still appearing or numbers still changing,
@@ -215,7 +215,7 @@ found. The hardware card in the app also shows the detected GPU vendor.
 If the console shows no GPU devices when you have one, that's worth reporting.
 
 ### The starter model gives terrible answers
-That's expected — it's a 0.5B model chosen for download size, not quality. **Replace it.** The Model
+It's a 3B model chosen to be small and reliable with tools, not to be the best you can run. **Replace it.** The Model
 Advisor recommends something appropriate for your hardware, and the difference is dramatic.
 → [How to swap it](first-run.md#step-5--get-a-model-that-is-actually-good)
 
@@ -485,7 +485,7 @@ Everything else (the AI engine, models, the app itself) ships in the download.
 
 ### How much disk space will this really use?
 - App: ~100 MB to download, ~275 MB once extracted
-- Engine + starter model: ~1 GB
+- Engine + starter model: ~3 GB
 - A useful model: **4–20 GB each**
 
 **5 GB gets you the starter model and nothing else.** Budget **10 GB** to run one real model, and

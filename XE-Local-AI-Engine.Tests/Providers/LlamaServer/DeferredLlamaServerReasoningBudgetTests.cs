@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using OpenAI;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -134,6 +135,36 @@ public sealed class DeferredLlamaServerReasoningBudgetTests
         var body = AssertEx.NotNull(handler.CapturedBody);
         using var doc = JsonDocument.Parse(body);
         AssertEx.Equal(expected, doc.RootElement.GetProperty("reasoning_budget_tokens").GetInt32());
+    }
+
+    /// <summary>
+    ///     Model-matrix F2: the node's default limit is the budget plus the answer cap, so halving it would cut "high" from
+    ///     24576 to 20480; only the window clamp applies. An explicit limit (the theory above) still halves.
+    /// </summary>
+    [Test]
+    [Arguments(65536, 40960, 24576)]
+    [Arguments(4096, 4096, 2048)]
+    public async Task ApplyReasoningBudget_UnderTheDefaultLimit_KeepsTheBudgetAndOnlyTheWindowClamps(int numCtx, int defaultLimit, int expected)
+    {
+        using var handler = new CapturingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var chat = BuildOpenAiChatClient(http);
+        var options = new ChatOptions
+        {
+            MaxOutputTokens = defaultLimit,
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                [DeferredLlamaServerChatClient.ReasoningBudgetMarkerKey] = 24576,
+                [DeferredLlamaServerChatClient.DefaultOutputCapMarkerKey] = true,
+                ["num_ctx"] = numCtx
+            }
+        };
+
+        await chat.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], DeferredLlamaServerChatClient.ApplyReasoningBudget(options), CancellationToken.None);
+
+        using var doc = JsonDocument.Parse(AssertEx.NotNull(handler.CapturedBody));
+        AssertEx.Equal(expected, doc.RootElement.GetProperty("reasoning_budget_tokens").GetInt32());
+        AssertEx.Equal(InvocationAgentDefinition.DefaultOutputCapMarkerKey, DeferredLlamaServerChatClient.DefaultOutputCapMarkerKey, "the duplicated marker literal");
     }
 
     private static IChatClient BuildOpenAiChatClient(HttpClient http)

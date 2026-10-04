@@ -94,7 +94,14 @@ describe("LoadedModelsPage", () => {
 	});
 
 	// The page lists the llama.cpp runtime only (relocated from the model-fit advisor).
-	const runningModel = { modelName: "running-a", role: "chat", isResponsive: true, detail: "" };
+	const runningModel = {
+		modelName: "running-a",
+		role: "chat",
+		isResponsive: true,
+		detail: "",
+		effectiveContextTokens: null,
+		expertsOffloaded: false,
+	};
 
 	it("renders the llama.cpp running-models table and no Ollama section", () => {
 		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));

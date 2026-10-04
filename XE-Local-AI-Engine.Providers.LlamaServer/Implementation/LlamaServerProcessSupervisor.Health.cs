@@ -82,7 +82,8 @@ public sealed partial class LlamaServerProcessSupervisor
         return !running.IsProfilingOwned || ReferenceEquals(running, GetOwnExclusiveProfilingProcess(key, out _))
             ? new LlamaServerRuntimeInfo
             {
-                EffectiveContextTokens = effectiveContext
+                EffectiveContextTokens = effectiveContext,
+                ExpertsOffloaded = running.ExpertsOffloaded
             }
             : null;
     }
@@ -117,7 +118,9 @@ public sealed partial class LlamaServerProcessSupervisor
                 Detail = responsive ? "Responsive." : "Not responding to health probe.",
                 IsBusy = running.ActiveLeases > 0,
                 LastUsedUtc = running.LastUsedUtc,
-                IsTransient = running.IsTransient
+                IsTransient = running.IsTransient,
+                EffectiveContextTokens = running.EffectiveContextTokens,
+                ExpertsOffloaded = running.ExpertsOffloaded
             });
         }
 

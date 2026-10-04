@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -18,12 +19,20 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly ILogger<ChatTurnContextBuilder> _logger;
 
+    // Null in the test hosts that never ask; then grounding is reported available, so no false notice is ever emitted.
+    private readonly IEmbeddingModelResolver? _embeddingModelResolver;
+    private readonly ILocalModelProviderResolver? _providerResolver;
+    private readonly IOptions<KnowledgeBaseOptions>? _knowledgeOptions;
+
     public ChatTurnContextBuilder(IConversationUploadedFileStore uploadedFileStore,
         IUntrustedContentFenceSeedProvider fenceSeedProvider,
         IServiceScopeFactory scopeFactory,
         IOptions<LocalChatAgentOptions> localChatOptions,
         INodeRuntimeSettings runtimeSettings,
-        ILogger<ChatTurnContextBuilder> logger)
+        ILogger<ChatTurnContextBuilder> logger,
+        IEmbeddingModelResolver? embeddingModelResolver = null,
+        ILocalModelProviderResolver? providerResolver = null,
+        IOptions<KnowledgeBaseOptions>? knowledgeOptions = null)
     {
         _uploadedFileStore = uploadedFileStore;
         _fenceSeedProvider = fenceSeedProvider;
@@ -31,6 +40,29 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
         _localChatOptions = localChatOptions;
         _runtimeSettings = runtimeSettings;
         _logger = logger;
+        _embeddingModelResolver = embeddingModelResolver;
+        _providerResolver = providerResolver;
+        _knowledgeOptions = knowledgeOptions;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> IsKnowledgeEmbeddingAvailableAsync(CancellationToken cancellationToken = default)
+    {
+        if (_embeddingModelResolver is null || _providerResolver is null || _knowledgeOptions is null)
+        {
+            return true;
+        }
+
+        try
+        {
+            var provider = _providerResolver.ResolveProvider(_knowledgeOptions.Value.EmbeddingProviderName);
+            return (await _embeddingModelResolver.ResolveAsync(provider, cancellationToken)).IsConfident;
+        }
+        catch (InvalidOperationException)
+        {
+            // No such provider registered: the same not-confident outcome the document catalog folds this into.
+            return false;
+        }
     }
 
     /// <inheritdoc />
@@ -76,7 +108,9 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
             }
         }
 
-        var content = ConversationAttachmentContextComposer.Compose(parts, await _runtimeSettings.GetMaxInlinedAttachmentCharsAsync(cancellationToken), _fenceSeedProvider.DeriveSeed(conversationId));
+        var maxChars = await _runtimeSettings.GetMaxInlinedAttachmentCharsAsync(cancellationToken);
+        var fenceSeed = _fenceSeedProvider.DeriveSeed(conversationId);
+        var content = ConversationAttachmentContextComposer.Compose(parts, maxChars, fenceSeed);
         if (content is null)
         {
             return null;
@@ -87,7 +121,9 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
             Id = Guid.NewGuid(),
             Role = MessageRole.User,
             Content = content,
-            SortOrder = 0
+            SortOrder = 0,
+            // The fixed cap above knows nothing of the window; the runner, which does, shrinks it further (model-matrix F6).
+            ShortenAttachment = charBudget => ConversationAttachmentContextComposer.Compose(parts, Math.Min(charBudget, maxChars), fenceSeed)
         };
     }
 

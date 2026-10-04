@@ -84,4 +84,7 @@ public sealed record OrchestrationParticipant
     ///     leaves the inner budgeter on its configured default window.
     /// </remarks>
     public int? EffectiveContextTokens { get; init; }
+
+    /// <summary>The node's thinking budget per effort level; null takes <see cref="ReasoningBudgets.Default" />.</summary>
+    public ReasoningBudgets? ReasoningBudgets { get; init; }
 }

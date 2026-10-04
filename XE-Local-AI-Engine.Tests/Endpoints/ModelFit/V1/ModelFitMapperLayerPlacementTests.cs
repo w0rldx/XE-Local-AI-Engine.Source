@@ -43,6 +43,45 @@ public sealed class ModelFitMapperLayerPlacementTests
     }
 
     [Test]
+    public void ToResponse_ExpertOffloadWithEveryLayerCounted_SaysTheExpertsAreInSystemRam()
+    {
+        var response = Profile().ToResponse(new RuntimeDeviceAuditState
+        {
+            InferenceBackend = "cuda",
+            GpuExpected = true,
+            CpuFallback = false,
+            LayerPlacement = new LlamaLayerPlacement
+            {
+                ModelName = "qwen3.6-35b-a3b",
+                Role = ModelRole.Chat,
+                OffloadedLayers = 41,
+                TotalLayers = 41,
+                ExpertsOffloaded = true
+            }
+        });
+
+        AssertEx.Equal(expected: 41, response.GpuOffloadedLayers!.Value);
+        AssertEx.True(response.GpuExpertsOffloaded);
+    }
+
+    [Test]
+    public void ToResponse_RunningProcess_CarriesItsWindowAndPlacement()
+    {
+        var response = new LlamaServerProcessHealth
+        {
+            ModelName = "qwen3.6-35b-a3b",
+            Role = ModelRole.Chat,
+            IsResponsive = true,
+            Detail = "Responsive.",
+            EffectiveContextTokens = 65536,
+            ExpertsOffloaded = true
+        }.ToResponse();
+
+        AssertEx.Equal(expected: 65536, response.EffectiveContextTokens!.Value);
+        AssertEx.True(response.ExpertsOffloaded);
+    }
+
+    [Test]
     public void ToResponse_NoObservedLoad_LeavesEveryPlacementFieldNull()
     {
         var response = Profile().ToResponse(new RuntimeDeviceAuditState
@@ -56,6 +95,7 @@ public sealed class ModelFitMapperLayerPlacementTests
         AssertEx.Null(response.GpuTotalLayers);
         AssertEx.Null(response.GpuOffloadModelName);
         AssertEx.Null(response.GpuOffloadRole);
+        AssertEx.False(response.GpuExpertsOffloaded);
         AssertEx.Null(response.BackendUndeterminedReason);
     }
 

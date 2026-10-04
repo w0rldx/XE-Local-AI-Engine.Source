@@ -294,7 +294,14 @@ public sealed class NodeSettingsEndpointTests
             HuggingFaceDownloadConnections = 6,
             TranscriptionInferenceTimeoutMinutes = 60,
             AgentHomeMaxRunSeconds = 1200,
-            AgentHomeRunRetentionDays = 14
+            AgentHomeRunRetentionDays = 14,
+            ReasoningBudgetMinimalTokens = 512,
+            ReasoningBudgetLowTokens = 1024,
+            ReasoningBudgetMediumTokens = 4096,
+            ReasoningBudgetHighTokens = 16384,
+            DefaultReasoningEffort = "minimal",
+            ChatOutputCapMode = "notice",
+            ChatOutputCapMaxTokens = 8192
         });
         using var putResponse = await client.SendAsync(putRequest);
         AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
@@ -323,6 +330,17 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(expected: 60, settings.TranscriptionInferenceTimeoutMinutes);
         AssertEx.Equal(expected: 1200, settings.AgentHomeMaxRunSeconds);
         AssertEx.Equal(expected: 14, settings.AgentHomeRunRetentionDays);
+        AssertEx.Equal(expected: 512, settings.ReasoningBudgetMinimalTokens);
+        AssertEx.Equal(expected: 1024, settings.ReasoningBudgetLowTokens);
+        AssertEx.Equal(expected: 4096, settings.ReasoningBudgetMediumTokens);
+        AssertEx.Equal(expected: 16384, settings.ReasoningBudgetHighTokens);
+        AssertEx.Equal("minimal", settings.DefaultReasoningEffort);
+        AssertEx.Equal("notice", settings.ChatOutputCapMode);
+        AssertEx.Equal(expected: 8192, settings.ChatOutputCapMaxTokens);
+        AssertEx.Equal(StoredNodeSettings.MinChatOutputCapMaxTokens, settings.MinChatOutputCapMaxTokens);
+        AssertEx.Equal(StoredNodeSettings.MaxChatOutputCapMaxTokens, settings.MaxAllowedChatOutputCapMaxTokens);
+        AssertEx.Equal(StoredNodeSettings.MinReasoningBudgetTokens, settings.MinReasoningBudgetTokens);
+        AssertEx.Equal(StoredNodeSettings.MaxReasoningBudgetTokens, settings.MaxAllowedReasoningBudgetTokens);
         // Bounds are server-authoritative for the React form.
         AssertEx.Equal(StoredNodeSettings.MinLlamaReadinessTimeoutCapSeconds, settings.MinLlamaReadinessTimeoutCapSeconds);
         AssertEx.Equal(StoredNodeSettings.MaxLlamaChatCacheRamMiB, settings.MaxAllowedLlamaChatCacheRamMiB);
@@ -330,6 +348,26 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(StoredNodeSettings.MaxTranscriptionIdleTimeoutMinutes, settings.MaxAllowedTranscriptionIdleTimeoutMinutes);
         AssertEx.Equal(StoredNodeSettings.MinHuggingFaceDiskMarginBytes, settings.MinHuggingFaceDiskMarginBytes);
         AssertEx.Equal(StoredNodeSettings.MaxHuggingFaceDiskMarginBytes, settings.MaxAllowedHuggingFaceDiskMarginBytes);
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WithAnUnbudgetedDefaultReasoningEffort_IsRejectedUnderTheWireName()
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            DefaultReasoningEffort = "none"
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal("defaultReasoningEffort", document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -1523,6 +1561,24 @@ public sealed class NodeSettingsEndpointTests
         });
 
         AssertEx.Equal(expectedValid, result.IsValid);
+    }
+
+    /// <summary>The mapper trims both choices before storing them, so the validator must judge the trimmed value too.</summary>
+    [Test]
+    public void SaveNodeSettings_PaddedReasoningEffortAndOutputCapMode_ValidateAndStoreTrimmed()
+    {
+        var request = new SaveNodeSettingsRequest
+        {
+            DefaultReasoningEffort = " low ",
+            ChatOutputCapMode = " notice "
+        };
+
+        var result = new SaveNodeSettingsRequestValidator().Validate(request);
+        var stored = request.ToStoredSettings(new StoredNodeSettings());
+
+        AssertEx.True(result.IsValid, string.Join("; ", result.Errors.Select(static error => error.ErrorMessage)));
+        AssertEx.Equal("low", stored.DefaultReasoningEffort);
+        AssertEx.Equal("notice", stored.ChatOutputCapMode);
     }
 
     [Test]

@@ -165,6 +165,7 @@ published.
 - **Managed Python layer** — one shared, `uv`-managed Python acquisition and runner layer for Training and Compute, plus a shared child-process supervision layer. ADR 0016.
 - **Runtime RAM/VRAM widget** — live RAM and VRAM in the top bar, with image and transcription residents listed and draft-only models unloaded sooner.
 - **Vault key custody** — the persisted `node.key` is wrapped under the admin password and a one-time recovery code; a locked node serves only an unlock page. ADR 0018.
+- **Granite 4.1 3B in the curated catalog** — IBM's 3B model (`unsloth/granite-4.1-3b-GGUF`, tier A, needs llama.cpp `b10201`); tool-capable, no thinking mode.
 
 ### Changed
 
@@ -216,6 +217,8 @@ published.
 - **Node Settings** are regrouped into sections and the curated limits are now node settings.
 - **MCP hardening** — the outbound MCP client and the inbound MCP server are tightened (`feat(mcp)`, 2026-09-30).
 - **Playbook memory** is gated on cloud egress and bounded in size; a turn notice says when it is withheld.
+- **The first-run starter model is Granite 4.1 3B** (`unsloth/granite-4.1-3b-GGUF` `Q4_K_M`, ~2.1 GB) instead of Qwen2.5 0.5B (~0.4 GB): it handles tools and background jobs reliably. The first download is about five times larger.
+- **The Hugging Face quant picker no longer recommends an unquantized file** (`F32`/`F16`/`BF16`) when the repository offers a quantized one; the float files stay listed with their tier and fit verdict.
 
 ### Removed
 

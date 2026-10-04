@@ -97,9 +97,9 @@ XE Local AI Engine — tester quickstart (Windows)
    "More info", then "Run anyway".
 4. The native window opens. ASP.NET Core Runtime 10 (x64) and WebView2 are required.
 
-First run downloads a llama.cpp runtime and a ~400 MB starter model from the
+First run downloads a llama.cpp runtime and a ~2 GB starter model from the
 internet — this can take a few minutes and looks quiet; watch the console.
-Needs ~2 GB free disk. A GPU is optional (CPU works).
+Needs ~4 GB free disk. A GPU is optional (CPU works).
 
 To create your login: the first time the app opens, set an admin password.
 To stop the app: choose Exit when closing the native window, or Exit from its tray menu.
@@ -129,9 +129,9 @@ XE Local AI Engine — tester quickstart (Linux)
    Or run ./XE-Local-AI-Engine.Desktop directly.
 3. The native window opens; --browser and --headless remain available.
 
-First run downloads a llama.cpp runtime and a ~400 MB starter model from the
+First run downloads a llama.cpp runtime and a ~2 GB starter model from the
 internet — this can take a few minutes and looks quiet; watch the terminal.
-Needs ~2 GB free disk. A GPU is optional (CPU works).
+Needs ~4 GB free disk. A GPU is optional (CPU works).
 
 To create your login: the first time the app opens, set an admin password.
 To stop the app: choose Exit when closing the native window.

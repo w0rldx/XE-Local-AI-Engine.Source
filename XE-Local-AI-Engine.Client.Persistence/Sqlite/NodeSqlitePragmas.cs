@@ -161,6 +161,30 @@ public static class NodeSqlitePragmas
         return $"PRAGMA synchronous={settings.Synchronous.ToString().ToUpperInvariant()};";
     }
 
+    /// <summary>
+    ///     Returns <paramref name="connectionString" /> with a shared cache on an on-disk database switched to the private
+    ///     default; any other string is returned unchanged.
+    /// </summary>
+    /// <remarks>
+    ///     On a shared cache SQLite locks per table and answers a conflict with SQLITE_LOCKED_SHAREDCACHE (262), which
+    ///     busy_timeout never waits on: one connection's uncommitted schema change fails every other connection's next
+    ///     prepare outright, the first pragma of a fresh open included. A private cache under WAL waits instead. A named
+    ///     in-memory database keeps its shared cache, since that is the only way two connections see one.
+    /// </remarks>
+    public static string WithPrivateCache(string connectionString)
+    {
+        var builder = new SqliteConnectionStringBuilder(connectionString);
+        if (builder.Cache != SqliteCacheMode.Shared
+            || builder.Mode == SqliteOpenMode.Memory
+            || string.Equals(builder.DataSource, ":memory:", StringComparison.OrdinalIgnoreCase))
+        {
+            return connectionString;
+        }
+
+        _ = builder.Remove("Cache");
+        return builder.ToString();
+    }
+
     // WAL journaling is only safely settable on a writable, private-cache, on-disk connection, so the three shapes that cannot switch into it (in-memory,
     // read-only, shared cache) are skipped rather than warned about on every open. What each one reports or refuses: docs/wiki/08-data-and-persistence.md.
     private static bool ShouldApplyWal(DbConnection connection, NodeSqlitePragmaSettings settings)

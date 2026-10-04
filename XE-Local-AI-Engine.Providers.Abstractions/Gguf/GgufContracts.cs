@@ -331,6 +331,12 @@ public sealed class GgufRepoFile
     ///     rather than in the byte formula.
     /// </summary>
     public long? AttentionValueLengthMla { get; init; }
+
+    /// <summary>
+    ///     Hybrid recurrent/attention layer stride (GGUF <c>{arch}.full_attention_interval</c>): only every Nth layer holds a KV
+    ///     cache. <see langword="null" /> when the header omits it; the estimator then charges every layer.
+    /// </summary>
+    public long? FullAttentionInterval { get; init; }
 }
 
 /// <summary>One repo's inspected detail: gating, license, and its usable <c>.gguf</c> files.</summary>
@@ -393,4 +399,6 @@ public sealed class GgufModelFootprintFacts
     public long? AttentionKeyLengthMla { get; init; }
 
     public long? AttentionValueLengthMla { get; init; }
+
+    public long? FullAttentionInterval { get; init; }
 }

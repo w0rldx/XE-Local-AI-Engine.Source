@@ -309,6 +309,46 @@ public sealed class ChatInvocationStatePumpTests
         AssertEx.Equal(interim, sink.Events[^1].Content, "The terminal re-states the whole text, which collapses the client's live split.");
     }
 
+    /// <summary>
+    ///     F9: a Stop trips the run token, so the pump terminalizes Cancelled from its catch. The persist cadence lags the
+    ///     emit cadence, so that terminal must carry what was SENT, not what was last written.
+    /// </summary>
+    [Test]
+    public async Task PumpAsync_WhenCancelledBetweenFlushes_TerminalizesCancelledWithTheTextAlreadySent()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var recordingPump = new RecordingInvocationPump();
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
+        var states = new[]
+        {
+            NewState(correlation, "Hel", string.Empty, InvocationStatus.Running),
+            NewState(correlation, "Hello world", string.Empty, InvocationStatus.Running)
+        };
+        using var cancellation = new CancellationTokenSource();
+        var sink = new CollectingSink();
+
+        // 50 ms steps: each snapshot is emitted (past the 40 ms debounce), but only the first one is persisted.
+        await new ChatInvocationStatePump(recordingPump, clock).PumpAsync(new SteppingStateReader(states, clock, TimeSpan.FromMilliseconds(50), cancelWhenDrained: cancellation),
+            sink,
+            correlation,
+            "model-x",
+            new NodeChatStreamSequence(),
+            new NodeChatPartAccumulator(),
+            onTerminal: null,
+            cancellation.Token);
+
+        AssertEx.Equal("Hel", string.Join('|', recordingPump.Flushes), "The persist cadence must lag, or this test proves nothing.");
+        var sent = string.Concat(sink.Events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantDelta).Select(streamEvent => streamEvent.Delta));
+        AssertEx.Equal("Hello world", sent);
+        AssertEx.Equal(ChatStreamEventTypes.AssistantCancelled, sink.Events[^1].Type);
+        AssertEx.Equal(sent, sink.Events[^1].Content, "The Cancelled terminal must persist the text already sent.");
+    }
+
     private static async Task<(List<ChatStreamEvent> Events, List<string> Flushes)> DriveAsync(TimeSpan step,
         IReadOnlyList<string> contentSnapshots,
         string terminalContent)
@@ -414,26 +454,36 @@ public sealed class ChatInvocationStatePumpTests
         private readonly IReadOnlyList<InvocationState> _states;
         private readonly ManualTimeProvider _clock;
         private readonly TimeSpan _step;
+        private readonly CancellationTokenSource? _cancelWhenDrained;
         private int _index;
         private bool _available;
 
-        public SteppingStateReader(IReadOnlyList<InvocationState> states, ManualTimeProvider clock, TimeSpan step)
+        // With cancelWhenDrained, running out of snapshots trips that source instead of completing the channel: the
+        // run token a user's cancel trips, at a point between snapshots the test chooses.
+        public SteppingStateReader(IReadOnlyList<InvocationState> states, ManualTimeProvider clock, TimeSpan step, CancellationTokenSource? cancelWhenDrained = null)
         {
             _states = states;
             _clock = clock;
             _step = step;
+            _cancelWhenDrained = cancelWhenDrained;
         }
 
-        public override ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
+        public override async ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default)
         {
             if (_index >= _states.Count)
             {
-                return ValueTask.FromResult(false);
+                if (_cancelWhenDrained is not null)
+                {
+                    await _cancelWhenDrained.CancelAsync();
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                return false;
             }
 
             _clock.Advance(_step);
             _available = true;
-            return ValueTask.FromResult(true);
+            return true;
         }
 
         public override bool TryRead([MaybeNullWhen(false)] out InvocationState item)

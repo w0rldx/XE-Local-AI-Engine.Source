@@ -12,4 +12,7 @@ public sealed class LocalModelRuntimeInfo
 {
     /// <summary>The effective per-turn context window in tokens the running model was launched with.</summary>
     public required int EffectiveContextTokens { get; init; }
+
+    /// <summary>Whether the running model's Mixture-of-Experts weights were placed in system RAM rather than on the GPU.</summary>
+    public bool ExpertsOffloaded { get; init; }
 }

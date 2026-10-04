@@ -135,6 +135,7 @@ internal static class ModelFitMapper
             BackendUndeterminedReason = audit.BackendUndeterminedReason,
             GpuOffloadedLayers = audit.LayerPlacement?.OffloadedLayers,
             GpuTotalLayers = audit.LayerPlacement?.TotalLayers,
+            GpuExpertsOffloaded = audit.LayerPlacement?.ExpertsOffloaded ?? false,
             GpuOffloadModelName = audit.LayerPlacement?.ModelName,
             GpuOffloadRole = audit.LayerPlacement?.Role.ToWireString()
         };
@@ -215,6 +216,8 @@ internal static class ModelFitMapper
             IsBusy = health.IsBusy,
             LastUsedUtc = health.LastUsedUtc,
             IsTransient = health.IsTransient,
+            EffectiveContextTokens = health.EffectiveContextTokens,
+            ExpertsOffloaded = health.ExpertsOffloaded,
             DetailCode = (health.HasExited, health.IsResponsive) switch
             {
                 (true, _) => "exited",

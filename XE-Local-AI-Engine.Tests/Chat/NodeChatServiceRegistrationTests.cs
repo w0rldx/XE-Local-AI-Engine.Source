@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -12,6 +13,9 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
+// AddServices mutates the process-global JSON serializer options, so two of these tests at once can enumerate the
+// converter list while the other inserts into it ("Collection was modified").
+[NotInParallel(nameof(NodeChatServiceRegistrationTests))]
 [Category(TestCategories.Integration)]
 public sealed class NodeChatServiceRegistrationTests : IDisposable
 {
@@ -60,7 +64,29 @@ public sealed class NodeChatServiceRegistrationTests : IDisposable
         AssertEx.Null(localChatHubRegistration);
     }
 
-    private WebApplicationBuilder CreateBuilder()
+    /// <summary>F16: the Aspire integration's shared-cache string reaches no consumer; every reader of the key gets a private cache.</summary>
+    [Test]
+    public async Task AddServices_RewritesASharedCacheNodeConnectionStringToAPrivateCache()
+    {
+        var builder = CreateBuilder(";Cache=Shared;Mode=ReadWriteCreate");
+        builder.AddServices(builder.Configuration, NodeStartupSettings.Read(builder.Configuration, builder.Environment));
+        builder.Services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
+
+        await using var provider = builder.Services.BuildServiceProvider(true);
+        await using var scope = provider.CreateAsyncScope();
+
+        foreach (var connectionString in new[]
+                 {
+                     builder.Configuration.GetConnectionString("node-sqlite"),
+                     scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetConnectionString(),
+                     scope.ServiceProvider.GetRequiredService<NodeIdentityDbContext>().Database.GetConnectionString()
+                 })
+        {
+            AssertEx.False(AssertEx.NotNull(connectionString).Contains("Cache", StringComparison.OrdinalIgnoreCase), $"Shared cache survived in '{connectionString}'.");
+        }
+    }
+
+    private WebApplicationBuilder CreateBuilder(string connectionStringSuffix = "")
     {
         var databasePath = GetDatabasePath("registration.sqlite");
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -73,7 +99,7 @@ public sealed class NodeChatServiceRegistrationTests : IDisposable
         {
             ["Agent:LocalChat:DefaultModel"] = "llama3.2",
             ["CentralPlatform:BaseUrl"] = "https://127.0.0.1",
-            ["ConnectionStrings:node-sqlite"] = $"Data Source={databasePath}",
+            ["ConnectionStrings:node-sqlite"] = $"Data Source={databasePath}" + connectionStringSuffix,
             ["Ollama:Endpoint"] = "http://127.0.0.1:11434"
         });
 

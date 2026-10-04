@@ -1049,6 +1049,9 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         /// </summary>
         public int? EffectiveContextTokens { get; init; }
 
+        /// <summary>Whether the launched argv pins Mixture-of-Experts weights to system RAM.</summary>
+        public bool ExpertsOffloaded { get; init; }
+
         /// <summary>Immutable snapshot of the exact argv for the candidate that reached readiness.</summary>
         public IReadOnlyList<string> SuccessfulLaunchArguments { get; init; } = [];
 

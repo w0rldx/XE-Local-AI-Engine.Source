@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 ///     window, used by the provider-boundary budget middleware.
 /// </summary>
 /// <remarks>
-///     Always keeps system messages, the most recent <see cref="ProviderCallBudgetOptions.RecentMessagesToKeep" />
-///     messages and the very last message (the pending tool result the model must see next); over the window it first
+///     Always keeps system messages, the user's current message, the most recent
+///     <see cref="ProviderCallBudgetOptions.RecentMessagesToKeep" /> messages and the very last message (the pending tool result the model must see next); over the window it first
 ///     excerpts oversized tool results anywhere, so the pending result is bounded rather than dropped, then drops the
 ///     oldest non-protected messages whole. See docs/wiki/04-agent-mode.md ("What the per-round reducer keeps").
 /// </remarks>
@@ -44,6 +44,17 @@ internal static class ProviderCallBudgeter
 
         var keepCount = Math.Max(2, options.RecentMessagesToKeep);
         var recentFrom = count - keepCount;
+
+        // The user's current message is irreducible: a few tool rounds push it out of the recent window, and a chat template
+        // given no user message rejects the request (llama-server: "No user query found in messages") instead of answering.
+        var currentUser = -1;
+        for (var i = count - 1; i >= 0 && currentUser < 0; i--)
+        {
+            if (messages[i].Role == ChatRole.User && !string.IsNullOrWhiteSpace(messages[i].Text))
+            {
+                currentUser = i;
+            }
+        }
         var excerptChars = Math.Max(0, options.OversizedToolResultExcerptChars);
 
         var currentEstimate = estimatedBefore;
@@ -85,7 +96,7 @@ internal static class ProviderCallBudgeter
                 continue;
             }
 
-            if (!IsUnitDroppable(working, unitRoot, root, count, recentFrom))
+            if (!IsUnitDroppable(working, unitRoot, root, count, recentFrom, currentUser))
             {
                 continue;
             }
@@ -213,12 +224,12 @@ internal static class ProviderCallBudgeter
     }
 
     // A unit is droppable only when EVERY member is droppable; a single protected member (system / within the recent-keep
-    // window / the last pending message) pins the whole unit so no half of a call/result pair is ever dropped.
-    private static bool IsUnitDroppable(IReadOnlyList<ChatMessage> messages, int[] unitRoot, int root, int count, int recentFrom)
+    // window / the last pending message / the user's current message) pins the whole unit so no half of a call/result pair is ever dropped.
+    private static bool IsUnitDroppable(IReadOnlyList<ChatMessage> messages, int[] unitRoot, int root, int count, int recentFrom, int currentUser)
     {
         for (var i = 0; i < count; i++)
         {
-            if (Find(unitRoot, i) == root && !IsDroppable(messages[i], i, count, recentFrom))
+            if (Find(unitRoot, i) == root && !IsDroppable(messages[i], i, count, recentFrom, currentUser))
             {
                 return false;
             }
@@ -227,9 +238,9 @@ internal static class ProviderCallBudgeter
         return true;
     }
 
-    private static bool IsDroppable(ChatMessage message, int index, int count, int recentFrom)
+    private static bool IsDroppable(ChatMessage message, int index, int count, int recentFrom, int currentUser)
     {
-        return message.Role != ChatRole.System && index < recentFrom && index != count - 1;
+        return message.Role != ChatRole.System && index < recentFrom && index != count - 1 && index != currentUser;
     }
 
     private static bool TryExcerptToolResult(ChatMessage message, int excerptChars, out ChatMessage truncated, out int charsOmitted)

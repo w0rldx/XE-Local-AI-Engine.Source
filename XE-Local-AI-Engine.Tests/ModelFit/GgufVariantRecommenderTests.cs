@@ -91,6 +91,63 @@ public sealed class GgufVariantRecommenderTests
     }
 
     [Test]
+    public async Task Annotate_QuantizedFilesPresent_NeverRecommendsAnUnquantizedFloat()
+    {
+        // Everything fits (free = 24 GiB). BF16 shares Q8_0's NearLossless tier and is larger, so before the float exclusion it
+        // won the size tie-break; with a quantized file on offer the pick moves to Q8_0 and BF16 stays listed with its verdict.
+        var recommender = Build(freeVramBytes: 24 * Gib);
+        var files = new[]
+        {
+            RepoFile("BF16", 6 * Gib),
+            RepoFile("Q8_0", 3 * Gib),
+            RepoFile("Q5_K_M", (5 * Gib) / 2),
+            RepoFile("Q4_K_M", 2 * Gib)
+        };
+
+        var result = await recommender.AnnotateAsync(files, CancellationToken.None);
+
+        AssertEx.Equal(GgufFitVerdict.Fits, VerdictOf(result, "BF16"));
+        AssertEx.Equal(GgufQuantTier.NearLossless, TierOf(result, "BF16"));
+        AssertEx.Equal(1, result.Count(static a => a.IsRecommended));
+        AssertEx.True(IsRecommended(result, "Q8_0"));
+    }
+
+    [Test]
+    public async Task Annotate_FloatOnlyRepository_StillRecommendsTheLargestFittingFloat()
+    {
+        // No quantized file on offer → the floats stay candidates and the existing rule applies: same tier, larger size wins.
+        var recommender = Build(freeVramBytes: 24 * Gib);
+        var files = new[]
+        {
+            RepoFile("BF16", 6 * Gib),
+            RepoFile("F16", 6 * Gib + 1),
+            RepoFile("F32", 12 * Gib)
+        };
+
+        var result = await recommender.AnnotateAsync(files, CancellationToken.None);
+
+        AssertEx.Equal(1, result.Count(static a => a.IsRecommended));
+        AssertEx.True(IsRecommended(result, "F32"));
+    }
+
+    [Test]
+    public async Task Annotate_UnslothDynamicQuant_IsEligibleOverAnUnquantizedFloat()
+    {
+        // A UD- quant is quantized, so it displaces BF16 even though BF16 grades the higher tier.
+        var recommender = Build(freeVramBytes: 24 * Gib);
+        var files = new[]
+        {
+            RepoFile("BF16", 6 * Gib),
+            RepoFile("UD-Q4_K_XL", 2 * Gib)
+        };
+
+        var result = await recommender.AnnotateAsync(files, CancellationToken.None);
+
+        AssertEx.Equal(1, result.Count(static a => a.IsRecommended));
+        AssertEx.True(IsRecommended(result, "UD-Q4_K_XL"));
+    }
+
+    [Test]
     public async Task Annotate_NoneFitButSomeTight_RecommendsBestTight()
     {
         // free = 5 GiB. Q4_K_M 4.5 GiB fits the raw size but the headroom margin eats in → Tight; Q5_K_M 4.8 GiB also

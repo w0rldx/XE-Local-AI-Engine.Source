@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -27,6 +28,7 @@ public sealed partial class InvocationRunner
         CancellationToken invocationToken)
     {
         var participants = new List<OrchestrationParticipant>(spec.Participants.Count);
+        var reasoningBudgets = await _runtimeSettings.GetReasoningBudgetsAsync(invocationToken);
         foreach (var participant in spec.Participants)
         {
             var participantResolution = await ResolveModelAsync(participant.ModelId ?? resolvedModel, invocationToken);
@@ -60,6 +62,7 @@ public sealed partial class InvocationRunner
                 // must not be handed a budget llama.cpp silently ignores, while an enforcing pin keeps its cap.
                 ReasoningBudgetEnforceable = participant.ReasoningBudgetEnforceable,
                 EffectiveContextTokens = participantContextTokens,
+                ReasoningBudgets = reasoningBudgets,
                 Tools = BuildParticipantTools(participant.Tools)
             });
         }
@@ -283,10 +286,13 @@ public sealed partial class InvocationRunner
     private static InvocationAgentDefinition BuildInvocationDefinition(RuntimePackage package,
         string resolvedModel,
         IReadOnlyList<ChatMessage> messages,
-        int? effectiveContextTokens)
+        int? effectiveContextTokens,
+        ReasoningBudgets? reasoningBudgets = null,
+        int? defaultMaxOutputTokens = null)
     {
         return new InvocationAgentDefinition
         {
+            DefaultMaxOutputTokens = defaultMaxOutputTokens,
             ModelId = resolvedModel,
             Instructions = package.ResolvedSystemPrompt,
             OmitSystemPrompt = package.OmitSystemPrompt,
@@ -298,7 +304,8 @@ public sealed partial class InvocationRunner
             Skills = MapSkills(package.Skills),
             EffectiveContextTokens = effectiveContextTokens,
             ResponseJsonSchema = package.ResponseJsonSchema,
-            ReasoningBudgetEnforceable = package.ReasoningBudgetEnforceable
+            ReasoningBudgetEnforceable = package.ReasoningBudgetEnforceable,
+            ReasoningBudgets = reasoningBudgets
         };
     }
 
@@ -322,6 +329,183 @@ public sealed partial class InvocationRunner
         return budgeter.Budget(seed, capacity, reserved, package.ResolvedSystemPrompt, BuildToolBudgetDefinitions(package.AllowedTools), resolvedModel);
     }
 
+    /// <summary>The first round fitted to the launched window: the package, the tool definitions the budgeter counts, and what was narrowed.</summary>
+    /// <remarks><see cref="Measured" /> is the budget of <see cref="Messages" />, so the initial assembly does not measure the same request twice.</remarks>
+    private readonly record struct FirstRoundFit(RuntimePackage Package,
+        IReadOnlyList<ChatMessage> Messages,
+        IReadOnlyList<string> ToolDefinitions,
+        ConversationBudgetResult Measured,
+        FittedToolOffer? FittedOffer,
+        bool AttachmentShortened);
+
+    /// <summary>
+    ///     Fits the two fixed costs a first message cannot compact away to the launched window: the tool offer (model-matrix
+    ///     F5) and the inlined attachment (F6).
+    /// </summary>
+    /// <remarks>
+    ///     The offer is sized without the attachment, which then shrinks to the room the tools leave. A too-large offer is
+    ///     narrowed by the relevance hop to a token budget: the pinned tools, then ranked tools in rank order while they fit,
+    ///     never below the pinned tools plus one ranked tool, so <c>list_tools</c> can still reveal the rest. The attachment is
+    ///     recomposed under a smaller budget, which keeps its fence intact and tells the model it was truncated. Either one
+    ///     that cannot fit throws with its own cause.
+    /// </remarks>
+    private FirstRoundFit FitFirstRoundToWindow(RuntimePackage package, string resolvedModel, TurnPolicy turnPolicy)
+    {
+        var definitions = BuildToolBudgetDefinitions(package.AllowedTools);
+        var messages = BuildChatMessages(package);
+        var measured = BudgetMessages(messages, package, definitions, resolvedModel, turnPolicy);
+        if (!measured.ExceedsBudget)
+        {
+            return new FirstRoundFit(package, messages, definitions, measured, FittedOffer: null, AttachmentShortened: false);
+        }
+
+        bool Exceeds(RuntimePackage candidate, IReadOnlyList<string> toolDefinitions) =>
+            BudgetMessages(BuildChatMessages(candidate), candidate, toolDefinitions, resolvedModel, turnPolicy).ExceedsBudget;
+
+        var attachment = package.ConversationContext.Find(static message => message.ShortenAttachment is not null);
+        var withoutAttachment = attachment is null
+            ? package
+            : package with
+            {
+                ConversationContext = [.. package.ConversationContext.Where(message => !ReferenceEquals(message, attachment))]
+            };
+        FittedToolOffer? fittedOffer = null;
+        // Only when the turn fits with no tools at all: otherwise the offer is not the cause, and the generic hard stop applies.
+        if (definitions.Count > 0 && !package.DisableToolRelevanceFilter && Exceeds(withoutAttachment, definitions) && !Exceeds(withoutAttachment, []))
+        {
+            // list_tools and ask_user are always offered; every other tool is costed by its own definition. Overhead is additive per
+            // definition, so a tool's cost is what it adds to the pinned set's.
+            List<string> pinned = [ListToolsFunction.BudgetDefinition];
+            var ranked = new List<(string Name, string Definition)>();
+            for (var index = 0; index < package.AllowedTools.Count; index++)
+            {
+                if (string.Equals(package.AllowedTools[index].Name, AskUserTool.ToolName, StringComparison.Ordinal))
+                {
+                    pinned.Add(definitions[index]);
+                }
+                else
+                {
+                    ranked.Add((package.AllowedTools[index].Name, definitions[index]));
+                }
+            }
+
+            int Overhead(IReadOnlyList<string> toolDefinitions) =>
+                _contextBudgeter.Budget([], turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens, systemPrompt: null, toolDefinitions, resolvedModel).FixedOverheadTokens;
+
+            var pinnedOverhead = Overhead(pinned);
+            var costs = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var (name, definition) in ranked)
+            {
+                costs[name] = Overhead([.. pinned, definition]) - pinnedOverhead;
+            }
+
+            // The full offer exceeds after every trim pass ran, so its measured size is the irreducible turn; what the pinned set
+            // leaves above it is the room the ranked tools share.
+            var irreducible = BudgetMessages(BuildChatMessages(withoutAttachment), withoutAttachment, definitions, resolvedModel, turnPolicy).EstimatedTokensAfter;
+            var room = BudgetMessages(BuildChatMessages(withoutAttachment), withoutAttachment, pinned, resolvedModel, turnPolicy).EffectiveBudgetTokens - irreducible;
+
+            // Less one tool call and its result, measured by the same budgeter: filled to the edge, the 4B's second round overflowed (live C2).
+            List<ChatMessage> roundTrip =
+            [
+                new(ChatRole.Assistant,
+                    [new FunctionCallContent("call_0", "tool",new Dictionary<string, object?>(StringComparer.Ordinal) { ["input"] =new string('x', FittedRoundTripArgumentCharacters) })]),
+                new(ChatRole.Tool, [new FunctionResultContent("call_0", new string('x', FittedRoundTripResultCharacters))])
+            ];
+            room -= _contextBudgeter.Budget(roundTrip, turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens, systemPrompt: null, [], resolvedModel).EstimatedTokensBefore;
+
+            // The floor: the pinned tools plus at least one ranked tool.
+            if (costs.Count == 0 || room < costs.Values.Min())
+            {
+                throw new ContextBudgetExceededException(ToolOfferExceedsWindowMessage);
+            }
+
+            fittedOffer = new FittedToolOffer
+            {
+                RankedTokenBudget = room,
+                TokenCosts = costs
+            };
+
+            // The later budget stages measure the costliest offer the hop could send in any rank order.
+            foreach (var index in CostliestWithin([.. ranked.Select(entry => costs[entry.Name])], room))
+            {
+                pinned.Add(ranked[index].Definition);
+            }
+
+            definitions = pinned;
+        }
+
+        var shortened = false;
+        messages = BuildChatMessages(package);
+        measured = BudgetMessages(messages, package, definitions, resolvedModel, turnPolicy);
+
+        // Only when the turn fits without it: otherwise the attachment is not the cause, and the generic hard stop names the history.
+        if (measured.ExceedsBudget && attachment?.ShortenAttachment is { } shorten && !Exceeds(withoutAttachment, definitions))
+        {
+            var charBudget = attachment.Content.Length;
+            // Each pass removes at least a quarter, so a token estimate that keeps drifting cannot loop for long.
+            for (; measured.ExceedsBudget; measured = BudgetMessages(messages, package, definitions, resolvedModel, turnPolicy))
+            {
+                charBudget -= Math.Max(Math.Max((measured.EstimatedTokensAfter - measured.EffectiveBudgetTokens) * 4, charBudget / 4), 1);
+                var content = charBudget > 0 ? shorten(charBudget) : null;
+                if (content is null)
+                {
+                    throw new ContextBudgetExceededException(AttachmentExceedsWindowMessage);
+                }
+
+                var current = attachment;
+                attachment = attachment with
+                {
+                    Content = content
+                };
+                package = package with
+                {
+                    ConversationContext = [.. package.ConversationContext.Select(message => ReferenceEquals(message, current) ? attachment : message)]
+                };
+                messages = BuildChatMessages(package);
+                shortened = true;
+            }
+        }
+
+        return new FirstRoundFit(package, messages, definitions, measured, fittedOffer, shortened);
+    }
+
+    /// <summary>The indices of the subset with the largest total cost within <paramref name="room" /> (0/1 knapsack).</summary>
+    /// <remarks>
+    ///     The hop offers tools in rank order while they fit, so any subset within the room can go out. Taking the largest
+    ///     costs first is not that bound: room 1000 and costs 600, 500, 500 count 600 where the hop can send 1000.
+    /// </remarks>
+    internal static IReadOnlyList<int> CostliestWithin(IReadOnlyList<int> costs, int room)
+    {
+        // lastItem[total] is the item that first reached that total; each total's chain uses strictly earlier items.
+        var lastItem = new int[Math.Max(room, 0) + 1];
+        Array.Fill(lastItem, -1);
+        for (var index = 0; index < costs.Count; index++)
+        {
+            for (var total = room; total >= costs[index] && costs[index] > 0; total--)
+            {
+                if (lastItem[total] < 0 && (total == costs[index] || lastItem[total - costs[index]] >= 0))
+                {
+                    lastItem[total] = index;
+                }
+            }
+        }
+
+        var subset = new List<int>();
+        for (var total = Array.FindLastIndex(lastItem, static index => index >= 0); total > 0; total -= costs[lastItem[total]])
+        {
+            subset.Add(lastItem[total]);
+        }
+
+        return subset;
+    }
+
+    private ConversationBudgetResult BudgetMessages(IReadOnlyList<ChatMessage> messages,
+        RuntimePackage package,
+        IReadOnlyList<string> toolDefinitions,
+        string resolvedModel,
+        TurnPolicy turnPolicy) =>
+        _contextBudgeter.Budget(messages, turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens, package.ResolvedSystemPrompt, toolDefinitions, resolvedModel);
+
     /// <summary>
     ///     Applies the turn's already-resolved <see cref="TurnPolicy.ContextCapacityTokens" /> and
     ///     <see cref="TurnPolicy.ReservedOutputTokens" /> to a message list, reference-equal when nothing was trimmed.
@@ -340,11 +524,12 @@ public sealed partial class InvocationRunner
         string stage,
         TurnPolicy turnPolicy,
         StreamTransport transport,
-        ContextBudgetNoticeGate gate)
+        ContextBudgetNoticeGate gate,
+        ConversationBudgetResult? measured = null)
     {
         // Tool schemas sit outside every stage's history; the system prompt (blank when omitted) sits outside the initial assembly but
         // leads the tool loop's seed. The budgeter counts the prompt once either way, so the hard stop measures the actual request.
-        var result = _contextBudgeter.Budget(messages,
+        var result = measured ?? _contextBudgeter.Budget(messages,
             turnPolicy.ContextCapacityTokens,
             turnPolicy.ReservedOutputTokens,
             package.ResolvedSystemPrompt,
@@ -379,7 +564,11 @@ public sealed partial class InvocationRunner
 
         if (result.ExceedsBudget)
         {
-            throw new ContextBudgetExceededException(ContextBudgetExceededMessage);
+            // Compacting cannot help when the tool offer is what does not fit (model-matrix F5), so the message names it.
+            var toolsAreTheCause = toolBudgetDefinitions.Count > 0
+                                   && !_contextBudgeter.Budget(messages, turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens, package.ResolvedSystemPrompt, [], resolvedModel)
+                                                       .ExceedsBudget;
+            throw new ContextBudgetExceededException(toolsAreTheCause ? ToolOfferExceedsWindowMessage : ContextBudgetExceededMessage);
         }
 
         if (!gate.NoticeEmitted)

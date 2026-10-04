@@ -229,6 +229,55 @@ public sealed class SupervisorSpawnArgsTests
     }
 
     [Test]
+    public async Task EnsureRunning_ExpertOffloadPlacement_IsReportedWithTheWindowEvenThoughEveryLayerCountsAsOffloaded()
+    {
+        // llama.cpp prints "offloaded 41/41 layers to GPU" for a --cpu-moe launch that keeps 20.7 GB of experts in RAM (model-matrix round, 2026-10-04).
+        var launcher = new FakeProcessLauncher
+        {
+            StartupLines = ["load_tensors: offloaded 41/41 layers to GPU"]
+        };
+        var report = new LlamaLayerPlacementReport();
+        var allocation = new ProcessContextAllocation
+        {
+            ProcessContextTokens = 65536,
+            ModelTrainContextTokens = null,
+            Source = ProcessContextAllocationSource.HardwareTier,
+            Placement = ProcessPlacementMode.ExpertOffload,
+            Footprint = ResourceFootprint.Zero,
+            ContentIdentity = "moe-model:0",
+            CacheKey = "moe-cache"
+        };
+        var allocationResolver = Substitute.For<IProcessContextAllocationResolver>();
+        allocationResolver.ResolveAsync(Arg.Any<string>(),
+                              Arg.Any<ModelRole>(),
+                              Arg.Any<GpuVariant>(),
+                              Arg.Any<ResolvedLaunchArguments>(),
+                              Arg.Any<CancellationToken>())
+                          .Returns(_ => Task.FromResult<ProcessContextAllocation?>(allocation));
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: new FakeHealthProbe
+            {
+                EffectiveContextTokens = 65536
+            },
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            layerPlacementReport: report,
+            allocationResolver: allocationResolver);
+
+        await supervisor.EnsureRunningAsync("moe-model", ModelRole.Chat, CancellationToken.None);
+
+        var placement = AssertEx.NotNull(report.Current);
+        AssertEx.Equal(expected: 41, placement.OffloadedLayers);
+        AssertEx.True(placement.ExpertsOffloaded);
+        AssertEx.True(placement.IsPartial, "experts in system RAM is not a fully GPU-resident model.");
+        AssertEx.True(AssertEx.NotNull(supervisor.GetRuntimeInfo("moe-model", ModelRole.Chat)).ExpertsOffloaded);
+        var healths = await supervisor.CheckHealthAsync(CancellationToken.None);
+        AssertEx.Equal(expected: 1, healths.Count);
+        var health = healths[0];
+        AssertEx.Equal(expected: 65536, health.EffectiveContextTokens);
+        AssertEx.True(health.ExpertsOffloaded);
+    }
+
+    [Test]
     public async Task EnsureRunning_UsesAdmissionAdjustedAllocationContext()
     {
         var launcher = new FakeProcessLauncher();
@@ -530,6 +579,12 @@ public sealed class SupervisorSpawnArgsTests
 
         var runtimeInfo = AssertEx.NotNull(supervisor.GetRuntimeInfo("llama3", ModelRole.Chat));
         AssertEx.Equal(expected: 4096, runtimeInfo.EffectiveContextTokens);
+        AssertEx.False(runtimeInfo.ExpertsOffloaded);
+        var healths = await supervisor.CheckHealthAsync(CancellationToken.None);
+        AssertEx.Equal(expected: 1, healths.Count);
+        var health = healths[0];
+        AssertEx.Equal(expected: 4096, health.EffectiveContextTokens);
+        AssertEx.False(health.ExpertsOffloaded);
     }
 
     [Test]

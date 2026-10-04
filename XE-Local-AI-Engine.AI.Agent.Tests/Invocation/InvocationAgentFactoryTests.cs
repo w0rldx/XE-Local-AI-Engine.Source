@@ -489,6 +489,51 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.False(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaDisableThinkingMarkerKey));
     }
 
+    /// <summary>Model-matrix F2: the node's default cap applies only where the request sent no explicit limit.</summary>
+    /// <remarks>
+    ///     The cap bounds the ANSWER and adds to the applied reasoning budget, so a high-effort turn is never cut off inside
+    ///     the thinking budget the operator configured (coordinator decision on F2, 2026-10-04).
+    /// </remarks>
+    [Test]
+    [Arguments("high", 65_536, 16_384, null, 24_576 + 16_384, true)]
+    [Arguments("low", 65_536, 16_384, null, 2_048 + 16_384, true)]
+    [Arguments("none", 65_536, 16_384, null, 16_384, true)]
+    [Arguments("high", 4_096, 2_048, null, 4_096, true)]
+    [Arguments("high", 65_536, 16_384, 500, 500, false)]
+    public async Task CreateAsync_WithADefaultOutputCap_SendsTheBudgetPlusTheCapUnlessAnExplicitLimitWins(string effort,
+        int window,
+        int answerCap,
+        int? explicitLimit,
+        int expectedLimit,
+        bool expectMarker)
+    {
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3:8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = effort,
+            EffectiveContextTokens = window,
+            DefaultMaxOutputTokens = answerCap,
+            Sampling = explicitLimit is null
+                ? null
+                : new InvocationSamplingOptions
+                {
+                    MaxOutputTokens = explicitLimit
+                }
+        };
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var options = ResolveChatOptions(context);
+        AssertEx.Equal(expectedLimit, options.MaxOutputTokens);
+        AssertEx.Equal(expectMarker, options.AdditionalProperties?.ContainsKey(InvocationAgentDefinition.DefaultOutputCapMarkerKey) == true);
+    }
+
     [Test]
     [Arguments("minimal", 1024)]
     [Arguments("low", 2048)]
@@ -508,6 +553,36 @@ public sealed class InvocationAgentFactoryTests
             Tools = [],
             ConversationContext = [],
             ReasoningEffort = effort
+        };
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<int>(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey, out var budget));
+        AssertEx.Equal(expectedBudget, budget);
+    }
+
+    [Test]
+    [Arguments("high", 9000)]
+    [Arguments(null, 3000)]
+    public async Task CreateAsync_WithNodeBudgets_TakesTheNodeRung(string? effort, int expectedBudget)
+    {
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3:8b",
+            Instructions = "Be helpful.",
+            Tools = [],
+            ConversationContext = [],
+            ReasoningEffort = effort,
+            ReasoningBudgets = ReasoningBudgets.Default with
+            {
+                Medium = 3000,
+                High = 9000,
+                UnspecifiedEffort = "medium"
+            }
         };
 
         using var chatClient = new FakeChatClient();
@@ -546,14 +621,14 @@ public sealed class InvocationAgentFactoryTests
     }
 
     /// <summary>
-    ///     An UNSPECIFIED effort on a thinking model gets the medium rung: with no budget a hard prompt reasoned until
-    ///     <c>finish_reason: length</c> and the turn ended with no answer at all (tester round 6, item 8).
+    ///     An UNSPECIFIED effort on a thinking model gets the low rung by default: the old flat 8192 let a 0.8B reason
+    ///     for minutes over a greeting (model-matrix F3).
     /// </summary>
     [Test]
     [Arguments(null)]
     [Arguments("")]
     [Arguments("  ")]
-    public async Task CreateAsync_ThinkingCapableWithUnspecifiedEffort_CarriesTheMediumBudget(string? effort)
+    public async Task CreateAsync_ThinkingCapableWithUnspecifiedEffort_CarriesTheLowBudget(string? effort)
     {
         var definition = new InvocationAgentDefinition
         {
@@ -571,7 +646,7 @@ public sealed class InvocationAgentFactoryTests
 
         var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
         AssertEx.True(additionalProperties.TryGetValue<int>(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey, out var budget));
-        AssertEx.Equal(8192, budget);
+        AssertEx.Equal(2048, budget);
     }
 
     [Test]

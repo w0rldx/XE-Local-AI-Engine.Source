@@ -34,6 +34,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -1753,6 +1754,55 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.False(runner.CapturedContext.Any(message => message.Content.Contains(KnowledgeChatContextComposer.Preamble, StringComparison.Ordinal)),
             "no KB context block must be composed when retrieval returns nothing.");
         AssertEx.Null(AssertEx.NotNull(terminalRequest).Sources);
+    }
+
+    /// <summary>
+    ///     Model-matrix F13: on a node with no embedding model the upload failed to index, and a grounded turn ran with no
+    ///     sign that grounding was unavailable; the 4B said it had no access to documents.
+    /// </summary>
+    [Test]
+    [Arguments(false, true)]
+    [Arguments(true, false)]
+    public async Task SendMessageAsync_WhenKnowledgeIsRequested_NoticesOnlyAMissingEmbeddingModel(bool embedderInstalled, bool expectNotice)
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+        var scopeFactory = CreateKnowledgeScopeFactory();
+        var embeddingResolver = Substitute.For<IEmbeddingModelResolver>();
+        embeddingResolver.ResolveAsync(Arg.Any<ILocalModelProvider>(), Arg.Any<CancellationToken>())
+                         .Returns(new EmbeddingModelResolution
+                         {
+                             Name = "nomic-embed-text",
+                             IsConfident = embedderInstalled
+                         });
+        var builder = new ChatTurnContextBuilder(Substitute.For<IConversationUploadedFileStore>(),
+            CreateFenceSeedProvider(),
+            scopeFactory,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            NullLogger<ChatTurnContextBuilder>.Instance,
+            embeddingResolver,
+            Substitute.For<ILocalModelProviderResolver>(),
+            Options.Create(new KnowledgeBaseOptions()));
+
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, scopeFactory, turnContextBuilder: builder);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "what does the runbook say?",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseKnowledgeBase: true)))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.Equal(expectNotice ? 1 : 0, events.Count(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                                         && streamEvent.NoticeKind == nameof(TurnNoticeKind.KnowledgeUnavailable)));
     }
 
     [Test]
@@ -4223,7 +4273,8 @@ public sealed class NodeChatStreamServiceTests
         bool allowCloudModelAccess = false,
         IAgentDefinitionResolver? agentDefinitionResolver = null,
         IAgentDefinitionStore? agentDefinitionStore = null,
-        IOrchestrationResolver? orchestrationResolver = null)
+        IOrchestrationResolver? orchestrationResolver = null,
+        IChatTurnContextBuilder? turnContextBuilder = null)
     {
         return new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -4245,7 +4296,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationMaintenanceDispatcher>(),
-            CreateTurnContextBuilder(scopeFactory: scopeFactory),
+            turnContextBuilder ?? CreateTurnContextBuilder(scopeFactory: scopeFactory),
             Substitute.For<IConversationSandboxStager>(),
             Options.Create(new ChatStreamBudgetOptions()),
             TimeProvider.System,
@@ -5697,6 +5748,17 @@ public sealed class NodeChatStreamServiceTests
             CurrentInvocation.StreamedChunkCount++;
             CurrentInvocation.LastUpdatedAt = DateTimeOffset.UtcNow;
             RaiseChanged();
+            return Task.CompletedTask;
+        }
+
+        public Task ReportInvocationTextReclassifiedAsync(Guid invocationId, string content, string reasoningSuffix)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.StreamedContent = content;
+                CurrentInvocation.StreamedThinkingContent += reasoningSuffix;
+            }
+
             return Task.CompletedTask;
         }
 

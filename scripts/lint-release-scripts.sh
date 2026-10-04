@@ -74,6 +74,8 @@ SHELL_TARGETS=(
   "scripts/run-tests-memory-safe.sh"
   "scripts/run-e2e-local.sh"
   "scripts/run-gpu-smoke-local.sh"
+  "scripts/run-model-matrix-local.sh"
+  "scripts/tests/model-matrix.test.sh"
   "scripts/run-tool-grammar-smoke-local.sh"
   "scripts/run-retrieval-eval-local.sh"
   "scripts/run-docker-smoke-local.sh"

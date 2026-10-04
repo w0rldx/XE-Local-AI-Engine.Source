@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation.Orchestration;
 
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -20,11 +21,28 @@ public sealed class ParticipantReasoningOptionsTests
     [Arguments("low", 2048)]
     [Arguments("medium", 8192)]
     [Arguments("high", 24576)]
-    [Arguments(null, 8192)]
-    [Arguments("", 8192)]
+    [Arguments(null, 2048)]
+    [Arguments("", 2048)]
     public void Build_ThinkingCapableWithGradedEffort_CarriesTheMappedReasoningBudget(string? effort, int expectedBudget)
     {
         var properties = ParticipantReasoningOptions.Build(effort, supportsThinking: true);
+
+        AssertEx.True(properties.TryGetValue<int>(ParticipantReasoningOptions.LlamaReasoningBudgetMarkerKey, out var budget));
+        AssertEx.Equal(expectedBudget, budget);
+    }
+
+    [Test]
+    [Arguments("medium", 3000)]
+    [Arguments(null, 500)]
+    public void Build_WithNodeBudgets_TakesTheNodeRung(string? effort, int expectedBudget)
+    {
+        var properties = ParticipantReasoningOptions.Build(effort, supportsThinking: true,
+            reasoningBudgets: ReasoningBudgets.Default with
+            {
+                Minimal = 500,
+                Medium = 3000,
+                UnspecifiedEffort = "minimal"
+            });
 
         AssertEx.True(properties.TryGetValue<int>(ParticipantReasoningOptions.LlamaReasoningBudgetMarkerKey, out var budget));
         AssertEx.Equal(expectedBudget, budget);

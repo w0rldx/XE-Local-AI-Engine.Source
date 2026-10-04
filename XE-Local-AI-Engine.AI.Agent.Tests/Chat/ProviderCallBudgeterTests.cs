@@ -72,6 +72,33 @@ public sealed class ProviderCallBudgeterTests
         AssertEx.True(ContainsText(result.Messages, "u2"), "the last message is always kept");
     }
 
+    /// <summary>
+    ///     Model-matrix D2: three tool rounds pushed the user's message out of the recent window and it was dropped (llama-server:
+    ///     "No user query found"). It is irreducible; the round is flagged over the window instead.
+    /// </summary>
+    [Test]
+    public void Budget_NeverDropsTheUsersCurrentMessage_AndFlagsTheRoundWhenOnlyDroppingItWouldFit()
+    {
+        var question = $"Find the code in the attached file. {new string('x', 400)}";
+        var messages = new List<ChatMessage>
+        {
+            System("sys"),
+            User(question),
+            AssistantToolCall("c1", "search_text"),
+            ToolResult("c1", "No matches found."),
+            AssistantToolCall("c2", "search_text"),
+            ToolResult("c2", "No matches found."),
+            AssistantToolCall("c3", "search_text"),
+            ToolResult("c3", "No matches found.")
+        };
+        var total = ProviderMessageTokenEstimator.EstimateTokens(messages, 4);
+
+        var result = ProviderCallBudgeter.Budget(messages, instructionsTokens: 0, effectiveWindowTokens: total - 50, Options());
+
+        AssertEx.True(ContainsText(result.Messages, question), "the user's current message is kept");
+        AssertEx.True(result.ExceedsWindow, "the round is over the window without dropping it, so it fails as a context-window error");
+    }
+
     [Test]
     public void Budget_InstructionsCountTowardTheWindow()
     {

@@ -183,7 +183,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             ExpertCount = inputs.ExpertCount,
             ExpertUsedCount = inputs.ExpertUsedCount,
             AttentionKeyLengthMla = inputs.AttentionKeyLengthMla,
-            AttentionValueLengthMla = inputs.AttentionValueLengthMla
+            AttentionValueLengthMla = inputs.AttentionValueLengthMla,
+            FullAttentionInterval = inputs.FullAttentionInterval
         };
     }
 
@@ -613,7 +614,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 ExpertCount = metadata.ExpertCount,
                 ExpertUsedCount = metadata.ExpertUsedCount,
                 AttentionKeyLengthMla = metadata.AttentionKeyLengthMla,
-                AttentionValueLengthMla = metadata.AttentionValueLengthMla
+                AttentionValueLengthMla = metadata.AttentionValueLengthMla,
+                FullAttentionInterval = metadata.FullAttentionInterval
             };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -744,6 +746,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
 
         public long? AttentionValueLengthMla { get; init; }
 
+        public long? FullAttentionInterval { get; init; }
+
         public static GgufHeaderFootprintInputs Empty { get; } = new()
         {
             ParamCount = null,
@@ -760,7 +764,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             ExpertCount = null,
             ExpertUsedCount = null,
             AttentionKeyLengthMla = null,
-            AttentionValueLengthMla = null
+            AttentionValueLengthMla = null,
+            FullAttentionInterval = null
         };
     }
 

@@ -87,14 +87,19 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
                                                         + $"not the version {expected} this run was started against.");
         }
 
+        // Validated again HERE, not trusted from save time: an agent definition can be deleted between the two, and the
+        // parse is the same one the dispatcher routes with.
+        var graph = GraphWorkflowGraph.Parse(definition.GraphJson);
+
+        // A start without input runs on the Start node's declared default, the same one the SPA pre-fills; an explicit
+        // input always wins. Applied before the size cap so a default is bounded like any other input.
+        inputJson ??= graph.Nodes.Values.Select(static node => node.Config).OfType<GraphWorkflowStartConfig>().Single().DefaultInput?.GetRawText();
+
         if (inputJson is not null && Encoding.UTF8.GetByteCount(inputJson) > _options.MaxRunInputBytes)
         {
             throw new GraphWorkflowValidationException($"The run input is larger than the {_options.MaxRunInputBytes} bytes one run may carry.");
         }
 
-        // Validated again HERE, not trusted from save time: an agent definition can be deleted between the two, and the
-        // parse is the same one the dispatcher routes with.
-        var graph = GraphWorkflowGraph.Parse(definition.GraphJson);
         await EnsureToolNodesAreRunnableAsync(graph, cancellationToken);
 
         if (graph.Nodes.Count > _options.MaxNodeRunsPerRun)

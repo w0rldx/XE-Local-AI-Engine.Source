@@ -457,6 +457,13 @@ public sealed class MemoryFitEstimator
     // holds it only on the global layers — every pattern-th — and caps each window-limited local layer at min(context, window), matching llama.cpp's separate smaller cache.
     private static double TotalKvTokensAcrossLayers(long blockCount, long ctxTarget, GgufAttentionShape? attention)
     {
+        // Hybrid recurrent stack: llama.cpp (the qwen35/qwen35moe/qwen3next loaders) makes layer i attention iff (i + 1) % interval == 0 and gives only those a KV cache.
+        // Rounded UP, so a block count that is not a multiple of the interval (an appended MTP layer) is never under-counted.
+        if (attention?.FullAttentionInterval is { } interval && interval > 1)
+        {
+            blockCount = (blockCount + interval - 1) / interval;
+        }
+
         var window = attention?.SlidingWindow is > 0 ? attention.SlidingWindow : null;
         var pattern = attention?.SlidingWindowPattern is > 0 ? attention.SlidingWindowPattern : null;
 

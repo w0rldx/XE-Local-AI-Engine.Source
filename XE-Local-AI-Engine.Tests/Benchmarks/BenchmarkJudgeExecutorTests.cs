@@ -185,6 +185,7 @@ public sealed class BenchmarkJudgeExecutorTests
         AssertEx.Equal<int?>(50, persisted.Score);
 
         AssertEx.Equal("0", AssertEx.NotNull(package.SamplingOptions).Seed);
+        AssertEx.True(package.UsesFrozenBenchmarkPolicy, "Node output-cap and thinking-budget settings must not reach a frozen judging.");
         // The judge takes the node default and is deliberately NOT project-tunable: it emits one short constrained JSON
         // object, so a long-reasoning budget would only delay noticing a stuck judge.
         AssertEx.Equal(expected: 900, package.Timeouts.InvocationTimeoutSeconds);

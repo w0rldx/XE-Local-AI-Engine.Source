@@ -30,7 +30,8 @@ public static class ToolRelevanceScope
     ///     reference-equality pass-through and suppresses the <c>list_tools</c> append.
     /// </param>
     /// <param name="coreNames">The node's always-on tool names, from <c>IToolRelevanceCoreSet</c>.</param>
-    public static IDisposable BeginScope(bool active, IReadOnlySet<string> coreNames)
+    /// <param name="fittedOffer">Set only when the full offer does not fit the launched window (model-matrix F5).</param>
+    public static IDisposable BeginScope(bool active, IReadOnlySet<string> coreNames, FittedToolOffer? fittedOffer = null)
     {
         ArgumentNullException.ThrowIfNull(coreNames);
 
@@ -38,7 +39,8 @@ public static class ToolRelevanceScope
         AmbientState.Value = new ToolRelevanceState
         {
             Active = active,
-            CoreNames = coreNames
+            CoreNames = coreNames,
+            FittedOffer = fittedOffer
         };
         return new Scope(previous);
     }
@@ -155,6 +157,70 @@ internal sealed class ArrayDecision
 
     public required IReadOnlyList<string> HiddenNames { get; init; }
 
+    /// <summary>The window-fitted offer this decision was made under, or <see langword="null" />.</summary>
+    public FittedToolOffer? FittedOffer { get; init; }
+
+    /// <summary>With <see cref="FittedOffer" />: every rankable name, offered or hidden, in rank order.</summary>
+    public IReadOnlyList<string> RankOrder { get; init; } = [];
+
+    /// <summary>
+    ///     The hidden names <c>list_tools</c> may reveal: all of them, or under a fitted offer those that fit its budget
+    ///     together, in rank order. A revealed tool must be sendable, or the next round would overflow the window.
+    /// </summary>
+    public IReadOnlyList<string> RevealableNames()
+    {
+        if (FittedOffer is not { } fitted)
+        {
+            return HiddenNames;
+        }
+
+        var room = fitted.RankedTokenBudget;
+        var revealable = new List<string>();
+        foreach (var name in RankOrder.Where(name => HiddenNames.Contains(name, StringComparer.Ordinal)))
+        {
+            if (fitted.TokenCosts.TryGetValue(name, out var cost) && cost <= room)
+            {
+                room -= cost;
+                revealable.Add(name);
+            }
+        }
+
+        return revealable;
+    }
+
+    /// <summary>
+    ///     The names to send this round: the offer plus what <c>list_tools</c> revealed. Under a fitted offer the revealed
+    ///     tools come first and the offered ranked tools fill what budget they leave, in rank order; the pinned tools stay.
+    /// </summary>
+    public IReadOnlySet<string> SentNames()
+    {
+        var sent = new HashSet<string>(OfferedNames, StringComparer.Ordinal);
+        if (FittedOffer is not { } fitted)
+        {
+            sent.UnionWith(_revealed.Keys);
+            return sent;
+        }
+
+        if (_revealed.IsEmpty)
+        {
+            return sent;
+        }
+
+        // The pinned tools carry no cost; every ranked tool competes for the budget again, the ones the model asked for first.
+        sent.ExceptWith(fitted.TokenCosts.Keys);
+        var room = fitted.RankedTokenBudget;
+        foreach (var name in RankOrder.Where(IsRevealed).Concat(RankOrder.Where(name => OfferedNames.Contains(name, StringComparer.Ordinal))))
+        {
+            if (!sent.Contains(name) && fitted.TokenCosts.TryGetValue(name, out var cost) && cost <= room)
+            {
+                room -= cost;
+                _ = sent.Add(name);
+            }
+        }
+
+        return sent;
+    }
+
     /// <summary>Lock-free union; idempotent, so a model calling <c>list_tools</c> twice reveals the same set.</summary>
     public void Reveal(IEnumerable<string> names)
     {
@@ -197,6 +263,9 @@ internal sealed class ToolRelevanceState
     public required bool Active { get; init; }
 
     public required IReadOnlySet<string> CoreNames { get; init; }
+
+    /// <summary>The window-fitted offer, replacing the configured threshold; null when the full offer fits.</summary>
+    public FittedToolOffer? FittedOffer { get; init; }
 
     /// <summary>Whether this array already has a decision, computed or in flight.</summary>
     /// <remarks>

@@ -64,6 +64,13 @@ internal static class AddNodeModelRuntimeExtensions
         // (NodeSqlitePragmas.Configure — the raw-ADO OpenIfNeeded path takes no injected options) and register the interceptors applying them.
         var sqlitePragmaSettings = (configuration.GetSection(NodeSqliteOptions.Section).Get<NodeSqliteOptions>() ?? new NodeSqliteOptions()).ToSettings();
         NodeSqlitePragmas.Configure(sqlitePragmaSettings);
+        // The Aspire SQLite integration hands over "Cache=Shared", whose table locks busy_timeout never waits on. Rewritten
+        // here, once, because every consumer reads this key: both contexts, the recovery service and the Quartz job store.
+        if (configuration.GetConnectionString("node-sqlite") is { } nodeSqliteConnectionString)
+        {
+            configuration["ConnectionStrings:node-sqlite"] = NodeSqlitePragmas.WithPrivateCache(nodeSqliteConnectionString);
+        }
+
         builder.Services.AddSingleton(sqlitePragmaSettings);
         builder.Services.AddSingleton<NodeSqliteConnectionInterceptor>();
         builder.Services.AddSingleton<NodeSqliteCommandInterceptor>();

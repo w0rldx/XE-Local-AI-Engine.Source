@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
+using XE_Local_AI_Engine.AI.Agent.Invocation;
+
 /// <summary>The single read surface migrated consumers use for user-editable runtime knobs.</summary>
 /// <remarks>
 ///     Each getter resolves the effective value with the precedence <c>stored value &gt; appsettings seed &gt; hardcoded default</c>: it reads
@@ -170,6 +172,15 @@ public interface INodeRuntimeSettings
 
     /// <summary>The ceiling on the <c>search_knowledge_base</c> hit count (stored &gt; 20).</summary>
     Task<int> GetKnowledgeSearchMaxResultsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The llama.cpp thinking budget per effort level and the level an unspecified effort takes (each: stored &gt;
+    ///     <c>ReasoningBudgets.Default</c>).
+    /// </summary>
+    Task<ReasoningBudgets> GetReasoningBudgetsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The chat output-cap variant and its ceiling (each: stored &gt; <c>cap</c> / 16384).</summary>
+    Task<ChatOutputCap> GetChatOutputCapAsync(CancellationToken cancellationToken = default);
 
     /// <summary>The AgentHome whole-run wall clock in seconds (stored &gt; <c>AgentHome:MaxRunSeconds</c> &gt; 600).</summary>
     Task<int> GetAgentHomeMaxRunSecondsAsync(CancellationToken cancellationToken = default);

@@ -79,6 +79,18 @@ public sealed class LocalModelsGgufMappingTests
     }
 
     [Test]
+    public void ToDetailsResponse_RunningModel_CarriesItsWindowAndPlacement_AndAColdOneCarriesNeither()
+    {
+        var running = Gguf("unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q4_K_M").ToDetailsResponse("m", effectiveContextTokens: 65536, expertsOffloaded: true);
+        var cold = Gguf("unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q4_K_M").ToDetailsResponse("m");
+
+        AssertEx.Equal(expected: 65536, running.EffectiveContextTokens!.Value);
+        AssertEx.True(running.ExpertsOffloaded!.Value);
+        AssertEx.Null(cold.EffectiveContextTokens);
+        AssertEx.Null(cold.ExpertsOffloaded);
+    }
+
+    [Test]
     public void ToLlamaCppModelResponses_SurfacesOriginAndAggregateFingerprint()
     {
         const string fingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

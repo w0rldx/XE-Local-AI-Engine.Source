@@ -36,6 +36,26 @@ public sealed class ToolRelevanceSelection
 
     public required IReadOnlyList<string> HiddenNames { get; init; }
 
+    /// <summary>The non-core picks best first, when the selector ranked; null when it offered everything unranked.</summary>
+    /// <remarks>Read by the window-fitted offer, which fills its token budget in this order.</remarks>
+    public IReadOnlyList<string>? RankedNames { get; init; }
+
+    /// <summary>As <see cref="Compose(IReadOnlyList{ToolRelevanceCandidate}, IReadOnlySet{int})" />, keeping the ranker's order in <see cref="RankedNames" />.</summary>
+    /// <param name="candidates">The candidates, in the outbound array's own order.</param>
+    /// <param name="rankedNonCore">Indices into <paramref name="candidates" /> the ranker picked, best first.</param>
+    public static ToolRelevanceSelection Compose(IReadOnlyList<ToolRelevanceCandidate> candidates, IReadOnlyList<int> rankedNonCore)
+    {
+        ArgumentNullException.ThrowIfNull(rankedNonCore);
+
+        var selection = Compose(candidates, rankedNonCore.ToHashSet());
+        return new ToolRelevanceSelection
+        {
+            OfferedNames = selection.OfferedNames,
+            HiddenNames = selection.HiddenNames,
+            RankedNames = [.. rankedNonCore.Select(index => candidates[index].Name)]
+        };
+    }
+
     /// <summary>
     ///     Builds the selection from the ranked non-core picks by re-imposing the INPUT order over the union of core
     ///     and selected.

@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "about": "Pinned GGUF models for scripts/run-model-matrix-local.sh. sha256 is the Hugging Face LFS oid of the file; a file on disk whose hash differs is not the pinned artifact. Tiers are cumulative: fast is in extended, extended is in rc. thinkingOff says how effort none switches thinking off: template (the chat template closes an empty think block, visible in the generation prompt), budget (a zero reasoning budget only, invisible on the wire), or null for a model that does not think.",
+  "models": [
+    {
+      "id": "qwen3.5-0.8b",
+      "repo": "unsloth/Qwen3.5-0.8B-GGUF",
+      "file": "Qwen3.5-0.8B-Q4_K_M.gguf",
+      "sha256": "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
+      "sizeBytes": 532517120,
+      "modelName": "unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M",
+      "architecture": "qwen35",
+      "moe": false,
+      "thinkingOff": "template",
+      "toolCapable": true,
+      "tiers": ["fast", "extended", "rc"]
+    },
+    {
+      "id": "qwen3.5-4b",
+      "repo": "unsloth/Qwen3.5-4B-GGUF",
+      "file": "Qwen3.5-4B-Q4_K_M.gguf",
+      "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+      "sizeBytes": 2740937888,
+      "modelName": "unsloth/Qwen3.5-4B-GGUF:Q4_K_M",
+      "architecture": "qwen35",
+      "moe": false,
+      "thinkingOff": "template",
+      "toolCapable": true,
+      "tiers": ["fast", "extended", "rc"]
+    },
+    {
+      "id": "qwen3.5-9b",
+      "repo": "unsloth/Qwen3.5-9B-GGUF",
+      "file": "Qwen3.5-9B-Q4_K_M.gguf",
+      "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+      "sizeBytes": 5680522464,
+      "modelName": "unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
+      "architecture": "qwen35",
+      "moe": false,
+      "thinkingOff": "template",
+      "toolCapable": true,
+      "tiers": ["extended", "rc"]
+    },
+    {
+      "id": "granite-4.1-3b",
+      "repo": "unsloth/granite-4.1-3b-GGUF",
+      "file": "granite-4.1-3b-Q4_K_M.gguf",
+      "sha256": "ac08a622126e1feec0e3ae6b08505c8ecdd90d9d4002f07ac8820fd6169eb979",
+      "sizeBytes": 2099502400,
+      "modelName": "unsloth/granite-4.1-3b-GGUF:Q4_K_M",
+      "architecture": "granite",
+      "moe": false,
+      "thinkingOff": null,
+      "toolCapable": true,
+      "tiers": ["extended", "rc"]
+    },
+    {
+      "id": "lfm2.5-8b-a1b",
+      "repo": "unsloth/LFM2.5-8B-A1B-GGUF",
+      "file": "LFM2.5-8B-A1B-UD-Q4_K_M.gguf",
+      "sha256": "e2c8350d5e6e7c633b2ba4e20805a2c86bc46884cd285e8f3fe36ad917b772c7",
+      "sizeBytes": 5322223200,
+      "modelName": "unsloth/LFM2.5-8B-A1B-GGUF:UD-Q4_K_M",
+      "architecture": "lfm2moe",
+      "moe": true,
+      "thinkingOff": "budget",
+      "toolCapable": true,
+      "tiers": ["extended", "rc"]
+    },
+    {
+      "id": "qwen3.6-35b-a3b",
+      "repo": "unsloth/Qwen3.6-35B-A3B-GGUF",
+      "file": "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf",
+      "sha256": "ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61",
+      "sizeBytes": 22134528992,
+      "modelName": "unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q4_K_M",
+      "architecture": "qwen35moe",
+      "moe": true,
+      "thinkingOff": "template",
+      "toolCapable": true,
+      "tiers": ["rc"]
+    },
+    {
+      "id": "qwen3.8-27b",
+      "repo": "unsloth/Qwen3.8-27B-GGUF",
+      "file": "Qwen3.8-27B-UD-Q4_K_M.gguf",
+      "sha256": "322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "sizeBytes": 16464440224,
+      "modelName": "unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M",
+      "architecture": "qwen35",
+      "moe": false,
+      "thinkingOff": "template",
+      "toolCapable": true,
+      "tiers": ["rc"]
+    }
+  ]
+}

@@ -448,7 +448,8 @@ public sealed class BenchmarkRunExecutor : IBenchmarkRunExecutor
             ReasoningBudgetEnforceable = sampling.ReasoningBudgetEnforceable ?? true,
             // The answer is already capped at the project's max output tokens, so exactly that is reserved rather than the chat floor on
             // top of it, which refused small-window projects that fit. No cap keeps the floor. The freeze pre-flight reserves the same.
-            ReservedOutputTokensOverride = sampling.MaxOutputTokens
+            ReservedOutputTokensOverride = sampling.MaxOutputTokens,
+            UsesFrozenBenchmarkPolicy = true
         });
     }
 

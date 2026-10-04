@@ -32,7 +32,7 @@ internal sealed class LlamaLayerPlacementReport : ILlamaLayerPlacementReport
                      ?.Placement;
 
     /// <inheritdoc />
-    public void Record(ModelRole role, GpuVariant variant, string modelName, int offloadedLayers, int totalLayers)
+    public void Record(ModelRole role, GpuVariant variant, string modelName, int offloadedLayers, int totalLayers, bool expertsOffloaded = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentOutOfRangeException.ThrowIfNegative(offloadedLayers);
@@ -43,7 +43,8 @@ internal sealed class LlamaLayerPlacementReport : ILlamaLayerPlacementReport
             ModelName = modelName,
             Role = role,
             OffloadedLayers = offloadedLayers,
-            TotalLayers = totalLayers
+            TotalLayers = totalLayers,
+            ExpertsOffloaded = expertsOffloaded
         };
         var observation = new Observation
         {

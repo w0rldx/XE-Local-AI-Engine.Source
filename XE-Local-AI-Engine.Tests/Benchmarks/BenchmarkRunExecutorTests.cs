@@ -251,6 +251,7 @@ public sealed class BenchmarkRunExecutorTests
         AssertEx.True(lease.Disposed);
         var package = AssertEx.NotNull(assignedPackage);
         AssertEx.Null(package.ResponseJsonSchema, "Only the judge is decode-constrained; the primary measurement is not.");
+        AssertEx.True(package.UsesFrozenBenchmarkPolicy, "Node output-cap and thinking-budget settings must not reach a frozen run.");
         AssertEx.Equal<float?>(0, AssertEx.NotNull(package.SamplingOptions).Temperature);
         AssertEx.Equal("0", package.SamplingOptions!.Seed);
         AssertEx.Equal(8192, package.SamplingOptions.NumCtx);

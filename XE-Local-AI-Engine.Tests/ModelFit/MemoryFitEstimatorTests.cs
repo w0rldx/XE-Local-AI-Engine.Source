@@ -478,6 +478,65 @@ public sealed class MemoryFitEstimatorTests
     }
 
     [Test]
+    public void KvCache_HybridRecurrentStack_ChargesOnlyTheFullAttentionLayers_Qwen36MoeHeader()
+    {
+        // Real Qwen3.6-35B-A3B header (qwen35moe: 40 blocks, 2 KV heads, key/value 256, interval 4): llama.cpp gives 10 of 40 layers a KV cache. Measured at -c 65536
+        // q8_0: "KV buffer size = 680.00 MiB" = 10 · 2 · 512 · 65536 elements at q8_0's 34 bytes per 32, i.e. the estimator's 1-byte figure times 34/32.
+        var shape = new GgufAttentionShape
+        {
+            KeyLength = 256,
+            ValueLength = 256,
+            FullAttentionInterval = 4
+        };
+
+        var hybrid = MemoryFitEstimator.EstimateKvCacheFootprint(blockCount: 40, attentionHeadCountKV: 2, embeddingLength: 2048, attentionHeadCount: 16, ctxTarget: 65536,
+            KvCacheQuant.Q8_0, shape);
+        var everyLayer = MemoryFitEstimator.EstimateKvCacheFootprint(blockCount: 40, attentionHeadCountKV: 2, embeddingLength: 2048, attentionHeadCount: 16, ctxTarget: 65536,
+            KvCacheQuant.Q8_0, new GgufAttentionShape { KeyLength = 256, ValueLength = 256 });
+
+        AssertEx.Equal(10L * 2 * 512 * 65536, hybrid.BytesAtContext);
+        AssertEx.Equal(680L * 1024 * 1024, hybrid.BytesAtContext * 34 / 32);
+        AssertEx.Equal(4 * hybrid.BytesAtContext, everyLayer.BytesAtContext);
+    }
+
+    [Test]
+    [Arguments(41L, 11L)]
+    [Arguments(40L, 10L)]
+    [Arguments(3L, 1L)]
+    public void KvCache_HybridRecurrentStack_RoundsAttentionLayersUp(long blockCount, long expectedAttentionLayers)
+    {
+        // A block count that is not a multiple of the interval (an appended MTP layer) is charged one extra layer rather than one too few.
+        var shape = new GgufAttentionShape
+        {
+            KeyLength = 128,
+            ValueLength = 128,
+            FullAttentionInterval = 4
+        };
+
+        var kv = MemoryFitEstimator.EstimateKvCacheFootprint(blockCount, attentionHeadCountKV: 1, embeddingLength: 0, attentionHeadCount: 0, ctxTarget: 1000, KvCacheQuant.F16, shape);
+
+        AssertEx.Equal(expectedAttentionLayers * 256 * 2 * 1000, kv.BytesAtContext);
+    }
+
+    [Test]
+    [Arguments(null)]
+    [Arguments(0L)]
+    [Arguments(1L)]
+    public void KvCache_WithoutAUsableInterval_ChargesEveryLayer(long? interval)
+    {
+        // An absent key is the conservative default: no per-architecture assumption, every layer pays full-context KV.
+        var kv = MemoryFitEstimator.EstimateKvCacheFootprint(blockCount: 40, attentionHeadCountKV: 2, embeddingLength: 0, attentionHeadCount: 0, ctxTarget: 4096, KvCacheQuant.F16,
+            new GgufAttentionShape
+            {
+                KeyLength = 256,
+                ValueLength = 256,
+                FullAttentionInterval = interval
+            });
+
+        AssertEx.Equal(40L * 2 * 512 * 2 * 4096, kv.BytesAtContext);
+    }
+
+    [Test]
     public void MemoryFit_DenseLlama_ExplicitKeyValueEqualsDerived_SameBytes_ButExactConfidence()
     {
         // A dense Llama-3-8B-like model whose derived head_dim (4096/32 = 128) already equals the explicit key/value

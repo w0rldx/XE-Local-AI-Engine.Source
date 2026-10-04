@@ -89,7 +89,8 @@ internal static class GgufFileSelector
             SlidingWindow = file.SlidingWindow,
             SlidingWindowPattern = file.SlidingWindowPattern,
             KeyLengthMla = file.AttentionKeyLengthMla,
-            ValueLengthMla = file.AttentionValueLengthMla
+            ValueLengthMla = file.AttentionValueLengthMla,
+            FullAttentionInterval = file.FullAttentionInterval
         };
     }
 }

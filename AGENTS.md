@@ -179,6 +179,11 @@ Opt-in live runners (nothing invokes them; ask before running, run before a test
 - `scripts/run-docker-smoke-local.sh` — the four real-daemon container suites, which run ONLY under
   `XE_REQUIRE_DOCKER_TESTS=1` and skip everywhere else. CI proves the Engine API wire shape without a daemon
   against `Testing.FakeDocker`; this proves what only a daemon can. Exit 5 = no usable daemon, 1 = product failed.
+- `scripts/run-model-matrix-local.sh` — pinned-model scenario checks (thinking, output limits, tools, background
+  jobs, 4k window, MoE placement) via a live node; `--tier fast|extended|rc`, `--download`; exit 1 = a hard check
+  failed, 2 = model missing/hash mismatch/node not set up, 5 = infra abort. It is slow: run it once, as the last
+  validation step, and only when the change touches inference, thinking, tool offering, window budgeting or model
+  fit; never while iterating.
 
 ## Conventions that bite
 

@@ -96,7 +96,7 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
     /// </summary>
     /// <remarks>
     ///     Non-filtering paths are no ambient scope, an inactive scope, no tools, no <see cref="ListToolsFunction" /> in
-    ///     the array, a count at or below the threshold, or a blank query — reference equality means no clone and no
+    ///     the array, a count at or below the threshold, or a blank query outside a window-fitted scope — reference equality means no clone and no
     ///     reordering can occur there. The clone is seen only by the budgeter and the provider, never by anything that
     ///     dispatches a call.
     /// </remarks>
@@ -108,9 +108,12 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
             return options;
         }
 
+        // A window-fitted offer ranks the whole array: its budget, not a count, decides how many tools go out.
+        var threshold = scope.FittedOffer is null ? _options.Threshold : tools.Count - 1;
+
         // Located by TYPE, not by name: the hop needs this exact instance for the Bind step anyway, so one pass both
         // gates and binds — and a foreign tool that merely takes the name cannot switch the filter on.
-        if (tools.OfType<ListToolsFunction>().FirstOrDefault() is not { } listTools || tools.Count <= _options.Threshold)
+        if (tools.OfType<ListToolsFunction>().FirstOrDefault() is not { } listTools || tools.Count <= threshold)
         {
             return options;
         }
@@ -126,7 +129,9 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         // ONE decision per array per turn, so the query matters only for a FIRST-time computation: a text-less
         // approval-resume send must not resolve blank, fall through mid-turn and strand list_tools on the old binding.
         var query = LastUserText(messages);
-        if (string.IsNullOrWhiteSpace(query) && !scope.HasDecision(key))
+
+        // A window-fitted offer is a cap, not an optimisation: it narrows even with no query to rank by.
+        if (string.IsNullOrWhiteSpace(query) && scope.FittedOffer is null && !scope.HasDecision(key))
         {
             return options;
         }
@@ -135,7 +140,7 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         try
         {
             decision = await scope.GetOrComputeAsync(key,
-                                      () => SelectAsync(scope, tools, query, options, messages),
+                                      () => SelectAsync(scope, tools, query, threshold, options, messages),
                                       cancellationToken)
                                   .ConfigureAwait(false);
         }
@@ -153,11 +158,11 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         // substitute in the clone below, which nothing would ever invoke.
         listTools.Bind(decision);
 
-        // Offered union revealed, in the INPUT order, so a fixed set always serialises to the same tools array — a
-        // stable prompt prefix and one GBNF compilation across the turn's rounds.
-        var offered = new HashSet<string>(decision.OfferedNames, StringComparer.Ordinal);
+        // Offered union revealed (inside the budget when fitted), in the INPUT order, so a fixed set always serialises to the
+        // same tools array — a stable prompt prefix and one GBNF compilation across the turn's rounds.
+        var sent = decision.SentNames();
         var narrowed = options.Clone();
-        narrowed.Tools = [.. tools.Where(tool => offered.Contains(tool.Name) || decision.IsRevealed(tool.Name))];
+        narrowed.Tools = [.. tools.Where(tool => sent.Contains(tool.Name))];
         return narrowed;
     }
 
@@ -174,10 +179,12 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
     private async Task<ArrayDecision> SelectAsync(ToolRelevanceState scope,
         IList<AITool> tools,
         string? query,
+        int threshold,
         ChatOptions options,
         IReadOnlyList<ChatMessage> messages)
     {
-        var instructionText = options.Instructions ?? FirstSystemText(messages);
+        // A window-fitted array pins only the tools it cannot work without, or the core alone could overflow the window.
+        var instructionText = scope.FittedOffer is null ? options.Instructions ?? FirstSystemText(messages) : null;
 
         var candidates = new List<ToolRelevanceCandidate>(tools.Count);
         foreach (var tool in tools)
@@ -190,7 +197,40 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
             });
         }
 
-        var selection = await _selector.SelectAsync(query, candidates, _options.Threshold, CancellationToken.None).ConfigureAwait(false);
+        var selection = await _selector.SelectAsync(query, candidates, threshold, CancellationToken.None).ConfigureAwait(false);
+
+        // The fitted budget is enforced here, once for every selector and every path, a query with nothing to rank included:
+        // the pinned tools, then the rest in rank order (input order where unranked), each one that still fits.
+        List<string> rankOrder = [];
+        if (scope.FittedOffer is { } fitted)
+        {
+            var indexByName = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (var index = 0; index < candidates.Count; index++)
+            {
+                _ = indexByName.TryAdd(candidates[index].Name, index);
+            }
+
+            var room = fitted.RankedTokenBudget;
+            var ranked = new HashSet<int>();
+            var kept = new HashSet<int>();
+            foreach (var name in (selection.RankedNames ?? []).Concat(candidates.Select(static candidate => candidate.Name)))
+            {
+                var index = indexByName[name];
+                if (candidates[index].IsCore || !ranked.Add(index))
+                {
+                    continue;
+                }
+
+                rankOrder.Add(name);
+                if (fitted.TokenCosts.TryGetValue(name, out var cost) && cost <= room)
+                {
+                    room -= cost;
+                    _ = kept.Add(index);
+                }
+            }
+
+            selection = ToolRelevanceSelection.Compose(candidates, kept);
+        }
 
         // Counts are per ARRAY, not per round: written from INSIDE the single-flight factory and EXCHANGED rather than
         // added, so a turn that rebinds reports the array the model ended on, not a sum overstating the notice's "of M".
@@ -200,7 +240,9 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         return new ArrayDecision
         {
             OfferedNames = selection.OfferedNames,
-            HiddenNames = selection.HiddenNames
+            HiddenNames = selection.HiddenNames,
+            FittedOffer = scope.FittedOffer,
+            RankOrder = rankOrder
         };
     }
 
@@ -208,7 +250,7 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
     // assembly owns plus what the instructions name. MCP and custom tools are absent and rank like everything else.
     private static bool IsCore(ToolRelevanceState scope, string name, string? instructionText)
     {
-        if (scope.CoreNames.Contains(name)
+        if ((scope.FittedOffer is null && scope.CoreNames.Contains(name))
             || string.Equals(name, AskUserTool.ToolName, StringComparison.Ordinal)
             || string.Equals(name, ListToolsFunction.ToolName, StringComparison.Ordinal)
             || SkillToolNames.Contains(name, StringComparer.Ordinal))

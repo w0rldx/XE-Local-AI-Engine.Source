@@ -71,6 +71,16 @@ public interface IWorkerEventDispatcher
     Task ReportInvocationThinkingChunkAsync(Guid invocationId, string chunk);
 
     /// <summary>
+    ///     Replaces the streamed answer and appends to the streamed reasoning when the runner reclassifies answer text
+    ///     as reasoning at the end of a turn.
+    /// </summary>
+    /// <remarks>
+    ///     The reasoning only grows, so a consumer's reasoning cursor stays a prefix; the answer can shrink, which is why
+    ///     the terminal event carries the full text. A no-op when the id is not the current invocation.
+    /// </remarks>
+    Task ReportInvocationTextReclassifiedAsync(Guid invocationId, string content, string reasoningSuffix);
+
+    /// <summary>
     ///     Reports the runtime phase of the in-flight turn (preparing runtime → loading model → generating).
     /// </summary>
     /// <remarks>

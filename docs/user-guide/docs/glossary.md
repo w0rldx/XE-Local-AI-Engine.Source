@@ -108,7 +108,7 @@ and speeds.
 ### Parameters (0.5B, 7B, 14B, 70B)
 Roughly, how big the model's "brain" is. **B** = billion.
 
-- **0.5B** — tiny. Fast, runs anywhere, not very capable. *(This is the starter model.)*
+- **0.5B–3B** — tiny to small. Fast, runs almost anywhere, limited. *(The starter model is 3B.)*
 - **7B–8B** — the sweet spot for most consumer machines. Genuinely useful.
 - **14B–32B** — noticeably better, needs a good graphics card.
 - **70B+** — excellent, needs serious hardware.

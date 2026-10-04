@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Models.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
@@ -95,19 +96,20 @@ internal sealed class LocalModelDetailsResolver : ILocalModelDetailsResolver
             return new LocalModelDetailsResolution.NoLocalDetails();
         }
 
-        var effectiveContextTokens = await TryResolveEffectiveContextAsync(modelName, cancellationToken);
-        return new LocalModelDetailsResolution.Gguf(descriptor, effectiveContextTokens);
+        var runtimeInfo = await TryResolveRuntimeInfoAsync(modelName, cancellationToken);
+        return new LocalModelDetailsResolution.Gguf(descriptor,
+            runtimeInfo is { EffectiveContextTokens: > 0 } info ? info.EffectiveContextTokens : null,
+            runtimeInfo?.ExpertsOffloaded);
     }
 
-    // Best-effort: the effective context window the running llama.cpp chat process loaded (null when none is warm or the
-    // runtime does not report it). Never fails the details response — the meter simply falls back to MaxContextTokens.
-    private async Task<int?> TryResolveEffectiveContextAsync(string modelName, CancellationToken cancellationToken)
+    // Best-effort: what the running llama.cpp chat process loaded (null when none is warm or the runtime does not report it).
+    // Never fails the details response — the meter simply falls back to MaxContextTokens.
+    private async Task<LocalModelRuntimeInfo?> TryResolveRuntimeInfoAsync(string modelName, CancellationToken cancellationToken)
     {
         try
         {
             var provider = _providerResolver.ResolveProvider(LlamaCppProviderName);
-            var runtimeInfo = await provider.GetRuntimeInfoAsync(modelName, cancellationToken);
-            return runtimeInfo is { EffectiveContextTokens: > 0 } info ? info.EffectiveContextTokens : null;
+            return await provider.GetRuntimeInfoAsync(modelName, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

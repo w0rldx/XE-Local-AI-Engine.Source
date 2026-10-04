@@ -108,7 +108,7 @@ public sealed class DesktopBootstrapTests : IDisposable
         {
             // The stock Ollama-era default that desktop mode never installs.
             [DesktopBootstrap.LocalChatDefaultModelKey] = "qwen3:0.6b",
-            [DesktopBootstrap.FirstRunModelRepoIdKey] = "bartowski/Qwen2.5-0.5B-Instruct-GGUF",
+            [DesktopBootstrap.FirstRunModelRepoIdKey] = "unsloth/granite-4.1-3b-GGUF",
             [DesktopBootstrap.FirstRunModelQuantKey] = "Q4_K_M"
         });
 
@@ -116,7 +116,7 @@ public sealed class DesktopBootstrapTests : IDisposable
 
         // The desktop default must become the exact "repo:quant" identity first-run provisioning installs and selects,
         // overriding the stock Ollama id so the chat composer never opens on an uninstalled model.
-        AssertEx.Equal("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M", configuration[DesktopBootstrap.LocalChatDefaultModelKey]);
+        AssertEx.Equal("unsloth/granite-4.1-3b-GGUF:Q4_K_M", configuration[DesktopBootstrap.LocalChatDefaultModelKey]);
     }
 
     [Test]

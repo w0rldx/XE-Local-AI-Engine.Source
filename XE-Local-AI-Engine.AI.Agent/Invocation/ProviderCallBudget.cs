@@ -99,6 +99,7 @@ public sealed class ProviderCallBudget
     private int _toolArgumentRepairs;
     private int _agentHandoffs;
     private int _trimLogged;
+    private int _thinkingOff;
 
     private ProviderCallBudget(ProviderCallBudgetOptions options, long startedTimestamp)
     {
@@ -294,6 +295,18 @@ public sealed class ProviderCallBudget
     /// <summary>True exactly once per invocation: the first context trim is logged at Information, later ones at Debug.</summary>
     internal bool TryClaimTrimLog() =>
         Interlocked.Exchange(ref _trimLogged, 1) == 0;
+
+    /// <summary>Turns thinking off for every later provider round of this turn; the next turn's budget starts with it on.</summary>
+    /// <remarks>
+    ///     The tool-call re-prompt (model-matrix F4): after a call landed in the reasoning, the 9B kept writing calls there
+    ///     while thinking, and never with it off. Held here because only the provider-round hop sees each round of a segment.
+    /// </remarks>
+    internal void TurnThinkingOff() =>
+        Volatile.Write(ref _thinkingOff, 1);
+
+    /// <summary>Whether <see cref="TurnThinkingOff" /> was called for this turn.</summary>
+    internal bool IsThinkingOff =>
+        Volatile.Read(ref _thinkingOff) == 1;
 
     internal ProviderCallEfficiencySnapshot CaptureEfficiencySnapshot()
     {

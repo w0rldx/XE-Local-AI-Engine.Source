@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Testing.Builders;
 
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
@@ -46,6 +47,8 @@ public sealed class StubNodeRuntimeSettings
     private bool _autoProvisionFirstRunModel = StoredNodeSettings.DefaultAutoProvisionFirstRunModel;
     private int _agentHomeMaxRunSeconds = 600;
     private int _webFetchMaxContentChars = StoredNodeSettings.DefaultWebFetchMaxContentChars;
+    private ReasoningBudgets _reasoningBudgets = ReasoningBudgets.Default;
+    private ChatOutputCap _chatOutputCap = new() { Mode = StoredNodeSettings.ChatOutputCapModeCap, MaxTokens = StoredNodeSettings.DefaultChatOutputCapMaxTokens };
     private int _toolPipelineMaxIterationsPerRequest = StoredNodeSettings.DefaultToolPipelineMaxIterationsPerRequest;
     private int _toolPipelineMaxToolResultChars = StoredNodeSettings.DefaultToolPipelineMaxToolResultChars;
     private int _toolPipelineMaxConsecutiveInvalidToolCalls = StoredNodeSettings.DefaultToolPipelineMaxConsecutiveInvalidToolCalls;
@@ -336,6 +339,18 @@ public sealed class StubNodeRuntimeSettings
     public StubNodeRuntimeSettings WithAgentHomeMaxRunSeconds(int agentHomeMaxRunSeconds)
     {
         _agentHomeMaxRunSeconds = agentHomeMaxRunSeconds;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithReasoningBudgets(ReasoningBudgets reasoningBudgets)
+    {
+        _reasoningBudgets = reasoningBudgets;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithChatOutputCap(ChatOutputCap chatOutputCap)
+    {
+        _chatOutputCap = chatOutputCap;
         return this;
     }
 
@@ -731,6 +746,8 @@ public sealed class StubNodeRuntimeSettings
         settings.GetWebFetchMaxContentCharsAsync(Arg.Any<CancellationToken>()).Returns(_webFetchMaxContentChars);
         settings.GetKnowledgeSearchDefaultResultsAsync(Arg.Any<CancellationToken>()).Returns(StoredNodeSettings.DefaultKnowledgeSearchDefaultResults);
         settings.GetKnowledgeSearchMaxResultsAsync(Arg.Any<CancellationToken>()).Returns(StoredNodeSettings.DefaultKnowledgeSearchMaxResults);
+        settings.GetReasoningBudgetsAsync(Arg.Any<CancellationToken>()).Returns(_reasoningBudgets);
+        settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(_chatOutputCap);
         settings.GetAgentHomeMaxRunSecondsAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeMaxRunSeconds);
         settings.GetDefaultContextTokensAsync(Arg.Any<CancellationToken>()).Returns(_defaultContextTokens);
         settings.GetProviderBudgetRecentMessagesToKeepAsync(Arg.Any<CancellationToken>()).Returns(_providerBudgetRecentMessagesToKeep);

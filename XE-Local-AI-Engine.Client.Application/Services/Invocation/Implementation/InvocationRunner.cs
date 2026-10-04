@@ -51,12 +51,28 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // The floor for an unknown (0) or tiny reported window, which would otherwise cut every tool result to a character or two.
     private const int MinWindowToolResultCharacters = 8_192;
 
+    // The one tool round-trip a window-fitted offer keeps room for: short arguments and a short result, enough for the
+    // Default Assistant's short-result tools (live C2: Calculate returned 13 characters). Larger results are trimmed per round.
+    private const int FittedRoundTripArgumentCharacters = 128;
+    private const int FittedRoundTripResultCharacters = 512;
+
     // The notice for a turn whose last round produced neither text nor a tool call.
     private const string EmptyAnswerNoticeMessage = "The model stopped without an answer.";
 
     // The EmptyAnswer variant for a turn that spent its whole generation room thinking: the reasoning IS persisted and shown, so say so
     // (tester round 6 read the plain sentence as "the thoughts are lost"). The SPA localizes this exact sentence; change both together.
     private const string StoppedWhileThinkingNoticeMessage = "The model stopped while thinking before it could answer; its thoughts are kept above.";
+
+    // The EmptyAnswer variant for a final round whose reasoning ends in a tool-call block llama-server never parsed (model-matrix F4). The SPA localizes it.
+    private const string ToolCallInReasoningNoticeMessage =
+        "The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer.";
+
+    // The one re-prompt after such a round; the model sees it as a user message.
+    private const string ReasoningToolCallRepromptMessage =
+        "Your last reply put a tool call inside your reasoning, where it cannot run. Make the tool call now as an actual tool call, outside your reasoning.";
+
+    // A turn whose answer ended on the output cap or the window rather than where the model chose to stop.
+    private const string OutputLimitReachedNoticeMessage = "The answer stopped at the length limit before the model finished.";
 
     /// <summary>The authored effort that opens the dispatch path, and the value persisted as <c>authored_effort</c>.</summary>
     private const string AutoReasoningEffort = "auto";
@@ -69,6 +85,17 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // the two-pass truncation. A fixed, path-free constant carrying no token counts, model names, or content.
     private const string ContextBudgetExceededMessage =
         "Conversation exceeds the model's context window even after truncation — Compact the conversation to summarize older messages, start a new chat, or switch to a larger-context model.";
+
+    // The hard stop when the cause is the tool offer, which compacting cannot shrink (model-matrix F5).
+    private const string ToolOfferExceedsWindowMessage =
+        "The tools offered with this message do not fit this model's context window — Turn off tools for this chat, or switch to a larger-context model.";
+
+    // The hard stop when the attachment cannot fit even shortened (model-matrix F6).
+    private const string AttachmentExceedsWindowMessage =
+        "The attached file does not fit this model's context window, even shortened — Remove the attachment, or switch to a larger-context model.";
+
+    private const string AttachmentShortenedNoticeMessage =
+        "The attached file was shortened to fit this model's context window; the model was told it is incomplete.";
 
     private readonly ICapabilityReporter _capabilityReporter;
 
@@ -730,10 +757,30 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         // Built once for the whole turn: the offer list is fixed for the invocation, and the budgeter's framing memo is
         // keyed on these string instances (see ApplyContextBudgetAsync).
-        var toolBudgetDefinitions = BuildToolBudgetDefinitions(package.AllowedTools);
-        var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, toolBudgetDefinitions, resolvedModel, "initial-assembly", turnPolicy, transport, budgetGate);
+        var fit = FitFirstRoundToWindow(package, resolvedModel, turnPolicy);
+        package = fit.Package;
+        var toolBudgetDefinitions = fit.ToolDefinitions;
 
-        var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages, effectiveContextTokens);
+        // Opened HERE, not in the fit: an AsyncLocal written inside an awaited callee never reaches its caller. Active even with the
+        // operator's tool-relevance switch off, and pinning only the recovery tools: otherwise the turn cannot run at all.
+        using var fittedToolOffer = fit.FittedOffer is { } fittedOffer
+            ? ToolRelevanceScope.BeginScope(active: true, FrozenSet<string>.Empty, fittedOffer)
+            : null;
+        if (fit.AttachmentShortened)
+        {
+            await transport.EmitNoticeAsync(TurnNoticeKind.AttachmentShortened, AttachmentShortenedNoticeMessage);
+        }
+
+        var seededMessages = await ApplyContextBudgetAsync(fit.Messages, package, toolBudgetDefinitions, resolvedModel, "initial-assembly", turnPolicy, transport, budgetGate, fit.Measured);
+
+        // Model-matrix F2: a small model can repeat itself until the window or the turn timeout ends it. A frozen benchmark keeps
+        // the pre-node-settings behaviour: no default cap, no length notice, the fixed thinking ladder.
+        var outputCap = package.UsesFrozenBenchmarkPolicy
+            ? new ChatOutputCap { Mode = StoredNodeSettings.ChatOutputCapModeOff, MaxTokens = 0 }
+            : await _runtimeSettings.GetChatOutputCapAsync(invocationToken);
+        var reasoningBudgets = package.UsesFrozenBenchmarkPolicy ? ReasoningBudgets.Frozen : await _runtimeSettings.GetReasoningBudgetsAsync(invocationToken);
+        var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages, effectiveContextTokens,
+            reasoningBudgets, outputCap.TokensFor(effectiveContextTokens));
         // Coarse span over the MAF agent build — another pre-first-token stage. Disposed right after the
         // build so it does not enclose the streaming loop; the agent context keeps its normal await-using scope.
         var buildAgentActivity = NodeActivitySource.Source.StartActivity("chat.invocation.build_agent");
@@ -783,9 +830,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // follows earlier output by definition — a retry could duplicate output, so later segments run the provider send directly.
         var isFirstSegment = true;
 
-        // The per-segment update list is retained ONLY to replay a folded segment on approval, and only an ApprovalRequiredAIFunction produces a ToolApprovalRequestContent.
-        // The resolver ORs the registry pre-wrap into this tighten-only flag, so an all-false ClientLocal offer never wraps one; every other location is fail-closed here.
-        var approvalPossible = package.AllowedTools.Any(static tool => tool.RequiresApproval || tool.Location != ToolLocation.ClientLocal);
+        // The per-segment update list is retained ONLY to replay a folded segment, on approval or on the one tool-call-in-reasoning re-prompt below, so a
+        // turn offering no tool never keeps it.
+        var retainSegmentUpdates = package.AllowedTools.Count > 0;
+
+        // Model-matrix F4: a thinking model can write its tool call inside the reasoning block, where llama-server keeps it as reasoning. Re-prompted once, never more.
+        var reasoningToolCallReprompted = false;
+        var repromptPending = false;
 
         // The reviewed web results of THIS agent stream, read by the web tool handlers when the framework executes the approved calls.
         using var webReviewScope = WebReviewResultScope.BeginScope();
@@ -793,6 +844,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // Whether the round after the last tool result produced text or a call. A turn that ends on a silent round would
         // otherwise complete as an empty "answer" the user cannot tell from a slow one.
         var finalRoundHasOutput = false;
+
+        // Where the final round's answer and reasoning start in the turn's builders, so the end-of-turn checks below
+        // judge that round alone and never move text an earlier round (before a tool result) produced.
+        var finalRoundContentStart = stream.ResponseBuilder.Length;
+        var finalRoundReasoningStart = stream.ReasoningBuilder.Length;
 
         do
         {
@@ -806,6 +862,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             pendingApprovals.Clear();
             pendingApprovalKeys.Clear();
+            repromptPending = false;
             var segmentUpdates = new List<AgentResponseUpdate>();
 
             // The idle watchdog owns the token the provider call binds cancellation to, so an idle expiry actually cancels the send. The first segment also
@@ -826,7 +883,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             await foreach (var update in segmentStream.WithCancellation(invocationToken))
             {
-                if (approvalPossible)
+                if (retainSegmentUpdates)
                 {
                     segmentUpdates.Add(update);
                 }
@@ -979,6 +1036,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                                 // A result starts a new model round, which must produce its own text or call to count as an answer.
                                 finalRoundHasOutput = false;
+                                finalRoundContentStart = stream.ResponseBuilder.Length;
+                                finalRoundReasoningStart = stream.ReasoningBuilder.Length;
 
                                 // Media rides beside the model's text (ToolResultMedia) so an image result persists as an image, never as a type name.
                                 await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
@@ -1148,16 +1207,106 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                 currentMessages.Add(new ChatMessage(ChatRole.User, approvalResponses));
             }
-        } while (pendingApprovals.Count > 0);
+            else if (!finalRoundHasOutput && retainSegmentUpdates && !reasoningToolCallReprompted && !invocationToken.IsCancellationRequested
+                     && ReasoningCarriesToolCall(stream, finalRoundReasoningStart))
+            {
+                // The folded segment keeps every executed call and result but no reasoning, so the unparsed call is not replayed. A nudge recovered
+                // the bare 9B 5/5 at b10201 (.tmp/model-matrix-data/phase2/track-1b/probe-summary.txt).
+                reasoningToolCallReprompted = true;
+                foreach (var folded in segmentUpdates.ToAgentResponse().Messages)
+                {
+                    var kept = folded.Contents.Where(static content => content is not TextReasoningContent).ToList();
+                    if (kept.Exists(static content => content is not TextContent text || !string.IsNullOrWhiteSpace(text.Text)))
+                    {
+                        currentMessages.Add(new ChatMessage(folded.Role, kept));
+                    }
+                }
 
-        // Not for a cancelled turn: its stream can end normally, and the caller reports the cancellation instead.
+                currentMessages.Add(new ChatMessage(ChatRole.User, ReasoningToolCallRepromptMessage));
+
+                // Thinking stays off for the rest of the turn: back on after the re-prompt, the 9B put its next call in the reasoning
+                // again (live C1: 2 of 6), with thinking off it never did. The next turn's budget starts with it on.
+                ProviderCallBudget.Current?.TurnThinkingOff();
+                finalRoundContentStart = stream.ResponseBuilder.Length;
+                finalRoundReasoningStart = stream.ReasoningBuilder.Length;
+                repromptPending = true;
+            }
+        } while (pendingApprovals.Count > 0 || repromptPending);
+
+        // A thinking model leaks its deliberation into the answer with thinking off too (LFM2.5 at effort none, model-matrix W3),
+        // so its round is checked whether or not the reasoning channel carried anything.
+        if ((package.SupportsThinking || stream.ReasoningBuilder.Length > finalRoundReasoningStart) && !invocationToken.IsCancellationRequested
+            && await ReclassifyLeakedThinkTextAsync(transport, stream, finalRoundContentStart, package.SupportsThinking) is { } hasAnswer)
+        {
+            finalRoundHasOutput = hasAnswer;
+        }
+
+        var finalRoundReasoned = stream.ReasoningBuilder.Length > finalRoundReasoningStart;
+
+        // Not for a cancelled turn: the caller reports the cancellation. A round that reasoned and answered nothing ran out
+        // while thinking whatever the finish reason: a budget-forced end finishes "stop", the window "length".
         if (!finalRoundHasOutput && !invocationToken.IsCancellationRequested)
         {
-            var stoppedWhileThinking = string.Equals(stream.FinishReason, "length", StringComparison.Ordinal) && stream.ReasoningBuilder.Length > 0;
-            await transport.EmitNoticeAsync(TurnNoticeKind.EmptyAnswer,
-                stoppedWhileThinking ? StoppedWhileThinkingNoticeMessage : EmptyAnswerNoticeMessage,
-                stream.FinishReason);
+            var message = finalRoundReasoned ? StoppedWhileThinkingNoticeMessage : EmptyAnswerNoticeMessage;
+            if (ReasoningCarriesToolCall(stream, finalRoundReasoningStart))
+            {
+                message = ToolCallInReasoningNoticeMessage;
+            }
+
+            await transport.EmitNoticeAsync(TurnNoticeKind.EmptyAnswer, message, stream.FinishReason);
         }
+        else if (finalRoundHasOutput && outputCap.NotifiesOnLength && !invocationToken.IsCancellationRequested
+                 && string.Equals(stream.FinishReason, "length", StringComparison.Ordinal))
+        {
+            await transport.EmitNoticeAsync(TurnNoticeKind.OutputLimitReached, OutputLimitReachedNoticeMessage, stream.FinishReason);
+        }
+    }
+
+    // Qwen-family templates write a call as <tool_call>…</tool_call>; inside the reasoning block llama-server leaves it unparsed.
+    private static bool ReasoningCarriesToolCall(StreamState stream, int reasoningStart) =>
+        stream.ReasoningBuilder.Length > reasoningStart
+        && stream.ReasoningBuilder.ToString(reasoningStart, stream.ReasoningBuilder.Length - reasoningStart).Contains("<tool_call>", StringComparison.Ordinal);
+
+    /// <summary>
+    ///     Moves leaked think text from the final round's answer into the reasoning and reports the corrected texts so
+    ///     the terminal message persists them.
+    /// </summary>
+    /// <remarks>
+    ///     Only residue at the start of the answer: the text before a stray <c>&lt;/think&gt;</c> (Qwen3.5 9B, F19), or for a
+    ///     thinking model a whole <c>&lt;think&gt;…&lt;/think&gt;</c> block that opens the answer (Qwen3.5 0.8B, V2). A block after
+    ///     answer text is quoted markup and stays, tags included. The live stream showed it as the answer; the terminal event
+    ///     replaces it. Text that would leave no answer stays the answer, tags dropped. For a model that cannot think, a close
+    ///     tag after its own open tag is quoted markup and stays. Returns whether answer text remains, or null.
+    /// </remarks>
+    private static async Task<bool?> ReclassifyLeakedThinkTextAsync(StreamTransport transport, StreamState stream, int contentStart, bool thinkingModel)
+    {
+        const string OpenTag = "<think>";
+        const string CloseTag = "</think>";
+        var round = stream.ResponseBuilder.ToString(contentStart, stream.ResponseBuilder.Length - contentStart);
+        var close = round.IndexOf(CloseTag, StringComparison.Ordinal);
+        var open = close < 0 ? -1 : round.IndexOf(OpenTag, 0, close, StringComparison.Ordinal);
+        if (close < 0 || (open >= 0 && (!thinkingModel || !string.IsNullOrWhiteSpace(round[..open]))))
+        {
+            return null;
+        }
+
+        var leaked = (open < 0 ? round[..close] : round[(open + OpenTag.Length)..close]).Trim();
+        var answer = string.Concat(open < 0 ? string.Empty : round[..open], round[(close + CloseTag.Length)..].TrimStart()).TrimStart();
+
+        // The only text of the round is the answer with a stray tag (LFM2.5 at effort none: "Okay.\n</think>"): drop the tags, keep the text.
+        if (answer.Length == 0)
+        {
+            (answer, leaked) = (leaked, string.Empty);
+        }
+
+        var separator = stream.ReasoningBuilder.Length == 0 ? string.Empty : "\n\n";
+        var reasoningSuffix = leaked.Length == 0 ? string.Empty : string.Concat(separator, leaked);
+        var content = string.Concat(stream.ResponseBuilder.ToString(0, contentStart), answer);
+
+        stream.ResponseBuilder.Clear().Append(content);
+        stream.ReasoningBuilder.Append(reasoningSuffix);
+        await transport.Dispatcher.ReportInvocationTextReclassifiedAsync(transport.InvocationId, content, reasoningSuffix);
+        return answer.Length > 0;
     }
 
     /// <summary>

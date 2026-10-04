@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -49,6 +50,28 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         AssertEx.True(returned < 5, "some low-scored hits must be trimmed");
         AssertEx.True(returned >= 1, "at least the top hit must be returned");
         AssertEx.Equal(returned, root.GetProperty("results").GetArrayLength());
+    }
+
+    /// <summary>
+    ///     Model-matrix F18: after an empty search the 9B and LFM2.5 refused "How far is it from Berlin to Munich?" and
+    ///     kept refusing. The empty note and the tool's answering policy are scoped to the operator's documents.
+    /// </summary>
+    [Test]
+    public async Task ExecuteAsync_WhenNothingMatches_LetsTheModelAnswerAGeneralQuestionFromGeneralKnowledge()
+    {
+        var handler = CreateHandler(new KnowledgeSearchResult
+        {
+            Results = []
+        });
+
+        var json = await handler.ExecuteAsync("""{"query":"distance Berlin Munich"}""");
+
+        using var document = JsonDocument.Parse(json);
+        AssertEx.Equal(0, document.RootElement.GetProperty("results").GetArrayLength());
+        AssertEx.Contains(document.RootElement.GetProperty("note").GetString() ?? string.Empty, "answer it from your general knowledge", StringComparison.Ordinal);
+        AssertEx.False(SearchKnowledgeBaseToolDefinition.Description.Contains("fill gaps from prior knowledge", StringComparison.Ordinal),
+            "the unconditional answering policy is gone");
+        AssertEx.Contains(SearchKnowledgeBaseToolDefinition.Description, "Answering policy for questions about the operator's documents", StringComparison.Ordinal);
     }
 
     [Test]
@@ -105,6 +128,44 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         AssertEx.False(root.GetProperty("truncated").GetBoolean());
         AssertEx.Equal(expected: 1, root.GetProperty("returnedResults").GetInt32());
         AssertEx.Equal(expected: 1, root.GetProperty("totalResults").GetInt32());
+    }
+
+    /// <summary>Model-matrix F18 on LFM2.5: one indexed document made an unrelated chunk the rank-1 hit for a general question.</summary>
+    /// <remarks>
+    ///     The empty note never fired and the model read the miss as "no information". Every non-empty result now says the
+    ///     hits are ranked matches that may not answer, with no score threshold.
+    /// </remarks>
+    [Test]
+    public async Task ExecuteAsync_WhenAnUnrelatedChunkIsTheOnlyHit_LetsTheModelAnswerAGeneralQuestionFromGeneralKnowledge()
+    {
+        var handler = CreateHandler(new KnowledgeSearchResult
+        {
+            Results =
+            [
+                new KnowledgeSearchHit
+                {
+                    DocumentId = Guid.NewGuid(),
+                    ChunkId = Guid.NewGuid(),
+                    Title = "Orion",
+                    Section = null,
+                    Content = "Project Orion ships its telemetry agent in the third quarter.",
+                    Source = "knowledge-base",
+                    Score = 0.016,
+                    ChunkIndex = 0,
+                    DocumentStatus = KnowledgeDocumentStatus.Indexed,
+                    ServingLastKnownGood = false
+                }
+            ]
+        });
+
+        var json = await handler.ExecuteAsync("""{"query":"distance Berlin Munich"}""");
+
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        AssertEx.Equal(1, root.GetProperty("results").GetArrayLength(), "the hit is still returned: no threshold on the fused score");
+        var note = root.GetProperty("note").GetString() ?? string.Empty;
+        AssertEx.Contains(note, "may not address the question", StringComparison.Ordinal);
+        AssertEx.Contains(note, "answer it from your general knowledge", StringComparison.Ordinal);
     }
 
     [Test]

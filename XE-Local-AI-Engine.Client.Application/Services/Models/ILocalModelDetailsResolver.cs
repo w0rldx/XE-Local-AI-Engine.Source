@@ -38,10 +38,10 @@ public abstract record LocalModelDetailsResolution
     public sealed record External(ExternalProviderModelRegistration Registration) : LocalModelDetailsResolution;
 
     /// <summary>
-    ///     An installed GGUF served by llama.cpp. <paramref name="EffectiveContextTokens" /> is the running process's
-    ///     launched window when one is warm, and <see langword="null" /> otherwise (including when the probe failed).
+    ///     An installed GGUF served by llama.cpp. <paramref name="EffectiveContextTokens" /> and <paramref name="ExpertsOffloaded" /> describe
+    ///     the running process when one is warm, and are <see langword="null" /> otherwise (including when the probe failed).
     /// </summary>
-    public sealed record Gguf(LocalModelDescriptor Descriptor, int? EffectiveContextTokens) : LocalModelDetailsResolution;
+    public sealed record Gguf(LocalModelDescriptor Descriptor, int? EffectiveContextTokens, bool? ExpertsOffloaded = null) : LocalModelDetailsResolution;
 
     /// <summary>An Ollama-served model, as reported by the daemon's <c>/api/show</c>.</summary>
     public sealed record Ollama(OllamaModelDetails Details) : LocalModelDetailsResolution;

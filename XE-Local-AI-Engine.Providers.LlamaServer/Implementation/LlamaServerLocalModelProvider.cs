@@ -153,7 +153,8 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
             ? null
             : new LocalModelRuntimeInfo
             {
-                EffectiveContextTokens = info.EffectiveContextTokens
+                EffectiveContextTokens = info.EffectiveContextTokens,
+                ExpertsOffloaded = info.ExpertsOffloaded
             });
     }
 

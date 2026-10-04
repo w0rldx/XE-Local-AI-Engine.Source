@@ -22,7 +22,7 @@ interface RunningModelsPanelProps {
 // 2026-08-01, vestigial names from the model-fit advisor page this panel was relocated from (a test asserts it is absent
 // there now).
 export function RunningModelsPanel({ runningModels, isLoading, error, onEject, ejectingModelName }: RunningModelsPanelProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 
 	return (
 		<Card withBorder={true} radius="md" p="lg" data-testid="loaded-models-llamacpp-card">
@@ -81,6 +81,28 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 														? model.detail
 														: t(`pages.loadedModels.llamaCpp.details.${model.detailCode}`, model.detail)}
 												</Text>
+											) : null}
+											{model.effectiveContextTokens !== null ? (
+												<Text size="xs" c="dimmed" data-testid={`loaded-models-llamacpp-context-${model.modelName}`}>
+													{t("pages.loadedModels.llamaCpp.contextWindow", {
+														defaultValue: "Context window: {{tokens}} tokens",
+														tokens: model.effectiveContextTokens.toLocaleString(i18n.language),
+													})}
+												</Text>
+											) : null}
+											{model.expertsOffloaded ? (
+												<Badge
+													mt={4}
+													color="orange"
+													variant="light"
+													title={t(
+														"pages.loadedModels.llamaCpp.expertsOffloadedHint",
+														"This mixture-of-experts model keeps its expert weights in system RAM instead of on the GPU, so it generates noticeably slower.",
+													)}
+													data-testid={`loaded-models-llamacpp-experts-offloaded-${model.modelName}`}
+												>
+													{t("pages.loadedModels.llamaCpp.expertsOffloaded", "Experts in system RAM")}
+												</Badge>
 											) : null}
 										</Table.Td>
 										<Table.Td>{model.role ? <Badge variant="outline">{model.role}</Badge> : "—"}</Table.Td>

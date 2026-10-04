@@ -330,6 +330,7 @@ public sealed class BenchmarkComparisonExecutor : IBenchmarkComparisonExecutor
             Timeouts = BenchmarkFrozenPolicies.FrozenTimeouts(),
             SamplingOptions = BenchmarkRunExecutor.ToSamplingOptions(runtime.Sampling, runtime.RequestedContextTokens),
             IsUnattended = true,
+            UsesFrozenBenchmarkPolicy = true,
             ResponseJsonSchema = PairwiseResponseFormatSchema
         });
     }

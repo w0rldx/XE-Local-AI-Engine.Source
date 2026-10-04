@@ -4052,6 +4052,7 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse
 	modelName: string;
 	maxContextTokens?: number | null;
 	effectiveContextTokens?: number | null;
+	expertsOffloaded?: boolean | null;
 	displayLabel?: string | null;
 	externalConnectionId?: string | null;
 	externalConnectionName?: string | null;
@@ -4457,6 +4458,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = {
 	backendUndeterminedReason?: string | null;
 	gpuOffloadedLayers?: number | null;
 	gpuTotalLayers?: number | null;
+	gpuExpertsOffloaded?: boolean;
 	gpuOffloadModelName?: string | null;
 	gpuOffloadRole?: string | null;
 };
@@ -4729,6 +4731,8 @@ export type XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = {
 	isBusy: boolean;
 	lastUsedUtc: string | null;
 	isTransient: boolean;
+	effectiveContextTokens?: number | null;
+	expertsOffloaded?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1RuntimeAcquisitionStatusResponse = {
@@ -4931,6 +4935,17 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	minKnowledgeSearchResults?: number;
 	maxAllowedKnowledgeSearchResults?: number;
 	knowledgeSearchMaxResults?: number | null;
+	reasoningBudgetMinimalTokens?: number | null;
+	reasoningBudgetLowTokens?: number | null;
+	reasoningBudgetMediumTokens?: number | null;
+	reasoningBudgetHighTokens?: number | null;
+	minReasoningBudgetTokens?: number;
+	maxAllowedReasoningBudgetTokens?: number;
+	defaultReasoningEffort?: string | null;
+	chatOutputCapMode?: string | null;
+	chatOutputCapMaxTokens?: number | null;
+	minChatOutputCapMaxTokens?: number;
+	maxAllowedChatOutputCapMaxTokens?: number;
 	huggingFaceDownloadConnections?: number | null;
 	minHuggingFaceDownloadConnections?: number;
 	maxAllowedHuggingFaceDownloadConnections?: number;
@@ -5127,6 +5142,13 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	webFetchMaxContentChars?: number | null;
 	knowledgeSearchDefaultResults?: number | null;
 	knowledgeSearchMaxResults?: number | null;
+	reasoningBudgetMinimalTokens?: number | null;
+	reasoningBudgetLowTokens?: number | null;
+	reasoningBudgetMediumTokens?: number | null;
+	reasoningBudgetHighTokens?: number | null;
+	defaultReasoningEffort?: string | null;
+	chatOutputCapMode?: string | null;
+	chatOutputCapMaxTokens?: number | null;
 	huggingFaceDownloadConnections?: number | null;
 	transcriptionInferenceTimeoutMinutes?: number | null;
 	agentHomeMaxRunSeconds?: number | null;

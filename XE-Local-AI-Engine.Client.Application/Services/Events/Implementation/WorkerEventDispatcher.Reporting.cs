@@ -37,6 +37,23 @@ public sealed partial class WorkerEventDispatcher
         return Task.CompletedTask;
     }
 
+    public Task ReportInvocationTextReclassifiedAsync(Guid invocationId, string content, string reasoningSuffix)
+    {
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                state.StreamedContent = content;
+                if (!string.IsNullOrEmpty(reasoningSuffix))
+                {
+                    state.AppendStreamedThinkingContent(reasoningSuffix);
+                }
+
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
     public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase)
     {
         // The cold-load phases (PreparingRuntime/LoadingModel) fire BEFORE the stream-idle watchdog is armed, so a

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Memory;
@@ -30,6 +31,13 @@ internal static class ChatMemoryExtractionHook
             // finished answer, so skip it (no exec-log either — nothing meaningful ran).
             var failed = state.Status == InvocationStatus.Failed;
             if (state.Status != InvocationStatus.Completed && !failed)
+            {
+                return;
+            }
+
+            // Only a failure of the agent's own doing (a tool call, the agent runtime) holds a lesson. Timeouts, an open
+            // breaker or an absent model teach nothing, store junk "retry later" memories and refill the extraction queue.
+            if (failed && state.FailureCategory is not (FailureCategory.AgentToolCall or FailureCategory.AgentRuntime))
             {
                 return;
             }

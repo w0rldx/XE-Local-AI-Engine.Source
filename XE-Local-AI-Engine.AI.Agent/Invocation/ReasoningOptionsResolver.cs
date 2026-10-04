@@ -46,7 +46,7 @@ internal static class ReasoningOptionsResolver
     /// </summary>
     /// <remarks>
     ///     Present on a thinking-capable model whenever reasoning is on with a graded or UNSPECIFIED effort (the
-    ///     latter gets <see cref="DefaultReasoningBudgetTokens" />); without it llama-server free-runs the reasoning
+    ///     latter gets the rung of <see cref="ReasoningBudgets.UnspecifiedEffort" />); without it llama-server free-runs the reasoning
     ///     until the context window is exhausted and the turn returns no final answer. The key never reaches any wire, so only <c>DeferredLlamaServerChatClient</c> consumes it — and the
     ///     literal is duplicated there, because the AI.Agent assembly does not reference the LlamaServer provider.
     ///     Keep the two in sync.
@@ -109,39 +109,26 @@ internal static class ReasoningOptionsResolver
     }
 
     /// <summary>
-    ///     The budget an UNSPECIFIED effort gets on a thinking-capable model: the <c>medium</c> rung.
-    /// </summary>
-    /// <remarks>
-    ///     Before tester round 6 a blank effort sent no budget, and a hard prompt on a thinking model then reasoned
-    ///     until <c>finish_reason: length</c> with no answer at all (measured in docs/wiki/05-chat.md). Explicit
-    ///     <c>none</c> still turns thinking off and sends nothing.
-    /// </remarks>
-    internal const int DefaultReasoningBudgetTokens = 8192;
-
-    /// <summary>
     ///     Maps a normalized reasoning effort to the llama.cpp per-request thinking budget in tokens
     ///     (<c>reasoning_budget_tokens</c>), or <see langword="null" /> to send no budget at all.
     /// </summary>
     /// <remarks>
-    ///     Blank effort gets <see cref="DefaultReasoningBudgetTokens" />. Null — <c>none</c>, the binary <c>on</c>
-    ///     sentinel and any unrecognized value — keeps the model free-running. These are FIXED counts and neither caller knows the launched
-    ///     window here, so the value is a ceiling rather than a promise;
-    ///     <c>DeferredLlamaServerChatClient.ClampToGenerationRoom</c> is the seam that narrows it. See
-    ///     docs/wiki/04-agent-mode.md ("The reasoning-effort matrix and the thinking budget") for the ladder's sizing.
+    ///     Rungs come from <paramref name="budgets" /> (node settings; <see cref="ReasoningBudgets.Default" /> when null),
+    ///     and a blank effort takes the rung of <see cref="ReasoningBudgets.UnspecifiedEffort" />. <c>none</c>,
+    ///     <c>on</c> and unknown values send nothing. A ceiling, not a promise:
+    ///     <c>DeferredLlamaServerChatClient.ClampToGenerationRoom</c> narrows it to the window. See wiki 04.
     /// </remarks>
-    internal static int? ResolveReasoningBudgetTokens(string? reasoningEffort)
+    internal static int? ResolveReasoningBudgetTokens(string? reasoningEffort, ReasoningBudgets? budgets = null)
     {
-        if (string.IsNullOrWhiteSpace(reasoningEffort))
-        {
-            return DefaultReasoningBudgetTokens;
-        }
+        budgets ??= ReasoningBudgets.Default;
+        var effort = string.IsNullOrWhiteSpace(reasoningEffort) ? budgets.UnspecifiedEffort : reasoningEffort;
 
-        return reasoningEffort.Trim().ToUpperInvariant() switch
+        return effort.Trim().ToUpperInvariant() switch
         {
-            "MINIMAL" => 1024,
-            "LOW" => 2048,
-            "MEDIUM" => DefaultReasoningBudgetTokens,
-            "HIGH" or "XHIGH" => 24576,
+            "MINIMAL" => budgets.Minimal,
+            "LOW" => budgets.Low,
+            "MEDIUM" => budgets.Medium,
+            "HIGH" or "XHIGH" => budgets.High,
             _ => null
         };
     }

@@ -382,6 +382,44 @@ public sealed class NodeRuntimeSettingsTests
         AssertEx.Equal(expected: 20, await sut.GetKnowledgeSearchMaxResultsAsync());
     }
 
+    /// <summary>
+    ///     Operator decision 3 (model-matrix 2026-10-04): minimal 1024, low 2048, medium 8192, high 24576, and an
+    ///     unspecified effort takes the low rung; a stored value wins per rung.
+    /// </summary>
+    [Test]
+    public async Task ReasoningBudgets_DefaultToTheShippedLadderAndStoredValuesWin()
+    {
+        var unset = CreateSut(new StoredNodeSettings(), seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+        var budgets = await unset.GetReasoningBudgetsAsync();
+        AssertEx.Equal((1024, 2048, 8192, 24576, "low"), (budgets.Minimal, budgets.Low, budgets.Medium, budgets.High, budgets.UnspecifiedEffort));
+
+        var stored = CreateSut(new StoredNodeSettings
+            {
+                ReasoningBudgetLowTokens = 512,
+                ReasoningBudgetHighTokens = 16384,
+                DefaultReasoningEffort = "medium"
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+        budgets = await stored.GetReasoningBudgetsAsync();
+        AssertEx.Equal((1024, 512, 8192, 16384, "medium"), (budgets.Minimal, budgets.Low, budgets.Medium, budgets.High, budgets.UnspecifiedEffort));
+    }
+
+    /// <summary>Operator decision 4 (model-matrix F2): cap plus notice, at most 16384, by default; stored values win.</summary>
+    [Test]
+    public async Task ChatOutputCap_DefaultsToCapAt16384AndStoredValuesWin()
+    {
+        var unset = CreateSut(new StoredNodeSettings(), seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+        AssertEx.Equal(new ChatOutputCap { Mode = "cap", MaxTokens = 16_384 }, await unset.GetChatOutputCapAsync());
+
+        var stored = CreateSut(new StoredNodeSettings
+            {
+                ChatOutputCapMode = "off",
+                ChatOutputCapMaxTokens = 4096
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+        AssertEx.Equal(new ChatOutputCap { Mode = "off", MaxTokens = 4096 }, await stored.GetChatOutputCapAsync());
+    }
+
     [Test]
     public async Task Tunables_StoredAbsent_UseTheAppsettingsSeed()
     {

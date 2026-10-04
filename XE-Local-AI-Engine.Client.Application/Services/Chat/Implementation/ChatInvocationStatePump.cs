@@ -224,12 +224,15 @@ public sealed class ChatInvocationStatePump
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && !terminalPersisted)
         {
-            // Deliberate trade-off: a cancelled message terminalizes from the last-persisted cursor, so a cancel drops
-            // up to one flush window of tail tokens. Re-flushing cannot work with the token already tripped.
+            // Terminalize from what the client was already SENT, which can run ahead of the slow persist cadence. Both
+            // cursors are snapshots of one growing turn, so the longer one is the fresher one.
+            var seenCursor = emitCursor.Content.Length + emitCursor.Reasoning.Length > persistCursor.Content.Length + persistCursor.Reasoning.Length
+                ? emitCursor
+                : persistCursor;
             await TerminalizeInterruptedStreamAsync(eventSink,
                 correlation,
                 sequence.Next(),
-                persistCursor,
+                seenCursor,
                 wasCancelled: true);
         }
         catch (Exception) when (!terminalPersisted)

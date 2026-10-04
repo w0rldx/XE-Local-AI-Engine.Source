@@ -17,6 +17,10 @@ public sealed class ProcessContextAllocationResolverTests
     private const long Gb = 1024L * 1024 * 1024;
     private const string Model = "repo/model:Q4_K_M";
 
+    // What the process VRAM probe returned on the measured RTX 5090 host, and that host's RAM.
+    private const long MeasuredProcessBudget = 32_429_309_952;
+    private const long RamOfTheMeasuredHost = 50_509_557_760;
+
     [Test]
     public async Task Resolve_CpuOrPhantomVram_UsesCpuRamOnly()
     {
@@ -322,6 +326,93 @@ public sealed class ProcessContextAllocationResolverTests
         AssertEx.True(allocation.Footprint.GpuBytes > 0);
         AssertEx.True(allocation.Footprint.RamBytes > 0);
         AssertEx.True(allocation.Placement is ProcessPlacementMode.ExpertOffload or ProcessPlacementMode.Hybrid);
+    }
+
+    [Test]
+    public async Task Resolve_MoeThatFitsResidentAtTheFloor_PrefersResidentOverExpertOffloadAtALargerTier()
+    {
+        // The measured case: the 22.13 GB Qwen3.6-35B-A3B on a 32 GB card (32,429,309,952 B probed free) with about 5 GB held elsewhere. Resident it fits
+        // only at 16,384; expert offload fits at 65,536, which the old first-fit walk chose and which ran about 5x slower.
+        var resolver = BuildResolver(Profile(RamOfTheMeasuredHost, 32 * Gb, vramKnown: true),
+            processBudget: MeasuredProcessBudget - 5_000_000_000,
+            facts: Qwen36MoeFacts());
+
+        var allocation = AssertEx.NotNull(await Resolve(resolver, ResolvedLaunchArguments.Explore(), kvCacheType: null));
+
+        AssertEx.Equal(expected: 16384, allocation.ProcessContextTokens);
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, allocation.Placement);
+        AssertEx.Equal(expected: 0, allocation.Footprint.RamBytes);
+    }
+
+    [Test]
+    public async Task Resolve_MoeOnTheFreeMeasuredCard_FitsResidentAtTheLargestTier()
+    {
+        // Same model, nothing else resident: charging only the 10 attention layers' KV, it fits resident at 65,536 (it did, with about 4 GB to spare).
+        var resolver = BuildResolver(Profile(RamOfTheMeasuredHost, 32 * Gb, vramKnown: true),
+            processBudget: MeasuredProcessBudget,
+            facts: Qwen36MoeFacts());
+
+        var allocation = AssertEx.NotNull(await Resolve(resolver, ResolvedLaunchArguments.Explore(), kvCacheType: null));
+
+        AssertEx.Equal(expected: 65536, allocation.ProcessContextTokens);
+        AssertEx.Equal(ProcessPlacementMode.GpuResident, allocation.Placement);
+    }
+
+    [Test]
+    public async Task Resolve_MoeThatCannotFitResidentAtTheFloor_KeepsExpertOffloadAtTheLargestTier()
+    {
+        // A 16 GB card cannot hold the 22 GB of weights at any window: nothing to prefer, so the largest offload tier is kept, as before.
+        var resolver = BuildResolver(Profile(RamOfTheMeasuredHost, 16 * Gb, vramKnown: true),
+            processBudget: 16 * Gb,
+            facts: Qwen36MoeFacts());
+
+        var allocation = AssertEx.NotNull(await Resolve(resolver, ResolvedLaunchArguments.Explore(), kvCacheType: "q8_0"));
+
+        AssertEx.Equal(expected: 65536, allocation.ProcessContextTokens);
+        AssertEx.Equal(ProcessPlacementMode.ExpertOffload, allocation.Placement);
+    }
+
+    [Test]
+    public async Task Resolve_DenseModelOfTheSameSize_IsUnchangedByTheResidentPreference()
+    {
+        // The preference is about expert offload only: a dense file of the same size on the same budget keeps the first-fit answer (layer split at 65,536).
+        var moe = Qwen36MoeFacts();
+        var resolver = BuildResolver(Profile(RamOfTheMeasuredHost, 32 * Gb, vramKnown: true),
+            processBudget: MeasuredProcessBudget - 5_000_000_000,
+            facts: new GgufModelFootprintFacts
+            {
+                Quant = moe.Quant,
+                FileSizeBytes = moe.FileSizeBytes,
+                ParamCount = moe.ParamCount,
+                BlockCount = moe.BlockCount,
+                AttentionHeadCount = moe.AttentionHeadCount,
+                AttentionHeadCountKV = moe.AttentionHeadCountKV,
+                EmbeddingLength = moe.EmbeddingLength,
+                ContextLength = moe.ContextLength,
+                AttentionKeyLength = moe.AttentionKeyLength,
+                AttentionValueLength = moe.AttentionValueLength,
+                FullAttentionInterval = moe.FullAttentionInterval,
+                ContentIdentity = "sha256:dense"
+            });
+
+        var allocation = AssertEx.NotNull(await Resolve(resolver, ResolvedLaunchArguments.Explore(), kvCacheType: null));
+
+        AssertEx.Equal(expected: 65536, allocation.ProcessContextTokens);
+        AssertEx.Equal(ProcessPlacementMode.Hybrid, allocation.Placement);
+    }
+
+    [Test]
+    public async Task Resolve_MoeWhoseOnlyResidentFitIsBelowTheFloor_KeepsExpertOffloadAtTheLargerTier()
+    {
+        // Resident fits only at 8,192 here; below the floor the larger offloaded window stays the better trade, so the old answer holds.
+        var resolver = BuildResolver(Profile(RamOfTheMeasuredHost, 32 * Gb, vramKnown: true),
+            processBudget: MeasuredProcessBudget - 5_200_000_000,
+            facts: Qwen36MoeFacts());
+
+        var allocation = AssertEx.NotNull(await Resolve(resolver, ResolvedLaunchArguments.Explore(), kvCacheType: null));
+
+        AssertEx.Equal(expected: 65536, allocation.ProcessContextTokens);
+        AssertEx.Equal(ProcessPlacementMode.ExpertOffload, allocation.Placement);
     }
 
     [Test]
@@ -943,6 +1034,27 @@ public sealed class ProcessContextAllocationResolverTests
             attentionHeadCount: 64,
             attentionHeadCountKv: 8,
             embeddingLength: 8192);
+
+    // The real unsloth Qwen3.6-35B-A3B UD-Q4_K_M header: no general.parameter_count (weights = file size), 40 blocks of which every 4th is attention.
+    private static GgufModelFootprintFacts Qwen36MoeFacts() =>
+        new()
+        {
+            Quant = "UD-Q4_K_M",
+            FileSizeBytes = 22_134_528_992,
+            ParamCount = null,
+            BlockCount = 40,
+            AttentionHeadCount = 16,
+            AttentionHeadCountKV = 2,
+            EmbeddingLength = 2048,
+            ContextLength = 262144,
+            AttentionKeyLength = 256,
+            AttentionValueLength = 256,
+            FullAttentionInterval = 4,
+            ContentIdentity = "sha256:qwen36-35b-a3b",
+            Architecture = "qwen35moe",
+            ExpertCount = 256,
+            ExpertUsedCount = 8
+        };
 
     private static long UsableRamBudget(long total) =>
         Math.Max(0, total - Math.Max(LlamaServerLaunchPolicyOptions.MinimumRamReserveBytes,

@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -141,6 +142,49 @@ public sealed class ProviderCallBudgetChatClientTests
             "the caller's options must not be mutated; narrowing clones");
     }
 
+    /// <summary>
+    ///     Model-matrix F4/C1: once the re-prompt turns thinking off, every later round of the turn runs without it; the
+    ///     next turn, with its own budget, is back on the turn's effort.
+    /// </summary>
+    [Test]
+    public async Task GetResponseAsync_AfterThinkingIsTurnedOff_SendsEveryLaterRoundOfTheTurnWithThinkingOff()
+    {
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+        var options = new ChatOptions
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["num_ctx"] = 65536,
+                ["think"] = "medium",
+                [ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey] = 2048
+            }
+        };
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            ProviderCallBudget.Current!.TurnThinkingOff();
+            _ = await sut.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options);
+            _ = await sut.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options);
+        }
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            _ = await sut.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options);
+        }
+
+        foreach (var round in inner.ReceivedOptions.Take(2))
+        {
+            var properties = AssertEx.NotNull(round).AdditionalProperties!;
+            AssertEx.Equal<object?>(true, properties[InvocationAgentFactory.LlamaDisableThinkingMarkerKey]);
+            AssertEx.Equal<object?>(false, properties["think"]);
+            AssertEx.False(properties.ContainsKey(ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey), "no thinking budget with thinking off");
+        }
+
+        AssertEx.True(ReferenceEquals(options, inner.ReceivedOptions[2]), "the next turn keeps its own options");
+        AssertEx.False(options.AdditionalProperties.ContainsKey(InvocationAgentFactory.LlamaDisableThinkingMarkerKey), "the caller's options are not mutated");
+    }
+
     [Test]
     public async Task GetResponseAsync_WhenTheBudgetAlreadyFits_LeavesTheOptionsInstanceAlone()
     {
@@ -171,6 +215,65 @@ public sealed class ProviderCallBudgetChatClientTests
 
         AssertEx.True(ReferenceEquals(options, inner.ReceivedOptions.Single()),
             "a budget that already fits must pass the same options instance through");
+    }
+
+    /// <summary>
+    ///     Model-matrix F2: the node's default chat cap is half the window, and reserving it would have halved what the
+    ///     input may use. An explicit per-request limit is still reserved in full.
+    /// </summary>
+    /// <remarks>
+    ///     The 4k and 65k rows keep today's 1024-token floor: under the default limit a round that fits now still fits, and
+    ///     the same limit sent explicitly is reserved in full and refused.
+    /// </remarks>
+    [Test]
+    [Arguments(1_000, 2_000, 600, 0, true, true)]
+    [Arguments(1_000, 2_000, 600, 0, false, false)]
+    [Arguments(4_096, 7_600, 2_048, 1_024, true, true)]
+    [Arguments(4_096, 7_600, 2_048, 1_024, false, false)]
+    [Arguments(65_536, 160_000, 40_960, 1_024, true, true)]
+    [Arguments(65_536, 160_000, 40_960, 1_024, false, false)]
+    public async Task GetResponseAsync_ReservesAnExplicitOutputLimitButNotTheDefaultCap(int window,
+        int inputChars,
+        int limit,
+        int floor,
+        bool defaultCap,
+        bool expectSent)
+    {
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, new string('x', inputChars))
+        };
+        var options = new ChatOptions
+        {
+            MaxOutputTokens = limit,
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["num_ctx"] = window
+            }
+        };
+        if (defaultCap)
+        {
+            options.AdditionalProperties[InvocationAgentDefinition.DefaultOutputCapMarkerKey] = true;
+        }
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   ReservedOutputTokenFloor = floor
+               }))
+        {
+            if (expectSent)
+            {
+                _ = await sut.GetResponseAsync(messages, options);
+            }
+            else
+            {
+                _ = await AssertEx.ThrowsAsync<ProviderContextWindowExceededException>(async () => await sut.GetResponseAsync(messages, options));
+            }
+        }
+
+        AssertEx.Equal(expectSent ? 1 : 0, inner.ReceivedMessageSets.Count);
     }
 
     [Test]

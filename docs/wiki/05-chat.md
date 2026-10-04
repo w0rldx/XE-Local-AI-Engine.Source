@@ -151,7 +151,7 @@ Interim text segments. Text the model streams before a tool call ("Let me search
 
 - `WorkerEventDispatcher.ReportToolCallLifecycleAsync` stamps a requested call's `ToolCallLifecyclePayload.ContentOffset` with the streamed-content length, under the lock that orders the content appends. The split is therefore exact even when the pump's debounced emit of the narration's tail trails the tool event.
 - `NodeChatPartAccumulator.AppendToolRequested` closes the content since the previous boundary into a `text` part at the tool's sequence, inserted just ahead of the tool part. Whitespace-only narration produces no part; a repeated requested phase moves nothing.
-- At the terminal, `ChatInvocationStatePump` persists `parts` sliced from the full streamed content and `Content` = `NodeChatPartAccumulator.FinalSegment`, the text after the last tool call. Previews, history (`ConversationContextBuilder`), regeneration/variants and memory extraction keep reading `Content` and so see only the answer; the model's later turns never see the narration. An interrupted/cancelled terminal still persists the whole cursor text with no parts (unchanged).
+- At the terminal, `ChatInvocationStatePump` persists `parts` sliced from the full streamed content and `Content` = `NodeChatPartAccumulator.FinalSegment`, the text after the last tool call. Previews, history (`ConversationContextBuilder`), regeneration/variants and memory extraction keep reading `Content` and so see only the answer; the model's later turns never see the narration. An interrupted/cancelled terminal still persists the whole cursor text with no parts (unchanged). A user Stop trips the run token before the cancel endpoint marks the row, so the pump terminalizes Cancelled from its catch; it writes the fresher of the emit and persist cursors, so the persisted text is never shorter than what the client was already sent (F9). Either write order ends there, because the pump's Cancelled terminalize may supersede the endpoint's Cancelled row.
 - The wire keeps ONE global content-offset space: deltas, snapshots and the gap detector are unchanged. `tool-call-requested` carries the split offset in `contentOffset` (live and in the resume replay). The React reducer (`NodeChatStreamState.ts`) tracks the whole streamed text in `ChatMessageModel.streamedContent` once a tool carries an offset and re-derives the `text` parts and the answer from the tools' offsets on every event, so a late tail delta, a snapshot repair and a resume replay all land on the same split. A terminal whose content differs from the derived answer (an interrupted turn) wins and drops the derived parts.
 - `buildMessageParts` breaks a sequence tie as reasoning < text < tool < notice, so a text part renders before its card; `MessageParts` renders it muted (`c="dimmed"`). Old rows (one `Content`, no text parts) render exactly as before; no migration.
 
@@ -237,6 +237,12 @@ excerpts actually placed in context are persisted as metadata-only sources. Reac
 collapsed **Sources** strip under the assistant answer; selecting a source opens its knowledge-document
 drawer. Legacy, ungrounded, and empty-result turns render no strip.
 
+A grounded turn that passes that gate on a node with **no embedding model** carries a `KnowledgeUnavailable`
+notice, on send and on regenerate (model-matrix F13): without one no upload is indexed, so the turn cannot be grounded.
+"No embedding model" is `IChatTurnContextBuilder.IsKnowledgeEmbeddingAvailableAsync`, the same
+`IEmbeddingModelResolver` resolution ingestion and search use (not confident = none installed). The SPA localizes
+the sentence.
+
 ## File attachments
 
 A conversation can carry uploaded file attachments that the model reads as turn context. The path is fully node-local: upload → pure-.NET text extraction → encrypted-at-rest storage → per-turn injection.
@@ -255,7 +261,7 @@ Large pasted text takes a different, deliberately smaller path. `Security:MaxMes
 
 **Two injection modes** (`NodeChatStreamService.cs`): the synthetic prepended context differs by turn mode.
 
-- **Plain chat** inlines the extracted text directly. `ChatTurnContextBuilder.BuildAttachmentContextAsync` loads the `AttachmentFileIds` named on the send, keeps only `Extracted` files, reads each decrypted Markdown, and composes one capped context message via `ConversationAttachmentContextComposer.Compose(parts, MaxInlinedAttachmentChars)` prepended to the conversation history (`ConversationContextBuilder.Build` places it in the first slot and shifts the history down). Returns `null` on the common no-attachment path so the prompt stays byte-identical.
+- **Plain chat** inlines the extracted text directly. `ChatTurnContextBuilder.BuildAttachmentContextAsync` loads the `AttachmentFileIds` named on the send, keeps only `Extracted` files, reads each decrypted Markdown, and composes one capped context message via `ConversationAttachmentContextComposer.Compose(parts, MaxInlinedAttachmentChars)` prepended to the conversation history (`ConversationContextBuilder.Build` places it in the first slot and shifts the history down). Returns `null` on the common no-attachment path so the prompt stays byte-identical. That fixed cap knows nothing of the window, so the message also carries `ShortenAttachment`, which recomposes it under a smaller budget (fence intact, truncation note for the model). When the first round does not fit the launched window but would without the attachment, `InvocationRunner.FitFirstRoundToWindow` shrinks it to the room left and emits an `AttachmentShortened` notice; if not even an empty recomposition fits, the turn fails with "The attached file does not fit this model's context window, even shortened" (model-matrix F6: a 30k-character file failed every first turn at 4k and 8k).
 - **Agent mode** never inlines content. When the turn offers tools, the sandbox is re-staged with this conversation's attachments and the model is handed a pointer message naming the staged paths — see the sandbox-staging path below.
 
 **Agent-mode sandbox staging:** `IConversationSandboxStager.PrepareConversationAttachmentsAsync` re-stages the node sandbox so it holds **only** this conversation's extracted attachments under the workspace `attachments/` alias, then `ChatTurnContextBuilder.BuildAgentAttachmentHint` emits a pointer message listing those staged paths so a weak model reads the right files with its `read_file` / `list_files` / `search_text` tools. `NodeChatStreamService.StageConversationAttachmentsAsync` calls the stager before the turn context is built; a workspace that cannot be prepared, or is busy, terminalizes the assistant message as failed with that reason before the run starts. The stager lives in Agent Mode; see [Agent Mode](04-agent-mode.md).
@@ -305,13 +311,16 @@ for the `fast-model-*` codes being refusal-only, never a swap reason.
 ### Thinking budget (llama.cpp) and where it is enforceable
 
 A graded effort also caps HOW LONG the model may think. `ReasoningOptionsResolver.ResolveReasoningBudgetTokens`
-maps the effort to a token ceiling (`minimal` 1024, `low` 2048, `medium` 8192, `high`/`xhigh` 24576) and both
+maps the effort to a token ceiling — a node setting per level, shipped `minimal` 1024, `low` 2048, `medium` 8192,
+`high`/`xhigh` 24576 (Node Settings → Chat → Thinking budgets) — and both
 marker emitters — `InvocationAgentFactory` (single-agent) and `ParticipantReasoningOptions`
 (orchestration participants, MCP-bound children, spawned sub-agents) — put it on the in-process marker
 `xe.llama.reasoning_budget_tokens`, which `DeferredLlamaServerChatClient.ApplyReasoningBudget` patches onto the
 outbound body as `reasoning_budget_tokens` (clamped to the launched window by `ClampToGenerationRoom`). An
-unspecified effort gets the `medium` rung (8192) since tester round 6 — before that it sent nothing and a hard prompt
-thought until `finish_reason: length` with no answer. Explicit `none` still turns thinking off and sends no budget.
+unspecified effort gets the rung of the default-effort node setting, shipped `low` (model-matrix 2026-10-04; tester
+round 6 had set `medium`, and before that it sent nothing and a hard prompt thought until `finish_reason: length` with
+no answer). Explicit `none` turns thinking off: `enable_thinking=false` plus `reasoning_budget_tokens: 0`, see
+[Agent Mode](04-agent-mode.md) ("The reasoning-effort matrix and the thinking budget").
 
 **Answer now.** A streaming request that carries the budget also carries `reasoning_control: true`
 (`DeferredLlamaServerChatClient.ApplyReasoningControl`), which arms llama-server's realtime reasoning control (pin
@@ -324,9 +333,27 @@ budget-enforceable) posts `chat/messages/{messageId}/answer-now`, which sends
 reasoning, not armed, or refused (the server's own text is logged, never returned). The turn keeps streaming; the
 model closes its reasoning and answers.
 
-When a turn still ends with no answer, finish reason `length` and non-empty reasoning, the `EmptyAnswer` notice reads
+When a turn still ends with no answer after its final round reasoned, the `EmptyAnswer` notice reads
 "The model stopped while thinking before it could answer; its thoughts are kept above." — the reasoning is
-persisted (`Reasoning`) and rendered as the Thoughts segment above the notice. The SPA localizes that sentence.
+persisted (`Reasoning`) and rendered as the Thoughts segment above the notice. The SPA localizes that sentence. Any
+finish reason qualifies: a budget-forced end of the reasoning block finishes `stop`, the window `length`.
+
+### Output cap and the "stopped at length" notice
+
+A single-agent turn's output is capped by the node setting `chatOutputCapMode` (Node Settings → Chat → Answer length;
+operator decision 4, model-matrix F2, where a 0.8B repeated `000…` until the 65k window ran out). The cap bounds the
+**answer**, and the thinking budget bounds the thinking, so they add: under `cap` (shipped) the limit sent is the turn's
+applied reasoning budget (the rung after the window clamp, zero with thinking off) plus the answer cap, half the launched
+window at most `chatOutputCapMaxTokens` (shipped 16384), never more than the window
+(`InvocationAgentFactory.ApplyDefaultOutputCap`). A 65k-window `high` turn therefore gets 24576 + 16384 = 40960, a `low`
+turn 2048 + 16384 = 18432, thinking off 16384; "16384" is never the total. `notice` and `off` send no limit. An explicit
+per-request `maxOutputTokens` always wins unchanged (and still halves the thinking budget in `ClampToGenerationRoom`), and
+a turn whose window is unknown (cloud, Ollama) is not capped. The default limit carries
+`InvocationAgentDefinition.DefaultOutputCapMarkerKey`, so `ClampToGenerationRoom` does not halve the budget against it
+and `ProviderCallBudgetChatClient` keeps reserving only its floor: reserving it would have halved what the history may use.
+When an answer that produced text ends on `finish_reason: length` (the cap or the window), the turn carries an
+`OutputLimitReached` notice, "The answer stopped at the length limit before the model finished.", unless the variant
+is `off`. The SPA localizes that sentence. The orchestration path is not capped.
 
 **llama-server honours that field only for templates it can find a thinking END tag for.** Its gate writes the
 budget onto the sampler only when the chat-template classification produced a non-empty think-end-tag set —

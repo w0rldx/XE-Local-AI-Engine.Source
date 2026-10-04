@@ -481,6 +481,11 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
             return null;
         }
 
+        if (!await _turnContextBuilder.IsKnowledgeEmbeddingAvailableAsync(cancellationToken))
+        {
+            await _eventDispatcher.ReportTurnNoticeAsync(KnowledgeUnavailableNotice.For(requestId));
+        }
+
         var retrievalQuery = ResolvePrecedingUserTurnContent(conversation, original);
         return string.IsNullOrWhiteSpace(retrievalQuery)
             ? null

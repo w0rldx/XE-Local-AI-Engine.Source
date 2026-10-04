@@ -12,4 +12,7 @@ public sealed class LlamaServerRuntimeInfo
 {
     /// <summary>The per-slot context window (<c>default_generation_settings.n_ctx</c>) the running server reports.</summary>
     public required int EffectiveContextTokens { get; init; }
+
+    /// <summary>Whether the launch pinned Mixture-of-Experts weights to system RAM (<c>--cpu-moe</c> or an expert <c>-ot …=CPU</c>).</summary>
+    public bool ExpertsOffloaded { get; init; }
 }

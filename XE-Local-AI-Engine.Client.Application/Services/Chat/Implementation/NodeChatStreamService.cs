@@ -652,6 +652,11 @@ public sealed class NodeChatStreamService : INodeChatStreamService
 
         if (attachmentsAllowed)
         {
+            if (request.UseKnowledgeBase && !await _turnContextBuilder.IsKnowledgeEmbeddingAvailableAsync(cancellationToken))
+            {
+                await _eventDispatcher.ReportTurnNoticeAsync(KnowledgeUnavailableNotice.For(requestId));
+            }
+
             return;
         }
 

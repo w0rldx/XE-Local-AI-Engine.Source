@@ -3,6 +3,8 @@ import {
 	IconArrowsExchange,
 	IconBolt,
 	IconBookOff,
+	IconCut,
+	IconFileText,
 	IconFilter,
 	IconHistory,
 	IconHistoryOff,
@@ -45,6 +47,12 @@ function noticeIcon(noticeKind: string) {
 			return IconHistoryOff;
 		case "ToolsWithheld":
 			return IconToolsOff;
+		case "OutputLimitReached":
+			return IconCut;
+		case "KnowledgeUnavailable":
+			return IconBookOff;
+		case "AttachmentShortened":
+			return IconFileText;
 		default:
 			return IconInfoCircle;
 	}
@@ -73,16 +81,30 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.toolHistoryWithheld";
 		case "ToolsWithheld":
 			return "chat.notices.toolsWithheld";
+		case "OutputLimitReached":
+			return "chat.notices.outputLimitReached";
+		case "KnowledgeUnavailable":
+			return "chat.notices.knowledgeUnavailable";
+		case "AttachmentShortened":
+			return "chat.notices.attachmentShortened";
 		default:
 			return undefined;
 	}
 }
 
 // Server notice sentences the SPA localizes, keyed by their exact English text (InvocationRunner's
-// StoppedWhileThinkingNoticeMessage — change both together). Any other text renders verbatim.
+// StoppedWhileThinkingNoticeMessage, OutputLimitReachedNoticeMessage, ToolCallInReasoningNoticeMessage, and
+// KnowledgeUnavailableNotice.Message and AttachmentShortenedNoticeMessage — change both together). Any other text renders verbatim.
 const localizedNoticeKeys: Readonly<Record<string, string>> = {
 	"The model stopped while thinking before it could answer; its thoughts are kept above.":
 		"chat.notices.stoppedWhileThinkingText",
+	"The answer stopped at the length limit before the model finished.": "chat.notices.outputLimitReachedText",
+	"The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer.":
+		"chat.notices.toolCallInReasoningText",
+	"Your knowledge base was not used for this message because no embedding model is installed, so your documents could not be indexed.":
+		"chat.notices.knowledgeUnavailableText",
+	"The attached file was shortened to fit this model's context window; the model was told it is incomplete.":
+		"chat.notices.attachmentShortenedText",
 };
 
 /**

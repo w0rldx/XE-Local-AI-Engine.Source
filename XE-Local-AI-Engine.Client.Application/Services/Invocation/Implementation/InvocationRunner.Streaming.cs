@@ -151,6 +151,8 @@ public sealed partial class InvocationRunner
 
         public IWorkerEventDispatcher Dispatcher { get; }
 
+        public Guid InvocationId => _package.InvocationId;
+
         /// <summary>
         ///     Reports a non-fatal turn notice (model substitution, tool disabled, history truncated) for this
         ///     invocation.

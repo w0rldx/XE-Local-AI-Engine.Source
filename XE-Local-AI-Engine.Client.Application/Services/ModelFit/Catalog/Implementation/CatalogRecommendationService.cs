@@ -301,7 +301,8 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
             SlidingWindow = file.SlidingWindow,
             SlidingWindowPattern = file.SlidingWindowPattern,
             KeyLengthMla = file.AttentionKeyLengthMla,
-            ValueLengthMla = file.AttentionValueLengthMla
+            ValueLengthMla = file.AttentionValueLengthMla,
+            FullAttentionInterval = file.FullAttentionInterval
         };
     }
 }

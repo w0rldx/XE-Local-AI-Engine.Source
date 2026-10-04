@@ -39863,6 +39863,10 @@
             "format": "int32",
             "nullable": true
           },
+          "expertsOffloaded": {
+            "type": "boolean",
+            "nullable": true
+          },
           "displayLabel": {
             "type": "string",
             "nullable": true
@@ -41179,6 +41183,9 @@
             "format": "int32",
             "nullable": true
           },
+          "gpuExpertsOffloaded": {
+            "type": "boolean"
+          },
           "gpuOffloadModelName": {
             "type": "string",
             "nullable": true
@@ -42235,6 +42242,14 @@
           },
           "isTransient": {
             "type": "boolean"
+          },
+          "effectiveContextTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "expertsOffloaded": {
+            "type": "boolean"
           }
         }
       },
@@ -43034,6 +43049,55 @@
             "type": "integer",
             "format": "int32",
             "nullable": true
+          },
+          "reasoningBudgetMinimalTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningBudgetLowTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningBudgetMediumTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningBudgetHighTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minReasoningBudgetTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedReasoningBudgetTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "defaultReasoningEffort": {
+            "type": "string",
+            "nullable": true
+          },
+          "chatOutputCapMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "chatOutputCapMaxTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minChatOutputCapMaxTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedChatOutputCapMaxTokens": {
+            "type": "integer",
+            "format": "int32"
           },
           "huggingFaceDownloadConnections": {
             "type": "integer",
@@ -43911,6 +43975,49 @@
             "format": "int32",
             "maximum": 20,
             "minimum": 1,
+            "nullable": true
+          },
+          "reasoningBudgetMinimalTokens": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 131072,
+            "minimum": 128,
+            "nullable": true
+          },
+          "reasoningBudgetLowTokens": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 131072,
+            "minimum": 128,
+            "nullable": true
+          },
+          "reasoningBudgetMediumTokens": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 131072,
+            "minimum": 128,
+            "nullable": true
+          },
+          "reasoningBudgetHighTokens": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 131072,
+            "minimum": 128,
+            "nullable": true
+          },
+          "defaultReasoningEffort": {
+            "type": "string",
+            "nullable": true
+          },
+          "chatOutputCapMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "chatOutputCapMaxTokens": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 131072,
+            "minimum": 256,
             "nullable": true
           },
           "huggingFaceDownloadConnections": {

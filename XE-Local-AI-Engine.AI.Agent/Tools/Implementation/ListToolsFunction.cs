@@ -23,6 +23,9 @@ internal sealed class ListToolsFunction : AIFunction
     /// <summary>Longest description returned per tool; a listing is a menu, not a second copy of the schema.</summary>
     internal const int MaxDescriptionLength = 200;
 
+    /// <summary>The listed description of a held-back tool that does not fit the window-fitted offer's budget.</summary>
+    internal const string DoesNotFitDescription = "Not callable in this turn: it does not fit the context window of this model.";
+
     // Argument-free by design: an empty object schema keeps the compiled GBNF grammar's cost at zero, and a function
     // with no parameters is what rules out an ambient "current array" argument ever coming back.
     private static readonly JsonElement NoArgumentsSchema = MetadataToolFunction.ParseSchema("""
@@ -53,11 +56,16 @@ internal sealed class ListToolsFunction : AIFunction
 
     public override string Name => ToolName;
 
-    public override string Description =>
-        "Lists the tools that were held back from this turn to save context, with a one-line description each. "
-        + "Call it when no offered tool fits what you were asked to do; the listed tools become callable immediately afterwards.";
+    public override string Description => ToolDescription;
 
     public override JsonElement JsonSchema => NoArgumentsSchema;
+
+    /// <summary>This tool's name, description and schema as one text unit, for a caller sizing an offer that will include it.</summary>
+    internal static string BudgetDefinition => string.Concat(ToolName, "\n", ToolDescription, "\n", NoArgumentsSchema.GetRawText());
+
+    private const string ToolDescription =
+        "Lists the tools that were held back from this turn to save context, with a one-line description each. "
+        + "Call it when no offered tool fits what you were asked to do; the listed tools become callable immediately afterwards.";
 
     /// <summary>
     ///     Binds the decision for the array this instance is about to be sent in. Called by the hop on the object it
@@ -81,16 +89,18 @@ internal sealed class ListToolsFunction : AIFunction
             return ValueTask.FromResult<object?>("[]");
         }
 
+        // Under a window-fitted offer only the tools that fit its budget become callable; the listing says so of the rest.
+        var revealable = decision.RevealableNames();
         var listing = decision.HiddenNames
                               .Select(name => new HiddenTool
                               {
                                   Name = name,
-                                  Description = DescribeTool(name)
+                                  Description = revealable.Contains(name, StringComparer.Ordinal) ? DescribeTool(name) : DoesNotFitDescription
                               })
                               .ToList();
 
         // Reveal AFTER the listing is materialised, on the decision this instance was bound to and on no other.
-        decision.Reveal(decision.HiddenNames);
+        decision.Reveal(revealable);
 
         return ValueTask.FromResult<object?>(JsonSerializer.Serialize(listing, ListingSerializerOptions));
     }

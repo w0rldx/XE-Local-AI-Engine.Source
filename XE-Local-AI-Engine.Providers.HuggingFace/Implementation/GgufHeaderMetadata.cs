@@ -40,6 +40,8 @@ internal sealed class GgufHeaderMetadata
 
     public long? AttentionValueLengthMla { get; init; }
 
+    public long? FullAttentionInterval { get; init; }
+
     public static GgufHeaderMetadata Empty { get; } = new()
     {
         Architecture = null,
@@ -58,7 +60,8 @@ internal sealed class GgufHeaderMetadata
         SlidingWindow = null,
         SlidingWindowPattern = null,
         AttentionKeyLengthMla = null,
-        AttentionValueLengthMla = null
+        AttentionValueLengthMla = null,
+        FullAttentionInterval = null
     };
 
     /// <summary>True when the GGUF declares a positive expert count — a Mixture-of-Experts model (dense models omit it).</summary>

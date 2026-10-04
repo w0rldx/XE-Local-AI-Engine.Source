@@ -49,6 +49,9 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     // turn's thinking budget in tokens, which must ride the outbound body: llama-server otherwise thinks until the window is exhausted and the turn has no answer.
     internal const string ReasoningBudgetMarkerKey = "xe.llama.reasoning_budget_tokens";
 
+    // In-process marker, duplicated from InvocationAgentDefinition.DefaultOutputCapMarkerKey for the same reason: MaxOutputTokens is the node's default limit.
+    internal const string DefaultOutputCapMarkerKey = "xe.default_output_cap";
+
     // The OpenAI schema wrapper requires a name and llama-server ignores it, so an unnamed MEAI response format needs
     // any valid one rather than a meaningful one.
     private const string DefaultResponseSchemaName = "response";
@@ -133,7 +136,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
             try
             {
-                return await resolved.Client.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+                return StripLeadingThinkTags(await resolved.Client.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false));
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested && LlamaServerConnectionFailure.IsServerGone(ex))
             {
@@ -211,6 +214,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                 resolved.Client.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
             var retry = false;
             var reasoningControlAdvertised = false;
+            var stripper = new LeadingThinkTagStripper();
+            ChatResponseUpdate? lastUpdate = null;
             try
             {
                 var first = true;
@@ -247,10 +252,30 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
                     if (!moved)
                     {
+                        // A stream that ended on a held partial tag still owes the caller that text.
+                        if (lastUpdate is not null && stripper.Flush() is { Length: > 0 } held)
+                        {
+                            yield return new ChatResponseUpdate(lastUpdate.Role, held)
+                            {
+                                ResponseId = lastUpdate.ResponseId,
+                                MessageId = lastUpdate.MessageId,
+                                ModelId = lastUpdate.ModelId,
+                                CreatedAt = lastUpdate.CreatedAt
+                            };
+                        }
+
                         yield break;
                     }
 
                     var update = enumerator.Current;
+                    lastUpdate = update;
+                    foreach (var content in update.Contents)
+                    {
+                        if (content is TextContent text)
+                        {
+                            text.Text = stripper.Push(text.Text);
+                        }
+                    }
 
                     // Once per request (a self-healed retry is a new completion with a new id): advertise where the armed completion can be told
                     // to stop reasoning. The id is MEAI's ResponseId, which the OpenAI adapter copies from the chunk's chatcmpl id.
@@ -316,7 +341,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
     /// <summary>
     ///     When the turn carries the <see cref="DisableThinkingMarkerKey" /> marker, returns a clone of
-    ///     <paramref name="options" /> whose request body carries the enable-thinking switch off.
+    ///     <paramref name="options" /> whose request body carries the enable-thinking switch off and a zero reasoning budget.
     /// </summary>
     /// <remarks>
     ///     Without the marker the options are returned unchanged, so every other request is byte-identical, and a
@@ -335,8 +360,14 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             return options;
         }
 
+        // A zero reasoning budget rides along for templates that render <think> but never read enable_thinking (LFM2.5): the
+        // kwarg is inert there and the budget is the only off switch. Probed at b10201: inert on a template that honours the kwarg.
         return OpenAICompatibleRequestBody.Chain(options,
-            static body => OpenAICompatibleRequestBody.SetRawField(body, "$.chat_template_kwargs", DisableThinkingKwargs));
+            static body =>
+            {
+                OpenAICompatibleRequestBody.SetRawField(body, "$.chat_template_kwargs", DisableThinkingKwargs);
+                OpenAICompatibleRequestBody.SetField(body, "$.reasoning_budget_tokens", 0);
+            });
     }
 
     /// <summary>
@@ -386,6 +417,29 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     private static bool IsReasoningControlArmed(ChatOptions? options) =>
         TryReadInt32(options?.AdditionalProperties, ReasoningBudgetMarkerKey) is > 0;
 
+    // Non-streaming twin of the per-update strip in GetStreamingResponseAsync: a summarizer fold or a JSON job reads
+    // response.Text whole, so residue tags at its head would land in the summary or break the parse.
+    private static ChatResponse StripLeadingThinkTags(ChatResponse response)
+    {
+        var stripper = new LeadingThinkTagStripper();
+        TextContent? last = null;
+        foreach (var content in response.Messages.SelectMany(static message => message.Contents))
+        {
+            if (content is TextContent text)
+            {
+                text.Text = stripper.Push(text.Text);
+                last = text;
+            }
+        }
+
+        if (last is not null)
+        {
+            last.Text += stripper.Flush();
+        }
+
+        return response;
+    }
+
     /// <summary>
     ///     Caps the marker's budget at HALF the room this turn can actually generate into, so the reasoning phase can
     ///     never consume everything the model had to answer with.
@@ -405,7 +459,9 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             room = window;
         }
 
-        if (options.MaxOutputTokens is { } maxOutput && maxOutput > 0)
+        // A default limit already holds the budget plus the answer cap, so halving it would shorten the configured budget.
+        if (options.MaxOutputTokens is { } maxOutput && maxOutput > 0
+                                                     && options.AdditionalProperties?.ContainsKey(DefaultOutputCapMarkerKey) != true)
         {
             room = room is { } known ? Math.Min(known, maxOutput) : maxOutput;
         }

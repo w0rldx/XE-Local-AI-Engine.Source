@@ -160,6 +160,25 @@ public sealed class GgufHeaderReaderLocalFileTests
         AssertEx.Equal(expected: 128L, metadata.AttentionValueLength!.Value);
         AssertEx.Null(metadata.SlidingWindow);
         AssertEx.Null(metadata.SlidingWindowPattern); // no window key AND qwen35 has no interleaved-SWA arch default
+        AssertEx.Null(metadata.FullAttentionInterval); // no key: NO arch default, unlike llama.cpp's assumed 4 — the estimator stays conservative
+    }
+
+    [Test]
+    public async Task ReadHeaderFromFile_HybridQwen35Moe_ExtractsFullAttentionInterval()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var path = dir.FilePath("qwen36-35b-a3b.gguf");
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "qwen35moe")
+                     .WithUint32("qwen35moe.block_count", value: 40)
+                     .WithUint32("qwen35moe.full_attention_interval", value: 4)
+                     .Build();
+        await File.WriteAllBytesAsync(path, header);
+        var reader = NewReader();
+
+        var metadata = await reader.ReadHeaderFromFileAsync(path, CancellationToken.None);
+
+        AssertEx.Equal(expected: 4L, metadata.FullAttentionInterval!.Value);
     }
 
     [Test]

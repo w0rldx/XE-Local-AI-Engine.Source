@@ -52,6 +52,7 @@ function profile(overrides: Partial<HardwareProfile> = {}): HardwareProfile {
 		backendUndeterminedReason: null,
 		gpuOffloadedLayers: null,
 		gpuTotalLayers: null,
+		gpuExpertsOffloaded: false,
 		gpuOffloadModelName: null,
 		gpuOffloadRole: null,
 		...overrides,
@@ -213,7 +214,25 @@ describe("HardwareProfileCard layer placement", () => {
 		renderCard({ inferenceBackend: "cuda", gpuOffloadedLayers: 49, gpuTotalLayers: 49, gpuOffloadModelName: "qwen3-14b" });
 
 		expect(screen.queryByTestId("model-fit-hardware-partial-offload-alert")).toBeNull();
+		expect(screen.queryByTestId("model-fit-hardware-expert-offload-alert")).toBeNull();
 		expect(screen.getByTestId("model-fit-hardware-gpu-layers").textContent).toBe("49 / 49");
+	});
+
+	it("does not present an expert-offloaded model as fully on the GPU", () => {
+		// llama.cpp reports 41/41 for a --cpu-moe launch that keeps 20.7 GB of experts in system RAM.
+		renderCard({
+			inferenceBackend: "cuda",
+			gpuOffloadedLayers: 41,
+			gpuTotalLayers: 41,
+			gpuExpertsOffloaded: true,
+			gpuOffloadModelName: "qwen3.6-35b-a3b",
+		});
+
+		const alert = screen.getByTestId("model-fit-hardware-expert-offload-alert");
+		expect(alert.textContent).toContain("qwen3.6-35b-a3b");
+		expect(alert.textContent).toContain("system RAM");
+		expect(screen.getByTestId("model-fit-hardware-gpu-layers").textContent).toBe("41 / 41, experts in RAM");
+		expect(screen.queryByTestId("model-fit-hardware-partial-offload-alert")).toBeNull();
 	});
 
 	it("reads 'not measured yet' before any model has loaded, never a zero", () => {

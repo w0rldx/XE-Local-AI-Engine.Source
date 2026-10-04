@@ -24,6 +24,12 @@ public sealed class RunningModelResponse
 
     /// <summary>Whether the process was loaded only for an AI Assist draft and is unloaded after a short idle time.</summary>
     public required bool IsTransient { get; init; }
+
+    /// <summary>The context window the running server loaded (from its <c>/props</c>); <see langword="null" /> when it could not be read.</summary>
+    public int? EffectiveContextTokens { get; init; }
+
+    /// <summary>Whether the launch keeps the model's Mixture-of-Experts weights in system RAM (expert offload) rather than on the GPU.</summary>
+    public bool ExpertsOffloaded { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET model-fit/running</c>.</summary>

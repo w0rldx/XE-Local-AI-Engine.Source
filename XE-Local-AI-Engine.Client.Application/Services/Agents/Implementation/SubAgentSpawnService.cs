@@ -594,7 +594,8 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
                 reasoning.SupportsThinking,
                 reasoning.ReasoningBudgetEnforceable,
                 _logger,
-                binding.ModelName);
+                binding.ModelName,
+                await _runtimeSettings.GetReasoningBudgetsAsync(ct));
         }
 
         var agentOptions = new ChatClientAgentOptions

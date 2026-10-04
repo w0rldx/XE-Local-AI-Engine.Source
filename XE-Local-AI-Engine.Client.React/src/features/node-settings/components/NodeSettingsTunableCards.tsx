@@ -2,12 +2,14 @@ import { Card, Group, Select, Stack, Switch, Title } from "@mantine/core";
 import {
 	IconArrowsMinimize,
 	IconBox,
+	IconBulb,
 	IconCloudLock,
 	IconDownload,
 	IconHistory,
 	IconLayoutKanban,
 	IconMicrophone,
 	IconRobot,
+	IconRuler,
 	IconSearch,
 	IconSparkles,
 	IconTool,
@@ -19,7 +21,9 @@ import { useTranslation } from "react-i18next";
 import { nodeSettingsFieldLabel } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
 import { NodeSettingsNumberField } from "@/features/node-settings/components/NodeSettingsNumberField";
 import {
+	chatOutputCapModeSelectValues,
 	containerRuntimeSelectValues,
+	defaultReasoningEffortSelectValues,
 	type NodeSettingsFieldBounds,
 	type NodeSettingsFieldsForm,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
@@ -88,6 +92,117 @@ export function NodeSettingsToolLimitsCard({ bounds, ...field }: NodeSettingsTun
 				bounds={bounds.tunables.customToolMaxTimeoutSeconds}
 				unit={t("pages.nodeSettings.fields.seconds", "seconds")}
 				testId="node-settings-custom-tool-max-timeout"
+			/>
+		</TunableCard>
+	);
+}
+
+export function NodeSettingsReasoningBudgetsCard({ bounds, ...field }: NodeSettingsTunableCardProps) {
+	const { t } = useTranslation();
+	const tokens = t("pages.nodeSettings.fields.tokens", "tokens");
+	return (
+		<TunableCard
+			title={t("pages.nodeSettings.fields.reasoningBudgets.title", "Thinking budgets")}
+			icon={<IconBulb size={20} />}
+			testId="node-settings-reasoning-budgets-card"
+		>
+			<Select
+				label={nodeSettingsFieldLabel(
+					t,
+					"defaultReasoningEffort",
+					t("pages.nodeSettings.fields.defaultReasoningEffort.label", "Budget when no effort is chosen"),
+				)}
+				description={t(
+					"pages.nodeSettings.fields.defaultReasoningEffort.description",
+					"Which budget a local thinking model gets when a turn names no reasoning effort.",
+				)}
+				data={defaultReasoningEffortSelectValues.map((value) => ({
+					value,
+					label: t(`pages.nodeSettings.fields.defaultReasoningEffort.options.${value}`, value),
+				}))}
+				value={field.form.defaultReasoningEffort}
+				onChange={(value) => field.onChange("defaultReasoningEffort", value ?? field.form.defaultReasoningEffort)}
+				allowDeselect={false}
+				data-testid="node-settings-default-reasoning-effort"
+			/>
+			<NodeSettingsNumberField
+				{...field}
+				field="reasoningBudgetMinimalTokens"
+				label={t("pages.nodeSettings.fields.reasoningBudgetMinimalTokens.label", "Minimal effort")}
+				bounds={bounds.tunables.reasoningBudgetMinimalTokens}
+				unit={tokens}
+				testId="node-settings-reasoning-budget-minimal"
+			/>
+			<NodeSettingsNumberField
+				{...field}
+				field="reasoningBudgetLowTokens"
+				label={t("pages.nodeSettings.fields.reasoningBudgetLowTokens.label", "Low effort")}
+				bounds={bounds.tunables.reasoningBudgetLowTokens}
+				unit={tokens}
+				testId="node-settings-reasoning-budget-low"
+			/>
+			<NodeSettingsNumberField
+				{...field}
+				field="reasoningBudgetMediumTokens"
+				label={t("pages.nodeSettings.fields.reasoningBudgetMediumTokens.label", "Medium effort")}
+				bounds={bounds.tunables.reasoningBudgetMediumTokens}
+				unit={tokens}
+				testId="node-settings-reasoning-budget-medium"
+			/>
+			<NodeSettingsNumberField
+				{...field}
+				field="reasoningBudgetHighTokens"
+				label={t("pages.nodeSettings.fields.reasoningBudgetHighTokens.label", "High effort")}
+				description={t(
+					"pages.nodeSettings.fields.reasoningBudgetHighTokens.description",
+					"How long a local model may think before it must answer. The model's window can lower it further.",
+				)}
+				bounds={bounds.tunables.reasoningBudgetHighTokens}
+				unit={tokens}
+				testId="node-settings-reasoning-budget-high"
+			/>
+		</TunableCard>
+	);
+}
+
+export function NodeSettingsOutputCapCard({ bounds, ...field }: NodeSettingsTunableCardProps) {
+	const { t } = useTranslation();
+	return (
+		<TunableCard
+			title={t("pages.nodeSettings.fields.chatOutputCap.title", "Answer length")}
+			icon={<IconRuler size={20} />}
+			testId="node-settings-output-cap-card"
+		>
+			<Select
+				label={nodeSettingsFieldLabel(
+					t,
+					"chatOutputCapMode",
+					t("pages.nodeSettings.fields.chatOutputCapMode.label", "Answer length limit"),
+				)}
+				description={t(
+					"pages.nodeSettings.fields.chatOutputCapMode.description",
+					"Stops a local model that keeps repeating itself. A limit a request sets itself always wins.",
+				)}
+				data={chatOutputCapModeSelectValues.map((value) => ({
+					value,
+					label: t(`pages.nodeSettings.fields.chatOutputCapMode.options.${value}`, value),
+				}))}
+				value={field.form.chatOutputCapMode}
+				onChange={(value) => field.onChange("chatOutputCapMode", value ?? field.form.chatOutputCapMode)}
+				allowDeselect={false}
+				data-testid="node-settings-chat-output-cap-mode"
+			/>
+			<NodeSettingsNumberField
+				{...field}
+				field="chatOutputCapMaxTokens"
+				label={t("pages.nodeSettings.fields.chatOutputCapMaxTokens.label", "Longest answer")}
+				description={t(
+					"pages.nodeSettings.fields.chatOutputCapMaxTokens.description",
+					"The answer may use half the model's context window, but never more than this. A thinking model's thinking budget comes on top, so this is not the total.",
+				)}
+				bounds={bounds.tunables.chatOutputCapMaxTokens}
+				unit={t("pages.nodeSettings.fields.tokens", "tokens")}
+				testId="node-settings-chat-output-cap-max-tokens"
 			/>
 		</TunableCard>
 	);

@@ -171,5 +171,12 @@ public sealed record RuntimePackage
     /// </remarks>
     public int? ReservedOutputTokensOverride { get; init; }
 
+    /// <summary>
+    ///     A benchmark generation (primary, judge or pairwise): the runner applies no node default output cap and the
+    ///     <c>ReasoningBudgets.Frozen</c> ladder instead of the node's, so saving node settings cannot change a frozen run.
+    /// </summary>
+    /// <remarks>An execution-context flag, not agent configuration, so it is excluded from <see cref="ConfigHash" />.</remarks>
+    public bool UsesFrozenBenchmarkPolicy { get; init; }
+
     public required string ConfigHash { get; init; }
 }

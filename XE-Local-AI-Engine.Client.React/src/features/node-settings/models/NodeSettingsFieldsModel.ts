@@ -54,6 +54,11 @@ const nodeSettingsFieldBounds = {
 	webFetchMaxContentChars: { min: 1000, max: 100000 },
 	knowledgeSearchDefaultResults: { min: 1, max: 20 },
 	knowledgeSearchMaxResults: { min: 1, max: 20 },
+	reasoningBudgetMinimalTokens: { min: 128, max: 131072 },
+	reasoningBudgetLowTokens: { min: 128, max: 131072 },
+	reasoningBudgetMediumTokens: { min: 128, max: 131072 },
+	reasoningBudgetHighTokens: { min: 128, max: 131072 },
+	chatOutputCapMaxTokens: { min: 256, max: 131072 },
 	huggingFaceDownloadConnections: { min: 1, max: 16 },
 	transcriptionIdleTimeoutMinutes: { min: 1, max: 240 },
 	transcriptionInferenceTimeoutMinutes: { min: 1, max: 480 },
@@ -296,6 +301,15 @@ export interface NodeSettingsFieldsForm {
 	webFetchMaxContentChars: number | string;
 	knowledgeSearchDefaultResults: number | string;
 	knowledgeSearchMaxResults: number | string;
+	// llama.cpp thinking budget per reasoning effort, and whose budget a turn with no effort gets (section "chat").
+	reasoningBudgetMinimalTokens: number | string;
+	reasoningBudgetLowTokens: number | string;
+	reasoningBudgetMediumTokens: number | string;
+	reasoningBudgetHighTokens: number | string;
+	defaultReasoningEffort: string;
+	// The chat output cap: its variant and the ceiling on half the launched window (section "chat").
+	chatOutputCapMode: string;
+	chatOutputCapMaxTokens: number | string;
 	huggingFaceDownloadConnections: number | string;
 	transcriptionIdleTimeoutMinutes: number | string;
 	transcriptionInferenceTimeoutMinutes: number | string;
@@ -396,6 +410,13 @@ const CHAT_CACHE_RAM_AUTO = -1;
 
 export const containerRuntimeSelectValues = ["auto", "docker"] as const;
 
+// The efforts with a reasoning budget, the choices for the effort an unspecified turn takes (mirrors
+// StoredNodeSettings.IsValidDefaultReasoningEffort; "none" sends no budget, so it cannot be one).
+export const defaultReasoningEffortSelectValues = ["minimal", "low", "medium", "high"] as const;
+
+// The chat output-cap variants (mirrors StoredNodeSettings.IsValidChatOutputCapMode).
+export const chatOutputCapModeSelectValues = ["cap", "notice", "off"] as const;
+
 // The curated tunables that are plain bounded integers, each validated against its own server bounds entry.
 const tunableFields = [
 	"llamaReadinessTimeoutCapSeconds",
@@ -412,6 +433,11 @@ const tunableFields = [
 	"webFetchMaxContentChars",
 	"knowledgeSearchDefaultResults",
 	"knowledgeSearchMaxResults",
+	"reasoningBudgetMinimalTokens",
+	"reasoningBudgetLowTokens",
+	"reasoningBudgetMediumTokens",
+	"reasoningBudgetHighTokens",
+	"chatOutputCapMaxTokens",
 	"huggingFaceDownloadConnections",
 	"transcriptionIdleTimeoutMinutes",
 	"transcriptionInferenceTimeoutMinutes",
@@ -546,6 +572,13 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	webFetchMaxContentChars: 12000,
 	knowledgeSearchDefaultResults: 5,
 	knowledgeSearchMaxResults: 20,
+	reasoningBudgetMinimalTokens: 1024,
+	reasoningBudgetLowTokens: 2048,
+	reasoningBudgetMediumTokens: 8192,
+	reasoningBudgetHighTokens: 24576,
+	defaultReasoningEffort: "low",
+	chatOutputCapMode: "cap",
+	chatOutputCapMaxTokens: 16384,
 	huggingFaceDownloadConnections: 4,
 	transcriptionIdleTimeoutMinutes: 15,
 	transcriptionInferenceTimeoutMinutes: 30,
@@ -701,6 +734,8 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		speculativeDraftGpuLayers: response.speculativeDraftGpuLayers ?? "",
 		huggingFaceDiskMarginBytes: scaledOr(response.huggingFaceDiskMarginBytes, "huggingFaceDiskMarginBytes"),
 		containerRuntimeSelection: response.containerRuntimeSelection ?? nodeSettingsFieldDefaults.containerRuntimeSelection,
+		defaultReasoningEffort: response.defaultReasoningEffort ?? nodeSettingsFieldDefaults.defaultReasoningEffort,
+		chatOutputCapMode: response.chatOutputCapMode ?? nodeSettingsFieldDefaults.chatOutputCapMode,
 		agentHomeMaxRunSeconds: scaledOr(response.agentHomeMaxRunSeconds, "agentHomeMaxRunSeconds"),
 		agentHomeRunRetentionDays: numberOr(response.agentHomeRunRetentionDays, nodeSettingsFieldDefaults.agentHomeRunRetentionDays),
 		agentHomeMaxInnerToolCalls: numberOr(
@@ -836,6 +871,11 @@ const responseBoundKeys = {
 	webFetchMaxContentChars: ["minWebFetchMaxContentChars", "maxAllowedWebFetchMaxContentChars"],
 	knowledgeSearchDefaultResults: ["minKnowledgeSearchResults", "maxAllowedKnowledgeSearchResults"],
 	knowledgeSearchMaxResults: ["minKnowledgeSearchResults", "maxAllowedKnowledgeSearchResults"],
+	reasoningBudgetMinimalTokens: ["minReasoningBudgetTokens", "maxAllowedReasoningBudgetTokens"],
+	reasoningBudgetLowTokens: ["minReasoningBudgetTokens", "maxAllowedReasoningBudgetTokens"],
+	reasoningBudgetMediumTokens: ["minReasoningBudgetTokens", "maxAllowedReasoningBudgetTokens"],
+	reasoningBudgetHighTokens: ["minReasoningBudgetTokens", "maxAllowedReasoningBudgetTokens"],
+	chatOutputCapMaxTokens: ["minChatOutputCapMaxTokens", "maxAllowedChatOutputCapMaxTokens"],
 	huggingFaceDownloadConnections: ["minHuggingFaceDownloadConnections", "maxAllowedHuggingFaceDownloadConnections"],
 	transcriptionIdleTimeoutMinutes: ["minTranscriptionIdleTimeoutMinutes", "maxAllowedTranscriptionIdleTimeoutMinutes"],
 	transcriptionInferenceTimeoutMinutes: [
@@ -1453,6 +1493,14 @@ export function buildNodeSettingsRequest(
 
 	if (form.containerRuntimeSelection !== baseline.containerRuntimeSelection) {
 		body.containerRuntimeSelection = form.containerRuntimeSelection;
+	}
+
+	if (form.defaultReasoningEffort !== baseline.defaultReasoningEffort) {
+		body.defaultReasoningEffort = form.defaultReasoningEffort;
+	}
+
+	if (form.chatOutputCapMode !== baseline.chatOutputCapMode) {
+		body.chatOutputCapMode = form.chatOutputCapMode;
 	}
 
 	if (includeDeveloperFields) {

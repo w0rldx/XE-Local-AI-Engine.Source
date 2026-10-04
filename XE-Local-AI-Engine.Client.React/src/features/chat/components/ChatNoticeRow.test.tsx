@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatNoticeRow } from "@/features/chat/components/ChatNoticeRow";
 import type { ChatNoticePart } from "@/features/chat/models/ChatModels";
+import { nonEnglishLocales } from "@/test/Locales";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 function renderWithProviders(ui: ReactElement) {
@@ -68,6 +69,19 @@ describe("ChatNoticeRow", () => {
 			screen.getByText("The model stopped while thinking before it could answer; its thoughts are kept above."),
 		).toBeTruthy();
 		expect(screen.getByTestId("chat-notice-detail").textContent).toBe("length");
+	});
+
+	it("localizes the tool-call-in-reasoning sentence in en and de", () => {
+		const text = "The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer.";
+		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "EmptyAnswer", text, detail: "stop" })} />);
+
+		expect(screen.getByText(text)).toBeTruthy();
+		const de = nonEnglishLocales.find((locale) => locale.code === "de")?.resource as {
+			chat: { notices: Record<string, string> };
+		};
+		expect(de.chat.notices["toolCallInReasoningText"]).toBe(
+			"Das Modell hat versucht, ein Tool innerhalb seiner Überlegungen aufzurufen, wo der Aufruf nicht ausgeführt werden kann, und hat ohne Antwort aufgehört.",
+		);
 	});
 
 	it("tags the row with the notice kind for each known kind", () => {
@@ -160,6 +174,9 @@ describe("ChatNoticeRow", () => {
 		["EmptyAnswer", "No answer", ".tabler-icon-message-off"],
 		["ToolHistoryWithheld", "Tool history withheld", ".tabler-icon-history-off"],
 		["ToolsWithheld", "Tools not offered", ".tabler-icon-tools-off"],
+		["OutputLimitReached", "Answer cut off", ".tabler-icon-cut"],
+		["KnowledgeUnavailable", "Knowledge base unavailable", ".tabler-icon-book-off"],
+		["AttachmentShortened", "Attachment shortened", ".tabler-icon-file-text"],
 	])("renders the %s notice with its own glyph and label", (noticeKind, label, iconClass) => {
 		const { container } = renderWithProviders(
 			<ChatNoticeRow part={noticePart({ noticeKind, text: "a server-owned sentence" })} />,

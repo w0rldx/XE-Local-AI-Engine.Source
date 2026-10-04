@@ -7,6 +7,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Contracts.Telemetry;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
@@ -227,8 +228,14 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
             throw;
         }
 
+        var sendOptions = NarrowReasoningBudget(options, window, result.EstimatedTokensAfter);
+        if (budget.IsThinkingOff)
+        {
+            sendOptions = DisableThinking(sendOptions);
+        }
+
         return new BudgetedRound(result.Messages,
-            NarrowReasoningBudget(options, window, result.EstimatedTokensAfter),
+            sendOptions,
             // Only a named model can be calibrated; an unnamed round is sent but teaches nothing.
             string.IsNullOrWhiteSpace(modelId) ? null : modelId,
             result.EstimatedTokensAfter);
@@ -276,6 +283,18 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         return narrowed;
     }
 
+    /// <summary>The same switch effort none sets (<c>InvocationAgentFactory</c>), on a clone: think off, the llama.cpp marker on, no budget.</summary>
+    private static ChatOptions DisableThinking(ChatOptions? options)
+    {
+        var off = options?.Clone() ?? new ChatOptions();
+        var properties = options?.AdditionalProperties is { } existing ? new AdditionalPropertiesDictionary(existing) : [];
+        properties["think"] = false;
+        properties[InvocationAgentFactory.LlamaDisableThinkingMarkerKey] = true;
+        _ = properties.Remove(ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey);
+        off.AdditionalProperties = properties;
+        return off;
+    }
+
     private static int ResolveContextWindow(ChatOptions? options, ProviderCallBudgetOptions budgetOptions)
     {
         if (options?.AdditionalProperties is { } properties
@@ -291,7 +310,9 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
 
     private static int ResolveReservedOutputTokens(ChatOptions? options, ProviderCallBudgetOptions budgetOptions)
     {
-        var requestedOutput = options?.MaxOutputTokens is { } maxOutput && maxOutput > 0 ? maxOutput : 0;
+        // The node's default chat cap only bounds a runaway; reserving it would hold back up to half the window from the input.
+        var defaultCap = options?.AdditionalProperties?.ContainsKey(InvocationAgentDefinition.DefaultOutputCapMarkerKey) == true;
+        var requestedOutput = !defaultCap && options?.MaxOutputTokens is { } maxOutput && maxOutput > 0 ? maxOutput : 0;
         return Math.Max(budgetOptions.ReservedOutputTokenFloor, requestedOutput);
     }
 

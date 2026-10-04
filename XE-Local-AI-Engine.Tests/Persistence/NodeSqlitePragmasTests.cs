@@ -393,6 +393,85 @@ public sealed class NodeSqlitePragmasTests : IDisposable
             "WAL must be skipped on a shared-cache connection.");
     }
 
+    /// <summary>
+    ///     F16: on a shared cache, an uncommitted schema change (the readiness probe's DDL) fails a fresh open's first
+    ///     prepare with SQLITE_LOCKED_SHAREDCACHE (262), which busy_timeout never waits on.
+    /// </summary>
+    /// <remarks>
+    ///     The failure takes one of two forms, chosen by the heap address of the statement buffer: SQLitePCL slices it
+    ///     by a tail pointer the failed prepare never wrote, which throws (the transient open) or yields an empty tail,
+    ///     and then Microsoft.Data.Sqlite retries until the command timeout and throws SQLite error 6. The one-second
+    ///     timeout keeps the second form short; both carry 262.
+    /// </remarks>
+    [Test]
+    public async Task SharedCache_UncommittedSchemaChange_FailsAFreshOpen_WithLockedSharedCache()
+    {
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = Path.Combine(_dir, "shared-schema-lock.sqlite"),
+            Cache = SqliteCacheMode.Shared,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            DefaultTimeout = 1
+        }.ToString();
+        await using var writer = new SqliteConnection(connectionString);
+        await writer.OpenAsync();
+        await ExecuteAsync(writer, "BEGIN IMMEDIATE;");
+        await ExecuteAsync(writer, "CREATE TABLE probe (id INTEGER);");
+
+        await using var reader = new SqliteConnection(connectionString);
+        await reader.OpenAsync();
+        var failure = await AssertEx.ThrowsAsync<DbException>(() =>
+            NodeSqlitePragmas.ApplyAsync(reader, NodeSqlitePragmaSettings.Default, logger: null, CancellationToken.None));
+
+        AssertEx.True((failure is NodeSqliteTransientOpenException && failure.Message.Contains("extended result code 262", StringComparison.Ordinal))
+                      || failure is SqliteException { SqliteExtendedErrorCode: 262 },
+            $"The schema lock must surface as SQLITE_LOCKED_SHAREDCACHE (262); got {failure.GetType().Name}: {failure.Message}");
+        await ExecuteAsync(writer, "ROLLBACK;");
+    }
+
+    /// <summary>
+    ///     The F16 fix: the same Aspire string, rewritten by <see cref="NodeSqlitePragmas.WithPrivateCache" />, opens and
+    ///     reads while the same schema change is held, because private-cache WAL readers never take a table lock.
+    /// </summary>
+    [Test]
+    public async Task WithPrivateCache_AFreshOpenSucceedsWhileAnotherConnectionHoldsAnUncommittedSchemaChange()
+    {
+        var connectionString = NodeSqlitePragmas.WithPrivateCache(new SqliteConnectionStringBuilder
+        {
+            DataSource = Path.Combine(_dir, "private-schema-lock.sqlite"),
+            Cache = SqliteCacheMode.Shared,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            // Without the fix this test fails in the repro's way; the short timeout keeps that failure short too.
+            DefaultTimeout = 1
+        }.ToString());
+        await using var writer = new SqliteConnection(connectionString);
+        await NodeSqlitePragmas.OpenAndConfigureAsync(writer, CancellationToken.None);
+        await ExecuteAsync(writer, "BEGIN IMMEDIATE;");
+        await ExecuteAsync(writer, "CREATE TABLE probe (id INTEGER);");
+
+        await using var reader = new SqliteConnection(connectionString);
+        await NodeSqlitePragmas.OpenAndConfigureAsync(reader, CancellationToken.None);
+
+        AssertEx.Equal(expected: 0L, await ScalarAsync<long>(reader, "SELECT count(*) FROM sqlite_master WHERE name = 'probe';"),
+            "The reader sees the committed schema, without the writer's uncommitted table.");
+        await ExecuteAsync(writer, "ROLLBACK;");
+    }
+
+    [Test]
+    [Arguments("Filename=node.db;Cache=Shared;Mode=ReadWriteCreate", SqliteCacheMode.Default)]
+    [Arguments("Filename=node.db;Foreign Keys=True", SqliteCacheMode.Default)]
+    [Arguments("Filename=shared-memory;Mode=Memory;Cache=Shared", SqliteCacheMode.Shared)]
+    public void WithPrivateCache_DropsTheSharedCacheOnlyFromAnOnDiskDatabase(string connectionString, SqliteCacheMode expected)
+    {
+        var original = new SqliteConnectionStringBuilder(connectionString);
+        var rewritten = new SqliteConnectionStringBuilder(NodeSqlitePragmas.WithPrivateCache(connectionString));
+
+        AssertEx.Equal(expected, rewritten.Cache);
+        AssertEx.Equal(original.DataSource, rewritten.DataSource);
+        AssertEx.Equal(original.Mode, rewritten.Mode);
+        AssertEx.Equal(original.ForeignKeys, rewritten.ForeignKeys);
+    }
+
     private static async Task<SqliteConnection> OpenConfiguredAsync(string path, NodeSqlitePragmaSettings settings)
     {
         var connection = new SqliteConnection($"Data Source={path}");

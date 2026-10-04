@@ -320,7 +320,7 @@ public sealed class SupervisorGateScopeTests
 
         public LlamaLayerPlacement? Current { get; private set; }
 
-        public void Record(ModelRole role, GpuVariant variant, string modelName, int offloadedLayers, int totalLayers)
+        public void Record(ModelRole role, GpuVariant variant, string modelName, int offloadedLayers, int totalLayers, bool expertsOffloaded = false)
         {
             Interlocked.Increment(ref _recordCount);
             Current = new LlamaLayerPlacement
@@ -328,7 +328,8 @@ public sealed class SupervisorGateScopeTests
                 ModelName = modelName,
                 Role = role,
                 OffloadedLayers = offloadedLayers,
-                TotalLayers = totalLayers
+                TotalLayers = totalLayers,
+                ExpertsOffloaded = expertsOffloaded
             };
         }
 

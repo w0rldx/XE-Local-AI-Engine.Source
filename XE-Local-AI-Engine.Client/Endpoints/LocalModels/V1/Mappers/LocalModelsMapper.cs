@@ -426,7 +426,10 @@ internal static class LocalModelsMapper
     ///     process is warm. <c>Template</c>/<c>System</c>/<c>License</c> are Ollama Modelfile concepts a raw GGUF has
     ///     no equivalent of, so they stay null.
     /// </remarks>
-    public static LocalModelDetailsResponse ToDetailsResponse(this LocalModelDescriptor descriptor, string modelName, int? effectiveContextTokens = null)
+    public static LocalModelDetailsResponse ToDetailsResponse(this LocalModelDescriptor descriptor,
+        string modelName,
+        int? effectiveContextTokens = null,
+        bool? expertsOffloaded = null)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
 
@@ -435,6 +438,7 @@ internal static class LocalModelsMapper
             ModelName = modelName,
             MaxContextTokens = descriptor.MaxContextTokens,
             EffectiveContextTokens = effectiveContextTokens,
+            ExpertsOffloaded = expertsOffloaded,
             Origin = descriptor.Origin,
             ModelContentFingerprint = descriptor.ModelContentFingerprint,
             Template = null,

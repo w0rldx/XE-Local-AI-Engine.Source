@@ -282,6 +282,12 @@ public sealed class LocalModelDetailsResponse
     /// </remarks>
     public int? EffectiveContextTokens { get; init; }
 
+    /// <summary>
+    ///     Whether the RUNNING llama.cpp process keeps this Mixture-of-Experts model's expert weights in system RAM (expert offload)
+    ///     rather than on the GPU; null when no chat process is running for the model.
+    /// </summary>
+    public bool? ExpertsOffloaded { get; init; }
+
     /// <summary>The operator's friendly label for this model, or null when they gave none. Populated for external models.</summary>
     /// <remarks>
     ///     The four fields below mirror their namesakes on <see cref="LocalModelResponse" /> deliberately: a details

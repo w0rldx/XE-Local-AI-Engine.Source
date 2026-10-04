@@ -140,11 +140,11 @@ the rest can wait.
 
 > ### ⚠️ Please read this part — it prevents the most common bad first impression
 >
-> The starter model is **tiny — 0.5 billion parameters**. It exists purely to prove that chat works on
-> your machine without a huge download.
+> The starter model is **small — IBM Granite 4.1, 3 billion parameters, about 2 GB**. It was picked
+> because it handles tools and background jobs reliably without a huge download.
 >
-> **It will feel dumb.** It forgets things, gets facts wrong, and rambles. That is the model, not the
-> app, and it is **not** what this software is capable of.
+> **It has limits.** It gets facts wrong more often and handles long or subtle requests worse than a
+> larger model. That is the model, not the app, and it is **not** what this software is capable of.
 >
 > Swapping it for a real model takes about five minutes and transforms the experience. Please do this
 > before forming an opinion.

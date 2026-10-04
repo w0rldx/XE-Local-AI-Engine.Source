@@ -62,7 +62,7 @@ public sealed class LexicalToolRelevanceSelector : IToolRelevanceSelector
                               .ThenBy(static scored => scored.Index)
                               .Take(rankedSlots)
                               .Select(static scored => scored.Index)
-                              .ToHashSet();
+                              .ToList();
 
         // Re-impose the INPUT order over the union (the shared step, so the embedding selector cannot diverge from it).
         return Task.FromResult(ToolRelevanceSelection.Compose(candidates, selectedNonCore));

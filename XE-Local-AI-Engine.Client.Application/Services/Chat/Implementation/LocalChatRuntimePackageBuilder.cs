@@ -78,6 +78,8 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             ResponseJsonSchema = request.ResponseJsonSchema,
             // Benchmark primary only; a budgeting knob, not agent configuration, so NOT hashed either.
             ReservedOutputTokensOverride = request.ReservedOutputTokensOverride,
+            // Benchmark executors only; an execution-context flag, NOT hashed.
+            UsesFrozenBenchmarkPolicy = request.UsesFrozenBenchmarkPolicy,
             // The resolved skill set IS fed into the config hash: skill bodies ride MAF progressive disclosure, not
             // ResolvedSystemPrompt, so folding the set with the body hashed is what invalidates a stale resume.
             ConfigHash = RuntimePackageConfigHash.Compute(request.AgentDefinitionVersion,

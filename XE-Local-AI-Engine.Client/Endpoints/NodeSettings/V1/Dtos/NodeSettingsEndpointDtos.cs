@@ -361,6 +361,41 @@ public sealed record NodeSettingsResponse
     /// <summary>Ceiling on the search_knowledge_base hit count. Applies to the next call.</summary>
     public int? KnowledgeSearchMaxResults { get; init; }
 
+    /// <summary>llama.cpp thinking budget for effort minimal, in tokens; null = default 1024. Applies to the next turn.</summary>
+    public int? ReasoningBudgetMinimalTokens { get; init; }
+
+    /// <summary>llama.cpp thinking budget for effort low, in tokens; null = default 2048. Applies to the next turn.</summary>
+    public int? ReasoningBudgetLowTokens { get; init; }
+
+    /// <summary>llama.cpp thinking budget for effort medium, in tokens; null = default 8192. Applies to the next turn.</summary>
+    public int? ReasoningBudgetMediumTokens { get; init; }
+
+    /// <summary>llama.cpp thinking budget for efforts high and xhigh, in tokens; null = default 24576. Applies to the next turn.</summary>
+    public int? ReasoningBudgetHighTokens { get; init; }
+
+    public int MinReasoningBudgetTokens { get; init; }
+
+    public int MaxAllowedReasoningBudgetTokens { get; init; }
+
+    /// <summary>
+    ///     Whose budget a turn that names no effort gets: minimal, low, medium or high; null = default low. Applies to the
+    ///     next turn.
+    /// </summary>
+    public string? DefaultReasoningEffort { get; init; }
+
+    /// <summary>
+    ///     Chat output-cap variant: cap (cap plus a stopped-at-length notice), notice (notice only, no cap) or off; null =
+    ///     default cap. Applies to the next turn.
+    /// </summary>
+    public string? ChatOutputCapMode { get; init; }
+
+    /// <summary>Ceiling on the chat output cap (half the launched window), in tokens; null = default 16384. Applies to the next turn.</summary>
+    public int? ChatOutputCapMaxTokens { get; init; }
+
+    public int MinChatOutputCapMaxTokens { get; init; }
+
+    public int MaxAllowedChatOutputCapMaxTokens { get; init; }
+
     /// <summary>Parallel range connections per large model download. Applies after a node restart.</summary>
     public int? HuggingFaceDownloadConnections { get; init; }
 
@@ -922,6 +957,27 @@ public sealed record SaveNodeSettingsRequest
 
     /// <summary>Ceiling on the search_knowledge_base hit count. Applies to the next call.</summary>
     public int? KnowledgeSearchMaxResults { get; init; }
+
+    /// <summary>llama.cpp thinking budget for effort minimal, in tokens. Applies to the next turn.</summary>
+    public int? ReasoningBudgetMinimalTokens { get; init; }
+
+    /// <summary>llama.cpp thinking budget for effort low, in tokens. Applies to the next turn.</summary>
+    public int? ReasoningBudgetLowTokens { get; init; }
+
+    /// <summary>llama.cpp thinking budget for effort medium, in tokens. Applies to the next turn.</summary>
+    public int? ReasoningBudgetMediumTokens { get; init; }
+
+    /// <summary>llama.cpp thinking budget for efforts high and xhigh, in tokens. Applies to the next turn.</summary>
+    public int? ReasoningBudgetHighTokens { get; init; }
+
+    /// <summary>Whose budget a turn that names no effort gets: minimal, low, medium or high. Applies to the next turn.</summary>
+    public string? DefaultReasoningEffort { get; init; }
+
+    /// <summary>Chat output-cap variant: cap, notice or off. Applies to the next turn.</summary>
+    public string? ChatOutputCapMode { get; init; }
+
+    /// <summary>Ceiling on the chat output cap (half the launched window), in tokens. Applies to the next turn.</summary>
+    public int? ChatOutputCapMaxTokens { get; init; }
 
     /// <summary>Parallel range connections per large model download. Applies after a node restart.</summary>
     public int? HuggingFaceDownloadConnections { get; init; }

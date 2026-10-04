@@ -251,9 +251,9 @@ Everything below runs **on your own machine** unless you deliberately connect an
 This is an early beta, built by **one person** in their spare time alongside a full-time job. Please
 read these before you start, so nothing comes as a surprise:
 
-- **The starter model is deliberately tiny.** The app downloads a very small model (~400 MB) on first
-  launch just to prove chat works. **It is not representative of the quality this app can deliver** —
-  it will feel weak, and that is expected. Use the built-in advisor at **Models → Recommendations** to pick a real model
+- **The starter model is deliberately small.** The app downloads a small model (IBM Granite 4.1 3B,
+  ~2 GB) on first launch so chat and tools work out of the box. **It is not representative of the quality
+  this app can deliver** — larger models answer noticeably better. Use the built-in advisor at **Models → Recommendations** to pick a real model
   for your hardware. [How to do that →](docs/first-run.md#step-5--get-a-model-that-is-actually-good)
 - **Windows will warn you on first launch**, because the build is unsigned. [What to click →](docs/install-windows.md#the-windows-smartscreen-warning)
 - **Expect rough edges.** This is early, actively-developed software.

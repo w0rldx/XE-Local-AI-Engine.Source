@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.Analysis;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Analysis;
 using XE_Local_AI_Engine.Client.Services.Analysis.Implementation;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Insights;
@@ -27,6 +29,7 @@ public sealed class DefaultPlaybookAnalysisAgentTests
             Options.Create(new PlaybookAnalysisOptions()),
             StubNodeRuntimeSettings.Create().WithPlaybookAnalysisModelName("ext:cloud-box/gpt").Build(),
             trust,
+            new ServiceCollection().AddScoped(_ => Substitute.For<IModelCapabilityResolver>()).BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             NullLogger<DefaultPlaybookAnalysisAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(new FeedbackInsightsResult

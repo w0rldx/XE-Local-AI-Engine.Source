@@ -115,7 +115,8 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
             participant.SupportsThinking,
             participant.ReasoningBudgetEnforceable,
             _logger,
-            participant.ModelId);
+            participant.ModelId,
+            participant.ReasoningBudgets);
 
         // This participant's launched window as num_ctx, so ProviderCallBudgetChatClient sizes IT against its own model
         // rather than the shared default; the ContainsKey guard leaves any per-send override in place.

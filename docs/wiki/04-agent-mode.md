@@ -130,6 +130,42 @@ boundary. A hidden tool is one the model was not shown; if the model names it an
 exactly today's rules — same wrapper, same policy — and an unresolvable name simply yields a not-found
 result and the loop continues. Hiding never widens the authorised set and never waives an approval.
 
+**Fitting the offer to the window (model-matrix F5).** When a single-agent turn's first round does not fit the launched
+window and would fit without the tool offer, `InvocationRunner.FitFirstRoundToWindow` narrows the offer through this hop
+even with the node setting off: it opens a nested `ToolRelevanceScope` with a `FittedToolOffer`, the estimated tokens
+the ranked tools may use beside the pinned `list_tools` (and `ask_user`), and each other tool's cost measured from its own
+definition. With it set the hop pins only `list_tools`, `ask_user` and the skill tools, so the node core cannot overflow the
+window, ranks the whole array, and offers ranked tools in rank order while they fit the budget: a tool that does not fit
+is skipped and the next one tried (input order where the selector did not rank). The budget holds for the whole turn,
+`list_tools` included: under a fitted offer it reveals only the held-back tools that fit the budget together, in rank
+order, and lists the rest as not callable in this turn; the next round sends the pinned tools, the revealed ones, and the
+earlier ranked tools in rank order while budget is left, so a revealed tool displaces the lowest-ranked ones instead of
+restoring the offer that did not fit. The attachment is sized against the costliest offer the hop could send in any rank
+order, the largest total cost within the budget, not the largest definitions first. The count-based fit it replaced sized the
+offer on the largest definitions with a six-slot floor and never ran a turn at 4,096 (V4). The budget keeps room for one
+tool round-trip, a call with 128 characters of arguments and a 512-character result measured by the same budgeter
+(`FittedRoundTripArgumentCharacters`, `FittedRoundTripResultCharacters`): filled to the edge, the 4B's second round
+overflowed after one Calculate call (C2). With the real Default Assistant offer at 4,096 that reserve is about 170
+tokens, roughly one ranked tool, and leaves a budget of about 1,050 tokens. A turn whose full offer fits pays nothing; a
+larger tool result is left to the per-round trimming. This deliberately overrides the
+operator's tool-relevance switch and the node core pins: the alternative is a turn that cannot run at all. The budget is a
+cap on every path, including a query with no rankable word or no user text, where the selectors otherwise offer the whole
+array. When not even the pinned tools plus the cheapest ranked tool fit, the turn
+fails with "The tools offered with this message do not fit this model's context window", never with advice to compact,
+but only when the turn would fit with no tools at all; otherwise the generic context-window message applies. The same
+tool message replaces the generic one whenever the hard stop would have passed without the tools. A package with
+`DisableToolRelevanceFilter` is not narrowed. The orchestration path is not fitted.
+
+**Known limit at a 4,096 window.** The reserve covers one short tool round-trip and no more. Live on a 4B and a 3B
+model at 4,096, a turn with no tool or one tool call completes; a turn that needs several tool rounds, or calls
+`list_tools` and then a discovered tool, ends with the context-window error in a later round. A rule that kept half the
+free room for tool rounds was tried and reverted: the two pinned tools alone exceeded that half once the per-model token
+estimate had calibrated, so nearly every agent turn was refused at the fit (model-matrix round, 2026-10-04). On a
+node's first request for a model the first-round fit runs before that model's tool-template overhead is calibrated
+(about 200 tokens for Qwen3.5-0.8B), so the second round can exceed the window; on a calibrated node the offer can be
+refused at the fit instead. From 8,192
+the full Default Assistant offer is sent and multi-round turns run. Agent work with tools needs a window of 8,192 or more.
+
 Rules the hop holds:
 
 - It refuses to filter any array that does not already carry a `ListToolsFunction` **instance**,
@@ -344,7 +380,11 @@ the innermost analogue of the application layer's turn-grouped budgeter, operati
 list MAF hands the raw `IChatClient` after appending inner tool results. Its policy:
 
 1. Always keep system messages, the most recent `ProviderCallBudgetOptions.RecentMessagesToKeep`
-   messages, and the very last message — the pending tool result the model must see next.
+   messages, and the very last message — the pending tool result the model must see next. The user's current
+   message (the last user message with text) is kept too: after a few tool rounds it falls out of the recent
+   window, and a request without it is rejected by the chat template (llama-server: "No user query found in
+   messages", model-matrix D2). When the set is over the window without dropping it, the round fails with the
+   context-window error.
 2. Over the window, first **excerpt** oversized tool results anywhere, oldest first, including a recent
    or pending one: excerpting is the primary size backstop and it keeps the pending tool result
    *bounded* rather than dropped.
@@ -721,17 +761,59 @@ model switch) cannot honour it, but the user still asked to reason: the caller o
 entirely so the model's chat-template-baked reasoning runs, and only `none` or unspecified sends
 `think: false`.
 
-**The budget ladder** is `minimal` 1024, `low` 2048, `medium` 8192, `high`/`xhigh` 24576 tokens. A blank
-(unspecified) effort gets the `medium` rung (`ReasoningOptionsResolver.DefaultReasoningBudgetTokens`, since tester
-round 6): uncapped, a hard prompt reasoned until `finish_reason: length` and the turn had no answer. Anything
-else — `none` (reasoning is being turned off, so a budget is meaningless), the binary `on` sentinel, an
-unrecognized value — sends no budget at all. The marker is inert off the llama.cpp path. The levels are
-sized so a capped reasoning phase still leaves room for a real final answer inside the 64k windows local
-runtimes are launched with: low is a short scratchpad, medium the everyday cap, and `high` still leaves well
-over half the window for the answer plus the prompt. Without a cap a Qwen3-class model can spend the whole
-window thinking and return no answer at all — the failure this mapping exists to prevent. `minimal` and
-`xhigh` are mapped rather than left null precisely so a definition that pins a Codex-only level onto a local
-model does not silently get *more* thinking than `high`.
+**The budget ladder** is a node setting (`ReasoningBudgets`, read per turn through
+`INodeRuntimeSettings.GetReasoningBudgetsAsync`; Node Settings → Chat → Thinking budgets). Shipped defaults:
+`minimal` 1024, `low` 2048, `medium` 8192, `high`/`xhigh` 24576 tokens. A blank (unspecified) effort gets the rung
+of the **default effort** setting, shipped `low` (model-matrix 2026-10-04, operator decision 3: the earlier flat
+`medium` let a 0.8B spend minutes reasoning over a five-word greeting). Only the budget follows that setting: the
+turn still sends no effort, so `think` stays `true` for Ollama and an external model keeps its registered default.
+Uncapped, a hard prompt reasoned until `finish_reason: length` with no answer (tester round 6). Anything else —
+`none` (reasoning is being turned off, so a budget is meaningless), the binary `on` sentinel, an unrecognized
+value — sends no budget at all. The marker is inert off the llama.cpp path. `minimal` and `xhigh` are mapped
+rather than left null so a definition that pins a Codex-only level onto a local model does not silently get
+*more* thinking than `high`. The single-agent definition, every orchestration participant and a profile-bound
+sub-agent read the same node ladder.
+
+**Reasoning off on llama.cpp** sends `chat_template_kwargs.enable_thinking=false` **and**
+`reasoning_budget_tokens: 0` (`DeferredLlamaServerChatClient.ApplyThinkingSwitch`). A template that renders
+`<think>` but never reads `enable_thinking` (LFM2.5) ignores the kwarg; the zero budget is its only off switch,
+probed at b10201 (`.tmp/model-matrix-data/phase2/track-1a/probe-summary.txt`), and it leaves the output of a
+template that honours the kwarg byte-identical. The forced empty block can surface as `<think></think>` at the
+head of the content; `LeadingThinkTagStripper` drops that, and a stray leading `</think>`, from every
+llama-server answer.
+
+**When a round ends with no answer after reasoning**, the turn notice says the model stopped while thinking,
+whatever the finish reason: a budget-forced end finishes `stop`, the window `length`. A model that keeps
+deliberating in content after the budget closed the block and then writes a literal `</think>` has the text before
+that tag moved into the reasoning at the end of the turn (`InvocationRunner.ReclassifyLeakedThinkTextAsync`,
+`IWorkerEventDispatcher.ReportInvocationTextReclassifiedAsync`); the live stream showed it as answer until the
+terminal event replaces it. For a thinking-capable model the check runs on every final round, also with thinking off
+(LFM2.5 at effort none closes its in-content deliberation with `</think>`, model-matrix W3), and a whole
+`<think>…</think>` block that opens the answer, leading whitespace aside (Qwen3.5 0.8B reopening the block after the
+budget, V2), moves to the reasoning too, leaving the text after it as the answer. Only residue at the start counts: a
+block that follows answer text (`Use <think>analysis</think> before the answer`, or a template in a code fence) is
+quoted markup and stays, tags included. The cleanup never takes a round's only text: when nothing
+would remain outside the tags (LFM2.5 at effort none answering `Okay.` followed by a stray `</think>`, or a lone
+`<think>X</think>` block), the tags are dropped, that text stays the answer and no empty-answer notice fires. A
+round that only reasoned on the reasoning channel and then wrote its deliberation before a stray tag therefore shows
+that deliberation as the answer. A model that is not thinking-capable is left alone unless
+its round reasoned, and even then a close tag preceded by its own open tag stays as quoted markup. The residual
+false positives are a thinking-capable model whose answer opens with a quoted block, and any answer whose first
+`</think>` has no open tag before it: the text before that tag moves to the reasoning, because a stray close tag after
+deliberation (W3) looks the same.
+
+**A tool call written inside the reasoning** (model-matrix F4: Qwen3.5 0.8B and 9B with thinking on write the next
+`<tool_call>` block before `</think>`, and llama-server keeps it as reasoning) is re-prompted once: when a tool-offering
+single-agent turn's final round produced nothing and its reasoning contains `<tool_call>`, the runner replays the
+segment's executed calls and results without reasoning, adds one user message asking for the call outside the
+reasoning, and streams one more round. From the re-prompt on, the rest of the turn runs with thinking off, the switch
+effort `none` sets (`think:false`, the llama.cpp disable-thinking marker, no budget): the runner calls
+`ProviderCallBudget.TurnThinkingOff` and `ProviderCallBudgetChatClient` applies it to the re-prompt round and every
+later provider round of the turn. The next turn has its own budget and starts on its normal effort. A second such round
+is not retried; its `EmptyAnswer` notice says the model tried to call a tool inside its reasoning. Probed at b10201:
+thinking off avoided it 3/3, the nudge recovered it 5/5 (`.tmp/model-matrix-data/phase2/track-1b/probe-summary.txt`).
+Live on the 9B, a thinking-on re-prompt recovered 1 of 3; a thinking-off re-prompt with later rounds back on thinking
+completed 2 of 6, because the next call landed in the reasoning again; effort none completed 3 of 3.
 
 Because these are fixed counts and neither caller knows the launched window here, the value is a **ceiling,
 not a promise**. `DeferredLlamaServerChatClient.ClampToGenerationRoom` narrows it to half the room a smaller

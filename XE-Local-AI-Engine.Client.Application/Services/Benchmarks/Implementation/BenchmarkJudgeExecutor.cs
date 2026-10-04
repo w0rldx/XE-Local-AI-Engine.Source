@@ -452,6 +452,7 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             Timeouts = BenchmarkFrozenPolicies.FrozenTimeouts(),
             SamplingOptions = BenchmarkRunExecutor.ToSamplingOptions(runtime.Sampling, runtime.RequestedContextTokens),
             IsUnattended = true,
+            UsesFrozenBenchmarkPolicy = true,
             // The prompt ASKS for this shape and the parser refuses anything else, which cost one judge invocation in three against a small model.
             // Constraining the decode makes the two agree; the response-format schema drops the string-length bounds the parser still enforces (see the constant).
             ResponseJsonSchema = JudgeResponseFormatSchema

@@ -404,7 +404,8 @@ public sealed partial class LlamaServerProcessSupervisor
                 _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms (readiness budget {BudgetSeconds:F0}s).",
                     key.ModelName, key.Role, handle.ProcessId, readinessDuration.TotalMilliseconds, readinessTimeout.TotalSeconds);
 
-                var placement = RecordObservedLayerPlacement(key, variant, placementSniffer);
+                var expertsOffloaded = PinsExpertsToCpu(spec.Arguments);
+                var placement = RecordObservedLayerPlacement(key, variant, placementSniffer, expertsOffloaded);
 
                 // Assembled here (the RunningProcess below carries it) but NOT published yet: post-readiness bookkeeping can still throw and tree-kill the child, and
                 // readinessRecorded stays false until the publish so a catch path records the failed outcome exactly once. Why: wiki 03, "Spawn attempt sequencing…".
@@ -469,6 +470,7 @@ public sealed partial class LlamaServerProcessSupervisor
                 var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
                 {
                     EffectiveContextTokens = effectiveContext,
+                    ExpertsOffloaded = expertsOffloaded,
                     SuccessfulLaunchArguments = fitParamsCapture is null ? [] : [.. spec.Arguments],
                     LoadObservation = loadObservation,
                     LaunchReceipt = launchReceipt,
@@ -633,7 +635,8 @@ public sealed partial class LlamaServerProcessSupervisor
     /// </remarks>
     private LlamaServerLaunchPlacement RecordObservedLayerPlacement(ProcessKey key,
         GpuVariant variant,
-        LlamaServerLayerPlacementSniffer? sniffer)
+        LlamaServerLayerPlacementSniffer? sniffer,
+        bool expertsOffloaded)
     {
         if (sniffer is null || !sniffer.TryGetObservation(out var offloaded, out var total))
         {
@@ -642,7 +645,7 @@ public sealed partial class LlamaServerProcessSupervisor
                 TotalLayers: null);
         }
 
-        _layerPlacementReport.Record(key.Role, variant, key.ModelName, offloaded, total);
+        _layerPlacementReport.Record(key.Role, variant, key.ModelName, offloaded, total, expertsOffloaded);
 
         // 0/N is its own outcome, not the extreme end of a partial offload: a GPU build serving entirely from system RAM
         // is a different fact about a measurement than one that placed most of its layers.
@@ -660,10 +663,25 @@ public sealed partial class LlamaServerProcessSupervisor
             return new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.Partial, offloaded, total);
         }
 
-        _logger.LogInformation("llama-server placed all {Total} layers of model {ModelName} role {Role} on the GPU.",
-            total, key.ModelName, key.Role);
+        if (expertsOffloaded)
+        {
+            // llama.cpp counts a layer as offloaded even when --cpu-moe left its expert tensors in RAM, so "all layers" alone would read as fully on the GPU.
+            _logger.LogWarning("llama-server placed all {Total} layers of model {ModelName} role {Role} on the GPU but kept its expert weights in system RAM, which is substantially slower.",
+                total, key.ModelName, key.Role);
+        }
+        else
+        {
+            _logger.LogInformation("llama-server placed all {Total} layers of model {ModelName} role {Role} on the GPU.",
+                total, key.ModelName, key.Role);
+        }
+
         return new LlamaServerLaunchPlacement(LlamaServerPlacementOutcome.Full, offloaded, total);
     }
+
+    // The admitted --cpu-moe, or a replayed -ot pinning expert tensors ("…_exps=CPU", what a fit-params explore writes). Operator args cannot carry either: both are managed flags.
+    private static bool PinsExpertsToCpu(IReadOnlyList<string> arguments) =>
+        arguments.Any(static argument => string.Equals(argument, LlamaServerManagedFlags.CpuMoe, StringComparison.Ordinal)
+                                         || argument.Contains("exps=CPU", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     ///     Assembles the benchmark launch receipt, non-throwing by construction.

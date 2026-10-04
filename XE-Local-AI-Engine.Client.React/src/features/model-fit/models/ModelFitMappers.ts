@@ -118,6 +118,7 @@ export function toHardwareProfile(dto: XeLocalAiEngineClientEndpointsModelFitV1H
 		backendUndeterminedReason: dto.backendUndeterminedReason ?? null,
 		gpuOffloadedLayers: dto.gpuOffloadedLayers ?? null,
 		gpuTotalLayers: dto.gpuTotalLayers ?? null,
+		gpuExpertsOffloaded: dto.gpuExpertsOffloaded ?? false,
 		gpuOffloadModelName: dto.gpuOffloadModelName ?? null,
 		gpuOffloadRole: dto.gpuOffloadRole ?? null,
 	};

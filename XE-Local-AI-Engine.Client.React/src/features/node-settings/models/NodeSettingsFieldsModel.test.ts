@@ -984,6 +984,72 @@ describe("curated tunables", () => {
 		}
 	});
 
+	it("sends the reasoning budgets and the unspecified-effort rung live, within the shared token range", () => {
+		const baseline = toNodeSettingsFieldsForm(undefined);
+		// Operator decision 3 (model-matrix 2026-10-04): these mirror ReasoningBudgets.Default in the backend.
+		expect(baseline.reasoningBudgetMinimalTokens).toBe(1024);
+		expect(baseline.reasoningBudgetLowTokens).toBe(2048);
+		expect(baseline.reasoningBudgetMediumTokens).toBe(8192);
+		expect(baseline.reasoningBudgetHighTokens).toBe(24576);
+		expect(baseline.defaultReasoningEffort).toBe("low");
+
+		const form = { ...baseline, reasoningBudgetMediumTokens: 4096, defaultReasoningEffort: "minimal" };
+		expect(buildNodeSettingsRequest(form, baseline, bounds, false)).toEqual({
+			body: { reasoningBudgetMediumTokens: 4096, defaultReasoningEffort: "minimal" },
+			errors: {},
+		});
+		expect(
+			buildNodeSettingsRequest({ ...baseline, reasoningBudgetHighTokens: 64 }, baseline, bounds, false).errors[
+				"reasoningBudgetHighTokens"
+			],
+		).toBe("range");
+		expect(
+			toNodeSettingsFieldBounds({ minReasoningBudgetTokens: 256, maxAllowedReasoningBudgetTokens: 65536 }).tunables
+				.reasoningBudgetLowTokens,
+		).toEqual({ min: 256, max: 65536 });
+		expect(toNodeSettingsFieldsForm({ defaultReasoningEffort: "high", reasoningBudgetLowTokens: 512 })).toMatchObject({
+			defaultReasoningEffort: "high",
+			reasoningBudgetLowTokens: 512,
+		});
+		for (const live of [
+			"reasoningBudgetMinimalTokens",
+			"reasoningBudgetLowTokens",
+			"reasoningBudgetMediumTokens",
+			"reasoningBudgetHighTokens",
+			"defaultReasoningEffort",
+		] as const) {
+			expect(restartGatedNodeSettingsFields.has(live)).toBe(false);
+		}
+	});
+
+	it("sends the chat output cap live, its ceiling within its own range", () => {
+		const baseline = toNodeSettingsFieldsForm(undefined);
+		// Operator decision 4 (model-matrix 2026-10-04): cap plus notice, at most 16384 tokens.
+		expect(baseline.chatOutputCapMode).toBe("cap");
+		expect(baseline.chatOutputCapMaxTokens).toBe(16384);
+
+		const form = { ...baseline, chatOutputCapMode: "notice", chatOutputCapMaxTokens: 8192 };
+		expect(buildNodeSettingsRequest(form, baseline, bounds, false)).toEqual({
+			body: { chatOutputCapMode: "notice", chatOutputCapMaxTokens: 8192 },
+			errors: {},
+		});
+		expect(
+			buildNodeSettingsRequest({ ...baseline, chatOutputCapMaxTokens: 100 }, baseline, bounds, false).errors[
+				"chatOutputCapMaxTokens"
+			],
+		).toBe("range");
+		expect(
+			toNodeSettingsFieldBounds({ minChatOutputCapMaxTokens: 512, maxAllowedChatOutputCapMaxTokens: 65536 }).tunables
+				.chatOutputCapMaxTokens,
+		).toEqual({ min: 512, max: 65536 });
+		expect(toNodeSettingsFieldsForm({ chatOutputCapMode: "off", chatOutputCapMaxTokens: 2048 })).toMatchObject({
+			chatOutputCapMode: "off",
+			chatOutputCapMaxTokens: 2048,
+		});
+		expect(restartGatedNodeSettingsFields.has("chatOutputCapMode")).toBe(false);
+		expect(restartGatedNodeSettingsFields.has("chatOutputCapMaxTokens")).toBe(false);
+	});
+
 	it("takes the new bounds from the response, the knowledge counts sharing one range", () => {
 		const fromServer = toNodeSettingsFieldBounds({
 			minWebFetchTimeoutSeconds: 7,

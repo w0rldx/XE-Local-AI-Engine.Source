@@ -27,6 +27,13 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
     /// </remarks>
     private const int FallbackContextCeilingTokens = 8192;
 
+    /// <summary>The smallest chat tier the walk still prefers fully GPU-resident over an expert-offload placement at a larger tier.</summary>
+    /// <remarks>
+    ///     Expert offload (<c>--cpu-moe</c>) streams every expert weight from system RAM: on a 32 GB card the 35B-A3B ran about 5x slower at
+    ///     65,536 offloaded than at 32,768 resident (model-matrix round, 2026-10-04). Below this window the larger offloaded one stays the better trade.
+    /// </remarks>
+    private const int ResidentPreferenceFloorTokens = 16384;
+
     private readonly ConcurrentDictionary<string, HardwareAllocationContext> _hardwareAllocationContexts =
         new(StringComparer.Ordinal);
 
@@ -345,20 +352,45 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             ? LlamaServerLaunchPolicyOptions.ChatContextTiers
             : [_options.ContextTokensForRole(role)];
 
+        // The first fitting expert-offload tier at or above the floor, held while the walk looks for a resident one down to the floor.
+        int? expertOffloadContext = null;
         foreach (var candidate in candidates)
         {
             // The tier is chosen against the fp16 estimate even when the caller named a quantized KV type, keeping the guarantee the whole option rests
             // on — a quantized request can only ever reserve LESS — because a quantized tier walk could SELECT a larger window and book more bytes.
             var context = CapAndAlign(candidate, trainCeiling);
+            if (expertOffloadContext is not null && context < ResidentPreferenceFloorTokens)
+            {
+                break;
+            }
+
             var allocation = BuildAllocation(key, contentIdentity, context, trainCeiling, source, variant, profile, facts,
                 processGpuBudget, kvCacheQuant: null);
-            if (FitsStableBudgets(allocation.Footprint, variant, profile, processGpuBudget))
+            if (!FitsStableBudgets(allocation.Footprint, variant, profile, processGpuBudget))
             {
-                return kvCacheQuant is null
-                    ? allocation
-                    : BuildAllocation(key, contentIdentity, context, trainCeiling, source, variant, profile, facts,
-                        processGpuBudget, kvCacheQuant);
+                continue;
             }
+
+            if (allocation.Placement == ProcessPlacementMode.ExpertOffload && context >= ResidentPreferenceFloorTokens)
+            {
+                expertOffloadContext ??= context;
+                continue;
+            }
+
+            if (expertOffloadContext is not null && allocation.Placement != ProcessPlacementMode.GpuResident)
+            {
+                continue;
+            }
+
+            return kvCacheQuant is null
+                ? allocation
+                : BuildAllocation(key, contentIdentity, context, trainCeiling, source, variant, profile, facts,
+                    processGpuBudget, kvCacheQuant);
+        }
+
+        if (expertOffloadContext is { } offloadContext)
+        {
+            return BuildAllocation(key, contentIdentity, offloadContext, trainCeiling, source, variant, profile, facts, processGpuBudget, kvCacheQuant);
         }
 
         var fallback = ResolveFallbackContextTokens(role, candidates, facts, trainCeiling, variant, profile, processGpuBudget);
@@ -521,7 +553,8 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
                 SlidingWindow = facts.SlidingWindow,
                 SlidingWindowPattern = facts.SlidingWindowPattern,
                 KeyLengthMla = facts.AttentionKeyLengthMla,
-                ValueLengthMla = facts.AttentionValueLengthMla
+                ValueLengthMla = facts.AttentionValueLengthMla,
+                FullAttentionInterval = facts.FullAttentionInterval
             },
             nativeQuantFormat: QuantLadder.IsNativeFormat(quant));
     }

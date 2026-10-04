@@ -26,8 +26,14 @@ public sealed record LlamaLayerPlacement
     public required int TotalLayers { get; init; }
 
     /// <summary>
-    ///     <see langword="true" /> when some layers stayed in system RAM. Serving still works; throughput does not.
-    ///     This is NOT a CPU fallback — the GPU is in use, just not for the whole model.
+    ///     Whether the launch pinned the Mixture-of-Experts weights to system RAM. llama.cpp still counts every such layer
+    ///     as offloaded, so the layer counts alone read as "fully on the GPU" for a model that streams its experts from RAM.
     /// </summary>
-    public bool IsPartial => OffloadedLayers < TotalLayers;
+    public bool ExpertsOffloaded { get; init; }
+
+    /// <summary>
+    ///     <see langword="true" /> when some layers, or the expert weights, stayed in system RAM. Serving still works;
+    ///     throughput does not. This is NOT a CPU fallback — the GPU is in use, just not for the whole model.
+    /// </summary>
+    public bool IsPartial => OffloadedLayers < TotalLayers || ExpertsOffloaded;
 }
