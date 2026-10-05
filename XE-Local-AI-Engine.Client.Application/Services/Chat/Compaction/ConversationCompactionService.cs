@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     Default <see cref="IConversationCompactionService" />: it loads the conversation, picks the older span the
@@ -66,12 +67,13 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
     }
 
     public Task<ConversationCompactionResult> CompactAsync(Guid conversationId, string? requestedModel = null, CancellationToken cancellationToken = default) =>
-        CompactAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim: null, distill: true, cancellationToken);
+        CompactAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim: null, distill: true, cancellationToken: cancellationToken);
 
     public async Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
         string? requestedModel,
         int? recentMessagesToKeepVerbatim,
         bool distill = true,
+        ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive,
         CancellationToken cancellationToken = default)
     {
         // Before any model work: an Origin=Remote conversation is refused, a missing one still answers ConversationNotFound.
@@ -84,7 +86,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         ConversationCompactionResult result;
         try
         {
-            result = await CompactCoreAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim, distill, nodeSettings, operation.Token);
+            result = await CompactCoreAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim, distill, residencyIntent, nodeSettings, operation.Token);
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -129,6 +131,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         string? requestedModel,
         int? recentMessagesToKeepVerbatim,
         bool distill,
+        ModelResidencyIntent residencyIntent,
         StoredNodeSettings nodeSettings,
         CancellationToken cancellationToken)
     {
@@ -198,7 +201,7 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
         string? alreadyCaptured = null;
         if (distill)
         {
-            var distilled = await _distillation.DistillPendingAsync(conversationId, requestedModel, upToAnchorSequence: cutoffSequence, cancellationToken);
+            var distilled = await _distillation.DistillPendingAsync(conversationId, requestedModel, upToAnchorSequence: cutoffSequence, residencyIntent, cancellationToken);
             if (distilled.Status is ConversationStateDistillationStatus.DistillerReturnedNothing or ConversationStateDistillationStatus.TimedOut or ConversationStateDistillationStatus.Superseded
                 || (distilled.Status == ConversationStateDistillationStatus.Distilled && distilled.CoversToSequence < cutoffSequence))
             {
@@ -250,7 +253,8 @@ internal sealed class ConversationCompactionService : IConversationCompactionSer
                     Messages = toFold,
                     ModelName = model,
                     SupportsThinking = capabilities.SupportsThinking,
-                    EffectiveContextTokens = effectiveContextTokens
+                    EffectiveContextTokens = effectiveContextTokens,
+                    ResidencyIntent = residencyIntent
                 },
                 cancellationToken);
         // A provider may finish concurrently with cancellation; never advance coverage after the deadline.

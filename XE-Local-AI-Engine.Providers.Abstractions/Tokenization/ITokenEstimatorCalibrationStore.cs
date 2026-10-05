@@ -43,7 +43,7 @@ public interface ITokenEstimatorCalibrationStore
 
     /// <summary>
     ///     Tokens <paramref name="modelName" />'s chat template spends ONCE per request that offers at least one tool, beyond each tool's own
-    ///     definition: the tool-use instructions and the block that frames the tool list. Zero when nothing has been measured.
+    ///     definition: the tool-use instructions and the block that frames the tool list. A conservative default until one has been measured.
     /// </summary>
     int ResolveToolTemplatePreamble(string? modelName);
 

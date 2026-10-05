@@ -65,6 +65,9 @@ internal static class InvocationFailureClassifier
             // Admission policies supply sanitized, user-facing refusal text. Surface it verbatim as an ordinary
             // terminal agent-runtime failure; the policy runs after warm-up but before any generation method is called.
             InvocationGenerationRejectedException generationRejected => new FailureClassification(FailureCategory.AgentRuntime, generationRejected.Message),
+            // A capacity refusal of the model's launch reaches the chat path unwrapped. Its sanitized reason names only models and says what to do
+            // ("Eject one of them or pick a loaded model"), so it is surfaced verbatim rather than as the generic model-load text.
+            LlamaCapacityRefusedException capacityRefused => new FailureClassification(FailureCategory.ModelLoadFailed, capacityRefused.Message),
             // Matches BEFORE the generic InvalidOperationException arms below (both derive from InvalidOperationException):
             // a local-default send with no installed GGUF chat model surfaces ModelNotInstalled, not ProviderUnreachable.
             NoChatModelInstalledException => new FailureClassification(FailureCategory.ModelNotInstalled, NoChatModelInstalledMessage),

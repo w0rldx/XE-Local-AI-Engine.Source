@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+
 /// <summary>
 ///     The single admission verdict the capacity gate returns for a sub-agent spawn keyed on its <c>(model, role)</c>.
 /// </summary>
@@ -42,4 +44,17 @@ public sealed class CapacityDecision
     ///     <see langword="null" /> otherwise. Disposing it is idempotent.
     /// </summary>
     public IDisposable? Reservation { get; init; }
+
+    /// <summary>
+    ///     Whether this is a reject because the model's footprint did not fit the free memory budget, the one reject that unloading
+    ///     a resident model can relieve. <see langword="false" /> for every other verdict and reason.
+    /// </summary>
+    public bool IsMemoryShortfall { get; init; }
+
+    /// <summary>
+    ///     Report-only: the llama.cpp launch admission a local Allow booked, or the last candidate a memory-shortfall reject found too large,
+    ///     for logging the window, footprint and global free VRAM the decision used.
+    /// </summary>
+    /// <remarks><see langword="null" /> for every other verdict and for an Allow with no known footprint. Nothing may branch on it.</remarks>
+    public ProcessLaunchAdmission? Admission { get; init; }
 }

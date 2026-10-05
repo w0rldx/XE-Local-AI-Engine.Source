@@ -187,7 +187,10 @@ per turn, so none is restart-gated; the effort choices are `defaultReasoningEffo
 `none` because it sends no budget. Semantics: [Agent Mode](04-agent-mode.md) ("The reasoning-effort matrix and the
 thinking budget"). Beside it the **Answer length** card (`NodeSettingsOutputCapCard`) holds the chat output-cap
 variant (`chatOutputCapModeSelectValues`: cap, notice, off) and the cap's ceiling, both read per turn; semantics:
-[Chat](05-chat.md) ("Output cap and the "stopped at length" notice").
+[Chat](05-chat.md) ("Output cap and the "stopped at length" notice"). The four budgets, the default effort, the cap
+variant and the ceiling may be unset: a blank number field shows the shipped default as its placeholder and a set one
+offers **Use default**; the two selects carry a "Default (…)" option. The save sends `-1` for a blanked number and an
+empty string for a default option, which the node stores as unset.
 
 **The draft is `fieldsForm`; `fieldsBaseline` is the server state it was last seeded from.** `buildNodeSettingsRequest`
 diffs the two and sends only the changed fields, matching the PUT DTO's optional-field-keeps-current-value contract

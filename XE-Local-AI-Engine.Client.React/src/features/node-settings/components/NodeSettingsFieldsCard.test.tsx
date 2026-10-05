@@ -9,6 +9,7 @@ import {
 	NodeSettingsFieldsCard,
 	type NodeSettingsFieldsCardProps,
 } from "@/features/node-settings/components/NodeSettingsFieldsCard";
+import { NodeSettingsNumberField } from "@/features/node-settings/components/NodeSettingsNumberField";
 import {
 	type NodeSettingsFieldsForm,
 	toNodeSettingsFieldBounds,
@@ -691,9 +692,15 @@ describe("NodeSettingsFieldsCard — chat knobs", () => {
 		const { onChange } = renderCard({ section: "chat" });
 		const card = screen.getByTestId("node-settings-reasoning-budgets-card");
 		expect(within(card).getByText("Thinking budgets")).toBeTruthy();
-		expect((within(card).getByTestId("node-settings-reasoning-budget-minimal") as HTMLInputElement).value).toBe("1024 tokens");
-		expect((within(card).getByTestId("node-settings-reasoning-budget-high") as HTMLInputElement).value).toBe("24576 tokens");
-		expect((within(card).getByTestId("node-settings-default-reasoning-effort") as HTMLInputElement).value).toBe("low");
+		// Unset: blank, with the shipped default shown in its place and nothing to reset.
+		const minimal = within(card).getByTestId("node-settings-reasoning-budget-minimal") as HTMLInputElement;
+		expect(minimal.value).toBe("");
+		expect(minimal.placeholder).toBe("Default: 1024 tokens");
+		expect((within(card).getByTestId("node-settings-reasoning-budget-high") as HTMLInputElement).placeholder).toBe(
+			"Default: 24576 tokens",
+		);
+		expect(within(card).queryByTestId("node-settings-reasoning-budget-minimal-use-default")).toBeNull();
+		expect((within(card).getByTestId("node-settings-default-reasoning-effort") as HTMLInputElement).value).toBe("Default (low)");
 		// Read per turn: no restart badge on any of them.
 		expect(screen.queryByTestId("node-settings-restart-badge-reasoningBudgetLowTokens")).toBeNull();
 		expect(screen.queryByTestId("node-settings-restart-badge-defaultReasoningEffort")).toBeNull();
@@ -707,8 +714,11 @@ describe("NodeSettingsFieldsCard — chat knobs", () => {
 		const { onChange } = renderCard({ section: "chat" });
 		const card = screen.getByTestId("node-settings-output-cap-card");
 		expect(within(card).getByText("Answer length")).toBeTruthy();
-		expect((within(card).getByTestId("node-settings-chat-output-cap-max-tokens") as HTMLInputElement).value).toBe("16384 tokens");
-		expect((within(card).getByTestId("node-settings-chat-output-cap-mode") as HTMLInputElement).value).toBe("cap");
+		expect((within(card).getByTestId("node-settings-chat-output-cap-max-tokens") as HTMLInputElement).placeholder).toBe(
+			"Default: 16384 tokens",
+		);
+		// This wrapper renders inline fallbacks, so the option shows the literal; the bundle strings are asserted below.
+		expect((within(card).getByTestId("node-settings-chat-output-cap-mode") as HTMLInputElement).value).toBe("Default (cap)");
 		// Read per turn: no restart badge.
 		expect(screen.queryByTestId("node-settings-restart-badge-chatOutputCapMode")).toBeNull();
 		expect(screen.queryByTestId("node-settings-restart-badge-chatOutputCapMaxTokens")).toBeNull();
@@ -716,6 +726,72 @@ describe("NodeSettingsFieldsCard — chat knobs", () => {
 		fireEvent.change(within(card).getByTestId("node-settings-chat-output-cap-max-tokens"), { target: { value: "4096" } });
 
 		expect(onChange).toHaveBeenCalledWith("chatOutputCapMaxTokens", 4096);
+	});
+
+	it("offers Use default on a stored thinking budget and output-cap ceiling, which blanks the field", () => {
+		const { onChange } = renderCard({
+			section: "chat",
+			form: { ...toNodeSettingsFieldsForm(undefined), reasoningBudgetLowTokens: 512, chatOutputCapMaxTokens: 2048 },
+		});
+
+		fireEvent.click(screen.getByTestId("node-settings-reasoning-budget-low-use-default"));
+		fireEvent.click(screen.getByTestId("node-settings-chat-output-cap-max-tokens-use-default"));
+
+		expect(onChange).toHaveBeenCalledWith("reasoningBudgetLowTokens", "");
+		expect(onChange).toHaveBeenCalledWith("chatOutputCapMaxTokens", "");
+		// Only the stored fields carry the action.
+		expect(screen.queryByTestId("node-settings-reasoning-budget-medium-use-default")).toBeNull();
+	});
+
+	it("keeps the same input mounted when an unset thinking budget gets its first digit", () => {
+		const field = (form: NodeSettingsFieldsForm) => (
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<NodeSettingsNumberField
+					field="reasoningBudgetLowTokens"
+					label="Low effort"
+					bounds={{ min: 128, max: 131072 }}
+					unit="tokens"
+					form={form}
+					errors={{}}
+					onChange={vi.fn()}
+					testId="budget"
+					shippedDefault={2048}
+				/>
+			</MantineProvider>
+		);
+		const blank = toNodeSettingsFieldsForm(undefined);
+		const { rerender } = render(field(blank));
+		const input = screen.getByTestId("budget");
+
+		rerender(field({ ...blank, reasoningBudgetLowTokens: 1 }));
+
+		// A remount here drops focus after one keystroke, so "1500" would arrive as "1".
+		expect(screen.getByTestId("budget")).toBe(input);
+		expect(screen.getByTestId("budget-use-default")).toBeTruthy();
+	});
+
+	it("ships the use-default and slow-hardware timeout strings in en and de", () => {
+		const de = nonEnglishLocales.find((locale) => locale.code === "de")?.resource;
+		const lookup = (bundle: unknown, key: string) =>
+			key.split(".").reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], bundle);
+		for (const [key, en, german] of [
+			["pages.nodeSettings.fields.useDefault", "Use default", "Standard verwenden"],
+			["pages.nodeSettings.fields.defaultValue", "Default: {{value}}", "Standard: {{value}}"],
+			["pages.nodeSettings.fields.defaultOption", "Default ({{value}})", "Standard ({{value}})"],
+			[
+				"pages.nodeSettings.fields.chatOutputCapMaxTokens.timeoutHint",
+				"On slow hardware a long answer can reach the message request timeout (Local chat runtime) before this limit. If answers end in a timeout, raise that timeout.",
+				"Auf langsamer Hardware kann eine lange Antwort das Zeitlimit für Nachrichtenanfragen (Lokale Chat-Runtime) vor dieser Grenze erreichen. Enden Antworten mit einer Zeitüberschreitung, erhöhen Sie dieses Zeitlimit.",
+			],
+			[
+				"pages.nodeSettings.localChatRuntime.outputCapHint",
+				"On slow hardware a long answer can reach this timeout before the answer length limit (Longest answer) stops it. Raise this timeout, or lower Longest answer.",
+				"Auf langsamer Hardware kann eine lange Antwort dieses Zeitlimit erreichen, bevor die Begrenzung der Antwortlänge (Längste Antwort) sie stoppt. Erhöhen Sie dieses Zeitlimit oder senken Sie „Längste Antwort“.",
+			],
+		] as const) {
+			expect(i18next.getFixedT("en")(key)).toBe(en);
+			expect(lookup(de, key)).toBe(german);
+		}
 	});
 
 	it("ships the answer-length strings in en and de", () => {

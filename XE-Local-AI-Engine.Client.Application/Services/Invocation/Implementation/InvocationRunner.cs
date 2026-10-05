@@ -67,6 +67,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private const string ToolCallInReasoningNoticeMessage =
         "The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer.";
 
+    // The EmptyAnswer variant for a final answer that is only tool-call markup written as text: the call never ran, and the markup stays shown.
+    private const string ToolCallAsTextNoticeMessage =
+        "The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.";
+
     // The one re-prompt after such a round; the model sees it as a user message.
     private const string ReasoningToolCallRepromptMessage =
         "Your last reply put a tool call inside your reasoning, where it cannot run. Make the tool call now as an actual tool call, outside your reasoning.";
@@ -773,12 +777,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         var seededMessages = await ApplyContextBudgetAsync(fit.Messages, package, toolBudgetDefinitions, resolvedModel, "initial-assembly", turnPolicy, transport, budgetGate, fit.Measured);
 
-        // Model-matrix F2: a small model can repeat itself until the window or the turn timeout ends it. A frozen benchmark keeps
-        // the pre-node-settings behaviour: no default cap, no length notice, the fixed thinking ladder.
-        var outputCap = package.UsesFrozenBenchmarkPolicy
-            ? new ChatOutputCap { Mode = StoredNodeSettings.ChatOutputCapModeOff, MaxTokens = 0 }
-            : await _runtimeSettings.GetChatOutputCapAsync(invocationToken);
-        var reasoningBudgets = package.UsesFrozenBenchmarkPolicy ? ReasoningBudgets.Frozen : await _runtimeSettings.GetReasoningBudgetsAsync(invocationToken);
+        var (outputCap, reasoningBudgets) = await ResolveOutputPolicyAsync(package, invocationToken);
         var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages, effectiveContextTokens,
             reasoningBudgets, outputCap.TokensFor(effectiveContextTokens));
         // Coarse span over the MAF agent build — another pre-first-token stage. Disposed right after the
@@ -1255,17 +1254,68 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             await transport.EmitNoticeAsync(TurnNoticeKind.EmptyAnswer, message, stream.FinishReason);
         }
-        else if (finalRoundHasOutput && outputCap.NotifiesOnLength && !invocationToken.IsCancellationRequested
-                 && string.Equals(stream.FinishReason, "length", StringComparison.Ordinal))
+        // The content-channel twin of a call in the reasoning: the text stays, since a turn never loses its only visible text, and the notice says it is no answer.
+        else if (finalRoundHasOutput && !invocationToken.IsCancellationRequested && AnswerIsOnlyToolCallMarkup(stream, finalRoundContentStart))
+        {
+            await transport.EmitNoticeAsync(TurnNoticeKind.EmptyAnswer, ToolCallAsTextNoticeMessage, stream.FinishReason);
+        }
+        else if (finalRoundHasOutput)
+        {
+            await EmitOutputLimitNoticeIfReachedAsync(transport, stream, outputCap, invocationToken);
+        }
+    }
+
+    // The one "stopped at length" rule for the single-agent turn and the orchestration run alike.
+    private static async Task EmitOutputLimitNoticeIfReachedAsync(StreamTransport transport, StreamState stream, ChatOutputCap outputCap, CancellationToken invocationToken)
+    {
+        if (outputCap.NotifiesOnLength && !invocationToken.IsCancellationRequested
+            && string.Equals(stream.FinishReason, "length", StringComparison.Ordinal))
         {
             await transport.EmitNoticeAsync(TurnNoticeKind.OutputLimitReached, OutputLimitReachedNoticeMessage, stream.FinishReason);
         }
+    }
+
+    // Model-matrix F2: a small model can repeat itself until the window or the turn timeout ends it. A frozen benchmark keeps
+    // the pre-node-settings behaviour: no default cap, no length notice, the fixed thinking ladder.
+    private async Task<(ChatOutputCap OutputCap, ReasoningBudgets ReasoningBudgets)> ResolveOutputPolicyAsync(RuntimePackage package, CancellationToken invocationToken)
+    {
+        if (package.UsesFrozenBenchmarkPolicy)
+        {
+            return (new ChatOutputCap { Mode = StoredNodeSettings.ChatOutputCapModeOff, MaxTokens = 0 }, ReasoningBudgets.Frozen);
+        }
+
+        return (await _runtimeSettings.GetChatOutputCapAsync(invocationToken), await _runtimeSettings.GetReasoningBudgetsAsync(invocationToken));
     }
 
     // Qwen-family templates write a call as <tool_call>…</tool_call>; inside the reasoning block llama-server leaves it unparsed.
     private static bool ReasoningCarriesToolCall(StreamState stream, int reasoningStart) =>
         stream.ReasoningBuilder.Length > reasoningStart
         && stream.ReasoningBuilder.ToString(reasoningStart, stream.ReasoningBuilder.Length - reasoningStart).Contains("<tool_call>", StringComparison.Ordinal);
+
+    // Strict: the whole trimmed round is one or more closed <tool_call> blocks and nothing else, so an answer that explains the syntax is untouched.
+    private static bool AnswerIsOnlyToolCallMarkup(StreamState stream, int contentStart)
+    {
+        const string OpenTag = "<tool_call>";
+        const string CloseTag = "</tool_call>";
+        var rest = stream.ResponseBuilder.ToString(contentStart, stream.ResponseBuilder.Length - contentStart).AsSpan().Trim();
+        if (rest.IsEmpty)
+        {
+            return false;
+        }
+
+        while (!rest.IsEmpty)
+        {
+            var close = rest.IndexOf(CloseTag, StringComparison.Ordinal);
+            if (!rest.StartsWith(OpenTag, StringComparison.Ordinal) || close < 0)
+            {
+                return false;
+            }
+
+            rest = rest[(close + CloseTag.Length)..].TrimStart();
+        }
+
+        return true;
+    }
 
     /// <summary>
     ///     Moves leaked think text from the final round's answer into the reasoning and reports the corrected texts so
@@ -1332,7 +1382,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         int? effectiveContextTokens,
         CancellationToken invocationToken)
     {
-        var definition = await BuildOrchestrationDefinitionAsync(package, spec, resolvedModel, effectiveContextTokens, transport, invocationToken);
+        var (outputCap, reasoningBudgets) = await ResolveOutputPolicyAsync(package, invocationToken);
+        var definition = await BuildOrchestrationDefinitionAsync(package, spec, resolvedModel, effectiveContextTokens, transport, outputCap, reasoningBudgets, invocationToken);
 
         // A participant runs on its OWN model, which the turn-level pin does not cover, so its sends would fall to the transport's weaker unpinned check while
         // the workflow carries node-local tool results between participants. One scope for all of them: the workflow interleaves participants in this single async flow.
@@ -1353,6 +1404,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // Drain to the natural end of WatchAsync rather than breaking on the first TerminalOutput: the session drives the workflow as the stream is pulled and
         // ends it right after, so a full drain is the documented terminator and an early break could truncate a later-superstep delta. It adds no idle latency.
         string? activeParticipantKey = null;
+
+        // The last round that produced answer text decides why the turn stopped: a later tool-call-only round (a handoff) must not
+        // hide its "length", and an earlier participant's "length" must not outlive a final participant that finished normally.
+        var roundHasText = false;
         await foreach (var update in session.WatchAsync(invocationToken))
         {
             if (!string.IsNullOrEmpty(update.ParticipantKey)
@@ -1364,6 +1419,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 }
 
                 activeParticipantKey = update.ParticipantKey;
+                roundHasText = false;
             }
 
             switch (update.Kind)
@@ -1374,6 +1430,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                 case OrchestrationUpdateKind.TextDelta when !string.IsNullOrEmpty(update.Text):
                     await transport.EmitTextAsync(stream, update.Text);
+                    roundHasText = true;
                     break;
 
                 case OrchestrationUpdateKind.ApprovalRequest when update.RequestId is { } requestId:
@@ -1399,7 +1456,19 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     // ends naturally (the factory's documented terminator) rather than breaking the enumeration early.
                     break;
             }
+
+            if (!string.IsNullOrEmpty(update.FinishReason))
+            {
+                if (roundHasText)
+                {
+                    stream.FinishReason = update.FinishReason;
+                }
+
+                roundHasText = false;
+            }
         }
+
+        await EmitOutputLimitNoticeIfReachedAsync(transport, stream, outputCap, invocationToken);
     }
 
     public async Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default)

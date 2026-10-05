@@ -686,7 +686,7 @@ public sealed class ProcessContextAllocationResolverTests
     }
 
     [Test]
-    public async Task AdmissionDownTier_IsPureUntilCommitted_ThenPersistsMonotonicallyWithoutConsumingOomRetries()
+    public async Task AdmissionDownTier_IsNeverCached_SoTheNextResolveTiersBackUp_WithoutConsumingOomRetries()
     {
         var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
         var automatic = AssertEx.NotNull(await resolver.ResolveAsync(Model,
@@ -709,15 +709,18 @@ public sealed class ProcessContextAllocationResolverTests
 
         AssertEx.True(resolver.TryCommitAdmissionAllocation(second, out var committedLow));
         AssertEx.Equal(second, committedLow);
-        AssertEx.True(resolver.TryCommitAdmissionAllocation(first, out var committedAfterStaleHigh));
-        AssertEx.Equal(second, committedAfterStaleHigh, "a stale higher candidate must not overwrite a committed lower tier");
+        AssertEx.True(resolver.TryGetEffectiveCommittedAllocation(second, out var launched));
+        AssertEx.Equal(second, launched, "the admitted window still reaches the launch it admitted");
 
-        var persisted = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+        // The residents that forced the smaller window leave: the next spawn of the model resolves its full tier again.
+        var tieredBackUp = AssertEx.NotNull(await resolver.ResolveAsync(Model,
             ModelRole.Chat,
             GpuVariant.Cuda,
             ResolvedLaunchArguments.Explore(),
             CancellationToken.None));
-        AssertEx.Equal(second, persisted);
+        AssertEx.Equal(automatic, tieredBackUp, "an admission down-tier must not pin the model's window for the process lifetime");
+        AssertEx.True(resolver.TryCommitAdmissionAllocation(automatic, out var committedFull));
+        AssertEx.Equal(automatic, committedFull, "a later full-tier admission is not coerced down to an earlier admission's window");
 
         AssertEx.True(resolver.TryDownTierAfterOutOfMemory(second, out var firstOom));
         AssertEx.True(resolver.TryDownTierAfterOutOfMemory(firstOom, out var secondOom));
@@ -765,11 +768,35 @@ public sealed class ProcessContextAllocationResolverTests
 
         AssertEx.Equal(expected: 8192, candidate.ProcessContextTokens);
         AssertEx.True(resolver.TryCommitAdmissionAllocation(candidate, out _));
-        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(automatic, out var first));
+
+        // The admitted 8192 launch hits out-of-memory; a caller still holding the stale full-tier allocation continues below that sticky tier.
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(candidate, out var first));
         AssertEx.Equal(expected: 4096, first.ProcessContextTokens);
         AssertEx.True(resolver.TryDownTierAfterOutOfMemory(automatic, out var second));
         AssertEx.Equal(expected: 2048, second.ProcessContextTokens);
         AssertEx.False(resolver.TryDownTierAfterOutOfMemory(automatic, out _));
+    }
+
+    [Test]
+    public async Task OomDownTier_StaysSticky_AndCapsLaterAdmissions()
+    {
+        var resolver = BuildResolver(Profile(64 * Gb, 32 * Gb, vramKnown: true), processBudget: 32 * Gb);
+        var automatic = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+
+        AssertEx.True(resolver.TryDownTierAfterOutOfMemory(automatic, out var oom));
+
+        var resolved = AssertEx.NotNull(await resolver.ResolveAsync(Model,
+            ModelRole.Chat,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            CancellationToken.None));
+        AssertEx.Equal(oom, resolved, "an out-of-memory down-tier is a fact about this host and stays in force");
+        AssertEx.True(resolver.TryCommitAdmissionAllocation(automatic, out var committed));
+        AssertEx.Equal(oom, committed, "an admission must reserve the sticky out-of-memory window, never the larger one it proposed");
     }
 
     [Test]

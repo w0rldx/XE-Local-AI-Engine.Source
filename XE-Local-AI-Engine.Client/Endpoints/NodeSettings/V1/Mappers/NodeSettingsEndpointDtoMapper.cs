@@ -413,17 +413,24 @@ internal static class NodeSettingsEndpointDtoMapper
             WebFetchMaxContentChars = request.WebFetchMaxContentChars ?? currentSettings.WebFetchMaxContentChars,
             KnowledgeSearchDefaultResults = request.KnowledgeSearchDefaultResults ?? currentSettings.KnowledgeSearchDefaultResults,
             KnowledgeSearchMaxResults = request.KnowledgeSearchMaxResults ?? currentSettings.KnowledgeSearchMaxResults,
-            ReasoningBudgetMinimalTokens = request.ReasoningBudgetMinimalTokens ?? currentSettings.ReasoningBudgetMinimalTokens,
-            ReasoningBudgetLowTokens = request.ReasoningBudgetLowTokens ?? currentSettings.ReasoningBudgetLowTokens,
-            ReasoningBudgetMediumTokens = request.ReasoningBudgetMediumTokens ?? currentSettings.ReasoningBudgetMediumTokens,
-            ReasoningBudgetHighTokens = request.ReasoningBudgetHighTokens ?? currentSettings.ReasoningBudgetHighTokens,
-            DefaultReasoningEffort = request.DefaultReasoningEffort is null
-                ? currentSettings.DefaultReasoningEffort
-                : request.DefaultReasoningEffort.Trim(),
-            ChatOutputCapMode = request.ChatOutputCapMode is null
-                ? currentSettings.ChatOutputCapMode
-                : request.ChatOutputCapMode.Trim(),
-            ChatOutputCapMaxTokens = request.ChatOutputCapMaxTokens ?? currentSettings.ChatOutputCapMaxTokens,
+            ReasoningBudgetMinimalTokens = KeepOrUnsetTokens(request.ReasoningBudgetMinimalTokens, currentSettings.ReasoningBudgetMinimalTokens),
+            ReasoningBudgetLowTokens = KeepOrUnsetTokens(request.ReasoningBudgetLowTokens, currentSettings.ReasoningBudgetLowTokens),
+            ReasoningBudgetMediumTokens = KeepOrUnsetTokens(request.ReasoningBudgetMediumTokens, currentSettings.ReasoningBudgetMediumTokens),
+            ReasoningBudgetHighTokens = KeepOrUnsetTokens(request.ReasoningBudgetHighTokens, currentSettings.ReasoningBudgetHighTokens),
+            // The empty string clears these two back to the shipped default, like WebSearchSearxngUrl.
+            DefaultReasoningEffort = request.DefaultReasoningEffort switch
+            {
+                null => currentSettings.DefaultReasoningEffort,
+                "" => null,
+                { } effort => effort.Trim()
+            },
+            ChatOutputCapMode = request.ChatOutputCapMode switch
+            {
+                null => currentSettings.ChatOutputCapMode,
+                "" => null,
+                { } mode => mode.Trim()
+            },
+            ChatOutputCapMaxTokens = KeepOrUnsetTokens(request.ChatOutputCapMaxTokens, currentSettings.ChatOutputCapMaxTokens),
             HuggingFaceDownloadConnections = request.HuggingFaceDownloadConnections ?? currentSettings.HuggingFaceDownloadConnections,
             TranscriptionInferenceTimeoutMinutes = request.TranscriptionInferenceTimeoutMinutes ?? currentSettings.TranscriptionInferenceTimeoutMinutes,
             AgentHomeMaxRunSeconds = request.AgentHomeMaxRunSeconds ?? currentSettings.AgentHomeMaxRunSeconds,
@@ -521,5 +528,16 @@ internal static class NodeSettingsEndpointDtoMapper
             request.AutoCheckApplicationUpdates ?? currentSettings.AutoCheckApplicationUpdates,
             request.AutoCheckRuntimeUpdates ?? currentSettings.AutoCheckRuntimeUpdates,
             request.AutoProvisionFirstRunModel ?? currentSettings.AutoProvisionFirstRunModel);
+    }
+
+    /// <summary>Null keeps the stored value; <see cref="StoredNodeSettings.TokenSettingUnset" /> clears it back to the shipped default.</summary>
+    private static int? KeepOrUnsetTokens(int? requested, int? current)
+    {
+        return requested switch
+        {
+            null => current,
+            StoredNodeSettings.TokenSettingUnset => null,
+            { } tokens => tokens
+        };
     }
 }

@@ -8511,13 +8511,33 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	webFetchMaxContentChars: z.int().gte(1000).lte(100000).nullish(),
 	knowledgeSearchDefaultResults: z.int().gte(1).lte(20).nullish(),
 	knowledgeSearchMaxResults: z.int().gte(1).lte(20).nullish(),
-	reasoningBudgetMinimalTokens: z.int().gte(128).lte(131072).nullish(),
-	reasoningBudgetLowTokens: z.int().gte(128).lte(131072).nullish(),
-	reasoningBudgetMediumTokens: z.int().gte(128).lte(131072).nullish(),
-	reasoningBudgetHighTokens: z.int().gte(128).lte(131072).nullish(),
+	reasoningBudgetMinimalTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningBudgetLowTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningBudgetMediumTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningBudgetHighTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 	defaultReasoningEffort: z.string().nullish(),
 	chatOutputCapMode: z.string().nullish(),
-	chatOutputCapMaxTokens: z.int().gte(256).lte(131072).nullish(),
+	chatOutputCapMaxTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 	huggingFaceDownloadConnections: z.int().gte(1).lte(16).nullish(),
 	transcriptionInferenceTimeoutMinutes: z.int().gte(1).lte(480).nullish(),
 	agentHomeMaxRunSeconds: z.int().gte(60).lte(86400).nullish(),

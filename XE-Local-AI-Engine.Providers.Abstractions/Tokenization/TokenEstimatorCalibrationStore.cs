@@ -1,6 +1,9 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 using System.Collections.Concurrent;
+using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 
 public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationStore
 {
@@ -37,6 +40,13 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
     ///     and would shrink every tool round's window by it.
     /// </remarks>
     public const int MaximumToolTemplatePreambleTokens = 1024;
+
+    /// <summary>The tool-template preamble charged for a model that offers tools before its own preamble has been measured.</summary>
+    /// <remarks>
+    ///     The largest preamble measured across the pinned model-matrix families (2026-10: Qwen3.5 218, Granite 4.1 133, LFM2.5 25), so
+    ///     an uncalibrated first tool round is not under-counted; replaced by the measured value, smaller or larger, once calibration lands.
+    /// </remarks>
+    public const int DefaultToolTemplatePreambleTokens = 220;
 
     /// <summary>The correction of a model nothing has been observed for: multiply/divide by one, i.e. do nothing.</summary>
     public const double NeutralObservedCorrection = 1.0;
@@ -116,6 +126,84 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
         return corrected <= 0 ? 0 : (int)corrected;
     }
 
+    /// <summary>A tool's JSON schema as the chat template renders it, the form every tool budget counts.</summary>
+    /// <remarks>
+    ///     llama-server parses the request, so the HTTP body's whitespace never reaches the tokens; the templates measured (2026-10) render
+    ///     the schema single-line with <c>", "</c> / <c>": "</c> separators. Counting the indented source text instead over-charged a schema
+    ///     by a quarter or more. Unparseable text is returned as is. Real tools and the calibration probe tools both go through here, so the
+    ///     measured preamble and the schema count describe the same split.
+    /// </remarks>
+    public static string RenderToolSchema(string? schemaJson)
+    {
+        if (string.IsNullOrWhiteSpace(schemaJson))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(schemaJson);
+            return RenderToolSchema(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            return schemaJson;
+        }
+    }
+
+    /// <inheritdoc cref="RenderToolSchema(string?)" />
+    public static string RenderToolSchema(JsonElement schema)
+    {
+        if (schema.ValueKind == JsonValueKind.Undefined)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+        AppendRendered(builder, schema);
+        return builder.ToString();
+    }
+
+    private static void AppendRendered(StringBuilder builder, JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                builder.Append('{');
+                var firstProperty = true;
+                foreach (var property in element.EnumerateObject())
+                {
+                    builder.Append(firstProperty ? string.Empty : ", ").Append(JsonSerializer.Serialize(property.Name, RenderOptions)).Append(": ");
+                    AppendRendered(builder, property.Value);
+                    firstProperty = false;
+                }
+
+                builder.Append('}');
+                break;
+            case JsonValueKind.Array:
+                builder.Append('[');
+                var firstItem = true;
+                foreach (var item in element.EnumerateArray())
+                {
+                    builder.Append(firstItem ? string.Empty : ", ");
+                    AppendRendered(builder, item);
+                    firstItem = false;
+                }
+
+                builder.Append(']');
+                break;
+            case JsonValueKind.String:
+                builder.Append(JsonSerializer.Serialize(element.GetString(), RenderOptions));
+                break;
+            default:
+                builder.Append(element.GetRawText());
+                break;
+        }
+    }
+
+    // Escapes only what JSON requires, as a template's tojson does; the default encoder's '-style escapes would over-count.
+    private static readonly JsonSerializerOptions RenderOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
     private readonly ConcurrentDictionary<string, int> _divisors = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, double> _observedCorrections = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> _toolTemplatePreambles = new(StringComparer.Ordinal);
@@ -138,7 +226,7 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
     {
         return !string.IsNullOrWhiteSpace(modelName) && _toolTemplatePreambles.TryGetValue(modelName, out var preamble)
             ? preamble
-            : 0;
+            : DefaultToolTemplatePreambleTokens;
     }
 
     /// <inheritdoc />

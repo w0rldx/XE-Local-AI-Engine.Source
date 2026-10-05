@@ -3,14 +3,17 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>Brings a conversation's distilled state up to date with its completed messages on a node-local model.</summary>
 public interface IConversationStateDistillationService
 {
     /// <param name="upToAnchorSequence">Distil only messages at or below this anchor; null distils everything pending.</param>
+    /// <param name="residencyIntent"><see cref="ModelResidencyIntent.Background" /> when no user waits on it: a cold model then never unloads another.</param>
     Task<ConversationStateDistillationOutcome> DistillPendingAsync(Guid conversationId,
         string? requestedModel,
         int? upToAnchorSequence,
+        ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive,
         CancellationToken cancellationToken = default);
 }
 
@@ -75,6 +78,7 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
     public async Task<ConversationStateDistillationOutcome> DistillPendingAsync(Guid conversationId,
         string? requestedModel,
         int? upToAnchorSequence,
+        ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive,
         CancellationToken cancellationToken = default)
     {
         if (!await _runtimeSettings.GetCompactionDistillEnabledAsync(cancellationToken))
@@ -92,7 +96,7 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
         var progress = new Progress();
         try
         {
-            return await DistillCoreAsync(conversationId, requestedModel, upToAnchorSequence, nodeSettings, progress, operation.Token, cancellationToken);
+            return await DistillCoreAsync(conversationId, requestedModel, upToAnchorSequence, residencyIntent, nodeSettings, progress, operation.Token, cancellationToken);
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -110,6 +114,7 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
     private async Task<ConversationStateDistillationOutcome> DistillCoreAsync(Guid conversationId,
         string? requestedModel,
         int? upToAnchorSequence,
+        ModelResidencyIntent residencyIntent,
         StoredNodeSettings nodeSettings,
         Progress progress,
         CancellationToken operationToken,
@@ -163,7 +168,8 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
                     Messages = sources,
                     ModelName = model,
                     SupportsThinking = capabilities.SupportsThinking,
-                    EffectiveContextTokens = effectiveContextTokens
+                    EffectiveContextTokens = effectiveContextTokens,
+                    ResidencyIntent = residencyIntent
                 },
                 operationToken);
             // A provider may finish concurrently with the deadline; never persist after it.

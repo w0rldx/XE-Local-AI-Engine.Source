@@ -676,7 +676,7 @@ public sealed class ConversationCompactionServiceTests
         AssertEx.Equal(ConversationCompactionOutcome.Compacted, result.Outcome);
         Received.InOrder(() =>
         {
-            _ = distillation.DistillPendingAsync(ConversationId, null, 3, Arg.Any<CancellationToken>());
+            _ = distillation.DistillPendingAsync(ConversationId, null, 3, ModelResidencyIntent.Interactive, Arg.Any<CancellationToken>());
             _ = summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>());
         });
         var input = (ConversationSummarizerInput)summarizer.ReceivedCalls().Single().GetArguments()[0]!;
@@ -733,6 +733,27 @@ public sealed class ConversationCompactionServiceTests
         AssertEx.Null(input.AlreadyCaptured);
     }
 
+    [Test]
+    public async Task CompactAsync_PassesTheResidencyIntentToTheDistillerAndTheSummarizer()
+    {
+        var conversation = Conversation(CompletedMessages(count: 12));
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns("SYNOPSIS");
+        var distillation = NothingToDistill();
+        var service = CreateService(persistence, summarizer, resolver, distillation: distillation);
+
+        await service.CompactAsync(ConversationId, requestedModel: null, recentMessagesToKeepVerbatim: null, residencyIntent: ModelResidencyIntent.Background);
+
+        await distillation.Received(1).DistillPendingAsync(ConversationId, null, Arg.Any<int?>(), ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
+        var input = (ConversationSummarizerInput)summarizer.ReceivedCalls().Single().GetArguments()[0]!;
+        AssertEx.Equal(ModelResidencyIntent.Background, input.ResidencyIntent);
+    }
+
     private static ConversationCompactionService CreateService(INodeChatPersistenceService persistence,
         IConversationSummarizer summarizer,
         ILocalDefaultChatModelResolver? resolver = null,
@@ -766,7 +787,7 @@ public sealed class ConversationCompactionServiceTests
     private static IConversationStateDistillationService Distillation(ConversationStateDistillationOutcome outcome)
     {
         var distillation = Substitute.For<IConversationStateDistillationService>();
-        distillation.DistillPendingAsync(Arg.Any<Guid>(), Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CancellationToken>()).Returns(outcome);
+        distillation.DistillPendingAsync(Arg.Any<Guid>(), Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<ModelResidencyIntent>(), Arg.Any<CancellationToken>()).Returns(outcome);
         return distillation;
     }
 

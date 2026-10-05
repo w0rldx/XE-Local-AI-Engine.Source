@@ -135,6 +135,9 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
             AdditionalProperties = additionalProperties
         };
 
+        // Bounded like a single-agent turn: reasoning budget plus the answer cap for this participant's window, with the marker.
+        ReasoningOptionsResolver.ApplyDefaultOutputCap(chatOptions, additionalProperties, participant.DefaultMaxOutputTokens);
+
         return new ChatClientAgent(_chatClient,
             new ChatClientAgentOptions
             {

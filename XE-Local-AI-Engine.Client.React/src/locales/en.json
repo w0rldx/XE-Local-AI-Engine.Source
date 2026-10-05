@@ -273,6 +273,7 @@
 			"attachmentShortenedText": "The attached file was shortened to fit this model's context window; the model was told it is incomplete.",
 			"knowledgeUnavailableText": "Your knowledge base was not used for this message because no embedding model is installed, so your documents could not be indexed.",
 			"outputLimitReachedText": "The answer stopped at the length limit before the model finished.",
+			"toolCallAsTextText": "The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.",
 			"toolCallInReasoningText": "The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer."
 		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting.",
@@ -2345,6 +2346,9 @@
 				},
 				"secondsShort": "s",
 				"bytesShort": "B",
+				"useDefault": "Use default",
+				"defaultValue": "Default: {{value}}",
+				"defaultOption": "Default ({{value}})",
 				"agentHomeMaxRunSeconds": {
 					"label": "AgentHome run time limit",
 					"description": "The longest a whole run may take; at least the command timeout. Applies to the next run."
@@ -2483,7 +2487,8 @@
 				},
 				"chatOutputCapMaxTokens": {
 					"label": "Longest answer",
-					"description": "The answer may use half the model's context window, but never more than this. A thinking model's thinking budget comes on top, so this is not the total."
+					"description": "The answer may use half the model's context window, but never more than this. A thinking model's thinking budget comes on top, so this is not the total.",
+					"timeoutHint": "On slow hardware a long answer can reach the message request timeout (Local chat runtime) before this limit. If answers end in a timeout, raise that timeout."
 				},
 				"webFetch": {
 					"title": "Page fetching"
@@ -2761,6 +2766,7 @@
 				"description": "The maximum message request timeout bounds how long a single local chat message request (send or regenerate) may run before it is cancelled with a timeout. It is also reported to the platform via capability reports.",
 				"timeoutLabel": "Maximum message request timeout",
 				"timeoutRange": "Allowed range: {{min}}–{{max}} seconds.",
+				"outputCapHint": "On slow hardware a long answer can reach this timeout before the answer length limit (Longest answer) stops it. Raise this timeout, or lower Longest answer.",
 				"timeoutError": "Enter a whole number from {{min}} to {{max}}."
 			},
 			"uiMode": {

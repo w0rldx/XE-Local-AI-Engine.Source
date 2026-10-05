@@ -661,7 +661,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             return (bound, true);
         }
 
-        // The intent overloads are called only for a transient client, so a supervisor double that stubs just the plain members keeps serving every other client.
+        // The intent overloads are called only for a transient or background client, so a supervisor double that stubs just the plain members keeps serving every other client.
         var endpoint = _residencyIntent == ModelResidencyIntent.Interactive
             ? await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct).ConfigureAwait(false)
             : await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, _residencyIntent, ct).ConfigureAwait(false);

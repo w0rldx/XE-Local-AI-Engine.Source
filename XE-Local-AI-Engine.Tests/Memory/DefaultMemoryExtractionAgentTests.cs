@@ -63,6 +63,29 @@ public sealed class DefaultMemoryExtractionAgentTests
     }
 
     [Test]
+    public async Task MemoryExtraction_LoadsItsModelAsBackgroundWork()
+    {
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ProviderName.Returns("llamacpp");
+#pragma warning disable CA2000 // Ownership transfers to the agent, which disposes it via `using`.
+        provider.CreateChatClient(Arg.Any<LocalModelSelection>()).Returns(new EnvelopeChatClient("""{ "memories": [] }"""));
+#pragma warning restore CA2000
+        resolver.ResolveProviderForModelAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns(Task.FromResult(provider));
+        var agent = new DefaultMemoryExtractionAgent(resolver,
+            Options.Create(new MemoryExtractionOptions()),
+            StubNodeRuntimeSettings.Create().WithMemoryExtractionModelName("qwen3:8b").Build(),
+            Substitute.For<IModelTrustResolver>(),
+            Scopes(Substitute.For<IModelCapabilityResolver>()),
+            NullLogger<DefaultMemoryExtractionAgent>.Instance);
+
+        await agent.ProposeAsync(Run());
+
+        // A background load never unloads the model the user is chatting with.
+        provider.Received(1).CreateChatClient(Arg.Is<LocalModelSelection>(selection => selection.ResidencyIntent == ModelResidencyIntent.Background));
+    }
+
+    [Test]
     public async Task MemoryExtraction_WhenNoModelConfigured_ResolvesNothingAndReturnsEmpty()
     {
         var resolver = Substitute.For<ILocalModelProviderResolver>();

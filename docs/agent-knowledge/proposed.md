@@ -39,3 +39,23 @@ Once the operator approves it, move the entry to its topic file and delete it he
 ### FastEndpoints validator 400s carried a trace id that never joined the log
 
 **Rule:** FastEndpoints' default `ProblemDetails` `ResponseBuilder` writes `HttpContext.TraceIdentifier` (the Kestrel connection id), not the W3C trace id the log template prints, so any 400 the framework writes itself needs `FastEndpointsProblemWriter.Build` set as `ResponseBuilder` (`UseProblemDetails` in `Program.cs`). **Prevents:** a user quoting the `traceId` of a validation error and no `[trace:…]` log line ever matching it, while handler-written problems did match. **Authority:** `FastEndpointsProblemWriter.Build`, `ProblemDetailsExtensions.ResolveTraceId`; logging checkup 2026-10-02. Target: runtime.md. Pending guard: see Plans retro-actions 2026-10-05, WS4.
+
+### A FluentValidation range rule is published as OpenAPI min/max even under `.When`
+
+**Rule:** a request field that accepts a sentinel outside its range (`-1` = unset) validates with `Must(...)`, not `InclusiveBetween(...).When(...)`: FastEndpoints publishes the range as `minimum`/`maximum` whatever the condition, and the generated zod schema then refuses the sentinel in the browser before the request is sent. Check the regenerated `zod.gen.ts` for the field, and keep the SPA's range check on the bounds the response carries. **Prevents:** a reset the API accepts and the SPA cannot send. **Authority:** `NodeSettingsEndpointValidators` (`IsUnsetOrBetween`), `StoredNodeSettings.TokenSettingUnset`; model-matrix follow-ups V3, 2026-10-05. Target: frontend-and-api.md.
+
+### A wrapper that appears when a field becomes non-empty remounts the input
+
+**Rule:** a Mantine `inputContainer` (or any conditional wrapper around an input) is rendered in the same shape whether the field is empty or set; only its extra children are conditional. Test it by rerendering from blank to set and asserting the input is the same DOM node; a `fireEvent.change` test cannot see a remount. **Prevents:** the input losing focus after the first keystroke, so typing `1500` into an unset field leaves `1` (found only in the browser). **Authority:** `NodeSettingsNumberField`, `NodeSettingsFieldsCard.test.tsx` ("keeps the same input mounted ..."); model-matrix follow-ups, 2026-10-05. Target: frontend-and-api.md.
+
+### Count a tool schema as the chat template renders it, and measure tool cost as a prompt-token difference
+
+**Rule:** llama-server parses the request, so the body's JSON whitespace never reaches the tokens; the templates measured render a schema single-line with `", "` / `": "` separators. Budget tools through `TokenEstimatorCalibrationStore.RenderToolSchema`, the same helper the calibration probe uses, and judge any change by `usage.prompt_tokens` with and without the tools on at least two template families. **Prevents:** counting the indented source text, which under-counted an uncalibrated Qwen turn and over-charged a calibrated one by 150 to 200 tokens at a 4,096 window. **Authority:** `TokenEstimatorCalibrationStore` (`RenderToolSchema`, `DefaultToolTemplatePreambleTokens`); model-matrix follow-ups B1, 2026-10-05 (pinned pair: 769 / 683 / 569 real tokens on Qwen3.5, Granite 4.1, LFM2.5). Target: inference-runtime.md.
+
+### The backend gate empties `.tmp/backend-test-results/` when it starts
+
+**Rule:** never redirect a gate's own output into `.tmp/backend-test-results/`; read `gate.log` there (and the per-project `gate.log` beneath it) and take the exit code from the shell. **Prevents:** a wrapper log that is unlinked seconds after the run starts, leaving only an exit code and no failing test name. **Authority:** `scripts/run-backend-tests.sh`; model-matrix follow-ups, 2026-10-05. Target: backend-tests.md.
+
+### "Idle" by lease is not idle right after a turn: a background request holds the model for seconds
+
+**Rule:** a rule that acts on a chat process having no inference lease (unload it, refuse around it) treats "leased" as "wait, bounded", not as "unavailable": memory extraction and the other post-turn jobs take a lease on the model the moment the user's turn ends. Live-check any such rule with a turn on model A followed at once by a turn on model B. **Prevents:** the ordinary "switch model right after a turn" being refused with "Eject one of them" because the first model was busy for a few seconds (seen live, 2026-10-05). **Authority:** `PooledRoleLaunchAdmission.AdmitChatAsync` (`BusyResidentWaitCap`), `IdleChatEvictionResult`; model-matrix follow-ups W1. Target: models-and-inference.md.

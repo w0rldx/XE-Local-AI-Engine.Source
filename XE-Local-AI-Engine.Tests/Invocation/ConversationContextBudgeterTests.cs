@@ -592,7 +592,7 @@ public sealed class ConversationContextBudgeterTests
     {
         // The outer budget reads the offer DTO; the inner one reads the executable tool. Same name, description and schema: same cost.
         const string schema = """{"type":"object","properties":{"expression":{"type":"string"}},"required":["expression"]}""";
-        var description = new string('d', 400 - "calculate".Length - schema.Length);
+        var description = new string('d', 400 - "calculate".Length - TokenEstimatorCalibrationStore.RenderToolSchema(schema).Length);
         var offer = new AllowedToolDto
         {
             Id = Guid.NewGuid(),
@@ -606,8 +606,37 @@ public sealed class ConversationContextBudgeterTests
 
         var outer = sut.Budget([User("hello")], contextTokenCapacity: 8192, reservedOutputTokens: 0, toolDefinitions: InvocationRunner.BuildToolBudgetDefinitions([offer]));
 
-        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTools([executable]), outer.FixedOverheadTokens);
-        AssertEx.Equal((400 / 4) + 4 + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens, outer.FixedOverheadTokens, "the description is counted");
+        // An uncalibrated model: both budgets add the default tool-template preamble once on top of the per-tool charge.
+        var preamble = TokenEstimatorCalibrationStore.DefaultToolTemplatePreambleTokens;
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTools([executable]) + preamble, outer.FixedOverheadTokens);
+        AssertEx.Equal((400 / 4) + 4 + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens + preamble, outer.FixedOverheadTokens, "the description is counted");
+    }
+
+    [Test]
+    public void BuildToolBudgetDefinitions_CountsTheRenderedSchema_SoIndentedAndCompactOffersBudgetIdentically()
+    {
+        static AllowedToolDto Offer(string schema) => new()
+        {
+            Id = Guid.NewGuid(),
+            Name = "calculate",
+            Location = ToolLocation.ClientLocal,
+            Description = "Evaluates an expression.",
+            ParameterSchema = schema
+        };
+        const string compact = """{"type":"object","properties":{"expression":{"type":"string"}}}""";
+        const string indented = """
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "expression": { "type": "string" }
+                                  }
+                                }
+                                """;
+
+        var definitions = InvocationRunner.BuildToolBudgetDefinitions([Offer(compact), Offer(indented)]);
+
+        AssertEx.Equal("calculate\nEvaluates an expression.\n{\"type\": \"object\", \"properties\": {\"expression\": {\"type\": \"string\"}}}", definitions[0]);
+        AssertEx.Equal(definitions[0], definitions[1]);
     }
 
     [Test]
@@ -627,7 +656,8 @@ public sealed class ConversationContextBudgeterTests
         AssertEx.Equal(perTools + 150, withTools.FixedOverheadTokens, "once per request, not once per tool");
         AssertEx.Equal(expected: 0, withoutTools.FixedOverheadTokens);
         AssertEx.Equal(expected: 0, onlyBlankTools.FixedOverheadTokens);
-        AssertEx.Equal(perTools, unmeasuredModel.FixedOverheadTokens, "an unmeasured model keeps the constant-only charge");
+        AssertEx.Equal(perTools + TokenEstimatorCalibrationStore.DefaultToolTemplatePreambleTokens, unmeasuredModel.FixedOverheadTokens,
+            "an unmeasured model is charged the default preamble once");
     }
 
     [Test]

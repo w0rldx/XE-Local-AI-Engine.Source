@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+
 /// <summary>One older-history message handed to the summarizer (role + already-decrypted content).</summary>
 public sealed class ConversationSummarizerMessage
 {
@@ -35,6 +37,9 @@ public sealed class ConversationSummarizerInput
     ///     way a chat turn reads it. Null means unknown, and the fold budget stays at the configured ceiling.
     /// </summary>
     public int? EffectiveContextTokens { get; init; }
+
+    /// <summary><see cref="ModelResidencyIntent.Background" /> for automatic compaction, so a cold fold model never unloads the user's.</summary>
+    public ModelResidencyIntent ResidencyIntent { get; init; }
 }
 
 /// <summary>

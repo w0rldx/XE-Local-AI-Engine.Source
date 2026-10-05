@@ -309,7 +309,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             var running = await AwaitDetachedSpawnAsync(decision.SpawnTask!, ct).ConfigureAwait(false);
 
             // Backstops the join-time clear in DecideEnsureAsync for a join that raced the spawn's registration.
-            if (intent == ModelResidencyIntent.Interactive)
+            if (intent != ModelResidencyIntent.Transient)
             {
                 running.ClearTransient();
             }
@@ -415,8 +415,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                 return JoinInflightSpawn(inflight, intent);
             }
 
-            // Pooled roles pass the capacity gate here, after the reuse and join arms, so N concurrent cold ensures decide once.
-            var capacityReservation = await AdmitPooledLaunchAsync(key, ct).ConfigureAwait(false);
+            // Cold launches pass the capacity gate here, after the reuse and join arms, so N concurrent cold ensures decide once and a resident model never does.
+            var capacityReservation = await AdmitPooledLaunchAsync(key, intent, ct).ConfigureAwait(false);
             IProcessLaunchTicket? launchTicket = null;
             try
             {
@@ -461,10 +461,11 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         }
     }
 
-    /// <summary>Joins a spawn another caller started; an interactive joiner takes the transient mark off the process it will register.</summary>
+    /// <summary>Joins a spawn another caller started; a non-transient joiner takes the transient mark off the process it will register.</summary>
+    /// <remarks>The spawn's admission was decided once, by the caller that started it; a joiner never re-admits it.</remarks>
     private static EnsureDecision JoinInflightSpawn(InflightSpawn inflight, ModelResidencyIntent intent)
     {
-        if (intent == ModelResidencyIntent.Interactive)
+        if (intent != ModelResidencyIntent.Transient)
         {
             inflight.ClearTransient();
         }
@@ -503,6 +504,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             Admission = admission,
             LaunchTicket = launchTicket,
             CapacityReservation = capacityReservation,
+            Intent = intent,
             IsTransient = intent == ModelResidencyIntent.Transient
         };
     }
@@ -515,7 +517,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                 Exception? failure = null;
                 try
                 {
-                    running = await SpawnWithRestartAsync(key, inflight.Admission, _shutdownCts.Token).ConfigureAwait(false);
+                    running = await SpawnWithRestartAsync(key, inflight.Admission, inflight.Intent, _shutdownCts.Token).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -557,23 +559,36 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     }
 
     /// <summary>
-    ///     Runs the pooled-role capacity admission for a cold <see cref="ModelRole.Embedding" /> or
-    ///     <see cref="ModelRole.Reranker" /> launch; chat and a host with no gate wired get <see langword="null" />.
+    ///     Runs the capacity admission for a cold launch: the pooled-role hook, or the chat hook, which may unload idle chat
+    ///     models unless the launch is <see cref="ModelResidencyIntent.Background" />. <see langword="null" /> for a host
+    ///     with no gate wired and for a chat launch a caller already admitted.
     /// </summary>
     /// <remarks>
     ///     A refusal is a capacity policy outcome, not a crash, so it is re-flagged non-retryable and surfaces to the caller
     ///     before any launcher call.
     /// </remarks>
-    private async Task<IDisposable?> AdmitPooledLaunchAsync(ProcessKey key, CancellationToken ct)
+    private async Task<IDisposable?> AdmitPooledLaunchAsync(ProcessKey key, ModelResidencyIntent intent, CancellationToken ct)
     {
-        if (_pooledLaunchAdmission is null || key.Role is not (ModelRole.Embedding or ModelRole.Reranker))
+        if (_pooledLaunchAdmission is null)
+        {
+            return null;
+        }
+
+        // A caller that ran its own decision (a sub-agent dispatch) published the admission this launch consumes; deciding again would reject on it.
+        if (key.Role == ModelRole.Chat && _launchAdmissions.Snapshot(key.ModelName, key.Role).HasRequestedKey)
         {
             return null;
         }
 
         try
         {
-            return await _pooledLaunchAdmission.AdmitAsync(key.ModelName, key.Role, ct).ConfigureAwait(false);
+            return key.Role == ModelRole.Chat
+                ? await _pooledLaunchAdmission.AdmitChatAsync(key.ModelName,
+                                                  mayUnloadIdleModels: intent != ModelResidencyIntent.Background,
+                                                  (protectedModels, token) => EvictIdleChatForMemoryAsync(key, protectedModels, token),
+                                                  ct)
+                                              .ConfigureAwait(false)
+                : await _pooledLaunchAdmission.AdmitAsync(key.ModelName, key.Role, ct).ConfigureAwait(false);
         }
         catch (LlamaRuntimeException ex)
         {
@@ -581,6 +596,16 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             _logger.LogWarning("Capacity refused a {Role} llama-server launch for model {ModelName}: {Reason}", key.Role, key.ModelName, ex.Message);
             throw;
         }
+    }
+
+    /// <summary>The chat hook's eviction callback: unloads one idle chat process for <paramref name="requesting" />'s load, or names one only a lease kept.</summary>
+    private async Task<IdleChatEvictionResult> EvictIdleChatForMemoryAsync(ProcessKey requesting, IReadOnlyCollection<string> protectedModels, CancellationToken ct)
+    {
+        var (evicted, busy) = await _reaper.TryEvictIdleChatForMemoryAsync(requesting, protectedModels, ct).ConfigureAwait(false);
+        return new IdleChatEvictionResult(Describe(evicted), Describe(busy));
+
+        static string? Describe(ProcessKey? key) =>
+            key is { } k ? $"'{k.ModelName}' ({k.Role})" : null;
     }
 
     /// <summary>The outcome of <see cref="DecideEnsureAsync" />: a reused endpoint XOR the shared detached spawn task.</summary>
@@ -631,6 +656,9 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
         /// <summary>The pooled-role capacity reservation, released after <see cref="LaunchTicket" /> when the spawn settles.</summary>
         public required IDisposable? CapacityReservation { get; init; }
+
+        /// <summary>The starting caller's intent; like the admission, a joiner never changes it (a background spawn never evicts a chat process at the cap).</summary>
+        public required ModelResidencyIntent Intent { get; init; }
 
         /// <summary>Whether the process this spawn registers starts transient: a transient request started it and no interactive caller joined.</summary>
         /// <remarks>Read once, at registration, so a transient caller that cancels its wait still leaves a transient process: the spawn outlives its callers.</remarks>
@@ -1027,11 +1055,13 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         private long _evictionOwner;
         private int _ejected;
         private int _transient;
+        private int _awaitingFirstLease;
 
         public RunningProcess(IProcessTreeHandle handle, LlamaServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
         {
             _lastUsedTicks = startedUtc.UtcTicks;
             _lastLivenessProbeTicks = startedUtc.UtcTicks;
+            ReadyUtc = startedUtc;
             Handle = handle;
             Endpoint = endpoint;
             Port = port;
@@ -1076,6 +1106,9 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
         public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
 
+        /// <summary>When the process was registered, i.e. became ready.</summary>
+        public DateTimeOffset ReadyUtc { get; }
+
         /// <summary>
         ///     <see langword="true" /> while this process was spawned by a transient request and has had no interactive
         ///     touch since: the reaper applies the short transient idle lifetime and cap admission may evict it in-window.
@@ -1085,6 +1118,17 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         {
             get => Volatile.Read(ref _transient) != 0;
             init => _transient = value ? 1 : 0;
+        }
+
+        /// <summary>
+        ///     <see langword="true" /> from registration until the first inference lease is granted; memory eviction spares such a
+        ///     process for <see cref="LlamaServerIdleReaper.FirstLeaseGracePeriod" />, so the request that spawned it can lease it.
+        /// </summary>
+        /// <remarks>Cleared only AFTER the first lease is counted, so a scan that reads it cleared also sees that lease or its later release.</remarks>
+        public bool AwaitingFirstLease
+        {
+            get => Volatile.Read(ref _awaitingFirstLease) != 0;
+            init => _awaitingFirstLease = value ? 1 : 0;
         }
 
         /// <summary>
@@ -1111,6 +1155,12 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
 
         /// <summary><see langword="true" /> once this process was force-ejected while in-flight work still held a lease.</summary>
         public bool WasEjected => Volatile.Read(ref _ejected) != 0;
+
+        /// <summary>Records that a lease was granted, ending <see cref="AwaitingFirstLease" />.</summary>
+        public void MarkFirstLeaseGranted()
+        {
+            Volatile.Write(ref _awaitingFirstLease, value: 0);
+        }
 
         /// <summary>Registers an in-flight inference request against this process.</summary>
         public void AcquireLease()
@@ -1215,7 +1265,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         public void MarkUsed(DateTimeOffset now, ModelResidencyIntent intent = ModelResidencyIntent.Interactive)
         {
             StampLastUsed(now);
-            if (intent == ModelResidencyIntent.Interactive)
+            if (intent != ModelResidencyIntent.Transient)
             {
                 ClearTransient();
             }

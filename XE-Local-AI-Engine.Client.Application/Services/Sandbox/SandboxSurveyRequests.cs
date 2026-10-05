@@ -28,10 +28,10 @@ public sealed record SandboxListFilesRequest
     public string? NameGlob { get; init; }
 }
 
-/// <summary>A request to search the non-binary regular files under one sandbox directory.</summary>
+/// <summary>A request to search the non-binary regular files under one sandbox directory, or one such file.</summary>
 public sealed record SandboxSearchTextRequest
 {
-    /// <summary>The sandbox-absolute directory to survey. The provider confines it exactly as it confines a read.</summary>
+    /// <summary>The sandbox-absolute directory, or single file, to search. The provider confines it exactly as it confines a read.</summary>
     public required string DirectoryPath { get; init; }
 
     /// <summary>

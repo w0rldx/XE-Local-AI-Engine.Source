@@ -1,6 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -242,6 +245,79 @@ public sealed class SupervisorEvictionTests
     }
 
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task BackgroundSpawn_CapFullOfAChatProcessThatWouldYield_EvictsNothing_AndIsRefused(bool transient)
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var ttl = TimeSpan.FromMinutes(15);
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 1, ttl), timeProvider: time);
+        await FillWithYieldingChatProcessAsync(supervisor, time, ttl, transient);
+
+        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, ModelResidencyIntent.Background, CancellationToken.None));
+
+        AssertEx.Contains(ex.Message, "maximum number of local models", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal(expected: 1, launcher.LaunchCount, "the refused background load never launched");
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "work no user waits on never unloads a chat model at the cap");
+        AssertEx.Equal(expected: 0, supervisor.CountInflightSpawns());
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task InteractiveSpawn_CapFullOfAChatProcessThatWouldYield_EvictsIt(bool transient)
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var ttl = TimeSpan.FromMinutes(15);
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 1, ttl), timeProvider: time);
+        await FillWithYieldingChatProcessAsync(supervisor, time, ttl, transient);
+
+        await supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, ModelResidencyIntent.Interactive, CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.True(launcher.Handles.OrderBy(h => h.ProcessId).First().WasTreeKilled, "a user load takes the yielding chat process as before");
+    }
+
+    [Test]
+    [Arguments(ModelResidencyIntent.Background, 1)]
+    [Arguments(ModelResidencyIntent.Interactive, 0)]
+    public async Task CapFullOfIdleChatAndInWindowPooled_OnlyABackgroundSpawnSparesTheChatProcess(ModelResidencyIntent intent, int victimIndex)
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var ttl = TimeSpan.FromMinutes(15);
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 2, ttl), timeProvider: time);
+
+        // chat-a idles past its TTL (rank 0); the embedding process stays in-window (rank 1).
+        await supervisor.EnsureRunningAsync("chat-a", ModelRole.Chat, CancellationToken.None);
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("embed-model", ModelRole.Embedding, CancellationToken.None);
+
+        await supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, intent, CancellationToken.None);
+
+        AssertEx.Equal(expected: 3, launcher.LaunchCount);
+        var handles = launcher.Handles.OrderBy(h => h.ProcessId).ToList();
+        AssertEx.True(handles[victimIndex].WasTreeKilled, $"a {intent} spawn evicts process {victimIndex}");
+        AssertEx.False(handles[1 - victimIndex].WasTreeKilled, $"a {intent} spawn evicts exactly one process");
+    }
+
+    // Chat model-a fills the only slot as a victim a user load would take: idle past its TTL, or in-window but transient.
+    private static async Task FillWithYieldingChatProcessAsync(LlamaServerProcessSupervisor supervisor, AdvanceableTimeProvider time, TimeSpan ttl, bool transient)
+    {
+        if (transient)
+        {
+            await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, ModelResidencyIntent.Transient, CancellationToken.None);
+            return;
+        }
+
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+    }
+
+    [Test]
     public async Task EnsureRunning_CapFull_InWindowPooledButLeased_IsNotEvicted_UntilLeaseReleases()
     {
         var launcher = new FakeProcessLauncher();
@@ -311,6 +387,129 @@ public sealed class SupervisorEvictionTests
         AssertEx.Equal("model-b", supervisor.ListRunningProcesses().Single().ModelName);
     }
 
+    [Test]
+    public async Task MemoryEviction_TakesTheLeastRecentlyUsedIdleChat_EvenInsideItsIdleWindow()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var admission = new EvictingChatAdmission("chat-c");
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: CapOf(cap: 5, TimeSpan.FromMinutes(15)),
+            timeProvider: time,
+            pooledLaunchAdmission: admission);
+
+        await ServeOneTurnAsync(supervisor, "chat-a");
+        time.Advance(TimeSpan.FromMinutes(1));
+        await ServeOneTurnAsync(supervisor, "chat-b");
+        time.Advance(TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("embed-model", ModelRole.Embedding, CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(1));
+
+        // Every resident is well inside the 15 min window, so neither the idle reaper nor cap eviction would take any of them.
+        await supervisor.EnsureRunningAsync("chat-c", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(new IdleChatEvictionResult("'chat-a' (Chat)", BusyModel: null), admission.Results.Single());
+        var handles = launcher.Handles.OrderBy(static handle => handle.ProcessId).ToList();
+        AssertEx.True(handles[0].WasTreeKilled, "The least recently used idle chat process is unloaded for a chat load that does not fit.");
+        AssertEx.False(handles[1].WasTreeKilled, "Only one process is unloaded per eviction call.");
+        AssertEx.False(handles[2].WasTreeKilled, "The node's embedder is never unloaded for memory.");
+        AssertEx.Null(supervisor.GetRegisteredProcess("chat-a", ModelRole.Chat));
+        AssertEx.Equal(expected: 4, launcher.LaunchCount);
+    }
+
+    [Test]
+    public async Task MemoryEviction_NeverTakesALeasedProtectedOrPooledProcess()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var admission = new EvictingChatAdmission("chat-c")
+        {
+            Protected = ["KEEP-WARM"]
+        };
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: CapOf(cap: 6, TimeSpan.FromMinutes(15)),
+            timeProvider: time,
+            pooledLaunchAdmission: admission);
+
+        await supervisor.EnsureRunningAsync("chat-a", ModelRole.Chat, CancellationToken.None);
+        using var lease = AssertEx.NotNull(supervisor.TryAcquireInferenceLease("chat-a", ModelRole.Chat).Lease);
+        await ServeOneTurnAsync(supervisor, "keep-warm");
+        await supervisor.EnsureRunningAsync("embed-model", ModelRole.Embedding, CancellationToken.None);
+        await supervisor.EnsureRunningAsync("rerank-model", ModelRole.Reranker, CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(1));
+
+        await supervisor.EnsureRunningAsync("chat-c", ModelRole.Chat, CancellationToken.None);
+
+        // Only the leased chat is reported busy, so the hook can wait for it; the protected and pooled processes are not candidates at all.
+        AssertEx.Equal(new IdleChatEvictionResult(EvictedModel: null, "'chat-a' (Chat)"), admission.Results.Single());
+        AssertEx.Empty(launcher.Handles.Where(static handle => handle.WasTreeKilled));
+    }
+
+    [Test]
+    public async Task MemoryEviction_NeverTakesAProfilingProcess()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var admission = new EvictingChatAdmission("model-b");
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: CapOf(cap: 3, TimeSpan.FromMinutes(15)),
+            timeProvider: time,
+            pooledLaunchAdmission: admission);
+
+        var profilingHandleKilledDuringBody = true;
+        await supervisor.RunExclusiveProfilingAsync("model-a",
+            ModelRole.Chat,
+            ResolvedLaunchArguments.Explore(),
+            enableMetrics: false,
+            async (_, _) =>
+            {
+                time.Advance(TimeSpan.FromMinutes(1));
+                await supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, CancellationToken.None);
+                profilingHandleKilledDuringBody = launcher.Handles.OrderBy(static handle => handle.ProcessId).First().WasTreeKilled;
+                return true;
+            },
+            CancellationToken.None);
+
+        AssertEx.Equal(IdleChatEvictionResult.NothingEligible, admission.Results.Single(), "The process a benchmark is measuring is neither unloaded nor waited for.");
+        AssertEx.False(profilingHandleKilledDuringBody);
+    }
+
+    [Test]
+    public async Task MemoryEviction_SparesANeverLeasedChat_OnlyForTheGracePeriod()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var admission = new EvictingChatAdmission("chat-c", "chat-d");
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            options: CapOf(cap: 5, TimeSpan.FromMinutes(15)),
+            timeProvider: time,
+            pooledLaunchAdmission: admission);
+
+        // chat-b is ready, but the conversation that cold-started it has not taken its lease yet.
+        await supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, CancellationToken.None);
+        time.Advance(TimeSpan.FromSeconds(10));
+
+        await supervisor.EnsureRunningAsync("chat-c", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(IdleChatEvictionResult.NothingEligible, admission.Results.Single(), "A load must neither take nor wait for a model another conversation is about to use.");
+        var chatB = launcher.Handles.OrderBy(static handle => handle.ProcessId).First();
+        AssertEx.False(chatB.WasTreeKilled);
+
+        // Never leased past the grace period (a warm-only load, say from the model picker): an ordinary idle victim.
+        time.Advance(TimeSpan.FromSeconds(30));
+        await supervisor.EnsureRunningAsync("chat-d", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal("'chat-b' (Chat)", admission.Results[1].EvictedModel);
+        AssertEx.True(chatB.WasTreeKilled, "The grace period bounds the protection; it must not last until the idle TTL.");
+    }
+
+    /// <summary>Loads a chat model and serves one request on it, the way a turn does: ensure, lease, release.</summary>
+    private static async Task ServeOneTurnAsync(LlamaServerProcessSupervisor supervisor, string modelName)
+    {
+        await supervisor.EnsureRunningAsync(modelName, ModelRole.Chat, CancellationToken.None);
+        AssertEx.NotNull(supervisor.TryAcquireInferenceLease(modelName, ModelRole.Chat).Lease).Dispose();
+    }
+
     private static LlamaServerSupervisorOptions CapOf(int cap, TimeSpan ttl)
     {
         return new LlamaServerSupervisorOptions
@@ -319,5 +518,36 @@ public sealed class SupervisorEvictionTests
             IdleTimeToLive = ttl,
             MaxRestartAttempts = 3
         };
+    }
+
+    /// <summary>A chat admission that, for one model, asks the supervisor to unload one idle chat process and records what it took.</summary>
+    private sealed class EvictingChatAdmission : ILlamaServerPooledLaunchAdmission
+    {
+        private readonly HashSet<string> _evictFor;
+
+        public EvictingChatAdmission(params string[] evictFor)
+        {
+            _evictFor = new HashSet<string>(evictFor, StringComparer.Ordinal);
+        }
+
+        public IReadOnlyCollection<string> Protected { get; init; } = [];
+
+        public List<IdleChatEvictionResult> Results { get; } = [];
+
+        public Task<IDisposable?> AdmitAsync(string modelName, ModelRole role, CancellationToken ct) =>
+            Task.FromResult<IDisposable?>(null);
+
+        public async Task<IDisposable?> AdmitChatAsync(string modelName,
+            bool mayUnloadIdleModels,
+            Func<IReadOnlyCollection<string>, CancellationToken, Task<IdleChatEvictionResult>> evictIdleModel,
+            CancellationToken ct)
+        {
+            if (_evictFor.Contains(modelName))
+            {
+                Results.Add(await evictIdleModel(Protected, ct));
+            }
+
+            return null;
+        }
     }
 }

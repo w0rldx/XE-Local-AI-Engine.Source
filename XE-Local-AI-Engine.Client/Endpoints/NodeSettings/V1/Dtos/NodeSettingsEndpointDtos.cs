@@ -958,25 +958,25 @@ public sealed record SaveNodeSettingsRequest
     /// <summary>Ceiling on the search_knowledge_base hit count. Applies to the next call.</summary>
     public int? KnowledgeSearchMaxResults { get; init; }
 
-    /// <summary>llama.cpp thinking budget for effort minimal, in tokens. Applies to the next turn.</summary>
+    /// <summary>llama.cpp thinking budget for effort minimal, in tokens; -1 resets to the default. Applies to the next turn.</summary>
     public int? ReasoningBudgetMinimalTokens { get; init; }
 
-    /// <summary>llama.cpp thinking budget for effort low, in tokens. Applies to the next turn.</summary>
+    /// <summary>llama.cpp thinking budget for effort low, in tokens; -1 resets to the default. Applies to the next turn.</summary>
     public int? ReasoningBudgetLowTokens { get; init; }
 
-    /// <summary>llama.cpp thinking budget for effort medium, in tokens. Applies to the next turn.</summary>
+    /// <summary>llama.cpp thinking budget for effort medium, in tokens; -1 resets to the default. Applies to the next turn.</summary>
     public int? ReasoningBudgetMediumTokens { get; init; }
 
-    /// <summary>llama.cpp thinking budget for efforts high and xhigh, in tokens. Applies to the next turn.</summary>
+    /// <summary>llama.cpp thinking budget for efforts high and xhigh, in tokens; -1 resets to the default. Applies to the next turn.</summary>
     public int? ReasoningBudgetHighTokens { get; init; }
 
-    /// <summary>Whose budget a turn that names no effort gets: minimal, low, medium or high. Applies to the next turn.</summary>
+    /// <summary>Whose budget a turn that names no effort gets: minimal, low, medium or high; empty resets to the default. Applies to the next turn.</summary>
     public string? DefaultReasoningEffort { get; init; }
 
-    /// <summary>Chat output-cap variant: cap, notice or off. Applies to the next turn.</summary>
+    /// <summary>Chat output-cap variant: cap, notice or off; empty resets to the default. Applies to the next turn.</summary>
     public string? ChatOutputCapMode { get; init; }
 
-    /// <summary>Ceiling on the chat output cap (half the launched window), in tokens. Applies to the next turn.</summary>
+    /// <summary>Ceiling on the chat output cap (half the launched window), in tokens; -1 resets to the default. Applies to the next turn.</summary>
     public int? ChatOutputCapMaxTokens { get; init; }
 
     /// <summary>Parallel range connections per large model download. Applies after a node restart.</summary>

@@ -172,7 +172,13 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
             return false;
         }
 
-        committed = CommitAdjustedAllocation(candidate);
+        // An admission down-tier is NOT cached: it reflects the residents of that moment, and the admission carries its window into the launch on its own, so
+        // the next spawn after they leave tiers back up. Only an out-of-memory down-tier is sticky, and an admission never claims more than it allows.
+        if (_adjustedAllocations.TryGetValue(candidate.CacheKey, out var adjusted) && adjusted.ProcessContextTokens < candidate.ProcessContextTokens)
+        {
+            committed = adjusted;
+        }
+
         return true;
     }
 

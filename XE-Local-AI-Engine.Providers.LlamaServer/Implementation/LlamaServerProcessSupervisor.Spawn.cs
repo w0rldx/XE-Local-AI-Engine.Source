@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -23,6 +24,7 @@ public sealed partial class LlamaServerProcessSupervisor
     /// </summary>
     private async Task<RunningProcess> SpawnWithRestartAsync(ProcessKey key,
         ProcessLaunchAdmission? admission,
+        ModelResidencyIntent intent,
         CancellationToken ct)
     {
         Exception? lastError = null;
@@ -36,7 +38,7 @@ public sealed partial class LlamaServerProcessSupervisor
 
             try
             {
-                return await SpawnOnceAsync(key, admission, ct).ConfigureAwait(false);
+                return await SpawnOnceAsync(key, admission, intent, ct).ConfigureAwait(false);
             }
             catch (LlamaRuntimeException ex) when (ex.Data.Contains(NonRetryableMarker))
             {
@@ -94,6 +96,7 @@ public sealed partial class LlamaServerProcessSupervisor
     /// </summary>
     private Task<RunningProcess> SpawnOnceAsync(ProcessKey key,
         ProcessLaunchAdmission? admission,
+        ModelResidencyIntent intent,
         CancellationToken ct)
     {
         // The resolver is awaited inside the core, after variant selection and before admission, so a slow profile read never stalls admission for other keys.
@@ -105,7 +108,8 @@ public sealed partial class LlamaServerProcessSupervisor
             ensureMetrics: false,
             applyLaunchPolicy: true,
             admission,
-            ct);
+            ct,
+            intent: intent);
     }
 
     /// <summary>
@@ -129,7 +133,8 @@ public sealed partial class LlamaServerProcessSupervisor
         ProcessLaunchAdmission? admission,
         CancellationToken ct,
         LlamaServerBenchmarkLaunchPolicy? benchmarkPolicy = null,
-        bool profilingOwned = false)
+        bool profilingOwned = false,
+        ModelResidencyIntent intent = ModelResidencyIntent.Interactive)
     {
         var modelFilePath = await _modelStore.ResolveModelFilePathAsync(key.ModelName, ct).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(modelFilePath))
@@ -261,7 +266,7 @@ public sealed partial class LlamaServerProcessSupervisor
         {
             var candidate = planCandidates[attempt];
             var isSafeRetry = candidate.AttemptKind == LlamaServerLoadAttemptKind.SafeRetry;
-            var port = await _reaper.AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
+            var port = await _reaper.AdmitAndAllocatePortAsync(intent, ct).ConfigureAwait(false);
 
             IProcessTreeHandle? handle = null;
             long? readinessStartedTimestamp = null;
@@ -475,6 +480,7 @@ public sealed partial class LlamaServerProcessSupervisor
                     LoadObservation = loadObservation,
                     LaunchReceipt = launchReceipt,
                     IsProfilingOwned = profilingOwned,
+                    AwaitingFirstLease = true,
 
                     // The spawn's in-flight record is still registered here; it carries the mark past a transient caller that cancelled its wait.
                     IsTransient = !profilingOwned && _inflightSpawns.TryGetValue(key, out var inflight) && inflight.IsTransient

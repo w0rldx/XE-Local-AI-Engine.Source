@@ -156,15 +156,17 @@ but only when the turn would fit with no tools at all; otherwise the generic con
 tool message replaces the generic one whenever the hard stop would have passed without the tools. A package with
 `DisableToolRelevanceFilter` is not narrowed. The orchestration path is not fitted.
 
-**Known limit at a 4,096 window.** The reserve covers one short tool round-trip and no more. Live on a 4B and a 3B
-model at 4,096, a turn with no tool or one tool call completes; a turn that needs several tool rounds, or calls
-`list_tools` and then a discovered tool, ends with the context-window error in a later round. A rule that kept half the
-free room for tool rounds was tried and reverted: the two pinned tools alone exceeded that half once the per-model token
-estimate had calibrated, so nearly every agent turn was refused at the fit (model-matrix round, 2026-10-04). On a
-node's first request for a model the first-round fit runs before that model's tool-template overhead is calibrated
-(about 200 tokens for Qwen3.5-0.8B), so the second round can exceed the window; on a calibrated node the offer can be
-refused at the fit instead. From 8,192
-the full Default Assistant offer is sent and multi-round turns run. Agent work with tools needs a window of 8,192 or more.
+**Known limit at a 4,096 window.** The input room is 2,457 tokens (the window less the estimate margin and the
+1,024-token output reserve), and the reserve covers one short tool round-trip. Tool definitions are counted in the
+single-line form the chat template renders, plus the model's measured tool-template preamble, or
+`TokenEstimatorCalibrationStore.DefaultToolTemplatePreambleTokens` until it is measured, so a calibrated and an
+uncalibrated node fit the same offer. Measured live at 4,096 (Qwen3.5-0.8B, Qwen3.5-4B, Granite 4.1-3B, three runs
+per cell, calibrated and not, 2026-10-05): a turn with one tool call and a turn with two chained tool calls complete
+on all three; `list_tools` followed by a discovered tool completes on Granite and ends with the context-window error
+on both Qwen models, whose round after the tool list is 41 to 65 estimated tokens over the room. The estimate ran
+about 370 tokens above the real prompt there. A rule that kept half the free room for tool rounds was tried and reverted: the two pinned tools alone
+exceeded that half, so nearly every agent turn was refused at the fit (model-matrix round, 2026-10-04). From 8,192
+the full Default Assistant offer is sent and multi-round turns run. Tool discovery needs a window of 8,192 or more.
 
 Rules the hop holds:
 
@@ -395,6 +397,14 @@ list MAF hands the raw `IChatClient` after appending inner tool results. Its pol
    function-call/result content is its own singleton unit, so plain history trims exactly as before,
    and when any member of a unit is protected (system, recent-keep, or last) the whole unit is kept and
    trimming continues with older units.
+4. Then **strip superseded plain reasoning**, oldest first, from assistant messages outside the in-flight round
+   (the last message's tool-call unit). Only reasoning with neither a provider raw representation nor protected
+   data is strippable: that is what the Chat Completions (llama-server, OpenAI-compatible, Azure) and Ollama
+   adapters produce. Reasoning a Responses provider returned (Codex: a raw reasoning item, or encrypted protected
+   data once streaming updates are coalesced) is never stripped from any round, because the stateless tool loop
+   replays it before every retained function call. A message is dropped only when everything it held was
+   strippable reasoning; a mixed message loses only its plain parts. On the llama-server path reasoning is not
+   sent at all, so there the pass only removes text that was counted and never transmitted.
 
 Units are built with union-find over shared `CallId`s, so a multi-call assistant turn or a tool message
 carrying results for several calls transitively merges their components; the higher-index root is

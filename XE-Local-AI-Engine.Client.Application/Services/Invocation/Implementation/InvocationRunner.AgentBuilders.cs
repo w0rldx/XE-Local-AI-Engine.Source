@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 public sealed partial class InvocationRunner
@@ -25,10 +26,11 @@ public sealed partial class InvocationRunner
         string resolvedModel,
         int? turnEffectiveContextTokens,
         StreamTransport transport,
+        ChatOutputCap outputCap,
+        ReasoningBudgets reasoningBudgets,
         CancellationToken invocationToken)
     {
         var participants = new List<OrchestrationParticipant>(spec.Participants.Count);
-        var reasoningBudgets = await _runtimeSettings.GetReasoningBudgetsAsync(invocationToken);
         foreach (var participant in spec.Participants)
         {
             var participantResolution = await ResolveModelAsync(participant.ModelId ?? resolvedModel, invocationToken);
@@ -41,7 +43,7 @@ public sealed partial class InvocationRunner
 
             // Resolve THIS participant's launched effective context window so its inner provider-round budgeter
             // sizes against it, not the shared configured default.
-            var participantContextTokens = await ResolveParticipantContextTokensAsync(participantResolution.Model,
+            var participantWindow = await ResolveParticipantContextTokensAsync(participantResolution.Model,
                 resolvedModel,
                 turnEffectiveContextTokens,
                 package.InvocationId,
@@ -61,8 +63,13 @@ public sealed partial class InvocationRunner
                 // Per participant alongside SupportsThinking: a model whose template renders no reasoning end marker
                 // must not be handed a budget llama.cpp silently ignores, while an enforcing pin keeps its cap.
                 ReasoningBudgetEnforceable = participant.ReasoningBudgetEnforceable,
-                EffectiveContextTokens = participantContextTokens,
+                EffectiveContextTokens = participantWindow.ContextTokens,
                 ReasoningBudgets = reasoningBudgets,
+                // Participants can run different models, so each is capped against ITS window, not the turn's; a local model
+                // not loaded yet takes the ceiling, since nothing recomputes the cap after its deferred load.
+                DefaultMaxOutputTokens = participantWindow.UnlaunchedLocalModel
+                    ? outputCap.TokensForUnlaunchedLocalModel()
+                    : outputCap.TokensFor(participantWindow.ContextTokens),
                 Tools = BuildParticipantTools(participant.Tools)
             });
         }
@@ -101,7 +108,7 @@ public sealed partial class InvocationRunner
     ///     that never triggers a load. Otherwise <see langword="null" />: participants are deliberately not pre-warmed
     ///     (VRAM and latency), so the inner budgeter keeps its default window until that participant launches.
     /// </remarks>
-    private async Task<int?> ResolveParticipantContextTokensAsync(string participantModel,
+    private async Task<ParticipantWindow> ResolveParticipantContextTokensAsync(string participantModel,
         string resolvedModel,
         int? turnEffectiveContextTokens,
         Guid invocationId,
@@ -109,17 +116,21 @@ public sealed partial class InvocationRunner
     {
         if (string.Equals(participantModel, resolvedModel, StringComparison.OrdinalIgnoreCase))
         {
-            return turnEffectiveContextTokens;
+            return new ParticipantWindow(turnEffectiveContextTokens, UnlaunchedLocalModel: false);
         }
 
         var provider = await _localRuntimeWarmer.ResolveWarmableProviderAsync(participantModel, invocationId, cancellationToken);
         if (provider is null)
         {
-            return null;
+            return new ParticipantWindow(ContextTokens: null, UnlaunchedLocalModel: false);
         }
 
-        return await _localRuntimeWarmer.ResolveEffectiveContextTokensAsync(provider, participantModel, invocationId, cancellationToken);
+        var contextTokens = await _localRuntimeWarmer.ResolveEffectiveContextTokensAsync(provider, participantModel, invocationId, cancellationToken);
+        return new ParticipantWindow(contextTokens, UnlaunchedLocalModel: contextTokens is null);
     }
+
+    /// <summary>A participant's launched window, and whether it is unknown because its local llama.cpp model is not loaded yet.</summary>
+    private readonly record struct ParticipantWindow(int? ContextTokens, bool UnlaunchedLocalModel);
 
     private static IReadOnlyList<AITool> BuildParticipantTools(IReadOnlyList<AllowedToolDto> tools)
     {
@@ -787,7 +798,7 @@ public sealed partial class InvocationRunner
             return [];
         }
 
-        return [.. allowedTools.Select(static tool => string.Concat(tool.Name, "\n", tool.Description, "\n", tool.ParameterSchema))];
+        return [.. allowedTools.Select(static tool => string.Concat(tool.Name, "\n", tool.Description, "\n", XE_Local_AI_Engine.Providers.Abstractions.Tokenization.TokenEstimatorCalibrationStore.RenderToolSchema(tool.ParameterSchema)))];
     }
 
     private static IReadOnlyList<AITool> BuildInvocationTools(RuntimePackage package)

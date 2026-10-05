@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -148,7 +149,7 @@ public sealed class KeepModelWarmBackgroundService : BackgroundService
             _lastWarmAttemptTimestamp = now;
 
             var provider = await _providerResolver.ResolveProviderForModelAsync(modelName, cancellationToken);
-            await provider.WarmModelAsync(modelName, cancellationToken);
+            await provider.WarmModelAsync(modelName, ModelResidencyIntent.Background, cancellationToken);
             ResetFailureLogging();
             _logger.LogDebug("Keep model warm refreshed model {ModelName} through provider {ProviderName}.", modelName, provider.ProviderName);
         }

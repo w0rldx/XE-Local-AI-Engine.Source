@@ -345,7 +345,7 @@ operator decision 4, model-matrix F2, where a 0.8B repeated `000…` until the 6
 **answer**, and the thinking budget bounds the thinking, so they add: under `cap` (shipped) the limit sent is the turn's
 applied reasoning budget (the rung after the window clamp, zero with thinking off) plus the answer cap, half the launched
 window at most `chatOutputCapMaxTokens` (shipped 16384), never more than the window
-(`InvocationAgentFactory.ApplyDefaultOutputCap`). A 65k-window `high` turn therefore gets 24576 + 16384 = 40960, a `low`
+(`ReasoningOptionsResolver.ApplyDefaultOutputCap`). A 65k-window `high` turn therefore gets 24576 + 16384 = 40960, a `low`
 turn 2048 + 16384 = 18432, thinking off 16384; "16384" is never the total. `notice` and `off` send no limit. An explicit
 per-request `maxOutputTokens` always wins unchanged (and still halves the thinking budget in `ClampToGenerationRoom`), and
 a turn whose window is unknown (cloud, Ollama) is not capped. The default limit carries
@@ -353,7 +353,15 @@ a turn whose window is unknown (cloud, Ollama) is not capped. The default limit 
 and `ProviderCallBudgetChatClient` keeps reserving only its floor: reserving it would have halved what the history may use.
 When an answer that produced text ends on `finish_reason: length` (the cap or the window), the turn carries an
 `OutputLimitReached` notice, "The answer stopped at the length limit before the model finished.", unless the variant
-is `off`. The SPA localizes that sentence. The orchestration path is not capped.
+is `off`. The SPA localizes that sentence. An orchestration participant is capped the same way against the window of
+its own model (`OrchestrationAgentFactory.BuildAgentAsync`); one on another local llama.cpp model that is not loaded yet
+has no window to read, and nothing recomputes the cap after its deferred load, so under `cap` it takes the ceiling
+`chatOutputCapMaxTokens` (`ChatOutputCap.TokensForUnlaunchedLocalModel`), while a cloud or external participant stays
+uncapped. An orchestration turn carries the notice when the last
+participant round that produced answer text ended on `length`; a later tool-call-only round (a handoff) does not hide
+it, and an earlier participant's cut-off does not outlive a final participant that finished normally. A final answer
+that consists only of `<tool_call>` blocks keeps its text and carries an `EmptyAnswer` notice saying the call was
+written as text and did not run.
 
 **llama-server honours that field only for templates it can find a thinking END tag for.** Its gate writes the
 budget onto the sampler only when the chat-template classification produced a non-empty think-end-tag set —

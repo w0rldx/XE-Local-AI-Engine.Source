@@ -87,4 +87,10 @@ public sealed record OrchestrationParticipant
 
     /// <summary>The node's thinking budget per effort level; null takes <see cref="ReasoningBudgets.Default" />.</summary>
     public ReasoningBudgets? ReasoningBudgets { get; init; }
+
+    /// <summary>
+    ///     The node's answer cap for THIS participant's launched window (model-matrix F2), on top of its thinking budget; null leaves
+    ///     the participant uncapped. Applied at construction exactly like the single-agent turn's, marker included.
+    /// </summary>
+    public int? DefaultMaxOutputTokens { get; init; }
 }

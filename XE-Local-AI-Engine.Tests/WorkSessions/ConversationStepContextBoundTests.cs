@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -775,6 +776,7 @@ public sealed class ConversationStepContextBoundTests
             string? requestedModel,
             int? recentMessagesToKeepVerbatim,
             bool distill = true,
+            ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive,
             CancellationToken cancellationToken = default)
         {
             DistillRequested |= distill;

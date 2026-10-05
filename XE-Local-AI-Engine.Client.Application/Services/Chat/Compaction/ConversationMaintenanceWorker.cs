@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
@@ -168,8 +169,10 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
             return;
         }
 
-        // Folds on the node's default local model, like the work-session bound: the fold is not the chat's own work.
-        var result = await services.GetRequiredService<IConversationCompactionService>().CompactAsync(job.ConversationId, requestedModel: null, cancellationToken);
+        // Folds on the node's default local model, like the work-session bound: the fold is not the chat's own work, so its load never unloads the chat's model.
+        var result = await services.GetRequiredService<IConversationCompactionService>()
+                                   .CompactAsync(job.ConversationId, requestedModel: null, recentMessagesToKeepVerbatim: null, residencyIntent: ModelResidencyIntent.Background,
+                                       cancellationToken: cancellationToken);
         _logger.LogInformation(
             "Conversation {ConversationId} projected ~{Projected} replayed token(s) against an auto-compact threshold of {Threshold}; automatic compaction reported {Outcome} after folding {Folded} message(s).",
             job.ConversationId,
@@ -216,7 +219,7 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
         }
 
         var outcome = await services.GetRequiredService<IConversationStateDistillationService>()
-                                    .DistillPendingAsync(job.ConversationId, requestedModel: null, upToAnchorSequence: null, cancellationToken);
+                                    .DistillPendingAsync(job.ConversationId, requestedModel: null, upToAnchorSequence: null, ModelResidencyIntent.Background, cancellationToken);
         _logger.LogInformation(
             "Conversation {ConversationId} had {Pending} undistilled message(s) (~{Tokens} token(s)); distillation reported {Status} after {Calls} call(s), state now covers sequence {CoversTo}.",
             job.ConversationId,

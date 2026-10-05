@@ -128,7 +128,7 @@ public sealed class SupervisorTransientResidencyTests
         await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, ModelResidencyIntent.Transient, CancellationToken.None);
 
         // KeepModelWarmBackgroundService warms through this provider call.
-        await provider.WarmModelAsync("model-a", CancellationToken.None);
+        await provider.WarmModelAsync("model-a", ModelResidencyIntent.Background, CancellationToken.None);
 
         await AssertKeepsNormalTtlAsync(supervisor, launcher, time);
     }
@@ -146,6 +146,37 @@ public sealed class SupervisorTransientResidencyTests
         var chat = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
         probe.Release();
         await Task.WhenAll(draft, chat);
+
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
+        await AssertKeepsNormalTtlAsync(supervisor, launcher, time);
+    }
+
+    [Test]
+    public async Task BackgroundEnsureReusingATransientProcess_ClearsTheMark()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        await using var supervisor = SupervisorFactory.Create(launcher, options: Options(cap: 3), timeProvider: time);
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, ModelResidencyIntent.Transient, CancellationToken.None);
+
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, ModelResidencyIntent.Background, CancellationToken.None);
+
+        await AssertKeepsNormalTtlAsync(supervisor, launcher, time);
+    }
+
+    [Test]
+    public async Task BackgroundCallerJoiningATransientSpawn_LeavesAnInteractiveProcess()
+    {
+        var launcher = new FakeProcessLauncher();
+        var probe = new GatedHealthProbe();
+        var time = new AdvanceableTimeProvider();
+        await using var supervisor = SupervisorFactory.Create(launcher, probe, options: Options(cap: 3), timeProvider: time);
+
+        var draft = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, ModelResidencyIntent.Transient, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => probe.Waiting == 1, TimeSpan.FromSeconds(5), "The transient spawn never reached readiness.");
+        var background = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, ModelResidencyIntent.Background, CancellationToken.None);
+        probe.Release();
+        await Task.WhenAll(draft, background);
 
         AssertEx.Equal(expected: 1, launcher.LaunchCount);
         await AssertKeepsNormalTtlAsync(supervisor, launcher, time);
@@ -227,6 +258,7 @@ public sealed class SupervisorTransientResidencyTests
     [Test]
     [Arguments(ModelResidencyIntent.Interactive)]
     [Arguments(ModelResidencyIntent.Transient)]
+    [Arguments(ModelResidencyIntent.Background)]
     public async Task LeaseOutlastingTheTtl_IdleTimeRunsFromTheRelease_AndTheMarkIsUnchanged(ModelResidencyIntent intent)
     {
         var launcher = new FakeProcessLauncher();

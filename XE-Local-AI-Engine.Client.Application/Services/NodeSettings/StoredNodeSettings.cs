@@ -271,6 +271,12 @@ public sealed partial record StoredNodeSettings
     /// <summary>Upper bound for each per-effort reasoning budget; the launched window narrows it further per turn.</summary>
     public const int MaxReasoningBudgetTokens = 131_072;
 
+    /// <summary>
+    ///     The request-only sentinel that resets a reasoning budget or <see cref="ChatOutputCapMaxTokens" /> to its
+    ///     shipped default (stored <see langword="null" />), because a <see langword="null" /> request member means "keep".
+    /// </summary>
+    public const int TokenSettingUnset = -1;
+
     /// <summary>Chat output-cap variant: cap the answer and say when it stopped at length (the shipped default).</summary>
     public const string ChatOutputCapModeCap = "cap";
 

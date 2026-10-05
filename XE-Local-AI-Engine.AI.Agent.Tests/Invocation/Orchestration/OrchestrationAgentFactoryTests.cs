@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -467,6 +468,121 @@ public sealed class OrchestrationAgentFactoryTests
         AssertEx.False(specialistRequest!.HasNumCtxKey, "a participant with an unknown window must fall back — no num_ctx override is sent");
     }
 
+    [Test]
+    public async Task CreateAsync_ParticipantWithADefaultOutputCap_BoundsItsRequestLikeASingleAgentTurn()
+    {
+        // A capped participant's request carries its thinking budget (clamped to half its window) plus the cap, and the default-cap
+        // marker so the provider-round budgeter does not reserve the cap from the input; an uncapped peer carries neither.
+        using var fake = new RecordingHandoffChatClient(SpecialistAnswer);
+        var factory = CreateFactory(fake);
+
+        var triage = Triage() with
+        {
+            ReasoningEffort = "high",
+            SupportsThinking = true,
+            EffectiveContextTokens = 4096,
+            DefaultMaxOutputTokens = 1000
+        };
+        var specialist = Specialist() with
+        {
+            DefaultMaxOutputTokens = null
+        };
+        var definition = new OrchestrationAgentDefinition
+        {
+            Triage = triage,
+            Participants = [triage, specialist],
+            Edges =
+            [
+                new OrchestrationEdge
+                {
+                    FromKey = "triage",
+                    ToKey = "specialist",
+                    Reason = "Route domain questions to the specialist."
+                }
+            ]
+        };
+
+        await using var session = await factory.CreateAsync(definition, [new ChatMessage(ChatRole.User, "Did the database migration complete?")]);
+        await foreach (var _ in session.WatchAsync())
+        {
+            // Drain the run to completion so both participants have issued their requests.
+        }
+
+        var triageRequest = AssertEx.NotNull(fake.RequestFor(TriageInstructions));
+        var specialistRequest = AssertEx.NotNull(fake.RequestFor(SpecialistInstructions));
+
+        // "high" is 24,576 on the default ladder, clamped to half the 4,096 window, plus the 1,000-token cap.
+        AssertEx.Equal<int?>(3048, triageRequest.MaxOutputTokens);
+        AssertEx.True(triageRequest.HasDefaultOutputCapMarker, "the node-chosen limit must carry its marker");
+        AssertEx.Null(specialistRequest.MaxOutputTokens, "an uncapped participant sends no limit");
+        AssertEx.False(specialistRequest.HasDefaultOutputCapMarker);
+    }
+
+    [Test]
+    public async Task CreateAsync_ParticipantWithACapAndNoWindow_SendsItsBudgetPlusTheCapWithTheMarker()
+    {
+        // A local participant not loaded yet is capped at the ceiling with no num_ctx: nothing clamps the budget, and the marker
+        // keeps the provider-round budgeter from reserving the cap and the llama.cpp client from halving the budget.
+        using var fake = new RecordingHandoffChatClient(SpecialistAnswer);
+        var factory = CreateFactory(fake);
+
+        var triage = Triage();
+        var specialist = Specialist() with
+        {
+            ReasoningEffort = "low",
+            SupportsThinking = true,
+            DefaultMaxOutputTokens = 16_384
+        };
+        var definition = new OrchestrationAgentDefinition
+        {
+            Triage = triage,
+            Participants = [triage, specialist],
+            Edges =
+            [
+                new OrchestrationEdge
+                {
+                    FromKey = "triage",
+                    ToKey = "specialist",
+                    Reason = "Route domain questions to the specialist."
+                }
+            ]
+        };
+
+        await using var session = await factory.CreateAsync(definition, [new ChatMessage(ChatRole.User, "Did the database migration complete?")]);
+        await foreach (var _ in session.WatchAsync())
+        {
+            // Drain the run to completion so both participants have issued their requests.
+        }
+
+        var specialistRequest = AssertEx.NotNull(fake.RequestFor(SpecialistInstructions));
+
+        // "low" is 2,048 on the default ladder, unclamped without a window, plus the 16,384-token ceiling.
+        AssertEx.False(specialistRequest.HasNumCtxKey);
+        AssertEx.Equal<int?>(2_048 + 16_384, specialistRequest.MaxOutputTokens);
+        AssertEx.True(specialistRequest.HasDefaultOutputCapMarker, "the node-chosen limit must carry its marker");
+    }
+
+    [Test]
+    public async Task WatchAsync_CarriesEachParticipantsFinishReasonOnTheStream()
+    {
+        // ChatClientAgent seeds AgentResponseUpdate.FinishReason from the provider's chunk and the handoff executor yields it
+        // unchanged, so the runner can tell an answer that stopped at the length limit from one that finished.
+        using var fake = new RecordingHandoffChatClient(SpecialistAnswer, ChatFinishReason.Length);
+        var factory = CreateFactory(fake);
+
+        await using var session = await factory.CreateAsync(BuildHandoffDefinition(), [new ChatMessage(ChatRole.User, "Did the database migration complete?")]);
+        var finishes = new List<string>();
+        await foreach (var update in session.WatchAsync())
+        {
+            if (update.FinishReason is { } finishReason)
+            {
+                finishes.Add($"{update.ParticipantKey}:{finishReason}");
+            }
+        }
+
+        AssertEx.Equal("triage:tool_calls,specialist:length", string.Join(",", finishes));
+    }
+
     private static async Task RunApprovalAcrossHandoff(bool approve, bool decorateClient)
     {
         const string ownToolName = "lookup_customer";
@@ -753,10 +869,12 @@ public sealed class OrchestrationAgentFactoryTests
     {
         private readonly List<RecordedRequest> _requests = [];
         private readonly string _specialistAnswer;
+        private readonly ChatFinishReason? _specialistFinishReason;
 
-        public RecordingHandoffChatClient(string specialistAnswer)
+        public RecordingHandoffChatClient(string specialistAnswer, ChatFinishReason? specialistFinishReason = null)
         {
             _specialistAnswer = specialistAnswer;
+            _specialistFinishReason = specialistFinishReason;
         }
 
         public RecordedRequest? RequestFor(string instructions)
@@ -772,7 +890,7 @@ public sealed class OrchestrationAgentFactoryTests
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            return ToUpdates(Build(messages.ToList(), options), cancellationToken);
+            return WithFinishReason(Build(messages.ToList(), options), cancellationToken);
         }
 
         public object? GetService(Type serviceType, object? serviceKey = null)
@@ -783,6 +901,24 @@ public sealed class OrchestrationAgentFactoryTests
         public void Dispose()
         {
             GC.SuppressFinalize(this);
+        }
+
+        // A provider reports why a round ended on its own last chunk, after the content.
+        private static async IAsyncEnumerable<ChatResponseUpdate> WithFinishReason(ChatResponse response,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await foreach (var update in ToUpdates(response, cancellationToken))
+            {
+                yield return update;
+            }
+
+            if (response.FinishReason is { } finishReason)
+            {
+                yield return new ChatResponseUpdate(ChatRole.Assistant, contents: [])
+                {
+                    FinishReason = finishReason
+                };
+            }
         }
 
         private ChatResponse Build(List<ChatMessage> list, ChatOptions? options)
@@ -798,14 +934,20 @@ public sealed class OrchestrationAgentFactoryTests
 
             if (isSpecialist || handoffTool is null)
             {
-                return new ChatResponse(new ChatMessage(ChatRole.Assistant, _specialistAnswer));
+                return new ChatResponse(new ChatMessage(ChatRole.Assistant, _specialistAnswer))
+                {
+                    FinishReason = _specialistFinishReason
+                };
             }
 
             var call = new FunctionCallContent($"call-{handoffTool.Name}", handoffTool.Name, new Dictionary<string, object?>());
             return new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
             {
                 call
-            }));
+            }))
+            {
+                FinishReason = _specialistFinishReason is null ? null : ChatFinishReason.ToolCalls
+            };
         }
 
         private void Record(string? systemText, ChatOptions? options)
@@ -828,7 +970,9 @@ public sealed class OrchestrationAgentFactoryTests
                 Think = think,
                 CodexReasoningEffort = codexEffort,
                 HasNumCtxKey = hasNumCtxKey,
-                NumCtx = numCtx
+                NumCtx = numCtx,
+                MaxOutputTokens = options?.MaxOutputTokens,
+                HasDefaultOutputCapMarker = properties?.ContainsKey(InvocationAgentDefinition.DefaultOutputCapMarkerKey) ?? false
             });
         }
     }
@@ -849,6 +993,10 @@ public sealed class OrchestrationAgentFactoryTests
         public required bool HasNumCtxKey { get; init; }
 
         public required object? NumCtx { get; init; }
+
+        public required int? MaxOutputTokens { get; init; }
+
+        public required bool HasDefaultOutputCapMarker { get; init; }
     }
 
     /// <summary>

@@ -384,6 +384,9 @@ The README's "RC readiness status" section is the contract: **do not mark releas
 - a passing `scripts/run-gpu-smoke-local.sh` run on a GPU box — the only evidence that the GPU actually
   did the work rather than a silent CPU fallback; an exit 5 is an infrastructure abort in which nothing
   was judged, so it is not evidence either way and the run must be repeated,
+- a passing `scripts/run-model-matrix-local.sh --tier rc` run on a GPU box — the evidence that small, cross-family
+  and MoE models behave with default settings (thinking, output limits, tools, background jobs, the 4,096 window,
+  MoE placement); exit 5 and exit 75 are not evidence either way and the run must be repeated,
 - generated schema/sample-manifest validation, including a clean `openapi:check`,
 - pinned runtime binary and package checksums (llama.cpp release pins; see [Local Runtime & Providers](03-local-runtime-and-providers.md)),
 - the matching `v<version>` source tag on the exact packaged commit,

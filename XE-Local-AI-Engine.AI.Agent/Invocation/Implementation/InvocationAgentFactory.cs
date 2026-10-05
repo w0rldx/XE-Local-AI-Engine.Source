@@ -174,7 +174,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             }
         }
 
-        ApplyDefaultOutputCap(chatOptions, additionalProperties, definition.DefaultMaxOutputTokens);
+        ReasoningOptionsResolver.ApplyDefaultOutputCap(chatOptions, additionalProperties, definition.DefaultMaxOutputTokens);
 
         InvocationAgentContext context = new()
         {
@@ -256,33 +256,6 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             },
             loggerFactory,
             services));
-    }
-
-    /// <summary>
-    ///     The node's default limit (model-matrix F2), only where no explicit limit was sent: the applied reasoning budget plus
-    ///     the answer cap, so the cap bounds the answer and never shortens a thinking budget the operator configured.
-    /// </summary>
-    /// <remarks>
-    ///     The budget is the marker's value after the window clamp <c>ClampToGenerationRoom</c> applies (half the window), zero
-    ///     with thinking off; the sum never exceeds the window. The marker tells the llama.cpp client and the provider-round
-    ///     budgeter that this limit is the default one, so neither halves the budget against it nor reserves it from the input.
-    /// </remarks>
-    private static void ApplyDefaultOutputCap(ChatOptions chatOptions, AdditionalPropertiesDictionary additionalProperties, int? answerCap)
-    {
-        if (chatOptions.MaxOutputTokens is not null || answerCap is not { } cap || cap <= 0)
-        {
-            return;
-        }
-
-        int? window = additionalProperties.TryGetValue(SamplingOptionKeys.NumCtx, out var rawWindow) && rawWindow is int numCtx && numCtx > 0 ? numCtx : null;
-        var reasoning = additionalProperties.TryGetValue(LlamaReasoningBudgetMarkerKey, out var rawBudget) && rawBudget is int budget && budget > 0 ? budget : 0;
-        if (window is { } room)
-        {
-            reasoning = Math.Min(reasoning, Math.Max(room / 2, 1));
-        }
-
-        chatOptions.MaxOutputTokens = window is { } limit ? Math.Min(reasoning + cap, limit) : reasoning + cap;
-        additionalProperties[InvocationAgentDefinition.DefaultOutputCapMarkerKey] = true;
     }
 
     /// <summary>

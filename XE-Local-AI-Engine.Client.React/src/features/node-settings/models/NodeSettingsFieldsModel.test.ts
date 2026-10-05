@@ -12,6 +12,7 @@ import {
 	nodeSettingsDisplayScale,
 	nodeSettingsScaleOf,
 	restartGatedNodeSettingsFields,
+	shippedDefaults,
 	speculativeModeSelectValues,
 	summarizePendingChanges,
 	toNodeSettingsFieldBounds,
@@ -987,11 +988,16 @@ describe("curated tunables", () => {
 	it("sends the reasoning budgets and the unspecified-effort rung live, within the shared token range", () => {
 		const baseline = toNodeSettingsFieldsForm(undefined);
 		// Operator decision 3 (model-matrix 2026-10-04): these mirror ReasoningBudgets.Default in the backend.
-		expect(baseline.reasoningBudgetMinimalTokens).toBe(1024);
-		expect(baseline.reasoningBudgetLowTokens).toBe(2048);
-		expect(baseline.reasoningBudgetMediumTokens).toBe(8192);
-		expect(baseline.reasoningBudgetHighTokens).toBe(24576);
-		expect(baseline.defaultReasoningEffort).toBe("low");
+		expect(shippedDefaults).toMatchObject({
+			reasoningBudgetMinimalTokens: 1024,
+			reasoningBudgetLowTokens: 2048,
+			reasoningBudgetMediumTokens: 8192,
+			reasoningBudgetHighTokens: 24576,
+			defaultReasoningEffort: "low",
+		});
+		// Unset renders blank: the field shows the shipped default instead of claiming a stored value.
+		expect(baseline.reasoningBudgetMinimalTokens).toBe("");
+		expect(baseline.defaultReasoningEffort).toBe("");
 
 		const form = { ...baseline, reasoningBudgetMediumTokens: 4096, defaultReasoningEffort: "minimal" };
 		expect(buildNodeSettingsRequest(form, baseline, bounds, false)).toEqual({
@@ -1025,8 +1031,10 @@ describe("curated tunables", () => {
 	it("sends the chat output cap live, its ceiling within its own range", () => {
 		const baseline = toNodeSettingsFieldsForm(undefined);
 		// Operator decision 4 (model-matrix 2026-10-04): cap plus notice, at most 16384 tokens.
-		expect(baseline.chatOutputCapMode).toBe("cap");
-		expect(baseline.chatOutputCapMaxTokens).toBe(16384);
+		expect(shippedDefaults.chatOutputCapMode).toBe("cap");
+		expect(shippedDefaults.chatOutputCapMaxTokens).toBe(16384);
+		expect(baseline.chatOutputCapMode).toBe("");
+		expect(baseline.chatOutputCapMaxTokens).toBe("");
 
 		const form = { ...baseline, chatOutputCapMode: "notice", chatOutputCapMaxTokens: 8192 };
 		expect(buildNodeSettingsRequest(form, baseline, bounds, false)).toEqual({
@@ -1048,6 +1056,44 @@ describe("curated tunables", () => {
 		});
 		expect(restartGatedNodeSettingsFields.has("chatOutputCapMode")).toBe(false);
 		expect(restartGatedNodeSettingsFields.has("chatOutputCapMaxTokens")).toBe(false);
+	});
+
+	it("resets stored thinking budgets and output-cap fields to the default with the sentinels, and leaves unset ones alone", () => {
+		const stored = toNodeSettingsFieldsForm({
+			reasoningBudgetMinimalTokens: 512,
+			reasoningBudgetLowTokens: 1024,
+			reasoningBudgetMediumTokens: 4096,
+			reasoningBudgetHighTokens: 16384,
+			defaultReasoningEffort: "high",
+			chatOutputCapMode: "off",
+			chatOutputCapMaxTokens: 2048,
+		});
+		const reset = {
+			...stored,
+			reasoningBudgetMinimalTokens: "",
+			reasoningBudgetLowTokens: "",
+			reasoningBudgetMediumTokens: "",
+			reasoningBudgetHighTokens: "",
+			defaultReasoningEffort: "",
+			chatOutputCapMode: "",
+			chatOutputCapMaxTokens: "",
+		};
+
+		expect(buildNodeSettingsRequest(reset, stored, bounds, false)).toEqual({
+			body: {
+				reasoningBudgetMinimalTokens: -1,
+				reasoningBudgetLowTokens: -1,
+				reasoningBudgetMediumTokens: -1,
+				reasoningBudgetHighTokens: -1,
+				defaultReasoningEffort: "",
+				chatOutputCapMode: "",
+				chatOutputCapMaxTokens: -1,
+			},
+			errors: {},
+		});
+		// Already unset on both sides: nothing to send, and blank is not a range error.
+		const unset = toNodeSettingsFieldsForm({});
+		expect(buildNodeSettingsRequest(unset, unset, bounds, false)).toEqual({ body: {}, errors: {} });
 	});
 
 	it("takes the new bounds from the response, the knowledge counts sharing one range", () => {

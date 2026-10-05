@@ -388,10 +388,13 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector }
 							</Text>
 							<NumberInput
 								label={t("pages.nodeSettings.localChatRuntime.timeoutLabel", "Maximum message request timeout")}
-								description={t("pages.nodeSettings.localChatRuntime.timeoutRange", "Allowed range: {{min}}–{{max}} seconds.", {
+								description={`${t("pages.nodeSettings.localChatRuntime.timeoutRange", "Allowed range: {{min}}–{{max}} seconds.", {
 									min: minTimeout,
 									max: maxTimeout,
-								})}
+								})} ${t(
+									"pages.nodeSettings.localChatRuntime.outputCapHint",
+									"On slow hardware a long answer can reach this timeout before the answer length limit (Longest answer) stops it. Raise this timeout, or lower Longest answer.",
+								)}`}
 								suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
 								min={minTimeout}
 								max={maxTimeout}

@@ -516,7 +516,8 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
             trimmed = trimmed[2..];
         }
 
-        return prefix + trimmed;
+        // A search of one FILE emits an empty path ("./:line:text"): the confined path is the file itself, not its directory.
+        return trimmed.StartsWith(':') ? prefix.TrimEnd('/') + trimmed : prefix + trimmed;
     }
 
     private sealed record CoderWorkspaceAccess : IDisposable

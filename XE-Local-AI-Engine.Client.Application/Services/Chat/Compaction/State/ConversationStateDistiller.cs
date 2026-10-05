@@ -150,7 +150,8 @@ internal sealed class ConversationStateDistiller : IConversationStateDistiller
         using var chatClient = provider.CreateChatClient(new LocalModelSelection
         {
             ModelName = input.ModelName,
-            ProviderName = provider.ProviderName
+            ProviderName = provider.ProviderName,
+            ResidencyIntent = input.ResidencyIntent
         }).WithProviderTelemetry();
 
         var chatOptions = new ChatOptions

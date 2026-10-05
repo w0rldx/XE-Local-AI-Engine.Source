@@ -119,7 +119,8 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
         var selection = new LocalModelSelection
         {
             ModelName = input.ModelName,
-            ProviderName = provider.ProviderName
+            ProviderName = provider.ProviderName,
+            ResidencyIntent = input.ResidencyIntent
         };
 
         // IChatClient is IDisposable — dispose the per-run node-local client.
@@ -237,6 +238,12 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
             return null;
         }
 
+        if (IsInputEcho(text))
+        {
+            _logger.LogWarning("Conversation summarizer echoed its JSON input instead of a synopsis; aborting so coverage is not advanced past un-summarized messages.");
+            return null;
+        }
+
         var clamped = TruncateAtRuneBoundary(text, Math.Max(1, _options.MaxSummaryChars));
 
         // One line per fold: how close the synopsis came to the rendered ceiling, and - because only the summarizer
@@ -331,6 +338,39 @@ internal sealed class ConversationSummarizer : IConversationSummarizer
         }
 
         return best;
+    }
+
+    // A small model can hand the fold's JSON input back (seen on LFM2.5). The WHOLE output, optionally in one code fence, must parse
+    // as an object carrying one of the input's own keys; prose that merely quotes JSON never parses whole, so it is kept.
+    internal static bool IsInputEcho(string text)
+    {
+        var candidate = text.Trim();
+        // Only a fence around the WHOLE output is unwrapped: fenced JSON followed by prose is a synopsis that quotes, not an echo.
+        if (candidate.StartsWith("```", StringComparison.Ordinal) && candidate.EndsWith("```", StringComparison.Ordinal))
+        {
+            var bodyStart = candidate.IndexOf('\n', StringComparison.Ordinal);
+            var fenceEnd = candidate.Length - 3;
+            candidate = bodyStart > 0 && fenceEnd > bodyStart ? candidate[(bodyStart + 1)..fenceEnd].Trim() : candidate;
+        }
+
+        if (!candidate.StartsWith('{'))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(candidate);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.EnumerateObject().Any(static property =>
+                       property.Name.Equals(nameof(ConversationSummarizerInput.PriorSummary), StringComparison.OrdinalIgnoreCase)
+                       || property.Name.Equals(nameof(ConversationSummarizerInput.AlreadyCaptured), StringComparison.OrdinalIgnoreCase)
+                       || property.Name.Equals(nameof(ConversationSummarizerInput.Messages), StringComparison.OrdinalIgnoreCase));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     internal static string TruncateAtRuneBoundary(string value, int maximumChars)

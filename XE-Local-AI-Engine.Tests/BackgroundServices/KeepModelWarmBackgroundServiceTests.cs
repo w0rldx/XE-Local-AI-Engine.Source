@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -23,7 +24,7 @@ public sealed class KeepModelWarmBackgroundServiceTests
         await harness.Service.RunIterationAsync(CancellationToken.None);
 
         await harness.Resolver.DidNotReceiveWithAnyArgs().ResolveProviderForModelAsync(default!, default);
-        await harness.Provider.DidNotReceiveWithAnyArgs().WarmModelAsync(default!, default);
+        await harness.Provider.DidNotReceiveWithAnyArgs().WarmModelAsync(default!, default, default);
     }
 
     [Test]
@@ -34,7 +35,7 @@ public sealed class KeepModelWarmBackgroundServiceTests
         await harness.Service.RunIterationAsync(CancellationToken.None);
 
         await harness.Resolver.Received(1).ResolveProviderForModelAsync("model-a", Arg.Any<CancellationToken>());
-        await harness.Provider.Received(1).WarmModelAsync("model-a", Arg.Any<CancellationToken>());
+        await harness.Provider.Received(1).WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -47,7 +48,7 @@ public sealed class KeepModelWarmBackgroundServiceTests
         harness.Clock.Advance(TimeSpan.FromSeconds(60));
         await harness.Service.RunIterationAsync(CancellationToken.None);
 
-        await harness.Provider.Received(1).WarmModelAsync("model-a", Arg.Any<CancellationToken>());
+        await harness.Provider.Received(1).WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -59,8 +60,8 @@ public sealed class KeepModelWarmBackgroundServiceTests
         harness.ModelName = "model-b";
         await harness.Service.RunIterationAsync(CancellationToken.None);
 
-        await harness.Provider.Received(1).WarmModelAsync("model-a", Arg.Any<CancellationToken>());
-        await harness.Provider.Received(1).WarmModelAsync("model-b", Arg.Any<CancellationToken>());
+        await harness.Provider.Received(1).WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
+        await harness.Provider.Received(1).WarmModelAsync("model-b", ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -71,11 +72,11 @@ public sealed class KeepModelWarmBackgroundServiceTests
 
         harness.Clock.Advance(TimeSpan.FromSeconds(120));
         await harness.Service.RunIterationAsync(CancellationToken.None);
-        await harness.Provider.Received(1).WarmModelAsync("model-a", Arg.Any<CancellationToken>());
+        await harness.Provider.Received(1).WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
 
         harness.IntervalSeconds = 60;
         await harness.Service.RunIterationAsync(CancellationToken.None);
-        await harness.Provider.Received(2).WarmModelAsync("model-a", Arg.Any<CancellationToken>());
+        await harness.Provider.Received(2).WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -88,21 +89,21 @@ public sealed class KeepModelWarmBackgroundServiceTests
         await harness.Service.RunIterationAsync(CancellationToken.None);
 
         // The provider's idempotent warm path reuses the resident process and refreshes its idle timestamp.
-        await harness.Provider.Received(2).WarmModelAsync("model-a", Arg.Any<CancellationToken>());
+        await harness.Provider.Received(2).WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task RunIterationAsync_WhenWarmFails_RetriesAfterConfiguredInterval()
     {
         var harness = CreateHarness(enabled: true, modelName: "model-a", intervalSeconds: 60);
-        harness.Provider.WarmModelAsync("model-a", Arg.Any<CancellationToken>())
+        harness.Provider.WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>())
                .Returns(Task.FromException(new InvalidOperationException("load failed")), Task.CompletedTask);
 
         await harness.Service.RunIterationAsync(CancellationToken.None);
         harness.Clock.Advance(TimeSpan.FromSeconds(60));
         await harness.Service.RunIterationAsync(CancellationToken.None);
 
-        await harness.Provider.Received(2).WarmModelAsync("model-a", Arg.Any<CancellationToken>());
+        await harness.Provider.Received(2).WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -110,7 +111,7 @@ public sealed class KeepModelWarmBackgroundServiceTests
     {
         var harness = CreateHarness(enabled: true, modelName: "model-a", intervalSeconds: 60);
         var shouldFail = true;
-        harness.Provider.WarmModelAsync("model-a", Arg.Any<CancellationToken>())
+        harness.Provider.WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>())
                .Returns(_ => shouldFail
                    ? Task.FromException(new InvalidOperationException("load failed"))
                    : Task.CompletedTask);
@@ -136,7 +137,7 @@ public sealed class KeepModelWarmBackgroundServiceTests
     public async Task RunIterationAsync_WhenLlamaRuntimeFails_LeavesWarningOwnershipWithSupervisor()
     {
         var harness = CreateHarness(enabled: true, modelName: "model-a", intervalSeconds: 60);
-        harness.Provider.WarmModelAsync("model-a", Arg.Any<CancellationToken>())
+        harness.Provider.WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>())
                .Returns(Task.FromException(new LlamaRuntimeException("spawn failed")));
 
         await harness.Service.RunIterationAsync(CancellationToken.None);
@@ -150,7 +151,7 @@ public sealed class KeepModelWarmBackgroundServiceTests
     public async Task RunIterationAsync_WhenMutationEnds_ResetsFailureBudget()
     {
         var harness = CreateHarness(enabled: true, modelName: "model-a", intervalSeconds: 60);
-        harness.Provider.WarmModelAsync("model-a", Arg.Any<CancellationToken>())
+        harness.Provider.WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>())
                .Returns(Task.FromException(new InvalidOperationException("load failed")));
 
         await harness.Service.RunIterationAsync(CancellationToken.None);
@@ -170,7 +171,7 @@ public sealed class KeepModelWarmBackgroundServiceTests
 
         await harness.Service.RunIterationAsync(CancellationToken.None);
 
-        await harness.Provider.DidNotReceiveWithAnyArgs().WarmModelAsync(default!, default);
+        await harness.Provider.DidNotReceiveWithAnyArgs().WarmModelAsync(default!, default, default);
     }
 
     [Test]
@@ -181,7 +182,7 @@ public sealed class KeepModelWarmBackgroundServiceTests
 
         await harness.Service.RunIterationAsync(CancellationToken.None);
 
-        await harness.Provider.DidNotReceiveWithAnyArgs().WarmModelAsync(default!, default);
+        await harness.Provider.DidNotReceiveWithAnyArgs().WarmModelAsync(default!, default, default);
     }
 
     [Test]
@@ -192,7 +193,7 @@ public sealed class KeepModelWarmBackgroundServiceTests
 
         await harness.Service.RunIterationAsync(CancellationToken.None);
 
-        await harness.Provider.DidNotReceiveWithAnyArgs().WarmModelAsync(default!, default);
+        await harness.Provider.DidNotReceiveWithAnyArgs().WarmModelAsync(default!, default, default);
     }
 
     [Test]
@@ -206,11 +207,11 @@ public sealed class KeepModelWarmBackgroundServiceTests
 
         harness.Clock.Advance(TimeSpan.FromSeconds(14));
         await harness.Service.RunIterationAsync(CancellationToken.None);
-        await harness.Provider.Received(1).WarmModelAsync("model-a", Arg.Any<CancellationToken>());
+        await harness.Provider.Received(1).WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
 
         harness.Clock.Advance(TimeSpan.FromSeconds(1));
         await harness.Service.RunIterationAsync(CancellationToken.None);
-        await harness.Provider.Received(2).WarmModelAsync("model-a", Arg.Any<CancellationToken>());
+        await harness.Provider.Received(2).WarmModelAsync("model-a", ModelResidencyIntent.Background, Arg.Any<CancellationToken>());
     }
 
     [Test]

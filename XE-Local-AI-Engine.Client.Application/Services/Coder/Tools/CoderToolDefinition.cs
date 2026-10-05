@@ -56,7 +56,7 @@ internal static class CoderToolDefinition
     public const string SearchTextToolName = "search_text";
 
     public const string SearchTextDescription =
-        "Search the read-only project workspace for a text or regex pattern. Returns matches as "
+        "Search a file or directory of the read-only project workspace for a text or regex pattern. Returns matches as "
         + "relative/path:line: text; secret files and directories are excluded.";
 
     // `path.maxLength` (4096): do not clamp — see the note on ListFilesParameterSchema above.

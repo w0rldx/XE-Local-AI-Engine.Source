@@ -45,7 +45,8 @@ public interface ILlamaServerProcessSupervisor
     /// <summary>
     ///     As <see cref="EnsureRunningAsync(string, ModelRole, CancellationToken)" />, with the caller's residency intent:
     ///     a process a <see cref="ModelResidencyIntent.Transient" /> call spawns gets the short transient idle lifetime,
-    ///     and any <see cref="ModelResidencyIntent.Interactive" /> touch gives it the normal one back.
+    ///     and any other touch gives it the normal one back. A <see cref="ModelResidencyIntent.Background" /> cold chat load
+    ///     never unloads another chat model.
     /// </summary>
     Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, ModelResidencyIntent intent, CancellationToken ct)
     {

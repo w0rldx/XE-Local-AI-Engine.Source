@@ -64,4 +64,18 @@ public sealed record CapacityRequest
     ///     footprint then allows with no reservation, and a launch admission the registry refuses is dropped, so the launch goes unbound.
     /// </remarks>
     public bool NeverRejectOnBudget { get; init; }
+
+    /// <summary>Whether a chat model that does not fit at its tier may be admitted at a smaller context window.</summary>
+    /// <remarks>
+    ///     <see langword="true" /> keeps every existing caller's behaviour. The supervisor's own chat admission asks first with
+    ///     <see langword="false" />, so unloading an idle model is tried before the window shrinks.
+    /// </remarks>
+    public bool AllowAdmissionDownTier { get; init; } = true;
+
+    /// <summary>Whether the process-count check is left to the supervisor, which enforces its loaded cap at spawn with its own eviction.</summary>
+    /// <remarks>
+    ///     Set by the supervisor's own chat admission, which runs below every caller exactly like a pooled role: refusing on the count here
+    ///     would pre-empt the cap eviction that lets an idle embedder or reranker yield to a chat load.
+    /// </remarks>
+    public bool SupervisorEnforcesProcessCap { get; init; }
 }

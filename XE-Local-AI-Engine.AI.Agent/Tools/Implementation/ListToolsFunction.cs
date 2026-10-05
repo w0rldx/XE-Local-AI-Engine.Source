@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
 ///     The escape hatch for the tool-relevance offer: an argument-free, approval-free listing of the tools this turn
@@ -61,7 +62,7 @@ internal sealed class ListToolsFunction : AIFunction
     public override JsonElement JsonSchema => NoArgumentsSchema;
 
     /// <summary>This tool's name, description and schema as one text unit, for a caller sizing an offer that will include it.</summary>
-    internal static string BudgetDefinition => string.Concat(ToolName, "\n", ToolDescription, "\n", NoArgumentsSchema.GetRawText());
+    internal static string BudgetDefinition => string.Concat(ToolName, "\n", ToolDescription, "\n", TokenEstimatorCalibrationStore.RenderToolSchema(NoArgumentsSchema));
 
     private const string ToolDescription =
         "Lists the tools that were held back from this turn to save context, with a one-line description each. "

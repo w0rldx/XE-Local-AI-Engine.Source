@@ -188,7 +188,7 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
         var probeCharge = 0;
         foreach (var tool in ProbeTools)
         {
-            var definition = string.Concat(tool.Name, "\n", tool.Description, "\n", tool.JsonSchema.GetRawText());
+            var definition = string.Concat(tool.Name, "\n", tool.Description, "\n", TokenEstimatorCalibrationStore.RenderToolSchema(tool.JsonSchema));
             probeCharge += ProbeEstimator.EstimateTokensWithDivisor(new ChatMessage(ChatRole.System, definition), charsPerToken)
                            + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens;
         }

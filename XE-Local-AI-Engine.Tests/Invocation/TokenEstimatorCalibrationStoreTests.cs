@@ -27,16 +27,20 @@ public sealed class TokenEstimatorCalibrationStoreTests
     }
 
     [Test]
-    public void ResolveToolTemplatePreamble_ForAnUnknownModel_IsZero()
+    public void ResolveToolTemplatePreamble_ForAnUnknownModel_IsTheConservativeDefault()
     {
         var store = new TokenEstimatorCalibrationStore();
 
-        AssertEx.Equal(expected: 0, store.ResolveToolTemplatePreamble(Model));
-        AssertEx.Equal(expected: 0, store.ResolveToolTemplatePreamble(modelName: null));
+        AssertEx.Equal(expected: 220, TokenEstimatorCalibrationStore.DefaultToolTemplatePreambleTokens);
+        AssertEx.Equal(TokenEstimatorCalibrationStore.DefaultToolTemplatePreambleTokens, store.ResolveToolTemplatePreamble(Model));
+        AssertEx.Equal(TokenEstimatorCalibrationStore.DefaultToolTemplatePreambleTokens, store.ResolveToolTemplatePreamble(modelName: null));
     }
 
+    /// <summary>The measured value always replaces the default, also when it is smaller (zero included).</summary>
     [Test]
     [Arguments(198, 198)]
+    [Arguments(25, 25)]
+    [Arguments(400, 400)]
     [Arguments(-40, 0)]
     [Arguments(50_000, TokenEstimatorCalibrationStore.MaximumToolTemplatePreambleTokens)]
     public void SetToolTemplatePreamble_StoresPerModelWithinTheBound(int measured, int expected)
@@ -46,7 +50,26 @@ public sealed class TokenEstimatorCalibrationStoreTests
         store.SetToolTemplatePreamble(Model, measured);
 
         AssertEx.Equal(expected, store.ResolveToolTemplatePreamble(Model));
-        AssertEx.Equal(expected: 0, store.ResolveToolTemplatePreamble("another-model"));
+        AssertEx.Equal(TokenEstimatorCalibrationStore.DefaultToolTemplatePreambleTokens, store.ResolveToolTemplatePreamble("another-model"));
+    }
+
+    [Test]
+    public void RenderToolSchema_RendersIndentedAndCompactSourcesToTheSameSingleLineForm()
+    {
+        const string compact = """{"type":"object","properties":{"q":{"type":"string","enum":["a","b"]}},"required":["q"]}""";
+        const string indented = """
+                                {
+                                  "type": "object",
+                                  "properties": { "q": { "type": "string", "enum": [ "a", "b" ] } },
+                                  "required": [ "q" ]
+                                }
+                                """;
+        const string rendered = """{"type": "object", "properties": {"q": {"type": "string", "enum": ["a", "b"]}}, "required": ["q"]}""";
+
+        AssertEx.Equal(rendered, TokenEstimatorCalibrationStore.RenderToolSchema(compact));
+        AssertEx.Equal(rendered, TokenEstimatorCalibrationStore.RenderToolSchema(indented));
+        AssertEx.Equal(string.Empty, TokenEstimatorCalibrationStore.RenderToolSchema((string?)null));
+        AssertEx.Equal("not json", TokenEstimatorCalibrationStore.RenderToolSchema("not json"));
     }
 
     [Test]

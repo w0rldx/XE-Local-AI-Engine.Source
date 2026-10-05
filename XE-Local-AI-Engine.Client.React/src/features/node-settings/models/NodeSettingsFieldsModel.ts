@@ -301,7 +301,9 @@ export interface NodeSettingsFieldsForm {
 	webFetchMaxContentChars: number | string;
 	knowledgeSearchDefaultResults: number | string;
 	knowledgeSearchMaxResults: number | string;
-	// llama.cpp thinking budget per reasoning effort, and whose budget a turn with no effort gets (section "chat").
+	// llama.cpp thinking budget per reasoning effort, and whose budget a turn with no effort gets (section "chat"). These
+	// four and the two output-cap fields are blank while the node uses the shipped default (see shippedDefaults); a save
+	// that blanks a stored value sends the reset sentinel.
 	reasoningBudgetMinimalTokens: number | string;
 	reasoningBudgetLowTokens: number | string;
 	reasoningBudgetMediumTokens: number | string;
@@ -416,6 +418,30 @@ export const defaultReasoningEffortSelectValues = ["minimal", "low", "medium", "
 
 // The chat output-cap variants (mirrors StoredNodeSettings.IsValidChatOutputCapMode).
 export const chatOutputCapModeSelectValues = ["cap", "notice", "off"] as const;
+
+// What the node uses while one of these fields is unset (blank in the form): ReasoningBudgets.Default and the
+// StoredNodeSettings output-cap defaults. Shown as the field's default; never sent.
+export const shippedDefaults = {
+	reasoningBudgetMinimalTokens: 1024,
+	reasoningBudgetLowTokens: 2048,
+	reasoningBudgetMediumTokens: 8192,
+	reasoningBudgetHighTokens: 24576,
+	chatOutputCapMaxTokens: 16384,
+	defaultReasoningEffort: "low",
+	chatOutputCapMode: "cap",
+} as const;
+
+// The request-only value that resets a token field above to its shipped default (StoredNodeSettings.TokenSettingUnset);
+// a select clears with the empty string instead.
+const TOKEN_SETTING_UNSET = -1;
+
+const unsettableTokenFields: ReadonlySet<string> = new Set([
+	"reasoningBudgetMinimalTokens",
+	"reasoningBudgetLowTokens",
+	"reasoningBudgetMediumTokens",
+	"reasoningBudgetHighTokens",
+	"chatOutputCapMaxTokens",
+]);
 
 // The curated tunables that are plain bounded integers, each validated against its own server bounds entry.
 const tunableFields = [
@@ -572,13 +598,14 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	webFetchMaxContentChars: 12000,
 	knowledgeSearchDefaultResults: 5,
 	knowledgeSearchMaxResults: 20,
-	reasoningBudgetMinimalTokens: 1024,
-	reasoningBudgetLowTokens: 2048,
-	reasoningBudgetMediumTokens: 8192,
-	reasoningBudgetHighTokens: 24576,
-	defaultReasoningEffort: "low",
-	chatOutputCapMode: "cap",
-	chatOutputCapMaxTokens: 16384,
+	// Blank = the node's shipped default (shippedDefaults).
+	reasoningBudgetMinimalTokens: "",
+	reasoningBudgetLowTokens: "",
+	reasoningBudgetMediumTokens: "",
+	reasoningBudgetHighTokens: "",
+	defaultReasoningEffort: "",
+	chatOutputCapMode: "",
+	chatOutputCapMaxTokens: "",
 	huggingFaceDownloadConnections: 4,
 	transcriptionIdleTimeoutMinutes: 15,
 	transcriptionInferenceTimeoutMinutes: 30,
@@ -1436,6 +1463,12 @@ export function buildNodeSettingsRequest(
 	}
 
 	for (const field of tunableFields) {
+		if (unsettableTokenFields.has(field) && String(form[field]).trim() === "") {
+			if (String(baseline[field]).trim() !== "") {
+				body[field] = TOKEN_SETTING_UNSET;
+			}
+			continue;
+		}
 		collectBoundedInt(
 			form[field],
 			baseline[field],

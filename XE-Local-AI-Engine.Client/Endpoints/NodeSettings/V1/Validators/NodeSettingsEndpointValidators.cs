@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Validators;
 
+using System.Globalization;
 using FastEndpoints;
 using FluentValidation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -16,6 +17,12 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </remarks>
 public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSettingsRequest>
 {
+    private static readonly string ReasoningBudgetRangeMessage = string.Create(CultureInfo.InvariantCulture,
+        $"A reasoning budget must be from {StoredNodeSettings.MinReasoningBudgetTokens} to {StoredNodeSettings.MaxReasoningBudgetTokens} tokens, or {StoredNodeSettings.TokenSettingUnset} for the default.");
+
+    private static readonly string ChatOutputCapMaxTokensRangeMessage = string.Create(CultureInfo.InvariantCulture,
+        $"The chat output cap ceiling must be from {StoredNodeSettings.MinChatOutputCapMaxTokens} to {StoredNodeSettings.MaxChatOutputCapMaxTokens} tokens, or {StoredNodeSettings.TokenSettingUnset} for the default.");
+
     public SaveNodeSettingsRequestValidator()
     {
         RuleFor(static request => request.MaxMessageRequestTimeoutSeconds)
@@ -179,30 +186,37 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
         RuleFor(static request => request.KnowledgeSearchMaxResults)
             .InclusiveBetween(StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults);
 
+        // TokenSettingUnset (-1) and the empty string are the "back to default" sentinels; everything else is range-checked. Must, not
+        // InclusiveBetween: the OpenAPI schema would publish the range as min/max and the generated client would refuse the sentinel.
         RuleFor(static request => request.ReasoningBudgetMinimalTokens)
-            .InclusiveBetween(StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens);
+            .Must(static tokens => IsUnsetOrBetween(tokens, StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens))
+            .WithMessage(ReasoningBudgetRangeMessage);
 
         RuleFor(static request => request.ReasoningBudgetLowTokens)
-            .InclusiveBetween(StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens);
+            .Must(static tokens => IsUnsetOrBetween(tokens, StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens))
+            .WithMessage(ReasoningBudgetRangeMessage);
 
         RuleFor(static request => request.ReasoningBudgetMediumTokens)
-            .InclusiveBetween(StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens);
+            .Must(static tokens => IsUnsetOrBetween(tokens, StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens))
+            .WithMessage(ReasoningBudgetRangeMessage);
 
         RuleFor(static request => request.ReasoningBudgetHighTokens)
-            .InclusiveBetween(StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens);
+            .Must(static tokens => IsUnsetOrBetween(tokens, StoredNodeSettings.MinReasoningBudgetTokens, StoredNodeSettings.MaxReasoningBudgetTokens))
+            .WithMessage(ReasoningBudgetRangeMessage);
 
         RuleFor(static request => request.DefaultReasoningEffort)
             .Must(static effort => StoredNodeSettings.IsValidDefaultReasoningEffort(effort?.Trim()))
-            .When(static request => request.DefaultReasoningEffort is not null)
-            .WithMessage("Default reasoning effort must be minimal, low, medium or high.");
+            .When(static request => request.DefaultReasoningEffort is not (null or ""))
+            .WithMessage("Default reasoning effort must be minimal, low, medium or high, or empty for the default.");
 
         RuleFor(static request => request.ChatOutputCapMode)
             .Must(static mode => StoredNodeSettings.IsValidChatOutputCapMode(mode?.Trim()))
-            .When(static request => request.ChatOutputCapMode is not null)
-            .WithMessage("Chat output cap mode must be cap, notice or off.");
+            .When(static request => request.ChatOutputCapMode is not (null or ""))
+            .WithMessage("Chat output cap mode must be cap, notice or off, or empty for the default.");
 
         RuleFor(static request => request.ChatOutputCapMaxTokens)
-            .InclusiveBetween(StoredNodeSettings.MinChatOutputCapMaxTokens, StoredNodeSettings.MaxChatOutputCapMaxTokens);
+            .Must(static tokens => IsUnsetOrBetween(tokens, StoredNodeSettings.MinChatOutputCapMaxTokens, StoredNodeSettings.MaxChatOutputCapMaxTokens))
+            .WithMessage(ChatOutputCapMaxTokensRangeMessage);
 
         RuleFor(static request => request.HuggingFaceDownloadConnections)
             .InclusiveBetween(StoredNodeSettings.MinHuggingFaceDownloadConnections, StoredNodeSettings.MaxHuggingFaceDownloadConnections);
@@ -331,5 +345,10 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
     {
         return Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri)
                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    }
+
+    private static bool IsUnsetOrBetween(int? tokens, int min, int max)
+    {
+        return tokens is null or StoredNodeSettings.TokenSettingUnset || (tokens >= min && tokens <= max);
     }
 }

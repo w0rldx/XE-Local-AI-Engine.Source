@@ -63,6 +63,12 @@ public sealed record OrchestrationUpdate
     /// <summary>The tool awaiting approval for <see cref="OrchestrationUpdateKind.ApprovalRequest" />. Null otherwise.</summary>
     public string? ToolName { get; init; }
 
+    /// <summary>
+    ///     Why the participant's model round ended (<c>stop</c>, <c>length</c>, <c>tool_calls</c>), on the last update of the
+    ///     streamed chunk that reported it. A chunk carrying only the finish reason arrives as an empty <see cref="OrchestrationUpdateKind.TextDelta" />.
+    /// </summary>
+    public string? FinishReason { get; init; }
+
     public static OrchestrationUpdate TextFragment(string text, string? participantKey, string? participantName)
     {
         return new OrchestrationUpdate

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 
 using System.Text.Json.Serialization;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     The fixed kinds of fact a conversation's distilled state keeps. Fixed so the injected block groups
@@ -135,6 +136,9 @@ public sealed class ConversationStateDistillerInput
 
     /// <summary>The model's resident context window in tokens; null keeps the configured per-call ceiling.</summary>
     public int? EffectiveContextTokens { get; init; }
+
+    /// <summary><see cref="ModelResidencyIntent.Background" /> for automatic distillation, so a cold model never unloads the user's.</summary>
+    public ModelResidencyIntent ResidencyIntent { get; init; }
 }
 
 /// <summary>The result of one distiller call: the delta for the leading messages that fit the call's budget.</summary>

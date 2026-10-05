@@ -1591,6 +1591,73 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         AssertEx.Equal("./src/a.txt:2:needle here", matches[0]);
     }
 
+    /// <summary>A path read_file accepts — a FILE — is searchable too; its matches carry an empty path because the path is the file itself.</summary>
+    [Test]
+    public async Task ProcessSandboxProvider_SearchText_WhenPathIsAFile_SearchesThatFileOnly()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        await SeedAsync(provider, handle, "workspace/attachments/attachment-30000.md", "intro\nneedle here\n");
+        await SeedAsync(provider, handle, "workspace/attachments/other.md", "needle elsewhere\n");
+        await SeedAsync(provider, handle, "workspace/attachments/blob.bin", "needle\0binary");
+
+        var matches = await provider.SearchTextAsync(handle, new SandboxSearchTextRequest
+        {
+            DirectoryPath = "/workspace/attachments/attachment-30000.md",
+            Pattern = "needle",
+            MaxMatches = 10,
+            MaxOutputBytes = 4096
+        });
+        var binary = await provider.SearchTextAsync(handle, new SandboxSearchTextRequest
+        {
+            DirectoryPath = "/workspace/attachments/blob.bin",
+            Pattern = "needle",
+            MaxMatches = 10,
+            MaxOutputBytes = 4096
+        });
+
+        AssertEx.Equal(1, matches.Count);
+        AssertEx.Equal("./:2:needle here", matches[0]);
+        AssertEx.Equal(0, binary.Count);
+        // A missing path is still the same not-found, and a traversal to a host FILE the same refusal.
+        await AssertEx.ThrowsAsync<DirectoryNotFoundException>(() => provider.SearchTextAsync(handle, new SandboxSearchTextRequest
+        {
+            DirectoryPath = "/workspace/attachments/nope.md",
+            Pattern = "needle",
+            MaxMatches = 10,
+            MaxOutputBytes = 4096
+        }));
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.SearchTextAsync(handle, new SandboxSearchTextRequest
+        {
+            DirectoryPath = "/../../etc/passwd",
+            Pattern = "root",
+            MaxMatches = 10,
+            MaxOutputBytes = 4096
+        }));
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task ProcessSandboxProvider_SearchText_WhenFilePathIsAJailSymlink_Rejects()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        using var outside = new TempDir();
+        var secret = Path.Combine(outside.Path, "secret.txt");
+        await File.WriteAllTextAsync(secret, "OUTSIDE-THE-JAIL");
+
+        await SeedAsync(provider, handle, "workspace/keep.txt", "x");
+        await RunShellInJailAsync(provider, handle, "ln -s " + ShellQuote(secret) + " workspace/leak.txt");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.SearchTextAsync(handle, new SandboxSearchTextRequest
+        {
+            DirectoryPath = "/workspace/leak.txt",
+            Pattern = "OUTSIDE",
+            MaxMatches = 10,
+            MaxOutputBytes = 4096
+        }));
+    }
+
     /// <summary>
     ///     A command running in the jail can plant a symlink out of it, and the lexical jail check passes such a path —
     ///     so the no-symlink walk is what stops the survey from enumerating a directory outside the workspace. Planted

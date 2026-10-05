@@ -93,9 +93,12 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 }
 
 // Server notice sentences the SPA localizes, keyed by their exact English text (InvocationRunner's
-// StoppedWhileThinkingNoticeMessage, OutputLimitReachedNoticeMessage, ToolCallInReasoningNoticeMessage, and
-// KnowledgeUnavailableNotice.Message and AttachmentShortenedNoticeMessage — change both together). Any other text renders verbatim.
+// StoppedWhileThinkingNoticeMessage, OutputLimitReachedNoticeMessage, ToolCallInReasoningNoticeMessage,
+// ToolCallAsTextNoticeMessage, and KnowledgeUnavailableNotice.Message and AttachmentShortenedNoticeMessage — change both
+// together). Any other text renders verbatim.
 const localizedNoticeKeys: Readonly<Record<string, string>> = {
+	"The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.":
+		"chat.notices.toolCallAsTextText",
 	"The model stopped while thinking before it could answer; its thoughts are kept above.":
 		"chat.notices.stoppedWhileThinkingText",
 	"The answer stopped at the length limit before the model finished.": "chat.notices.outputLimitReachedText",

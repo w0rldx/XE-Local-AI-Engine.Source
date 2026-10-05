@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 ///     download URLs with tokens, or secrets. Any internal diagnostic detail belongs in the (non-surfaced) inner
 ///     exception, never in the message.
 /// </remarks>
-public sealed class LlamaRuntimeException : Exception
+public class LlamaRuntimeException : Exception
 {
     /// <summary>Creates a sanitized runtime failure with a user-safe message.</summary>
     public LlamaRuntimeException(string sanitizedMessage)

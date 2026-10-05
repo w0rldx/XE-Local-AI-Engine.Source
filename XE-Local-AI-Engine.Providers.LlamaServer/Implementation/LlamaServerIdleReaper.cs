@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using ProcessKey = LlamaServerProcessSupervisor.ProcessKey;
@@ -21,6 +22,9 @@ using RunningProcess = LlamaServerProcessSupervisor.RunningProcess;
 /// </remarks>
 internal sealed class LlamaServerIdleReaper : IDisposable
 {
+    /// <summary>How long after readiness a never-leased chat process is spared by memory eviction, so its spawning request can lease it first.</summary>
+    internal static readonly TimeSpan FirstLeaseGracePeriod = TimeSpan.FromSeconds(30);
+
     // Guards the loaded-cap admission decision + port-set mutation so the cap can never be exceeded by a race.
     private readonly SemaphoreSlim _admissionGate = new(initialCount: 1, maxCount: 1);
 
@@ -59,9 +63,10 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     /// </summary>
     /// <remarks>
     ///     The cap is measured by the <em>reserved-port</em> count, not the registered-process count, so it already
-    ///     includes in-flight spawns — see wiki 03, "Eviction &amp; reaper".
+    ///     includes in-flight spawns — see wiki 03, "Eviction &amp; reaper". A <see cref="ModelResidencyIntent.Background" />
+    ///     spawn never evicts a live chat process; with no other victim it is refused like any spawn at the cap.
     /// </remarks>
-    internal async Task<int> AdmitAndAllocatePortAsync(CancellationToken ct)
+    internal async Task<int> AdmitAndAllocatePortAsync(ModelResidencyIntent intent, CancellationToken ct)
     {
         // Processes detached from the table under the gate, tree-killed after it is released (see KillDetachedProcesses).
         var detached = new List<RunningProcess>();
@@ -71,7 +76,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             // Drop any process that has already exited so its slot/port is reclaimed before the cap check.
             PruneExitedProcesses(detached);
 
-            if (_ports.ReservedCount >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed(detached))
+            if (_ports.ReservedCount >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed(intent, detached))
             {
                 throw CapReached();
             }
@@ -151,7 +156,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     ///     and appended to <paramref name="detached" /> for the caller to tree-kill once the gate is released. The
     ///     ranking it applies is in wiki 03, "Eviction &amp; reaper".
     /// </remarks>
-    private bool TryEvictIdleLeastRecentlyUsed(List<RunningProcess> detached)
+    private bool TryEvictIdleLeastRecentlyUsed(ModelResidencyIntent intent, List<RunningProcess> detached)
     {
         var now = _timeProvider.GetUtcNow();
         ProcessKey? victimKey = null;
@@ -169,6 +174,12 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             // In-flight inference disqualifies a live process for the same reason the idle reaper skips it: past-TTL only means "no new request started", not
             // "not mid-generation". This is a best-effort heuristic read; the atomic claim is TryBeginEvict on the chosen victim below.
             if (running.ActiveLeases > 0 && !running.Handle.HasExited)
+            {
+                continue;
+            }
+
+            // Work no user waits on never unloads a chat model, idle past its TTL or transient alike; an exited handle is still reclaimed.
+            if (intent == ModelResidencyIntent.Background && key.Role == ModelRole.Chat && !running.Handle.HasExited)
             {
                 continue;
             }
@@ -195,27 +206,105 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             victimRank = rank;
         }
 
-        if (victimKey is null || victim is null)
-        {
-            return false;
-        }
-
-        // Atomically latch the chosen victim before tearing it down: if a request took a lease between the heuristic scan and here, TryBeginEvict fails and no
-        // victim is admitted this round, so the caller surfaces the cap error. An EXITED victim holds no real lease and is torn down regardless.
-        if (!victim.Handle.HasExited && !victim.TryBeginEvict(forProfiling: false, out _))
-        {
-            return false;
-        }
-
-        // Free the slot and port under the gate so the new admission proceeds immediately; the kill follows outside it. A lost removal race (a concurrent eject or
-        // reap already detached this victim) frees no slot of OUR doing, so report no admission rather than let the cap be overrun on someone else's teardown.
-        if (DetachProcess(victimKey.Value, victim) is not { } evicted)
+        if (victimKey is null || victim is null || !TryClaimAndDetach(victimKey.Value, victim, detached))
         {
             return false;
         }
 
         _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting {Idleness} llama-server for model {ModelName} role {Role} to admit a new one.",
             _options.MaxLoadedProcesses, victimRank == 0 ? "idle" : "in-window pooled or transient", victimKey.Value.ModelName, victimKey.Value.Role);
+        return true;
+    }
+
+    /// <summary>
+    ///     Unloads the least-recently-used live chat process no request is using, to free memory for a cold chat load the capacity
+    ///     gate refused on budget, and returns its key; or, when none is idle, a key skipped only for its active lease.
+    /// </summary>
+    /// <remarks>
+    ///     Unlike <see cref="TryEvictIdleLeastRecentlyUsed" />, an in-window interactive chat process IS a victim here (operator decision: a chat
+    ///     load may unload any chat model without a request in flight). Never the requesting key, a pooled role (the node's embedder and
+    ///     reranker), a <paramref name="protectedModels" /> name, or a profiling process. The victim is tree-killed before this returns, outside
+    ///     the gate; the caller's bounded re-probe covers the driver releasing its VRAM. Wiki 03, "Eviction &amp; reaper".
+    /// </remarks>
+    internal async Task<(ProcessKey? Evicted, ProcessKey? Busy)> TryEvictIdleChatForMemoryAsync(ProcessKey requesting,
+        IReadOnlyCollection<string> protectedModels,
+        CancellationToken ct)
+    {
+        var detached = new List<RunningProcess>();
+        await _admissionGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var now = _timeProvider.GetUtcNow();
+            ProcessKey? victimKey = null;
+            ProcessKey? busyKey = null;
+            RunningProcess? victim = null;
+            foreach (var (key, running) in _processes)
+            {
+                // An exited process holds no memory to free. A process awaiting its first lease was just loaded for a request that has not leased it
+                // yet, so it is spared, but only for a grace period: a warm-only load (the model picker) never leases at all.
+                if (key.Role != ModelRole.Chat
+                    || key.Equals(requesting)
+                    || protectedModels.Contains(key.ModelName, StringComparer.OrdinalIgnoreCase)
+                    || running.Handle.HasExited
+                    || running.IsProfilingPinned
+                    || running.IsProfilingOwned
+                    || running.AwaitingFirstLease && now - running.ReadyUtc < FirstLeaseGracePeriod)
+                {
+                    continue;
+                }
+
+                if (running.ActiveLeases > 0)
+                {
+                    busyKey ??= key;
+                    continue;
+                }
+
+                if (victim is null || running.LastUsedUtc < victim.LastUsedUtc)
+                {
+                    victimKey = key;
+                    victim = running;
+                }
+            }
+
+            if (victimKey is null || victim is null)
+            {
+                return (null, busyKey);
+            }
+
+            // A lease taken between the scan and the claim makes the victim busy, not ineligible.
+            if (!TryClaimAndDetach(victimKey.Value, victim, detached))
+            {
+                return (null, victimKey);
+            }
+
+            _logger.LogWarning("Evicting idle chat llama-server for model {ModelName} to free memory for a load of model {RequestedModelName}.",
+                victimKey.Value.ModelName, requesting.ModelName);
+            return (victimKey, null);
+        }
+        finally
+        {
+            _admissionGate.Release();
+            KillDetachedProcesses(detached);
+        }
+    }
+
+    /// <summary>Atomically claims <paramref name="victim" /> and detaches it into <paramref name="detached" /> for a kill outside the gate.</summary>
+    /// <remarks>The caller holds the admission gate.</remarks>
+    private bool TryClaimAndDetach(ProcessKey key, RunningProcess victim, List<RunningProcess> detached)
+    {
+        // Atomically latch the chosen victim before tearing it down: if a request took a lease between the heuristic scan and here, TryBeginEvict fails and no
+        // victim is admitted this round, so the caller surfaces its error. An EXITED victim holds no real lease and is torn down regardless.
+        if (!victim.Handle.HasExited && !victim.TryBeginEvict(forProfiling: false, out _))
+        {
+            return false;
+        }
+
+        // Free the slot and port under the gate so the new admission proceeds immediately; the kill follows outside it. A lost removal race (a concurrent eject or
+        // reap already detached this victim) frees nothing of OUR doing, so report no eviction rather than act on someone else's teardown.
+        if (DetachProcess(key, victim) is not { } evicted)
+        {
+            return false;
+        }
 
         detached.Add(evicted);
         return true;

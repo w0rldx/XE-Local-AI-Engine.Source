@@ -43980,29 +43980,21 @@
           "reasoningBudgetMinimalTokens": {
             "type": "integer",
             "format": "int32",
-            "maximum": 131072,
-            "minimum": 128,
             "nullable": true
           },
           "reasoningBudgetLowTokens": {
             "type": "integer",
             "format": "int32",
-            "maximum": 131072,
-            "minimum": 128,
             "nullable": true
           },
           "reasoningBudgetMediumTokens": {
             "type": "integer",
             "format": "int32",
-            "maximum": 131072,
-            "minimum": 128,
             "nullable": true
           },
           "reasoningBudgetHighTokens": {
             "type": "integer",
             "format": "int32",
-            "maximum": 131072,
-            "minimum": 128,
             "nullable": true
           },
           "defaultReasoningEffort": {
@@ -44016,8 +44008,6 @@
           "chatOutputCapMaxTokens": {
             "type": "integer",
             "format": "int32",
-            "maximum": 131072,
-            "minimum": 256,
             "nullable": true
           },
           "huggingFaceDownloadConnections": {

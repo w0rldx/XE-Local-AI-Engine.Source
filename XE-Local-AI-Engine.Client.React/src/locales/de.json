@@ -273,6 +273,7 @@
 			"attachmentShortenedText": "Die angehängte Datei wurde gekürzt, damit sie in das Kontextfenster dieses Modells passt; das Modell wurde darauf hingewiesen, dass sie unvollständig ist.",
 			"knowledgeUnavailableText": "Ihre Wissensdatenbank wurde für diese Nachricht nicht verwendet, weil kein Einbettungsmodell installiert ist und Ihre Dokumente daher nicht indiziert werden konnten.",
 			"outputLimitReachedText": "Die Antwort wurde an der Längengrenze beendet, bevor das Modell fertig war.",
+			"toolCallAsTextText": "Das Modell hat einen Tool-Aufruf als Text geschrieben, statt das Tool aufzurufen. Der Aufruf wurde daher nicht ausgeführt, und es gibt keine Antwort.",
 			"toolCallInReasoningText": "Das Modell hat versucht, ein Tool innerhalb seiner Überlegungen aufzurufen, wo der Aufruf nicht ausgeführt werden kann, und hat ohne Antwort aufgehört."
 		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus.",
@@ -2345,6 +2346,9 @@
 				},
 				"secondsShort": "s",
 				"bytesShort": "B",
+				"useDefault": "Standard verwenden",
+				"defaultValue": "Standard: {{value}}",
+				"defaultOption": "Standard ({{value}})",
 				"agentHomeMaxRunSeconds": {
 					"label": "AgentHome-Laufzeitlimit",
 					"description": "Die maximale Dauer eines ganzen Laufs; mindestens das Befehls-Timeout. Gilt ab dem nächsten Lauf."
@@ -2483,7 +2487,8 @@
 				},
 				"chatOutputCapMaxTokens": {
 					"label": "Längste Antwort",
-					"description": "Die Antwort darf das halbe Kontextfenster des Modells nutzen, aber nie mehr als diesen Wert. Das Denkbudget eines Denkmodells kommt hinzu, dies ist also nicht die Gesamtgrenze."
+					"description": "Die Antwort darf das halbe Kontextfenster des Modells nutzen, aber nie mehr als diesen Wert. Das Denkbudget eines Denkmodells kommt hinzu, dies ist also nicht die Gesamtgrenze.",
+					"timeoutHint": "Auf langsamer Hardware kann eine lange Antwort das Zeitlimit für Nachrichtenanfragen (Lokale Chat-Runtime) vor dieser Grenze erreichen. Enden Antworten mit einer Zeitüberschreitung, erhöhen Sie dieses Zeitlimit."
 				},
 				"webFetch": {
 					"title": "Seitenabruf"
@@ -2761,6 +2766,7 @@
 				"description": "Das maximale Zeitlimit für Nachrichtenanfragen begrenzt, wie lange eine einzelne lokale Chat-Nachrichtenanfrage (Senden oder Neu generieren) laufen darf, bevor sie mit einer Zeitüberschreitung abgebrochen wird. Es wird außerdem über Fähigkeitsberichte an die Plattform gemeldet.",
 				"timeoutLabel": "Maximales Zeitlimit für Nachrichtenanfragen",
 				"timeoutRange": "Zulässiger Bereich: {{min}}–{{max}} Sekunden.",
+				"outputCapHint": "Auf langsamer Hardware kann eine lange Antwort dieses Zeitlimit erreichen, bevor die Begrenzung der Antwortlänge (Längste Antwort) sie stoppt. Erhöhen Sie dieses Zeitlimit oder senken Sie „Längste Antwort“.",
 				"timeoutError": "Bitte eine ganze Zahl von {{min}} bis {{max}} eingeben."
 			},
 			"uiMode": {

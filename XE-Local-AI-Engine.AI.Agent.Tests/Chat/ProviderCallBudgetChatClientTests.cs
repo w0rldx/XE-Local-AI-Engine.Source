@@ -420,10 +420,10 @@ public sealed class ProviderCallBudgetChatClientTests
 
         var budgetOptions = new ProviderCallBudgetOptions
         {
-            // The window whose safety-margined budget is 650. Derived, not a bare 650: the budgeter measures against
-            // EstimateSafetyFactor of the window, so a bare 650 would leave the tool-LESS control arm already trimming
-            // and the comparison would prove nothing about the tool schemas.
-            DefaultContextTokens = (int)Math.Ceiling(650 / TokenEstimatorCalibrationStore.EstimateSafetyFactor),
+            // The window whose safety-margined budget is 650 plus the default tool-template preamble an uncalibrated tool round is
+            // charged. Derived, not a bare number: the budgeter measures against EstimateSafetyFactor of the window, so a bare 650
+            // would leave the tool-LESS control arm already trimming and the comparison would prove nothing about the tool schemas.
+            DefaultContextTokens = (int)Math.Ceiling((650 + TokenEstimatorCalibrationStore.DefaultToolTemplatePreambleTokens) / TokenEstimatorCalibrationStore.EstimateSafetyFactor),
             ReservedOutputTokenFloor = 0,
             RecentMessagesToKeep = 2,
             OversizedToolResultExcerptChars = 100_000
@@ -507,7 +507,8 @@ public sealed class ProviderCallBudgetChatClientTests
 
         AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTools(tools) + 150, withTools.ToolSchemaTokens, "once per request, not once per tool");
         AssertEx.Equal(expected: 0, withoutTools.ToolSchemaTokens);
-        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTools(tools), unmeasuredModel.ToolSchemaTokens);
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTools(tools) + TokenEstimatorCalibrationStore.DefaultToolTemplatePreambleTokens, unmeasuredModel.ToolSchemaTokens,
+            "an unmeasured model is charged the default preamble");
         AssertEx.Equal(withoutTools.EstimatedInputTokens + withTools.ToolSchemaTokens, withTools.EstimatedInputTokens,
             "the preamble is part of the round's input estimate, not only of the schema metric");
 

@@ -84,6 +84,20 @@ describe("ChatNoticeRow", () => {
 		);
 	});
 
+	it("localizes the tool-call-as-text sentence in en and de", () => {
+		const text =
+			"The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.";
+		renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "EmptyAnswer", text, detail: "stop" })} />);
+
+		expect(screen.getByText(text)).toBeTruthy();
+		const de = nonEnglishLocales.find((locale) => locale.code === "de")?.resource as {
+			chat: { notices: Record<string, string> };
+		};
+		expect(de.chat.notices["toolCallAsTextText"]).toBe(
+			"Das Modell hat einen Tool-Aufruf als Text geschrieben, statt das Tool aufzurufen. Der Aufruf wurde daher nicht ausgeführt, und es gibt keine Antwort.",
+		);
+	});
+
 	it("tags the row with the notice kind for each known kind", () => {
 		const { rerender } = renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "ModelSubstituted" })} />);
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("ModelSubstituted");

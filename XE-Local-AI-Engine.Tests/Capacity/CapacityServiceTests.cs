@@ -535,10 +535,120 @@ public sealed class CapacityServiceTests
 
         AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
         AssertEx.Equal(committed.Resources, harness.Ledger.Reserved);
+        AssertEx.Equal(committed.Admission, decision.Admission);
         harness.FootprintProvider.Received(2)
                .TryDownTierForAdmission(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>());
         harness.FootprintProvider.Received(1)
                .TryCommitAdmissionFootprint(adjusted, out Arg.Any<ModelFootprint>());
+        decision.Reservation?.Dispose();
+    }
+
+    [Test]
+    public async Task Capacity_WhenDownTierIsNotAllowed_RejectsAsAMemoryShortfall_WithoutShrinkingTheWindow()
+    {
+        // The supervisor's chat admission asks at the full tier first, so it can unload an idle model before the window shrinks.
+        var harness = new Harness
+        {
+            Profile = GpuProfile(8 * Gb),
+            Footprint = AdmissionFootprint(20 * Gb, 65536)
+        };
+        harness.FootprintProvider.TryDownTierForAdmission(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>())
+               .Returns(call =>
+               {
+                   call[1] = AdmissionFootprint(6 * Gb, 16384);
+                   return true;
+               });
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(new CapacityRequest
+            {
+                ModelName = Model,
+                Role = ModelRole.Chat,
+                AllowAdmissionDownTier = false
+            },
+            CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.True(decision.IsMemoryShortfall, "A budget miss is the reject an eviction can relieve.");
+        AssertEx.Equal(65536, decision.Admission?.Allocation.ProcessContextTokens, "The shortfall reports the full-tier window it was tried at.");
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+        harness.FootprintProvider.DidNotReceive()
+               .TryDownTierForAdmission(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>());
+    }
+
+    [Test]
+    public async Task Capacity_WhenNoTierFits_WalksToTheSmallestTier_AndTheShortfallCarriesTheLastCandidate()
+    {
+        // The live 35B-A3B load beside a 9B resident: 23,851 MiB free, and the estimate at every chat tier (weights plus 12 % margin dominate) above it.
+        const long mib = 1024 * 1024;
+        var tiers = new Queue<ModelFootprint>([
+            AdmissionFootprint(25_127 * mib, 32768), AdmissionFootprint(24_768 * mib, 16384), AdmissionFootprint(24_589 * mib, 8192),
+            AdmissionFootprint(24_544 * mib, 4096), AdmissionFootprint(24_455 * mib, 2048)
+        ]);
+        var harness = new Harness
+        {
+            Profile = GpuProfileWithFreeVram(32 * Gb, 23_851 * mib),
+            Footprint = AdmissionFootprint(25_843 * mib, 65536)
+        };
+        harness.FootprintProvider.TryDownTierForAdmission(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>())
+               .Returns(call =>
+               {
+                   if (!tiers.TryDequeue(out var next))
+                   {
+                       return false;
+                   }
+
+                   call[1] = next;
+                   return true;
+               });
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.True(decision.IsMemoryShortfall);
+        var tried = AssertEx.NotNull(decision.Admission, "A memory-shortfall reject must carry the figures it decided on, for the log.").Allocation;
+        AssertEx.Equal(2048, tried.ProcessContextTokens);
+        AssertEx.Equal(24_455 * mib, tried.Footprint.GpuBytes);
+        harness.FootprintProvider.Received(6)
+               .TryDownTierForAdmission(Arg.Any<ModelFootprint>(), out Arg.Any<ModelFootprint>());
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+    }
+
+    [Test]
+    public async Task Capacity_WhenTheSupervisorEnforcesTheProcessCap_SkipsTheCountCheck()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb),
+            MaxLoadedProcesses = 1,
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "running/a:Q4_K_M",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
+            ]
+        };
+        var service = harness.Build();
+
+        var counted = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+        var uncounted = await service.DecideAsync(new CapacityRequest
+            {
+                ModelName = Model,
+                Role = ModelRole.Chat,
+                SupervisorEnforcesProcessCap = true
+            },
+            CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, counted.Verdict);
+        AssertEx.False(counted.IsMemoryShortfall, "A process-count reject is not a memory shortfall.");
+        AssertEx.Equal(CapacityVerdict.Allow, uncounted.Verdict, "The supervisor's own cap eviction decides the count for its launches.");
+        uncounted.Reservation?.Dispose();
     }
 
     [Test]

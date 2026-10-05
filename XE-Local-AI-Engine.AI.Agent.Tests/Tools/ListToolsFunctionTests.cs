@@ -15,6 +15,15 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ListToolsFunctionTests
 {
     [Test]
+    public void BudgetDefinition_CountsTheSchemaAsTheTemplateRendersIt()
+    {
+        var function = new ListToolsFunction([]);
+
+        AssertEx.Equal($"list_tools\n{function.Description}\n{{\"type\": \"object\", \"properties\": {{}}, \"additionalProperties\": false}}",
+            ListToolsFunction.BudgetDefinition);
+    }
+
+    [Test]
     public async Task InvokeAsync_ReturnsExactlyTheHiddenNamesWithOneLineDescriptions()
     {
         var tools = Tools(("read_file", "Reads a file."), ("deploy", "Deploys the release."), ("search", "Searches."));

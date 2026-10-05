@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Chat;
 
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
@@ -125,15 +124,11 @@ internal static class ProviderMessageTokenEstimator
 
     private static TokenCharacterProfile ComputeToolCharacterProfile(AITool tool)
     {
+        // The declaration, not AIFunction: a declaration-only tool (a handoff) still sends its schema. Same text as the outer budget's
+        // definition (InvocationRunner.BuildToolBudgetDefinitions), so the two budgets charge a tool identically.
+        var schema = tool is AIFunctionDeclaration function ? TokenEstimatorCalibrationStore.RenderToolSchema(function.JsonSchema) : string.Empty;
         var profile = new TokenCharacterProfile();
-        profile.Add(tool.Name);
-        profile.Add(tool.Description);
-        // The declaration, not AIFunction: a declaration-only tool (a handoff) still sends its schema.
-        if (tool is AIFunctionDeclaration function && function.JsonSchema.ValueKind != JsonValueKind.Undefined)
-        {
-            profile.Add(function.JsonSchema.GetRawText());
-        }
-
+        profile.Add(string.Concat(tool.Name, "\n", tool.Description, "\n", schema));
         return profile;
     }
 

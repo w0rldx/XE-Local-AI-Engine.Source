@@ -215,7 +215,8 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
     private IReadOnlyList<OrchestrationUpdate> MapStreamingUpdate(AgentResponseUpdateEvent updateEvent)
     {
         var (participantKey, participantName) = ResolveParticipant(updateEvent.ExecutorId);
-        return ComposeStreamingUpdates(updateEvent.Update.Contents, updateEvent.Update.Text, participantKey, participantName);
+        // ChatClientAgent seeds each update from the provider's ChatResponseUpdate, finish reason included, and the handoff executor yields it unchanged.
+        return ComposeStreamingUpdates(updateEvent.Update.Contents, updateEvent.Update.Text, participantKey, participantName, updateEvent.Update.FinishReason?.Value);
     }
 
     /// <summary>Normalizes one streaming update's contents into ordered <see cref="OrchestrationUpdate" />s.</summary>
@@ -223,12 +224,14 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
     ///     A single update can carry reasoning AND visible text, since both co-occur on the wire, so BOTH are emitted —
     ///     reasoning delta first, then text — rather than returning early on reasoning and dropping the visible text. A
     ///     MAF handoff <c>FunctionCallContent</c> carries neither and maps to an empty list. Pure and static, so the
-    ///     mapping is unit-testable without the concrete MAF <c>StreamingRun</c>, which cannot be faked.
+    ///     mapping is unit-testable without the concrete MAF <c>StreamingRun</c>, which cannot be faked. A finish reason rides the
+    ///     last update; a chunk with nothing else (the provider's usual last one) yields an empty text delta to carry it.
     /// </remarks>
     internal static IReadOnlyList<OrchestrationUpdate> ComposeStreamingUpdates(IEnumerable<AIContent> contents,
         string? text,
         string? participantKey,
-        string? participantName)
+        string? participantName,
+        string? finishReason = null)
     {
         ArgumentNullException.ThrowIfNull(contents);
 
@@ -247,6 +250,19 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
         if (!string.IsNullOrEmpty(text))
         {
             updates.Add(OrchestrationUpdate.TextFragment(text, participantKey, participantName));
+        }
+
+        if (!string.IsNullOrEmpty(finishReason))
+        {
+            if (updates.Count == 0)
+            {
+                updates.Add(OrchestrationUpdate.TextFragment(string.Empty, participantKey, participantName));
+            }
+
+            updates[^1] = updates[^1] with
+            {
+                FinishReason = finishReason
+            };
         }
 
         return updates;

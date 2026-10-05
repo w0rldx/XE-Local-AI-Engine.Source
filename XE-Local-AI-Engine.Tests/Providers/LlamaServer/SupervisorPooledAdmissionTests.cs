@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Collections.Concurrent;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -42,16 +44,84 @@ public sealed class SupervisorPooledAdmissionTests
     }
 
     [Test]
-    public async Task ChatEnsure_NeverAsksTheHook()
+    public async Task ColdChatEnsure_AsksTheChatHookOnce_AndAResidentChatNever()
     {
         var launcher = new FakeProcessLauncher();
         var hook = new RecordingPooledAdmission(registry: null);
         await using var supervisor = Create(launcher, new ProcessLaunchAdmissionRegistry(), hook);
 
         await supervisor.EnsureRunningAsync("chat-model", ModelRole.Chat, CancellationToken.None);
+        await supervisor.EnsureRunningAsync("chat-model", ModelRole.Chat, CancellationToken.None);
 
-        AssertEx.Equal(expected: 1, launcher.LaunchCount, "the chat spawn must have run");
-        AssertEx.Equal(expected: 0, hook.Calls, "Chat follows the caller-side capacity protocol, never the pooled hook.");
+        AssertEx.Equal(expected: 1, launcher.LaunchCount, "the second ensure must reuse the resident process");
+        AssertEx.Equal(expected: 1, hook.ChatCalls, "A cold chat spawn is admitted once; a turn on a resident model is never admitted.");
+        AssertEx.Equal(expected: 0, hook.Calls, "Chat goes through the chat entry point, not the pooled one.");
+    }
+
+    [Test]
+    [Arguments(ModelResidencyIntent.Interactive, true)]
+    [Arguments(ModelResidencyIntent.Transient, true)]
+    [Arguments(ModelResidencyIntent.Background, false)]
+    public async Task ColdChatEnsure_OnlyABackgroundLoad_MayNotUnloadIdleModels(ModelResidencyIntent intent, bool expected)
+    {
+        var hook = new RecordingPooledAdmission(registry: null);
+        await using var supervisor = Create(new FakeProcessLauncher(), new ProcessLaunchAdmissionRegistry(), hook);
+
+        await supervisor.EnsureRunningAsync("chat-model", ModelRole.Chat, intent, CancellationToken.None);
+
+        AssertEx.Equal(expected, hook.MayUnloadIdleModels.Single());
+    }
+
+    [Test]
+    public async Task RefusedBackgroundLoad_LeavesNoSpawnToJoin_SoAUserTurnIsAdmittedOnItsOwn()
+    {
+        var launcher = new FakeProcessLauncher();
+        var hook = new RecordingPooledAdmission(registry: null)
+        {
+            RefuseBackground = true
+        };
+        await using var supervisor = Create(launcher, new ProcessLaunchAdmissionRegistry(), hook);
+
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("chat-model", ModelRole.Chat, ModelResidencyIntent.Background, CancellationToken.None));
+        await supervisor.EnsureRunningAsync("chat-model", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal("False,True", string.Join(",", hook.MayUnloadIdleModels));
+        AssertEx.Equal(expected: 1, launcher.LaunchCount, "The user turn runs its own admission and loads; the background refusal never binds it.");
+    }
+
+    [Test]
+    public async Task ChatEnsure_WithAnAdmissionAlreadyPublished_SkipsTheHook_AndConsumesIt()
+    {
+        var launcher = new FakeProcessLauncher();
+        var registry = new ProcessLaunchAdmissionRegistry();
+        var hook = new RecordingPooledAdmission(registry);
+        await using var supervisor = Create(launcher, registry, hook);
+
+        // A sub-agent dispatch decided on its own and published the admission this launch is expected to consume.
+        AssertEx.True(registry.TryAcquire(RecordingPooledAdmission.Admission("chat-model", ModelRole.Chat), out var consumer));
+        await supervisor.EnsureRunningAsync("chat-model", ModelRole.Chat, CancellationToken.None);
+        consumer!.Dispose();
+
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
+        AssertEx.Equal(expected: 0, hook.ChatCalls, "A second decision would reject on the admission its own caller published.");
+        AssertEx.False(registry.Snapshot("chat-model", ModelRole.Chat).HasRequestedKey, "The published admission must have been consumed and released.");
+    }
+
+    [Test]
+    public async Task ChatHookRefusal_FailsNonRetryable_WithoutLaunching()
+    {
+        var launcher = new FakeProcessLauncher();
+        var hook = new RecordingPooledAdmission(registry: null)
+        {
+            Refusal = new LlamaRuntimeException("Insufficient capacity for 'chat-model' (Chat). Eject one of them or pick a loaded model.")
+        };
+        await using var supervisor = Create(launcher, new ProcessLaunchAdmissionRegistry(), hook);
+
+        var refused = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("chat-model", ModelRole.Chat, CancellationToken.None));
+
+        AssertEx.True(refused.Data.Contains(NonRetryableMarker), "A refused chat load is a policy outcome and must be classified non-retryable.");
+        AssertEx.Contains(refused.Message, "Eject one of them", StringComparison.Ordinal);
+        AssertEx.Equal(expected: 0, launcher.LaunchCount);
     }
 
     [Test]
@@ -123,6 +193,33 @@ public sealed class SupervisorPooledAdmissionTests
     }
 
     [Test]
+    public async Task BackgroundChatLoad_AdmittedOnMemory_ButRefusedAtTheCap_ReleasesItsReservation()
+    {
+        var launcher = new FakeProcessLauncher();
+        var registry = new ProcessLaunchAdmissionRegistry();
+        var hook = new RecordingPooledAdmission(registry);
+        await using var supervisor = Create(launcher, registry, hook, options: new LlamaServerSupervisorOptions
+        {
+            MaxLoadedProcesses = 1,
+            IdleTimeToLive = TimeSpan.FromHours(1)
+        });
+        await supervisor.EnsureRunningAsync("chat-a", ModelRole.Chat, ModelResidencyIntent.Transient, CancellationToken.None);
+
+        var refused = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            supervisor.EnsureRunningAsync("chat-b", ModelRole.Chat, ModelResidencyIntent.Background, CancellationToken.None));
+
+        AssertEx.Contains(refused.Message, "maximum number of local models", StringComparison.OrdinalIgnoreCase);
+        AssertEx.True(refused.Data.Contains(NonRetryableMarker), "the cap refusal is a policy outcome, like the capacity refusal");
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "the in-window transient chat process is not a background victim");
+        var reservation = hook.Reservations.Last();
+        AssertEx.Equal(expected: 2, hook.Reservations.Count);
+        AssertEx.True(reservation.Disposed, "the memory admission's reservation is released when the spawn is refused at the cap");
+        AssertEx.False(reservation.GlobalBlockerAtRelease);
+        AssertEx.False(registry.Snapshot("chat-b", ModelRole.Chat).HasRequestedKey, "no ledger booking is left behind");
+        AssertEx.Equal(expected: 0, supervisor.CountInflightSpawns());
+    }
+
+    [Test]
     public async Task ReapThenEnsure_AsksTheHookAgain()
     {
         var launcher = new FakeProcessLauncher();
@@ -141,11 +238,13 @@ public sealed class SupervisorPooledAdmissionTests
         ProcessLaunchAdmissionRegistry registry,
         RecordingPooledAdmission hook,
         ILlamaServerHealthProbe? healthProbe = null,
-        FakeModelStore? modelStore = null)
+        FakeModelStore? modelStore = null,
+        LlamaServerSupervisorOptions? options = null)
     {
         return SupervisorFactory.Create(launcher,
             healthProbe,
             modelStore,
+            options,
             variantSelector: new FakeVariantSelector(GpuVariant.Cpu),
             launchAdmissions: registry,
             pooledLaunchAdmission: hook);
@@ -158,6 +257,7 @@ public sealed class SupervisorPooledAdmissionTests
     {
         private readonly ProcessLaunchAdmissionRegistry? _registry;
         private int _calls;
+        private int _chatCalls;
 
         public RecordingPooledAdmission(ProcessLaunchAdmissionRegistry? registry)
         {
@@ -166,9 +266,15 @@ public sealed class SupervisorPooledAdmissionTests
 
         public Exception? Refusal { get; init; }
 
+        public bool RefuseBackground { get; init; }
+
         public int Calls => Volatile.Read(ref _calls);
 
+        public int ChatCalls => Volatile.Read(ref _chatCalls);
+
         public ConcurrentQueue<ModelRole> Roles { get; } = new();
+
+        public ConcurrentQueue<bool> MayUnloadIdleModels { get; } = new();
 
         public ConcurrentQueue<Reservation> Reservations { get; } = new();
 
@@ -192,7 +298,35 @@ public sealed class SupervisorPooledAdmissionTests
             return Task.FromResult<IDisposable?>(reservation);
         }
 
-        private static ProcessLaunchAdmission Admission(string modelName, ModelRole role) =>
+        public Task<IDisposable?> AdmitChatAsync(string modelName,
+            bool mayUnloadIdleModels,
+            Func<IReadOnlyCollection<string>, CancellationToken, Task<IdleChatEvictionResult>> evictIdleModel,
+            CancellationToken ct)
+        {
+            Interlocked.Increment(ref _chatCalls);
+            MayUnloadIdleModels.Enqueue(mayUnloadIdleModels);
+            if (Refusal is not null)
+            {
+                throw Refusal;
+            }
+
+            if (RefuseBackground && !mayUnloadIdleModels)
+            {
+                throw new LlamaCapacityRefusedException("Insufficient capacity for 'chat-model' (Chat). Eject one of them or pick a loaded model.");
+            }
+
+            if (_registry is null)
+            {
+                return Task.FromResult<IDisposable?>(null);
+            }
+
+            AssertEx.True(_registry.TryAcquire(Admission(modelName, ModelRole.Chat), out var consumer), "the test admission must publish");
+            var reservation = new Reservation(_registry, consumer!);
+            Reservations.Enqueue(reservation);
+            return Task.FromResult<IDisposable?>(reservation);
+        }
+
+        public static ProcessLaunchAdmission Admission(string modelName, ModelRole role) =>
             new()
             {
                 ModelName = modelName,

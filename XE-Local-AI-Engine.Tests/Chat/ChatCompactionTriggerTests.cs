@@ -60,6 +60,21 @@ public sealed class ChatCompactionTriggerTests
     }
 
     [Test]
+    public async Task BothJobKinds_LoadTheirModelAsBackgroundWork()
+    {
+        await using var harness = new ConversationMaintenanceHarness(projectedTokens: 5_377);
+        var conversationId = Guid.NewGuid();
+        harness.Persistence.GetConversationForTurnAsync(conversationId, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<NodeChatConversationDto?>(ConversationWith(conversationId, messages: 6, stateCoversTo: null)));
+
+        await harness.Worker.ProcessJobAsync(ConversationMaintenanceHarness.Job(conversationId, kind: ConversationMaintenanceKind.Distill), CancellationToken.None);
+        await harness.Worker.ProcessJobAsync(ConversationMaintenanceHarness.Job(conversationId), CancellationToken.None);
+
+        // A post-turn fold on the node default model must never unload the model the user is chatting with.
+        AssertEx.Equal("Background,Background", string.Join(',', harness.Intents));
+    }
+
+    [Test]
     public async Task DistillJob_CountsOnlyMessagesAfterTheStateWatermark()
     {
         // Eight completed messages, six of them already distilled: two pending is below the six-message trigger.

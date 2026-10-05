@@ -30,6 +30,12 @@ public interface ILocalModelProvider
     /// <summary>Loads or probes a model so first-token latency is paid before an interactive turn.</summary>
     Task WarmModelAsync(string modelName, CancellationToken ct);
 
+    /// <summary>As <see cref="WarmModelAsync(string, CancellationToken)" />, with the caller's residency intent; a provider may ignore it.</summary>
+    Task WarmModelAsync(string modelName, ModelResidencyIntent intent, CancellationToken ct)
+    {
+        return WarmModelAsync(modelName, ct);
+    }
+
     /// <summary>
     ///     Returns live runtime facts for the running chat process backing <paramref name="modelName" /> — currently the
     ///     effective context window it actually loaded — or <see langword="null" /> when unknown (the model is not yet

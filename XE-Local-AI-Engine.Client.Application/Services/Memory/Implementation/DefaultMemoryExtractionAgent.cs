@@ -73,7 +73,8 @@ internal sealed class DefaultMemoryExtractionAgent : IMemoryExtractionAgent
         var selection = new LocalModelSelection
         {
             ModelName = modelName,
-            ProviderName = provider.ProviderName
+            ProviderName = provider.ProviderName,
+            ResidencyIntent = ModelResidencyIntent.Background
         };
 
         // IChatClient is IDisposable — dispose the per-run node-local client.

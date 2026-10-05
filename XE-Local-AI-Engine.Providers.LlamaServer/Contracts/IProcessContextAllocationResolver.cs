@@ -34,8 +34,8 @@ public interface IProcessContextAllocationResolver
     bool TryDownTierForAdmission(ProcessContextAllocation current, out ProcessContextAllocation downTiered);
 
     /// <summary>
-    /// Atomically commits a fitting admission candidate without replacing an already-committed lower allocation. Returns
-    /// the effective committed allocation so admission can reserve exactly what launch will consume.
+    /// Validates a fitting admission candidate and returns the allocation launch will consume: the candidate, or a lower
+    /// out-of-memory down-tier already in force. The candidate is never cached, so it lasts only for that launch.
     /// </summary>
     bool TryCommitAdmissionAllocation(ProcessContextAllocation candidate, out ProcessContextAllocation committed);
 

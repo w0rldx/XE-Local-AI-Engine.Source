@@ -139,6 +139,13 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     }
 
     /// <inheritdoc />
+    public async Task WarmModelAsync(string modelName, ModelResidencyIntent intent, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        await _supervisor.EnsureRunningAsync(modelName, ModelRole.Chat, intent, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
     /// <remarks>
     ///     Reports the running CHAT process's effective context window (the launched <c>-c</c> as clamped by the server,
     ///     read from <c>/props</c>). Returns <see langword="null" /> when no chat process is running for the model or its

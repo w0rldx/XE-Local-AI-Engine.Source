@@ -38,7 +38,7 @@ internal static class AddNodeCapacityExtensions
         builder.Services.AddSingleton<IPendingFootprintLedger, PendingFootprintLedger>();
         builder.Services.AddScoped<ICapacityService, CapacityService>();
 
-        // The supervisor's admission hook for cold embedder/reranker spawns. Singleton over IServiceScopeFactory: injecting the
+        // The supervisor's admission hook for cold embedder, reranker and chat spawns. Singleton over IServiceScopeFactory: injecting the
         // Scoped capacity service would be a cycle, since that service depends on the supervisor.
         builder.Services.AddSingleton<ILlamaServerPooledLaunchAdmission, PooledRoleLaunchAdmission>();
 

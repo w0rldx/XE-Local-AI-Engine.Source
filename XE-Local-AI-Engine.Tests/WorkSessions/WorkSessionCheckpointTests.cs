@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -258,6 +259,7 @@ public sealed class WorkSessionCheckpointTests
             string? requestedModel,
             int? recentMessagesToKeepVerbatim,
             bool distill = true,
+            ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive,
             CancellationToken cancellationToken = default)
         {
             LastKeepVerbatim = recentMessagesToKeepVerbatim;

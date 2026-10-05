@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+
 /// <summary>Why a compaction attempt ended the way it did.</summary>
 public enum ConversationCompactionOutcome
 {
@@ -71,7 +73,7 @@ public interface IConversationCompactionService
     /// <param name="requestedModel">The model to summarize with, if it is an installed LOCAL chat model.</param>
     /// <remarks>Anything else, including a blank, degrades to a node-local default, so content stays on-machine.</remarks>
     Task<ConversationCompactionResult> CompactAsync(Guid conversationId, string? requestedModel = null, CancellationToken cancellationToken = default) =>
-        CompactAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim: null, distill: true, cancellationToken);
+        CompactAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim: null, distill: true, cancellationToken: cancellationToken);
 
     /// <summary>The same compaction with an explicit keep window and an optional distillation step.</summary>
     /// <param name="recentMessagesToKeepVerbatim">
@@ -79,6 +81,7 @@ public interface IConversationCompactionService
     ///     clamped to the same floor of 2; null keeps the configured window.
     /// </param>
     /// <param name="distill">True distils the state up to the fold cutoff first; work sessions pass false (their state is rebuilt per step).</param>
+    /// <param name="residencyIntent"><see cref="ModelResidencyIntent.Background" /> when no user waits on it: a cold model then never unloads another.</param>
     /// <remarks>
     ///     A caller that knows its conversation does not depend on verbatim history can fold down to the last
     ///     exchange. A work-session step is that caller: its state block is rebuilt from the database every step, so
@@ -88,5 +91,6 @@ public interface IConversationCompactionService
         string? requestedModel,
         int? recentMessagesToKeepVerbatim,
         bool distill = true,
+        ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive,
         CancellationToken cancellationToken = default);
 }

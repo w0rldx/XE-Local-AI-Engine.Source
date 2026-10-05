@@ -98,7 +98,7 @@ internal sealed class WorkSessionCheckpointComposer
             requestedModel: null,
             ConversationStepContextBound.SessionKeepVerbatim,
             distill: false,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         // Any non-blank synopsis wins, not only a freshly folded one: the step boundary often leaves nothing to fold,
         // and its "already covered" no-op returns the synopsis THAT fold produced. Compacted-only would pin a stale one.

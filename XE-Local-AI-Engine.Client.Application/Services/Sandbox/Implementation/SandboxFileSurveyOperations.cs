@@ -106,8 +106,26 @@ internal static class SandboxFileSurveyOperations
             cancellationToken);
     }
 
+    /// <summary>Searches the jail's text files under a directory, or one file when the path names a file.</summary>
+    /// <remarks>
+    ///     A file path runs the directory's confinement unchanged — <c>ResolveJailPath</c>, then <c>EnsureNoSymlinkComponentsUnderJail</c>
+    ///     over every component including the leaf — and the scanner refuses a link leaf again and applies the same binary skip and bounds.
+    /// </remarks>
     public static IReadOnlyList<string> SearchText(string jailRoot, SandboxSearchTextRequest request, CancellationToken cancellationToken)
     {
+        var resolved = SandboxJailPathGuard.ResolveJailPath(jailRoot, request.DirectoryPath);
+        SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(jailRoot, resolved, request.DirectoryPath);
+        if (File.Exists(resolved))
+        {
+            return WorkspaceFileScanner.SearchTextInFile(resolved,
+                request.Pattern,
+                request.IsRegex,
+                request.MaxMatches,
+                request.MaxOutputBytes,
+                request.IsPathSuppressed ?? (static _ => false),
+                cancellationToken);
+        }
+
         var root = ResolveSurveyDirectory(jailRoot, request.DirectoryPath);
 
         return WorkspaceFileScanner.SearchText(root,

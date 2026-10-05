@@ -219,6 +219,60 @@ public sealed class ConversationSummarizerBoundaryTests
     }
 
     [Test]
+    [Arguments("{\"priorSummary\":null,\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}")]
+    [Arguments("```json\n{\"Messages\": [{\"role\": \"user\", \"content\": \"hello\"}]}\n```")]
+    [Arguments("{\"alreadyCaptured\":\"x\"}")]
+    public async Task SummarizeAsync_WhenTheFoldEchoesItsJsonInput_AbortsWithoutAdvancingCoverage(string echo)
+    {
+        using var client = new CapturingChatClient(responseFactory: _ => echo);
+        var summarizer = CreateSummarizer(client, requestBudget: 1800, maxSummaryChars: 300);
+
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = "hello"
+                }
+            ],
+            ModelName = "model"
+        });
+
+        AssertEx.Null(result, "An echoed input is not a synopsis and must not be stored as one.");
+    }
+
+    [Test]
+    [Arguments("The user asked for a greeting; the assistant greeted them back.")]
+    [Arguments("The user shared the config {\"messages\": 3} and asked why it fails.")]
+    [Arguments("{\"summary\": \"The user greeted the assistant.\"}")]
+    [Arguments("{ the user wrote braces and an open question }")]
+    [Arguments("```json\n{\"messages\": 3}\n```\nThe user shared that config and asked why it fails.")]
+    public async Task SummarizeAsync_WhenTheSynopsisMerelyContainsJson_KeepsIt(string synopsis)
+    {
+        using var client = new CapturingChatClient(responseFactory: _ => synopsis);
+        var summarizer = CreateSummarizer(client, requestBudget: 1800, maxSummaryChars: 300);
+
+        var result = await summarizer.SummarizeAsync(new ConversationSummarizerInput
+        {
+            PriorSummary = null,
+            Messages =
+            [
+                new ConversationSummarizerMessage
+                {
+                    Role = "user",
+                    Content = "hello"
+                }
+            ],
+            ModelName = "model"
+        });
+
+        AssertEx.Equal(synopsis, result);
+    }
+
+    [Test]
     public async Task FoldAsync_WhenTheModelSupportsThinking_DisablesItOnEveryRequest()
     {
         using var client = new CapturingChatClient();

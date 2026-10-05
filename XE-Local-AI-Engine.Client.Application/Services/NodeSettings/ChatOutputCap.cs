@@ -17,4 +17,8 @@ public sealed record ChatOutputCap
         Mode is StoredNodeSettings.ChatOutputCapModeCap && windowTokens is { } window && window > 0
             ? Math.Max(1, Math.Min(window / 2, MaxTokens))
             : null;
+
+    /// <summary>The output cap for a local llama.cpp model not loaded yet, whose window is unknown: <see cref="MaxTokens" /> under <c>cap</c>, else null.</summary>
+    public int? TokensForUnlaunchedLocalModel() =>
+        Mode is StoredNodeSettings.ChatOutputCapModeCap ? Math.Max(1, MaxTokens) : null;
 }

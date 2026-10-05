@@ -74,6 +74,8 @@ public sealed class InvocationRunnerTests
 
     private const string SkillName = "demo";
 
+    private const string CloudModel = "cloud-model";
+
     // real-timer: one stubbed local warm, and the floor a turn that summed TWO of them must clear. The floor sits
     // well under the pair and well over a single warm, so neither a fast machine nor a loaded one changes the verdict.
     private static readonly TimeSpan WarmDelay = TimeSpan.FromMilliseconds(40);
@@ -1245,6 +1247,188 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
         await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.OutputLimitReached));
+    }
+
+    /// <summary>
+    ///     Model-matrix follow-up: orchestration participants ran uncapped. Each is capped against the window ITS model was
+    ///     launched with (participants can run different models); notice-only and off do not cap.
+    /// </summary>
+    [Test]
+    [Arguments("cap", 16_384, 2_048)]
+    [Arguments("notice", null, null)]
+    [Arguments("off", null, null)]
+    public async Task RunAsync_ForAnOrchestration_CapsEachParticipantAgainstItsOwnWindow(string mode, int? expectedTriageCap, int? expectedSpecialistCap)
+    {
+        var definition = await CaptureOrchestrationDefinitionAsync(new ChatOutputCap { Mode = mode, MaxTokens = 16_384 }, RuntimePackageBuilder.Valid());
+
+        AssertEx.Equal(expectedTriageCap, definition.Participants[0].DefaultMaxOutputTokens, "the triage runs the turn's 65,536 window");
+        AssertEx.Equal(expectedSpecialistCap, definition.Participants[1].DefaultMaxOutputTokens, "the specialist runs a 4,096 window");
+    }
+
+    /// <summary>
+    ///     A participant on another local model that is not loaded yet has no window to cap against, and nothing recomputes the
+    ///     cap after its deferred load, so it takes the ceiling; a cloud or external participant stays uncapped like such a turn.
+    /// </summary>
+    [Test]
+    [Arguments("cold-model", "cap", 16_384)]
+    [Arguments("cold-model", "notice", null)]
+    [Arguments("cold-model", "off", null)]
+    [Arguments(CloudModel, "cap", null)]
+    [Arguments("ext:provider/remote-model", "cap", null)]
+    public async Task RunAsync_ForAnOrchestration_CapsAParticipantWithAnUnknownWindowOnlyWhenItIsLocal(string specialistModel, string mode, int? expectedSpecialistCap)
+    {
+        var definition = await CaptureOrchestrationDefinitionAsync(new ChatOutputCap { Mode = mode, MaxTokens = 16_384 }, RuntimePackageBuilder.Valid(), specialistModel: specialistModel);
+
+        AssertEx.Equal(specialistModel, definition.Participants[1].ModelId);
+        AssertEx.Null(definition.Participants[1].EffectiveContextTokens, "the specialist's window is not known at build time");
+        AssertEx.Equal(expectedSpecialistCap, definition.Participants[1].DefaultMaxOutputTokens);
+    }
+
+    [Test]
+    [Arguments("small-model")]
+    [Arguments("cold-model")]
+    public async Task RunAsync_ForAFrozenBenchmarkOrchestration_UsesTheFrozenLadderAndNoCap(string specialistModel)
+    {
+        var definition = await CaptureOrchestrationDefinitionAsync(new ChatOutputCap { Mode = "cap", MaxTokens = 1_000 }, RuntimePackageBuilder.Valid(), frozen: true, specialistModel);
+
+        AssertEx.True(definition.Participants.All(static participant => participant.DefaultMaxOutputTokens is null), "a frozen run takes no default cap");
+        AssertEx.True(definition.Participants.All(static participant => participant.ReasoningBudgets == ReasoningBudgets.Frozen), "a frozen run takes the fixed ladder");
+    }
+
+    /// <summary>
+    ///     Model-matrix follow-up: an orchestration whose answer stopped at the length limit said nothing, unlike a single-agent turn.
+    ///     A handoff round with no text after it must not hide the cut-off.
+    /// </summary>
+    [Test]
+    [Arguments("cap", false, 1)]
+    [Arguments("notice", false, 1)]
+    [Arguments("off", false, 0)]
+    [Arguments("cap", true, 1)]
+    public async Task RunAsync_WhenTheLastOrchestrationAnswerEndsOnLength_EmitsOneOutputLimitNoticeUnlessOff(string mode, bool handoffRoundAfter, int expectedNotices)
+    {
+        OrchestrationRound[] rounds = handoffRoundAfter
+            ? [new("a", "Handing over.", "tool_calls"), new("b", "0000", "length"), new("a", Text: null, "tool_calls")]
+            : [new("a", "Handing over.", "tool_calls"), new("b", "0000", "length")];
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher,
+            orchestrationAgentFactory: CreateOrchestrationFactory(OrchestrationRounds(rounds), out _),
+            configureRuntimeSettings: settings => settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(new ChatOutputCap { Mode = mode, MaxTokens = 16_384 }));
+
+        await RunPlainAsync(runner, RuntimePackageBuilder.Valid().WithOrchestrationSpec(SampleSpec()).Build());
+
+        await dispatcher.Received(expectedNotices).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.OutputLimitReached
+            && payload.Message == "The answer stopped at the length limit before the model finished."
+            && payload.Detail == "length"));
+    }
+
+    /// <summary>An earlier participant's cut-off is not the answer the user reads when the final participant finished normally.</summary>
+    [Test]
+    [Arguments("length")]
+    [Arguments("tool_calls")]
+    public async Task RunAsync_WhenTheFinalOrchestrationParticipantStops_EmitsNoOutputLimitNotice(string earlierFinish)
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher,
+            orchestrationAgentFactory: CreateOrchestrationFactory(OrchestrationRounds(new("a", "partial", earlierFinish), new("b", "Done.", "stop")), out _));
+
+        await RunPlainAsync(runner, RuntimePackageBuilder.Valid().WithOrchestrationSpec(SampleSpec()).Build());
+
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.OutputLimitReached));
+    }
+
+    // The specialist's model: "small-model" is resident with a 4,096 window, any other plain id is local but not loaded yet,
+    // and CloudModel routes to the cloud.
+    private static async Task<OrchestrationAgentDefinition> CaptureOrchestrationDefinitionAsync(ChatOutputCap outputCap,
+        RuntimePackageBuilder packageBuilder,
+        bool frozen = false,
+        string specialistModel = "small-model")
+    {
+        OrchestrationAgentDefinition? captured = null;
+        var orchestrationFactory = Substitute.For<IOrchestrationAgentFactory>();
+        orchestrationFactory.CreateAsync(Arg.Do<OrchestrationAgentDefinition>(definition => captured = definition), Arg.Any<IReadOnlyList<ChatMessage>>(), Arg.Any<CancellationToken>())
+                            .Returns(_ => Task.FromException<IOrchestrationRunSession>(new InvalidOperationException("stop after the definition")));
+        var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
+        cloudFactory.IsCloudProviderSelected(CloudModel).Returns(true);
+        var runner = CreateRunner(orchestrationAgentFactory: orchestrationFactory,
+            providerResolver: CreatePerModelLlamaCppResolver(new Dictionary<string, int>(StringComparer.Ordinal)
+            {
+                ["qwen3.5:0.8b"] = 65_536,
+                ["small-model"] = 4_096
+            }),
+            activeCloudFactory: cloudFactory,
+            configureRuntimeSettings: settings => settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(outputCap));
+        var spec = SampleSpec();
+        var package = packageBuilder.WithOrchestrationSpec(spec with
+        {
+            Participants = [spec.Participants[0] with { ModelId = null }, spec.Participants[1] with { ModelId = specialistModel }]
+        }).Build() with
+        {
+            UsesFrozenBenchmarkPolicy = frozen
+        };
+
+        await RunPlainAsync(runner, package);
+
+        return AssertEx.NotNull(captured);
+    }
+
+    // One participant round: its text (if any), then the provider's last chunk carrying only the finish reason.
+    private readonly record struct OrchestrationRound(string Key, string? Text, string FinishReason);
+
+    private static async IAsyncEnumerable<OrchestrationUpdate> OrchestrationRounds(params OrchestrationRound[] rounds)
+    {
+        foreach (var round in rounds)
+        {
+            var name = round.Key == "a" ? "Triage" : "Specialist";
+            if (round.Text is { } text)
+            {
+                yield return OrchestrationUpdate.TextFragment(text, round.Key, name);
+            }
+
+            await Task.Yield();
+            yield return OrchestrationUpdate.TextFragment(string.Empty, round.Key, name) with
+            {
+                FinishReason = round.FinishReason
+            };
+        }
+
+        yield return OrchestrationUpdate.Terminal();
+    }
+
+    /// <summary>
+    ///     A final round that is only <c>&lt;tool_call&gt;</c> text finished "stop" and raised no notice. The text stays (a turn
+    ///     never loses its only visible text); the notice says it is no answer.
+    /// </summary>
+    [Test]
+    [Arguments("<tool_call>\n{\"name\": \"Calculate\", \"arguments\": {\"expression\": \"2+2\"}}\n</tool_call>")]
+    [Arguments("  <tool_call>{\"name\": \"a\"}</tool_call>\n\n<tool_call>{\"name\": \"b\"}</tool_call>\n")]
+    public async Task RunAsync_WhenTheFinalAnswerIsOnlyToolCallMarkup_EmitsTheToolCallAsTextNotice(string answer)
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdates(answer));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.Kind == TurnNoticeKind.EmptyAnswer
+            && payload.Message == "The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer."));
+        await dispatcher.DidNotReceive().ReportInvocationTextReclassifiedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [Test]
+    [Arguments("Call it like this: <tool_call>{\"name\": \"a\"}</tool_call>")]
+    [Arguments("<tool_call>{\"name\": \"a\"}</tool_call>\nThat is the syntax.")]
+    [Arguments("<tool_call>{\"name\": \"a\"}")]
+    [Arguments("The answer is 4.")]
+    public async Task RunAsync_WhenTheFinalAnswerHasTextBesideToolCallMarkup_RaisesNoEmptyAnswerNotice(string answer)
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdates(answer));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.DidNotReceive().ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload => payload.Kind == TurnNoticeKind.EmptyAnswer));
     }
 
     private static async IAsyncEnumerable<AgentResponseUpdate> ReasoningThenContentFinishing(string finishReason, string reasoning, string content)
@@ -5247,6 +5431,22 @@ public sealed class InvocationRunnerTests
 
         await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "The model could not be loaded or run on the provider."),
             FailureCategory.ModelLoadFailed);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenCapacityRefusesTheModelLaunch_MapsModelLoadFailed_AndSurfacesTheRefusalVerbatim()
+    {
+        const string refusal = "Insufficient capacity for 'big/model-GGUF:Q4_K_M' (Chat): not enough free memory for another model. "
+                               + "Loaded now: 'small/model-GGUF:Q4_K_M' (Chat). Eject one of them or pick a loaded model.";
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new LlamaCapacityRefusedException(refusal)));
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(factory, eventDispatcher: dispatcher);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), refusal, FailureCategory.ModelLoadFailed);
     }
 
     [Test]

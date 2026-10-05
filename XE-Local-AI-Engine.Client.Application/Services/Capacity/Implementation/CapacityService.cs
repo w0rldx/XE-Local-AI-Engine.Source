@@ -183,12 +183,12 @@ public sealed class CapacityService : ICapacityService
             return Reject(ReasonRejectFootprintUnknown, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
 
-        // Process-count headroom mirrors the supervisor's loaded-cap (distinct (model,role) + this new one ≤ cap). A pooled role skips it:
-        // at the cap the supervisor's idle reaper evicts the least recently used pooled process, or refuses the launch itself.
+        // Process-count headroom mirrors the supervisor's loaded-cap (distinct (model,role) + this new one ≤ cap). A pooled role and the supervisor's
+        // own chat admission skip it: at the cap the supervisor's idle reaper evicts the least recently used pooled process, or refuses the launch itself.
         var activeProcessKeys = running.Select(static key => new ProcessLaunchAdmissionKey(key.ModelName, key.Role))
                                        .Concat(launchSnapshot.AdmittedKeys)
                                        .ToHashSet();
-        if (!isPooledRole && activeProcessKeys.Count + 1 > _localProviderResolver.MaxLoadedProcesses)
+        if (!isPooledRole && !request.SupervisorEnforcesProcessCap && activeProcessKeys.Count + 1 > _localProviderResolver.MaxLoadedProcesses)
         {
             return Reject(ReasonRejectProcessCap, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
@@ -201,14 +201,14 @@ public sealed class CapacityService : ICapacityService
         var fits = true;
         while (!FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad))
         {
-            if (!_footprintProvider.TryDownTierForAdmission(footprint, out var downTiered))
+            if (!request.AllowAdmissionDownTier || !_footprintProvider.TryDownTierForAdmission(footprint, out var downTiered))
             {
                 fits = false;
                 break;
             }
 
             // A caller that NAMED a required window launches AT it (a benchmark replays its frozen -c), so a lower tier must never be admitted: the reservation
-            // would under-book, and it pins the model's shared allocation below that window for the process lifetime — later admissions reject until restart.
+            // would under-book the window that process actually allocates.
             if (request.RequiredContextTokens is { } required
                 && downTiered.Admission?.Allocation.ProcessContextTokens < required)
             {
@@ -220,19 +220,20 @@ public sealed class CapacityService : ICapacityService
 
         if (!fits && !neverReject)
         {
-            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
+            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning, isMemoryShortfall: true, footprint.Admission);
         }
 
         var committed = _footprintProvider.TryCommitAdmissionFootprint(footprint, out footprint);
         fits = fits && committed && FitsResourceBudget(profile, footprint.Resources, hasUnmeasuredGpuLoad);
         if (!fits && !neverReject)
         {
-            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
+            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning, isMemoryShortfall: committed,
+                committed ? footprint.Admission : null);
         }
 
         // Publish only after the exact footprint is reserved. Registry failure disposes the tentative reservation before
         // returning, preserving the ledger -> registry lock order and leaving neither half of the admission live.
-        using var reservation = new AdmissionReservation(_ledger.Reserve(footprint.Resources));
+        using var reservation = new AdmissionReservation(_ledger.Reserve(footprint.Resources), footprint.Admission);
         if (!isLlamaServer || !request.PublishLaunchAdmission)
         {
             return fits ? AllowWithinBudget(modelName, role, reservation, ollamaWarning, published: false) : AllowOverBudget(modelName, role, reservation, ollamaWarning);
@@ -279,7 +280,9 @@ public sealed class CapacityService : ICapacityService
         ModelRole role,
         RunningSnapshot runningSnapshot,
         ProcessLaunchAdmissionSnapshot launchSnapshot,
-        bool ollamaWarning)
+        bool ollamaWarning,
+        bool isMemoryShortfall = false,
+        ProcessLaunchAdmission? shortfallAdmission = null)
     {
         var resident = runningSnapshot.Keys
                                       .Concat(launchSnapshot.AdmittedKeys.Select(static key => new RunningKey(key.ModelName, key.Role)))
@@ -303,7 +306,9 @@ public sealed class CapacityService : ICapacityService
         {
             Verdict = CapacityVerdict.RejectInsufficient,
             Reason = reason,
-            OllamaEvictionWarning = ollamaWarning
+            OllamaEvictionWarning = ollamaWarning,
+            IsMemoryShortfall = isMemoryShortfall,
+            Admission = shortfallAdmission
         };
     }
 
@@ -404,12 +409,14 @@ public sealed class CapacityService : ICapacityService
 
     private sealed class AdmissionReservation : IDisposable
     {
+        private readonly ProcessLaunchAdmission? _admission;
         private IDisposable? _reservation;
 
-        public AdmissionReservation(IDisposable footprintReservation)
+        public AdmissionReservation(IDisposable footprintReservation, ProcessLaunchAdmission? admission)
         {
             ArgumentNullException.ThrowIfNull(footprintReservation);
             _reservation = footprintReservation;
+            _admission = admission;
         }
 
         public bool TryAttach(IProcessLaunchAdmissionRegistry registry, ProcessLaunchAdmission admission)
@@ -439,7 +446,8 @@ public sealed class CapacityService : ICapacityService
                 Verdict = CapacityVerdict.Allow,
                 Reason = ReasonAllow,
                 OllamaEvictionWarning = ollamaWarning,
-                Reservation = _reservation
+                Reservation = _reservation,
+                Admission = _admission
             };
             _reservation = null;
             return decision;

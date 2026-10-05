@@ -41,13 +41,13 @@ public interface IModelFootprintProvider
 
     /// <summary>
     /// Purely recomputes the next smaller automatic hardware-tier footprint candidate for admission. Frozen and
-    /// deterministic allocations cannot be adjusted; shared launch state is unchanged until the explicit commit.
+    /// deterministic allocations cannot be adjusted; shared launch state is never changed by it.
     /// </summary>
     bool TryDownTierForAdmission(ModelFootprint current, out ModelFootprint downTiered);
 
     /// <summary>
-    /// Commits a fitting admission candidate and returns the effective monotone allocation footprint that launch will
-    /// consume. A caller must reserve the returned footprint, not the proposed one.
+    /// Validates a fitting admission candidate and returns the footprint that launch will consume: the candidate, or a
+    /// lower out-of-memory down-tier already in force. A caller reserves the returned footprint, not the proposed one.
     /// </summary>
     bool TryCommitAdmissionFootprint(ModelFootprint candidate, out ModelFootprint committed);
 }

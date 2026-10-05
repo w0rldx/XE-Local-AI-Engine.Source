@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -60,6 +61,9 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
 
     /// <summary>Every distillation the worker asked for.</summary>
     public ConcurrentQueue<Guid> Distillations { get; } = new();
+
+    /// <summary>The residency intent of every compaction and distillation, in call order.</summary>
+    public ConcurrentQueue<ModelResidencyIntent> Intents { get; } = new();
 
     /// <summary>Runs inside each compaction before it returns; a test parks, throws or observes the token here.</summary>
     public Func<Guid, CancellationToken, Task>? OnCompact { get; set; }
@@ -142,8 +146,7 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
     }
 
     /// <summary>
-    ///     Records each call; hand-written because the worker calls the three-argument default-interface overload,
-    ///     which forwards here.
+    ///     Records each call; hand-written so a default-interface overload forwards here too.
     /// </summary>
     internal sealed class RecordingCompactionService : IConversationCompactionService
     {
@@ -158,9 +161,11 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
             string? requestedModel,
             int? recentMessagesToKeepVerbatim,
             bool distill = true,
+            ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive,
             CancellationToken cancellationToken = default)
         {
             _harness.Compactions.Enqueue((conversationId, requestedModel, this));
+            _harness.Intents.Enqueue(residencyIntent);
             if (_harness.OnCompact is { } onCompact)
             {
                 await onCompact(conversationId, cancellationToken);
@@ -184,9 +189,11 @@ internal sealed class ConversationMaintenanceHarness : IAsyncDisposable
         }
 
         public Task<ConversationStateDistillationOutcome> DistillPendingAsync(Guid conversationId, string? requestedModel, int? upToAnchorSequence,
+            ModelResidencyIntent residencyIntent = ModelResidencyIntent.Interactive,
             CancellationToken cancellationToken = default)
         {
             _harness.Distillations.Enqueue(conversationId);
+            _harness.Intents.Enqueue(residencyIntent);
             return Task.FromResult(new ConversationStateDistillationOutcome
             {
                 Status = ConversationStateDistillationStatus.Distilled,

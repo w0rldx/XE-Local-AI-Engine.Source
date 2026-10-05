@@ -111,26 +111,71 @@ internal static class WorkspaceFileScanner
             return results;
         }
 
+        Walk(scanRoot, isSuppressed, CollectMatches(pattern, isRegex, maxMatches, maxOutputBytes, results, cancellationToken), cancellationToken);
+        return results;
+    }
+
+    /// <summary><see cref="SearchText" /> over one regular file, with the same binary skip, bounds and link refusal a scan root gets.</summary>
+    /// <remarks>Matches carry an empty relative path (<c>./:line:text</c>): the path IS the requested one.</remarks>
+    /// <param name="filePath">An already-confined absolute host file inside the managed workspace.</param>
+    /// <param name="isSuppressed">Given the file's name, whether it must not be searched.</param>
+    public static List<string> SearchTextInFile(string filePath,
+        string pattern,
+        bool isRegex,
+        int maxMatches,
+        int maxOutputBytes,
+        Func<string, bool> isSuppressed,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+        ArgumentNullException.ThrowIfNull(pattern);
+        ArgumentNullException.ThrowIfNull(isSuppressed);
+
+        var file = new FileInfo(filePath);
+        if (!file.Exists)
+        {
+            throw new DirectoryNotFoundException("The requested workspace file does not exist.");
+        }
+
+        if (IsLink(file))
+        {
+            throw new WorkspaceScanRejectedException("The requested workspace file is a symbolic link.");
+        }
+
+        var results = new List<string>();
+        if (pattern.Length == 0 || maxMatches <= 0 || isSuppressed(file.Name))
+        {
+            return results;
+        }
+
+        _ = CollectMatches(pattern, isRegex, maxMatches, maxOutputBytes, results, cancellationToken)(string.Empty, file);
+        return results;
+    }
+
+    // The per-file visit both searches share: emits ./relative:line:text and stops once either budget is reached.
+    private static Func<string, FileInfo, bool> CollectMatches(string pattern,
+        bool isRegex,
+        int maxMatches,
+        int maxOutputBytes,
+        List<string> results,
+        CancellationToken cancellationToken)
+    {
         var expression = isRegex ? CompilePattern(pattern) : null;
         var emittedBytes = 0;
-        Walk(scanRoot,
-            isSuppressed,
-            (relative, file) => ForEachTextLine(file,
-                (lineNumber, text) =>
+        return (relative, file) => ForEachTextLine(file,
+            (lineNumber, text) =>
+            {
+                if (!Matches(text, pattern, expression))
                 {
-                    if (!Matches(text, pattern, expression))
-                    {
-                        return true;
-                    }
+                    return true;
+                }
 
-                    var line = string.Create(CultureInfo.InvariantCulture, $"./{relative}:{lineNumber}:{text}");
-                    results.Add(line);
-                    emittedBytes += Encoding.UTF8.GetByteCount(line) + 1;
-                    return results.Count < maxMatches && emittedBytes < maxOutputBytes;
-                },
-                cancellationToken),
+                var line = string.Create(CultureInfo.InvariantCulture, $"./{relative}:{lineNumber}:{text}");
+                results.Add(line);
+                emittedBytes += Encoding.UTF8.GetByteCount(line) + 1;
+                return results.Count < maxMatches && emittedBytes < maxOutputBytes;
+            },
             cancellationToken);
-        return results;
     }
 
     /// <summary>

@@ -216,6 +216,168 @@ public sealed class ProviderCallBudgeterTests
         AssertEx.True(ContainsResult(result.Messages, "c2"), "the protected result is kept");
     }
 
+    /// <summary>
+    ///     Model-matrix 4,096 window: round 2 overshot only because round 1's reasoning was still counted. Everything here sits in the
+    ///     recent window, so no drop can help; stripping the superseded reasoning does.
+    /// </summary>
+    [Test]
+    public void Budget_StripsSupersededReasoning_KeepsTheInFlightRoundsReasoningAndTheUserMessage()
+    {
+        var question = $"Calculate it. {new string('q', 200)}";
+        var oldReasoning = new string('r', 400);
+        var currentReasoning = new string('s', 400);
+        var messages = new List<ChatMessage>
+        {
+            System("sys"),
+            User(question),
+            AssistantReasonedCall(oldReasoning, "c1", "calculate"),
+            ToolResult("c1", "42"),
+            AssistantReasonedCall(currentReasoning, "c2", "calculate"),
+            ToolResult("c2", "84")
+        };
+        var total = ProviderMessageTokenEstimator.EstimateTokens(messages, 4);
+
+        var result = ProviderCallBudgeter.Budget(messages, instructionsTokens: 0, effectiveWindowTokens: total - 50, Options());
+
+        AssertEx.False(result.ExceedsWindow, "stripping round 1's reasoning frees ~100 tokens, enough for a 50-token overshoot");
+        AssertEx.True(result.Trimmed);
+        AssertEx.Equal(expected: 1, result.ReasoningStripped);
+        AssertEx.Equal(expected: 0, result.MessagesDropped);
+        AssertEx.Equal(total - (400 / 4), result.EstimatedTokensAfter);
+        AssertEx.False(ContainsReasoning(result.Messages, oldReasoning), "the superseded reasoning is stripped");
+        AssertEx.True(ContainsReasoning(result.Messages, currentReasoning), "the in-flight round keeps its reasoning");
+        AssertEx.True(ContainsText(result.Messages, question), "the user's current message is kept");
+        AssertEx.True(ContainsCall(result.Messages, "c1") && ContainsResult(result.Messages, "c1"), "the stripped round keeps its call and result");
+    }
+
+    [Test]
+    public void Budget_StripsAReasoningOnlyMessageWhole()
+    {
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            new(ChatRole.Assistant, [new TextReasoningContent(new string('r', 400))]),
+            AssistantToolCall("c1", "calculate"),
+            ToolResult("c1", "42")
+        };
+        var total = ProviderMessageTokenEstimator.EstimateTokens(messages, 4);
+
+        var result = ProviderCallBudgeter.Budget(messages, instructionsTokens: 0, effectiveWindowTokens: total - 50, Options());
+
+        AssertEx.False(result.ExceedsWindow);
+        AssertEx.Equal(expected: 1, result.ReasoningStripped);
+        AssertEx.Equal(expected: 1, result.MessagesDropped, "an emptied message is dropped, never sent contentless");
+        AssertEx.Equal(expected: 3, result.Messages.Count);
+    }
+
+    [Test]
+    public void Budget_UnderWindow_LeavesSupersededReasoningInPlace()
+    {
+        var oldReasoning = new string('r', 400);
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            AssistantReasonedCall(oldReasoning, "c1", "calculate"),
+            ToolResult("c1", "42"),
+            AssistantReasonedCall("now", "c2", "calculate"),
+            ToolResult("c2", "84")
+        };
+        var total = ProviderMessageTokenEstimator.EstimateTokens(messages, 4);
+
+        var result = ProviderCallBudgeter.Budget(messages, instructionsTokens: 0, effectiveWindowTokens: total, Options());
+
+        AssertEx.False(result.Trimmed);
+        AssertEx.Equal(expected: 0, result.ReasoningStripped);
+        AssertEx.True(ReferenceEquals(messages, result.Messages), "a round that fits is not touched");
+    }
+
+    [Test]
+    public void Budget_StillOverAfterStrippingReasoning_FlagsTheRound_AndNeverStripsTheInFlightRound()
+    {
+        var question = $"Calculate it. {new string('q', 200)}";
+        var currentReasoning = new string('s', 400);
+        var messages = new List<ChatMessage>
+        {
+            System("sys"),
+            User(question),
+            AssistantReasonedCall(new string('r', 40), "c1", "calculate"),
+            ToolResult("c1", "42"),
+            AssistantReasonedCall(currentReasoning, "c2", "calculate"),
+            ToolResult("c2", "84")
+        };
+        var total = ProviderMessageTokenEstimator.EstimateTokens(messages, 4);
+
+        // Round 1's reasoning frees 10 tokens; only stripping the in-flight round's 100 would fit.
+        var result = ProviderCallBudgeter.Budget(messages, instructionsTokens: 0, effectiveWindowTokens: total - 50, Options());
+
+        AssertEx.True(result.ExceedsWindow, "an irreducible round still fails as a context-window error");
+        AssertEx.Equal(expected: 1, result.ReasoningStripped);
+        AssertEx.True(ContainsReasoning(result.Messages, currentReasoning), "the in-flight round's reasoning is never stripped");
+        AssertEx.True(ContainsText(result.Messages, question), "the user's current message is kept");
+    }
+
+    /// <summary>
+    ///     Codex's stateless tool loop replays each retained call's reasoning item before it: raw item (non-streaming) or
+    ///     protected data (streaming). Neither may be stripped, so the round is flagged exactly as without Pass 3.
+    /// </summary>
+    [Test]
+    public void Budget_NeverStripsProviderBackedReasoning_FromAnyRetainedRound()
+    {
+        var rawReasoning = new string('r', 400);
+        var protectedReasoning = new string('p', 400);
+        var messages = new List<ChatMessage>
+        {
+            System("sys"),
+            User("Calculate it."),
+            ProviderReasonedCall(new TextReasoningContent(rawReasoning) { RawRepresentation = new object() }, "c1"),
+            ToolResult("c1", "42"),
+            ProviderReasonedCall(new TextReasoningContent(protectedReasoning) { ProtectedData = "encrypted" }, "c2"),
+            ToolResult("c2", "84"),
+            ProviderReasonedCall(new TextReasoningContent("now") { ProtectedData = "encrypted" }, "c3"),
+            ToolResult("c3", "126")
+        };
+        var total = ProviderMessageTokenEstimator.EstimateTokens(messages, 4);
+
+        var result = ProviderCallBudgeter.Budget(messages, instructionsTokens: 0, effectiveWindowTokens: total - 50, Options(recentKeep: 8));
+
+        AssertEx.True(result.ExceedsWindow, "nothing here is reducible, so the round fails as a context-window error");
+        AssertEx.False(result.Trimmed);
+        AssertEx.Equal(expected: 0, result.ReasoningStripped);
+        AssertEx.True(ReferenceEquals(messages, result.Messages), "the provider-backed history is passed through untouched");
+    }
+
+    [Test]
+    public void Budget_MixedReasoningMessage_LosesOnlyThePlainReasoning()
+    {
+        var plainReasoning = new string('r', 400);
+        var protectedPart = new TextReasoningContent("summary") { ProtectedData = "encrypted" };
+        var messages = new List<ChatMessage>
+        {
+            User("Calculate it."),
+            new(ChatRole.Assistant, [new TextReasoningContent(plainReasoning), protectedPart, new FunctionCallContent("c1", "calculate", new Dictionary<string, object?>())]),
+            ToolResult("c1", "42"),
+            new(ChatRole.Assistant, [new TextReasoningContent(plainReasoning), protectedPart]),
+            AssistantToolCall("c2", "calculate"),
+            ToolResult("c2", "84")
+        };
+        var total = ProviderMessageTokenEstimator.EstimateTokens(messages, 4);
+
+        var result = ProviderCallBudgeter.Budget(messages, instructionsTokens: 0, effectiveWindowTokens: total - 150, Options());
+
+        AssertEx.False(result.ExceedsWindow);
+        AssertEx.Equal(expected: 2, result.ReasoningStripped);
+        AssertEx.Equal(expected: 0, result.MessagesDropped, "a message keeping provider-backed reasoning is not emptied, so never dropped");
+        AssertEx.Equal(expected: 6, result.Messages.Count);
+        AssertEx.False(ContainsReasoning(result.Messages, plainReasoning), "the plain reasoning is stripped from both messages");
+        AssertEx.Equal(expected: 2, result.Messages.SelectMany(static message => message.Contents).Count(content => ReferenceEquals(content, protectedPart)),
+            "the provider-backed part survives in both messages");
+    }
+
+    private static ChatMessage ProviderReasonedCall(TextReasoningContent reasoning, string callId)
+    {
+        return new ChatMessage(ChatRole.Assistant, [reasoning, new FunctionCallContent(callId, "calculate", new Dictionary<string, object?>())]);
+    }
+
     private static ProviderCallBudgetOptions Options(int recentKeep = 6, int excerptChars = 2000)
     {
         return new ProviderCallBudgetOptions
@@ -243,6 +405,17 @@ public sealed class ProviderCallBudgeterTests
     private static ChatMessage AssistantToolCall(string callId, string name)
     {
         return new ChatMessage(ChatRole.Assistant, [new FunctionCallContent(callId, name, new Dictionary<string, object?>())]);
+    }
+
+    private static ChatMessage AssistantReasonedCall(string reasoning, string callId, string name)
+    {
+        return new ChatMessage(ChatRole.Assistant,
+            [new TextReasoningContent(reasoning), new FunctionCallContent(callId, name, new Dictionary<string, object?>())]);
+    }
+
+    private static bool ContainsReasoning(IReadOnlyList<ChatMessage> messages, string reasoning)
+    {
+        return messages.Any(message => message.Contents.OfType<TextReasoningContent>().Any(part => string.Equals(part.Text, reasoning, StringComparison.Ordinal)));
     }
 
     private static ChatMessage AssistantMultiCall(params (string CallId, string Name)[] calls)

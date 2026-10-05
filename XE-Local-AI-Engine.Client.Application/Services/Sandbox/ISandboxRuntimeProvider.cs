@@ -84,7 +84,7 @@ public interface ISandboxRuntimeProvider
     }
 
     /// <summary>
-    ///     Search the non-binary regular files under a sandbox directory, as <c>./relative/path:line:text</c> entries.
+    ///     Search the non-binary regular files under a sandbox directory, or one such file, as <c>./relative/path:line:text</c> entries.
     ///     Replaces a <c>grep</c> shell-out for the same reasons as <see cref="ListFilesAsync" /> — and <c>grep</c> does
     ///     not exist at all on a stock Windows 11 install.
     /// </summary>

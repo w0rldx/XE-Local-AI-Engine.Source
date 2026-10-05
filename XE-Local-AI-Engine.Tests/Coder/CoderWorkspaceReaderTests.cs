@@ -367,6 +367,60 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    public async Task SearchText_WhenPathIsAFile_ReturnsItsMatchesUnderItsWorkspacePath()
+    {
+        using var provider = CreateProvider();
+        await SeedWorkspaceFileAsync(provider, "attachments/attachment-30000.md", "intro\nneedle here\n");
+        await SeedWorkspaceFileAsync(provider, "attachments/other.md", "needle elsewhere\n");
+        var reader = CreateReader(provider);
+
+        var result = await reader.SearchTextAsync(new SearchTextToolRequest
+        {
+            Pattern = "needle",
+            Path = "attachments/attachment-30000.md"
+        });
+        var missing = await reader.SearchTextAsync(new SearchTextToolRequest
+        {
+            Pattern = "needle",
+            Path = "attachments/nope.md"
+        });
+
+        AssertEx.Contains(result, "attachments/attachment-30000.md:2:needle here");
+        AssertEx.False(result.Contains("elsewhere", StringComparison.Ordinal), "a file path must search that file only");
+        AssertEx.Contains(missing, "that workspace path does not exist.");
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task SearchText_WhenFilePathIsLeafSymlinkToHostFile_ReturnsRejection()
+    {
+        using var provider = CreateProvider();
+        var handle = await CreateOrAttachAsync(provider);
+        using var escapeTarget = new TempDir(_tempPaths);
+        var secret = Path.Combine(escapeTarget.Path, "secret.txt");
+        await File.WriteAllTextAsync(secret, "OUTSIDE-THE-JAIL");
+        await RunShellInJailAsync(provider, handle,
+            $"mkdir -p agent-home/workspace/selected && ln -s {ShellQuote(secret)} agent-home/workspace/selected/leak.txt");
+        var reader = CreateReader(provider);
+
+        var result = await reader.SearchTextAsync(new SearchTextToolRequest
+        {
+            Pattern = "OUTSIDE-THE-JAIL",
+            Path = "leak.txt"
+        });
+        var traversal = await reader.SearchTextAsync(new SearchTextToolRequest
+        {
+            Pattern = "root",
+            Path = "../../etc/passwd"
+        });
+
+        AssertEx.Contains(result, "rejected", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(result.Contains("OUTSIDE-THE-JAIL", StringComparison.Ordinal), "search_text must not follow a file symlink out of the jail");
+        AssertEx.Contains(traversal, "rejected", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(traversal.Contains("root:", StringComparison.Ordinal), "the host passwd content must never be searched");
+    }
+
+    [Test]
     [RunOn(OS.Linux)]
     public async Task ListFiles_WrapsInjectionShapedFileNameInsideUntrustedFence()
     {

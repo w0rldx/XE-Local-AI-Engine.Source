@@ -102,7 +102,8 @@ public sealed class ProviderMessageTokenEstimatorTests
         // Qwen3.8 renders each tool as OpenAI JSON; the wrapper measured 21.9 tokens a tool, 4 of them the per-message framing.
         AITool[] tools = [AIFunctionFactory.CreateDeclaration("t", new string('d', 39), JsonDocument.Parse("{}").RootElement)];
 
-        AssertEx.Equal((1 + 39 + 2) / 4 + OverheadTokens + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens, ProviderMessageTokenEstimator.EstimateTools(tools));
+        // name, newline, description, newline, schema: the same definition text the outer budget counts.
+        AssertEx.Equal((1 + 1 + 39 + 1 + 2) / 4 + OverheadTokens + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens, ProviderMessageTokenEstimator.EstimateTools(tools));
     }
 
     [Test]
@@ -112,7 +113,33 @@ public sealed class ProviderMessageTokenEstimatorTests
         const string schema = """{"type":"object","properties":{"reason":{"type":"string"}}}""";
         AITool[] tools = [AIFunctionFactory.CreateDeclaration("h", description: null, JsonDocument.Parse(schema).RootElement)];
 
-        AssertEx.Equal((1 + schema.Length) / 4 + OverheadTokens + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens, ProviderMessageTokenEstimator.EstimateTools(tools));
+        // Counted as the template renders it: single-line with ", " / ": " separators.
+        const string rendered = """{"type": "object", "properties": {"reason": {"type": "string"}}}""";
+        AssertEx.Equal((1 + 2 + rendered.Length) / 4 + OverheadTokens + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens, ProviderMessageTokenEstimator.EstimateTools(tools));
+    }
+
+    [Test]
+    public void EstimateTools_CountsIndentedAndCompactSchemasIdentically()
+    {
+        const string compact = """{"type":"object","properties":{"reason":{"type":"string","description":"Why it's needed"}},"required":["reason"]}""";
+        const string indented = """
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "reason": {
+                                      "type": "string",
+                                      "description": "Why it's needed"
+                                    }
+                                  },
+                                  "required": [ "reason" ]
+                                }
+                                """;
+        AITool[] compactTools = [AIFunctionFactory.CreateDeclaration("t", "d", JsonDocument.Parse(compact).RootElement)];
+        AITool[] indentedTools = [AIFunctionFactory.CreateDeclaration("t", "d", JsonDocument.Parse(indented).RootElement)];
+
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTools(compactTools), ProviderMessageTokenEstimator.EstimateTools(indentedTools));
+        AssertEx.Equal("""{"type": "object", "properties": {"reason": {"type": "string", "description": "Why it's needed"}}, "required": ["reason"]}""",
+            TokenEstimatorCalibrationStore.RenderToolSchema(indented));
     }
 
     [Test]

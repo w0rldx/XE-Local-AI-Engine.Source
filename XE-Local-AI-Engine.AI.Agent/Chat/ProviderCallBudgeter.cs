@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 ///     Always keeps system messages, the user's current message, the most recent
 ///     <see cref="ProviderCallBudgetOptions.RecentMessagesToKeep" /> messages and the very last message (the pending tool result the model must see next); over the window it first
 ///     excerpts oversized tool results anywhere, so the pending result is bounded rather than dropped, then drops the
-///     oldest non-protected messages whole. See docs/wiki/04-agent-mode.md ("What the per-round reducer keeps").
+///     oldest non-protected messages whole, then strips superseded plain reasoning outside the in-flight round. See docs/wiki/04-agent-mode.md ("What the per-round reducer keeps").
 /// </remarks>
 internal static class ProviderCallBudgeter
 {
@@ -114,7 +114,40 @@ internal static class ProviderCallBudgeter
             }
         }
 
-        if (messagesDropped == 0 && toolResultsTruncated == 0)
+        // Pass 3: while still over the window, strip superseded plain reasoning outside the in-flight round (the last message's unit).
+        // Provider-backed reasoning (raw item or protected data) stays everywhere: Codex replays it before every retained function_call.
+        var reasoningStripped = 0;
+        var inFlightUnit = Find(unitRoot, count - 1);
+        for (var i = 0; i < count && currentEstimate > window; i++)
+        {
+            if (dropped[i] || working[i].Role != ChatRole.Assistant || Find(unitRoot, i) == inFlightUnit)
+            {
+                continue;
+            }
+
+            if (!TryStripReasoning(working[i], out var stripped, out var emptied))
+            {
+                continue;
+            }
+
+            reasoningStripped++;
+
+            // Emptied = every part was strippable reasoning: no call id, a unit of its own; sent empty, some providers reject it.
+            if (emptied)
+            {
+                dropped[i] = true;
+                currentEstimate -= perMessageTokens[i];
+                messagesDropped++;
+                continue;
+            }
+
+            working[i] = stripped;
+            var strippedTokens = ProviderMessageTokenEstimator.EstimateTokens(stripped, charsPerToken);
+            currentEstimate += strippedTokens - perMessageTokens[i];
+            perMessageTokens[i] = strippedTokens;
+        }
+
+        if (messagesDropped == 0 && toolResultsTruncated == 0 && reasoningStripped == 0)
         {
             // Nothing was reducible (all content is protected/pinned); keep the set and flag the overrun.
             return new ProviderBudgetResult
@@ -123,6 +156,7 @@ internal static class ProviderCallBudgeter
                 Trimmed = false,
                 MessagesDropped = 0,
                 ToolResultsTruncated = 0,
+                ReasoningStripped = 0,
                 CharsTruncated = 0,
                 EstimatedTokensBefore = estimatedBefore,
                 EstimatedTokensAfter = estimatedBefore,
@@ -145,6 +179,7 @@ internal static class ProviderCallBudgeter
             Trimmed = true,
             MessagesDropped = messagesDropped,
             ToolResultsTruncated = toolResultsTruncated,
+            ReasoningStripped = reasoningStripped,
             CharsTruncated = charsTruncated,
             EstimatedTokensBefore = estimatedBefore,
             EstimatedTokensAfter = currentEstimate,
@@ -296,9 +331,40 @@ internal static class ProviderCallBudgeter
             return false;
         }
 
-        // Clone-PRESERVING: id, author, provider raw representation and additional properties carry over, because a
-        // rewrite from role + contents alone would strip a re-excerpted message's identity on the way to the provider.
-        truncated = new ChatMessage(message.Role, rewritten)
+        truncated = CloneWithContents(message, rewritten);
+        return true;
+    }
+
+    // Removes every strippable reasoning part; false when the message carries none. emptied = nothing else survives.
+    private static bool TryStripReasoning(ChatMessage message, out ChatMessage stripped, out bool emptied)
+    {
+        stripped = message;
+        emptied = false;
+        if (!message.Contents.Any(IsStrippableReasoning))
+        {
+            return false;
+        }
+
+        List<AIContent> retained = [.. message.Contents.Where(static content => !IsStrippableReasoning(content))];
+        emptied = retained.Count == 0;
+        if (!emptied)
+        {
+            stripped = CloneWithContents(message, retained);
+        }
+
+        return true;
+    }
+
+    // Plain reasoning only: Chat Completions and Ollama adapters set neither; a Responses item carries a raw item (non-streaming)
+    // or protected data (streaming, after coalescing drops the raw item), and Codex must receive it again.
+    private static bool IsStrippableReasoning(AIContent content) =>
+        content is TextReasoningContent { RawRepresentation: null } reasoning && string.IsNullOrEmpty(reasoning.ProtectedData);
+
+    // Clone-PRESERVING: id, author, provider raw representation and additional properties carry over, because a
+    // rewrite from role + contents alone would strip a rewritten message's identity on the way to the provider.
+    private static ChatMessage CloneWithContents(ChatMessage message, IList<AIContent> contents)
+    {
+        return new ChatMessage(message.Role, contents)
         {
             AuthorName = message.AuthorName,
             MessageId = message.MessageId,
@@ -306,7 +372,6 @@ internal static class ProviderCallBudgeter
             RawRepresentation = message.RawRepresentation,
             AdditionalProperties = message.AdditionalProperties
         };
-        return true;
     }
 
     private static string Excerpt(string value, int excerptChars, int omitted)
@@ -327,6 +392,9 @@ internal sealed record ProviderBudgetResult
 
     public required int ToolResultsTruncated { get; init; }
 
+    /// <summary>Messages whose superseded reasoning was stripped (a reasoning-only one is also counted in <see cref="MessagesDropped" />).</summary>
+    public required int ReasoningStripped { get; init; }
+
     public required int CharsTruncated { get; init; }
 
     public required int EstimatedTokensBefore { get; init; }
@@ -344,6 +412,7 @@ internal sealed record ProviderBudgetResult
             Trimmed = false,
             MessagesDropped = 0,
             ToolResultsTruncated = 0,
+            ReasoningStripped = 0,
             CharsTruncated = 0,
             EstimatedTokensBefore = estimatedTokens,
             EstimatedTokensAfter = estimatedTokens,

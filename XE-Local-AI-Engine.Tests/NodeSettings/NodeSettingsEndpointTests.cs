@@ -371,6 +371,123 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public async Task SaveNodeSettings_UnsetSentinels_ClearTheBudgetsAndOutputCap_AndTheShippedDefaultsApplyAgain()
+    {
+        var saved = new StoredNodeSettings
+        {
+            ReasoningBudgetMinimalTokens = 512,
+            ReasoningBudgetLowTokens = 1024,
+            ReasoningBudgetMediumTokens = 4096,
+            ReasoningBudgetHighTokens = 16384,
+            DefaultReasoningEffort = "high",
+            ChatOutputCapMode = "off",
+            ChatOutputCapMaxTokens = 2048
+        };
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => saved);
+        nodeSettingsStore.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             saved = call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(saved);
+                             return Task.FromResult(saved);
+                         });
+
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        // A save of an unrelated field (all seven null) keeps every stored value.
+        using var keepRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        keepRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            WebFetchTimeoutSeconds = 30
+        });
+        using var keepResponse = await client.SendAsync(keepRequest);
+        AssertEx.Equal(HttpStatusCode.OK, keepResponse.StatusCode);
+        AssertEx.Equal(expected: 1024, saved.ReasoningBudgetLowTokens);
+        AssertEx.Equal("off", saved.ChatOutputCapMode);
+
+        using var unsetRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        unsetRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            ReasoningBudgetMinimalTokens = StoredNodeSettings.TokenSettingUnset,
+            ReasoningBudgetLowTokens = StoredNodeSettings.TokenSettingUnset,
+            ReasoningBudgetMediumTokens = StoredNodeSettings.TokenSettingUnset,
+            ReasoningBudgetHighTokens = StoredNodeSettings.TokenSettingUnset,
+            DefaultReasoningEffort = "",
+            ChatOutputCapMode = "",
+            ChatOutputCapMaxTokens = StoredNodeSettings.TokenSettingUnset
+        });
+        using var unsetResponse = await client.SendAsync(unsetRequest);
+        AssertEx.Equal(HttpStatusCode.OK, unsetResponse.StatusCode);
+
+        using var getRequest = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var getResponse = await client.SendAsync(getRequest);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(getResponse);
+        AssertEx.Null(settings.ReasoningBudgetMinimalTokens);
+        AssertEx.Null(settings.ReasoningBudgetLowTokens);
+        AssertEx.Null(settings.ReasoningBudgetMediumTokens);
+        AssertEx.Null(settings.ReasoningBudgetHighTokens);
+        AssertEx.Null(settings.DefaultReasoningEffort);
+        AssertEx.Null(settings.ChatOutputCapMode);
+        AssertEx.Null(settings.ChatOutputCapMaxTokens);
+
+        // What a turn reads now is the shipped default, not the cleared value.
+        var runtimeSettings = factory.Services.GetRequiredService<INodeRuntimeSettings>();
+        var budgets = await runtimeSettings.GetReasoningBudgetsAsync();
+        AssertEx.Equal(expected: 1024, budgets.Minimal);
+        AssertEx.Equal(expected: 2048, budgets.Low);
+        AssertEx.Equal(expected: 8192, budgets.Medium);
+        AssertEx.Equal(expected: 24576, budgets.High);
+        AssertEx.Equal("low", budgets.UnspecifiedEffort);
+        var outputCap = await runtimeSettings.GetChatOutputCapAsync();
+        AssertEx.Equal(StoredNodeSettings.ChatOutputCapModeCap, outputCap.Mode);
+        AssertEx.Equal(StoredNodeSettings.DefaultChatOutputCapMaxTokens, outputCap.MaxTokens);
+    }
+
+    /// <summary>Only -1 and the empty string are the "back to default" sentinels; every other out-of-range value is still refused.</summary>
+    [Test]
+    [Arguments(-2)]
+    [Arguments(0)]
+    [Arguments(StoredNodeSettings.MinReasoningBudgetTokens - 1)]
+    [Arguments(StoredNodeSettings.MaxReasoningBudgetTokens + 1)]
+    public void SaveNodeSettings_ReasoningBudgetAndOutputCapCeiling_RejectEverythingOutOfRangeButTheSentinel(int tokens)
+    {
+        var validator = new SaveNodeSettingsRequestValidator();
+
+        var budget = validator.Validate(new SaveNodeSettingsRequest
+        {
+            ReasoningBudgetMinimalTokens = tokens
+        });
+        var ceiling = validator.Validate(new SaveNodeSettingsRequest
+        {
+            ChatOutputCapMaxTokens = tokens
+        });
+        var sentinels = validator.Validate(new SaveNodeSettingsRequest
+        {
+            ReasoningBudgetMinimalTokens = StoredNodeSettings.TokenSettingUnset,
+            ChatOutputCapMaxTokens = StoredNodeSettings.TokenSettingUnset,
+            DefaultReasoningEffort = "",
+            ChatOutputCapMode = ""
+        });
+
+        AssertEx.False(budget.IsValid);
+        AssertEx.False(ceiling.IsValid);
+        AssertEx.True(sentinels.IsValid, string.Join("; ", sentinels.Errors.Select(static error => error.ErrorMessage)));
+    }
+
+    [Test]
+    [Arguments(" ")]
+    [Arguments("none")]
+    [Arguments("default")]
+    public void SaveNodeSettings_EffortAndOutputCapMode_RejectAnyOtherBlankOrUnknownLiteral(string value)
+    {
+        var validator = new SaveNodeSettingsRequestValidator();
+
+        AssertEx.False(validator.Validate(new SaveNodeSettingsRequest { DefaultReasoningEffort = value }).IsValid);
+        AssertEx.False(validator.Validate(new SaveNodeSettingsRequest { ChatOutputCapMode = value }).IsValid);
+    }
+
+    [Test]
     public async Task SaveNodeSettings_WhenTheKnowledgeSearchDefaultExceedsTheMaximum_BindsTheErrorToTheDefault()
     {
         var nodeSettingsStore = NewSettingsStore();

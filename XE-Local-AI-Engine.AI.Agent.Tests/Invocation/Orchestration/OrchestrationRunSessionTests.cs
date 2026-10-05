@@ -129,4 +129,35 @@ public sealed class OrchestrationRunSessionTests
 
         AssertEx.Empty(updates);
     }
+
+    [Test]
+    public void ComposeStreamingUpdates_WhenAFinishReasonRidesText_PutsItOnTheLastUpdate()
+    {
+        var contents = new List<AIContent>
+        {
+            new TextReasoningContent("thinking"),
+            new TextContent("cut off")
+        };
+
+        var updates = OrchestrationRunSession.ComposeStreamingUpdates(contents, "cut off", "key", "name", "length");
+
+        AssertEx.Equal(expected: 2, updates.Count);
+        AssertEx.Null(updates[0].FinishReason);
+        AssertEx.Equal("length", updates[1].FinishReason);
+        AssertEx.Equal("cut off", updates[1].Text);
+    }
+
+    [Test]
+    public void ComposeStreamingUpdates_WhenOnlyAFinishReasonArrives_CarriesItOnAnEmptyTextDelta()
+    {
+        // The provider's last chunk usually has no content; without a carrier the runner never learns the round hit the limit.
+        var updates = OrchestrationRunSession.ComposeStreamingUpdates([], text: null, "key", "name", "length");
+
+        AssertEx.Equal(expected: 1, updates.Count);
+        var update = updates[0];
+        AssertEx.Equal(OrchestrationUpdateKind.TextDelta, update.Kind);
+        AssertEx.Equal(string.Empty, update.Text);
+        AssertEx.Equal("length", update.FinishReason);
+        AssertEx.Equal("key", update.ParticipantKey);
+    }
 }
