@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 //  - retry safe methods (GET poll/readiness), while
 //  - keeping the attempt/total timeout and circuit breaker for all methods, and
 //  - remaining a SINGLE pipeline even under Aspire, where ServiceDefaults' ConfigureHttpClientDefaults would otherwise
-//    add a second, POST-retrying standard handler. Mirrors CentralPlatformResilienceTests.
+//    add a second, POST-retrying standard handler.
 [Category(TestCategories.Unit)]
 public sealed class StableDiffusionCppRuntimeResilienceTests
 {

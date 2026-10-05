@@ -295,7 +295,7 @@ default — including that POST.
 
 The registration therefore builds a single POST-safe pipeline: `RemoveAllResilienceHandlers` strips the global handler
 (a no-op outside Aspire), and `DisableForUnsafeHttpMethods` narrows retries to safe methods — the GET poll and readiness
-calls — while keeping the timeouts and the circuit breaker for every method. This mirrors `AddCentralPlatformResilience`.
+calls — while keeping the timeouts and the circuit breaker for every method.
 
 ## Daemon leases and the teardown races
 

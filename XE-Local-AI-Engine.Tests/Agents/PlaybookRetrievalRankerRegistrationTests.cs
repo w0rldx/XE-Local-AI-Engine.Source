@@ -63,7 +63,6 @@ public sealed class PlaybookRetrievalRankerRegistrationTests : IDisposable
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Agent:LocalChat:DefaultModel"] = "llama3.2",
-            ["CentralPlatform:BaseUrl"] = "https://127.0.0.1",
             ["ConnectionStrings:node-sqlite"] = $"Data Source={databasePath}",
             // ValidateOnBuild eagerly constructs NodeOperatorSecretProvider, which requires a base64 32-byte operator
             // secret. Supply one via configuration so the build never depends on an ambient/leaked process env var.

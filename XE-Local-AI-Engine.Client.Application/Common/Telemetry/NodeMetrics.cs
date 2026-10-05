@@ -13,14 +13,6 @@ public static class NodeMetrics
     private static readonly Meter Meter = new(MeterName);
 
     /// <summary>
-    ///     Incremented each time the node detects a hash mismatch on a received runtime-package envelope.
-    ///     Labels: reason (config_hash_mismatch | history_hash_mismatch).
-    /// </summary>
-    public static readonly Counter<long> EnvelopeHashMismatchTotal =
-        Meter.CreateCounter<long>("envelope_hash_mismatch_total",
-            description: "Number of envelope hash mismatches detected by the node.");
-
-    /// <summary>
     ///     Incremented when a chat stream watchdog fires (no-first-chunk or inter-chunk stall).
     ///     Labels: reason (no_first_chunk_timeout | inter_chunk_stall_timeout).
     /// </summary>

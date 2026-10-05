@@ -11,8 +11,7 @@ public sealed class SecurityOptions
 
     /// <summary>Cap on the UTF-8 size of ONE inbound chat message's content.</summary>
     /// <remarks>
-    ///     Enforced at the entry seams only — the SignalR hub (<c>LocalChatHub.SendMessage</c>, before anything is persisted) and the
-    ///     encrypted-envelope assembler (<c>RuntimePackageEnvelopeAssembler</c>, where every message is untrusted platform input) — and
+    ///     Enforced at the entry seam only — the SignalR hub (<c>LocalChatHub.SendMessage</c>, before anything is persisted) — and
     ///     deliberately NOT re-applied to stored history on later turns: the budgeter trims history against the model's real window, and
     ///     hard-failing a turn on an already-stored message poisons the conversation permanently, so merely LOWERING this value would brick
     ///     every conversation holding a larger one. Larger documents belong on the upload path (<see cref="MaxUploadFileSizeMb" />).

@@ -69,7 +69,6 @@ public sealed class SchedulerFeatureGateTests
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Agent:LocalChat:DefaultModel"] = "llama3.2",
-                ["CentralPlatform:BaseUrl"] = "https://127.0.0.1",
                 ["ConnectionStrings:node-sqlite"] = $"Data Source={Path.Combine(root, "node.sqlite")}",
                 ["Ollama:Endpoint"] = "http://127.0.0.1:11434",
                 ["Scheduler:Enabled"] = schedulerEnabled.ToString()

@@ -66,11 +66,6 @@ project.fragment.lock.json
 artifacts/
 # The rule above is for .NET build output; this is a source directory that happens to share the name.
 !XE-Local-AI-Engine.Client.React/src/core/artifacts/
-!Plans/artifacts/
-!Plans/artifacts/sample-manifests/
-!Plans/artifacts/sample-manifests/*.yaml
-!Plans/artifacts/schemas/
-!Plans/artifacts/schemas/*.schema.json
 
 # StyleCop
 StyleCopReport.xml

@@ -94,7 +94,7 @@ public sealed record RuntimePackage
     /// </summary>
     /// <remarks>
     ///     Named for the PERMISSION, not the state, so the <c>false</c> default is by construction "the model is pinned, never swap it":
-    ///     every construction site that omits it — the scheduler, the three benchmark executors, the encrypted/server envelope assembler —
+    ///     every construction site that omits it — the scheduler, the three benchmark executors —
     ///     fails closed with no edit, and only the chat send/regenerate paths raise it, on a turn with no explicit user pick and no honored
     ///     agent pin. Deliberately excluded from the config hash (mirrors <see cref="IsUnattended" />): it describes HOW the model was
     ///     chosen, so the same agent asking the same question hashes identically and the cross-repo encrypted/server digest stays stable.
