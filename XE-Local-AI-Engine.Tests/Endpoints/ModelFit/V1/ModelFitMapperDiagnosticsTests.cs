@@ -148,9 +148,29 @@ public sealed class ModelFitMapperDiagnosticsTests
                     Record = record,
                     Diagnostics = ModelFitRecommendationDiagnostics.Parse(record.DiagnosticsJson, record.ModelName)
                 }
-            ]
+            ],
+            SkippedCatalogEntries = []
         };
 
         return view.ToResponse().Recommendations[0];
+    }
+
+    [Test]
+    public void ToResponse_CopiesTheSkippedCatalogEntries_AndACacheMissHasNone()
+    {
+        var view = new ModelFitLatestRecommendationsView
+        {
+            SnapshotId = Guid.NewGuid(),
+            Status = ModelFitRunStatus.Succeeded,
+            ApprovedImageId = "advisor",
+            UseCase = "coding",
+            ProviderName = "advisor",
+            CompletedAtUtc = 0L,
+            Recommendations = [],
+            SkippedCatalogEntries = ["Gemma 4 12B", "Qwen3 8B"]
+        };
+
+        AssertEx.Equal("Gemma 4 12B|Qwen3 8B", string.Join('|', view.ToResponse().SkippedCatalogEntries));
+        AssertEx.Empty(ModelFitMapper.EmptyCache().SkippedCatalogEntries);
     }
 }

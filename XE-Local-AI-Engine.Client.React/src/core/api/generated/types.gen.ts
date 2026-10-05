@@ -4362,6 +4362,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResp
 	useCase?: string | null;
 	lastRefreshedAtUtc?: number | null;
 	recommendations: Array<XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse>;
+	skippedCatalogEntries: Array<string>;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest = {

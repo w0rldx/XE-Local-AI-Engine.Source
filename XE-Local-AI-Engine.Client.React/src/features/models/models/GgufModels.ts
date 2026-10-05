@@ -56,7 +56,8 @@ export const fitVerdictColor: Record<GgufFitVerdict, string | null> = {
 	Unknown: null,
 };
 
-// i18n suffix under `pages.models.gguf.download.fit.*` per verdict (Unknown has no label — it renders a dimmed dash).
+// i18n suffix under `pages.models.gguf.download.fit.*` per verdict (Unknown has no label — the download dialog shows a dimmed
+// dash, the tested list shows no badge).
 export const fitVerdictLabelKey: Record<Exclude<GgufFitVerdict, "Unknown">, string> = {
 	Fits: "fits",
 	Tight: "tight",

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -49,6 +49,7 @@ const { queryFns, mutationFns } = vi.hoisted(() => ({
 		getGgufImportCapability: vi.fn(),
 		getGgufImports: vi.fn(),
 		getModelCatalogInfo: vi.fn(),
+		getHardwareProfile: vi.fn(),
 	},
 	mutationFns: {
 		selectLocalModel: vi.fn(),
@@ -91,6 +92,11 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 		queryKey: fakeQueryKey("getModelCatalogInfo"),
 		queryFn: queryFns.getModelCatalogInfo,
 	}),
+	// Hardware profile: the tested list observes the shell's profile read to refetch verdicts once the audit exists.
+	getHardwareProfileOptions: () => ({
+		queryKey: fakeQueryKey("getHardwareProfile"),
+		queryFn: queryFns.getHardwareProfile,
+	}),
 	// GGUF browse + download factories — the GGUF section relocated to this page from the model-fit advisor.
 	browseGgufRepositoriesQueryKey: () => fakeQueryKey("browseGgufRepositories"),
 	browseGgufRepositoriesOptions: () => ({
@@ -131,6 +137,17 @@ import "@/i18n";
 import { ModelManagement } from "@/features/models/pages/ModelManagement";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 import { testMantineTheme } from "@/test/MantineTestRender";
+
+const hardwareProfile = {
+	totalRamBytes: 34_359_738_368,
+	availableRamBytes: 17_179_869_184,
+	vramBytes: 8_589_934_592,
+	vramKnown: true,
+	gpuVendor: "nvidia",
+	gpuAccelAvailable: true,
+	cpuCores: 16,
+	freeDiskBytes: 500_000_000_000,
+};
 
 function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -232,6 +249,7 @@ describe("ModelManagement", () => {
 			refreshSourceConfigured: false,
 			testedModels: [],
 		});
+		queryFns.getHardwareProfile.mockResolvedValue(hardwareProfile);
 		mutationFns.startGgufDownload.mockResolvedValue({ modelName: "unsloth/llama-3.1-8b-gguf", alreadyInFlight: false });
 		mutationFns.cancelGgufDownload.mockResolvedValue({ cancelled: true });
 		mutationFns.cancelGgufImport.mockResolvedValue({ cancellationRequested: true });
@@ -583,6 +601,60 @@ describe("ModelManagement", () => {
 		expect(screen.getByTestId("model-fit-browse-tested-fit-granite-4.1-3b").textContent).toBe("Fits");
 		expect(screen.getByTestId("model-fit-browse-tested-quant-qwen3.8-27b").textContent).toBe("UD-Q4_K_M · 15.3 GB");
 		expect(screen.queryByTestId("model-fit-browse-tested-fit-qwen3.8-27b")).toBeNull();
+	});
+
+	// A second observer of the profile query: it renders in the same commit that hands the settled profile to the tested
+	// list, so once it shows, the list's refetch effect has run.
+	function ProfileSettledProbe() {
+		const { isSuccess } = useQuery({
+			queryKey: fakeQueryKey("getHardwareProfile") as unknown[],
+			queryFn: queryFns.getHardwareProfile,
+		});
+		return isSuccess ? <span data-testid="profile-settled" /> : null;
+	}
+
+	// Lands on the page with the catalog answering before the hardware profile, as on a direct first landing; the
+	// profile settles a second later (Date is faked so the two dataUpdatedAt stamps cannot share a millisecond).
+	async function landWithProfileSettlingAfterCatalog(): Promise<void> {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		let settleProfile: ((value: typeof hardwareProfile) => void) | undefined;
+		queryFns.getHardwareProfile.mockReturnValue(
+			new Promise((resolve) => {
+				settleProfile = resolve;
+			}),
+		);
+
+		renderWithProviders(
+			<>
+				<ModelManagement />
+				<ProfileSettledProbe />
+			</>,
+		);
+		await screen.findByTestId("model-fit-browse-tested-quant-granite-4.1-3b");
+		vi.setSystemTime(Date.now() + 1000);
+		settleProfile?.(hardwareProfile);
+		await screen.findByTestId("profile-settled");
+	}
+
+	it("refetches the tested list once the hardware profile settles so the fit badge appears without user action", async () => {
+		queryFns.getModelCatalogInfo
+			.mockResolvedValueOnce(catalogWithTested({ ...testedGranite, fitVerdict: "Unknown" }))
+			.mockResolvedValue(catalogWithTested(testedGranite));
+
+		await landWithProfileSettlingAfterCatalog();
+
+		expect((await screen.findByTestId("model-fit-browse-tested-fit-granite-4.1-3b")).textContent).toBe("Fits");
+		expect(queryFns.getModelCatalogInfo).toHaveBeenCalledTimes(2);
+		expect(queryFns.getHardwareProfile).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not refetch the tested list when no verdict is Unknown", async () => {
+		queryFns.getModelCatalogInfo.mockResolvedValue(catalogWithTested(testedGranite));
+
+		await landWithProfileSettlingAfterCatalog();
+
+		expect(screen.getByTestId("model-fit-browse-tested-fit-granite-4.1-3b").textContent).toBe("Fits");
+		expect(queryFns.getModelCatalogInfo).toHaveBeenCalledTimes(1);
 	});
 
 	it("marks a tested model installed when any quant of its repo is installed, keeping Download enabled", async () => {

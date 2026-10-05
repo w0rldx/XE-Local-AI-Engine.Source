@@ -293,8 +293,8 @@ public sealed class CatalogRecommendationServiceTests
     {
         var entries = new[]
         {
-            Entry("broken", useCases: ["general"], tier: "S"),
-            Entry("timed-out", useCases: ["general"], tier: "S"),
+            Entry("broken", useCases: ["general"], tier: "S", displayName: "Zeta Broken"),
+            Entry("timed-out", useCases: ["general"], tier: "S", displayName: "Alpha Timed Out"),
             Entry("too-big", useCases: ["general"], tier: "S"),
             Entry("fine", useCases: ["general"], tier: "S")
         };
@@ -318,6 +318,8 @@ public sealed class CatalogRecommendationServiceTests
         AssertEx.Equal(1, warnings.Count);
         AssertEx.True(warnings[0].Message.Contains("broken, timed-out", StringComparison.Ordinal), warnings[0].Message);
         AssertEx.False(warnings[0].Message.Contains("too-big", StringComparison.Ordinal), "an entry that only failed to fit is not a skip.");
+        // The result names the skipped entries by display name, ordinally, so the advisor page can show them.
+        AssertEx.Equal("Alpha Timed Out|Zeta Broken", string.Join('|', result.SkippedEntryNames));
     }
 
     [Test]
@@ -334,6 +336,7 @@ public sealed class CatalogRecommendationServiceTests
 
         AssertEx.Empty(result.Recommended.Concat(result.CanRun));
         AssertEx.False(logger.Entries.Any(entry => entry.Level == LogLevel.Warning), "a model that does not fit is not an inspection failure.");
+        AssertEx.Empty(result.SkippedEntryNames);
     }
 
     private static IReadOnlySet<string> Empty { get; } = new HashSet<string>(StringComparer.Ordinal);
@@ -345,11 +348,12 @@ public sealed class CatalogRecommendationServiceTests
         double? activeParamsB = null,
         bool moe = false,
         string minLlamaCppTag = "b9692",
-        string releaseDate = "2026-01-01")
+        string releaseDate = "2026-01-01",
+        string? displayName = null)
     {
         return new ModelCatalogEntry(id,
             Family: id,
-            DisplayName: id,
+            DisplayName: displayName ?? id,
             Publisher: "Test",
             GgufRepo: $"org/{id}-GGUF",
             License: "mit",

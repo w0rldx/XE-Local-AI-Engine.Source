@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
@@ -17,6 +18,9 @@ using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 /// </remarks>
 public sealed class ModelFitQueryService : IModelFitQueryService
 {
+    /// <summary>Member of the snapshot's <c>system</c> diagnostics object listing the catalog entries the run skipped.</summary>
+    internal const string SkippedCatalogEntriesMember = "skipped_catalog_entries";
+
     private readonly ILogger<ModelFitQueryService> _logger;
     private readonly IOllamaModelService _ollamaModelService;
     private readonly IModelFitRecommendationStore _recommendationStore;
@@ -59,6 +63,7 @@ public sealed class ModelFitQueryService : IModelFitQueryService
 
         var recommendations = await _recommendationStore.ListForSnapshotAsync(summary.Id, cancellationToken);
         recommendations = await ApplyNodeInstallStateAsync(recommendations, cancellationToken);
+        var diagnosticsJson = await _snapshotStore.GetDiagnosticsJsonByIdAsync(summary.Id, cancellationToken);
 
         return new ModelFitLatestRecommendationsView
         {
@@ -75,8 +80,35 @@ public sealed class ModelFitQueryService : IModelFitQueryService
                     Record = record,
                     Diagnostics = ModelFitRecommendationDiagnostics.Parse(record.DiagnosticsJson, record.ModelName)
                 })
-            ]
+            ],
+            SkippedCatalogEntries = ReadSkippedCatalogEntries(diagnosticsJson)
         };
+    }
+
+    // Tolerant: an older snapshot has no such member, and null or malformed diagnostics read as none skipped.
+    private static IReadOnlyList<string> ReadSkippedCatalogEntries(string? diagnosticsJson)
+    {
+        if (string.IsNullOrWhiteSpace(diagnosticsJson))
+        {
+            return [];
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(diagnosticsJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty(SkippedCatalogEntriesMember, out var entries)
+                || entries.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            return [.. entries.EnumerateArray().Where(static entry => entry.ValueKind == JsonValueKind.String).Select(static entry => entry.GetString()!)];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
     }
 
     /// <summary>

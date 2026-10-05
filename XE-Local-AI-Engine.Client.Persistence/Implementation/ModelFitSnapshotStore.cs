@@ -190,6 +190,16 @@ public sealed class ModelFitSnapshotStore : IModelFitSnapshotStore
         };
     }
 
+    public async Task<string?> GetDiagnosticsJsonByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        // The whole entity is materialized because the encrypted columns are decrypted on entity materialization.
+        var entity = await _dbContext.ModelFitSnapshots
+                                     .AsNoTracking()
+                                     .FirstOrDefaultAsync(snapshot => snapshot.Id == id, cancellationToken);
+
+        return entity?.DiagnosticsJson is null ? null : Decode(entity.DiagnosticsJson);
+    }
+
     private static void ApplyTerminalFields(ModelFitSnapshot entity,
         ModelFitRunStatus status,
         int? exitCode,

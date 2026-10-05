@@ -297,6 +297,34 @@ public sealed class ModelFitQueryServiceTests
         AssertEx.False(response.Recommendations[0].IsTrustedPublisher);
     }
 
+    [Test]
+    public async Task GetLatestRecommendationsAsync_WhenDiagnosticsListSkippedEntries_SurfacesThem()
+    {
+        var harness = Harness.Create();
+        harness.SeedLatestRecommendationSnapshot("coding", """{"gpu_accel":true,"skipped_catalog_entries":["Gemma 4 12B","Qwen3 8B"]}""");
+
+        var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
+
+        AssertEx.Equal("Gemma 4 12B|Qwen3 8B", string.Join('|', AssertEx.NotNull(view).SkippedCatalogEntries));
+    }
+
+    [Test]
+    [Arguments(null)]
+    [Arguments("{}")]
+    [Arguments("""{"gpu_accel":true}""")]
+    [Arguments("{not json")]
+    [Arguments("[1,2]")]
+    [Arguments("""{"skipped_catalog_entries":"Qwen3 8B"}""")]
+    public async Task GetLatestRecommendationsAsync_WhenDiagnosticsLackOrMangleTheMember_SkipsNone(string? diagnosticsJson)
+    {
+        var harness = Harness.Create();
+        harness.SeedLatestRecommendationSnapshot("coding", diagnosticsJson);
+
+        var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
+
+        AssertEx.Empty(AssertEx.NotNull(view).SkippedCatalogEntries);
+    }
+
     private sealed class Harness
     {
         public required ModelFitQueryService Service { get; init; }
@@ -322,7 +350,7 @@ public sealed class ModelFitQueryServiceTests
             };
         }
 
-        public Guid SeedLatestRecommendationSnapshot(string? useCase)
+        public Guid SeedLatestRecommendationSnapshot(string? useCase, string? diagnosticsJson = "{}")
         {
             // Open then mark Succeeded so the in-memory store sets is_latest_successful via its real transition path.
             var summary = SnapshotStore
@@ -337,7 +365,7 @@ public sealed class ModelFitQueryServiceTests
                               StartedAtUtc = 1L
                           })
                           .GetAwaiter().GetResult();
-            SnapshotStore.MarkTerminalAsync(summary.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, "{}", stderrExcerpt: null, "{}", completedAtUtc: 2L)
+            SnapshotStore.MarkTerminalAsync(summary.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, "{}", stderrExcerpt: null, diagnosticsJson, completedAtUtc: 2L)
                          .GetAwaiter().GetResult();
             return summary.Id;
         }

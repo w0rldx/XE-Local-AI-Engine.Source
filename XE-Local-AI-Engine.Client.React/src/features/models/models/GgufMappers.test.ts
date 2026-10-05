@@ -58,6 +58,27 @@ describe("toGgufRepositoryDetail file mapping", () => {
 			isRecommended: false,
 		});
 	});
+
+	it("maps a file verdict this client does not know to Unknown", () => {
+		const detail = toGgufRepositoryDetail({
+			repoId: "owner/repo",
+			hasProjector: false,
+			files: [
+				{
+					fileName: "model-Q4_K_M.gguf",
+					quant: "Q4_K_M",
+					isDynamic: false,
+					isDraft: false,
+					sizeBytes: 4_000_000_000,
+					qualityTier: "Balanced",
+					fitVerdict: "Marginal",
+					isRecommended: false,
+				},
+			],
+		});
+
+		expect(detail.files[0]?.fitVerdict).toBe("Unknown");
+	});
 });
 
 describe("vision-projector fields", () => {
@@ -195,6 +216,22 @@ describe("toGgufTestedModel", () => {
 			testedSizeBytes: 2_099_502_400,
 			fitVerdict: "Tight",
 		});
+	});
+
+	it("maps a verdict this client does not know to Unknown", () => {
+		const model = toGgufTestedModel({
+			id: "granite-4.1-3b",
+			displayName: "Granite 4.1 3B",
+			publisher: "IBM",
+			ggufRepo: "unsloth/granite-4.1-3b-GGUF",
+			license: "apache-2.0",
+			totalParamsB: 3.4,
+			testedQuant: "Q4_K_M",
+			testedSizeBytes: 2_099_502_400,
+			fitVerdict: "Marginal",
+		});
+
+		expect(model.fitVerdict).toBe("Unknown");
 	});
 });
 

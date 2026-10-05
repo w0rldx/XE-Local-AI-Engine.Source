@@ -163,6 +163,12 @@ public sealed class GetLatestRecommendationsResponse
     public long? LastRefreshedAtUtc { get; init; }
 
     public required IReadOnlyList<ModelFitRecommendationResponse> Recommendations { get; init; }
+
+    /// <summary>
+    ///     Display names of the catalog entries the run could not check (repo inspection failed or timed out); empty on a
+    ///     cache-miss, when none were skipped, and for a snapshot written before this field shipped.
+    /// </summary>
+    public required IReadOnlyList<string> SkippedCatalogEntries { get; init; }
 }
 
 /// <summary>

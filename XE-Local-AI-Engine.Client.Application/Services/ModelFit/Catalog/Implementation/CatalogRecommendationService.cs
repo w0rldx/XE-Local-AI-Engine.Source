@@ -70,12 +70,12 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
                                .ToList();
 
         var gate = new SemaphoreSlim(MaxConcurrentInspections, MaxConcurrentInspections);
-        var skippedEntryIds = new ConcurrentQueue<string>();
+        var skippedEntries = new ConcurrentQueue<ModelCatalogEntry>();
         CatalogRecommendationCandidate?[] candidates;
         try
         {
             var evaluations = eligible
-                              .Select(entry => EvaluateEntryWithGuardAsync(entry, quantCeiling, ctxTarget, profile, installedKeys, gate, skippedEntryIds, cancellationToken))
+                              .Select(entry => EvaluateEntryWithGuardAsync(entry, quantCeiling, ctxTarget, profile, installedKeys, gate, skippedEntries, cancellationToken))
                               .ToList();
             candidates = await Task.WhenAll(evaluations);
         }
@@ -84,11 +84,11 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
             gate.Dispose();
         }
 
-        if (!skippedEntryIds.IsEmpty)
+        if (!skippedEntries.IsEmpty)
         {
             _logger.LogWarning("Skipped {SkippedCount} catalog entries because their repo inspection failed or timed out: {EntryIds}.",
-                skippedEntryIds.Count,
-                string.Join(", ", skippedEntryIds.Order(StringComparer.Ordinal)));
+                skippedEntries.Count,
+                string.Join(", ", skippedEntries.Select(static entry => entry.Id).Order(StringComparer.Ordinal)));
         }
 
         var ordered = candidates
@@ -111,7 +111,8 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
         {
             Recommended = recommended,
             CanRun = canRun,
-            CatalogSnapshot = snapshot
+            CatalogSnapshot = snapshot,
+            SkippedEntryNames = [.. skippedEntries.Select(static entry => entry.DisplayName).Order(StringComparer.Ordinal)]
         };
     }
 
@@ -141,7 +142,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
         HardwareProfile profile,
         IReadOnlySet<string> installedKeys,
         SemaphoreSlim gate,
-        ConcurrentQueue<string> skippedEntryIds,
+        ConcurrentQueue<ModelCatalogEntry> skippedEntries,
         CancellationToken cancellationToken)
     {
         await gate.WaitAsync(cancellationToken);
@@ -161,7 +162,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
                                               or OperationCanceledException or JsonException or FormatException or InvalidOperationException)
         {
             _logger.LogDebug(exception, "Skipping catalog entry {EntryId} (repo inspection failed or timed out).", entry.Id);
-            skippedEntryIds.Enqueue(entry.Id);
+            skippedEntries.Enqueue(entry);
             return null;
         }
         finally

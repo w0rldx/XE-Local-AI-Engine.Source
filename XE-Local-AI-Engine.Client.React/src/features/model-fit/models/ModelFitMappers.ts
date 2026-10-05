@@ -91,6 +91,7 @@ export function toLatestRecommendations(
 		lastRefreshedAtUtc: dto.lastRefreshedAtUtc ?? null,
 		// hasCache:false carries an empty recommendations array; coalesce defensively in case it is omitted.
 		recommendations: (dto.recommendations ?? []).map(toModelFitRecommendation),
+		skippedCatalogEntries: dto.skippedCatalogEntries ?? [],
 	};
 }
 

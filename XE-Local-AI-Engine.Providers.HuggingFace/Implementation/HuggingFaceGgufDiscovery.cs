@@ -266,12 +266,12 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
 
     /// <summary>
     ///     Second step of the header read: for each architecture signature among the early-stopped (partial) headers,
-    ///     reads the smallest file's whole header once and reuses it for every file of that signature.
+    ///     reads the smallest file's whole header once and uses it to fill the fields each file of that signature lacks.
     /// </summary>
     /// <remarks>
     ///     Keys a tool appended after the tokenizer are recovered without paying the vocabulary once per quant. The
     ///     complete header is used only when its own signature matches; a failed or mismatched read leaves the group's
-    ///     partial metadata. <see cref="GgufHeaderMetadata.QuantType" /> stays each file's own.
+    ///     partial metadata. A file's own non-null values and <see cref="GgufHeaderMetadata.QuantType" /> always win.
     /// </remarks>
     private async Task CompletePartialHeadersAsync(string repoId,
         string revision,
@@ -312,14 +312,39 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
 
             foreach (var i in group)
             {
-                headers[i] = complete with
-                {
-                    QuantType = headers[i].QuantType
-                };
+                headers[i] = FillMissing(headers[i], complete);
             }
         });
 
         await Task.WhenAll(reads).ConfigureAwait(false);
+    }
+
+    // A file keeps every value its own early read found; the representative's complete read only fills the gaps (a key
+    // after the tokenizer). Not partial any more: the completion step ran for it.
+    internal static GgufHeaderMetadata FillMissing(GgufHeaderMetadata own, GgufHeaderMetadata complete)
+    {
+        return new GgufHeaderMetadata
+        {
+            IsPartial = false,
+            Architecture = own.Architecture ?? complete.Architecture,
+            QuantType = own.QuantType,
+            ParamCount = own.ParamCount ?? complete.ParamCount,
+            BlockCount = own.BlockCount ?? complete.BlockCount,
+            AttentionHeadCount = own.AttentionHeadCount ?? complete.AttentionHeadCount,
+            AttentionHeadCountKV = own.AttentionHeadCountKV ?? complete.AttentionHeadCountKV,
+            EmbeddingLength = own.EmbeddingLength ?? complete.EmbeddingLength,
+            ContextLength = own.ContextLength ?? complete.ContextLength,
+            ChatTemplate = own.ChatTemplate ?? complete.ChatTemplate,
+            ExpertCount = own.ExpertCount ?? complete.ExpertCount,
+            ExpertUsedCount = own.ExpertUsedCount ?? complete.ExpertUsedCount,
+            AttentionKeyLength = own.AttentionKeyLength ?? complete.AttentionKeyLength,
+            AttentionValueLength = own.AttentionValueLength ?? complete.AttentionValueLength,
+            SlidingWindow = own.SlidingWindow ?? complete.SlidingWindow,
+            SlidingWindowPattern = own.SlidingWindowPattern ?? complete.SlidingWindowPattern,
+            AttentionKeyLengthMla = own.AttentionKeyLengthMla ?? complete.AttentionKeyLengthMla,
+            AttentionValueLengthMla = own.AttentionValueLengthMla ?? complete.AttentionValueLengthMla,
+            FullAttentionInterval = own.FullAttentionInterval ?? complete.FullAttentionInterval
+        };
     }
 
     private static (string? Architecture, long? BlockCount, long? EmbeddingLength, long? HeadCount, long? HeadCountKv) Signature(GgufHeaderMetadata header)

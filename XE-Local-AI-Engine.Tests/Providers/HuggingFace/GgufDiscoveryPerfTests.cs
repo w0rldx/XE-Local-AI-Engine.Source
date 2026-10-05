@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Net;
+using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -182,13 +184,91 @@ public sealed class GgufDiscoveryPerfTests
         }
     }
 
+    [Test]
+    public async Task InspectRepo_SameSignature_DifferentAttentionGeometry_EachFileKeepsItsOwn()
+    {
+        // Same five-field signature; the key length sits before the tokenizer, so each early read already found its own.
+        var smallest = LargeVocabHeader(blockCount: 32, keyLength: 256, optionalKeysAfterTokenizer: false);
+        var other = LargeVocabHeader(blockCount: 32, keyLength: 128, optionalKeysAfterTokenizer: false);
+        using var harness = new PerfHarness(repoDetail: BuildRepoDetailJson(count: 2),
+            headerBytesFor: fileName => fileName == FileNameFor(QuantTokens[0]) ? smallest : other,
+            headerProbeBytes: ProbeBytes);
+
+        var files = (await harness.Discovery.InspectRepoAsync(RepoId, CancellationToken.None)).Files;
+
+        AssertEx.Equal(expected: 1 + CompleteReadRequests, RangeCalls(harness, QuantTokens[0]));
+        AssertEx.Equal(expected: 1, RangeCalls(harness, QuantTokens[1]));
+        AssertEx.Equal(expected: 256L, files.Single(f => f.Quant == QuantTokens[0]).AttentionKeyLength!.Value);
+        AssertEx.Equal(expected: 128L, files.Single(f => f.Quant == QuantTokens[1]).AttentionKeyLength!.Value);
+    }
+
+    [Test]
+    public async Task InspectRepo_CompleteReadLacksAFieldTheFileHas_TheFileKeepsItsOwn()
+    {
+        // The representative's complete read never finds the optional keys (as when it stops truncated at the cap).
+        var smallest = LargeVocabHeader(blockCount: 32, keyLength: 256, optionalKeysAfterTokenizer: true, includeOptionalKeys: false);
+        var other = LargeVocabHeader(blockCount: 32, keyLength: 128, optionalKeysAfterTokenizer: false);
+        using var harness = new PerfHarness(repoDetail: BuildRepoDetailJson(count: 2),
+            headerBytesFor: fileName => fileName == FileNameFor(QuantTokens[0]) ? smallest : other,
+            headerProbeBytes: ProbeBytes);
+
+        var files = (await harness.Discovery.InspectRepoAsync(RepoId, CancellationToken.None)).Files;
+
+        AssertEx.Equal(expected: 1 + CompleteReadRequests, RangeCalls(harness, QuantTokens[0]));
+        AssertEx.Null(files.Single(f => f.Quant == QuantTokens[0]).AttentionKeyLength);
+        var kept = files.Single(f => f.Quant == QuantTokens[1]);
+        AssertEx.Equal(expected: 128L, kept.AttentionKeyLength!.Value);
+        AssertEx.Equal(expected: 4L, kept.FullAttentionInterval!.Value);
+    }
+
+    [Test]
+    public void FillMissing_FillsEveryNullableField_ExceptTheFilesOwnQuantType()
+    {
+        // Reflection, so a field added to GgufHeaderMetadata later is covered without editing this test.
+        var nullableFields = typeof(GgufHeaderMetadata).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                                                       .Where(static p => p.CanWrite && (p.PropertyType == typeof(string) || Nullable.GetUnderlyingType(p.PropertyType) is not null))
+                                                       .ToList();
+        var complete = GgufHeaderMetadata.Empty with { };
+        foreach (var field in nullableFields)
+        {
+            field.SetValue(complete, field.PropertyType == typeof(string) ? "set" : Convert.ChangeType(1, Nullable.GetUnderlyingType(field.PropertyType)!, CultureInfo.InvariantCulture));
+        }
+
+        var merged = HuggingFaceGgufDiscovery.FillMissing(GgufHeaderMetadata.Empty with { }, complete);
+
+        AssertEx.True(nullableFields.Count > 10, "the reflection must find the header fields.");
+        AssertEx.Null(merged.QuantType, "the quant label is per file, never borrowed.");
+        var missing = nullableFields.Where(static p => p.Name != nameof(GgufHeaderMetadata.QuantType)).Where(p => p.GetValue(merged) is null).Select(static p => p.Name).ToList();
+        AssertEx.Empty(missing, $"FillMissing drops: {string.Join(", ", missing)}");
+    }
+
+    [Test]
+    public async Task HeaderCache_HoldsMoreThan256Headers_SecondPassMakesNoRequest()
+    {
+        using var harness = new PerfHarness();
+        var fileNames = Enumerable.Range(0, 300).Select(static i => $"file-{i}.gguf").ToList();
+
+        foreach (var fileName in fileNames)
+        {
+            await harness.HeaderReader.ReadHeaderAsync(RepoId, fileName, Commit, CancellationToken.None);
+        }
+
+        foreach (var fileName in fileNames)
+        {
+            await harness.HeaderReader.ReadHeaderAsync(RepoId, fileName, Commit, CancellationToken.None);
+        }
+
+        AssertEx.Equal(expected: 300, harness.Handler.RangeCallCountByFile.Count);
+        AssertEx.Equal(expected: 300, harness.Handler.RangeCallCountByFile.Values.Sum());
+    }
+
     private static int RangeCalls(PerfHarness harness, string quant)
     {
         return harness.Handler.RangeCallCountByFile.GetValueOrDefault(FileNameFor(quant));
     }
 
     // The fit-relevant keys come first, then a vocabulary far past the 64 KiB probe; the optional keys sit before or after it.
-    private static byte[] LargeVocabHeader(uint blockCount, uint keyLength, bool optionalKeysAfterTokenizer)
+    private static byte[] LargeVocabHeader(uint blockCount, uint keyLength, bool optionalKeysAfterTokenizer, bool includeOptionalKeys = true)
     {
         var builder = new GgufHeaderBytesBuilder()
                       .WithString("general.architecture", "qwen35")
@@ -197,7 +277,7 @@ public sealed class GgufDiscoveryPerfTests
                       .WithUint32("qwen35.embedding_length", value: 2560)
                       .WithUint32("qwen35.attention.head_count", value: 16)
                       .WithUint32("qwen35.attention.head_count_kv", value: 4);
-        if (!optionalKeysAfterTokenizer)
+        if (!optionalKeysAfterTokenizer && includeOptionalKeys)
         {
             WithOptionalKeys(builder, keyLength);
         }
@@ -205,7 +285,7 @@ public sealed class GgufDiscoveryPerfTests
         builder.WithString("tokenizer.ggml.model", "gpt2")
                .WithStringArray("tokenizer.ggml.tokens", BuildVocab(20_000))
                .WithString("tokenizer.chat_template", "{{ messages }}");
-        if (optionalKeysAfterTokenizer)
+        if (optionalKeysAfterTokenizer && includeOptionalKeys)
         {
             WithOptionalKeys(builder, keyLength);
         }
@@ -303,11 +383,13 @@ public sealed class GgufDiscoveryPerfTests
 
             var clock = timeProvider ?? TimeProvider.System;
             var hubClient = new HfHubClient(_hubHttp, options, NullLogger<HfHubClient>.Instance, clock);
-            var headerReader = new GgufHeaderReader(_downloadHttp, options, NullLogger<GgufHeaderReader>.Instance, clock);
-            Discovery = new HuggingFaceGgufDiscovery(hubClient, headerReader, options, NullLogger<HuggingFaceGgufDiscovery>.Instance);
+            HeaderReader = new GgufHeaderReader(_downloadHttp, options, NullLogger<GgufHeaderReader>.Instance, clock);
+            Discovery = new HuggingFaceGgufDiscovery(hubClient, HeaderReader, options, NullLogger<HuggingFaceGgufDiscovery>.Instance);
         }
 
         public HuggingFaceGgufDiscovery Discovery { get; }
+
+        public GgufHeaderReader HeaderReader { get; }
 
         public TrackingStubHandler Handler { get; }
 

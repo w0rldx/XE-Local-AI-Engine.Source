@@ -155,6 +155,7 @@ const noCacheView = {
 	useCase: null,
 	lastRefreshedAtUtc: null,
 	recommendations: [],
+	skippedCatalogEntries: [],
 };
 
 function makeRecommendationFixture(overrides: Record<string, unknown> = {}) {
@@ -201,6 +202,7 @@ const populatedView = {
 	useCase: "coding",
 	lastRefreshedAtUtc: 1_700_000_000_000,
 	recommendations: [makeRecommendationFixture()],
+	skippedCatalogEntries: [] as string[],
 };
 
 // A snapshot with all three sections represented, used by the section-split tests.
@@ -216,6 +218,7 @@ const sectionedView = {
 		makeRecommendationFixture({ rank: 3, modelName: "can-run-model-2", section: "canRun", pullModelName: "can-run-2:latest" }),
 		makeRecommendationFixture({ rank: 4, modelName: "explore-model", section: "explore", pullModelName: "explore:latest" }),
 	],
+	skippedCatalogEntries: [],
 };
 
 const catalogInfo = {
@@ -312,6 +315,19 @@ describe("ModelRecommendationsPage", () => {
 		expect(screen.getByTestId("model-fit-snapshot")).toBeTruthy();
 		expect(screen.getByTestId("model-fit-recommendations-table")).toBeTruthy();
 		expect(screen.getByTestId("model-fit-recommendation-row-1")).toBeTruthy();
+		expect(screen.queryByTestId("model-fit-skipped-catalog-entries")).toBeNull();
+	});
+
+	it("names the catalog entries the refresh could not check", () => {
+		hooksMock.useLatestRecommendations.mockReturnValue(
+			makeQuery({ ...populatedView, skippedCatalogEntries: ["Qwen3 8B", "Gemma 4 12B"] }),
+		);
+
+		renderPage();
+
+		const notice = screen.getByTestId("model-fit-skipped-catalog-entries");
+		expect(notice.textContent).toContain("2 catalog models could not be checked");
+		expect(notice.textContent).toContain("Qwen3 8B, Gemma 4 12B");
 	});
 
 	it("triggers a GGUF download from a recommendation row via the Model Management feature's hook", () => {

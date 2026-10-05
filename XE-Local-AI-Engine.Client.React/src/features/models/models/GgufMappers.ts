@@ -29,6 +29,13 @@ export function toGgufRepository(dto: XeLocalAiEngineClientEndpointsModelFitV1Gg
 	};
 }
 
+const ggufFitVerdicts: readonly string[] = ["Fits", "Tight", "WontFit", "Unknown"] satisfies GgufFitVerdict[];
+
+// A verdict this client does not know (a newer backend) maps to Unknown, which renders no colored badge.
+function toGgufFitVerdict(value: string | undefined): GgufFitVerdict {
+	return ggufFitVerdicts.includes(value ?? "") ? (value as GgufFitVerdict) : "Unknown";
+}
+
 export function toGgufTestedModel(dto: XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogTestedModelResponse): GgufTestedModel {
 	return {
 		id: dto.id,
@@ -39,7 +46,7 @@ export function toGgufTestedModel(dto: XeLocalAiEngineClientEndpointsModelFitV1M
 		notes: dto.notes ?? null,
 		testedQuant: dto.testedQuant,
 		testedSizeBytes: dto.testedSizeBytes,
-		fitVerdict: dto.fitVerdict as GgufFitVerdict,
+		fitVerdict: toGgufFitVerdict(dto.fitVerdict),
 	};
 }
 
@@ -55,7 +62,7 @@ function toGgufRepositoryFile(dto: XeLocalAiEngineClientEndpointsModelFitV1GgufR
 		// The backend only ever emits the known enum-name values, so a plain cast is safe; defaults cover the
 		// degraded/omitted case (e.g. an old backend or a discovery failure) — Balanced/Unknown are the neutral picks.
 		qualityTier: (dto.qualityTier as GgufQuantTier) ?? "Balanced",
-		fitVerdict: (dto.fitVerdict as GgufFitVerdict) ?? "Unknown",
+		fitVerdict: toGgufFitVerdict(dto.fitVerdict),
 		isRecommended: dto.isRecommended ?? false,
 	};
 }

@@ -50,6 +50,16 @@ export function RecommendationSnapshot({ latest, onDownload, downloadingModelNam
 				</Stack>
 			</Group>
 
+			{latest.skippedCatalogEntries.length > 0 ? (
+				<Text size="sm" c="dimmed" data-testid="model-fit-skipped-catalog-entries">
+					{t(
+						"pages.modelFit.recommendations.skippedCatalogEntries",
+						"{{count}} catalog models could not be checked this time because their repositories could not be read in time: {{names}}. Refreshing again may bring them back.",
+						{ count: latest.skippedCatalogEntries.length, names: latest.skippedCatalogEntries.join(", ") },
+					)}
+				</Text>
+			) : null}
+
 			{latest.recommendations.length > 0 ? (
 				<Stack gap="lg">
 					{recommendedRows.length > 0 ? (

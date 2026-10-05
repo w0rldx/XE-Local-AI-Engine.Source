@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ModelFit;
 
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -661,7 +662,34 @@ public sealed class ModelFitRefreshServiceTests
         AssertEx.False(ModelFitRecommendationDiagnostics.Parse(exploreRow.DiagnosticsJson, exploreRow.ModelName).Tested);
     }
 
-    private static async Task<ICatalogRecommendationService> CatalogRecommending(string repoId, HardwareProfile profile)
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task Advisor_Recommend_PersistsTheSkippedCatalogEntriesInTheSystemDiagnostics_OnlyWhenAnyWereSkipped(bool anySkipped)
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([]));
+        var profile = GpuProfile(12 * Gb);
+        var catalog = await CatalogRecommending("unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF", profile, anySkipped ? ["Gemma 4 12B", "Qwen3 8B"] : []);
+        var advisor = BuildAdvisor(snapshotStore, new InMemoryModelFitRecommendationStore(), discovery, profile, catalog: catalog);
+
+        var result = await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+
+        AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
+        // The persisted diagnostics are what RecommendationJsonParser returned for the system object.
+        using var diagnostics = JsonDocument.Parse(AssertEx.NotNull(snapshotStore.Snapshots.Values.Single().DiagnosticsJson));
+        AssertEx.True(diagnostics.RootElement.TryGetProperty("gpu_accel", out _), "the existing system members stay.");
+        var hasMember = diagnostics.RootElement.TryGetProperty("skipped_catalog_entries", out var skipped);
+        AssertEx.Equal(anySkipped, hasMember);
+        if (anySkipped)
+        {
+            AssertEx.Equal("Gemma 4 12B|Qwen3 8B", string.Join('|', skipped.EnumerateArray().Select(static entry => entry.GetString())));
+        }
+    }
+
+    private static async Task<ICatalogRecommendationService> CatalogRecommending(string repoId, HardwareProfile profile, IReadOnlyList<string>? skippedEntryNames = null)
     {
         var file = File("Q4_K_M", paramCount: 1_000_000_000L);
         var selected = GgufFileSelector.SelectBestFit(new MemoryFitEstimator(), [file], "Q4_K_M", ctxTarget: 8192, profile)!;
@@ -701,7 +729,8 @@ public sealed class ModelFitRefreshServiceTests
                {
                    Recommended = [candidate],
                    CanRun = [],
-                   CatalogSnapshot = empty.CatalogSnapshot
+                   CatalogSnapshot = empty.CatalogSnapshot,
+                   SkippedEntryNames = skippedEntryNames ?? []
                }));
         return catalog;
     }

@@ -112,4 +112,7 @@ public sealed class CatalogRecommendationResult
     public required IReadOnlyList<CatalogRecommendationCandidate> CanRun { get; init; }
 
     public required ModelCatalogSnapshot CatalogSnapshot { get; init; }
+
+    /// <summary>Display names (ordinal order) of the entries skipped because their repo inspection failed or timed out.</summary>
+    public required IReadOnlyList<string> SkippedEntryNames { get; init; }
 }

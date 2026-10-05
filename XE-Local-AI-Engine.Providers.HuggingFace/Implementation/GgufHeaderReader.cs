@@ -23,6 +23,9 @@ internal sealed class GgufHeaderReader
 {
     private const uint GgufMagic = 0x4655_4747; // "GGUF" little-endian (0x47 0x47 0x55 0x46).
 
+    // One advisor run reads more than 256 file headers across the catalog, and early and complete reads are separate keys.
+    private const int HeaderCacheMaxEntries = 1024;
+
     private readonly HttpClient _httpClient;
     private readonly ILogger<GgufHeaderReader> _logger;
     private readonly HuggingFaceOptions _options;
@@ -38,7 +41,7 @@ internal sealed class GgufHeaderReader
         _httpClient = httpClient;
         _options = options;
         _logger = logger;
-        _headerCache = new TtlCache<GgufHeaderMetadata>(timeProvider);
+        _headerCache = new TtlCache<GgufHeaderMetadata>(timeProvider, HeaderCacheMaxEntries);
     }
 
     /// <summary>

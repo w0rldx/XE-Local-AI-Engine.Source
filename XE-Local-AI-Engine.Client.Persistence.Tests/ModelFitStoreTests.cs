@@ -217,6 +217,8 @@ public sealed class ModelFitStoreTests : IDisposable
         AssertEx.Equal(rawJson, raw.RawJson);
         AssertEx.Equal(stderr, raw.StderrExcerpt);
         AssertEx.Equal(diagnostics, raw.DiagnosticsJson);
+        AssertEx.Equal(diagnostics, await readStore.GetDiagnosticsJsonByIdAsync(snapshotId));
+        AssertEx.Null(await readStore.GetDiagnosticsJsonByIdAsync(Guid.NewGuid()));
     }
 
     [Test]

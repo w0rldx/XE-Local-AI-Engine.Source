@@ -30,7 +30,8 @@ internal static class ModelFitMapper
             Status = view.Status.ToString(),
             UseCase = view.UseCase,
             LastRefreshedAtUtc = view.CompletedAtUtc,
-            Recommendations = [.. view.Recommendations.Select(static r => r.ToResponse())]
+            Recommendations = [.. view.Recommendations.Select(static r => r.ToResponse())],
+            SkippedCatalogEntries = view.SkippedCatalogEntries
         };
     }
 
@@ -44,7 +45,8 @@ internal static class ModelFitMapper
             Status = null,
             UseCase = null,
             LastRefreshedAtUtc = null,
-            Recommendations = []
+            Recommendations = [],
+            SkippedCatalogEntries = []
         };
     }
 

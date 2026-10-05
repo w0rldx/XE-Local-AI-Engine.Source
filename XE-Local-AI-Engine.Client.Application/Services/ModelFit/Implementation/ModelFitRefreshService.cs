@@ -162,12 +162,12 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             // (never below one byte), so the advisor's system block is unchanged and its score is normalized against the budget the fits used.
             var companionReserve = await _companionReserve.ResolveGpuBytesAsync(profile, cancellationToken);
             var recommendationProfile = KnowledgeCompanionReserve.ApplyTo(profile, companionReserve);
-            var recommendations = await BuildRecommendationsAsync(request, quant, ctxTarget, recommendationProfile, cancellationToken);
+            var (recommendations, skippedCatalogEntries) = await BuildRecommendationsAsync(request, quant, ctxTarget, recommendationProfile, cancellationToken);
 
             var completedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
             // Serialize the ranked fits to the advisor recommendation JSON and parse them through the reused scaffold.
-            var advisorJson = SerializeAdvisorJson(recommendations, recommendationProfile);
+            var advisorJson = SerializeAdvisorJson(recommendations, recommendationProfile, skippedCatalogEntries);
             var parse = RecommendationJsonParser.Parse(advisorJson);
             if (!parse.IsSuccess)
             {
@@ -281,7 +281,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     ///     A catalog-lane failure never fails the whole refresh — the explore lane still succeeds on its own (see
     ///     <see cref="BuildCatalogRecommendationsAsync" />).
     /// </remarks>
-    private async Task<IReadOnlyList<AdvisorRecommendation>> BuildRecommendationsAsync(ModelFitRefreshRequest request,
+    private async Task<(IReadOnlyList<AdvisorRecommendation> Recommendations, IReadOnlyList<string> SkippedCatalogEntries)> BuildRecommendationsAsync(
+        ModelFitRefreshRequest request,
         string quant,
         int ctxTarget,
         HardwareProfile profile,
@@ -290,7 +291,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         // Which models are already downloaded (best-effort: a registry failure just marks all as not-installed).
         var installedKeys = await ListInstalledKeysAsync(cancellationToken);
 
-        var catalogRecommendations = await BuildCatalogRecommendationsAsync(request, quant, ctxTarget, profile, installedKeys, cancellationToken);
+        var (catalogRecommendations, skippedCatalogEntries) = await BuildCatalogRecommendationsAsync(request, quant, ctxTarget, profile, installedKeys, cancellationToken);
 
         // A model the catalog lane already recommends is not repeated as an explore row. Same comparer as installedKeys, and applied before the explore cap so the
         // lane still fills its limit; rank is the array order of the concatenation, so it stays contiguous.
@@ -303,7 +304,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             catalogModelNames,
             cancellationToken);
 
-        return [.. catalogRecommendations, .. exploreRecommendations];
+        return ([.. catalogRecommendations, .. exploreRecommendations], skippedCatalogEntries);
     }
 
     /// <summary>
@@ -312,9 +313,11 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     /// </summary>
     /// <remarks>
     ///     Any failure (catalog provider, discovery, estimator) is caught and logged — the catalog lane degrading to
-    ///     empty must never fail the run, since the explore lane alone is still a useful recommendation set.
+    ///     empty must never fail the run, since the explore lane alone is still a useful recommendation set. A failed
+    ///     lane reports no skipped entries.
     /// </remarks>
-    private async Task<IReadOnlyList<AdvisorRecommendation>> BuildCatalogRecommendationsAsync(ModelFitRefreshRequest request,
+    private async Task<(IReadOnlyList<AdvisorRecommendation> Rows, IReadOnlyList<string> SkippedEntryNames)> BuildCatalogRecommendationsAsync(
+        ModelFitRefreshRequest request,
         string quant,
         int ctxTarget,
         HardwareProfile profile,
@@ -328,7 +331,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
             var recommended = result.Recommended.Take(request.Limit).Select(candidate => ToAdvisorRecommendation(candidate, "recommended"));
             var canRun = result.CanRun.Take(request.Limit).Select(candidate => ToAdvisorRecommendation(candidate, "canRun"));
-            return [.. recommended, .. canRun];
+            return ([.. recommended, .. canRun], result.SkippedEntryNames);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -337,7 +340,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         catch (Exception exception) when (exception is HttpRequestException or IOException or TimeoutException or InvalidOperationException)
         {
             _logger.LogWarning(exception, "Catalog recommendation lane failed; the run continues with the explore lane only.");
-            return [];
+            return ([], []);
         }
     }
 
@@ -643,7 +646,9 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     ///     <c>score</c>. The <c>vram_required_gb</c>/<c>memory_required_gb</c> fields carry the estimate so the parser
     ///     fills <c>RequiredVramMb</c>/<c>RequiredRamMb</c> (today null).
     /// </remarks>
-    private static string SerializeAdvisorJson(IReadOnlyList<AdvisorRecommendation> recommendations, HardwareProfile profile)
+    private static string SerializeAdvisorJson(IReadOnlyList<AdvisorRecommendation> recommendations,
+        HardwareProfile profile,
+        IReadOnlyList<string> skippedCatalogEntries)
     {
         // The fit budget the score is normalized against, read from the estimator rather than re-derived here so the score
         // and the fit verdicts can never normalize against different budgets.
@@ -767,6 +772,18 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             writer.WriteBoolean("gpu_accel", profile.GpuAccelAvailable);
             writer.WriteString("gpu_vendor", profile.GpuVendor.ToString());
             writer.WriteBoolean("vram_known", profile.VramKnown);
+            // Catalog entries whose repo inspection failed this run; the query service surfaces them on the advisor page.
+            if (skippedCatalogEntries.Count > 0)
+            {
+                writer.WriteStartArray(ModelFitQueryService.SkippedCatalogEntriesMember);
+                foreach (var name in skippedCatalogEntries)
+                {
+                    writer.WriteStringValue(name);
+                }
+
+                writer.WriteEndArray();
+            }
+
             writer.WriteEndObject();
 
             writer.WriteEndObject();

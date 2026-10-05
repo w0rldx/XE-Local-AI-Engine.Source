@@ -24,6 +24,7 @@ function wrapInResponse(
 		useCase: "coding",
 		lastRefreshedAtUtc: 1_000_000,
 		recommendations: [rec],
+		skippedCatalogEntries: [],
 	};
 }
 
@@ -68,5 +69,22 @@ describe("toLatestRecommendations — releaseDate and isTrustedPublisher mapping
 		const result = toLatestRecommendations(wrapInResponse(makeRecDto()));
 
 		expect(result.recommendations[0]?.tested).toBe(false);
+	});
+});
+
+describe("toLatestRecommendations — skipped catalog entries", () => {
+	it("maps the skipped catalog entry names in order", () => {
+		const result = toLatestRecommendations({
+			...wrapInResponse(makeRecDto()),
+			skippedCatalogEntries: ["Qwen3 8B", "Gemma 4 12B"],
+		});
+
+		expect(result.skippedCatalogEntries).toEqual(["Qwen3 8B", "Gemma 4 12B"]);
+	});
+
+	it("maps an empty list to an empty list", () => {
+		const result = toLatestRecommendations(wrapInResponse(makeRecDto()));
+
+		expect(result.skippedCatalogEntries).toEqual([]);
 	});
 });

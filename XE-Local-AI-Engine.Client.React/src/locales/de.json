@@ -4249,6 +4249,8 @@
 				"emptyList": "Das aktuelle Snapshot enthielt keine Empfehlungen.",
 				"installed": "Installiert",
 				"catalogOnly": "Nur Katalog",
+				"skippedCatalogEntries_one": "{{count}} Katalogmodell konnte diesmal nicht geprüft werden, weil sein Repository nicht rechtzeitig erreichbar war: {{names}}. Bei der nächsten Aktualisierung ist es womöglich wieder dabei.",
+				"skippedCatalogEntries_other": "{{count}} Katalogmodelle konnten diesmal nicht geprüft werden, weil ihre Repositorys nicht rechtzeitig erreichbar waren: {{names}}. Bei der nächsten Aktualisierung sind sie womöglich wieder dabei.",
 				"useCases": {
 					"general": "Allgemein",
 					"coding": "Programmierung",

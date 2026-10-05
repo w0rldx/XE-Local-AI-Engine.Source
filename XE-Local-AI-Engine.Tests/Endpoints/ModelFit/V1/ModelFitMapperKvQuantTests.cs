@@ -55,7 +55,8 @@ public sealed class ModelFitMapperKvQuantTests
                     Record = record,
                     Diagnostics = ModelFitRecommendationDiagnostics.Parse(record.DiagnosticsJson, record.ModelName)
                 }
-            ]
+            ],
+            SkippedCatalogEntries = []
         };
     }
 

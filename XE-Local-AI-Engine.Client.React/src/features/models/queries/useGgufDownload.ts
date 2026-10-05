@@ -5,6 +5,7 @@ import {
 	browseGgufRepositoriesOptions,
 	cancelGgufDownloadMutation,
 	getGgufDownloadsQueryKey,
+	getHardwareProfileOptions,
 	getModelCatalogInfoOptions,
 	inspectGgufRepositoryOptions,
 	startGgufDownloadMutation,
@@ -54,12 +55,31 @@ export function useBrowseGgufRepositories(query: string, enabled: boolean) {
 
 // The curated catalog's tested models, offered on the browse panel before any search. Reads the catalog-info endpoint
 // (sharing its cache key with the advisor's catalog card); enabled gates it on the modelFit capability.
+// The endpoint only peeks the device audit that the hardware-profile read computes, so on a first landing it can answer
+// Unknown before the shell's profile read settles. Observing that query under the shell's exact key (no extra request)
+// refetches the catalog once the profile is newer and a verdict is still Unknown; the refetched catalog is then newer,
+// so this cannot loop.
 export function useTestedCatalogModels(enabled: boolean) {
-	return useQuery({
+	const catalog = useQuery({
 		...withResponseValidation(getModelCatalogInfoOptions()),
 		select: (data) => (data.testedModels ?? []).map(toGgufTestedModel),
 		enabled,
 	});
+	const profileUpdatedAt = useQuery({
+		...withResponseValidation(getHardwareProfileOptions({ query: { refresh: false } })),
+		enabled,
+		refetchOnMount: false,
+	}).dataUpdatedAt;
+	const { data, dataUpdatedAt, refetch } = catalog;
+	const hasUnknownVerdict = data?.some((model) => model.fitVerdict === "Unknown") ?? false;
+
+	useEffect(() => {
+		if (hasUnknownVerdict && profileUpdatedAt > 0 && dataUpdatedAt < profileUpdatedAt) {
+			refetch().catch(() => undefined);
+		}
+	}, [hasUnknownVerdict, profileUpdatedAt, dataUpdatedAt, refetch]);
+
+	return catalog;
 }
 
 // Per-repo GGUF file inspection backing the quant picker. enabled gates the query so it only fires when a repo is

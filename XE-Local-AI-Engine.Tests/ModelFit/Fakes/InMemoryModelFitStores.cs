@@ -120,6 +120,11 @@ internal sealed class InMemoryModelFitSnapshotStore : IModelFitSnapshotStore
         });
     }
 
+    public Task<string?> GetDiagnosticsJsonByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(Snapshots.TryGetValue(id, out var snapshot) ? snapshot.DiagnosticsJson : null);
+    }
+
     private static bool SameKey(StoredSnapshot a, StoredSnapshot b)
     {
         return a.Operation == b.Operation && a.UseCase == b.UseCase && a.ProviderName == b.ProviderName && a.ModelName == b.ModelName;
@@ -237,7 +242,8 @@ internal sealed class EmptyCatalogRecommendationService : ICatalogRecommendation
         {
             Recommended = [],
             CanRun = [],
-            CatalogSnapshot = snapshot
+            CatalogSnapshot = snapshot,
+            SkippedEntryNames = []
         });
     }
 }

@@ -52,6 +52,9 @@ public sealed class ModelFitLatestRecommendationsView
     public required long? CompletedAtUtc { get; init; }
 
     public required IReadOnlyList<ModelFitRecommendationView> Recommendations { get; init; }
+
+    /// <summary>Display names of the catalog entries this run could not inspect; empty for older snapshots.</summary>
+    public required IReadOnlyList<string> SkippedCatalogEntries { get; init; }
 }
 
 /// <summary>One recommendation row plus the typed read of its diagnostics blob, parsed once at the query boundary.</summary>

@@ -4,11 +4,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     Node-scoped persistence for model-fit snapshot runs.
 /// </summary>
 /// <remarks>
-///     The raw output, stderr excerpt and detailed diagnostics are encrypted at rest by the node encryption
-///     interceptors and are SANITIZED-BY-DEFAULT at this boundary: the list and latest projections
-///     (<see cref="ModelFitSnapshotSummaryRecord" />) never carry them, and only the explicit operator-diagnostics read
-///     (<see cref="GetRawByIdAsync" />) returns them decrypted. This store performs no validation; it owns id and
-///     timestamp stamping and the transactional latest-successful replacement.
+///     The raw output, stderr excerpt and detailed diagnostics are encrypted at rest and SANITIZED-BY-DEFAULT at this
+///     boundary: the list and latest projections (<see cref="ModelFitSnapshotSummaryRecord" />) never carry them; only
+///     <see cref="GetRawByIdAsync" /> returns them decrypted, and <see cref="GetDiagnosticsJsonByIdAsync" /> the
+///     diagnostics alone. This store performs no validation; it owns id and timestamp stamping and the transactional
+///     latest-successful replacement.
 /// </remarks>
 public interface IModelFitSnapshotStore
 {
@@ -64,6 +64,12 @@ public interface IModelFitSnapshotStore
     ///     stderr excerpt and diagnostics, or <c>null</c> when none exists. Never used by list/latest projections.
     /// </summary>
     Task<ModelFitSnapshotRawRecord?> GetRawByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Returns only the decrypted diagnostics of the run with <paramref name="id" /> (never the raw output or stderr),
+    ///     or <c>null</c> when the run or its diagnostics are absent. The caller projects the members it surfaces.
+    /// </summary>
+    Task<string?> GetDiagnosticsJsonByIdAsync(Guid id, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

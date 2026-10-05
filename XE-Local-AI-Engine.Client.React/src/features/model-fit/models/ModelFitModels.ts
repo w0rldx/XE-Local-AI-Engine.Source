@@ -110,6 +110,8 @@ export interface ModelFitLatestRecommendations {
 	readonly useCase: ModelFitUseCase | string | null;
 	readonly lastRefreshedAtUtc: number | null;
 	readonly recommendations: readonly ModelFitRecommendation[];
+	// Display names of catalog entries the run could not inspect in time; empty when none were skipped.
+	readonly skippedCatalogEntries: readonly string[];
 }
 
 // Filters for the latest-recommendations query. Only the use case scopes the cache read (the advisor no longer

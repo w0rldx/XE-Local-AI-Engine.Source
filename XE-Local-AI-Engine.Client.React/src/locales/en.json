@@ -4249,6 +4249,8 @@
 				"emptyList": "The latest snapshot returned no recommendations.",
 				"installed": "Installed",
 				"catalogOnly": "Catalog only",
+				"skippedCatalogEntries_one": "{{count}} catalog model could not be checked this time because its repository could not be read in time: {{names}}. Refreshing again may bring it back.",
+				"skippedCatalogEntries_other": "{{count}} catalog models could not be checked this time because their repositories could not be read in time: {{names}}. Refreshing again may bring them back.",
 				"useCases": {
 					"general": "General",
 					"coding": "Coding",

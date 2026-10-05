@@ -40830,7 +40830,8 @@
         "additionalProperties": false,
         "required": [
           "hasCache",
-          "recommendations"
+          "recommendations",
+          "skippedCatalogEntries"
         ],
         "properties": {
           "hasCache": {
@@ -40857,6 +40858,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ModelFitRecommendationResponse"
+            }
+          },
+          "skippedCatalogEntries": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         }

@@ -4802,6 +4802,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRe
 	useCase: z.string().nullish(),
 	lastRefreshedAtUtc: z.int().nullish(),
 	recommendations: z.array(zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse),
+	skippedCatalogEntries: z.array(z.string()),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportRequest = z.object({
