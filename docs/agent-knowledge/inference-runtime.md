@@ -117,6 +117,22 @@ tools are filtered. **Prevents:** unsupported kwargs and unrecoverable sessions.
 
 **Rule:** the outer `ConversationContextBudgeter` counts the system prompt as fixed overhead only when no System message in the history carries it; a pre-flight (benchmark freeze or similar) budgets through `InvocationRunner.BudgetFirstRound`, never a hand-built message list. Tool descriptions and an 18-token per-tool JSON wrapper are counted; the chat template's own tool preamble (~198 tokens on Qwen3.8) is not. **Prevents:** a 2048-token benchmark admitted at freeze and refused at runtime (prompt paid twice, descriptions uncounted: estimate 1189 vs 2052 real). **Authority:** `ConversationContextBudgeterTests` seeded-prompt cases, `InvocationRunnerTests.BudgetFirstRound_*`, `TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens`; live-findings S5, 2026-09-28.
 
+### Measure chat-template token overhead through llama-server, never with a hand-tuned per-template constant
+
+**Rule:** the calibration round measures the tool preamble per model through `POST /v1/messages/count_tokens` (system + messages + tools; on b10201 it equals `/tokenize` over `/apply-template`), with and without a fixed probe tool set, and subtracts what the estimator already charges for the probe. **Prevents:** a constant tuned on one template (Qwen3.8: ~198) under- or over-charging every other template (qwen2.5-0.5b: 84). **Authority:** `LlamaTokenEstimatorCalibrationService`, `TokenEstimatorCalibrationStore.ResolveToolTemplatePreamble`; open-items O1, 2026-09-28.
+
+### A supervisor caller that must not extend a helper-loaded model's lifetime passes the Transient intent
+
+**Rule:** a llama.cpp caller that loads a model only for a short helper call sets `ResidencyIntent = ModelResidencyIntent.Transient` on its `LocalModelSelection` (or calls the intent overloads of `EnsureRunningAsync`/`TryAcquireInferenceLease`). Every caller that passes no intent counts as Interactive and clears the transient mark for good, and only a process the Transient request spawned is ever marked. **Prevents:** a helper-loaded model holding memory for the full idle TTL and a cap slot, or, the other way, a new background caller silently giving a draft-loaded model the interactive lifetime. **Authority:** `LlamaServerProcessSupervisor` (`RunningProcess.MarkUsed`, `JoinInflightSpawn`), `LlamaServerIdleReaper.IdleTimeToLiveFor`, `SupervisorTransientResidencyTests`; wiki 03 "Eviction & reaper", 2026-09-29.
+
+### Every acquisition exit writes the latched status snapshot, cancellation included
+
+**Rule:** `RuntimeAcquisitionStatusRegistry` keeps the LAST write until another replaces it, and the banner hides only on Idle or Completed. Every reported acquisition must end with a write: Completed, Failed, or Idle on cancellation (never Failed). "Installed" in node settings (the installed-runtime record) and the banner are independent sources; one can say done while the other is stuck. **Prevents:** a banner frozen at "step 2 of 2, 30 %" after a request-scoped spawn cancelled its cudart download. **Authority:** `LlamaCppBinaryManager.EnsureVariantDirAsync`, `RuntimeAcquisitionProgressTests`; tester round 6, 2026-10-03.
+
+### A default output cap must carry its marker, or it eats half the input window
+
+**Rule:** a node-chosen `MaxOutputTokens` (the chat output cap) is set together with `InvocationAgentDefinition.DefaultOutputCapMarkerKey`; only an explicit per-request limit may reach `ChatOptions.MaxOutputTokens` without it. **Prevents:** `ProviderCallBudgetChatClient` reserving the whole cap (half the window) out of every round's input, which trims long histories at half their room and makes a 4k window refuse its own tool offer, and `ClampToGenerationRoom` halving the configured thinking budget against a limit that already holds it. **Authority:** `ProviderCallBudgetChatClient.ResolveReservedOutputTokens`, `ProviderCallBudgetChatClientTests.GetResponseAsync_ReservesAnExplicitOutputLimitButNotTheDefaultCap`; model-matrix F2, 2026-10-04.
+
 ## Covered elsewhere
 
 - A second patch onto `ChatOptions.RawRepresentationFactory` must compose the first — `docs/wiki/03-local-runtime-and-providers.md`

@@ -50,6 +50,14 @@ plain overflow box unless the call site passes `scrollAreaComponent`, as `Dialog
 scrollbar fix that skips every autosize site and dialog body. **Authority:** `components` block in
 `ThemeProvider.tsx`; `ThemeProvider.test.tsx`.
 
+### Judge listbox/option exposure with a verbose a11y snapshot or a DOM role query, never the default snapshot
+
+**Rule:** the default (non-verbose) accessibility snapshot of the browser tooling drops non-focusable descendants of a control, so every `role="listbox"` using the aria-activedescendant pattern (Mantine `Select`/`Autocomplete` or hand-written) shows as an empty listbox while the DOM, `aria-controls`/`aria-activedescendant` and Chrome's real AX tree are correct. Check a verbose snapshot or `querySelectorAll('[role=option]')` before filing an a11y finding. **Prevents:** chasing a phantom "empty listbox" (Mantine `withScrollArea: false` does not change it and regresses the dropdown height). **Authority:** open-items O3/S4 control test (hand-written listbox, focusable vs non-focusable option), 2026-09-28.
+
+### A UI that polls image or whisper residency reads `model-fit/runtime-residents`, never a runtime status route or `isBusy`
+
+**Rule:** poll `GET model-fit/runtime-residents` for image and whisper residents (llama.cpp stays on `model-fit/running`), never `GET transcription/runtime` or `GET images/runtime`, and never read an activity snapshot's `isBusy` as "work is running" or "eject allowed": it counts a resident daemon, while the row's `canEject` repeats the gate's eviction-reservation refusal. **Prevents:** a per-poll settings load, installed-runtime read and model recommendation from the transcription status route; an eject button disabled whenever anything is loaded. **Authority:** `RuntimeResidentsService`, `TranscriptionRuntimeService.GetRuntimeAsync`, `ImageRuntimeActivitySnapshot.IsBusy`, `TryAcquireEvictionReservation` on both activity gates; wiki 14 and 24, 2026-09-29.
+
 ### A gated-off Ollama runtime is a UI state, not an empty list
 
 **Rule:** with `XE_OLLAMA_RUNTIME_ENABLED=false` the no-op runtime answers available-and-empty, which looks idle, so

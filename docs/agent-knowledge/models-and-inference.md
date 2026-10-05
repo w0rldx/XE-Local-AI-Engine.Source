@@ -85,6 +85,14 @@ Architecture lives in `docs/wiki/03`, `07`, `15`, `18`, `20` and `24`; this file
 
 **Rule:** a provider module registering `services.TryAddSingleton(new XOptions())` gives the host a bare default; the class's `SectionName` is only a promise the host keeps by binding the section before registering the module. Before a live round relies on a config/env knob, prove it reached the process (`ps -o args` for a launch flag, else a log line). A unit test handing the options object to the consumer proves the consumer, not the binding. **Prevents:** a void live round measuring defaults. **Authority:** `AddNodeImagesExtensions.BindStableDiffusionRuntimeOptions`, `StableDiffusionRuntimeOptionsBindingTests`. [evidence](../agent-knowledge-evidence.md#a-providers-tryaddsingletonnew-xoptions-binds-nothing-prove-a-config-key-end-to-end-before-measuring-with-it)
 
+### A polling UI reads `ILiveMemorySampler`, never a forced hardware-profile refresh
+
+**Rule:** anything that polls memory for display reads `ILiveMemorySampler` (`GET model-fit/resources`), never `IHardwareProfiler.GetProfileAsync(forceRefresh: true)` or `model-fit/hardware-profile?refresh=true`. **Prevents:** a forced refresh per poll spawns a full probe each time and overwrites `HardwareProfiler`'s process-lifetime cache, the baseline model fit and profile invalidation read, with a transient reading. **Authority:** `LiveMemorySampler` (never touches the profiler cache, one shared probe per ~2 s window), `HardwareProfiler.GetProfileAsync`, `LiveMemorySamplerTests`; wiki 03 "Live memory sampler", 2026-09-29.
+
+### llama.cpp "offloaded N/N layers to GPU" does not mean GPU-resident under expert offload
+
+**Rule:** read placement from the launch argv (`--cpu-moe`, `-ot …exps=CPU`), not from the load banner: llama.cpp counts a layer offloaded when only its attention tensors are on the GPU. Pick a chat tier GPU-resident before expert offload (down to 16,384), and size hybrid recurrent stacks from `{arch}.full_attention_interval`. **Prevents:** a 35B-A3B that fits resident at 32k launched `-c 65536 --cpu-moe` (45 vs 222 tok/s) and shown as 41/41 on GPU. **Authority:** `ProcessContextAllocationResolver.ResolveCoreAsync`, `MemoryFitEstimator.TotalKvTokensAcrossLayers`, `LlamaServerProcessSupervisor.PinsExpertsToCpu`; model-matrix round F17, 2026-10-04.
+
 ## Benchmarks
 
 `docs/wiki/20-benchmarks.md` is the authority; the entries below keep only facts that page lacks.

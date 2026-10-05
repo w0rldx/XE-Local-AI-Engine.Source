@@ -40,6 +40,10 @@ containment check (jail paths, symlink guards, path containment, patch apply).
 - Isolation uses bwrap's own `--unshare-net`; never gate it on the non-isolated `SupportsNetworkPolicy` probe.
 - Synthetic `/etc` is a rewound, non-CLOEXEC sealed memfd. Kill authority is the transient scope cgroup, not PID/PGID trees.
 
+### Sandboxed MCP = self-contained servers; the registration `PATH` replaces the jail `PATH`
+
+**Rule:** a `Sandboxed` stdio MCP server sees only its command's directory, its working directory and `/usr`, read-only: a symlinked command's target and a script's interpreter are not bound, so npm/npx/uv/uvx/mise/nvm/venv installs need `PrivilegedHost`. The jail `PATH` is `/usr/bin:/bin`; a registration `PATH` variable REPLACES it (the chain applies registration env last), it never extends it, and this node's `PATH` never reaches the jail. Only a server that dies before its first message gets a stderr tail. **Prevents:** debugging a sandboxed server by fixing the host `PATH`, or adding one directory to `PATH` and losing `/usr/bin`. **Authority:** `SandboxIsolatedChain.SandboxPath`, `SandboxedMcpStdioTransport.JailSearchPath`, `SandboxedMcpStdioTransportTests`; `docs/security/mcp-trust-tiers.md`.
+
 ## Compute and AgentHome
 
 ### `ExecuteDetailedAsync` is the single compute execution boundary

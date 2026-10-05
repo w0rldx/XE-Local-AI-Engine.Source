@@ -45,7 +45,11 @@ Sandbox, compute and AgentHome containment: [sandbox-and-compute](sandbox-and-co
 
 ### Persisted chat parts are a render/reload record, not model context
 
-**Rule:** a `NodeChatMessagePart` reaches the model only via `ConversationContextBuilder.Build(includeToolHistory: true)` → `ConversationMessageDto.ToolExchanges` → `InvocationRunner.BuildChatMessages`, requested only by the integration execution coordinator for a `CallerManaged` session, and only off the FULL read (`GetConversationAsync`). `GetConversationForTurnAsync` blanks `metadata_json` for compaction-covered rows, so a replay fed by it is empty after compaction. Normal chat never replays parts. **Prevents:** assuming a continued turn sees its own tool calls because the SPA renders them. **Authority:** `IntegrationContinuationTests.ACallerManagedContinuationReplaysTheCallItsResultAndThenTheTurnsText`, `NodeChatTurnReadCapTests`. [evidence](../agent-knowledge-evidence.md#persisted-chat-parts-are-a-renderreload-record-not-model-context)
+**Rule:** a `NodeChatMessagePart` reaches the model only via `ConversationContextBuilder.Build(includeToolHistory: true)` → `ToolExchanges` → `InvocationRunner.BuildChatMessages`. Plain chat (`NodeChatStreamService`) requests it every turn off `GetConversationForTurnAsync`, each result cut to a 2,000-char excerpt and withheld for a cloud model without `AllowCloudModelAccess` (`ToolHistoryWithheld` notice); that read blanks `metadata_json` of compaction-covered rows, so covered exchanges are not replayed. A `CallerManaged` integration continuation uses the full read and replays them. Image parts never replay. **Prevents:** assuming a turn sees tool calls because the SPA renders them. **Authority:** `NodeChatStreamServiceTests` (follow-up, cloud), `IntegrationContinuationTests.ACallerManagedContinuationReplaysTheCallItsResultAndThenTheTurnsText`, `NodeChatTurnReadCapTests`.
+
+### `DelegatingAIFunction` does not hide `ApprovalRequiredAIFunction` from MEAI
+
+**Rule:** a wrapper meant to run an approval-required function without a human (an auto-approval adapter) must override `GetService` to return null for `typeof(ApprovalRequiredAIFunction)`; unwrapping via `InnerFunction` works too. `FunctionInvokingChatClient` detects approval with `GetService<ApprovalRequiredAIFunction>()`, and `DelegatingAIFunction.GetService` forwards to the wrapped function, so a plain delegating wrapper stays approval-required. **Prevents:** every call becoming a `ToolApprovalRequestContent` nothing answers, the run ending as an empty "succeeded" with no invocation and no audit row (inbound agentic MCP runs, I-D12). **Authority:** `McpAgenticToolAdapter` (`GetService` override), `McpAgenticToolAdapterTests.FunctionInvocation_RunsAdaptedTool_InsteadOfRequestingApproval`; ADR 0006 amendment 2026-09-30.
 
 ## MAF, MEAI and package cohorts
 
@@ -91,6 +95,10 @@ Sandbox, compute and AgentHome containment: [sandbox-and-compute](sandbox-and-co
 ### MCP transport and skill import
 
 **Rule:** HTTP MCP connect-time validation requires both `IsHttpScheme` (only `http`/`https`) and `IsLoopbackHost` (exact ordinal match in `McpOptions.HttpLoopbackHosts`), kept over CRUD validation; never replace the list with `IPAddress.IsLoopback`. The inbound `McpServer` policy lists only `McpApiKey`, and `MapMcp` stays inside `/api/local/v1` (`LocalApiSecurityMiddleware` is prefix-based). Optional tool parameters need C# defaults; nullability does not remove them from `required`. `GitHubSkillArchiveDownloader`'s real HEAD.zip redirect is a pre-RC manual check. **Prevents:** metadata addresses, userinfo, rebinding suffixes or alternate IPv6 spellings passing the boundary. **Authority:** the named predicates.
+
+### Note: ModelContextProtocol 2.2.0 does not send `notifications/cancelled` when a call's token fires
+
+**Rule:** do not rely on the MCP client to cancel server-side work: cancelling the token passed to `CallToolAsync`/`McpClientTool.InvokeAsync` sends no `notifications/cancelled` (observed on the wire against an in-process server on protocols 2025-11-25 and 2026-07-28; over HTTP the cancellation throws inside the send before the cancellation registration runs). `McpToolCallTimeoutAIFunction`'s timeout therefore abandons the call and audits `timeout` while the server keeps working. **Prevents:** trusting the SDK surface note that token cancellation notifies the server, and writing a test that waits for a notification that never comes. **Authority:** S4 wire observation, MCP hardening 2026-09-30 (PLAN §8); server-side cancel on timeout deferred. Re-check on an SDK bump.
 
 ### SignalR does not replay to late joiners
 

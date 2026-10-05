@@ -142,6 +142,14 @@ debugging a backend test, or changing `TestServerWebAppFactory`, `scripts/run-te
 
 **Rule:** before deleting a test file with the service it was written for, grep it for the other production symbols it exercises and re-home whatever is still live. **Prevents:** silently dropping a live control's only coverage; coverage thresholds are project-wide, so no gate notices. **Authority:** `MemoryProposalSecretScannerTests` (re-homed this way). [evidence](../agent-knowledge-evidence.md#deleting-a-dead-service-can-delete-a-live-controls-only-tests--grep-the-test-file-first)
 
+### A tamper test on an acquisition sidecar must keep it self-consistent, or the registry repairs it first
+
+**Rule:** `GgufModelRegistry.ListAllAsync` rewrites a shape-invalid or revision-inconsistent sidecar from the manifest before `InstalledGgufSnapshotStore` sees it, so a test that changes only the recorded digest never reaches the store's check; recompute `WeightMemberFingerprint`, `RegistrySourceRevision` and `RegistryRevision` when tampering. **Prevents:** a green "rejects a wrong sidecar" test that never exercised the rejection. **Authority:** `InstalledGgufSnapshotStoreTests` (SeedAcquiredAsync); open-items O2, 2026-09-28.
+
+### `StubNodeRuntimeSettings` feature switches default ON: disable a feature in the stub, not only in options
+
+**Rule:** a test that needs a feature off sets it on the stub (`With…Enabled(false)`) or in the stored settings; the nine switch getters on `StubNodeRuntimeSettings` return `true` unless told otherwise, and consumers read the accessor, never `IOptions<T>.Enabled`. Bound any loop the test drives with a `CancellationToken` that fires. **Prevents:** a harness that disables a feature through options alone running the enabled path, and a timer loop under `CancellationToken.None` with an unadvanced `FakeTimeProvider` hanging the gate batch silently. **Authority:** `b202ba93b`, `80d064fda` (`AgentHomeRunRetentionServiceTests`, `SchedulerHistoryRetentionServiceTests`), node-settings tier B.
+
 ## Browser E2E host
 
 ### a solution build overwrites the E2E test host, so the flagged build must be the LAST one before a `--no-build` E2E run

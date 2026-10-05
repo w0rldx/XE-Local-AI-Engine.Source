@@ -70,7 +70,7 @@ where Debug was green.
 
 ### After ANY failed build, rebuild to green before trusting a `--no-build` gate
 
-**Rule:** after any failed build, rebuild to `0 Error(s)` before a `--no-build` run: a project that fails leaves its output directory untouched, including its copies of dependencies that did compile, so the test host loads a pre-change product assembly. **Prevents:** grading old code as new. `scripts/assembly-guard.sh` cannot see it: it compares output before and after its own run, not output already stale at the start. **Authority:** `scripts/assembly-guard.sh`; reproduced with a two-project solution.
+**Rule:** after any failed build, rebuild to `0 Error(s)` before a `--no-build` run: a project that fails leaves its output directory untouched, including its copies of dependencies that did compile, so the test host loads a pre-change product assembly. The same holds for a Debug build with `XE_FULL_ANALYSIS=1`: an analyzer failure writes no new assembly, so a focused test-host run executes the previous one. **Prevents:** grading old code as new. `scripts/assembly-guard.sh` cannot see it: it compares output before and after its own run, not output already stale at the start. **Authority:** `scripts/assembly-guard.sh`; reproduced with a two-project solution.
 
 ### an analyzer error in a file the change never touched: re-run after a build-server shutdown before believing it
 

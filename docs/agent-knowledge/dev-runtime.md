@@ -24,6 +24,14 @@ change and reset revoke all. **Prevents:** reviving a logged-out cookie, or a lo
 **Authority:** `NodeAuthRefreshRotationGraceTests`; migration `AllowConcurrentRefreshSessions`.
 [evidence](../agent-knowledge-evidence.md#refresh-rotations-grace-window-is-discriminated-by-the-successor-link-never-by-revoked-recently-or-by-a-timestamp)
 
+### A local-mode host with a v2 `node.key` starts locked: tests and scripts that spawn the real host must unlock it
+
+**Rule:** a desktop or `XE_DATA_DIR` host whose `node.key` is a v2 vault serves only the unlock pre-host until the admin password is given, so any test or script that spawns the real host against such a data directory must pass `XE_ADMIN_PASSWORD` (or `--admin-password-stdin`) for a one-shot, supply an operator secret (`XE_NODE_SQLITE_KEY`) to bypass the vault, or unlock over `auth/vault/unlock`. **Prevents:** a spawned host that reports `XE_READY` and a healthy `auth/status` but never serves the real API, so the test or shell hangs on the unlock page until the 2-minute shell start deadline. `--mcp-key` and `--setup` on a locked vault exit 5 without a password. **Authority:** ADR 0018; `Program.Vault.cs` `UnlockVaultAsync`; `EngineCliProcessTests` locked-vault flows.
+
+### A new pre-host file read must skip the test content root
+
+**Rule:** a read of node state before the host is built takes the same `customization is null` guard `Program.cs` passes to `NodeStartupSettings.Read` (`includeLegacyContentRoot`): a test host's content root is the developer's source directory, so a legacy-path fallback there reads whatever file a dev run left behind. **Prevents:** test hosts whose registrations depend on a stray `node-settings.json` in `XE-Local-AI-Engine.Client/`, green on CI and red on one machine. **Authority:** `NodeStartupSettings.Read`, `Program.cs` (`includeLegacyContentRoot: customization is null`), node-settings tier B S0.
+
 ## Dev host lifecycle
 
 ### The dev environment has a CUDA GPU — probe it, never infer it
@@ -226,6 +234,10 @@ unmeasurable means. Test against a real second mount (`SeparateMountScratch`). *
 ### An ArgumentOutOfRangeException from Microsoft.Data.Sqlite on constant SQL is a masked native prepare failure
 
 **Rule:** treat it as SQLITE_MISUSE/NOMEM leaving the tail pointer unset, not as a caller bug. Read the NodeSqliteDiagnostics Warning lines (sqlite3_config_log result code, the pragma's extended result code) before changing pooling or adding locks. Tests that attach a logger match on a unique marker: the native log hook is process-global and every attached logger sees other tests' messages. **Prevents:** chasing a phantom argument bug, and flaky counts from cross-test SQLite messages. **Authority:** `NodeSqlitePragmas` transient open failure; `NodeSqliteDiagnosticsTests`; wiki 08 "Connection pragmas".
+
+### Never open the node database on a shared cache: busy_timeout does not cover its table locks
+
+**Rule:** the node database runs on a private cache; `AddNodeModelRuntime` strips Aspire's `Cache=Shared` through `NodeSqlitePragmas.WithPrivateCache`. Read extended code 262 as SQLITE_LOCKED_SHAREDCACHE: on a shared cache one connection's uncommitted DDL blocks every other connection's next prepare. The buffer address decides the form: an `ArgumentOutOfRangeException` from SQLitePCL, or SQLite error 6 once the driver's retry hits its command timeout. A test of it accepts both and sets a short `DefaultTimeout`. **Prevents:** the readiness probe's rolled-back `CREATE TABLE` failing an identity lookup with 500 and dropping a SignalR long-poll stream; a repro test that flakes on the 60 s form. **Authority:** `NodeSqlitePragmasTests` (`SharedCache_*`, `WithPrivateCache_*`); model-matrix F16, 2026-10-03.
 
 ## Windows
 
