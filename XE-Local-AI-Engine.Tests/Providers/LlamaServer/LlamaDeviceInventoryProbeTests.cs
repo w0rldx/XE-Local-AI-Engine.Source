@@ -1,11 +1,14 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     The device-inventory probe: its pure <c>--list-devices</c> parser turns each device line into a
@@ -13,9 +16,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the binary manager (no process spawned), and every real-probe failure (a non-existent binary) degrades to
 ///     <see cref="LlamaDeviceInventory.Unknown" /> rather than a false "no GPU". It also never ACQUIRES a runtime: with
 ///     none installed it reports <see cref="LlamaDeviceInventory.RuntimeNotInstalled" /> and leaves the download to the
-///     explicit paths, and that answer is never cached, so an install is seen immediately. The process launch itself is
-///     not exercised here — the parser is the unit; the no-spawn + no-acquire + degrade guards are proven via a
-///     substituted binary manager.
+///     explicit paths, and that answer is never cached, so an install is seen immediately. The parser is the unit; the
+///     no-spawn + no-acquire + degrade guards are proven via a substituted binary manager, and the Windows-CUDA
+///     half-install case via the real manager and a POSIX stub process.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class LlamaDeviceInventoryProbeTests
@@ -149,5 +152,57 @@ public sealed class LlamaDeviceInventoryProbeTests
         AssertEx.False(second.RuntimeMissing);
         await binaryManager.Received(2).TryGetInstalledBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
         await binaryManager.DidNotReceiveWithAnyArgs().EnsureBinaryAsync(default, default);
+    }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task GetDeviceInventory_WindowsCudaBuildWithoutCudart_SpawnsNothingAndCachesNothing_UntilCudartArrives()
+    {
+        // Pins the cached empty GPU list from a Windows CUDA build probed before its cudart DLLs arrived. The POSIX stub, like
+        // the real build, lists the GPU only when cudart64_*.dll sits next to it, and marks every spawn.
+        var cacheRoot = Path.Combine(Path.GetTempPath(), "xe-probe-cudart-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var pin = AssertEx.NotNull(LlamaCppReleasePins.TryResolveExact(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda));
+            var serverPath = Path.Combine(cacheRoot, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cuda", pin.ServerRelativePath);
+            var serverDir = Path.GetDirectoryName(serverPath)!;
+            Directory.CreateDirectory(serverDir);
+            await File.WriteAllTextAsync(serverPath, """
+                                                     #!/bin/sh
+                                                     dir=$(dirname "$0")
+                                                     : > "$dir/spawned"
+                                                     if ls "$dir"/cudart64_*.dll >/dev/null 2>&1; then
+                                                       echo "  CUDA0: NVIDIA Test GPU (24000 MiB, 23000 MiB free)"
+                                                     else
+                                                       echo "Available devices:"
+                                                     fi
+                                                     """);
+            File.SetUnixFileMode(serverPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            using var http = new HttpClient();
+            var manager = new LlamaCppBinaryManager(http, cacheRoot, LlamaCppReleasePins.PinnedTag, OSPlatform.Windows, Architecture.X64, TimeProvider.System);
+            var probe = new LlamaDeviceInventoryProbe(manager, NullLogger<LlamaDeviceInventoryProbe>.Instance);
+
+            var halfInstalled = await probe.GetDeviceInventoryAsync(GpuVariant.Cuda, CancellationToken.None);
+
+            AssertEx.True(halfInstalled.RuntimeMissing, "A CUDA build without cudart is not an installed CUDA runtime yet.");
+            AssertEx.False(halfInstalled.ProbeSucceeded);
+            AssertEx.False(File.Exists(Path.Combine(serverDir, "spawned")), "No --list-devices process may run against a half-CUDA dir.");
+
+            await File.WriteAllTextAsync(Path.Combine(serverDir, "cudart64_12.dll"), "fake-cuda-runtime");
+
+            var complete = await probe.GetDeviceInventoryAsync(GpuVariant.Cuda, CancellationToken.None);
+
+            AssertEx.True(File.Exists(Path.Combine(serverDir, "spawned")), "Once cudart is present the probe inventories the build.");
+            AssertEx.True(complete.ProbeSucceeded);
+            AssertEx.True(complete.HasGpuDevice, "The inventory taken after cudart arrived must list the GPU, not a cached empty list.");
+        }
+        finally
+        {
+            if (Directory.Exists(cacheRoot))
+            {
+                Directory.Delete(cacheRoot, recursive: true);
+            }
+        }
     }
 }

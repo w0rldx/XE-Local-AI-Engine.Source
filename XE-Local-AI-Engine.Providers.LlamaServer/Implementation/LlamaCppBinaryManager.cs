@@ -70,6 +70,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private readonly ICudaManagedBuildSignal? _managedCudaSignal;
     private readonly OSPlatform _os;
     private readonly LlamaServerRuntimeOverrideOptions? _overrideOptions;
+    private readonly Func<OSPlatform, Architecture, GpuVariant, LlamaCppAssetPin?> _pinResolver;
     private readonly SemaphoreSlim _sourceMutationGate = new(initialCount: 1, maxCount: 1);
 
     /// <summary>Single-flight lock per variant directory for <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" />.</summary>
@@ -114,7 +115,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     {
     }
 
-    /// <summary>Test seam: pins OS/arch so asset selection can be exercised on any host.</summary>
+    /// <summary>
+    ///     Test seam: pins OS/arch so asset selection can be exercised on any host; <paramref name="pinResolver" /> replaces the
+    ///     pin table so the pinned acquisition can verify fake archives.
+    /// </summary>
     internal LlamaCppBinaryManager(HttpClient httpClient,
         string cacheRoot,
         string activeTag,
@@ -125,8 +129,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         IInstalledRuntimeStore? installedRuntimeStore = null,
         LlamaServerRuntimeOverrideOptions? overrideOptions = null,
         ICudaManagedBuildSignal? managedCudaSignal = null,
-        IRuntimeAcquisitionStatusRegistry? acquisitionStatus = null)
+        IRuntimeAcquisitionStatusRegistry? acquisitionStatus = null,
+        Func<OSPlatform, Architecture, GpuVariant, LlamaCppAssetPin?>? pinResolver = null)
     {
+        _pinResolver = pinResolver ?? LlamaCppReleasePins.ResolveForAcquisition;
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(activeTag);
@@ -235,18 +241,28 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             }
 
             // The pinned path has no catalog-reported size — pass "unknown" (0) so only the absolute ceiling is enforced.
-            await DownloadVerifyExtractAsync(LlamaCppReleasePins.DownloadUri(resolvedTag, pin.AssetName), pin.AssetName, pin.Sha256, expectedSize: 0, variantDir, reporter, stepIndex: 1, ct)
+            var stagingDir = await DownloadVerifyExtractAsync(LlamaCppReleasePins.DownloadUri(resolvedTag, pin.AssetName), pin.AssetName, pin.Sha256, expectedSize: 0, variantDir,
+                    reporter,
+                    stepIndex: 1,
+                    ct)
                 .ConfigureAwait(false);
 
-            var serverPath = ResolveServerPath(variantDir, pin);
-            if (serverPath is null)
+            // Pair the CUDA runtime DLLs (pinned companion) INTO THE STAGING DIR, then publish: a CUDA build without its cudart archive silently degrades to
+            // CPU-only, and a published half-CUDA dir let the device probe cache an empty GPU list. A cudart failure discards the staging dir and throws.
+            try
             {
-                throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
+                var stagedServer = ResolveServerPath(stagingDir, pin)
+                                   ?? throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
+                await EnsureCudartRuntimeAsync(resolvedTag, pin, cudartAsset: null, variant, stagingDir, stagedServer, reporter, ct).ConfigureAwait(false);
+                PublishStagedVariant(stagingDir, variantDir);
+            }
+            finally
+            {
+                TryDeleteDirectory(stagingDir);
             }
 
-            // Pair the CUDA runtime DLLs (pinned companion) before the binary is recorded/served — a CUDA build without its
-            // cudart archive silently degrades to CPU-only. A cudart failure deletes the half-CUDA variant dir and throws.
-            await EnsureCudartRuntimeAsync(resolvedTag, pin, cudartAsset: null, variant, variantDir, serverPath, reporter, ct).ConfigureAwait(false);
+            var serverPath = ResolveServerPath(variantDir, pin)
+                             ?? throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
 
             await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, ct).ConfigureAwait(false);
 
@@ -318,7 +334,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         // skipped: it is a network call, and it only ever selects a tag to ACQUIRE — it cannot make a binary appear.
         var resolvedTag = installed is { Tag.Length: > 0 } && IsValidTag(installed.Tag) ? installed.Tag : _activeTag;
 
-        var pin = LlamaCppReleasePins.ResolveForAcquisition(_os, _arch, variant);
+        var pin = _pinResolver(_os, _arch, variant);
         if (pin is null)
         {
             // No prebuilt exists for this (os, arch, variant) — e.g. Linux CUDA. Nothing can be on disk under that name.
@@ -327,9 +343,14 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
         var variantDir = Path.Combine(_cacheRoot, "llama.cpp", resolvedTag, VariantSlug(variant));
 
-        // ResolveServerPath only probes the filesystem (File.Exists, then an enumerate guarded by Directory.Exists) and creates nothing. A cached CUDA dir missing
-        // its cudart companion is NOT topped up here (that downloads); it reads as installed, exactly as the supervisor's own ensure will find it before spawning.
+        // Filesystem probes only, nothing created. A Windows-CUDA dir missing cudart is NOT topped up (that downloads) and reads as NOT installed: it enumerates
+        // no GPU, and the device probe would cache that against an exe mtime the later top-up never changes. The next ensure repairs it.
         var cachedServer = ResolveServerPath(variantDir, pin);
+        if (cachedServer is not null && variant == GpuVariant.Cuda && _os == OSPlatform.Windows && !CudartRuntimePresent(Path.GetDirectoryName(cachedServer)!))
+        {
+            return null;
+        }
+
         return cachedServer is null
             ? null
             : new LlamaBinary
@@ -346,7 +367,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     both refuse a request with no genuine prebuilt (Linux CUDA) with one typed error instead of serving the CPU floor.
     /// </summary>
     private LlamaCppAssetPin ResolveAcquirablePin(GpuVariant variant) =>
-        LlamaCppReleasePins.ResolveForAcquisition(_os, _arch, variant)
+        _pinResolver(_os, _arch, variant)
         ?? throw new LlamaRuntimeException(LlamaCppReleasePins.MissingPrebuiltMessage(_os, _arch, variant));
 
     /// <summary>
@@ -511,17 +532,24 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             // Reuse the shared download→verify→atomic-extract pipeline, verifying against the live publisher digest. On any
             // failure the previously-installed binary (a sibling versioned dir) is untouched — versioned dirs isolate tiers.
-            await DownloadVerifyExtractAsync(url, assetName, expectedDigest, expectedSize, variantDir, reporter, stepIndex: 1, ct).ConfigureAwait(false);
+            var stagingDir = await DownloadVerifyExtractAsync(url, assetName, expectedDigest, expectedSize, variantDir, reporter, stepIndex: 1, ct).ConfigureAwait(false);
 
-            var serverPath = ResolveServerPathForAsset(variantDir, pin);
-            if (serverPath is null)
+            // Pair the CUDA runtime DLLs (live companion, name derived from the main asset) in staging, BEFORE publish and the smoke test, so nothing ever sees a
+            // half-CUDA dir; a cudart failure discards the staging dir and throws, never installs blind.
+            try
             {
-                throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
+                var stagedServer = ResolveServerPathForAsset(stagingDir, pin)
+                                   ?? throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
+                await EnsureCudartRuntimeAsync(tag, pin, cudartAsset: assetName, variant, stagingDir, stagedServer, reporter, ct).ConfigureAwait(false);
+                PublishStagedVariant(stagingDir, variantDir);
+            }
+            finally
+            {
+                TryDeleteDirectory(stagingDir);
             }
 
-            // Pair the CUDA runtime DLLs (live companion) BEFORE the smoke test so the self-check exercises a complete CUDA install. The companion name derives from
-            // the resolved main asset and its digest resolves live the same way; a cudart failure deletes the half-CUDA variant dir and throws, never installs blind.
-            await EnsureCudartRuntimeAsync(tag, pin, cudartAsset: assetName, variant, variantDir, serverPath, reporter, ct).ConfigureAwait(false);
+            var serverPath = ResolveServerPathForAsset(variantDir, pin)
+                             ?? throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
 
             // Smoke test BEFORE recording the install: a binary that cannot even report its version is not made active, and a failed self-check must not leave a
             // half-validated variant dir where a later EnsureBinaryAsync tier-1 resolve could serve it unverified — best-effort delete it before surfacing.
@@ -741,13 +769,27 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>Copies every <c>*.dll</c> found anywhere under <paramref name="sourceRoot" /> into <paramref name="serverDir" /> (flattened, overwriting).</summary>
-    private static void FlattenDllsInto(string sourceRoot, string serverDir)
+    /// <remarks>
+    ///     The <c>cudart64_*</c> marker <see cref="CudartRuntimePresent" /> keys on lands LAST, each file by an atomic rename: a top-up of a published dir
+    ///     must never read as installed (to the device probe) or as paired (to the next ensure's skip) before every runtime DLL is complete.
+    /// </remarks>
+    internal static void FlattenDllsInto(string sourceRoot, string serverDir)
     {
         Directory.CreateDirectory(serverDir);
-        foreach (var dll in Directory.EnumerateFiles(sourceRoot, "*.dll", SearchOption.AllDirectories))
+        var dlls = Directory.EnumerateFiles(sourceRoot, "*.dll", SearchOption.AllDirectories)
+            .OrderBy(dll => Path.GetFileName(dll).StartsWith("cudart64_", StringComparison.OrdinalIgnoreCase));
+        foreach (var dll in dlls)
         {
-            var destination = Path.Combine(serverDir, Path.GetFileName(dll));
-            File.Copy(dll, destination, overwrite: true);
+            var partial = Path.Combine(serverDir, $".{Guid.NewGuid():N}.partial");
+            try
+            {
+                File.Copy(dll, partial);
+                File.Move(partial, Path.Combine(serverDir, Path.GetFileName(dll)), overwrite: true);
+            }
+            finally
+            {
+                TryDeleteFile(partial);
+            }
         }
     }
 
@@ -867,33 +909,37 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Shared download, SHA256-verify and atomic-extract pipeline; a transient failure or a hash mismatch is
-    ///     discarded and retried exactly once.
+    ///     Shared download, SHA256-verify and extract pipeline; a transient failure or a hash mismatch is discarded and
+    ///     retried exactly once. Returns the UNPUBLISHED staging dir (a sibling of <paramref name="variantDir" />).
     /// </summary>
     /// <remarks>
     ///     The expected digest is supplied by the caller — the pinned hash (<see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" />) or the
     ///     live publisher digest (<see cref="InstallTagAsync(string, string, string, long, GpuVariant, CancellationToken)" />) — so both acquisition paths run identical
-    ///     verification logic.
+    ///     verification logic. The caller completes the staged tree (the Windows-CUDA cudart pairing), publishes it with
+    ///     <see cref="PublishStagedVariant" /> and deletes the staging dir on failure; nothing is visible at
+    ///     <paramref name="variantDir" /> until then.
     /// </remarks>
-    private async Task DownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex,
+    private async Task<string> DownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex,
         CancellationToken ct)
     {
-        var firstError = await TryDownloadVerifyExtractAsync(url, assetName, expectedSha256, expectedSize, variantDir, reporter, stepIndex, ct).ConfigureAwait(false);
-        if (firstError is null)
+        var (firstStaging, _) = await TryDownloadVerifyExtractAsync(url, assetName, expectedSha256, expectedSize, variantDir, reporter, stepIndex, ct).ConfigureAwait(false);
+        if (firstStaging is not null)
         {
-            return;
+            return firstStaging;
         }
 
-        var secondError = await TryDownloadVerifyExtractAsync(url, assetName, expectedSha256, expectedSize, variantDir, reporter, stepIndex, ct).ConfigureAwait(false);
-        if (secondError is null)
+        var (secondStaging, secondError) = await TryDownloadVerifyExtractAsync(url, assetName, expectedSha256, expectedSize, variantDir, reporter, stepIndex, ct).ConfigureAwait(false);
+        if (secondStaging is not null)
         {
-            return;
+            return secondStaging;
         }
 
-        throw new LlamaRuntimeException(IsDownloadStall(secondError)
+        // A null staging dir always carries its error.
+        var error = secondError!;
+        throw new LlamaRuntimeException(IsDownloadStall(error)
                 ? DownloadStalledMessage
                 : "The llama.cpp runtime could not be downloaded or failed integrity verification after a retry. Check the network connection and try again.",
-            secondError);
+            error);
     }
 
     /// <summary>True for the stall failure <see cref="DownloadToFileAsync" /> raises, so the retry wrapper keeps its reason instead of a generic one.</summary>
@@ -903,10 +949,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>
-    ///     Runs one download → SHA256 verify → extract pass. Returns <see langword="null" /> on success, or the
-    ///     non-fatal failure cause to drive a single retry. Cancellation propagates rather than being swallowed.
+    ///     Runs one download → SHA256 verify → extract pass. Returns the staging dir on success, or the non-fatal
+    ///     failure cause to drive a single retry. Cancellation propagates rather than being swallowed.
     /// </summary>
-    private async Task<Exception?> TryDownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex,
+    private async Task<(string? StagingDir, Exception? Error)> TryDownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex,
         CancellationToken ct)
     {
         // Defense-in-depth: even though assetName is allow-list-validated upstream, strip any directory component before
@@ -921,7 +967,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             // When the catalog reported a size, the on-disk length must match it exactly before we trust+hash the file.
             if (expectedSize > 0 && new FileInfo(tempArchive).Length != expectedSize)
             {
-                return new LlamaRuntimeException("The llama.cpp runtime download did not match its expected size.");
+                return (null, new LlamaRuntimeException("The llama.cpp runtime download did not match its expected size."));
             }
 
             // Verification and extraction of a few-hundred-MB archive are not instant; without their own phases the UI
@@ -929,12 +975,11 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             reporter?.Report(RuntimeAcquisitionPhase.Verifying, stepIndex);
             if (!await HashMatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
             {
-                return new LlamaRuntimeException("The llama.cpp runtime download failed integrity verification.");
+                return (null, new LlamaRuntimeException("The llama.cpp runtime download failed integrity verification."));
             }
 
             reporter?.Report(RuntimeAcquisitionPhase.Extracting, stepIndex);
-            await ExtractArchiveAsync(tempArchive, assetName, variantDir, ct).ConfigureAwait(false);
-            return null;
+            return (await ExtractArchiveAsync(tempArchive, assetName, variantDir, ct).ConfigureAwait(false), null);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -942,7 +987,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
         catch (Exception exception)
         {
-            return exception;
+            return (null, exception);
         }
         finally
         {
@@ -1024,9 +1069,9 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         return string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static async Task ExtractArchiveAsync(string archivePath, string assetName, string variantDir, CancellationToken ct)
+    // Extracts into a temp sibling of variantDir (same volume, so the later publish is an atomic move) and returns it; a partial extract is deleted here.
+    private static async Task<string> ExtractArchiveAsync(string archivePath, string assetName, string variantDir, CancellationToken ct)
     {
-        // Extract into a temp sibling then atomically move into place so a partial extract can't masquerade as cached.
         var stagingDir = $"{variantDir}.{Guid.NewGuid():N}.tmp";
         Directory.CreateDirectory(stagingDir);
         try
@@ -1044,20 +1089,46 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 throw new LlamaRuntimeException("The llama.cpp runtime archive format is not supported.");
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(variantDir.TrimEnd(Path.DirectorySeparatorChar))!);
-            if (Directory.Exists(variantDir))
-            {
-                Directory.Delete(variantDir, recursive: true);
-            }
+            return stagingDir;
+        }
+        catch
+        {
+            TryDeleteDirectory(stagingDir);
+            throw;
+        }
+    }
 
+    /// <summary>
+    ///     Atomically moves a COMPLETE staged tree into <paramref name="variantDir" />, replacing any previous content, so a
+    ///     resolve never observes a partial install (a missing server, or a CUDA build without its cudart DLLs).
+    /// </summary>
+    /// <remarks>
+    ///     The old dir is renamed aside (named like a staging dir), not deleted first: a delete that stops at a locked file, or a move that fails after it,
+    ///     would leave a half-deleted or no runtime. A failed move renames it back; a failed rename aside has touched nothing. Either way it rethrows.
+    /// </remarks>
+    internal static void PublishStagedVariant(string stagingDir, string variantDir)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(variantDir.TrimEnd(Path.DirectorySeparatorChar))!);
+        string? aside = null;
+        if (Directory.Exists(variantDir))
+        {
+            aside = $"{variantDir}.{Guid.NewGuid():N}.tmp";
+            Directory.Move(variantDir, aside);
+        }
+
+        try
+        {
             Directory.Move(stagingDir, variantDir);
         }
-        finally
+        catch when (aside is not null)
         {
-            if (Directory.Exists(stagingDir))
-            {
-                Directory.Delete(stagingDir, recursive: true);
-            }
+            Directory.Move(aside, variantDir);
+            throw;
+        }
+
+        if (aside is not null)
+        {
+            TryDeleteDirectory(aside);
         }
     }
 
