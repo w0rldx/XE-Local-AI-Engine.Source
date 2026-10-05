@@ -106,14 +106,19 @@ set -uo pipefail
 # directory before realpath sees it. The else-arm is the pre-existing fallback for a source tree
 # with no git metadata; keep it.
 # The resolution itself lives in scripts/lib/build-lock-common.sh, shared with build-lock-status.sh.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The REAL file's directory: through a symlink, lib/ and the lock anchor are those of the checkout the
+# wrapper actually lives in.
+SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 # A copy of this script needs lib/ beside it; say so rather than fail later on a missing function.
 [[ -r "${SCRIPT_DIR}/lib/build-lock-common.sh" ]] || {
   echo "[build-lock] missing ${SCRIPT_DIR}/lib/build-lock-common.sh — copy scripts/lib/ along with this script." >&2
   exit 2
 }
 # shellcheck source=scripts/lib/build-lock-common.sh
-source "${SCRIPT_DIR}/lib/build-lock-common.sh"
+source "${SCRIPT_DIR}/lib/build-lock-common.sh" || exit 2
+# A caller's GIT_DIR or private GIT_INDEX_FILE cannot pick the lock: the library's git calls ignore them
+# (xe_git). They are deliberately left in the environment of the wrapped command, which must see what
+# its caller exported.
 
 LOCK_FILE="${BUILD_LOCK_FILE:-$(build_lock_shared_path "${SCRIPT_DIR}")}"
 TIMEOUT="${BUILD_LOCK_TIMEOUT:-3600}"

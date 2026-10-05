@@ -51,7 +51,15 @@
 #   2    — usage error
 set -uo pipefail
 
-PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd))"
+# The roots come from the caller's working directory, by design: the gate and the runners call this from
+# the checkout whose output they test, and the script's own location is only the fallback outside any
+# repository. A caller's GIT_DIR/GIT_WORK_TREE must not swap in another repository's tree
+# (scripts/lib/git-env.sh); loading it is mandatory, or the guard would watch the wrong tree.
+GUARD_LIB="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/lib/git-env.sh"
+# shellcheck source=scripts/lib/git-env.sh
+source "$GUARD_LIB" || { echo "[guard] ERROR: cannot load $GUARD_LIB — copy scripts/lib/ along with this script." >&2; exit 2; }
+xe_drop_git_repo_env
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "$GUARD_LIB")/../.." && pwd))"
 
 # EX_TEMPFAIL. Deliberately distinct from every status the test runners already produce (0 pass,
 # 1 failures, 2 missing prerequisite, 8 zero-tests-matched) so "re-run me" can never be misread.

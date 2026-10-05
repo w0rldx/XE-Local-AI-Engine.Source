@@ -6,6 +6,18 @@
 #   <lock>.owner            pid= started= cwd= worktree= cmd=
 #   <lock>.waiters/<pid>    pid= since=   cwd= worktree= cmd=
 
+# Every git query below goes through xe_git: an inherited GIT_DIR would otherwise put the lock under
+# ANOTHER repository while this checkout builds, and `git -C` does not override it.
+# Mandatory, and fatal to the sourcing script: without xe_git every discovery below would fail and fall
+# back to a checkout-local lock, silently unsharing it in a linked worktree. `exit`, not `return`: a
+# sourcer that ignored a non-zero source status would carry on without it.
+BUILD_LOCK_GIT_ENV="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/git-env.sh"
+# shellcheck source=scripts/lib/git-env.sh
+source "${BUILD_LOCK_GIT_ENV}" || {
+  echo "[build-lock] ERROR: cannot load ${BUILD_LOCK_GIT_ENV} — copy scripts/lib/ along with this script." >&2
+  exit 2
+}
+
 # The shared lock path, resolved from <script dir> — see "SCOPE" in scripts/with-build-lock.sh for
 # why this goes through --git-common-dir and is anchored at the script, never the caller's CWD. git
 # prints the common dir relative to the -C directory when it is inside it, so a relative answer is
@@ -13,7 +25,7 @@
 # tree with no git metadata; keep it.
 build_lock_shared_path() {
   local dir="$1" common root
-  if common="$(git -C "${dir}" rev-parse --git-common-dir 2>/dev/null)" && [[ -n "${common}" ]]; then
+  if common="$(xe_git -C "${dir}" rev-parse --git-common-dir 2>/dev/null)" && [[ -n "${common}" ]]; then
     [[ "${common}" == /* ]] || common="${dir}/${common}"
     root="$(dirname "$(realpath "${common}")")"
   else
@@ -25,7 +37,7 @@ build_lock_shared_path() {
 # Basename of the checkout (main or linked worktree) that contains <dir>, or "-".
 build_lock_worktree() {
   local top
-  if top="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" && [[ -n "${top}" ]]; then
+  if top="$(xe_git -C "$1" rev-parse --show-toplevel 2>/dev/null)" && [[ -n "${top}" ]]; then
     basename "${top}"
   else
     echo "-"

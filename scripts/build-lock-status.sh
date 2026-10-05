@@ -16,14 +16,17 @@
 # Exit codes: 0 — status printed (locked or free); 2 — usage error.
 set -uo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The REAL file's directory, as in scripts/with-build-lock.sh, so both resolve the same lock.
+SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 # A copy of this script needs lib/ beside it; say so rather than fail later on a missing function.
 [[ -r "${SCRIPT_DIR}/lib/build-lock-common.sh" ]] || {
   echo "[build-lock-status] missing ${SCRIPT_DIR}/lib/build-lock-common.sh — copy scripts/lib/ along with this script." >&2
   exit 2
 }
 # shellcheck source=scripts/lib/build-lock-common.sh
-source "${SCRIPT_DIR}/lib/build-lock-common.sh"
+source "${SCRIPT_DIR}/lib/build-lock-common.sh" || exit 2
+# A caller's GIT_DIR cannot make this report on another repository's lock: the library's git calls
+# ignore the repository-selection variables (xe_git in scripts/lib/build-lock-common.sh).
 
 FORMAT=human
 LOCK_FILE="${BUILD_LOCK_FILE:-}"

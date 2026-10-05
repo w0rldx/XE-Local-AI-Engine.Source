@@ -38,7 +38,30 @@ if ! describe_json="$(timeout "${DEV_QUERY_TIMEOUT}s" aspire describe --apphost 
   echo "[dev-status] Aspire resource query failed; refusing to emit an incomplete status." >&2
   exit 4
 fi
-DEV_APPHOST="${DEV_APPHOST}" STATUS_FORMAT="${FORMAT}" APP_JSON="${app_json}" python3 -c '
+
+# The app origin serves the SPA bundle last BUILT into the Client's wwwroot (the Client build copies the React
+# dist/ there, keeping its mtime), not the working tree; the client-react (Vite) origin serves src/ live. Warn,
+# never fail, when src/ has changed since that build: validating on the Vite origin is legitimate. Tests are
+# not in the bundle, so *.test.* files and src/test/ do not count.
+spa_root="$(dirname "$(dirname "${DEV_APPHOST}")")"
+spa_bundle="${spa_root}/XE-Local-AI-Engine.Client/wwwroot/index.html"
+spa_rebuild="use the client-react (Vite) origin, or run pnpm run build in XE-Local-AI-Engine.Client.React and restart with scripts/dev-stop.sh and scripts/dev-start.sh"
+# Nothing in here may change the exit code or suppress the status: a missing or unreadable src/ (an AppHost in
+# another checkout) or bundle just means no warning. NUL-separated, so a file name with a newline cannot
+# split the "<mtime> <path>" record.
+spa_warning=""
+newest_spa_source="$(find "${spa_root}/XE-Local-AI-Engine.Client.React/src" -type f ! -name '*.test.*' \
+  ! -path '*/src/test/*' -printf '%T@ %P\0' 2>/dev/null | sort -z -n | tail -z -n 1 | tr -d '\0')" || newest_spa_source=""
+if [[ "${newest_spa_source}" =~ ^[0-9]+ ]]; then
+  if [[ ! -f "${spa_bundle}" ]]; then
+    spa_warning="the app origin has no built SPA bundle (${spa_bundle} is missing); ${spa_rebuild}"
+  elif spa_bundle_mtime="$(stat -c %Y "${spa_bundle}" 2>/dev/null)" \
+      && (( spa_bundle_mtime < BASH_REMATCH[0] )); then
+    spa_warning="the app origin serves a SPA bundle built before src/${newest_spa_source#* } changed; ${spa_rebuild}"
+  fi
+fi
+
+SPA_WARNING="${spa_warning}" DEV_APPHOST="${DEV_APPHOST}" STATUS_FORMAT="${FORMAT}" APP_JSON="${app_json}" python3 -c '
 import json, os, sys
 from urllib.parse import urlsplit, urlunsplit
 
@@ -79,6 +102,7 @@ result = {
     "sdkVersion": app.get("sdkVersion"),
     "dashboardUrl": safe_url(app.get("dashboardUrl", "")),
     "resources": resources,
+    "spaBundleWarning": os.environ["SPA_WARNING"] or None,
 }
 if os.environ["STATUS_FORMAT"] == "json":
     json.dump(result, sys.stdout, indent=2)
@@ -91,4 +115,6 @@ else:
         endpoints = ", ".join(x["url"] for x in resource["urls"])
         suffix = f"  {endpoints}" if endpoints else ""
         print("  {:<20} {:<12} health={}{}".format(resource["name"], resource["state"], resource["health"], suffix))
+    if result["spaBundleWarning"]:
+        print("[dev-status] WARNING: " + result["spaBundleWarning"])
 ' <<<"${describe_json}"

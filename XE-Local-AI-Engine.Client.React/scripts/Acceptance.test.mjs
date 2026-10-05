@@ -6,7 +6,16 @@ import { join } from "node:path";
 import test from "node:test";
 
 const { scripts } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-const stages = ["lint", "knip", "signalr:check", "depcruise", "test:coverage:check", "test:tooling", "build:bundle"];
+const stages = [
+	"node:check",
+	"lint",
+	"knip",
+	"signalr:check",
+	"depcruise",
+	"test:coverage:check",
+	"test:tooling",
+	"build:bundle",
+];
 
 // Run the real package-script composition, replacing expensive leaf checks with recording processes.
 function runGate(t, gate, failingStage = "") {

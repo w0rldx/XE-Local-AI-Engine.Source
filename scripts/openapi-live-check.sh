@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
 # Compare the committed frontend client with a freshly started desktop backend.
+# It first runs an incremental Release build of the host project under the build lock, then starts the host from
+# that output with --no-build. A failed build stops it (exit 1) before the host starts. It always builds — in CI too,
+# where that is an incremental no-op after the job's solution build — unless OPENAPI_LIVE_SKIP_BUILD=1 (loud: the
+# host then runs whatever Release binaries are already there).
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-PROJECT_ROOT="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)"
+SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+# From this file's location, not `git rev-parse`: an exported GIT_DIR would answer for another repository.
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
+# Nor may it pick the build lock or steer the build, the host or pnpm (scripts/lib/git-env.sh).
+# shellcheck source=scripts/lib/git-env.sh
+source "${PROJECT_ROOT}/scripts/lib/git-env.sh" \
+  || { echo "[openapi-live] ERROR: cannot load ${PROJECT_ROOT}/scripts/lib/git-env.sh — copy scripts/lib/ along with this script." >&2; exit 2; }
+xe_drop_git_repo_env
 CLIENT_PROJECT="${PROJECT_ROOT}/XE-Local-AI-Engine.Client/XE-Local-AI-Engine.Client.csproj"
 CLIENT_RELEASE_ROOT="${OPENAPI_LIVE_CLIENT_RELEASE_ROOT:-${PROJECT_ROOT}/XE-Local-AI-Engine.Client/bin/Release}"
 FRONTEND_DIR="${PROJECT_ROOT}/XE-Local-AI-Engine.Client.React"
@@ -22,9 +32,12 @@ case "${LIVE_SCRIPT}" in
   *) echo "[openapi-live] OPENAPI_LIVE_SCRIPT must be openapi, openapi:fetch or openapi:check:live." >&2; exit 2 ;;
 esac
 
-# The live server reads Release assemblies for the duration of the contract check. Hold the same
-# repository-wide lock as builds/tests; the wrapper is re-entrant through XE_BUILD_LOCK_HELD.
-if [[ -z "${XE_BUILD_LOCK_HELD:-}" ]]; then
+# The build and the live server below write and read the Release assemblies. Hold the same repository-wide lock
+# as builds/tests, entered through the wrapper exactly once: OUR marker, not XE_BUILD_LOCK_HELD, decides the
+# re-exec, because that variable names one lock file and only the wrapper can tell whether it is the one we need
+# (it passes through for the same file and acquires for a different one, or for a stale "1").
+if [[ -z "${XE_OPENAPI_LIVE_LOCKED:-}" ]]; then
+  export XE_OPENAPI_LIVE_LOCKED=1
   exec "${BUILD_LOCK}" -- "${BASH_SOURCE[0]}" "$@"
 fi
 
@@ -32,6 +45,26 @@ for tool in dotnet pnpm python3 setsid; do
   command -v "${tool}" >/dev/null 2>&1 || { echo "[openapi-live] Missing required tool: ${tool}" >&2; exit 2; }
 done
 [[ -f "${CLIENT_PROJECT}" ]] || { echo "[openapi-live] Client project not found: ${CLIENT_PROJECT}" >&2; exit 2; }
+
+# Build first: the host below runs from the Release output with --no-build, so a contract change built only in
+# Debug (or not at all) would regenerate against the OLD binaries and report PASS with no diff (2026-10-04).
+# Staleness is MSBuild's call — sources, deletions, Directory.*.props, package versions — not a timestamp guess:
+# an incremental Release build of the host project, a few seconds when nothing changed (measured 3-5 s). Its exit
+# status is checked: a failed build, an analyzer error included, leaves the PREVIOUS binaries in place, and
+# running those would be the same false green. Inside the lock taken above, with the gate's hygiene: no MSBuild
+# node reuse, and NUGET_PACKAGES pinned so a stale worker node cannot carry another worktree's package root.
+if [[ "${OPENAPI_LIVE_SKIP_BUILD:-}" == "1" ]]; then
+  echo "[openapi-live] WARNING: OPENAPI_LIVE_SKIP_BUILD=1 — not building; the host runs whatever Release binaries" \
+    "are already in place, which may be older than this checkout." >&2
+else
+  echo "[openapi-live] Building the host (Release, incremental)."
+  dotnet build-server shutdown >/dev/null 2>&1 || true
+  if ! MSBUILDDISABLENODEREUSE=1 NUGET_PACKAGES="${NUGET_PACKAGES:-${HOME:-}/.nuget/packages}" \
+      dotnet build "${CLIENT_PROJECT}" --configuration Release; then
+    echo "[openapi-live] BUILD FAILED — the host was not started (it would have run the previous binaries)." >&2
+    exit 1
+  fi
+fi
 
 temp_root="$(mktemp -d)"
 chmod 700 "${temp_root}"

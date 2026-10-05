@@ -46,7 +46,14 @@
 
 set -uo pipefail
 
-PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd))"
+# It lints, builds and runs the contract tests of the checkout it lives in — from its own (real) location,
+# never the caller's working directory or a caller's GIT_DIR/GIT_WORK_TREE (scripts/lib/git-env.sh, whose
+# loading is mandatory).
+PROJECT_ROOT="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.." && pwd)"
+# shellcheck source=scripts/lib/git-env.sh
+source "${PROJECT_ROOT}/scripts/lib/git-env.sh" \
+  || { echo "[lint] ERROR: cannot load ${PROJECT_ROOT}/scripts/lib/git-env.sh — copy scripts/lib/ along with this script." >&2; exit 2; }
+xe_drop_git_repo_env
 
 # Release-path shell scripts. Deliberately scoped: .tmp/worktrees is scratch, not release path.
 SHELL_TARGETS=(
@@ -86,8 +93,10 @@ SHELL_TARGETS=(
   # a bug in the contamination guard reads as a phantom regression or, worse, hides a real one.
   "scripts/with-build-lock.sh"
   "scripts/lib/build-lock-common.sh"
+  "scripts/lib/git-env.sh"
   "scripts/build-lock-status.sh"
   "scripts/tests/build-lock.test.sh"
+  "scripts/tests/entry-point-location.test.sh"
   "scripts/lib/test-sizing.sh"
   "scripts/tests/test-sizing.test.sh"
   "scripts/assembly-guard.sh"

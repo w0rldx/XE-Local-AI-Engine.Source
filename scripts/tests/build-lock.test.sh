@@ -94,4 +94,64 @@ wait "$HOLDER"; wait "$WAITER"
 status --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["holder"] is None and d["waiters"] == [], d' \
   || fail "(e) free json"
 echo "PASS (e) --json parses while held (escaped cmd, 1 waiter) and when free"
+
+# (f) Lock discovery belongs to the checkout the scripts live in, whatever repository-selection variables
+# the caller exported: `git -C` does not override GIT_DIR, and agents export a private GIT_INDEX_FILE.
+# A throwaway checkout holding copies of the scripts and a throwaway decoy repository; with no
+# BUILD_LOCK_FILE both the status report and the wrapper must resolve the checkout's lock, never the
+# decoy's — and nothing may write the exported index.
+# shellcheck source=scripts/lib/git-env.sh
+source "$ROOT/scripts/lib/git-env.sh"
+CHECKOUT="$TMP/checkout"
+DECOY="$TMP/decoy"
+mkdir -p "$CHECKOUT/scripts/lib" "$DECOY"
+cp "$WRAPPER" "$STATUS" "$CHECKOUT/scripts/"
+cp "$ROOT"/scripts/lib/*.sh "$CHECKOUT/scripts/lib/"
+xe_git init -q "$CHECKOUT"
+xe_git init -q "$DECOY"
+want="$(cd "$CHECKOUT" && pwd -P)/.tmp/build.lock"
+for selector in "GIT_DIR=$DECOY/.git" "GIT_DIR=$DECOY/.git GIT_WORK_TREE=$DECOY" \
+    "GIT_INDEX_FILE=$TMP/private-index" "GIT_DIR=$DECOY/.git GIT_INDEX_FILE=$TMP/private-index"; do
+  read -r -a assignments <<<"$selector"
+  got="$(env -u BUILD_LOCK_FILE "${assignments[@]}" "$CHECKOUT/scripts/build-lock-status.sh" --json \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["lock"])')"
+  [[ "$got" == "$want" ]] || fail "(f) status with $selector resolved $got, want $want"
+  held="$(env -u BUILD_LOCK_FILE -u XE_BUILD_LOCK_HELD "${assignments[@]}" "$CHECKOUT/scripts/with-build-lock.sh" \
+    --timeout 10 -- printenv XE_BUILD_LOCK_HELD)" || fail "(f) wrapper with $selector failed"
+  [[ "$held" == "$want" ]] || fail "(f) wrapper with $selector locked $held, want $want"
+done
+[[ ! -e "$TMP/private-index" && ! -e "$DECOY/.tmp" ]] || fail "(f) the exported index or the decoy's lock was written"
+echo "PASS (f) lock discovery ignores GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE"
+
+# (g) ...while the WRAPPED command still sees exactly what its caller exported: the protection lives in
+# the library's git calls, not in a scrub of the wrapper's environment.
+# shellcheck disable=SC2016 # expanded by the wrapped sh, on purpose
+wrapped="$(env -u BUILD_LOCK_FILE -u XE_BUILD_LOCK_HELD GIT_DIR="$TMP/throwaway/gitdir" \
+  GIT_INDEX_FILE="$TMP/throwaway/index" "$CHECKOUT/scripts/with-build-lock.sh" --timeout 10 -- \
+  sh -c 'printf "%s|%s|%s\n" "$XE_BUILD_LOCK_HELD" "${GIT_DIR-<unset>}" "${GIT_INDEX_FILE-<unset>}"')" \
+  || fail "(g) wrapper failed"
+[[ "$wrapped" == "$want|$TMP/throwaway/gitdir|$TMP/throwaway/index" ]] \
+  || fail "(g) wrapped command saw '$wrapped', want '$want|$TMP/throwaway/gitdir|$TMP/throwaway/index'"
+[[ ! -e "$TMP/throwaway" ]] || fail "(g) the exported paths were written"
+echo "PASS (g) the wrapped command keeps the caller's GIT_DIR and GIT_INDEX_FILE"
+
+# (h) A caller's GIT_CEILING_DIRECTORIES is a BOUNDARY, not a repository selection, and is respected: a
+# script copy WITHOUT its own .git, nested inside a throwaway outer repository, with the ceiling at its
+# parent, must not discover the outer repository — its lock and owner records stay out of it.
+OUTER="$TMP/outer"
+NESTED="$OUTER/fixture"
+mkdir -p "$NESTED/scripts/lib"
+xe_git init -q "$OUTER"
+cp "$WRAPPER" "$STATUS" "$NESTED/scripts/"
+cp "$ROOT"/scripts/lib/*.sh "$NESTED/scripts/lib/"
+outer_real="$(cd "$OUTER" && pwd -P)"
+nested_lock="$outer_real/fixture/.tmp/build.lock"
+got="$(env -u BUILD_LOCK_FILE GIT_CEILING_DIRECTORIES="$outer_real" "$NESTED/scripts/build-lock-status.sh" --json \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["lock"])')"
+[[ "$got" == "$nested_lock" ]] || fail "(h) status under the ceiling resolved $got, want $nested_lock"
+held="$(env -u BUILD_LOCK_FILE -u XE_BUILD_LOCK_HELD GIT_CEILING_DIRECTORIES="$outer_real" \
+  "$NESTED/scripts/with-build-lock.sh" --timeout 10 -- printenv XE_BUILD_LOCK_HELD)" || fail "(h) wrapper failed"
+[[ "$held" == "$nested_lock" ]] || fail "(h) wrapper under the ceiling locked $held, want $nested_lock"
+[[ ! -e "$OUTER/.tmp" ]] || fail "(h) the outer repository got a lock or owner record"
+echo "PASS (h) GIT_CEILING_DIRECTORIES keeps discovery out of an enclosing repository"
 echo "build-lock.test.sh: PASS"

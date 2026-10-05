@@ -5,7 +5,8 @@
 
 set -euo pipefail
 
-ROOT="$(git rev-parse --show-toplevel)"
+# From this file's location, not `git rev-parse`: an exported GIT_DIR would answer for another repository.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 FAKE="$TMP/repo"
@@ -117,18 +118,65 @@ Test run summary: Passed!
 SUMMARY
 exit "${FAKE_TEST_EXIT:-0}"
 EOF
+# Records the environment it inherited, so the scrub of the gate's own knobs is observable.
+cat >"$FAKE/scripts/run-release-contract-tests.sh" <<'EOF'
+#!/usr/bin/env bash
+env >"${FAKE_LOG}.contract-env"
+echo "contract JOBS=${JOBS:-} COVERAGE_DIR=${COVERAGE_DIR:-} XE_TEST_WIDTH_DEFAULT=${XE_TEST_WIDTH_DEFAULT:-} TEST_GROUPS=${TEST_GROUPS:-} TEST_SHARD=${TEST_SHARD:-}" >>"$FAKE_LOG"
+echo "[release-contract] scripts/tests/fake.test.sh"
+if [[ -n "${FAKE_CONTRACT_EXIT:-}" ]]; then
+  echo "ERROR: fake contract failure" >&2
+  exit "$FAKE_CONTRACT_EXIT"
+fi
+echo "[release-contract] 5/5 test files passed"
+echo "run-release-contract-tests.sh: PASS"
+EOF
+
+# The gate's four diff questions are answered from FAKE_GIT_*: FAKE_GIT_REF names the one ref that
+# exists (default develop; "none" for neither), FAKE_GIT_NO_MERGE_BASE stands in for a shallow clone,
+# FAKE_GIT_DIFF / FAKE_GIT_UNTRACKED are the changed and untracked paths, filtered by any pathspec
+# after `--` the way git filters them. Anything else — the lock wrapper's `git -C … rev-parse` — goes
+# to the real git. Path quoting is NOT faked: the real-git case below covers it.
+export REAL_GIT
+REAL_GIT="$(command -v git)"
+REAL_PATH="$PATH"
+cat >"$FAKE/bin/git" <<'EOF'
+#!/usr/bin/env bash
+list_paths() {
+  local list="$1" line spec; shift
+  local -a specs=()
+  while (($#)); do [[ "$1" == "--" ]] && { shift; specs=("$@"); break; }; shift; done
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    (( ${#specs[@]} )) || { printf '%s\n' "$line"; continue; }
+    for spec in "${specs[@]}"; do [[ "$line" == "$spec"/* ]] && { printf '%s\n' "$line"; break; }; done
+  done <<<"$list"
+}
+case "$1" in
+  rev-parse)  [[ "$2 $3" == "--verify -q" ]] || exec "$REAL_GIT" "$@"
+              [[ "$4" == "${FAKE_GIT_REF:-develop}^{commit}" ]] ;;
+  merge-base) [[ -z "${FAKE_GIT_NO_MERGE_BASE:-}" ]] && echo 0123abc ;;
+  diff)       list_paths "${FAKE_GIT_DIFF:-}" "$@" ;;
+  ls-files)   list_paths "${FAKE_GIT_UNTRACKED:-}" "$@" ;;
+  *)          exec "$REAL_GIT" "$@" ;;
+esac
+EOF
 chmod +x "$FAKE/scripts/with-build-lock.sh" "$FAKE/scripts/assembly-guard.sh" \
-  "$FAKE/scripts/run-tests-memory-safe.sh" "$FAKE/bin/dotnet"
+  "$FAKE/scripts/run-tests-memory-safe.sh" "$FAKE/scripts/run-release-contract-tests.sh" \
+  "$FAKE/bin/dotnet" "$FAKE/bin/git"
 export PATH="$FAKE/bin:$PATH"
 
 # Runs the gate with NO_BUILD=1 (the stub dotnet builds nothing) and captures output + status.
 # Arguments after the case name are env assignments; GATE_ARGS carries the script's own flags.
+# GITHUB_ACTIONS, CI and XE_GATE_CONTRACT_TESTS are blanked so the contract-lane decision does not
+# depend on where this file runs (a runner sets GITHUB_ACTIONS=true and CI=true); a case that wants
+# them passes them after `env`.
 GATE_ARGS=()
 run_gate() {
   local name="$1"; shift
   : >"$TMP/$name.log"
   set +e
-  output="$(FAKE_LOG="$TMP/$name.log" NO_BUILD=1 "$@" \
+  output="$(FAKE_LOG="$TMP/$name.log" NO_BUILD=1 GITHUB_ACTIONS='' CI='' XE_GATE_CONTRACT_TESTS='' "$@" \
     "$FAKE/scripts/run-backend-tests.sh" ${GATE_ARGS[@]+"${GATE_ARGS[@]}"} 2>&1)"
   status=$?
   set -e
@@ -248,6 +296,206 @@ GATE_ARGS=()
 [[ "$status" -eq 0 ]]
 refute_grep '^runner ' "$TMP/siblings-only.log"
 [[ "$(grep -c '^test project=' "$TMP/siblings-only.log")" -eq 2 ]]
+
+# --- release contract tests: a lane when scripts/, publish/ or .github/workflows/ changed ---
+# Nothing changed: one line says why, and the runner is never called.
+run_gate contract-untouched env FAKE_GIT_DIFF=$'README.md\nXE-Local-AI-Engine.Client/Program.cs\n.github/dependabot.yml\nscriptsx/a.sh\n'
+[[ "$status" -eq 0 ]] || { echo "contract-untouched exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq '>> Release contract tests: skipped (nothing under scripts/, publish/ or .github/workflows/ changed since the merge-base with develop; XE_GATE_CONTRACT_TESTS=run forces them)' <<<"$output"
+refute_grep '^contract ' "$TMP/contract-untouched.log"
+
+# An untracked script counts, and the lane runs with the gate's own knobs scrubbed from its env.
+# TEST_GROUPS/TEST_SHARD are the batched runner's knobs: inherited, they make fixture-based contract
+# tests select nothing.
+run_gate contract-untracked env FAKE_GIT_UNTRACKED=$'scripts/new.sh\n' XE_TEST_WIDTH_DEFAULT=2 \
+  TEST_GROUPS=16 TEST_SHARD=1/4
+[[ "$status" -eq 0 ]] || { echo "contract-untracked exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq '>> Release contract tests: will run (scripts/new.sh changed since the merge-base with develop)' <<<"$output"
+grep -Fxq 'contract JOBS= COVERAGE_DIR= XE_TEST_WIDTH_DEFAULT= TEST_GROUPS= TEST_SHARD=' "$TMP/contract-untracked.log" \
+  || { echo "contract lane env not scrubbed: $(grep '^contract ' "$TMP/contract-untracked.log")" >&2; exit 1; }
+grep -Eq '^release-contract-tests +5 +0 +0 +[0-9]+s +0$' <<<"$output"
+grep -Fq 'BACKEND GATE GREEN' <<<"$output"
+
+# The WHOLE scrub list, read from the gate itself so the list and this assertion cannot drift: every
+# named knob and one probe per prefix is exported (with a value the gate accepts) and none may reach
+# the lane.
+gate_source="$ROOT/scripts/run-backend-tests.sh"
+read -r -a SCRUB_NAMES <<<"$(sed -n '/^CONTRACT_LANE_SCRUB=(/,/^)/p' "$gate_source" | sed '1d;$d' | tr '\n' ' ')"
+read -r -a SCRUB_PREFIXES <<<"$(sed -n 's/^CONTRACT_LANE_SCRUB_PREFIXES=(\(.*\))$/\1/p' "$gate_source")"
+(( ${#SCRUB_NAMES[@]} >= 10 && ${#SCRUB_PREFIXES[@]} >= 3 )) \
+  || { echo "scrub lists not found in $gate_source: ${SCRUB_NAMES[*]} / ${SCRUB_PREFIXES[*]}" >&2; exit 1; }
+declare -A scrub_value=([XE_TEST_PROFILE]=low-memory [XE_GATE_CANCEL_GRACE]=5 [XE_GATE_CONTRACT_TESTS]=run
+  [COVERAGE_DIR]="$TMP/scrub-cov" [JOBS]=2 [TEST_GROUPS]=16 [TEST_SHARD]=1/4)
+scrub_env=()
+scrub_check=()
+for name in "${SCRUB_NAMES[@]}"; do scrub_env+=("$name=${scrub_value[$name]:-1}"); scrub_check+=("$name"); done
+for prefix in "${SCRUB_PREFIXES[@]}"; do scrub_env+=("${prefix}SCRUB_PROBE=1"); scrub_check+=("${prefix}SCRUB_PROBE"); done
+run_gate contract-scrub env "${scrub_env[@]}"
+[[ "$status" -eq 0 ]] || { echo "contract-scrub exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -q '^FAKE_LOG=' "$TMP/contract-scrub.log.contract-env"
+for name in "${scrub_check[@]}"; do
+  if grep -q "^$name=" "$TMP/contract-scrub.log.contract-env"; then
+    echo "contract lane inherited $name" >&2; exit 1
+  fi
+done
+# ...and the list is COMPLETE against what the gate and its runner document as knobs: every name on a
+# knob line of either usage text ("#   NAME  description", or "#   JOBS, PAR  ...") must be listed or
+# covered by a prefix.
+documented_knobs=()
+knob_line='^#   ([A-Z][A-Z0-9_]*(, [A-Z][A-Z0-9_]*)*)  '
+for documented in "$ROOT/scripts/run-backend-tests.sh" "$ROOT/scripts/run-tests-memory-safe.sh"; do
+  while IFS= read -r line; do
+    [[ "$line" =~ $knob_line ]] || continue
+    IFS=', ' read -r -a names <<<"${BASH_REMATCH[1]}"
+    documented_knobs+=("${names[@]}")
+  done < <(sed -n '1,/^set -uo/p' "$documented")
+done
+(( ${#documented_knobs[@]} >= 15 )) || { echo "documented knobs not found: ${documented_knobs[*]}" >&2; exit 1; }
+for knob in "${documented_knobs[@]}"; do
+  covered=""
+  for name in "${SCRUB_NAMES[@]}"; do [[ "$knob" == "$name" ]] && covered=1; done
+  for prefix in "${SCRUB_PREFIXES[@]}"; do [[ "$knob" == "$prefix"* ]] && covered=1; done
+  [[ -n "$covered" ]] || { echo "documented knob $knob is missing from CONTRACT_LANE_SCRUB" >&2; exit 1; }
+done
+
+# A committed or uncommitted change under publish/ or .github/workflows/ counts too.
+run_gate contract-publish env FAKE_GIT_DIFF=$'README.md\npublish/package-rc.sh\n'
+[[ "$status" -eq 0 ]]
+grep -Fq 'will run (publish/package-rc.sh changed' <<<"$output"
+run_gate contract-workflow env FAKE_GIT_DIFF=$'.github/workflows/e2e.yml\n'
+grep -Fq 'will run (.github/workflows/e2e.yml changed' <<<"$output"
+
+# A failing contract run fails the gate, appears in the table and prints its log.
+run_gate contract-red env FAKE_GIT_DIFF=$'scripts/dev-start.sh\n' FAKE_CONTRACT_EXIT=1
+[[ "$status" -eq 1 ]] || { echo "contract-red exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq 'FAILED: release-contract-tests(exit=1)' <<<"$output"
+grep -Fq '[release-contract-tests] ERROR: fake contract failure' <<<"$output"
+refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
+
+# Cannot tell = run, and say why: no develop ref, or no merge-base (a shallow clone).
+run_gate contract-no-ref env FAKE_GIT_REF=none
+grep -Fq 'will run (no develop or origin/develop ref' <<<"$output"
+grep -q '^contract ' "$TMP/contract-no-ref.log"
+run_gate contract-shallow env FAKE_GIT_NO_MERGE_BASE=1
+grep -Fq 'will run (no merge-base of HEAD with develop (shallow clone?)' <<<"$output"
+run_gate contract-origin env FAKE_GIT_REF=origin/develop
+grep -Fq 'changed since the merge-base with origin/develop;' <<<"$output"
+
+# The override forces either way; anything else is a usage error before any build.
+run_gate contract-force env XE_GATE_CONTRACT_TESTS=run
+grep -Fq 'will run (forced by XE_GATE_CONTRACT_TESTS=run)' <<<"$output"
+grep -q '^contract ' "$TMP/contract-force.log"
+run_gate contract-skip env XE_GATE_CONTRACT_TESTS=skip FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
+grep -Fq 'skipped (XE_GATE_CONTRACT_TESTS=skip;' <<<"$output"
+refute_grep '^contract ' "$TMP/contract-skip.log"
+run_gate contract-invalid env XE_GATE_CONTRACT_TESTS=yes NO_BUILD=
+[[ "$status" -eq 2 ]]
+grep -Fq "XE_GATE_CONTRACT_TESTS must be run, skip or auto, got 'yes'" <<<"$output"
+refute_grep '^build ' "$TMP/contract-invalid.log"
+
+# The CI `siblings` leg shape is unchanged: a GitHub Actions runner has its own release-contracts job.
+GATE_ARGS=(--siblings-only)
+run_gate contract-ci env GITHUB_ACTIONS=true CI=true COVERAGE_DIR="$TMP/ci-cov" XE_TEST_WIDTH_DEFAULT=2 \
+  FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
+GATE_ARGS=()
+[[ "$status" -eq 0 ]]
+grep -Fq 'skipped (GITHUB_ACTIONS=true; that workflow runs them in its own release-contracts job;' <<<"$output"
+refute_grep '^contract ' "$TMP/contract-ci.log"
+[[ "$(grep -c '^test project=' "$TMP/contract-ci.log")" -eq 2 ]]
+# A developer shell that merely exports CI (any value) is not that runner: the lane still runs.
+for ci_value in true false 1; do
+  run_gate "contract-ci-$ci_value" env CI="$ci_value" FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
+  grep -Fq '>> Release contract tests: will run (scripts/dev-start.sh changed' <<<"$output" \
+    || { echo "CI=$ci_value skipped the contract lane:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+  grep -q '^contract ' "$TMP/contract-ci-$ci_value.log"
+done
+run_gate contract-gha-false env GITHUB_ACTIONS=false FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
+grep -q '^contract ' "$TMP/contract-gha-false.log"
+
+# --- release contract tests against REAL git: git quotes unusual paths ("scripts/caf\303\251.sh") ---
+# A throwaway repository whose develop holds the fake gate as committed, then a feature branch. The
+# fixture-local identity is the repository's own throwaway one, as in
+# scripts/performance/tests/test_capture_inference_evidence.py.
+#
+# Isolation: git picks the repository from the environment BEFORE -C, so an exported GIT_DIR,
+# GIT_WORK_TREE or GIT_INDEX_FILE (agents commit through a private GIT_INDEX_FILE) would send the
+# fixture's init, config, add and commit into that repository. Every fixture git and gate call runs
+# with all GIT_* variables removed and no global or system config, and nothing is written before git
+# has been shown to resolve to the temporary directory.
+GITFAKE="$TMP/gitrepo"
+mkdir -p "$GITFAKE/bin"
+cp -r "$FAKE/scripts" "$GITFAKE/"
+cp "$FAKE/XE-Local-AI-Engine.slnx" "$GITFAKE/"
+cp "$FAKE/bin/dotnet" "$GITFAKE/bin/"
+printf '.tmp/\n' >"$GITFAKE/.gitignore"
+# The REAL contract runner here, and one contract test that records which checkout it ran from: proof
+# of whose tests the lane ran comes from the test itself, not from a stub that prints success.
+cp "$ROOT/scripts/run-release-contract-tests.sh" "$GITFAKE/scripts/"
+mkdir -p "$GITFAKE/scripts/tests"
+cat >"$GITFAKE/scripts/tests/marker.test.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "contract-marker $(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)" >>"$FAKE_LOG"
+echo "marker.test.sh: PASS"
+EOF
+chmod +x "$GITFAKE/scripts/tests/marker.test.sh"
+GIT_ENV_SCRUB=()
+for var in $(compgen -v GIT_); do GIT_ENV_SCRUB+=(-u "$var"); done
+GIT_ENV_SCRUB+=(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_CEILING_DIRECTORIES="$TMP")
+fixture_git() { env "${GIT_ENV_SCRUB[@]}" "$REAL_GIT" -C "$GITFAKE" "$@"; }
+fixture_git init -q -b develop
+gitfake_real="$(cd "$GITFAKE" && pwd -P)"
+fixture_git_dir="$(fixture_git rev-parse --absolute-git-dir)"
+fixture_top="$(fixture_git rev-parse --show-toplevel)"
+if [[ "$fixture_git_dir" != "$gitfake_real/.git" || "$fixture_top" != "$gitfake_real" ]]; then
+  echo "REFUSING: fixture git resolves to git-dir '$fixture_git_dir', top '$fixture_top', not $gitfake_real" >&2
+  exit 1
+fi
+fixture_git config user.email fixture@example.invalid
+fixture_git config user.name "Contract Fixture"
+fixture_git add -A
+fixture_git commit -q -m fixture
+fixture_git checkout -q -b feature
+# A clean clone: the repository an inherited GIT_DIR/GIT_WORK_TREE points the gate at below. Its own
+# marker test would record the decoy's path.
+env "${GIT_ENV_SCRUB[@]}" "$REAL_GIT" clone -q "$GITFAKE" "$TMP/decoy"
+decoy_real="$(cd "$TMP/decoy" && pwd -P)"
+# Arguments are extra env assignments, applied after the scrub so a case can export git variables on purpose.
+real_git_gate() {
+  local name="$1"; shift
+  : >"$TMP/$name.log"
+  set +e
+  output="$(env "${GIT_ENV_SCRUB[@]}" FAKE_LOG="$TMP/$name.log" NO_BUILD=1 GITHUB_ACTIONS='' CI='' \
+    XE_GATE_CONTRACT_TESTS='' PATH="$GITFAKE/bin:$REAL_PATH" "$@" "$GITFAKE/scripts/run-backend-tests.sh" 2>&1)"
+  status=$?
+  set -e
+}
+real_git_gate real-git-clean
+[[ "$status" -eq 0 ]] || { echo "real-git-clean exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq '>> Release contract tests: skipped (nothing under scripts/' <<<"$output"
+printf 'echo\n' >"$GITFAKE/scripts/"$'caf\xc3\xa9.sh'
+real_git_gate real-git-quoted
+[[ "$status" -eq 0 ]] || { echo "real-git-quoted exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq '>> Release contract tests: will run (' <<<"$output" \
+  || { echo "untracked non-ASCII script did not run the lane:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fxq "contract-marker $gitfake_real" "$TMP/real-git-quoted.log"
+# Staged, so it is in `git diff` rather than in the untracked list.
+fixture_git add -A
+real_git_gate real-git-staged
+[[ "$status" -eq 0 ]] || { echo "real-git-staged exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq '>> Release contract tests: will run (' <<<"$output"
+grep -Fxq "contract-marker $gitfake_real" "$TMP/real-git-staged.log"
+grep -Eq '^release-contract-tests +1 +0 +0 +[0-9]+s +0$' <<<"$output"
+grep -Fq 'BACKEND GATE GREEN' <<<"$output"
+# The gate decides from, AND runs the contract tests of, ITS OWN checkout: a caller's GIT_DIR,
+# GIT_WORK_TREE and GIT_INDEX_FILE naming a clean sibling checkout must neither turn the staged change
+# into "nothing changed" nor make the runner run the sibling's tests and report their PASS.
+real_git_gate real-git-inherited GIT_DIR="$TMP/decoy/.git" GIT_WORK_TREE="$TMP/decoy" \
+  GIT_INDEX_FILE="$TMP/decoy/.git/index"
+grep -Fq '>> Release contract tests: will run (' <<<"$output" \
+  || { echo "inherited git variables redirected the gate's diff:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fxq "contract-marker $gitfake_real" "$TMP/real-git-inherited.log" \
+  || { echo "the lane ran another checkout's contract tests: $(grep contract-marker "$TMP/real-git-inherited.log")" >&2; exit 1; }
+refute_grep -F "contract-marker $decoy_real" "$TMP/real-git-inherited.log"
 
 # --- hollow-gate guard: a suite that prints no MTP summary is never green ---
 run_gate hollow env FAKE_NO_SUMMARY=1

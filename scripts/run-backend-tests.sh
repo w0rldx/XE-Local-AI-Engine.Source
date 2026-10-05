@@ -19,6 +19,25 @@
 #     --coverage-output relative to it, so projects sharing one directory overwrite each other's
 #     Cobertura report — that collision was the only reason the projects were ever serial).
 #   Both lanes run at the same time; every PID is waited on individually.
+#   * A third lane, release-contract-tests, runs scripts/run-release-contract-tests.sh when the branch
+#     touches scripts/, publish/ or .github/workflows/ — see "Release contract tests" below.
+#
+# Release contract tests
+#   The scripts under scripts/, publish/ and .github/workflows/ are pinned by fake-host contract tests
+#   that only CI's release-contracts job used to run, so a script change could pass this gate and still
+#   turn develop red. The gate therefore runs them as one more lane whenever anything under those three
+#   directories differs from the merge-base of HEAD with develop (origin/develop when there is no local
+#   develop): committed, staged, unstaged, deleted and untracked files all count, and a detached HEAD is
+#   just HEAD. When that comparison cannot be made — no develop ref, a shallow clone without the
+#   merge-base, not a git checkout — the lane RUNS and says why: not knowing is not a reason to skip.
+#   Otherwise one ">> Release contract tests: skipped" line says why they did not run.
+#   On a GitHub Actions runner (GITHUB_ACTIONS=true, set for every step) the lane is skipped: that
+#   workflow runs them in its own release-contracts job and its `siblings` leg must not pay for them
+#   twice. A plain CI variable is NOT enough — a developer shell may export one. The lane is independent of
+#   NO_BUILD and --siblings-only (it tests scripts, not assemblies), runs unguarded, and gets an
+#   environment scrubbed of this gate's own knobs so the fakes behave as they do in CI.
+#   Measured on a 32-core dev box (2026-10-05): about 1.5 min of wall on its own, concurrent with the
+#   test lanes, so it rarely lengthens the gate.
 #
 # Locking — ONE lock for the whole gate, taken here
 #   scripts/with-build-lock.sh cannot subdivide a critical section (see its "Re-entrancy" note), and
@@ -91,6 +110,8 @@
 #                     console output is kept beside its reports as gate.log either way, and printed
 #                     only when that lane fails.
 #   JOBS, PAR         passed through to scripts/run-tests-memory-safe.sh
+#   XE_GATE_CONTRACT_TESTS  run: always run the release contract tests; skip: never run them (one line
+#                     says so); unset or auto: decide from the diff against develop, skip when GITHUB_ACTIONS=true.
 #   XE_GATE_CANCEL_GRACE  seconds a lane may take to wind down after TERM before it is killed
 #                     outright (default 15; a whole number, 0 to skip straight to KILL)
 #   XE_TEST_WIDTH_DEFAULT             --maximum-parallel-tests for a sibling (default 8)
@@ -109,12 +130,19 @@
 #          red and never a green.
 set -uo pipefail
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Resolved BEFORE the cd below, because $BASH_SOURCE is whatever spelling the caller used: after the
 # cd, re-exec'ing a relative one would look for it under the repo root and die there. Every relative
 # invocation — `./run-backend-tests.sh` from scripts/, or any path from another directory — depends
-# on this line.
-SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+# on this line. realpath: through a symlink, "this checkout" is the one the real file lives in.
+SELF="$(realpath "${BASH_SOURCE[0]}")"
+REPO="$(cd "$(dirname "$SELF")/.." && pwd)"
+# This gate decides from, builds and tests THIS checkout; a caller's GIT_DIR, GIT_WORK_TREE or private
+# GIT_INDEX_FILE must steer none of it, nor anything it starts (scripts/lib/git-env.sh). Mandatory:
+# without it the gate would run unsanitized.
+# shellcheck source=scripts/lib/git-env.sh
+source "$REPO/scripts/lib/git-env.sh" \
+  || { echo "ERROR: cannot load $REPO/scripts/lib/git-env.sh — copy scripts/lib/ along with this script." >&2; exit 2; }
+xe_drop_git_repo_env
 
 usage() { sed -n '2,/^set -uo/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; $d'; }
 
@@ -230,6 +258,71 @@ mkdir -p "$RESULTS_ROOT"
 # Phase lines go to the console AND $RESULTS_ROOT/gate.log, which scripts/build-lock-status.sh reads so
 # a shell waiting on the lock can see which phase this gate is in.
 progress() { echo "$*"; echo "$*" >>"$RESULTS_ROOT/gate.log"; }
+
+# Decided BEFORE the build, so a bad override fails without spending one. Sets CONTRACT_LANE to the
+# lane name when the release contract tests run — see "Release contract tests" in the header.
+CONTRACT_LANE=""
+# Removed from the contract lane's environment. The contract tests drive fake copies of this gate, its
+# runner and the guard scripts, which read the same knobs: inherited, a JOBS exported by the sizing
+# step, a COVERAGE_DIR, a TEST_SHARD or a guard override would change what they select and assert.
+# Every knob this gate, scripts/run-tests-memory-safe.sh, scripts/lib/test-sizing.sh and the lock
+# wrapper's timeout document, this gate's and scripts/openapi-live-check.sh's lock markers, and (by prefix) the per-project widths,
+# the sizing inputs and scripts/openapi-live-check.sh's overrides. XE_BUILD_LOCK_HELD and
+# BUILD_LOCK_FILE stay, as a pair: a fake that falls back to the default lock file must pass through
+# the lock this gate holds rather than wait on it. MSBUILDDISABLENODEREUSE and NUGET_PACKAGES stay
+# too: the fakes never build. CI and GITHUB_ACTIONS stay: the release-contracts job runs these same tests
+# with both set, so each test must already be immune to them (and is validated that way); scrubbing them
+# here would hide a test that is not. scripts/tests/run-backend-tests.test.sh reads both lists from here.
+CONTRACT_LANE_SCRUB=(
+  JOBS PAR AVAIL_FLOOR TEST_GROUPS TEST_SHARD XE_TEST_PROFILE NO_BUILD NO_BUILD_LOCK NO_GUARD COVERAGE_DIR
+  BUILD_LOCK_TIMEOUT XE_GATE_CANCEL_GRACE XE_GATE_CONTRACT_TESTS XE_BACKEND_GATE_LOCKED XE_OPENAPI_LIVE_LOCKED
+)
+CONTRACT_LANE_SCRUB_PREFIXES=(XE_TEST_WIDTH_ XE_SIZING_ OPENAPI_LIVE_)
+# Reads THIS checkout: the repository-selection variables were dropped at the top, and the gate has
+# already cd'd to its repository root.
+contract_paths_touched() {
+  local ref base changed untracked
+  local -a contract_dirs=(scripts publish .github/workflows)
+  for ref in develop origin/develop; do
+    git rev-parse --verify -q "$ref^{commit}" >/dev/null 2>&1 || continue
+    if ! base="$(git merge-base HEAD "$ref" 2>/dev/null)"; then
+      CONTRACT_WHY="no merge-base of HEAD with $ref (shallow clone?), so a script change cannot be ruled out"
+      return 0
+    fi
+    # Against the working tree, not HEAD: uncommitted edits count. --no-renames lists both sides of a
+    # rename, so a script moved OUT of scripts/ still counts. git does the matching through the
+    # pathspec: its output quotes unusual names ("scripts/caf\303\251.sh"), so it is only ever
+    # tested for emptiness and shown, never parsed.
+    if ! changed="$(git diff --name-only --no-renames "$base" -- "${contract_dirs[@]}" 2>/dev/null)" \
+        || ! untracked="$(git ls-files --others --exclude-standard -- "${contract_dirs[@]}" 2>/dev/null)"; then
+      CONTRACT_WHY="git could not list the changes since $ref, so a script change cannot be ruled out"
+      return 0
+    fi
+    CONTRACT_WHY="${changed:-$untracked}"
+    CONTRACT_WHY="${CONTRACT_WHY%%$'\n'*}"
+    [[ -n "$CONTRACT_WHY" ]] && { CONTRACT_WHY="$CONTRACT_WHY changed since the merge-base with $ref"; return 0; }
+    CONTRACT_WHY="nothing under scripts/, publish/ or .github/workflows/ changed since the merge-base with $ref"
+    return 1
+  done
+  CONTRACT_WHY="no develop or origin/develop ref, so a script change cannot be ruled out"
+  return 0
+}
+case "${XE_GATE_CONTRACT_TESTS:-auto}" in
+  run)  CONTRACT_LANE=release-contract-tests; CONTRACT_WHY="forced by XE_GATE_CONTRACT_TESTS=run" ;;
+  skip) CONTRACT_WHY="XE_GATE_CONTRACT_TESTS=skip" ;;
+  auto)
+    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+      CONTRACT_WHY="GITHUB_ACTIONS=true; that workflow runs them in its own release-contracts job"
+    elif contract_paths_touched; then
+      CONTRACT_LANE=release-contract-tests
+    fi ;;
+  *) echo "ERROR: XE_GATE_CONTRACT_TESTS must be run, skip or auto, got '${XE_GATE_CONTRACT_TESTS}'." >&2; exit 2 ;;
+esac
+if [[ -n "$CONTRACT_LANE" ]]; then
+  progress ">> Release contract tests: will run ($CONTRACT_WHY)"
+else
+  progress ">> Release contract tests: skipped ($CONTRACT_WHY; XE_GATE_CONTRACT_TESTS=run forces them)"
+fi
 
 if [[ -z "${NO_BUILD:-}" ]]; then
   progress ">> Building the solution (Release)…"
@@ -364,6 +457,27 @@ run_batched_module() {
   echo "$p $f $rc $((EPOCHSECONDS-t0)) $s" >"$LANE_DIR/$module.result"
 }
 
+# PASS counts contract test FILES. The runner stops at the first failing file, so FAIL is 0 or 1.
+run_contract_tests() {
+  local module="$CONTRACT_LANE" log="$RESULTS_ROOT/$CONTRACT_LANE/gate.log" t0=$EPOCHSECONDS
+  local -a unset_args=()
+  local var prefix
+  mkdir -p "$RESULTS_ROOT/$module"
+  for var in "${CONTRACT_LANE_SCRUB[@]}"; do unset_args+=(-u "$var"); done
+  for prefix in "${CONTRACT_LANE_SCRUB_PREFIXES[@]}"; do
+    for var in $(compgen -v "$prefix"); do unset_args+=(-u "$var"); done
+  done
+  env "${unset_args[@]}" "$REPO/scripts/run-release-contract-tests.sh" >"$log" 2>&1
+  local rc=$? p f=0
+  p="$(grep -oE '^\[release-contract\] [0-9]+/' "$log" | grep -oE '[0-9]+' | tail -1)"; p="${p:-0}"
+  (( rc == 0 )) || f=1
+  if [[ "$rc" == 0 ]] && ! grep -Fxq 'run-release-contract-tests.sh: PASS' "$log"; then
+    echo "ERROR: $module printed no PASS line — nothing ran." >&2
+    rc=90
+  fi
+  echo "$p $f $rc $((EPOCHSECONDS-t0)) 0" >"$LANE_DIR/$module.result"
+}
+
 # Sized here — inside the lock and after the build — so the reading is the RAM free when the lanes
 # start. JOBS is exported so the runner takes it as-is instead of re-reading a changed MemAvailable.
 # At JOBS=1 the host cannot spare the siblings' default widths either; the lanes stay concurrent.
@@ -416,6 +530,16 @@ for module in "${!MODULE_PROJECTS[@]}"; do
   (( CANCEL_STATUS )) && finish_cancel
   [[ -z "$LOW_MEMORY" ]] || wait "${LANE_PIDS[$module]}"
 done
+if [[ -n "$CONTRACT_LANE" ]]; then
+  progress ">> Lane: $CONTRACT_LANE through scripts/run-release-contract-tests.sh"
+  LANES+=("$CONTRACT_LANE")
+  LAUNCHING=1
+  run_contract_tests </dev/null &
+  LANE_PIDS["$CONTRACT_LANE"]=$!
+  LAUNCHING=0
+  (( CANCEL_STATUS )) && finish_cancel
+  [[ -z "$LOW_MEMORY" ]] || wait "${LANE_PIDS[$CONTRACT_LANE]}"
+fi
 set +m
 
 for module in "${LANES[@]}"; do wait "${LANE_PIDS[$module]}"; done

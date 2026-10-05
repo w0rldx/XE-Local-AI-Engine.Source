@@ -2,7 +2,18 @@
 # Auto-enroll every release/compliance contract test and reject vacuous green runs.
 set -uo pipefail
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd))"
+# The checkout this runner lives in, from its own location: the tests beside it are the ones to run, never
+# whatever a caller's GIT_DIR/GIT_WORK_TREE or working directory names. The repository-selection variables
+# are dropped for every test it starts (scripts/lib/git-env.sh).
+repo_root="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.." && pwd)"
+# shellcheck source=scripts/lib/git-env.sh
+source "$repo_root/scripts/lib/git-env.sh" \
+  || { echo "ERROR: cannot load $repo_root/scripts/lib/git-env.sh — copy scripts/lib/ along with this runner." >&2; exit 2; }
+xe_drop_git_repo_env
+# And from inside it: several tests find their subject from the working directory (`git rev-parse`,
+# relative paths), so a runner started from another checkout would otherwise run these test files
+# against THAT checkout's scripts. Nothing below reads the caller's directory.
+cd "$repo_root" || { echo "ERROR: cannot enter $repo_root." >&2; exit 2; }
 # scripts/performance/tests uses the unittest-discovery naming (test_*.py) rather than this
 # runner's *.test.py convention, so both patterns are discovered below. Its third file,
 # capture_windows_vram.Tests.ps1, is Pester and runs from scripts/lint-release-scripts.sh instead.

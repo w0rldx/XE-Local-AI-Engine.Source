@@ -169,6 +169,54 @@ assert_process_gone "$(cat "${FAKE_LINGERING_PID}")"
 rm -f "${FAKE_ASPIRE_STATE}" "${FAKE_PS_FAIL_MARKER}"
 unset FAKE_START_MODE
 
+# The SPA bundle the app origin serves is the one last built into the Client's wwwroot. dev-status derives both
+# paths from the AppHost it reports on, so a fake checkout with dated files drives the staleness warning: a JSON
+# field (the output stays valid JSON) and one table line, never a failure.
+SPA_ROOT="${TEMP_ROOT}/spa-root"
+SPA_APPHOST="${SPA_ROOT}/XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj"
+SPA_BUNDLE="${SPA_ROOT}/XE-Local-AI-Engine.Client/wwwroot/index.html"
+SPA_SRC="${SPA_ROOT}/XE-Local-AI-Engine.Client.React/src"
+mkdir -p "$(dirname "${SPA_APPHOST}")" "$(dirname "${SPA_BUNDLE}")" "${SPA_SRC}/test"
+: >"${SPA_APPHOST}"
+printf 'app\n' >"${SPA_SRC}/App.tsx"
+touch -d '2026-01-02' "${SPA_SRC}/App.tsx"
+printf 'bundle\n' >"${SPA_BUNDLE}"
+touch -d '2026-01-01' "${SPA_BUNDLE}"
+: >"${FAKE_ASPIRE_STATE}"
+spa_status() { FAKE_APPHOST="${SPA_APPHOST}" XE_ASPIRE_APPHOST="${SPA_APPHOST}" "${SCRIPT_DIR}/dev-status.sh" "$@"; }
+spa_warning() { python3 -c 'import json, sys; print(json.load(sys.stdin)["spaBundleWarning"] or "")' <<<"$1"; }
+
+stale_json="$(spa_status --json)"
+[[ "$(spa_warning "${stale_json}")" == "the app origin serves a SPA bundle built before src/App.tsx changed; use the client-react (Vite) origin, or run pnpm run build"* ]]
+[[ "$(spa_status)" == *"[dev-status] WARNING: the app origin serves a SPA bundle built before src/App.tsx changed"* ]]
+
+touch -d '2026-01-03' "${SPA_BUNDLE}"
+[[ -z "$(spa_warning "$(spa_status --json)")" ]]
+[[ "$(spa_status)" != *"WARNING"* ]]
+
+# Tests are not in the bundle: editing one does not make it stale.
+printf 'test\n' >"${SPA_SRC}/App.test.tsx"
+printf 'setup\n' >"${SPA_SRC}/test/Setup.ts"
+touch -d '2026-01-05' "${SPA_SRC}/App.test.tsx" "${SPA_SRC}/test/Setup.ts"
+[[ -z "$(spa_warning "$(spa_status --json)")" ]]
+
+rm -f "${SPA_BUNDLE}"
+[[ "$(spa_warning "$(spa_status --json)")" == "the app origin has no built SPA bundle (${SPA_BUNDLE} is missing);"* ]]
+
+# The check is advisory: with no frontend src/ at all (an AppHost in a checkout without one) the status is
+# still printed, the exit code is the plain one, and the JSON stays valid.
+rm -rf "${SPA_SRC}"
+for format in --json ""; do
+  set +e
+  no_src_output="$(spa_status ${format:+"${format}"} 2>&1)"
+  no_src_status=$?
+  set -e
+  [[ "${no_src_status}" -eq 0 ]] || { echo "FAIL: dev-status ${format} exited ${no_src_status} without src/: ${no_src_output}" >&2; exit 1; }
+done
+[[ -z "$(spa_warning "$(spa_status --json)")" ]]
+[[ "$(spa_status)" == *"health=Healthy"* ]]
+rm -f "${FAKE_ASPIRE_STATE}"
+
 grep -Fq "trap 'exit 130' INT TERM" "${SCRIPT_DIR}/dev-start.sh"
 grep -Fq "trap 'exit 130' INT TERM" "${SCRIPT_DIR}/aspire-readiness-smoke.sh"
 grep -Fq "Startup session anchor identity changed; refusing to signal that session." "${SCRIPT_DIR}/dev-start.sh"
