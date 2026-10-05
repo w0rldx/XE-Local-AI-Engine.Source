@@ -124,11 +124,11 @@ export function ChatMessageList({
 	const streamingContent = scopedStreamingMessage?.content ?? "";
 	const hasStreamingContent = streamingContent.trim().length > 0;
 	// The stream error is NOT a placeholder: it renders once as an error block inside the assistant bubble
-	// (via the message's `error` field below), never as the body text or in the StreamingIndicator footer.
+	// (via the message's `error` field below), never as the body text or in the StreamingIndicator.
 	const streamingPlaceholder = hasStreamingContent
 		? undefined
 		: scopedStreamingMessage?.isQueued
-			? // Queued is surfaced solely by the StreamingIndicator pill below the turn; emitting it as the body
+			? // Queued is surfaced solely by the StreamingIndicator badge inside the bubble; emitting it as the body
 				// placeholder too would show the same text twice.
 				undefined
 			: scopedStreamingMessage?.isActive

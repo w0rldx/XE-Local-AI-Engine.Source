@@ -123,6 +123,112 @@ describe("ChatMessageList failed-turn rendering", () => {
 	});
 });
 
+describe("ChatMessageList streaming status placement", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: vi.fn().mockImplementation((query: string) => ({
+				matches: false,
+				media: query,
+				onchange: null,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+				dispatchEvent: vi.fn(),
+			})),
+		});
+		Object.defineProperty(window, "ResizeObserver", {
+			writable: true,
+			value: class ResizeObserverMock {
+				observe = vi.fn();
+
+				unobserve = vi.fn();
+
+				disconnect = vi.fn();
+			},
+		});
+		Element.prototype.scrollIntoView = vi.fn();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	function liveStream(overrides: Partial<ChatStreamingState> = {}): ChatStreamingState {
+		return { conversationId: "conversation-1", messageId: "assistant-1", content: "", isActive: true, ...overrides };
+	}
+
+	function withProviders(ui: ReactElement) {
+		return (
+			<MantineProvider env="test" theme={testMantineTheme}>
+				{ui}
+			</MantineProvider>
+		);
+	}
+
+	it("renders the cold-load line inside the placeholder bubble, then moves the status below the bubble once content arrives", () => {
+		const convo = conversation([userMessage()]);
+		const { rerender } = render(
+			withProviders(<ChatMessageList conversation={convo} streamingMessage={liveStream({ runtimePhase: "loading_model" })} />),
+		);
+
+		const bubble = screen.getByTestId("chat-message-bubble-assistant-1");
+		expect(bubble.textContent).toContain("Waiting for response");
+		const loading = screen.getByTestId("chat-stream-loading-model-indicator");
+		expect(loading.textContent).toContain("Loading model…");
+		expect(bubble.contains(loading)).toBe(true);
+
+		rerender(
+			withProviders(
+				<ChatMessageList
+					conversation={convo}
+					streamingMessage={liveStream({ content: "The answer", runtimePhase: "generating" })}
+				/>,
+			),
+		);
+
+		expect(screen.queryByTestId("chat-stream-loading-model-indicator")).toBeNull();
+		const streaming = screen.getByTestId("chat-streaming-indicator");
+		expect(streaming.textContent).toBe("Receiving response");
+		expect(screen.getByTestId("chat-message-bubble-assistant-1").contains(streaming)).toBe(false);
+	});
+
+	it("renders the queued badge inside a bubble with no placeholder text", () => {
+		renderWithProviders(
+			<ChatMessageList conversation={conversation([userMessage()])} streamingMessage={liveStream({ isQueued: true })} />,
+		);
+
+		const bubble = screen.getByTestId("chat-message-bubble-assistant-1");
+		const queued = screen.getByTestId("chat-stream-queued-indicator");
+		expect(queued.textContent).toContain("Queued — waiting for current task");
+		expect(bubble.contains(queued)).toBe(true);
+		expect(bubble.textContent).not.toContain("Waiting for response");
+	});
+
+	it("places the status the same way on a persisted streaming turn", () => {
+		// A persisted assistant row that so far carries only reasoning: it survives the list filter, so the live
+		// stream targets it instead of the synthetic row.
+		const persisted = failedAssistantMessage({ status: "streaming", error: undefined, reasoning: "Thinking it over." });
+		const convo = conversation([userMessage(), persisted]);
+		const { rerender } = render(
+			withProviders(<ChatMessageList conversation={convo} streamingMessage={liveStream({ runtimePhase: "loading_model" })} />),
+		);
+
+		const bubble = screen.getByTestId("chat-message-bubble-assistant-1");
+		expect(bubble.textContent).toContain("Waiting for response");
+		expect(bubble.contains(screen.getByTestId("chat-stream-loading-model-indicator"))).toBe(true);
+
+		const withContent = conversation([userMessage(), { ...persisted, content: "Partial answer" }]);
+		rerender(
+			withProviders(<ChatMessageList conversation={withContent} streamingMessage={liveStream({ content: "Partial answer" })} />),
+		);
+
+		expect(screen.queryByTestId("chat-stream-loading-model-indicator")).toBeNull();
+		const streaming = screen.getByTestId("chat-streaming-indicator");
+		expect(screen.getByTestId("chat-message-bubble-assistant-1").contains(streaming)).toBe(false);
+	});
+});
+
 describe("ChatMessageList conversation-load failure", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();

@@ -20,6 +20,8 @@ interface ChatMessageProps {
 	message: ChatMessageModel;
 	placeholder?: string;
 	footer?: ReactNode;
+	// In-bubble pre-first-token status; assistant turns only.
+	bubbleStatus?: ReactNode;
 	isStreaming?: boolean;
 	// Ordered interleave parts for the in-flight turn (from the stream reducer). When absent the component falls
 	// back to the persisted `message.parts`, then to a synthesized Thoughts segment from `message.reasoning`.
@@ -50,6 +52,7 @@ export const ChatMessage = memo(function ChatMessage({
 	message,
 	placeholder,
 	footer,
+	bubbleStatus,
 	isStreaming = false,
 	streamingParts,
 	streamingReasoningOverflowBytes = 0,
@@ -116,6 +119,7 @@ export const ChatMessage = memo(function ChatMessage({
 			display={display}
 			actions={actions}
 			footer={footer}
+			bubbleStatus={bubbleStatus}
 			isStreaming={isStreaming}
 			streamingReasoningOverflowBytes={streamingReasoningOverflowBytes}
 			reasoningEffort={reasoningEffort}

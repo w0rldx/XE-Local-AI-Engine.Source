@@ -57,6 +57,20 @@ export function ChatMessageRow({
 	isWorkSessionConversation,
 	renderAfterMessage,
 }: ChatMessageRowProps) {
+	// Before the first token the queued/loading status sits inside the bubble (the placeholder text or the queued
+	// badge always gives that bubble content); once content starts it moves below the bubble as the footer.
+	const isStatusInBubble = (scopedStreamingMessage?.isActive ?? false) && !hasStreamingContent;
+	const streamingIndicator = scopedStreamingMessage ? (
+		<StreamingIndicator
+			hasContent={hasStreamingContent}
+			isDelayed={scopedStreamingMessage.isDelayed}
+			isQueued={scopedStreamingMessage.isQueued}
+			isActive={scopedStreamingMessage.isActive}
+			runtimePhase={scopedStreamingMessage.runtimePhase}
+			runtimePhaseChangedAtUtc={scopedStreamingMessage.runtimePhaseChangedAtUtc}
+		/>
+	) : undefined;
+
 	if (row.kind === "streaming") {
 		return conversation && scopedStreamingMessage ? (
 			<ChatMessage
@@ -90,16 +104,8 @@ export function ChatMessageRow({
 				reasoningEffort={reasoningEffort}
 				failureCategory={scopedStreamingMessage.failureCategory}
 				isWorkSessionConversation={isWorkSessionConversation}
-				footer={
-					<StreamingIndicator
-						hasContent={hasStreamingContent}
-						isDelayed={scopedStreamingMessage.isDelayed}
-						isQueued={scopedStreamingMessage.isQueued}
-						isActive={scopedStreamingMessage.isActive}
-						runtimePhase={scopedStreamingMessage.runtimePhase}
-						runtimePhaseChangedAtUtc={scopedStreamingMessage.runtimePhaseChangedAtUtc}
-					/>
-				}
+				bubbleStatus={isStatusInBubble ? streamingIndicator : undefined}
+				footer={isStatusInBubble ? undefined : streamingIndicator}
 			/>
 		) : null;
 	}
@@ -138,18 +144,8 @@ export function ChatMessageRow({
 			onSubmitFeedback={onSubmitFeedback}
 			reasoningEffort={reasoningEffort}
 			isWorkSessionConversation={isWorkSessionConversation}
-			footer={
-				isStreamingTarget ? (
-					<StreamingIndicator
-						hasContent={hasStreamingContent}
-						isDelayed={scopedStreamingMessage?.isDelayed}
-						isQueued={scopedStreamingMessage?.isQueued}
-						isActive={scopedStreamingMessage?.isActive ?? false}
-						runtimePhase={scopedStreamingMessage?.runtimePhase}
-						runtimePhaseChangedAtUtc={scopedStreamingMessage?.runtimePhaseChangedAtUtc}
-					/>
-				) : undefined
-			}
+			bubbleStatus={isStreamingTarget && isStatusInBubble ? streamingIndicator : undefined}
+			footer={isStreamingTarget && !isStatusInBubble ? streamingIndicator : undefined}
 		/>
 	);
 	const after = renderAfterMessage?.(message.id);

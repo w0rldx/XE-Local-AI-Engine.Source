@@ -12,8 +12,9 @@ import { formatDurationCompact } from "@/core/formatting/TimeFormatting";
 const modelLoadingPhases = new Set(["preparing_runtime", "loading_model"]);
 
 // Errors are NOT rendered here: a failed turn shows its error as a highlighted block inside the assistant
-// bubble (see ChatMessage) so it renders exactly once and survives reload. This footer only conveys the
-// transient queued/streaming/delayed affordances.
+// bubble (see ChatMessage) so it renders exactly once and survives reload. This indicator only conveys the
+// transient queued/loading/streaming/delayed affordances; ChatMessageRow places the pre-first-token states
+// inside the bubble and the mid-stream line below it.
 interface StreamingIndicatorProps {
 	hasContent?: boolean;
 	isDelayed?: boolean;

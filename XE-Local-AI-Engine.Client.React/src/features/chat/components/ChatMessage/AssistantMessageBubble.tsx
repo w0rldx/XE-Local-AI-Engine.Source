@@ -21,6 +21,8 @@ interface AssistantMessageBubbleProps {
 	display: ChatMessageDisplay;
 	actions: ReactNode;
 	footer?: ReactNode;
+	// Pre-first-token status (queued / loading model) rendered inside the bubble, after any placeholder text.
+	bubbleStatus?: ReactNode;
 	isStreaming: boolean;
 	streamingReasoningOverflowBytes: number;
 	reasoningEffort?: ReasoningEffort;
@@ -34,6 +36,7 @@ export function AssistantMessageBubble({
 	display,
 	actions,
 	footer,
+	bubbleStatus,
 	isStreaming,
 	streamingReasoningOverflowBytes,
 	reasoningEffort,
@@ -86,7 +89,7 @@ export function AssistantMessageBubble({
 					/>
 				) : null}
 				<AnimatePresence initial={false}>
-					{content ? (
+					{content || bubbleStatus ? (
 						<m.div
 							key="answer"
 							initial={reducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: -6 }}
@@ -95,6 +98,7 @@ export function AssistantMessageBubble({
 							<Paper
 								withBorder={true}
 								p="sm"
+								data-testid={`chat-message-bubble-${message.id}`}
 								aria-live={assistantMessage && isBeingSpoken ? "off" : undefined}
 								style={{
 									background: assistantMessage ? CHAT_ASSISTANT_BACKGROUND : "var(--mantine-color-body)",
@@ -104,7 +108,8 @@ export function AssistantMessageBubble({
 									lineHeight: assistantMessage ? 1.6 : undefined,
 								}}
 							>
-								<ChatMarkdown content={content} withCaret={assistantMessage && isStreaming} />
+								{content ? <ChatMarkdown content={content} withCaret={assistantMessage && isStreaming} /> : null}
+								{bubbleStatus ? <Box mt={content ? "xs" : 0}>{bubbleStatus}</Box> : null}
 							</Paper>
 						</m.div>
 					) : null}
