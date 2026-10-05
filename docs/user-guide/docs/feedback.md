@@ -76,20 +76,20 @@ message says so.
 - **What happened** vs **what you expected**
 - **The app version** — e.g. `v0.1.0-rc.5.1`, from the release you downloaded
 - **Your system** — Windows version, CPU, GPU, RAM
-- **Any red text in the console window** — copy it as text if possible
+- **Any error message you saw** — copy it as text if possible
 - **A screenshot**, if it's a visual problem
 
-### Console log lines
+### Log files
 
-The black console window carries the real errors. To copy from it:
+The app writes its logs to a `logs` folder in your data folder (`%LOCALAPPDATA%\XE-Local-AI-Engine\logs` on
+Windows). To get there, click **Open logs folder** in the tray menu, or the same button on the error screen
+shown when the app cannot start. Attach the newest `xe-node-<date>.log`, and `desktop.log` and
+`launcher.log` if the app would not start.
 
-1. **Select the text with your mouse and press `Ctrl`+`C`.**
-2. Paste it into your issue.
-
-(On older Windows 10 consoles you may need to right-click → **Mark** first, then select and press
-**Enter**.)
-
-Or attach a log file from `%LOCALAPPDATA%\XE-Local-AI-Engine\logs`.
+To watch the log live, start the app from a terminal with `--debug` added, for example
+`XE-Local-AI-Engine.exe --debug` in the top-level app folder. The engine then logs in more detail and its
+lines appear in that terminal; select them and press `Ctrl`+`C` to copy. Closing that terminal quits the
+app. If the app was already running, nothing streams and the terminal names the logs folder instead.
 
 > **Skim a log before sending it.** The support export scrubs paths, e-mail addresses and tokens; a raw log file does not.
 

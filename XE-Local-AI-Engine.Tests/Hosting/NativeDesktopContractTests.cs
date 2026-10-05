@@ -1,9 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
+using Microsoft.Extensions.Configuration;
 using XE_Local_AI_Engine.Client.Hosting;
+using XE_Local_AI_Engine.Client.Services.Diagnostics;
 using XE_Local_AI_Engine.Desktop;
 using XE_Local_AI_Engine.Desktop.Linux;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.WindowsLauncher;
 
 /// <summary>
 ///     Pins the literals the desktop shell and the engine must agree on without sharing an assembly.
@@ -43,6 +46,24 @@ public sealed class NativeDesktopContractTests
     {
         AssertEx.Equal(DesktopLaunch.LaunchModeEnvironmentVariable, DesktopCommandLine.LaunchModeVariable);
         AssertEx.Equal(DesktopLaunch.McpOnlyModeValue, DesktopCommandLine.McpOnlyModeValue);
+    }
+
+    [Test]
+    public void DebugArgument_MatchesBetweenLauncherAndShell() =>
+        AssertEx.Equal(WindowsLauncherApplication.DebugArgument, DesktopStartupOptions.DebugArgument);
+
+    [Test]
+    public void LogLevelVariable_IsTheEnvironmentFormOfTheKeyTheEngineLevelSwitchReads()
+    {
+        // The environment-variable configuration provider maps "__" to the ":" key delimiter.
+        var configuration = new ConfigurationBuilder()
+                            .AddInMemoryCollection(new Dictionary<string, string?>
+                            {
+                                [DesktopEngineSession.LogLevelVariable.Replace("__", ConfigurationPath.KeyDelimiter, StringComparison.Ordinal)] = "Debug"
+                            })
+                            .Build();
+
+        AssertEx.True(new NodeLogLevelSwitch(configuration).Verbose);
     }
 
     [Test]

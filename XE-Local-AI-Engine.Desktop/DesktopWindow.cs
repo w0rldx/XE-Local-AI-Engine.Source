@@ -7,15 +7,17 @@ using XE_Local_AI_Engine.Desktop.Linux;
 internal sealed class DesktopWindow : Window, IAsyncDisposable
 {
     private readonly DesktopLaunchOptions _options;
+    private readonly bool _devTools;
     private readonly NativeWebView _webView;
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private Task<GtkDesktopBridge>? _linuxInitialization;
     private GtkDesktopBridge? _linux;
     private bool _disposed;
 
-    internal DesktopWindow(DesktopLaunchOptions options)
+    internal DesktopWindow(DesktopLaunchOptions options, bool devTools)
     {
         _options = options;
+        _devTools = devTools;
         if (OperatingSystem.IsWindows() && !WebViewAdapterInfo.GetAdapterInfo(WebViewAdapterType.WebView2).IsInstalled)
         {
             throw new PlatformNotSupportedException("Microsoft Edge WebView2 Runtime is required.");
@@ -41,7 +43,8 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
 
     private void OnEnvironmentRequested(object? sender, WebViewEnvironmentRequestedEventArgs args)
     {
-        args.EnableDevTools = false;
+        // Debug mode only (--debug); the document policies stay unchanged.
+        args.EnableDevTools = _devTools;
         var cacheDirectory = Path.Combine(_options.ProfileDirectory, "cache");
         switch (args)
         {

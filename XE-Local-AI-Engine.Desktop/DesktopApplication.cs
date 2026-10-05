@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
 using XE_Local_AI_Engine.Desktop.Linux;
@@ -19,6 +20,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
     private TrayIcon? _tray;
     private NativeMenuItem? _trayOpen;
     private NativeMenuItem? _traySettings;
+    private NativeMenuItem? _trayLogs;
     private NativeMenuItem? _trayQuit;
     private Window? _window;
     private DesktopCloseDialog? _dialog;
@@ -105,6 +107,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
                     DesktopEngineSession.ValidateRequestedPort(existing, _options.Port);
                 }
 
+                await WriteNotStreamedAsync();
                 await DesktopInstance.ActivateAsync(_options.DataDirectory, _stopping.Token);
                 Dispatcher.UIThread.Post(() => _ = QuitAsync());
                 return;
@@ -116,8 +119,13 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             DesktopText.Apply(await DesktopPreferences.ReadLanguageAsync(_options.DataDirectory, _stopping.Token));
             _engine = await DesktopEngineSession.StartAsync(_options, _stopping.Token);
             _stopping.Token.ThrowIfCancellationRequested();
+            if (!_engine.OwnsEngine)
+            {
+                await WriteNotStreamedAsync();
+            }
+
             var startupWindow = _window!;
-            var mainWindow = new DesktopWindow(new DesktopLaunchOptions(_engine.Origin, _options.ProfileDirectory));
+            var mainWindow = new DesktopWindow(new DesktopLaunchOptions(_engine.Origin, _options.ProfileDirectory), _options.Debug);
             mainWindow.Closing += OnClosing;
             _window = mainWindow;
             _desktop!.MainWindow = mainWindow;
@@ -170,10 +178,13 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         _trayOpen.Click += (_, _) => ShowWindow();
         _traySettings = new NativeMenuItem(DesktopText.Settings);
         _traySettings.Click += (_, _) => OpenSettings();
+        _trayLogs = new NativeMenuItem(DesktopText.OpenLogs);
+        _trayLogs.Click += (_, _) => _ = OpenLogsAsync();
         _trayQuit = new NativeMenuItem(DesktopText.Quit);
         _trayQuit.Click += (_, _) => _ = RequestQuitAsync();
         menu.Items.Add(_trayOpen);
         menu.Items.Add(_traySettings);
+        menu.Items.Add(_trayLogs);
         menu.Items.Add(_trayQuit);
         _tray.Menu = menu;
         _tray.Clicked += (_, _) => ShowWindow();
@@ -347,6 +358,8 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
 
         if (_traySettings is not null) { _traySettings.Header = DesktopText.Settings; }
 
+        if (_trayLogs is not null) { _trayLogs.Header = DesktopText.OpenLogs; }
+
         if (_trayQuit is not null) { _trayQuit.Header = DesktopText.Quit; }
 
         try
@@ -460,6 +473,13 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             panel.Children.Add(link);
         }
 
+        var logs = new Button
+        {
+            Content = DesktopText.OpenLogs
+        };
+        logs.Click += (_, _) => _ = OpenLogsAsync();
+        panel.Children.Add(logs);
+
         var quit = new Button
         {
             Content = DesktopText.Quit,
@@ -474,6 +494,32 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         };
         _window.Show();
         _window.Activate();
+    }
+
+    private async Task OpenLogsAsync()
+    {
+        try
+        {
+            var logs = Directory.CreateDirectory(_options.LogsDirectory);
+            if (_window is null || !await _window.Launcher.LaunchDirectoryInfoAsync(logs))
+            {
+                await Console.Error.WriteLineAsync($"The logs folder could not be opened: {logs.FullName}");
+            }
+        }
+        catch (Exception)
+        {
+            await Console.Error.WriteLineAsync("The logs folder could not be opened.");
+        }
+    }
+
+    /// <summary>Debug mode streams only an engine this process started; say so instead of leaving the console silent.</summary>
+    private async Task WriteNotStreamedAsync()
+    {
+        if (_options.Debug)
+        {
+            await Console.Out.WriteLineAsync(
+                $"Debug mode: engine logs are not streamed because this launch did not start the engine. Logs: {_options.LogsDirectory}");
+        }
     }
 
     private async Task ShowNoticeAsync(string message)

@@ -252,6 +252,25 @@ update while a native shell holds its lease: close that shell and update through
 Owned-engine updates coordinate through the shell/launcher process lifetime
 (`AppUpdateService`, `FrameworkDependentVelopackBootstrap`).
 
+A desktop launch shows no console. The Windows launcher starts the shell with `CreateNoWindow` and
+calls `FreeConsole` (`WindowsLauncherApplication.ShouldDetachConsole`); every engine mode keeps its
+console. The shell redirects an owned engine's stdout and stderr and reads them only for the
+`XE_READY` line and a 4 KB error tail, so the engine's log is read from `<data dir>/logs`
+(`xe-node-<date>.log`, beside `desktop.log` and `launcher.log`). The tray menu and the startup-failure
+view both offer **Open logs folder**, which creates the directory if needed and opens it in the OS
+file manager.
+
+`--debug` is the opt-in exception, for desktop launches only. The launcher keeps its console and
+forwards the flag; the shell (`DesktopStartupOptions.Debug`) enables WebView DevTools and, for an
+engine it starts, sets `Serilog__MinimumLevel__Default=Debug` on the child and echoes its stdout and
+stderr to its own console. The echo goes through a bounded drop-oldest channel with one writer task
+(`DesktopEngineEcho`), so a blocked console (a Windows text selection, a paused pipe) drops lines
+instead of stalling the engine's synchronous console sink. When the shell attaches to a running
+engine, or hands off to another shell instance, it prints one line naming the logs directory
+instead. Closing that console quits the app. Passing `--debug` together with an engine mode is
+harmless: the engine reads its modes from the raw arguments, and the configuration command-line
+provider only records an unused key.
+
 Windows requires the .NET desktop payload's framework prerequisites and WebView2; missing
 WebView2 produces an actionable startup error. Ubuntu requires WebKitGTK 4.1. Its restricted
 GTK adapter verifies the actual top-level document policy, blocks embedded frames, and offers
@@ -384,8 +403,10 @@ files each publish must carry. Changing a profile means changing that test in th
 
 `XE-Local-AI-Engine.WindowsLauncher` is the official Windows entry point. Its apphost provides Microsoft's standard
 missing-.NET behavior; once running, the C# code validates architecture, required adjacent files, and the ASP.NET Core
-runtime floor, forwards all Velopack arguments to `dotnet XE-Local-AI-Engine.Client.dll`, sets desktop mode, waits, and
-propagates the child exit code. The main host wraps Velopack's process locator so an update waits for both the managed
+runtime floor, forwards all Velopack arguments to `dotnet XE-Local-AI-Engine.Desktop.dll` (or to
+`XE-Local-AI-Engine.Client.dll` for an engine mode or operator command), sets desktop mode, waits, and
+propagates the child exit code. A desktop launch releases the console unless `--debug` is passed (see the native shell
+section above). The main host wraps Velopack's process locator so an update waits for both the managed
 host and launcher to exit before replacing the current directory.
 
 The launcher is a first-class solution project, not a packaging-script shim. `Program.Main` must remain synchronous

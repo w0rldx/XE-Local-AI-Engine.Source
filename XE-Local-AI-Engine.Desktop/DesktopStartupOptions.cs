@@ -8,10 +8,18 @@ internal sealed class DesktopStartupOptions
     // not reference); kept in sync by hand so both processes use the same per-user root.
     internal const string ApplicationDataFolderName = "XE-Local-AI-Engine";
 
+    /// <summary>Streams an owned engine's console at Debug level and enables WebView DevTools. The Windows launcher
+    ///     duplicates the literal to keep its console for this launch.</summary>
+    internal const string DebugArgument = "--debug";
+
     public required string DataDirectory { get; init; }
     public required string ProfileDirectory { get; init; }
     public int? Port { get; init; }
     public Uri? Origin { get; init; }
+    public bool Debug { get; init; }
+
+    /// <summary>The engine's rolling log and this shell's <c>desktop.log</c> share this directory.</summary>
+    internal string LogsDirectory => Path.Combine(DataDirectory, "logs");
 
     internal static DesktopStartupOptions Parse(string[] args, string? dataOverride, string localApplicationData)
     {
@@ -28,6 +36,7 @@ internal sealed class DesktopStartupOptions
         }
 
         int? port = null;
+        var debug = false;
         var index = 0;
         while (index < args.Length)
         {
@@ -35,6 +44,12 @@ internal sealed class DesktopStartupOptions
             if (string.Equals(argument, DesktopEngineSession.DesktopArgument, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(argument, DesktopEngineSession.NoBrowserArgument, StringComparison.OrdinalIgnoreCase))
             {
+                continue;
+            }
+
+            if (string.Equals(argument, DebugArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                debug = true;
                 continue;
             }
 
@@ -64,7 +79,8 @@ internal sealed class DesktopStartupOptions
         {
             DataDirectory = data,
             ProfileDirectory = Path.Combine(data, "desktop-profile"),
-            Port = port
+            Port = port,
+            Debug = debug
         };
     }
 

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Desktop;
 
+using System.Collections.Concurrent;
+using System.Globalization;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
@@ -29,6 +31,89 @@ public sealed class DesktopLifecycleTests
         AssertEx.Equal(41234, options.Port);
         options = DesktopStartupOptions.Parse(["--Desktop", "--PoRt", "41235"], null, directory.Path);
         AssertEx.Equal(41235, options.Port);
+    }
+
+    [Test]
+    public void StartupOptions_DebugIsOptInAndCombinesWithRestartArguments()
+    {
+        using var directory = new TempDirectory();
+        var plain = DesktopStartupOptions.Parse(["--desktop", "--port", "35207"], null, directory.Path);
+        AssertEx.False(plain.Debug);
+        AssertEx.Equal(Path.Combine(plain.DataDirectory, "logs"), plain.LogsDirectory);
+
+        var debug = DesktopStartupOptions.Parse(["--desktop", "--DEBUG", "--port", "35207"], null, directory.Path);
+        AssertEx.True(debug.Debug);
+        AssertEx.Equal(35207, debug.Port);
+        AssertEx.True(DesktopStartupOptions.Parse(["--debug"], null, directory.Path).Debug);
+        AssertEx.False(DesktopCommandLine.RunsEngine(["--debug"], launchMode: null), "--debug alone opens the window.");
+    }
+
+    [Test]
+    public void OwnedStartInfo_DebugStartsTheEngineAtDebugLevel()
+    {
+        using var directory = new TempDirectory();
+        var plain = DesktopEngineSession.CreateOwnedStartInfo(DesktopStartupOptions.Parse([], directory.Path, directory.Path), "pipe");
+        var debug = DesktopEngineSession.CreateOwnedStartInfo(DesktopStartupOptions.Parse(["--debug"], directory.Path, directory.Path), "pipe");
+
+        AssertEx.False(plain.Environment.TryGetValue(DesktopEngineSession.LogLevelVariable, out var inherited) && inherited == "Debug",
+            "Debug off leaves the engine at its configured level.");
+        AssertEx.Equal("Debug", debug.Environment[DesktopEngineSession.LogLevelVariable]);
+        AssertEx.Equal("pipe", debug.Environment[DesktopEngineSession.LifetimePipeVariable]);
+        AssertEx.True(debug.ArgumentList.Contains(DesktopEngineSession.DesktopArgument, StringComparer.Ordinal));
+        AssertEx.False(debug.ArgumentList.Contains(DesktopStartupOptions.DebugArgument, StringComparer.OrdinalIgnoreCase),
+            "The engine gets the level through its configuration, not the shell's flag.");
+    }
+
+    [Test]
+    public async Task Echo_CopiesEngineOutputWhileReadinessAndErrorTailStillWork()
+    {
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tail = new StringBuilder();
+        await using (var echo = new DesktopEngineEcho(output, error))
+        {
+            using var stdout = Reader("starting\nXE_READY=1 http://127.0.0.1:35207\n[DBG] request\n");
+            using var stderr = Reader("fatal: port in use");
+            await DesktopEngineSession.DrainOutputAsync(stdout, ready, echo, CancellationToken.None);
+            await DesktopEngineSession.DrainErrorsAsync(stderr, tail, echo, CancellationToken.None);
+        }
+
+        AssertEx.True(ready.Task.IsCompletedSuccessfully, "The readiness line is still detected.");
+        AssertEx.Equal("fatal: port in use", tail.ToString());
+        AssertEx.Equal(string.Join(Environment.NewLine, "starting", "XE_READY=1 http://127.0.0.1:35207", "[DBG] request", string.Empty), output.ToString());
+        AssertEx.Equal("fatal: port in use", error.ToString());
+    }
+
+    [Test]
+    public async Task Echo_BlockedConsoleNeverBlocksTheDrainAndKeepsTheNewestLines()
+    {
+        var sink = new BlockingWriter();
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tail = new StringBuilder();
+        var lineCount = DesktopEngineEcho.Capacity * 3;
+        var lines = Enumerable.Range(0, lineCount).Select(i => "line " + i.ToString(CultureInfo.InvariantCulture)).ToList();
+        lines.Insert(lineCount / 2, "XE_READY=1 http://127.0.0.1:35207");
+        await using (var echo = new DesktopEngineEcho(sink, sink))
+        {
+            using var stdout = Reader(string.Join('\n', lines) + "\n");
+            using var stderr = Reader(new string('e', DesktopEngineSession.ErrorTailLimit * 2) + "last words");
+            // A bound, not a wait for an event: a drain that blocks on the held console never completes.
+            await Task.WhenAll(DesktopEngineSession.DrainOutputAsync(stdout, ready, echo, CancellationToken.None),
+                DesktopEngineSession.DrainErrorsAsync(stderr, tail, echo, CancellationToken.None)).WaitAsync(TimeSpan.FromSeconds(30));
+
+            AssertEx.True(ready.Task.IsCompletedSuccessfully, "Readiness must not wait for the console.");
+            AssertEx.True(tail.ToString().EndsWith("last words", StringComparison.Ordinal), "The error tail must not wait for the console.");
+            sink.Release();
+            await AssertEx.EventuallyAsync(() => sink.Written.Contains(lines[^1], StringComparer.Ordinal), TimeSpan.FromSeconds(30),
+                "The newest line survives the backlog.");
+        }
+
+        var written = sink.Written.ToArray();
+        AssertEx.True(written.Length <= DesktopEngineEcho.Capacity + 1, $"Drop-oldest bounds the backlog, wrote {written.Length}.");
+        // The writer may hold one item from before the backlog filled; every other early line must have been dropped.
+        var oldest = lines.Take(DesktopEngineEcho.Capacity).ToHashSet(StringComparer.Ordinal);
+        AssertEx.True(written.Count(oldest.Contains) <= 1, "Old lines are dropped, not queued without bound.");
     }
 
     [Test]
@@ -295,5 +380,29 @@ public sealed class DesktopLifecycleTests
         AssertEx.Equal("The engine exited before readiness.", DesktopEngineSession.DescribeStartupFailure("  \n "));
         AssertEx.Equal("The engine exited before readiness. It reported: You must install or update .NET",
             DesktopEngineSession.DescribeStartupFailure("  You must install or update .NET\n"));
+    }
+
+    private static StreamReader Reader(string text) =>
+        new(new MemoryStream(Encoding.UTF8.GetBytes(text)));
+
+    /// <summary>A console with a text selection: every write waits until the test releases it.</summary>
+    private sealed class BlockingWriter : TextWriter
+    {
+        private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ConcurrentQueue<string> Written { get; } = new();
+        public override Encoding Encoding => Encoding.UTF8;
+
+        public void Release() =>
+            _gate.TrySetResult();
+
+        public override async Task WriteAsync(string? value)
+        {
+            await _gate.Task;
+            Written.Enqueue(value ?? string.Empty);
+        }
+
+        public override Task WriteLineAsync(string? value) =>
+            WriteAsync(value);
     }
 }

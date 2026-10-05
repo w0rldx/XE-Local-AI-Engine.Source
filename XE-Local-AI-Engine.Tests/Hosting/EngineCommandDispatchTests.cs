@@ -85,6 +85,7 @@ public sealed class EngineCommandDispatchTests
         AssertEx.Contains(output.ToString(), "scripts and installers must use XE_ADMIN_PASSWORD or --admin-password-stdin, never --admin-password on argv");
         AssertEx.Contains(output.ToString(), "--reset-admin-password <password>");
         AssertEx.Contains(output.ToString(), "XE_DATA_DIR must be an absolute path");
+        AssertEx.Contains(output.ToString(), "Desktop app: [--debug]");
         AssertEx.Contains(output.ToString(), "Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable.");
     }
 

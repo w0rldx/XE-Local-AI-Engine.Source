@@ -23,12 +23,17 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
     /// <summary>How much of the engine's standard error is kept for a startup failure report.</summary>
     internal const int ErrorTailLimit = 4096;
 
+    /// <summary>The environment form of the engine's <c>Serilog:MinimumLevel:Default</c>, which its log-level switch
+    ///     starts from; debug mode sets it to <c>Debug</c> on an owned engine.</summary>
+    internal const string LogLevelVariable = "Serilog__MinimumLevel__Default";
+
     private readonly Process? _process;
     private readonly NamedPipeServerStream? _lifetime;
     private readonly CancellationTokenSource _reading = new();
     private readonly StringBuilder _errorTail = new();
     private Task _output = Task.CompletedTask;
     private Task _errors = Task.CompletedTask;
+    private DesktopEngineEcho? _echo;
     private bool _stopped;
     private bool _disposed;
     private Uri? _origin;
@@ -92,19 +97,10 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
 
     private static async Task<(DesktopEngineSession? Session, string? ErrorTail)> StartOwnedAsync(DesktopStartupOptions options, CancellationToken cancellationToken)
     {
-        var start = CreateStartInfo(options.DataDirectory);
         var pipeName = "xe-desktop-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+        var start = CreateOwnedStartInfo(options, pipeName);
         var pipe = new NamedPipeServerStream(pipeName, PipeDirection.Out, 1,
             PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-        start.ArgumentList.Add(DesktopArgument);
-        start.ArgumentList.Add(NoBrowserArgument);
-        if (options.Port is { } port)
-        {
-            start.ArgumentList.Add("--port");
-            start.ArgumentList.Add(port.ToString(CultureInfo.InvariantCulture));
-        }
-
-        start.Environment[LifetimePipeVariable] = pipeName;
         var process = new Process
         {
             StartInfo = start
@@ -121,8 +117,9 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
             }
 
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            session._output = DrainOutputAsync(process.StandardOutput, ready, session._reading.Token);
-            session._errors = DrainErrorsAsync(process.StandardError, session._errorTail, session._reading.Token);
+            session._echo = options.Debug ? new DesktopEngineEcho(Console.Out, Console.Error) : null;
+            session._output = DrainOutputAsync(process.StandardOutput, ready, session._echo, session._reading.Token);
+            session._errors = DrainErrorsAsync(process.StandardError, session._errorTail, session._echo, session._reading.Token);
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             deadline.CancelAfter(TimeSpan.FromMinutes(2));
             var startup = Task.WhenAll(pipe.WaitForConnectionAsync(deadline.Token), ready.Task.WaitAsync(deadline.Token));
@@ -158,6 +155,27 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
                 await session.DisposeAsync();
             }
         }
+    }
+
+    internal static ProcessStartInfo CreateOwnedStartInfo(DesktopStartupOptions options, string pipeName)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var start = CreateStartInfo(options.DataDirectory);
+        start.ArgumentList.Add(DesktopArgument);
+        start.ArgumentList.Add(NoBrowserArgument);
+        if (options.Port is { } port)
+        {
+            start.ArgumentList.Add("--port");
+            start.ArgumentList.Add(port.ToString(CultureInfo.InvariantCulture));
+        }
+
+        start.Environment[LifetimePipeVariable] = pipeName;
+        if (options.Debug)
+        {
+            start.Environment[LogLevelVariable] = "Debug";
+        }
+
+        return start;
     }
 
     internal static ProcessStartInfo CreateStartInfo(string dataDirectory)
@@ -292,6 +310,7 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
                 _process?.Dispose();
                 _reading.Dispose();
                 _disposed = true;
+                if (_echo is not null) { await _echo.DisposeAsync(); }
             }
         }
     }
@@ -353,12 +372,15 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
         }
     }
 
-    private static async Task DrainOutputAsync(StreamReader reader, TaskCompletionSource ready, CancellationToken cancellationToken)
+    internal static async Task DrainOutputAsync(StreamReader reader, TaskCompletionSource ready, DesktopEngineEcho? echo, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(reader);
+        ArgumentNullException.ThrowIfNull(ready);
         try
         {
             while (await reader.ReadLineAsync(cancellationToken) is { } line)
             {
+                echo?.Output(line);
                 if (line.StartsWith("XE_READY=1 ", StringComparison.Ordinal))
                 {
                     ready.TrySetResult();
@@ -371,14 +393,17 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
         }
     }
 
-    private static async Task DrainErrorsAsync(StreamReader reader, StringBuilder tail, CancellationToken cancellationToken)
+    internal static async Task DrainErrorsAsync(StreamReader reader, StringBuilder tail, DesktopEngineEcho? echo, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(reader);
+        ArgumentNullException.ThrowIfNull(tail);
         var buffer = new char[1024];
         try
         {
             int read;
             while ((read = await reader.ReadAsync(buffer, cancellationToken)) > 0)
             {
+                echo?.Error(new string(buffer, 0, read));
                 lock (tail)
                 {
                     AppendTail(tail, new ReadOnlySpan<char>(buffer, 0, read));

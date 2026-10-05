@@ -9,6 +9,9 @@ using System.Text.Json;
 internal static partial class WindowsLauncherApplication
 {
     internal const string LauncherProcessIdVariable = "XE_WINDOWS_LAUNCHER_PID";
+
+    /// <summary>The desktop shell's debug flag; the shell duplicates the literal (<c>DesktopStartupOptions.DebugArgument</c>).</summary>
+    internal const string DebugArgument = "--debug";
     private const string AspNetCoreRuntimeName = "Microsoft.AspNetCore.App";
     private const int MissingPrerequisiteExitCode = 150;
     private const int LaunchFailureExitCode = 151;
@@ -139,9 +142,11 @@ internal static partial class WindowsLauncherApplication
             ? ManagedEntryPoint
             : DesktopEntryPoint;
 
-    /// <summary>True only for the GUI shell launch; every CLI mode keeps the console it prints to.</summary>
-    internal static bool ShouldDetachConsole(IEnumerable<string> arguments) =>
-        string.Equals(SelectManagedEntryPoint(arguments), DesktopEntryPoint, StringComparison.Ordinal);
+    /// <summary>True only for the GUI shell launch without <see cref="DebugArgument" />; every CLI mode keeps the console it
+    ///     prints to, and a debug launch keeps it for the engine log the shell streams there.</summary>
+    internal static bool ShouldDetachConsole(IReadOnlyCollection<string> arguments) =>
+        string.Equals(SelectManagedEntryPoint(arguments), DesktopEntryPoint, StringComparison.Ordinal)
+        && !arguments.Contains(DebugArgument, StringComparer.OrdinalIgnoreCase);
 
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [LibraryImport("kernel32.dll", SetLastError = true)]

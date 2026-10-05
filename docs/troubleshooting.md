@@ -13,7 +13,7 @@ Everything the app creates — database, keys, settings, downloaded model runtim
 
 Inside it you'll find `node.sqlite` (your chats/settings), `node.key` (the encryption key, itself locked by your admin password and recovery code), `models/` (downloaded models), `llama.cpp/`, `stable-diffusion.cpp/` and `whisper.cpp/` (downloaded runtimes), and `logs/` (log files).
 
-> **Always stop the app before editing or deleting anything in this folder.** Close the console/terminal window first.
+> **Always stop the app before editing or deleting anything in this folder.** Quit it first (**Quit XE** in the tray menu, or close the window and choose to quit).
 
 ## The app shows "Unlock this node"
 
@@ -53,14 +53,25 @@ In desktop mode the app binds an automatically chosen free loopback port (`127.0
 
 ## Where the logs are
 
-- **Live logs** stream in the console (Windows) / terminal (Linux) window the launcher opened — watch it while the app runs.
-- **Persisted logs** are written to a `logs/` folder under your data dir (see the table above), so you can attach them to a bug report even after the window is closed.
+- **Log files** are written to a `logs/` folder under your data dir (see the table above): the engine's daily `xe-node-<date>.log`, plus `desktop.log` (the app window) and, on Windows, `launcher.log`. They survive the app closing, so you can attach them to a bug report.
+- **Open logs folder** in the tray menu, or the same button on the error screen shown when the app cannot start, opens that folder in your file manager (it is created if it does not exist yet).
+- The desktop app opens **no console window**, so there is no live log by default. To watch one, start the app with `--debug` (below).
+
+### Debug mode (`--debug`)
+
+Start the app from a terminal with `--debug` added: on Windows, `XE-Local-AI-Engine.exe --debug` in the top-level portable folder; on Linux, the AppImage followed by `--debug`. Then:
+
+- the engine starts at **Debug** log level and its log lines stream into that terminal, as well as into the log files;
+- the app window allows the WebView developer tools;
+- the terminal stays tied to the app: **closing it quits the app**, so quit from the app instead when you are done.
+
+Log streaming applies only when this launch starts the engine. If an engine is already running for the data directory, or another app window already owns it, the terminal prints one line saying the logs are not streamed and naming the logs folder; read the files there instead.
 
 ## Reset the database (start clean)
 
 If the app's chat/settings state is corrupted or you want a clean slate:
 
-1. **Stop the app** (close the console/terminal window).
+1. **Stop the app** (quit it from the tray menu or the close dialog).
 2. Delete `node.sqlite` from your data dir, and `node.key` with it. If `node.key` stays, the next start still asks for the old admin password on the unlock page.
 3. Restart. The app recreates an empty database on next launch and runs setup again.
 
@@ -70,7 +81,7 @@ This wipes chats, agents, scheduler jobs, and settings, but **keeps** your downl
 
 ## Fully remove the app
 
-1. Stop the app and confirm its console/terminal has closed.
+1. Quit the app and confirm its window and tray icon are gone.
 2. Remove the application files:
    - **Windows:** delete the extracted Velopack portable directory.
    - **Linux:** delete the AppImage.
@@ -84,7 +95,7 @@ need chats, settings, models, or keys later.
 The best bug report is an in-app diagnostics snapshot:
 
 1. In the app, open **Diagnostics** and use **"Report a problem"** to export a snapshot (it captures recent activity, network calls, and errors, with secrets redacted).
-2. Send the exported snapshot back, along with **what you did**, and any **console/terminal log lines** and browser errors you saw.
+2. Send the exported snapshot back, along with **what you did**, any errors you saw, and if the app would not start, the files from **Open logs folder** (or the terminal output of a `--debug` run).
 
 ---
 

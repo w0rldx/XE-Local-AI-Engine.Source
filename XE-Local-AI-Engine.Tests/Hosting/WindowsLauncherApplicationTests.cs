@@ -55,6 +55,18 @@ public sealed class WindowsLauncherApplicationTests
     }
 
     [Test]
+    public void DebugArgument_OpensTheShellButKeepsItsConsole()
+    {
+        AssertEx.Equal("XE-Local-AI-Engine.Desktop.dll", WindowsLauncherApplication.SelectManagedEntryPoint(["--debug"]));
+        AssertEx.Equal("XE-Local-AI-Engine.Desktop.dll", WindowsLauncherApplication.SelectManagedEntryPoint(["--desktop", "--DEBUG"]));
+        AssertEx.False(WindowsLauncherApplication.ShouldDetachConsole(["--debug"]), "The shell streams the engine log to this console.");
+        AssertEx.False(WindowsLauncherApplication.ShouldDetachConsole(["--desktop", "--DEBUG", "--port", "41234"]));
+        AssertEx.False(WindowsLauncherApplication.ShouldDetachConsole(["--headless", "--debug"]), "An engine mode keeps its console anyway.");
+        AssertEx.True(WindowsLauncherApplication.CreateManagedArguments("app.dll", ["--debug"]).SequenceEqual(["app.dll", "--debug"]),
+            "The shell must receive the flag.");
+    }
+
+    [Test]
     [Arguments("10.0.11", true)]
     [Arguments("10.0.12", true)]
     [Arguments("10.1.0", false)]

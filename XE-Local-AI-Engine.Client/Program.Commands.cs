@@ -153,6 +153,7 @@ public sealed partial class Program
         ArgumentNullException.ThrowIfNull(standardOutput);
         await standardOutput.WriteLineAsync("XE Local AI Engine");
         await standardOutput.WriteLineAsync("Serve: --desktop | --browser | --headless | --mcp-only [--no-browser] [--port <1-65535>]");
+        await standardOutput.WriteLineAsync("Desktop app: [--debug] enables WebView DevTools and, when this launch starts the engine, streams its log at Debug level to the terminal.");
         await standardOutput
             .WriteLineAsync(
                 "Commands: --setup [--admin-email <email>] [--admin-password <password> | --admin-password-stdin] | --reset-admin-password <password> [--recovery-code-stdin] | --mcp-key <delegate|agentic> | --status [--json] | --help");
