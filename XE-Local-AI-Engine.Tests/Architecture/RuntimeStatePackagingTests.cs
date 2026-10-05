@@ -101,6 +101,29 @@ public sealed class RuntimeStatePackagingTests
         }
     }
 
+    [Test]
+    public void PublishedRepoTreeIncludes_ExcludeEveryHiddenDirectory()
+    {
+        var project = XDocument.Load(RepositoryPaths.ClientProject("XE-Local-AI-Engine.Client.csproj"));
+
+        // Every item type, Never or not: a later Update or another item type can still publish the tree.
+        var repoTreeIncludes = project.Descendants()
+                                      .Where(static item => item.Attribute("Include") is not null)
+                                      .SelectMany(static item => ((string)item.Attribute("Include")!)
+                                                                 .Split(';')
+                                                                 .Where(static pattern => pattern.Contains("..", StringComparison.Ordinal)
+                                                                                          && pattern.Contains("**", StringComparison.Ordinal))
+                                                                 .Select(pattern => (Pattern: pattern, Excludes: ((string?)item.Attribute("Exclude") ?? string.Empty).Split(';'))))
+                                      .ToArray();
+        var unguarded = repoTreeIncludes
+                        .Where(static include => !include.Excludes.Contains(include.Pattern.Split("**")[0] + "**/.*/**", StringComparer.Ordinal))
+                        .Select(static include => include.Pattern)
+                        .ToArray();
+
+        AssertEx.NotEmpty(repoTreeIncludes, "Expected the Client project to publish at least one repo tree outside its directory.");
+        AssertEx.Empty(unguarded, $"A published repo-tree include must exclude '<tree>/**/.*/**' (local hidden state ships otherwise): {string.Join(", ", unguarded)}");
+    }
+
     private sealed record RuntimeDirectoryProtection
     {
         public required string ProjectGlob { get; init; }

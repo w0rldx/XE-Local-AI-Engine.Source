@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.NodeSettings;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -704,8 +705,8 @@ public sealed class NodeSettingsEndpointTests
                 && Persisted(mutate, stored).KeepModelWarmModelName == "keep-me-warm"
                 && Persisted(mutate, stored).KeepModelWarmIntervalSeconds == 180
                 // A field missing from ToStoredSettings' hand-enumerated `new StoredNodeSettings { … }` is silently
-                // NULLed on EVERY put, and no reflection test guards that enumeration. A failure here is a data-loss
-                // bug, never a test to relax.
+                // NULLed on EVERY put (ToStoredSettings_WhenRequestIsEmpty_KeepsEveryStoredProperty guards the
+                // enumeration). A failure here is a data-loss bug, never a test to relax.
                 && Persisted(mutate, stored).ToolRelevanceEnabled == true),
             Arg.Any<CancellationToken>());
     }
@@ -1093,6 +1094,32 @@ public sealed class NodeSettingsEndpointTests
         var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
         AssertEx.Equal(expected: true, merged.VoiceFeatureEnabled);
         AssertEx.Equal("af_heart", merged.DefaultVoiceProfile);
+    }
+
+    [Test]
+    public void ToStoredSettings_WhenRequestIsEmpty_KeepsEveryStoredProperty()
+    {
+        // LOCAL-ONLY members SaveTrustedMergedAsync re-applies from the stored record after the mapper runs.
+        string[] carriedByTheSaveService = [nameof(StoredNodeSettings.MachineKey), nameof(StoredNodeSettings.TranscriptionSelectedModelId)];
+        var properties = typeof(StoredNodeSettings).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(property => property.CanWrite && !carriedByTheSaveService.Contains(property.Name))
+            .ToArray();
+        var defaults = new StoredNodeSettings();
+        var lost = new List<string>();
+        foreach (var property in properties)
+        {
+            // One property per record, so a fallback cross-wired to a sibling with the same probe cannot pass.
+            var probe = ProbeValue(property);
+            AssertEx.False(Equals(probe, property.GetValue(defaults)), $"ProbeValue gives {property.Name} its default; add a case for {property.PropertyType.Name}.");
+            var current = new StoredNodeSettings();
+            property.SetValue(current, probe);
+            if (!Equals(probe, property.GetValue(new SaveNodeSettingsRequest().ToStoredSettings(current))))
+            {
+                lost.Add(property.Name);
+            }
+        }
+
+        AssertEx.Empty(lost, $"ToStoredSettings dropped stored values: {string.Join(", ", lost)}");
     }
 
     [Test]
@@ -2293,5 +2320,21 @@ public sealed class NodeSettingsEndpointTests
         store.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
              .Returns(call => Task.FromResult(call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(settings)));
         return store;
+    }
+
+    /// <summary>A probe value for a stored property; the round-trip test fails when it equals the property's default.</summary>
+    private static object ProbeValue(PropertyInfo property)
+    {
+        var type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        return type switch
+        {
+            _ when type == typeof(int) => 7,
+            _ when type == typeof(long) => 7L,
+            _ when type == typeof(bool) => true,
+            _ when type == typeof(string) => $"probe-{property.Name}",
+            _ when type == typeof(IReadOnlyList<string>) => new[] { "probe" },
+            _ => Activator.CreateInstance(type)
+                 ?? throw new InvalidOperationException($"No probe value for {property.Name} ({type.Name}).")
+        };
     }
 }

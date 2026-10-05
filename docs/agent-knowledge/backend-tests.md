@@ -58,6 +58,10 @@ debugging a backend test, or changing `TestServerWebAppFactory`, `scripts/run-te
 
 **Rule:** before packaging, or diagnosing a suddenly slow timing test, run `dotnet build-server shutdown`. Compare the failure's duration with the test's budget: a failure lasting exactly the budget under load is a load signature, not a behaviour signal. **Prevents:** chasing a product defect for a starved timer. **Authority:** `AGENTS.md` "Validation" (shutdown before a gate chain). [evidence](../agent-knowledge-evidence.md#timing-test-and-build-daemon-incidents)
 
+### The backend gate empties `.tmp/backend-test-results/` when it starts
+
+**Rule:** never redirect a gate's own output into `.tmp/backend-test-results/`; read `gate.log` there (and the per-project `gate.log` beneath it) and take the exit code from the shell. **Prevents:** a wrapper log that is unlinked seconds after the run starts, leaving only an exit code and no failing test name. **Authority:** `scripts/run-backend-tests.sh`; model-matrix follow-ups, 2026-10-05.
+
 ## Flakes and parallelism
 
 ### The full Tests module is flaky under parallelism — verify suspects in isolation

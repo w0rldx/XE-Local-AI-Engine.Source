@@ -92,6 +92,10 @@ token waits for the job the previous turn queued. Do not read that delay as a re
 `ConversationMaintenanceWorker`.
 [evidence](../agent-knowledge-evidence.md#the-post-turn-maintenance-queue-shares-the-chats-single-llama-server-slot-so-its-cost-lands-on-the-next-turn)
 
+### "Idle" by lease is not idle right after a turn: a background request holds the model for seconds
+
+**Rule:** a rule that acts on a chat process having no inference lease (unload it, refuse around it) treats "leased" as "wait, bounded", not as "unavailable": memory extraction and the other post-turn jobs take a lease on the model the moment the user's turn ends. Live-check any such rule with a turn on model A followed at once by a turn on model B. **Prevents:** the ordinary "switch model right after a turn" being refused with "Eject one of them" because the first model was busy for a few seconds (seen live, 2026-10-05). **Authority:** `PooledRoleLaunchAdmission.AdmitChatAsync` (`BusyResidentWaitCap`), `IdleChatEvictionResult`; model-matrix follow-ups W1.
+
 ### A work session is chat turns in a loop, and it takes the node's only invocation slot
 
 **Rule:** mechanics are in wiki 04 §5. Drive `INodeChatStreamService.SendMessageAsync`, not
@@ -132,6 +136,10 @@ tools are filtered. **Prevents:** unsupported kwargs and unrecoverable sessions.
 ### A default output cap must carry its marker, or it eats half the input window
 
 **Rule:** a node-chosen `MaxOutputTokens` (the chat output cap) is set together with `InvocationAgentDefinition.DefaultOutputCapMarkerKey`; only an explicit per-request limit may reach `ChatOptions.MaxOutputTokens` without it. **Prevents:** `ProviderCallBudgetChatClient` reserving the whole cap (half the window) out of every round's input, which trims long histories at half their room and makes a 4k window refuse its own tool offer, and `ClampToGenerationRoom` halving the configured thinking budget against a limit that already holds it. **Authority:** `ProviderCallBudgetChatClient.ResolveReservedOutputTokens`, `ProviderCallBudgetChatClientTests.GetResponseAsync_ReservesAnExplicitOutputLimitButNotTheDefaultCap`; model-matrix F2, 2026-10-04.
+
+### Count a tool schema as the chat template renders it, and measure tool cost as a prompt-token difference
+
+**Rule:** llama-server parses the request, so the body's JSON whitespace never reaches the tokens; the templates measured render a schema single-line with `", "` / `": "` separators. Budget tools through `TokenEstimatorCalibrationStore.RenderToolSchema`, the same helper the calibration probe uses, and judge any change by `usage.prompt_tokens` with and without the tools on at least two template families. **Prevents:** counting the indented source text, which under-counted an uncalibrated Qwen turn and over-charged a calibrated one by 150 to 200 tokens at a 4,096 window. **Authority:** `TokenEstimatorCalibrationStore` (`RenderToolSchema`, `DefaultToolTemplatePreambleTokens`); model-matrix follow-ups B1, 2026-10-05 (pinned pair: 769 / 683 / 569 real tokens on Qwen3.5, Granite 4.1, LFM2.5).
 
 ## Covered elsewhere
 

@@ -19,6 +19,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 //
 // This asserts the observable consequence (a second provider receives events) rather than the flag itself, so it keeps
 // holding if the registration is restructured.
+//
+// AddServices mutates the process-global FastEndpoints serializer options outside the host factory's startup lock.
+[NotInParallel]
 [Category(TestCategories.Integration)]
 public sealed class SerilogProviderForwardingTests : IDisposable
 {

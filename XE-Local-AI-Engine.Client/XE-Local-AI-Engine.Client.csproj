@@ -119,6 +119,7 @@
              CopyToPublishDirectory="PreserveNewest"
              CopyToOutputDirectory="Never"/>
     <Content Include="$(MSBuildProjectDirectory)/../third-party/nuget/**"
+             Exclude="$(MSBuildProjectDirectory)/../third-party/nuget/**/.*/**"
              Link="licenses/nuget/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToPublishDirectory="PreserveNewest"
              CopyToOutputDirectory="Never"/>
@@ -148,10 +149,12 @@
          a packaged build has no corpus to measure against. BenchmarkFidelityCorpus.Resolve walks up to
          tools/benchmark/corpus/ when the published copy is absent. -->
     <Content Include="$(MSBuildProjectDirectory)/../tools/benchmark/corpus/**"
+             Exclude="$(MSBuildProjectDirectory)/../tools/benchmark/corpus/**/.*/**"
              Link="benchmark-corpus/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToPublishDirectory="PreserveNewest"
              CopyToOutputDirectory="Never"/>
     <Content Include="$(MSBuildProjectDirectory)/../third-party/data/**"
+             Exclude="$(MSBuildProjectDirectory)/../third-party/data/**/.*/**"
              Link="licenses/data/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToPublishDirectory="PreserveNewest"
              CopyToOutputDirectory="Never"/>

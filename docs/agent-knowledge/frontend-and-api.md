@@ -58,6 +58,10 @@ scrollbar fix that skips every autosize site and dialog body. **Authority:** `co
 
 **Rule:** poll `GET model-fit/runtime-residents` for image and whisper residents (llama.cpp stays on `model-fit/running`), never `GET transcription/runtime` or `GET images/runtime`, and never read an activity snapshot's `isBusy` as "work is running" or "eject allowed": it counts a resident daemon, while the row's `canEject` repeats the gate's eviction-reservation refusal. **Prevents:** a per-poll settings load, installed-runtime read and model recommendation from the transcription status route; an eject button disabled whenever anything is loaded. **Authority:** `RuntimeResidentsService`, `TranscriptionRuntimeService.GetRuntimeAsync`, `ImageRuntimeActivitySnapshot.IsBusy`, `TryAcquireEvictionReservation` on both activity gates; wiki 14 and 24, 2026-09-29.
 
+### A wrapper that appears when a field becomes non-empty remounts the input
+
+**Rule:** a Mantine `inputContainer` (or any conditional wrapper around an input) is rendered in the same shape whether the field is empty or set; only its extra children are conditional. Test it by rerendering from blank to set and asserting the input is the same DOM node; a `fireEvent.change` test cannot see a remount. **Prevents:** the input losing focus after the first keystroke, so typing `1500` into an unset field leaves `1` (found only in the browser). **Authority:** `NodeSettingsNumberField`, `NodeSettingsFieldsCard.test.tsx` ("keeps the same input mounted ..."); model-matrix follow-ups, 2026-10-05.
+
 ### A gated-off Ollama runtime is a UI state, not an empty list
 
 **Rule:** with `XE_OLLAMA_RUNTIME_ENABLED=false` the no-op runtime answers available-and-empty, which looks idle, so
@@ -128,6 +132,10 @@ partial-object match, never `.slice()`. **Prevents:** re-requesting page one for
 with no interceptors: no auth header, no ProblemDetails mapping. A lazy `import()` breaks `config/bundle-budget.json`.
 **Prevents:** a 409 `conflictType` present in one test file and absent in another. **Authority:**
 `LoginNavigation.ts`; `Interceptors.ts` `redirectToLoginOnce`; `ChatWorkflowMode.test.tsx`.
+
+### A FluentValidation range rule is published as OpenAPI min/max even under `.When`
+
+**Rule:** a request field that accepts a sentinel outside its range (`-1` = unset) validates with `Must(...)`, not `InclusiveBetween(...).When(...)`: FastEndpoints publishes the range as `minimum`/`maximum` whatever the condition, and the generated zod schema then refuses the sentinel in the browser before the request is sent. Check the regenerated `zod.gen.ts` for the field, and keep the SPA's range check on the bounds the response carries. **Prevents:** a reset the API accepts and the SPA cannot send. **Authority:** `NodeSettingsEndpointValidators` (`IsUnsetOrBetween`), `StoredNodeSettings.TokenSettingUnset`; model-matrix follow-ups V3, 2026-10-05.
 
 ## Endpoint error shapes
 

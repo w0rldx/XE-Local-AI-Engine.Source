@@ -18,6 +18,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The verbose switch on the real <c>AddServices</c> Serilog pipeline: it must be applied after
 ///     <c>ReadFrom.Configuration</c> (or the configured Default wins) and must leave the Microsoft overrides in force.
 /// </summary>
+// AddServices mutates the process-global FastEndpoints serializer options outside the host factory's startup lock.
+[NotInParallel]
 [Category(TestCategories.Integration)]
 public sealed class NodeLogLevelSwitchTests : IDisposable
 {

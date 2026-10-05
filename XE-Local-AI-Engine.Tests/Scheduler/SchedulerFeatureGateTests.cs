@@ -14,6 +14,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <c>Scheduler:Enabled=false</c> registers no Quartz runtime, yet the Scheduler endpoints stay discovered and
 ///     FastEndpoints activates them at startup. The node must still boot and the API must refuse cleanly.
 /// </summary>
+// AddServices mutates the process-global FastEndpoints serializer options outside the host factory's startup lock.
+[NotInParallel]
 [Category(TestCategories.Integration)]
 public sealed class SchedulerFeatureGateTests
 {
