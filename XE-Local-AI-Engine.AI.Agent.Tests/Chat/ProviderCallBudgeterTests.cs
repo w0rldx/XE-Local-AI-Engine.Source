@@ -329,11 +329,20 @@ public sealed class ProviderCallBudgeterTests
         {
             System("sys"),
             User("Calculate it."),
-            ProviderReasonedCall(new TextReasoningContent(rawReasoning) { RawRepresentation = new object() }, "c1"),
+            ProviderReasonedCall(new TextReasoningContent(rawReasoning)
+            {
+                RawRepresentation = new object()
+            }, "c1"),
             ToolResult("c1", "42"),
-            ProviderReasonedCall(new TextReasoningContent(protectedReasoning) { ProtectedData = "encrypted" }, "c2"),
+            ProviderReasonedCall(new TextReasoningContent(protectedReasoning)
+            {
+                ProtectedData = "encrypted"
+            }, "c2"),
             ToolResult("c2", "84"),
-            ProviderReasonedCall(new TextReasoningContent("now") { ProtectedData = "encrypted" }, "c3"),
+            ProviderReasonedCall(new TextReasoningContent("now")
+            {
+                ProtectedData = "encrypted"
+            }, "c3"),
             ToolResult("c3", "126")
         };
         var total = ProviderMessageTokenEstimator.EstimateTokens(messages, 4);
@@ -350,7 +359,10 @@ public sealed class ProviderCallBudgeterTests
     public void Budget_MixedReasoningMessage_LosesOnlyThePlainReasoning()
     {
         var plainReasoning = new string('r', 400);
-        var protectedPart = new TextReasoningContent("summary") { ProtectedData = "encrypted" };
+        var protectedPart = new TextReasoningContent("summary")
+        {
+            ProtectedData = "encrypted"
+        };
         var messages = new List<ChatMessage>
         {
             User("Calculate it."),

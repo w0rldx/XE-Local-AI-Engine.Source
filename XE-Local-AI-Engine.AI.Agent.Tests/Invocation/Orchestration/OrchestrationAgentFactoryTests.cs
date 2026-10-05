@@ -905,7 +905,8 @@ public sealed class OrchestrationAgentFactoryTests
 
         // A provider reports why a round ended on its own last chunk, after the content.
         private static async IAsyncEnumerable<ChatResponseUpdate> WithFinishReason(ChatResponse response,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
         {
             await foreach (var update in ToUpdates(response, cancellationToken))
             {

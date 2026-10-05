@@ -484,8 +484,14 @@ public sealed class NodeSettingsEndpointTests
     {
         var validator = new SaveNodeSettingsRequestValidator();
 
-        AssertEx.False(validator.Validate(new SaveNodeSettingsRequest { DefaultReasoningEffort = value }).IsValid);
-        AssertEx.False(validator.Validate(new SaveNodeSettingsRequest { ChatOutputCapMode = value }).IsValid);
+        AssertEx.False(validator.Validate(new SaveNodeSettingsRequest
+        {
+            DefaultReasoningEffort = value
+        }).IsValid);
+        AssertEx.False(validator.Validate(new SaveNodeSettingsRequest
+        {
+            ChatOutputCapMode = value
+        }).IsValid);
     }
 
     [Test]
@@ -1102,8 +1108,8 @@ public sealed class NodeSettingsEndpointTests
         // LOCAL-ONLY members SaveTrustedMergedAsync re-applies from the stored record after the mapper runs.
         string[] carriedByTheSaveService = [nameof(StoredNodeSettings.MachineKey), nameof(StoredNodeSettings.TranscriptionSelectedModelId)];
         var properties = typeof(StoredNodeSettings).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(property => property.CanWrite && !carriedByTheSaveService.Contains(property.Name))
-            .ToArray();
+                                                   .Where(property => property.CanWrite && !carriedByTheSaveService.Contains(property.Name))
+                                                   .ToArray();
         var defaults = new StoredNodeSettings();
         var lost = new List<string>();
         foreach (var property in properties)
@@ -2332,7 +2338,10 @@ public sealed class NodeSettingsEndpointTests
             _ when type == typeof(long) => 7L,
             _ when type == typeof(bool) => true,
             _ when type == typeof(string) => $"probe-{property.Name}",
-            _ when type == typeof(IReadOnlyList<string>) => new[] { "probe" },
+            _ when type == typeof(IReadOnlyList<string>) => new[]
+            {
+                "probe"
+            },
             _ => Activator.CreateInstance(type)
                  ?? throw new InvalidOperationException($"No probe value for {property.Name} ({type.Name}).")
         };

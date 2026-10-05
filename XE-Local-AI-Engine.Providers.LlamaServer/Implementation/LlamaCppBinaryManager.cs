@@ -247,6 +247,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
                     reporter.Complete();
                 }
+
                 return new LlamaBinary
                 {
                     ServerExecutablePath = cachedServer,
@@ -723,7 +724,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         var serverDir = Path.GetDirectoryName(serverPath)!;
         if (!isPinnedTag)
         {
-            Diagnose(() => _logger.LogWarning("The CUDA runtime libraries of llama.cpp {Tag} are incomplete (no {Family} next to the server), so it runs without CUDA; reinstalling that tag repairs it.",
+            Diagnose(() => _logger.LogWarning(
+                "The CUDA runtime libraries of llama.cpp {Tag} are incomplete (no {Family} next to the server), so it runs without CUDA; reinstalling that tag repairs it.",
                 tag,
                 MissingCudaCompanionFamily(serverDir)));
             return false;
@@ -759,8 +761,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
                     // The name only: this reason is shown in the UI. The full path goes to the log with the inner exception.
-                    throw new LlamaRuntimeException(
-                        $"{Path.GetFileName(dll)} could not be written to the runtime folder. Closing programs that use the runtime folder and retrying helps.",
+                    throw new LlamaRuntimeException($"{Path.GetFileName(dll)} could not be written to the runtime folder. Closing programs that use the runtime folder and retrying helps.",
                         exception);
                 }
             }
@@ -1112,7 +1113,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     Runs one download → SHA256 verify → extract pass. Returns the staging dir on success, or the non-fatal
     ///     failure cause to drive a single retry. Cancellation propagates rather than being swallowed.
     /// </summary>
-    private async Task<(string? StagingDir, Exception? Error)> TryDownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, AcquisitionReporter? reporter, int stepIndex,
+    private async Task<(string? StagingDir, Exception? Error)> TryDownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir,
+        AcquisitionReporter? reporter, int stepIndex,
         CancellationToken ct)
     {
         // Defense-in-depth: even though assetName is allow-list-validated upstream, strip any directory component before

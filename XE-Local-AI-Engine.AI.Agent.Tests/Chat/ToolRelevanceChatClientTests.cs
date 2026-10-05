@@ -303,7 +303,11 @@ public sealed class ToolRelevanceChatClientTests
         costs["weather_now"] = 50;
         costs["forecast"] = 25;
 
-        var sent = await SendAsync(tools, query: "weather forecast", fittedOffer: new FittedToolOffer { RankedTokenBudget = 30, TokenCosts = costs });
+        var sent = await SendAsync(tools, query: "weather forecast", fittedOffer: new FittedToolOffer
+        {
+            RankedTokenBudget = 30,
+            TokenCosts = costs
+        });
 
         AssertEx.Equal(string.Join(",", ListToolsFunction.ToolName, AskUserTool.ToolName, "forecast"), string.Join(",", sent.Names));
         AssertEx.Contains(AssertEx.NotNull(listTools.BoundDecision).HiddenNames, "weather_now");
@@ -339,7 +343,11 @@ public sealed class ToolRelevanceChatClientTests
         var (tools, listTools) = BuildArray([AskUserTool.ToolName, .. FillerNames(4), "huge_tool"]);
         var costs = FillerNames(4).ToDictionary(static name => name, static _ => 10, StringComparer.Ordinal);
         costs["huge_tool"] = 100;
-        var fitted = new FittedToolOffer { RankedTokenBudget = 30, TokenCosts = costs };
+        var fitted = new FittedToolOffer
+        {
+            RankedTokenBudget = 30,
+            TokenCosts = costs
+        };
         using var inner = new CapturingChatClient();
         using var sut = BuildSut(inner);
 

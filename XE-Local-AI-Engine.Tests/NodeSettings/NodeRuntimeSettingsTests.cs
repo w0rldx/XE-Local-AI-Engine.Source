@@ -409,7 +409,11 @@ public sealed class NodeRuntimeSettingsTests
     public async Task ChatOutputCap_DefaultsToCapAt16384AndStoredValuesWin()
     {
         var unset = CreateSut(new StoredNodeSettings(), seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
-        AssertEx.Equal(new ChatOutputCap { Mode = "cap", MaxTokens = 16_384 }, await unset.GetChatOutputCapAsync());
+        AssertEx.Equal(new ChatOutputCap
+        {
+            Mode = "cap",
+            MaxTokens = 16_384
+        }, await unset.GetChatOutputCapAsync());
 
         var stored = CreateSut(new StoredNodeSettings
             {
@@ -417,7 +421,11 @@ public sealed class NodeRuntimeSettingsTests
                 ChatOutputCapMaxTokens = 4096
             },
             seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
-        AssertEx.Equal(new ChatOutputCap { Mode = "off", MaxTokens = 4096 }, await stored.GetChatOutputCapAsync());
+        AssertEx.Equal(new ChatOutputCap
+        {
+            Mode = "off",
+            MaxTokens = 4096
+        }, await stored.GetChatOutputCapAsync());
     }
 
     [Test]

@@ -1167,7 +1167,11 @@ public sealed class InvocationRunnerTests
 
         var runner = CreateRunner(factory,
             providerResolver: CreateLlamaCppResolver(window),
-            configureRuntimeSettings: settings => settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(new ChatOutputCap { Mode = mode, MaxTokens = ceiling }));
+            configureRuntimeSettings: settings => settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(new ChatOutputCap
+            {
+                Mode = mode,
+                MaxTokens = ceiling
+            }));
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
@@ -1189,7 +1193,11 @@ public sealed class InvocationRunnerTests
             providerResolver: CreateLlamaCppResolver(65_536),
             configureRuntimeSettings: settings =>
             {
-                settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(new ChatOutputCap { Mode = "cap", MaxTokens = 1_000 });
+                settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(new ChatOutputCap
+                {
+                    Mode = "cap",
+                    MaxTokens = 1_000
+                });
                 settings.GetReasoningBudgetsAsync(Arg.Any<CancellationToken>()).Returns(ReasoningBudgets.Default with
                 {
                     Medium = 3000,
@@ -1228,7 +1236,11 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var runner = CreateRunner(eventDispatcher: dispatcher,
             agentUpdates: ReasoningThenContentFinishing("length", "thought", "0000"),
-            configureRuntimeSettings: settings => settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(new ChatOutputCap { Mode = mode, MaxTokens = 16_384 }));
+            configureRuntimeSettings: settings => settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(new ChatOutputCap
+            {
+                Mode = mode,
+                MaxTokens = 16_384
+            }));
 
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
@@ -1259,7 +1271,11 @@ public sealed class InvocationRunnerTests
     [Arguments("off", null, null)]
     public async Task RunAsync_ForAnOrchestration_CapsEachParticipantAgainstItsOwnWindow(string mode, int? expectedTriageCap, int? expectedSpecialistCap)
     {
-        var definition = await CaptureOrchestrationDefinitionAsync(new ChatOutputCap { Mode = mode, MaxTokens = 16_384 }, RuntimePackageBuilder.Valid());
+        var definition = await CaptureOrchestrationDefinitionAsync(new ChatOutputCap
+        {
+            Mode = mode,
+            MaxTokens = 16_384
+        }, RuntimePackageBuilder.Valid());
 
         AssertEx.Equal(expectedTriageCap, definition.Participants[0].DefaultMaxOutputTokens, "the triage runs the turn's 65,536 window");
         AssertEx.Equal(expectedSpecialistCap, definition.Participants[1].DefaultMaxOutputTokens, "the specialist runs a 4,096 window");
@@ -1277,7 +1293,11 @@ public sealed class InvocationRunnerTests
     [Arguments("ext:provider/remote-model", "cap", null)]
     public async Task RunAsync_ForAnOrchestration_CapsAParticipantWithAnUnknownWindowOnlyWhenItIsLocal(string specialistModel, string mode, int? expectedSpecialistCap)
     {
-        var definition = await CaptureOrchestrationDefinitionAsync(new ChatOutputCap { Mode = mode, MaxTokens = 16_384 }, RuntimePackageBuilder.Valid(), specialistModel: specialistModel);
+        var definition = await CaptureOrchestrationDefinitionAsync(new ChatOutputCap
+        {
+            Mode = mode,
+            MaxTokens = 16_384
+        }, RuntimePackageBuilder.Valid(), specialistModel: specialistModel);
 
         AssertEx.Equal(specialistModel, definition.Participants[1].ModelId);
         AssertEx.Null(definition.Participants[1].EffectiveContextTokens, "the specialist's window is not known at build time");
@@ -1289,7 +1309,11 @@ public sealed class InvocationRunnerTests
     [Arguments("cold-model")]
     public async Task RunAsync_ForAFrozenBenchmarkOrchestration_UsesTheFrozenLadderAndNoCap(string specialistModel)
     {
-        var definition = await CaptureOrchestrationDefinitionAsync(new ChatOutputCap { Mode = "cap", MaxTokens = 1_000 }, RuntimePackageBuilder.Valid(), frozen: true, specialistModel);
+        var definition = await CaptureOrchestrationDefinitionAsync(new ChatOutputCap
+        {
+            Mode = "cap",
+            MaxTokens = 1_000
+        }, RuntimePackageBuilder.Valid(), frozen: true, specialistModel);
 
         AssertEx.True(definition.Participants.All(static participant => participant.DefaultMaxOutputTokens is null), "a frozen run takes no default cap");
         AssertEx.True(definition.Participants.All(static participant => participant.ReasoningBudgets == ReasoningBudgets.Frozen), "a frozen run takes the fixed ladder");
@@ -1312,7 +1336,11 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var runner = CreateRunner(eventDispatcher: dispatcher,
             orchestrationAgentFactory: CreateOrchestrationFactory(OrchestrationRounds(rounds), out _),
-            configureRuntimeSettings: settings => settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(new ChatOutputCap { Mode = mode, MaxTokens = 16_384 }));
+            configureRuntimeSettings: settings => settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(new ChatOutputCap
+            {
+                Mode = mode,
+                MaxTokens = 16_384
+            }));
 
         await RunPlainAsync(runner, RuntimePackageBuilder.Valid().WithOrchestrationSpec(SampleSpec()).Build());
 
@@ -1360,12 +1388,22 @@ public sealed class InvocationRunnerTests
             configureRuntimeSettings: settings => settings.GetChatOutputCapAsync(Arg.Any<CancellationToken>()).Returns(outputCap));
         var spec = SampleSpec();
         var package = packageBuilder.WithOrchestrationSpec(spec with
-        {
-            Participants = [spec.Participants[0] with { ModelId = null }, spec.Participants[1] with { ModelId = specialistModel }]
-        }).Build() with
-        {
-            UsesFrozenBenchmarkPolicy = frozen
-        };
+            {
+                Participants =
+                [
+                    spec.Participants[0] with
+                    {
+                        ModelId = null
+                    },
+                    spec.Participants[1] with
+                    {
+                        ModelId = specialistModel
+                    }
+                ]
+            }).Build() with
+            {
+                UsesFrozenBenchmarkPolicy = frozen
+            };
 
         await RunPlainAsync(runner, package);
 
@@ -2792,10 +2830,16 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         FittedToolOffer? fittedOffer = null;
         var factory = CreateFactory(CreateUpdates("Jupiter"), onCreate: _ => fittedOffer = ToolRelevanceScope.Current?.FittedOffer);
-        var budgetOptions = new ConversationContextBudgetOptions { DefaultContextTokens = 4096 };
+        var budgetOptions = new ConversationContextBudgetOptions
+        {
+            DefaultContextTokens = 4096
+        };
         var contextBudgeter = new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(budgetOptions), StubNodeRuntimeSettings.Create().Build());
         var runner = CreateRunner(factory, eventDispatcher: dispatcher, contextBudgetOptions: budgetOptions, contextBudgeter: contextBudgeter);
-        var package = RuntimePackageBuilder.Valid().WithSystemPrompt(systemPrompt).WithUserMessage(Question).Build() with { AllowedTools = [.. offer] };
+        var package = RuntimePackageBuilder.Valid().WithSystemPrompt(systemPrompt).WithUserMessage(Question).Build() with
+        {
+            AllowedTools = [.. offer]
+        };
 
         await RunAsync(runner, package);
 
@@ -2812,7 +2856,12 @@ public sealed class InvocationRunnerTests
         var offered = costliest.Append(AskUserTool.ToolName).ToHashSet(StringComparer.Ordinal);
         List<ChatMessage> toolRoundTrip =
         [
-            new(ChatRole.Assistant, [new FunctionCallContent("call_0", "Calculate", new Dictionary<string, object?>(StringComparer.Ordinal) { ["expression"] = "17 * 23" })]),
+            new(ChatRole.Assistant, [
+                new FunctionCallContent("call_0", "Calculate", new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["expression"] = "17 * 23"
+                })
+            ]),
             new(ChatRole.Tool, [new FunctionResultContent("call_0", "17 * 23 = 391")])
         ];
         var secondRound = contextBudgeter.Budget([new ChatMessage(ChatRole.User, Question), .. toolRoundTrip],
@@ -2828,7 +2877,8 @@ public sealed class InvocationRunnerTests
 
         // The provider call the turn makes: the real offer as executable tools plus list_tools, through the relevance hop
         // and the provider-round budgeter, which throws when the request does not fit the window.
-        List<AITool> tools = [.. offer.Select(static tool => new MetadataToolFunction(tool.Name, tool.Description, MetadataToolFunction.ParseSchema(tool.ParameterSchema!), static (_, _) => Task.FromResult("ok")))];
+        List<AITool> tools =
+            [.. offer.Select(static tool => new MetadataToolFunction(tool.Name, tool.Description, MetadataToolFunction.ParseSchema(tool.ParameterSchema!), static (_, _) => Task.FromResult("ok")))];
         tools.Add(new ListToolsFunction(tools));
         ChatOptions? sent = null;
         var provider = Substitute.For<IChatClient>();
@@ -2841,28 +2891,37 @@ public sealed class InvocationRunnerTests
             NullLogger<ToolRelevanceChatClient>.Instance);
         List<string> sentNames;
         using (ToolRelevanceScope.BeginScope(active: true, FrozenSet<string>.Empty, fitted))
-        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { DefaultContextTokens = 4096 }))
-        {
-            var options = new ChatOptions
+            using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+                   {
+                       DefaultContextTokens = 4096
+                   }))
             {
-                ModelId = Model,
-                Tools = tools,
-                AdditionalProperties = new AdditionalPropertiesDictionary { ["num_ctx"] = 4096 }
-            };
-            List<ChatMessage> round = [new ChatMessage(ChatRole.System, systemPrompt), new ChatMessage(ChatRole.User, Question)];
-            _ = await hop.GetResponseAsync(round, options);
-            sentNames = [.. AssertEx.NotNull(sent).Tools!.Select(static tool => tool.Name)];
+                var options = new ChatOptions
+                {
+                    ModelId = Model,
+                    Tools = tools,
+                    AdditionalProperties = new AdditionalPropertiesDictionary
+                    {
+                        ["num_ctx"] = 4096
+                    }
+                };
+                List<ChatMessage> round = [new ChatMessage(ChatRole.System, systemPrompt), new ChatMessage(ChatRole.User, Question)];
+                _ = await hop.GetResponseAsync(round, options);
+                sentNames = [.. AssertEx.NotNull(sent).Tools!.Select(static tool => tool.Name)];
 
-            // The next provider round, after the call and its result, for this query's selection and the costliest one.
-            round.AddRange(toolRoundTrip);
-            _ = await hop.GetResponseAsync(round, options);
-            _ = await budgeter.GetResponseAsync(round, new ChatOptions
-            {
-                ModelId = Model,
-                Tools = [.. tools.Where(tool => offered.Contains(tool.Name) || tool is ListToolsFunction)],
-                AdditionalProperties = new AdditionalPropertiesDictionary { ["num_ctx"] = 4096 }
-            });
-        }
+                // The next provider round, after the call and its result, for this query's selection and the costliest one.
+                round.AddRange(toolRoundTrip);
+                _ = await hop.GetResponseAsync(round, options);
+                _ = await budgeter.GetResponseAsync(round, new ChatOptions
+                {
+                    ModelId = Model,
+                    Tools = [.. tools.Where(tool => offered.Contains(tool.Name) || tool is ListToolsFunction)],
+                    AdditionalProperties = new AdditionalPropertiesDictionary
+                    {
+                        ["num_ctx"] = 4096
+                    }
+                });
+            }
 
         AssertEx.Contains(sentNames, ListToolsFunction.ToolName);
         AssertEx.Contains(sentNames, AskUserTool.ToolName);
@@ -2875,10 +2934,28 @@ public sealed class InvocationRunnerTests
     ///     hop can send both 500s, so the largest-first 600 is an underestimate.
     /// </summary>
     [Test]
-    [Arguments(new[] { 600, 500, 500 }, 1000, 1000)]
-    [Arguments(new[] { 300, 700, 250, 400 }, 1000, 1000)]
-    [Arguments(new[] { 1200, 900 }, 1000, 900)]
-    [Arguments(new[] { 1200 }, 1000, 0)]
+    [Arguments(new[]
+    {
+        600,
+        500,
+        500
+    }, 1000, 1000)]
+    [Arguments(new[]
+    {
+        300,
+        700,
+        250,
+        400
+    }, 1000, 1000)]
+    [Arguments(new[]
+    {
+        1200,
+        900
+    }, 1000, 900)]
+    [Arguments(new[]
+    {
+        1200
+    }, 1000, 0)]
     public void CostliestWithin_ReturnsTheLargestTotalCostTheHopCanSendWithinTheRoom(int[] costs, int room, int expectedTotal)
     {
         var subset = InvocationRunner.CostliestWithin(costs, room);
@@ -2891,11 +2968,11 @@ public sealed class InvocationRunnerTests
     private static Task<IReadOnlyList<AllowedToolDto>> DefaultAssistantOfferAsync(string model)
     {
         return new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
-                   new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
-                   StubNodeRuntimeSettings.Create().WithToolCapableModels(model).WithKnowledgeAgentToolsEnabled(true).Build(),
-                   NullCustomToolScopeFactory.Instance,
-                   new FakeModelTrustResolver())
-               .GetOfferedToolsAsync(model, isCloudModel: false);
+                new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+                StubNodeRuntimeSettings.Create().WithToolCapableModels(model).WithKnowledgeAgentToolsEnabled(true).Build(),
+                NullCustomToolScopeFactory.Instance,
+                new FakeModelTrustResolver())
+            .GetOfferedToolsAsync(model, isCloudModel: false);
     }
 
     private static async Task<string> ReadAgentInstructionsAsync(string fileName)
@@ -2960,7 +3037,10 @@ public sealed class InvocationRunnerTests
                 DefaultContextTokens = 4096,
                 ReservedOutputTokenFloor = 0
             });
-        var parts = new[] { new AttachmentTextPart("notes.txt", new string('a', 30_000)) };
+        var parts = new[]
+        {
+            new AttachmentTextPart("notes.txt", new string('a', 30_000))
+        };
         var package = WithAttachment(RuntimePackageBuilder.Valid().Build(), parts);
 
         await RunAsync(runner, package);
@@ -4019,8 +4099,7 @@ public sealed class InvocationRunnerTests
         var segments = new List<IReadOnlyList<ChatMessage>>();
         var thinkingOffRounds = new List<bool>();
         var calls = 0;
-        var factory = CreateMessageCapturingFactory(
-            _ =>
+        var factory = CreateMessageCapturingFactory(_ =>
             {
                 // What the provider-round hop (ProviderCallBudgetChatClient) reads as each segment starts and ends.
                 thinkingOffRounds.Add(ProviderCallBudget.Current?.IsThinkingOff == true);
@@ -4194,7 +4273,10 @@ public sealed class InvocationRunnerTests
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: CreateUpdates(answer));
 
-        await RunAsync(runner, RuntimePackageBuilder.Valid().Build() with { SupportsThinking = false });
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build() with
+        {
+            SupportsThinking = false
+        });
 
         await dispatcher.DidNotReceive().ReportInvocationTextReclassifiedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>());
     }

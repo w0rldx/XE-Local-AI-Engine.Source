@@ -22,7 +22,7 @@ public sealed class PooledRoleLaunchAdmissionTests
     private const string Model = "gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M";
     private const string ChatModel = "unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q4_K_XL";
     private const string BusyModel = "'busy/chat-GGUF:Q4_K_M' (Chat)";
-    private const string Reason ="Insufficient capacity for 'm' (Chat): not enough free memory for another model. Loaded now: 'x' (Chat). Eject one of them or pick a loaded model.";
+    private const string Reason = "Insufficient capacity for 'm' (Chat): not enough free memory for another model. Loaded now: 'x' (Chat). Eject one of them or pick a loaded model.";
 
     [Test]
     public async Task Allow_HandsTheReservationToTheCaller_AndOutlivesTheScope()
@@ -178,7 +178,8 @@ public sealed class PooledRoleLaunchAdmissionTests
             BusyCalls = int.MaxValue
         };
 
-        var exception = await AssertEx.ThrowsAsync<LlamaCapacityRefusedException>(() => host.Admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: true, evictions.EvictAsync, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<LlamaCapacityRefusedException>(() =>
+            host.Admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: true, evictions.EvictAsync, CancellationToken.None));
 
         AssertEx.Equal(Reason, exception.Message);
         AssertEx.True(host.Time.Elapsed >= PooledRoleLaunchAdmission.BusyResidentWaitCap, "The wait must have run to its bound.");
@@ -217,7 +218,8 @@ public sealed class PooledRoleLaunchAdmissionTests
         await using var host = Host.Create(Shortfall(), Shortfall());
         var evictions = new EvictionRecorder();
 
-        var exception = await AssertEx.ThrowsAsync<LlamaCapacityRefusedException>(() => host.Admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: true, evictions.EvictAsync, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<LlamaCapacityRefusedException>(() =>
+            host.Admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: true, evictions.EvictAsync, CancellationToken.None));
 
         AssertEx.Equal(Reason, exception.Message);
         AssertEx.Equal(2, host.Created.Single().Requests.Count);
@@ -233,7 +235,8 @@ public sealed class PooledRoleLaunchAdmissionTests
             BusyCalls = 1
         };
 
-        var exception = await AssertEx.ThrowsAsync<LlamaCapacityRefusedException>(() => host.Admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: false, evictions.EvictAsync, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<LlamaCapacityRefusedException>(() =>
+            host.Admission.AdmitChatAsync(ChatModel, mayUnloadIdleModels: false, evictions.EvictAsync, CancellationToken.None));
 
         AssertEx.Equal(Reason, exception.Message);
         AssertEx.Equal(0, evictions.Calls, "A background load must never unload the idle resident nor poll a busy one.");

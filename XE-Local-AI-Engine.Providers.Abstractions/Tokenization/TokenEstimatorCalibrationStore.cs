@@ -202,7 +202,10 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
     }
 
     // Escapes only what JSON requires, as a template's tojson does; the default encoder's '-style escapes would over-count.
-    private static readonly JsonSerializerOptions RenderOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+    private static readonly JsonSerializerOptions RenderOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     private readonly ConcurrentDictionary<string, int> _divisors = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, double> _observedCorrections = new(StringComparer.Ordinal);

@@ -12,6 +12,7 @@ internal static partial class WindowsLauncherApplication
 
     /// <summary>The desktop shell's debug flag; the shell duplicates the literal (<c>DesktopStartupOptions.DebugArgument</c>).</summary>
     internal const string DebugArgument = "--debug";
+
     private const string AspNetCoreRuntimeName = "Microsoft.AspNetCore.App";
     private const int MissingPrerequisiteExitCode = 150;
     private const int LaunchFailureExitCode = 151;

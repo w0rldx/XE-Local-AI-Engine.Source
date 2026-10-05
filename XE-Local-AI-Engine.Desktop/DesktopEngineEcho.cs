@@ -14,12 +14,11 @@ internal sealed class DesktopEngineEcho : IAsyncDisposable
 {
     internal const int Capacity = 1024;
 
-    private readonly Channel<(bool Error, string Text)> _pending = Channel.CreateBounded<(bool Error, string Text)>(
-        new BoundedChannelOptions(Capacity)
-        {
-            FullMode = BoundedChannelFullMode.DropOldest,
-            SingleReader = true
-        });
+    private readonly Channel<(bool Error, string Text)> _pending = Channel.CreateBounded<(bool Error, string Text)>(new BoundedChannelOptions(Capacity)
+    {
+        FullMode = BoundedChannelFullMode.DropOldest,
+        SingleReader = true
+    });
 
     private readonly Task _writer;
 

@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Dispatch;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 public sealed partial class InvocationRunner
@@ -342,7 +343,8 @@ public sealed partial class InvocationRunner
 
     /// <summary>The first round fitted to the launched window: the package, the tool definitions the budgeter counts, and what was narrowed.</summary>
     /// <remarks><see cref="Measured" /> is the budget of <see cref="Messages" />, so the initial assembly does not measure the same request twice.</remarks>
-    private readonly record struct FirstRoundFit(RuntimePackage Package,
+    private readonly record struct FirstRoundFit(
+        RuntimePackage Package,
         IReadOnlyList<ChatMessage> Messages,
         IReadOnlyList<string> ToolDefinitions,
         ConversationBudgetResult Measured,
@@ -419,7 +421,12 @@ public sealed partial class InvocationRunner
             List<ChatMessage> roundTrip =
             [
                 new(ChatRole.Assistant,
-                    [new FunctionCallContent("call_0", "tool",new Dictionary<string, object?>(StringComparer.Ordinal) { ["input"] =new string('x', FittedRoundTripArgumentCharacters) })]),
+                [
+                    new FunctionCallContent("call_0", "tool", new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["input"] = new string('x', FittedRoundTripArgumentCharacters)
+                    })
+                ]),
                 new(ChatRole.Tool, [new FunctionResultContent("call_0", new string('x', FittedRoundTripResultCharacters))])
             ];
             room -= _contextBudgeter.Budget(roundTrip, turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens, systemPrompt: null, [], resolvedModel).EstimatedTokensBefore;
@@ -798,7 +805,7 @@ public sealed partial class InvocationRunner
             return [];
         }
 
-        return [.. allowedTools.Select(static tool => string.Concat(tool.Name, "\n", tool.Description, "\n", XE_Local_AI_Engine.Providers.Abstractions.Tokenization.TokenEstimatorCalibrationStore.RenderToolSchema(tool.ParameterSchema)))];
+        return [.. allowedTools.Select(static tool => string.Concat(tool.Name, "\n", tool.Description, "\n", TokenEstimatorCalibrationStore.RenderToolSchema(tool.ParameterSchema)))];
     }
 
     private static IReadOnlyList<AITool> BuildInvocationTools(RuntimePackage package)

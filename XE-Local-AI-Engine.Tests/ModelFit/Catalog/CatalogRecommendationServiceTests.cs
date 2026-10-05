@@ -6,7 +6,6 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
-using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;

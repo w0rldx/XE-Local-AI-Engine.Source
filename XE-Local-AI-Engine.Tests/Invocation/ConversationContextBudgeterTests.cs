@@ -615,14 +615,16 @@ public sealed class ConversationContextBudgeterTests
     [Test]
     public void BuildToolBudgetDefinitions_CountsTheRenderedSchema_SoIndentedAndCompactOffersBudgetIdentically()
     {
-        static AllowedToolDto Offer(string schema) => new()
-        {
-            Id = Guid.NewGuid(),
-            Name = "calculate",
-            Location = ToolLocation.ClientLocal,
-            Description = "Evaluates an expression.",
-            ParameterSchema = schema
-        };
+        static AllowedToolDto Offer(string schema) =>
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Name = "calculate",
+                Location = ToolLocation.ClientLocal,
+                Description = "Evaluates an expression.",
+                ParameterSchema = schema
+            };
+
         const string compact = """{"type":"object","properties":{"expression":{"type":"string"}}}""";
         const string indented = """
                                 {

@@ -517,8 +517,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
     {
         if (_options.Debug)
         {
-            await Console.Out.WriteLineAsync(
-                $"Debug mode: engine logs are not streamed because this launch did not start the engine. Logs: {_options.LogsDirectory}");
+            await Console.Out.WriteLineAsync($"Debug mode: engine logs are not streamed because this launch did not start the engine. Logs: {_options.LogsDirectory}");
         }
     }
 

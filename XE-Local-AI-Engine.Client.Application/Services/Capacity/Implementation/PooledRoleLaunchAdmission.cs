@@ -136,7 +136,10 @@ public sealed class PooledRoleLaunchAdmission : ILlamaServerPooledLaunchAdmissio
 
             if (decision.IsMemoryShortfall)
             {
-                decision = await capacity.DecideAsync(request with { AllowAdmissionDownTier = true }, ct);
+                decision = await capacity.DecideAsync(request with
+                {
+                    AllowAdmissionDownTier = true
+                }, ct);
             }
         }
 

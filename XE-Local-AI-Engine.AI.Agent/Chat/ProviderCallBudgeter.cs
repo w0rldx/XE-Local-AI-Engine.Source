@@ -55,6 +55,7 @@ internal static class ProviderCallBudgeter
                 currentUser = i;
             }
         }
+
         var excerptChars = Math.Max(0, options.OversizedToolResultExcerptChars);
 
         var currentEstimate = estimatedBefore;

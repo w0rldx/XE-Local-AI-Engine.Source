@@ -87,7 +87,7 @@ public sealed class LlamaTokenEstimatorCalibrationServiceTests
         // What the budgeters already charge for the two probe tools: each definition framed as one message, plus the wrapper constant.
         var probeCharge = LlamaTokenEstimatorCalibrationService.ProbeTools.Sum(static tool =>
             ((tool.Name.Length + 1 + tool.Description.Length + 1 + TokenEstimatorCalibrationStore.RenderToolSchema(tool.JsonSchema).Length) / 4) + 4
-                                                                                                             + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens);
+            + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens);
         AssertEx.Equal(500 - probeCharge, store.ResolveToolTemplatePreamble("model-a"));
         AssertEx.ContainsSingle(logger.Preambles, preamble => preamble == 500 - probeCharge);
 

@@ -447,8 +447,8 @@ public sealed class BinaryManagerCudartAtomicPublishTests
     {
         return string.Join("\n",
             Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
-                .Select(file => $"{Path.GetRelativePath(dir, file)}: {Sha256Hex(File.ReadAllBytes(file))}")
-                .Order(StringComparer.Ordinal));
+                     .Select(file => $"{Path.GetRelativePath(dir, file)}: {Sha256Hex(File.ReadAllBytes(file))}")
+                     .Order(StringComparer.Ordinal));
     }
 
     private static string[] Lines(string snapshot)
@@ -582,12 +582,18 @@ public sealed class BinaryManagerCudartAtomicPublishTests
         {
             if (!uri.AbsoluteUri.Contains(_cudartName, StringComparison.Ordinal))
             {
-                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(MainArchive) };
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(MainArchive)
+                };
             }
 
             VariantDirVisibleAtCudartRequest.Add(Directory.Exists(VariantDir));
             return CudartServed
-                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(_cudartArchive) }
+                ? new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(_cudartArchive)
+                }
                 : new HttpResponseMessage(HttpStatusCode.NotFound);
         }
     }
@@ -647,9 +653,11 @@ public sealed class BinaryManagerCudartAtomicPublishTests
             _size = size;
         }
 
-        public Task<LlamaCppReleaseResult> ResolveRecommendedAsync(string recommendedTag, CancellationToken ct) => Task.FromResult(LlamaCppReleaseResult.Offline());
+        public Task<LlamaCppReleaseResult> ResolveRecommendedAsync(string recommendedTag, CancellationToken ct) =>
+            Task.FromResult(LlamaCppReleaseResult.Offline());
 
-        public Task<LlamaCppReleaseResult> ResolveUpstreamLatestAsync(CancellationToken ct) => Task.FromResult(LlamaCppReleaseResult.Offline());
+        public Task<LlamaCppReleaseResult> ResolveUpstreamLatestAsync(CancellationToken ct) =>
+            Task.FromResult(LlamaCppReleaseResult.Offline());
 
         public Task<LlamaCppReleaseResult> ResolveAssetAsync(string tag, OSPlatform os, Architecture arch, GpuVariant variant, CancellationToken ct) =>
             Task.FromResult(LlamaCppReleaseResult.Offline());

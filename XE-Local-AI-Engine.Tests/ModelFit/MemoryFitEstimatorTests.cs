@@ -492,7 +492,11 @@ public sealed class MemoryFitEstimatorTests
         var hybrid = MemoryFitEstimator.EstimateKvCacheFootprint(blockCount: 40, attentionHeadCountKV: 2, embeddingLength: 2048, attentionHeadCount: 16, ctxTarget: 65536,
             KvCacheQuant.Q8_0, shape);
         var everyLayer = MemoryFitEstimator.EstimateKvCacheFootprint(blockCount: 40, attentionHeadCountKV: 2, embeddingLength: 2048, attentionHeadCount: 16, ctxTarget: 65536,
-            KvCacheQuant.Q8_0, new GgufAttentionShape { KeyLength = 256, ValueLength = 256 });
+            KvCacheQuant.Q8_0, new GgufAttentionShape
+            {
+                KeyLength = 256,
+                ValueLength = 256
+            });
 
         AssertEx.Equal(10L * 2 * 512 * 65536, hybrid.BytesAtContext);
         AssertEx.Equal(680L * 1024 * 1024, hybrid.BytesAtContext * 34 / 32);

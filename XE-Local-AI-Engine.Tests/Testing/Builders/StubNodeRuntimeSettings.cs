@@ -48,7 +48,13 @@ public sealed class StubNodeRuntimeSettings
     private int _agentHomeMaxRunSeconds = 600;
     private int _webFetchMaxContentChars = StoredNodeSettings.DefaultWebFetchMaxContentChars;
     private ReasoningBudgets _reasoningBudgets = ReasoningBudgets.Default;
-    private ChatOutputCap _chatOutputCap = new() { Mode = StoredNodeSettings.ChatOutputCapModeCap, MaxTokens = StoredNodeSettings.DefaultChatOutputCapMaxTokens };
+
+    private ChatOutputCap _chatOutputCap = new()
+    {
+        Mode = StoredNodeSettings.ChatOutputCapModeCap,
+        MaxTokens = StoredNodeSettings.DefaultChatOutputCapMaxTokens
+    };
+
     private int _toolPipelineMaxIterationsPerRequest = StoredNodeSettings.DefaultToolPipelineMaxIterationsPerRequest;
     private int _toolPipelineMaxToolResultChars = StoredNodeSettings.DefaultToolPipelineMaxToolResultChars;
     private int _toolPipelineMaxConsecutiveInvalidToolCalls = StoredNodeSettings.DefaultToolPipelineMaxConsecutiveInvalidToolCalls;

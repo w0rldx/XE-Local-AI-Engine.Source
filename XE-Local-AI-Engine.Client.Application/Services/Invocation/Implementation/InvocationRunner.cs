@@ -1235,7 +1235,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // A thinking model leaks its deliberation into the answer with thinking off too (LFM2.5 at effort none, model-matrix W3),
         // so its round is checked whether or not the reasoning channel carried anything.
         if ((package.SupportsThinking || stream.ReasoningBuilder.Length > finalRoundReasoningStart) && !invocationToken.IsCancellationRequested
-            && await ReclassifyLeakedThinkTextAsync(transport, stream, finalRoundContentStart, package.SupportsThinking) is { } hasAnswer)
+                                                                                                    && await ReclassifyLeakedThinkTextAsync(transport, stream, finalRoundContentStart,
+                                                                                                        package.SupportsThinking) is { } hasAnswer)
         {
             finalRoundHasOutput = hasAnswer;
         }
@@ -1269,7 +1270,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private static async Task EmitOutputLimitNoticeIfReachedAsync(StreamTransport transport, StreamState stream, ChatOutputCap outputCap, CancellationToken invocationToken)
     {
         if (outputCap.NotifiesOnLength && !invocationToken.IsCancellationRequested
-            && string.Equals(stream.FinishReason, "length", StringComparison.Ordinal))
+                                       && string.Equals(stream.FinishReason, "length", StringComparison.Ordinal))
         {
             await transport.EmitNoticeAsync(TurnNoticeKind.OutputLimitReached, OutputLimitReachedNoticeMessage, stream.FinishReason);
         }
@@ -1281,7 +1282,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
     {
         if (package.UsesFrozenBenchmarkPolicy)
         {
-            return (new ChatOutputCap { Mode = StoredNodeSettings.ChatOutputCapModeOff, MaxTokens = 0 }, ReasoningBudgets.Frozen);
+            return (new ChatOutputCap
+            {
+                Mode = StoredNodeSettings.ChatOutputCapModeOff,
+                MaxTokens = 0
+            }, ReasoningBudgets.Frozen);
         }
 
         return (await _runtimeSettings.GetChatOutputCapAsync(invocationToken), await _runtimeSettings.GetReasoningBudgetsAsync(invocationToken));

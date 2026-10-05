@@ -594,7 +594,13 @@ public sealed class FirstRunModelProvisioningServiceTests
                 return false;
             }
 
-            Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Idle, Variant = variant, Tag = tag, StepCount = Current.StepCount });
+            Report(new RuntimeAcquisitionUpdate
+            {
+                Phase = RuntimeAcquisitionPhase.Idle,
+                Variant = variant,
+                Tag = tag,
+                StepCount = Current.StepCount
+            });
             return true;
         }
 

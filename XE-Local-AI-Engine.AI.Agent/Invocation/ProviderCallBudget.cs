@@ -305,8 +305,7 @@ public sealed class ProviderCallBudget
         Volatile.Write(ref _thinkingOff, 1);
 
     /// <summary>Whether <see cref="TurnThinkingOff" /> was called for this turn.</summary>
-    internal bool IsThinkingOff =>
-        Volatile.Read(ref _thinkingOff) == 1;
+    internal bool IsThinkingOff => Volatile.Read(ref _thinkingOff) == 1;
 
     internal ProviderCallEfficiencySnapshot CaptureEfficiencySnapshot()
     {
