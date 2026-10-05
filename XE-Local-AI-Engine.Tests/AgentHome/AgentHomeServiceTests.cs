@@ -416,18 +416,12 @@ public sealed class AgentHomeServiceTests : IDisposable
     }
 
     /// <summary>
-    ///     The guard is keyed by owner-node, so two owners run at once. One lease manager — the subject — is shared,
-    ///     and each owner gets its own <c>AgentHomeOptions.RootPath</c>.
+    ///     The guard is exclusive per node, so a run on a DIFFERENT node is not blocked by one in flight elsewhere. One
+    ///     lease manager — the subject — is shared, and each node has its own <c>AgentHomeOptions.RootPath</c>, as two
+    ///     node processes would.
     /// </summary>
-    /// <remarks>
-    ///     One <c>agent-home</c> tree exists per root, keyed by neither owner nor node, and an owner mismatch wipes it
-    ///     recursively. Driving both owners at one root therefore had the second owner's prepare delete the first
-    ///     owner's LIVE run directory from under its logger, which is the intermittent <c>Directory not empty</c> this
-    ///     test failed the gate with. The guard key is the subject, so each owner gets its own root and the first
-    ///     owner's run directory is asserted to survive.
-    /// </remarks>
     [Test]
-    public async Task RunLifecycleAsync_WhenDifferentOwnerNode_NotBlockedByConcurrentRun()
+    public async Task RunLifecycleAsync_WhenDifferentNode_NotBlockedByConcurrentRun()
     {
         var clock = new ManualTimeProvider(FixedNow);
         var provider = new FakeSandboxRuntimeProvider(clock);
@@ -445,13 +439,13 @@ public sealed class AgentHomeServiceTests : IDisposable
         await loop.WaitForEntryAsync(count: 1);
         var firstRunLogDirectory = SingleRunLogDirectory(ownerA.RootPath);
 
-        // A different owner-node keys a different guard, so its run is not rejected. Assert it got past the guard
-        // (a SECOND goal loop is running) rather than throwing AgentHomeBusy.
+        // A different node has its own guard, so its run is not rejected. Assert it got past the guard (a SECOND goal
+        // loop is running) rather than throwing AgentHomeBusy.
         using var secondCancellation = new CancellationTokenSource();
         var second = ownerB.Service.RunLifecycleAsync(NewLifecycle(folderId), secondCancellation.Token);
         await loop.WaitForEntryAsync(count: 2);
 
-        AssertEx.False(second.IsFaulted, "a different owner-node must not be rejected by the first owner's guard");
+        AssertEx.False(second.IsFaulted, "a different node must not be rejected by the first node's guard");
         AssertEx.False(first.IsFaulted, "the first run is still inside its goal loop, not faulted");
         AssertEx.True(Directory.Exists(firstRunLogDirectory),
             $"the first owner's run is still live, so nothing the second owner does may delete '{firstRunLogDirectory}' from under its logger");
@@ -461,6 +455,53 @@ public sealed class AgentHomeServiceTests : IDisposable
         await secondCancellation.CancelAsync();
         await SwallowAsync(first);
         await SwallowAsync(second);
+    }
+
+    /// <summary>
+    ///     The shared-root topology production has: one node, one <c>agent-home</c> tree, two accounts. While owner A's
+    ///     run is in flight, owner B's run is refused with the busy answer, and A's run directory survives and keeps
+    ///     logging.
+    /// </summary>
+    /// <remarks>
+    ///     Before the guard was made node-wide, B took its own owner-node lease, its prepare saw a manifest naming A and
+    ///     wiped the whole tree recursively — A's live <c>runs/&lt;id&gt;/</c> included. B's goal executor completes
+    ///     at once, so without the guard B succeeds and this test fails on the missing busy answer, not on a hang.
+    /// </remarks>
+    [Test]
+    public async Task RunLifecycleAsync_WhenDifferentOwnerSameNode_RejectsWithBusyAndKeepsTheLiveRun()
+    {
+        var clock = new ManualTimeProvider(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+        var folderId = Guid.NewGuid();
+        resolver.Add(folderId, "selected-project", CreateSourceFolder());
+
+        var sharedRoot = Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
+        var leases = new AgentHomeExecutionLeaseManager();
+        var loop = GateableGoalExecutor.Create();
+        using var ownerA = CreateHarness(clock, provider, resolver, new MutableIdentityProvider("owner-a", "node-1"),
+            leaseManager: leases, goalExecutor: loop.Executor, rootPath: sharedRoot);
+        using var ownerB = CreateHarness(clock, provider, resolver, new MutableIdentityProvider("owner-b", "node-1"),
+            leaseManager: leases, rootPath: sharedRoot);
+
+        var first = ownerA.Service.RunLifecycleAsync(NewLifecycle(folderId));
+        await loop.WaitForEntryAsync(count: 1);
+        var firstRunLogDirectory = SingleRunLogDirectory(sharedRoot);
+        var firstEvents = Path.Combine(firstRunLogDirectory, "events.jsonl");
+        var eventsBefore = await File.ReadAllTextAsync(firstEvents);
+
+        await AssertEx.ThrowsAsync<AgentHomeBusyException>(() => ownerB.Service.RunLifecycleAsync(NewLifecycle(folderId)));
+
+        AssertEx.True(Directory.Exists(firstRunLogDirectory),
+            $"owner A's run is still live, so owner B's refused run may not delete '{firstRunLogDirectory}' from under its logger");
+
+        loop.Release();
+        var firstResult = await first;
+
+        AssertEx.True(firstResult.Completed, "owner A's run must finish normally after owner B was turned away");
+        var eventsAfter = await File.ReadAllTextAsync(firstEvents);
+        AssertEx.True(eventsAfter.Length > eventsBefore.Length && eventsAfter.Contains("run_completed", StringComparison.Ordinal),
+            "owner A's log must keep appending into its own run directory after owner B's attempt");
     }
 
     [Test]
@@ -1095,9 +1136,10 @@ public sealed class AgentHomeServiceTests : IDisposable
         LocalContainerOptions? nodeOptions = null,
         IAgentHomeGoalExecutor? goalExecutor = null,
         AgentHomeRunExecutionRegistry? executingRuns = null,
-        bool? optionsEnabled = null)
+        bool? optionsEnabled = null,
+        string? rootPath = null)
     {
-        var root = Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
+        var root = rootPath ?? Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
         _tempRoots.Add(root);
 
         var options = Options.Create(new AgentHomeOptions
@@ -1110,7 +1152,8 @@ public sealed class AgentHomeServiceTests : IDisposable
                                                      .WithAgentHomeEnabled(enabled)
                                                      .WithAgentHomeCommandTimeoutSeconds(commandTimeoutSeconds)
                                                      .Build();
-        var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
+        var leases = leaseManager ?? new AgentHomeExecutionLeaseManager();
+        var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, leases, clock, NullLogger<AgentHomeManifestService>.Instance);
 
         var serviceProvider = new ServiceCollection()
                               .AddScoped(_ => resolver)
@@ -1119,7 +1162,6 @@ public sealed class AgentHomeServiceTests : IDisposable
                               .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(clock))
                               .BuildServiceProvider();
 
-        var leases = leaseManager ?? new AgentHomeExecutionLeaseManager();
         var isolation = new AgentHomeWorkspaceIsolation(provider, leases, NullLogger<AgentHomeWorkspaceIsolation>.Instance);
         var workspaceService = new AgentHomeWorkspaceService(provider,
             isolation,

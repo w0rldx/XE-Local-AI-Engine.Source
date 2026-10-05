@@ -212,14 +212,14 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         var runtimeSettings = StubNodeRuntimeSettings.Create()
                                                      .WithAgentHomeCommandTimeoutSeconds(120)
                                                      .Build();
-        var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
+        var leases = new AgentHomeExecutionLeaseManager();
+        var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, leases, clock, NullLogger<AgentHomeManifestService>.Instance);
 
         var serviceProvider = new ServiceCollection()
                               .AddScoped(_ => resolver)
                               .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(clock))
                               .BuildServiceProvider();
 
-        var leases = new AgentHomeExecutionLeaseManager();
         var isolation = new AgentHomeWorkspaceIsolation(provider, leases, NullLogger<AgentHomeWorkspaceIsolation>.Instance);
         var workspaceService = new AgentHomeWorkspaceService(provider,
             isolation,

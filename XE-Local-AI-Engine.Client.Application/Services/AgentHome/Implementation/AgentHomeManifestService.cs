@@ -44,6 +44,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
 
     private readonly string _dataDirectoryRoot;
     private readonly SemaphoreSlim _gate = new(initialCount: 1, maxCount: 1);
+    private readonly IAgentHomeExecutionLeaseManager _leaseManager;
     private readonly ILogger<AgentHomeManifestService> _logger;
     private readonly AgentHomeOptions _options;
     private readonly IAgentSandboxRuntimeProvider _sandboxProvider;
@@ -52,6 +53,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
     public AgentHomeManifestService(INodeDataDirectory dataDirectory,
         IOptions<AgentHomeOptions> options,
         IAgentSandboxRuntimeProvider sandboxProvider,
+        IAgentHomeExecutionLeaseManager leaseManager,
         TimeProvider timeProvider,
         ILogger<AgentHomeManifestService> logger)
     {
@@ -60,6 +62,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         _dataDirectoryRoot = dataDirectory.Root;
         _options = options.Value;
         _sandboxProvider = sandboxProvider ?? throw new ArgumentNullException(nameof(sandboxProvider));
+        _leaseManager = leaseManager ?? throw new ArgumentNullException(nameof(leaseManager));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -68,6 +71,11 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
     {
         ArgumentNullException.ThrowIfNull(attachKey);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // Every wipe below runs under the node's execution lease: a holder borrows it, an idle node lends it for the
+        // call, and a run in flight (any owner's) is refused here. Recovery acquire: poison is the caller's decision.
+        using var lease = _leaseManager.TryAcquireForRecovery(new AgentHomeExecutionLeaseKey(attachKey.OwnerUserId, attachKey.NodeId))
+                          ?? throw new AgentHomeBusyException("an AgentHome run is already in progress for this node.");
 
         await _gate.WaitAsync(cancellationToken);
         try

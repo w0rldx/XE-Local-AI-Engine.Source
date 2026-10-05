@@ -5,7 +5,10 @@ using System.Collections.Concurrent;
 internal sealed class AgentHomeExecutionLeaseManager : IAgentHomeExecutionLeaseManager
 {
     private readonly AsyncLocal<LeaseScope?> _ambientScope = new();
-    private readonly ConcurrentDictionary<AgentHomeExecutionLeaseKey, SemaphoreSlim> _gates = new();
+
+    // One gate per NODE, not per owner-node key: the node has one agent-home tree and an owner mismatch wipes it, so
+    // a different owner must never run while any run is in flight there. Poison and the ambient borrow stay per key.
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<AgentHomeExecutionLeaseKey, byte> _poisoned = new();
 
     public IAgentHomeExecutionLease? TryAcquire(AgentHomeExecutionLeaseKey key)
@@ -21,7 +24,7 @@ internal sealed class AgentHomeExecutionLeaseManager : IAgentHomeExecutionLeaseM
     // A read of the gate, never a wait on it: CurrentCount is 0 exactly while an OwnedLease holds it, and a key that
     // has never been acquired has no gate at all. An ambient borrow needs no branch: the owning gate is taken anyway.
     public bool IsHeld(AgentHomeExecutionLeaseKey key) =>
-        _gates.TryGetValue(key, out var gate) && gate.CurrentCount == 0;
+        _gates.TryGetValue(key.NodeId, out var gate) && gate.CurrentCount == 0;
 
     public bool IsPoisoned(AgentHomeExecutionLeaseKey key) =>
         _poisoned.ContainsKey(key);
@@ -50,7 +53,7 @@ internal sealed class AgentHomeExecutionLeaseManager : IAgentHomeExecutionLeaseM
             return ambient.Key == key ? BorrowedLease.Instance : null;
         }
 
-        var gate = _gates.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
+        var gate = _gates.GetOrAdd(key.NodeId, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
 #pragma warning disable MA0032 // zero-timeout poll is a TryEnter, not a blocking wait: a token would change nothing
         if (!gate.Wait(millisecondsTimeout: 0))
 #pragma warning restore MA0032

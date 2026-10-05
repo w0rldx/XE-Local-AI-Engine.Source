@@ -239,13 +239,13 @@ public sealed class AgentHomeToolResultContainmentTests : IDisposable
                                                      .WithAgentHomePrepareTimeoutSeconds(300)
                                                      .Build();
 
-        var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
+        var leases = new AgentHomeExecutionLeaseManager();
+        var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, leases, clock, NullLogger<AgentHomeManifestService>.Instance);
         var serviceProvider = new ServiceCollection()
                               .AddScoped<ISelectedFolderResolver>(_ => resolver)
                               .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(clock))
                               .BuildServiceProvider();
 
-        var leases = new AgentHomeExecutionLeaseManager();
         var isolation = new AgentHomeWorkspaceIsolation(provider, leases, NullLogger<AgentHomeWorkspaceIsolation>.Instance);
         var workspaceService = new AgentHomeWorkspaceService(provider,
             isolation,

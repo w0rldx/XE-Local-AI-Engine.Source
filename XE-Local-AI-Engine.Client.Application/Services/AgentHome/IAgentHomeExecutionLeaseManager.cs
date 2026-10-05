@@ -4,6 +4,10 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 ///     Coordinates exclusive access to one owner-node AgentHome sandbox. Acquisition never queues. Code already running
 ///     inside the same asynchronous owner-node scope may borrow the ambient lease; unrelated callers cannot.
 /// </summary>
+/// <remarks>
+///     Exclusion is per NODE: while any key on a node is held, every other key on that node — a different owner — is
+///     refused too, because the node has one <c>agent-home</c> tree and an owner change wipes it. Poison stays per key.
+/// </remarks>
 internal interface IAgentHomeExecutionLeaseManager
 {
     IAgentHomeExecutionLease? TryAcquire(AgentHomeExecutionLeaseKey key);

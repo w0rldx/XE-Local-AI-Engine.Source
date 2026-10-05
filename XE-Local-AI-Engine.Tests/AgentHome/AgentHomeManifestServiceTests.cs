@@ -188,6 +188,31 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
         AssertEx.False(File.Exists(sentinel), "an owner change must not reuse copied workspace contents");
     }
 
+    /// <summary>
+    ///     The wipe's own guard, independent of any caller: while another owner's run holds the node's execution lease,
+    ///     an owner change refuses with the busy answer instead of recursively deleting the tree under that run.
+    /// </summary>
+    [Test]
+    public async Task InitializeAsync_WhenOwnerChangesWhileAnotherOwnersRunHoldsTheNode_RefusesAndKeepsTheTree()
+    {
+        var clock = new ManualTimeProvider(FixedNow);
+        var leases = new AgentHomeExecutionLeaseManager();
+        using var service = CreateService(NewTempRoot(), clock, new FakeSandboxRuntimeProvider(clock), leaseManager: leases);
+
+        var layoutA = await service.InitializeAsync(Key());
+        var liveRunLog = Path.Combine(layoutA.RootPath, "runs", "run-live", "logs", "events.jsonl");
+        Directory.CreateDirectory(Path.GetDirectoryName(liveRunLog)!);
+        await File.WriteAllTextAsync(liveRunLog, "{}\n");
+
+        // Owner A's run holds the node from its own flow, so nothing here can borrow it ambiently.
+        using var runningA = await Task.Run(() => leases.TryAcquire(new AgentHomeExecutionLeaseKey("owner-a", "node-1")));
+        AssertEx.NotNull(runningA, "owner A's run must hold the node lease for this test to mean anything");
+
+        await AssertEx.ThrowsAsync<AgentHomeBusyException>(() => service.InitializeAsync(Key("owner-b")));
+
+        AssertEx.True(File.Exists(liveRunLog), "a refused owner change must leave the in-flight run's tree in place");
+    }
+
     [Test]
     public async Task InitializeAsync_WhenOwnerChanges_KillsPriorSandbox()
     {
@@ -219,6 +244,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
                 RootPath = null
             }),
             new FakeSandboxRuntimeProvider(clock),
+            new AgentHomeExecutionLeaseManager(),
             clock,
             NullLogger<AgentHomeManifestService>.Instance);
 
@@ -262,14 +288,20 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     private static AgentHomeManifestService CreateService(string rootPath,
         TimeProvider clock,
         IAgentSandboxRuntimeProvider provider,
-        int staleSeconds = 1800)
+        int staleSeconds = 1800,
+        IAgentHomeExecutionLeaseManager? leaseManager = null)
     {
         var options = Options.Create(new AgentHomeOptions
         {
             RootPath = rootPath,
             PrepareStaleAfterSeconds = staleSeconds
         });
-        return new AgentHomeManifestService(new FakeNodeDataDirectory(rootPath), options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
+        return new AgentHomeManifestService(new FakeNodeDataDirectory(rootPath),
+            options,
+            provider,
+            leaseManager ?? new AgentHomeExecutionLeaseManager(),
+            clock,
+            NullLogger<AgentHomeManifestService>.Instance);
     }
 
     private static SandboxAttachKey Key(string owner = "owner-a")
