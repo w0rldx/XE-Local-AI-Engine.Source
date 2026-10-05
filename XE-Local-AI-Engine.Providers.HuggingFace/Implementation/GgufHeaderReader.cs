@@ -46,23 +46,41 @@ internal sealed class GgufHeaderReader
     ///     <paramref name="revision" /> and extracts the standardized metadata.
     /// </summary>
     /// <remarks>
-    ///     Never throws on a missing optional key, a short read, or a non-GGUF file — returns an all-null
-    ///     <see cref="GgufHeaderMetadata" /> instead. Cached for <see cref="HuggingFaceOptions.HeaderCacheTtl" />, keyed
-    ///     by repo + filename + resolved revision: a header is immutable for a given resolved revision, so once read it
-    ///     never needs a second range request.
+    ///     Stops at the tokenizer once the architecture block is set (<see cref="GgufHeaderMetadata.IsPartial" />); keys
+    ///     after it are not read. Never throws on a short read or a non-GGUF file (all-null metadata instead). Cached for
+    ///     <see cref="HuggingFaceOptions.HeaderCacheTtl" /> by repo + filename + resolved revision (immutable).
     /// </remarks>
     public Task<GgufHeaderMetadata> ReadHeaderAsync(string repoId, string fileName, string revision, CancellationToken ct)
+    {
+        return ReadCachedAsync(repoId, fileName, revision, "early", HasArchitectureBlock, ct);
+    }
+
+    /// <summary>
+    ///     Range-reads the WHOLE key-value section of one file (growing to the hard cap), so keys written after the
+    ///     tokenizer are read too. Same tolerance as <see cref="ReadHeaderAsync" />, cached separately.
+    /// </summary>
+    public Task<GgufHeaderMetadata> ReadCompleteHeaderAsync(string repoId, string fileName, string revision, CancellationToken ct)
+    {
+        return ReadCachedAsync(repoId, fileName, revision, "complete", static _ => false, ct);
+    }
+
+    private Task<GgufHeaderMetadata> ReadCachedAsync(string repoId,
+        string fileName,
+        string revision,
+        string mode,
+        Func<ParsedHeader, bool> isSufficient,
+        CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
 
         var rev = string.IsNullOrWhiteSpace(revision) ? "main" : revision;
-        var cacheKey = $"{repoId}::{fileName}::{rev}";
+        var cacheKey = $"{repoId}::{fileName}::{rev}::{mode}";
 
-        return _headerCache.GetOrAddAsync(cacheKey, _options.HeaderCacheTtl, token => FetchHeaderAsync(repoId, fileName, rev, token), ct);
+        return _headerCache.GetOrAddAsync(cacheKey, _options.HeaderCacheTtl, token => FetchHeaderAsync(repoId, fileName, rev, isSufficient, token), ct);
     }
 
-    private async Task<GgufHeaderMetadata> FetchHeaderAsync(string repoId, string fileName, string rev, CancellationToken ct)
+    private async Task<GgufHeaderMetadata> FetchHeaderAsync(string repoId, string fileName, string rev, Func<ParsedHeader, bool> isSufficient, CancellationToken ct)
     {
         var url = $"{_options.DownloadBaseUrl.TrimEnd('/')}/{repoId}/resolve/{rev}/{fileName}";
 
@@ -71,7 +89,7 @@ internal sealed class GgufHeaderReader
 
         try
         {
-            return await ReadGrowingAsync((requested, token) => FetchRangeAsync(url, requested, token), probe, hardCap, ct)
+            return await ReadGrowingAsync((requested, token) => FetchRangeAsync(url, requested, token), probe, hardCap, isSufficient, ct)
                 .ConfigureAwait(false);
         }
         catch (HttpRequestException ex)
@@ -114,7 +132,7 @@ internal sealed class GgufHeaderReader
                 bufferSize: 1,
                 FileOptions.Asynchronous | FileOptions.SequentialScan);
 
-            return await ReadGrowingAsync((requested, token) => ReadPrefixAsync(stream, requested, token), initialProbe, hardCap, ct)
+            return await ReadGrowingAsync((requested, token) => ReadPrefixAsync(stream, requested, token), initialProbe, hardCap, static _ => false, ct)
                 .ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
@@ -130,11 +148,14 @@ internal sealed class GgufHeaderReader
     /// </summary>
     /// <remarks>
     ///     Doubles the probe up to <paramref name="hardCap" /> while parsing reports it ran out of bytes mid-block,
-    ///     stopping early when the source returns fewer bytes than requested (the whole short file was read).
+    ///     stopping early when the source returns fewer bytes than requested (the whole short file was read) or when
+    ///     <paramref name="isSufficient" /> accepts the truncated parse, which is then flagged
+    ///     <see cref="GgufHeaderMetadata.IsPartial" />.
     /// </remarks>
     private static async Task<GgufHeaderMetadata> ReadGrowingAsync(Func<long, CancellationToken, Task<byte[]?>> fetch,
         long initialProbe,
         long hardCap,
+        Func<ParsedHeader, bool> isSufficient,
         CancellationToken ct)
     {
         var requested = initialProbe;
@@ -146,15 +167,42 @@ internal sealed class GgufHeaderReader
                 return GgufHeaderMetadata.Empty;
             }
 
-            var (metadata, truncated) = TryParse(bytes);
-            if (!truncated || requested >= hardCap || bytes.Length < requested)
+            var parsed = TryParse(bytes);
+            if (!parsed.Truncated || requested >= hardCap || bytes.Length < requested)
             {
                 // Parsed fully, hit the cap, or the source returned the whole (short) file — accept what we have.
-                return metadata;
+                return parsed.Metadata;
+            }
+
+            if (isSufficient(parsed))
+            {
+                return parsed.Metadata with
+                {
+                    IsPartial = true
+                };
             }
 
             requested = Math.Min(requested * 2, hardCap);
         }
+    }
+
+    /// <summary>
+    ///     Remote sufficiency check: the parse was cut at or after the first <c>tokenizer.*</c> key with the fit-relevant
+    ///     architecture fields set, so the vocabulary arrays need not be fetched.
+    /// </summary>
+    /// <remarks>
+    ///     GGUF does not guarantee that order: a tool may append a key after the tokenizer. The result is therefore
+    ///     flagged partial, and the inspector completes it with one <see cref="ReadCompleteHeaderAsync" /> per architecture.
+    /// </remarks>
+    private static bool HasArchitectureBlock(ParsedHeader parsed)
+    {
+        var metadata = parsed.Metadata;
+        return parsed.ReachedTokenizer
+               && metadata.Architecture is not null
+               && metadata.BlockCount is > 0
+               && metadata.EmbeddingLength is > 0
+               && metadata.AttentionHeadCount is > 0
+               && metadata.AttentionHeadCountKV is > 0;
     }
 
     // Reads up to count bytes from the start of the open stream. Returns null when the file is empty.
@@ -225,21 +273,24 @@ internal sealed class GgufHeaderReader
         }
 
         var values = new Dictionary<string, object>(StringComparer.Ordinal);
+        var reachedTokenizer = false;
         for (ulong i = 0; i < kvCount; i++)
         {
             if (!reader.TryReadGgufString(out var key))
             {
-                return new ParsedHeader(Build(values), Truncated: true);
+                return new ParsedHeader(Build(values), Truncated: true, reachedTokenizer);
             }
+
+            reachedTokenizer |= key.StartsWith("tokenizer.", StringComparison.Ordinal);
 
             if (!reader.TryReadUInt32(out var valueType))
             {
-                return new ParsedHeader(Build(values), Truncated: true);
+                return new ParsedHeader(Build(values), Truncated: true, reachedTokenizer);
             }
 
             if (!TryReadValue(ref reader, valueType, out var value, out var ranOut))
             {
-                return new ParsedHeader(Build(values), ranOut);
+                return new ParsedHeader(Build(values), ranOut, reachedTokenizer);
             }
 
             if (value is not null)
@@ -248,11 +299,14 @@ internal sealed class GgufHeaderReader
             }
         }
 
-        return new ParsedHeader(Build(values), Truncated: false);
+        return new ParsedHeader(Build(values), Truncated: false, reachedTokenizer);
     }
 
-    /// <summary>A parsed GGUF header plus whether parsing ran out of bytes mid-block (the caller may re-request more).</summary>
-    private sealed record ParsedHeader(GgufHeaderMetadata Metadata, bool Truncated);
+    /// <summary>
+    ///     A parsed GGUF header, whether parsing ran out of bytes mid-block (the caller may re-request more), and whether
+    ///     a <c>tokenizer.*</c> key was reached.
+    /// </summary>
+    private sealed record ParsedHeader(GgufHeaderMetadata Metadata, bool Truncated, bool ReachedTokenizer = false);
 
     private static GgufHeaderMetadata Build(IReadOnlyDictionary<string, object> values)
     {

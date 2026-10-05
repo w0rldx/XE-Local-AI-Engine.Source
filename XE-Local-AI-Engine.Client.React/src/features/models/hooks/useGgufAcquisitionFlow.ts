@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { toast } from "@/core/ui/notifications/Toast";
-import { defaultGgufQuant, type GgufRepository, type GgufRepositoryFile } from "@/features/models/models/GgufModels";
+import { defaultGgufQuant, type GgufDownloadTarget, type GgufRepositoryFile } from "@/features/models/models/GgufModels";
 import {
 	useActiveGgufAcquisitions,
 	useCancelGgufImport,
@@ -48,7 +48,7 @@ export function useGgufAcquisitionFlow() {
 	const [importModalOpened, { open: openImportModal, close: closeImportModal }] = useDisclosure(false);
 	// The repo whose quant picker dialog is open (null = closed). Selecting a browse row opens the dialog so the
 	// operator picks the exact quant (incl. Unsloth Dynamic UD- quants) instead of always pulling the default Q4_K_M.
-	const [downloadRepo, setDownloadRepo] = useState<GgufRepository | null>(null);
+	const [downloadRepo, setDownloadRepo] = useState<GgufDownloadTarget | null>(null);
 
 	const browseQueryResult = useBrowseGgufRepositories(browseQuery, true);
 	const startGgufDownloadMutation = useStartGgufDownload();
@@ -78,8 +78,8 @@ export function useGgufAcquisitionFlow() {
 		[startGgufDownloadMutation, markInFlight, t],
 	);
 
-	// Opens the quant picker for a browse row instead of immediately pulling the default quant.
-	const handleBrowseDownload = (repository: GgufRepository): void => {
+	// Opens the quant picker for a browse row (or a tested catalog pick) instead of immediately pulling the default quant.
+	const handleBrowseDownload = (repository: GgufDownloadTarget): void => {
 		setDownloadRepo(repository);
 	};
 

@@ -20,4 +20,13 @@ public interface IGgufVariantRecommender
     ///     Never throws except on <paramref name="ct" /> cancellation.
     /// </remarks>
     Task<IReadOnlyList<GgufVariantAnnotation>> AnnotateAsync(IReadOnlyList<GgufRepoFile> files, CancellationToken ct);
+
+    /// <summary>Returns one fit verdict per size, in the same order, graded against the memoized effective hardware profile.</summary>
+    /// <remarks>
+    ///     The advisor's budget (free VRAM less the knowledge companions' reserve, or available RAM in CPU mode) with the same headroom
+    ///     rule as <see cref="AnnotateAsync" />. Never computes the device audit: no process start, no network. Every verdict is
+    ///     <see cref="GgufFitVerdict.Unknown" /> until a determinate audit is cached, or for unknown hardware. Never throws except on
+    ///     <paramref name="ct" /> cancellation.
+    /// </remarks>
+    Task<IReadOnlyList<GgufFitVerdict>> ClassifyAgainstProfileAsync(IReadOnlyList<long> sizesBytes, CancellationToken ct);
 }

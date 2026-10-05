@@ -4726,6 +4726,19 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse = 
 	pinnedTag: z.string(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogTestedModelResponse = z.object({
+	id: z.string(),
+	displayName: z.string(),
+	publisher: z.string(),
+	ggufRepo: z.string(),
+	license: z.string(),
+	totalParamsB: z.number(),
+	notes: z.string().nullish(),
+	testedQuant: z.string(),
+	testedSizeBytes: z.int(),
+	fitVerdict: z.string(),
+});
+
 export const zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse = z.object({
 	catalogVersion: z.string(),
 	updatedAt: z.string().nullish(),
@@ -4737,6 +4750,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse =
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	refreshSourceConfigured: z.boolean(),
+	testedModels: z.array(zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogTestedModelResponse),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse = z.object({
@@ -4764,6 +4778,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResp
 	isTrustedPublisher: z.boolean().optional(),
 	section: z.string(),
 	tier: z.string().nullish(),
+	tested: z.boolean().optional(),
 	catalogId: z.string().nullish(),
 	catalogDisplayName: z.string().nullish(),
 	catalogNotes: z.string().nullish(),

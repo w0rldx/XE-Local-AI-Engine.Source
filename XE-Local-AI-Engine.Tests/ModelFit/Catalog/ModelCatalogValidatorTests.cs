@@ -40,6 +40,52 @@ public sealed class ModelCatalogValidatorTests
         AssertEx.True(result.IsValid, string.Join("; ", result.Errors));
         AssertEx.NotNull(result.Document);
         AssertEx.Equal(expected: 1, result.Document!.Models.Count);
+        // A schema-v1 entry without the optional "tested" key reads as untested.
+        AssertEx.False(result.Document.Models[0].Tested);
+    }
+
+    [Test]
+    public void Validate_WhenTestedIsTrue_CarriesTheFlag()
+    {
+        var entry = WithTestedFields("\"tested\": true, \"testedQuant\": \"UD-Q4_K_M\", \"testedSizeBytes\": 2099502400");
+        var json = $$"""{ "schemaVersion": 1, "catalogVersion": "1.0.0", "models": [{{entry}}] }""";
+
+        var result = ModelCatalogValidator.Validate(json);
+
+        AssertEx.True(result.IsValid, string.Join("; ", result.Errors));
+        AssertEx.True(result.Document!.Models[0].Tested);
+        AssertEx.Equal("UD-Q4_K_M", result.Document.Models[0].TestedQuant);
+        AssertEx.Equal(2099502400L, result.Document.Models[0].TestedSizeBytes);
+    }
+
+    [Test]
+    [Arguments("\"tested\": true", "models[0].testedQuant")]
+    [Arguments("\"tested\": true, \"testedQuant\": \" \", \"testedSizeBytes\": 1", "models[0].testedQuant")]
+    [Arguments("\"tested\": true, \"testedQuant\": \"Q4_K_M\"", "models[0].testedSizeBytes")]
+    [Arguments("\"tested\": true, \"testedQuant\": \"Q4_K_M\", \"testedSizeBytes\": 0", "models[0].testedSizeBytes")]
+    public void Validate_WhenTestedLacksQuantOrSize_Fails(string fields, string expectedPath)
+    {
+        var json = $$"""{ "schemaVersion": 1, "catalogVersion": "1.0.0", "models": [{{WithTestedFields(fields)}}] }""";
+
+        var result = ModelCatalogValidator.Validate(json);
+
+        AssertEx.False(result.IsValid);
+        AssertEx.True(result.Errors.Any(e => e.StartsWith(expectedPath, StringComparison.Ordinal)), string.Join("; ", result.Errors));
+    }
+
+    [Test]
+    [Arguments("\"testedQuant\": \"Q4_K_M\"")]
+    [Arguments("\"testedSizeBytes\": 2099502400")]
+    [Arguments("\"tested\": false, \"testedQuant\": \"Q4_K_M\", \"testedSizeBytes\": 2099502400")]
+    public void Validate_WhenNotTestedButCarriesTestedFields_Fails(string fields)
+    {
+        var json = $$"""{ "schemaVersion": 1, "catalogVersion": "1.0.0", "models": [{{WithTestedFields(fields)}}] }""";
+
+        var result = ModelCatalogValidator.Validate(json);
+
+        AssertEx.False(result.IsValid);
+        AssertEx.True(result.Errors.Any(e => e.StartsWith("models[0].testedQuant and testedSizeBytes", StringComparison.Ordinal)),
+            string.Join("; ", result.Errors));
     }
 
     [Test]
@@ -176,5 +222,10 @@ public sealed class ModelCatalogValidatorTests
 
         AssertEx.True(result.IsValid, string.Join("; ", result.Errors));
         AssertEx.Empty(result.Document!.Models);
+    }
+
+    private static string WithTestedFields(string fields)
+    {
+        return ValidEntryJson.Replace("\"releaseDate\": \"2026-01-01\"", $"\"releaseDate\": \"2026-01-01\", {fields}", StringComparison.Ordinal);
     }
 }

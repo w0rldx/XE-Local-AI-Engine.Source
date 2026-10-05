@@ -15,6 +15,8 @@ public sealed record ModelCatalogDocument(
 
 /// <summary>
 ///     One curated catalog entry: a specific model family pointed at a live-verified Hugging Face GGUF repo.
+///     <see cref="Tested" /> marks a model the authors ran through their live scenario checks, at
+///     <see cref="TestedQuant" /> (<see cref="TestedSizeBytes" /> on disk); display-only.
 /// </summary>
 /// <remarks>
 ///     <see cref="ActiveParamsB" /> non-null (with <see cref="Moe" /> true) marks a Mixture-of-Experts model and feeds
@@ -38,7 +40,10 @@ public sealed record ModelCatalogEntry(
     int ContextLength,
     string MinLlamaCppTag,
     string ReleaseDate,
-    string? Notes);
+    string? Notes,
+    bool Tested = false,
+    string? TestedQuant = null,
+    long? TestedSizeBytes = null);
 
 /// <summary>
 ///     Result of <see cref="ModelCatalogValidator.Validate" />: a well-formed document

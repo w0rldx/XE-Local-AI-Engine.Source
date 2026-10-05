@@ -59,6 +59,9 @@ export interface ModelFitRecommendation {
 	readonly section: ModelFitRecommendationSection;
 	// Curated-catalog quality tier (S/A/B), or null when the row has no catalog match.
 	readonly tier: ModelFitCatalogTier;
+	// True when the authors ran this catalog model through their live scenario checks. Display-only; false for a row
+	// with no catalog match.
+	readonly tested: boolean;
 	// Stable curated-catalog entry id backing this row, or null when the row has no catalog match.
 	readonly catalogId: string | null;
 	// Human-friendly catalog display name (e.g. "Qwen2.5 Coder 32B"), preferred over the raw modelName when present.

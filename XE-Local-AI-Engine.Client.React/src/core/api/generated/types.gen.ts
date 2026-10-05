@@ -4654,6 +4654,20 @@ export type XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse = {
 	sourceUrl?: string | null;
 	modelCount: number;
 	refreshSourceConfigured: boolean;
+	testedModels: Array<XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogTestedModelResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogTestedModelResponse = {
+	id: string;
+	displayName: string;
+	publisher: string;
+	ggufRepo: string;
+	license: string;
+	totalParamsB: number;
+	notes?: string | null;
+	testedQuant: string;
+	testedSizeBytes: number;
+	fitVerdict: string;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse = {
@@ -4674,6 +4688,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationRespon
 	isTrustedPublisher?: boolean;
 	section: string;
 	tier?: string | null;
+	tested?: boolean;
 	catalogId?: string | null;
 	catalogDisplayName?: string | null;
 	catalogNotes?: string | null;

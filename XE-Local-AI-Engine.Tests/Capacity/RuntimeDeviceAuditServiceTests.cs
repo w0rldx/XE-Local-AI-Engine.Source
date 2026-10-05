@@ -491,6 +491,52 @@ public sealed class RuntimeDeviceAuditServiceTests
     }
 
     [Test]
+    public async Task PeekEffectiveProfile_ColdCache_ReturnsNull_WithoutProbing()
+    {
+        var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
+        probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(WithDevices(GpuVariant.Cuda)));
+        using var service = BuildService(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, probe);
+
+        AssertEx.Null(await service.PeekEffectiveProfileAsync(CancellationToken.None));
+        await probe.DidNotReceive().GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task PeekEffectiveProfile_AfterAMemoizedFallbackAudit_ReturnsTheSameDegradedProfile_AsGetEffectiveProfile()
+    {
+        var raw = GpuProfile(GpuVendor.Nvidia);
+        using var service = BuildService(raw, GpuVariant.Vulkan, LlamaDeviceInventory.Empty(GpuVariant.Vulkan));
+        var effective = await service.GetEffectiveProfileAsync(forceRefreshProfile: false, CancellationToken.None);
+
+        var peeked = AssertEx.NotNull(await service.PeekEffectiveProfileAsync(CancellationToken.None));
+
+        AssertEx.False(peeked.VramKnown);
+        AssertEx.False(peeked.GpuAccelAvailable);
+        AssertEx.Null(peeked.VramBytes);
+        AssertEx.Null(peeked.AvailableVramBytes);
+        AssertEx.Equal(raw.AvailableRamBytes, peeked.AvailableRamBytes);
+        AssertEx.Equal(effective, peeked);
+    }
+
+    [Test]
+    public async Task PeekEffectiveProfile_AfterAWorkingGpuAudit_ReturnsTheRawProfile_UntilTheSignalChanges()
+    {
+        var raw = GpuProfile(GpuVendor.Nvidia);
+        var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
+        probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(WithDevices(GpuVariant.Cuda)));
+        var signal = new CudaManagedBuildSignal();
+        using var service = BuildService(raw, GpuVariant.Cuda, probe, signal);
+        await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.Equal(raw, await service.PeekEffectiveProfileAsync(CancellationToken.None));
+
+        // A managed-CUDA change makes the memo stale: the peek answers null and still does not re-probe.
+        signal.NotifyBinaryChanged();
+        AssertEx.Null(await service.PeekEffectiveProfileAsync(CancellationToken.None));
+        await probe.Received(1).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task GetAudit_ActiveSourceVariantReplacement_InvalidatesMemoEvenWhenNotCuda()
     {
         var probe = Substitute.For<ILlamaDeviceInventoryProbe>();

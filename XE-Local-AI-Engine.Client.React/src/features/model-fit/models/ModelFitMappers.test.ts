@@ -57,4 +57,16 @@ describe("toLatestRecommendations — releaseDate and isTrustedPublisher mapping
 
 		expect(result.recommendations[0]?.isTrustedPublisher).toBe(false);
 	});
+
+	it("maps tested true from the DTO field", () => {
+		const result = toLatestRecommendations(wrapInResponse(makeRecDto({ tested: true })));
+
+		expect(result.recommendations[0]?.tested).toBe(true);
+	});
+
+	it("coalesces an absent tested to false", () => {
+		const result = toLatestRecommendations(wrapInResponse(makeRecDto()));
+
+		expect(result.recommendations[0]?.tested).toBe(false);
+	});
 });

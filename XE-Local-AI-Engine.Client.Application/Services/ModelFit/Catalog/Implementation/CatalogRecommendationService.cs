@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Catalog.Implementation;
 
+using System.Collections.Concurrent;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
@@ -69,17 +70,25 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
                                .ToList();
 
         var gate = new SemaphoreSlim(MaxConcurrentInspections, MaxConcurrentInspections);
+        var skippedEntryIds = new ConcurrentQueue<string>();
         CatalogRecommendationCandidate?[] candidates;
         try
         {
             var evaluations = eligible
-                              .Select(entry => EvaluateEntryWithGuardAsync(entry, quantCeiling, ctxTarget, profile, installedKeys, gate, cancellationToken))
+                              .Select(entry => EvaluateEntryWithGuardAsync(entry, quantCeiling, ctxTarget, profile, installedKeys, gate, skippedEntryIds, cancellationToken))
                               .ToList();
             candidates = await Task.WhenAll(evaluations);
         }
         finally
         {
             gate.Dispose();
+        }
+
+        if (!skippedEntryIds.IsEmpty)
+        {
+            _logger.LogWarning("Skipped {SkippedCount} catalog entries because their repo inspection failed or timed out: {EntryIds}.",
+                skippedEntryIds.Count,
+                string.Join(", ", skippedEntryIds.Order(StringComparer.Ordinal)));
         }
 
         var ordered = candidates
@@ -132,6 +141,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
         HardwareProfile profile,
         IReadOnlySet<string> installedKeys,
         SemaphoreSlim gate,
+        ConcurrentQueue<string> skippedEntryIds,
         CancellationToken cancellationToken)
     {
         await gate.WaitAsync(cancellationToken);
@@ -151,6 +161,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
                                               or OperationCanceledException or JsonException or FormatException or InvalidOperationException)
         {
             _logger.LogDebug(exception, "Skipping catalog entry {EntryId} (repo inspection failed or timed out).", entry.Id);
+            skippedEntryIds.Enqueue(entry.Id);
             return null;
         }
         finally

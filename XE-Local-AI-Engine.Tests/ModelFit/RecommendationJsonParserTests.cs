@@ -148,6 +148,7 @@ public sealed class RecommendationJsonParserTests
                                   "name": "org/moe-model:Q4_K_M",
                                   "section": "recommended",
                                   "tier": "S",
+                                  "tested": true,
                                   "catalog_id": "moe-model",
                                   "catalog_display_name": "MoE Model 30B-A3B",
                                   "catalog_notes": "Runs with experts offloaded to system RAM.",
@@ -165,6 +166,7 @@ public sealed class RecommendationJsonParserTests
         var diagnostics = AssertEx.NotNull(result.Recommendations[0].DiagnosticsJson);
         AssertEx.Contains(diagnostics, "\"section\":\"recommended\"");
         AssertEx.Contains(diagnostics, "\"tier\":\"S\"");
+        AssertEx.Contains(diagnostics, "\"tested\":true");
         AssertEx.Contains(diagnostics, "\"catalog_id\":\"moe-model\"");
         AssertEx.Contains(diagnostics, "\"expert_offload\":true");
         AssertEx.Contains(diagnostics, "\"gpu_gb\":10.5");

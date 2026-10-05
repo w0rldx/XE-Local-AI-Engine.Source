@@ -6,25 +6,9 @@ import { useTranslation } from "react-i18next";
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import type { GgufFitVerdict, GgufQuantTier, GgufRepository, GgufRepositoryFile } from "@/features/models/models/GgufModels";
-import { recommendedGgufFileName } from "@/features/models/models/GgufModels";
+import type { GgufDownloadTarget, GgufQuantTier, GgufRepositoryFile } from "@/features/models/models/GgufModels";
+import { fitVerdictColor, fitVerdictLabelKey, preferredGgufFileName } from "@/features/models/models/GgufModels";
 import { useInspectGgufRepository } from "@/features/models/queries/useGgufDownload";
-
-// Mantine badge color per hardware fit verdict; Unknown is intentionally null (no probe → render a dimmed placeholder,
-// not a misleading colored badge). Keys are exhaustive over GgufFitVerdict so a new verdict forces a compile update.
-const fitVerdictColor: Record<GgufFitVerdict, string | null> = {
-	Fits: "green",
-	Tight: "yellow",
-	WontFit: "red",
-	Unknown: null,
-};
-
-// i18n suffix under `pages.models.gguf.download.fit.*` per verdict (Unknown has no label — it renders a dimmed dash).
-const fitVerdictLabelKey: Record<Exclude<GgufFitVerdict, "Unknown">, string> = {
-	Fits: "fits",
-	Tight: "tight",
-	WontFit: "wontFit",
-};
 
 // i18n suffix under `pages.models.gguf.download.quality.*` per static quality tier.
 const qualityTierLabelKey: Record<GgufQuantTier, string> = {
@@ -36,8 +20,9 @@ const qualityTierLabelKey: Record<GgufQuantTier, string> = {
 };
 
 interface GgufDownloadDialogProps {
-	// The repo whose quants are being picked; null closes the dialog (and gates the inspect query).
-	repository: GgufRepository | null;
+	// The repo whose quants are being picked; null closes the dialog (and gates the inspect query). The dialog inspects
+	// the repo itself; a tested catalog pick also names its tested quant, which becomes the default selection.
+	repository: GgufDownloadTarget | null;
 	onClose: () => void;
 	// `includeProjector` is undefined when the repo ships no vision projector — the caller then omits the field entirely
 	// so the server default applies; it is a boolean only when the operator was actually offered the choice.
@@ -57,14 +42,14 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 	const inspect = useInspectGgufRepository(repository?.repoId ?? "", opened);
 	const files = useMemo<readonly GgufRepositoryFile[]>(() => inspect.data?.files ?? [], [inspect.data?.files]);
 	// The operator's explicit pick, or null when they haven't chosen yet. The effective selection is DERIVED below so we
-	// never store a value that the list no longer contains (avoids a derived-state effect): default to the backend's
-	// recommended file (falling back to the first/smallest), but honor a still-present explicit choice.
+	// never store a value that the list no longer contains (avoids a derived-state effect): default to the tested quant
+	// or the backend's recommended file (falling back to the first/smallest), but honor a still-present explicit choice.
 	const [pickedFileName, setPickedFileName] = useState<string | null>(null);
 
 	const selectedFileName =
 		pickedFileName !== null && files.some((file) => file.fileName === pickedFileName)
 			? pickedFileName
-			: recommendedGgufFileName(files);
+			: preferredGgufFileName(files, repository?.preferredQuant);
 
 	const selectedFile = files.find((file) => file.fileName === selectedFileName) ?? null;
 

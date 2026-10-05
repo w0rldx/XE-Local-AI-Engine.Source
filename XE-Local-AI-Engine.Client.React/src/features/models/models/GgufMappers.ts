@@ -2,6 +2,7 @@ import type {
 	XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse,
 	XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse,
 	XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse,
+	XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogTestedModelResponse,
 } from "@/core/api/generated";
 import type {
 	GgufFitVerdict,
@@ -9,6 +10,7 @@ import type {
 	GgufRepository,
 	GgufRepositoryDetail,
 	GgufRepositoryFile,
+	GgufTestedModel,
 } from "@/features/models/models/GgufModels";
 
 // Maps optional generated wire fields into required domain values; validation remains at the API boundary.
@@ -24,6 +26,20 @@ export function toGgufRepository(dto: XeLocalAiEngineClientEndpointsModelFitV1Gg
 		license: dto.license ?? null,
 		hasUsableGguf: dto.hasUsableGguf ?? false,
 		isTrustedPublisher: dto.isTrustedPublisher ?? false,
+	};
+}
+
+export function toGgufTestedModel(dto: XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogTestedModelResponse): GgufTestedModel {
+	return {
+		id: dto.id,
+		displayName: dto.displayName,
+		ggufRepo: dto.ggufRepo,
+		license: dto.license,
+		totalParamsB: dto.totalParamsB,
+		notes: dto.notes ?? null,
+		testedQuant: dto.testedQuant,
+		testedSizeBytes: dto.testedSizeBytes,
+		fitVerdict: dto.fitVerdict as GgufFitVerdict,
 	};
 }
 

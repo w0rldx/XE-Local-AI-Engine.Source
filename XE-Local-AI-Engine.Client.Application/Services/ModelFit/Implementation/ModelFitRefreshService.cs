@@ -361,6 +361,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             LastModified = releaseDate,
             Section = section,
             Tier = entry.Tier,
+            Tested = entry.Tested,
             CatalogId = entry.Id,
             CatalogDisplayName = entry.DisplayName,
             CatalogNotes = entry.Notes,
@@ -698,6 +699,11 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                     writer.WriteString("tier", recommendation.Tier);
                 }
 
+                if (recommendation.Tested)
+                {
+                    writer.WriteBoolean("tested", value: true);
+                }
+
                 if (recommendation.CatalogId is not null)
                 {
                     writer.WriteString("catalog_id", recommendation.CatalogId);
@@ -816,6 +822,9 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
         /// <summary>The catalog entry's editorial tier (S/A/B), or <see langword="null" /> for an explore-lane row.</summary>
         public string? Tier { get; init; }
+
+        /// <summary>Whether the catalog entry is flagged as live-scenario tested; always <see langword="false" /> for an explore-lane row.</summary>
+        public bool Tested { get; init; }
 
         /// <summary>The catalog entry id, or <see langword="null" /> for an explore-lane row.</summary>
         public string? CatalogId { get; init; }

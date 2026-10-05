@@ -287,10 +287,172 @@ public sealed class GgufVariantRecommenderTests
                               .ResolveGpuBytesAsync(Arg.Is<HardwareProfile>(profile => profile.AvailableVramBytes == 12 * Gib), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task Annotate_CpuModeNode_GradesAgainstAvailableRam_AndRecommendsByFit()
+    {
+        // A CPU-mode node with 12 GiB of available RAM and no VRAM budget. The 10.5 GiB file plus its headroom margin overshoots
+        // the budget, so it is Tight, and the 13 GiB file is larger than the budget. The companion GPU reserve never applies here.
+        var companionReserve = Substitute.For<IKnowledgeCompanionReserve>();
+        var recommender = Build(freeVramBytes: null, variant: GpuVariant.Cpu, companionReserve: companionReserve, profile: CpuProfile(availableRamBytes: 12 * Gib));
+        var files = new[]
+        {
+            RepoFile("Q4_K_M", 4 * Gib),
+            RepoFile("Q6_K", (21 * Gib) / 2),
+            RepoFile("Q8_0", 13 * Gib)
+        };
+
+        var result = await recommender.AnnotateAsync(files, CancellationToken.None);
+
+        AssertEx.Equal(GgufFitVerdict.Fits, VerdictOf(result, "Q4_K_M"));
+        AssertEx.Equal(GgufFitVerdict.Tight, VerdictOf(result, "Q6_K"));
+        AssertEx.Equal(GgufFitVerdict.WontFit, VerdictOf(result, "Q8_0"));
+        AssertEx.Equal(1, result.Count(static a => a.IsRecommended));
+        AssertEx.True(IsRecommended(result, "Q4_K_M"));
+        await companionReserve.DidNotReceive().ResolveGpuBytesAsync(Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Annotate_CpuModeNodeWithUnknownRam_VerdictsUnknown_AndRecommendsSweetSpot()
+    {
+        var recommender = Build(freeVramBytes: null, variant: GpuVariant.Cpu, profile: CpuProfile(availableRamBytes: 0));
+        var files = new[]
+        {
+            RepoFile("Q4_K_M", 4 * Gib),
+            RepoFile("Q5_K_M", 5 * Gib),
+            RepoFile("Q8_0", 9 * Gib)
+        };
+
+        var result = await recommender.AnnotateAsync(files, CancellationToken.None);
+
+        AssertEx.True(result.All(static a => a.FitVerdict == GgufFitVerdict.Unknown));
+        AssertEx.True(IsRecommended(result, "Q5_K_M"));
+    }
+
+    [Test]
+    public async Task ClassifyAgainstProfile_GpuProfile_GradesAgainstCachedFreeVramLessTheReserve_WithoutTheProbe()
+    {
+        // Cached free VRAM 12 GiB less a 2 GiB companion reserve = 10 GiB. 4 GiB + 1 GiB margin fits; 9 GiB + 1.35 GiB margin
+        // overshoots but the file alone fits (Tight); 11 GiB won't fit. Without the reserve the 9 GiB file would fit.
+        var (recommender, probe, selector, companionReserve) = BuildForProfile(GpuProfile(freeVramBytes: 12 * Gib), companionReserveBytes: 2 * Gib);
+
+        var result = await recommender.ClassifyAgainstProfileAsync([4 * Gib, 9 * Gib, 11 * Gib], CancellationToken.None);
+
+        AssertEx.True(result.SequenceEqual([GgufFitVerdict.Fits, GgufFitVerdict.Tight, GgufFitVerdict.WontFit]), string.Join(", ", result));
+        await companionReserve.Received(1)
+                              .ResolveGpuBytesAsync(Arg.Is<HardwareProfile>(profile => profile.AvailableVramBytes == 12 * Gib), Arg.Any<CancellationToken>());
+        await probe.DidNotReceive().TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await selector.DidNotReceive().SelectVariantAsync(Arg.Any<CancellationToken>());
+
+        var (unreserved, _, _, _) = BuildForProfile(GpuProfile(freeVramBytes: 12 * Gib), companionReserveBytes: 0);
+        AssertEx.Equal(GgufFitVerdict.Fits, (await unreserved.ClassifyAgainstProfileAsync([9 * Gib], CancellationToken.None))[0]);
+    }
+
+    [Test]
+    public async Task ClassifyAgainstProfile_CpuModeProfile_GradesAgainstAvailableRam_WithoutTheReserve()
+    {
+        var (recommender, probe, _, companionReserve) = BuildForProfile(CpuProfile(availableRamBytes: 12 * Gib), companionReserveBytes: 4 * Gib);
+
+        var result = await recommender.ClassifyAgainstProfileAsync([4 * Gib, (21 * Gib) / 2, 13 * Gib], CancellationToken.None);
+
+        AssertEx.True(result.SequenceEqual([GgufFitVerdict.Fits, GgufFitVerdict.Tight, GgufFitVerdict.WontFit]), string.Join(", ", result));
+        await companionReserve.DidNotReceive().ResolveGpuBytesAsync(Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>());
+        await probe.DidNotReceive().TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ClassifyAgainstProfile_UnknownHardware_IsUnknownForEverySize()
+    {
+        var (recommender, probe, _, _) = BuildForProfile(CpuProfile(availableRamBytes: 0), companionReserveBytes: 0);
+
+        var result = await recommender.ClassifyAgainstProfileAsync([1 * Gib, 64 * Gib], CancellationToken.None);
+
+        AssertEx.True(result.SequenceEqual([GgufFitVerdict.Unknown, GgufFitVerdict.Unknown]), string.Join(", ", result));
+        await probe.DidNotReceive().TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ClassifyAgainstProfile_ProfileReadFails_DegradesToUnknown_ButCallerCancellationPropagates()
+    {
+        var (recommender, _, _, _) = BuildForProfile(GpuProfile(freeVramBytes: 12 * Gib), companionReserveBytes: 0, auditFailure: new IOException("audit exploded"));
+
+        var result = await recommender.ClassifyAgainstProfileAsync([4 * Gib], CancellationToken.None);
+
+        AssertEx.Equal(GgufFitVerdict.Unknown, result[0]);
+
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        var (cancelled, _, _, _) = BuildForProfile(GpuProfile(freeVramBytes: 12 * Gib), companionReserveBytes: 0, auditFailure: new OperationCanceledException(cts.Token));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => cancelled.ClassifyAgainstProfileAsync([4 * Gib], cts.Token));
+    }
+
+    private static HardwareProfile GpuProfile(long freeVramBytes)
+    {
+        return new HardwareProfile
+        {
+            TotalRamBytes = 64 * Gib,
+            AvailableRamBytes = 48 * Gib,
+            VramBytes = 16 * Gib,
+            AvailableVramBytes = freeVramBytes,
+            VramKnown = true,
+            GpuVendor = GpuVendor.Nvidia,
+            GpuAccelAvailable = true,
+            CpuCores = 16,
+            FreeDiskBytes = 500 * Gib
+        };
+    }
+
+    // The profile path's collaborators are returned so a test can prove the live probe and variant selector were never touched.
+    private static (GgufVariantRecommender Recommender, IProcessVramBudgetProbe Probe, IGpuVariantSelector Selector, IKnowledgeCompanionReserve Reserve)
+        BuildForProfile(HardwareProfile profile, long companionReserveBytes, Exception? auditFailure = null)
+    {
+        var selector = Substitute.For<IGpuVariantSelector>();
+        var probe = Substitute.For<IProcessVramBudgetProbe>();
+        var companionReserve = Substitute.For<IKnowledgeCompanionReserve>();
+        companionReserve.ResolveGpuBytesAsync(Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(companionReserveBytes));
+        var runtimeAudit = Substitute.For<IRuntimeDeviceAudit>();
+        runtimeAudit.PeekEffectiveProfileAsync(Arg.Any<CancellationToken>())
+                    .Returns(_ => auditFailure is null ? Task.FromResult<HardwareProfile?>(profile) : Task.FromException<HardwareProfile?>(auditFailure));
+
+        return (new GgufVariantRecommender(selector, probe, companionReserve, runtimeAudit, NullLogger<GgufVariantRecommender>.Instance), probe, selector, companionReserve);
+    }
+
+    [Test]
+    public async Task ClassifyAgainstProfile_NoCachedAudit_IsUnknownForEverySize_AndNeverComputesTheAudit()
+    {
+        var probe = Substitute.For<IProcessVramBudgetProbe>();
+        var runtimeAudit = Substitute.For<IRuntimeDeviceAudit>();
+        runtimeAudit.PeekEffectiveProfileAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<HardwareProfile?>(null));
+        var recommender = new GgufVariantRecommender(Substitute.For<IGpuVariantSelector>(), probe, Substitute.For<IKnowledgeCompanionReserve>(), runtimeAudit,
+            NullLogger<GgufVariantRecommender>.Instance);
+
+        var result = await recommender.ClassifyAgainstProfileAsync([1 * Gib, 64 * Gib], CancellationToken.None);
+
+        AssertEx.True(result.SequenceEqual([GgufFitVerdict.Unknown, GgufFitVerdict.Unknown]), string.Join(", ", result));
+        await runtimeAudit.DidNotReceive().GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await runtimeAudit.DidNotReceive().GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await probe.DidNotReceive().TryGetProcessBudgetBytesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    private static HardwareProfile CpuProfile(long availableRamBytes)
+    {
+        return new HardwareProfile
+        {
+            TotalRamBytes = 64 * Gib,
+            AvailableRamBytes = availableRamBytes,
+            VramBytes = null,
+            VramKnown = false,
+            GpuVendor = GpuVendor.None,
+            GpuAccelAvailable = false,
+            CpuCores = 16,
+            FreeDiskBytes = 500 * Gib
+        };
+    }
+
     private static GgufVariantRecommender Build(long? freeVramBytes,
         GpuVariant variant = GpuVariant.Cuda,
         long companionReserveBytes = 0,
-        IKnowledgeCompanionReserve? companionReserve = null)
+        IKnowledgeCompanionReserve? companionReserve = null,
+        HardwareProfile? profile = null)
     {
         var selector = Substitute.For<IGpuVariantSelector>();
         selector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(variant));
@@ -308,7 +470,7 @@ public sealed class GgufVariantRecommenderTests
         // A stale cached free figure, which the probe's live one must replace.
         var runtimeAudit = Substitute.For<IRuntimeDeviceAudit>();
         runtimeAudit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                    .Returns(Task.FromResult(new HardwareProfile
+                    .Returns(Task.FromResult(profile ?? new HardwareProfile
                     {
                         TotalRamBytes = 64 * Gib,
                         AvailableRamBytes = 48 * Gib,

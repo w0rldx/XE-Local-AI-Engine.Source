@@ -55,6 +55,31 @@ public sealed class GgufHeaderReaderLocalFileTests
     }
 
     [Test]
+    public async Task ReadHeaderFromFile_ExtractsChatTemplate_AfterAVocabLargerThanTheFirstProbe()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var path = dir.FilePath("qwen35-large-vocab.gguf");
+        // A complete architecture block followed by a ~1.5 MiB vocab: the remote path would stop at the tokenizer, the local one must not.
+        const string template = "{% for tool in tools %}{{ tool }}{% endfor %}";
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "qwen35")
+                     .WithUint32("qwen35.block_count", value: 32)
+                     .WithUint32("qwen35.embedding_length", value: 2560)
+                     .WithUint32("qwen35.attention.head_count", value: 16)
+                     .WithUint32("qwen35.attention.head_count_kv", value: 4)
+                     .WithStringArray("tokenizer.ggml.tokens", BuildVocab(80_000))
+                     .WithString("tokenizer.chat_template", template)
+                     .Build();
+        AssertEx.True(header.Length > 1024 * 1024, "the vocab must outgrow the local reader's 1 MiB first probe.");
+        await File.WriteAllBytesAsync(path, header);
+        var reader = NewReader();
+
+        var metadata = await reader.ReadHeaderFromFileAsync(path, CancellationToken.None);
+
+        AssertEx.Equal(template, metadata.ChatTemplate!);
+    }
+
+    [Test]
     public async Task ReadHeaderFromFile_ExtractsExpertCount_AndFlagsMoe()
     {
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();

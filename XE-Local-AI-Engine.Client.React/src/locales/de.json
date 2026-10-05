@@ -3208,6 +3208,7 @@
 					"untrustedPublisherHint": "Dieser Anbieter ist kein bekannter GGUF-Packager – prüfe das Repository vor dem Download.",
 					"download": "Herunterladen",
 					"noGguf": "Kein GGUF",
+					"clearSearch": "Suche zurücksetzen",
 					"columns": {
 						"repo": "Repository",
 						"downloads": "Downloads",
@@ -3215,6 +3216,17 @@
 						"updated": "Aktualisiert",
 						"license": "Lizenz",
 						"action": "Aktion"
+					},
+					"tested": {
+						"title": "Von den Autoren getestet",
+						"hint": "Diese Modelle haben die Live-Szenarien der Autoren bestanden. Wähle eines aus, um eine zu diesem Rechner passende Quantisierung zu wählen, oder suche oben auf Hugging Face.",
+						"columns": {
+							"model": "Modell",
+							"size": "Größe",
+							"testedQuant": "Getestete Quantisierung",
+							"notes": "Hinweise"
+						},
+						"installed": "Installiert"
 					}
 				},
 				"download": {
@@ -4292,6 +4304,10 @@
 					"s": "S",
 					"a": "A",
 					"b": "B"
+				},
+				"tested": {
+					"badge": "Getestet",
+					"tooltip": "Die Autoren haben dieses Modell in ihren Live-Szenarien geprüft."
 				},
 				"moeOffload": {
 					"badge": "Experten auf CPU – langsamer, höhere Qualität",

@@ -48,6 +48,7 @@ const { queryFns, mutationFns } = vi.hoisted(() => ({
 		inspectGgufRepository: vi.fn(),
 		getGgufImportCapability: vi.fn(),
 		getGgufImports: vi.fn(),
+		getModelCatalogInfo: vi.fn(),
 	},
 	mutationFns: {
 		selectLocalModel: vi.fn(),
@@ -85,6 +86,11 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 		queryFn: queryFns.getLatestRecommendations,
 	}),
 	refreshRecommendationsMutation: () => ({ mutationFn: vi.fn() }),
+	// Catalog info: the browse panel lists its tested models before any search.
+	getModelCatalogInfoOptions: () => ({
+		queryKey: fakeQueryKey("getModelCatalogInfo"),
+		queryFn: queryFns.getModelCatalogInfo,
+	}),
 	// GGUF browse + download factories — the GGUF section relocated to this page from the model-fit advisor.
 	browseGgufRepositoriesQueryKey: () => fakeQueryKey("browseGgufRepositories"),
 	browseGgufRepositoriesOptions: () => ({
@@ -219,6 +225,13 @@ describe("ModelManagement", () => {
 		queryFns.inspectGgufRepository.mockResolvedValue({ repoId: "", files: [] });
 		queryFns.getGgufImportCapability.mockResolvedValue({ available: false });
 		queryFns.getGgufImports.mockResolvedValue({ items: [] });
+		queryFns.getModelCatalogInfo.mockResolvedValue({
+			catalogVersion: "2026.10.2",
+			source: "bundled",
+			modelCount: 45,
+			refreshSourceConfigured: false,
+			testedModels: [],
+		});
 		mutationFns.startGgufDownload.mockResolvedValue({ modelName: "unsloth/llama-3.1-8b-gguf", alreadyInFlight: false });
 		mutationFns.cancelGgufDownload.mockResolvedValue({ cancelled: true });
 		mutationFns.cancelGgufImport.mockResolvedValue({ cancellationRequested: true });
@@ -517,6 +530,200 @@ describe("ModelManagement", () => {
 		fireEvent.click(screen.getByTestId("model-fit-browse-search-button"));
 
 		await waitFor(() => expect(useGgufBrowseStore.getState().browseQuery).toBe("llama 3.1"));
+	});
+
+	const testedGranite = {
+		id: "granite-4.1-3b",
+		displayName: "Granite 4.1 3B",
+		publisher: "IBM",
+		ggufRepo: "unsloth/granite-4.1-3b-GGUF",
+		license: "apache-2.0",
+		totalParamsB: 3.4,
+		notes: "Tool-capable small model with no thinking mode.",
+		testedQuant: "Q4_K_M",
+		testedSizeBytes: 2_099_502_400,
+		fitVerdict: "Fits",
+	};
+
+	const catalogWithTested = (...testedModels: unknown[]) => ({
+		catalogVersion: "2026.10.3",
+		source: "bundled",
+		modelCount: 45,
+		refreshSourceConfigured: false,
+		testedModels,
+	});
+
+	const ggufFile = (quant: string, sizeBytes: number, fitVerdict: string, isRecommended = false) => ({
+		fileName: `granite-4.1-3b-${quant}.gguf`,
+		quant,
+		isDynamic: false,
+		isDraft: false,
+		sizeBytes,
+		qualityTier: "Balanced",
+		fitVerdict,
+		isRecommended,
+	});
+
+	it("shows the tested quant with its size and fit badge, and no badge for an unknown verdict", async () => {
+		queryFns.getModelCatalogInfo.mockResolvedValue(
+			catalogWithTested(testedGranite, {
+				...testedGranite,
+				id: "qwen3.8-27b",
+				displayName: "Qwen3.8 27B",
+				ggufRepo: "unsloth/Qwen3.8-27B-GGUF",
+				testedQuant: "UD-Q4_K_M",
+				testedSizeBytes: 16_464_440_224,
+				fitVerdict: "Unknown",
+			}),
+		);
+
+		renderWithProviders(<ModelManagement />);
+
+		expect((await screen.findByTestId("model-fit-browse-tested-quant-granite-4.1-3b")).textContent).toBe("Q4_K_M · 2.0 GB");
+		expect(screen.getByTestId("model-fit-browse-tested-fit-granite-4.1-3b").textContent).toBe("Fits");
+		expect(screen.getByTestId("model-fit-browse-tested-quant-qwen3.8-27b").textContent).toBe("UD-Q4_K_M · 15.3 GB");
+		expect(screen.queryByTestId("model-fit-browse-tested-fit-qwen3.8-27b")).toBeNull();
+	});
+
+	it("marks a tested model installed when any quant of its repo is installed, keeping Download enabled", async () => {
+		queryFns.listLocalModels.mockResolvedValue({
+			isAvailable: true,
+			items: [
+				{
+					modelName: "unsloth/Granite-4.1-3b-GGUF:Q8_0",
+					provider: "llamacpp",
+					isSelected: false,
+					kind: "Chat",
+					detectedKind: "Chat",
+					capabilities: [],
+					isOverridden: false,
+				},
+			],
+		});
+		queryFns.getModelCatalogInfo.mockResolvedValue(
+			catalogWithTested(testedGranite, { ...testedGranite, id: "qwen3.5-4b", ggufRepo: "unsloth/Qwen3.5-4B-GGUF" }),
+		);
+
+		renderWithProviders(<ModelManagement />);
+
+		expect((await screen.findByTestId("model-fit-browse-tested-installed-granite-4.1-3b")).textContent).toBe("Installed");
+		expect(screen.queryByTestId("model-fit-browse-tested-installed-qwen3.5-4b")).toBeNull();
+		expect((screen.getByTestId("model-fit-browse-tested-download-granite-4.1-3b") as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	it("brings the tested list back and hides the results when the search is cleared", async () => {
+		queryFns.getModelCatalogInfo.mockResolvedValue(catalogWithTested(testedGranite));
+		queryFns.browseGgufRepositories.mockResolvedValue({ items: [ggufRepo] });
+
+		renderWithProviders(<ModelManagement />);
+
+		expect(await screen.findByTestId("model-fit-browse-tested-table")).toBeTruthy();
+		// No clear control while there is nothing to clear.
+		expect(screen.queryByRole("button", { name: "Clear search" })).toBeNull();
+		fireEvent.change(screen.getByTestId("model-fit-browse-input"), { target: { value: "llama" } });
+		fireEvent.click(screen.getByTestId("model-fit-browse-search-button"));
+		expect(await screen.findByTestId("model-fit-browse-table")).toBeTruthy();
+		expect(screen.queryByTestId("model-fit-browse-tested-table")).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+
+		expect(await screen.findByTestId("model-fit-browse-tested-table")).toBeTruthy();
+		expect(screen.queryByTestId("model-fit-browse-table")).toBeNull();
+		expect((screen.getByTestId("model-fit-browse-input") as HTMLInputElement).value).toBe("");
+		expect(useGgufBrowseStore.getState().browseQuery).toBe("");
+		expect((screen.getByTestId("model-fit-browse-search-button") as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	it("preselects the tested quant when the picker opens from a tested row", async () => {
+		queryFns.getModelCatalogInfo.mockResolvedValue(catalogWithTested(testedGranite));
+		queryFns.inspectGgufRepository.mockResolvedValue({
+			repoId: "unsloth/granite-4.1-3b-GGUF",
+			hasProjector: false,
+			files: [ggufFile("Q4_K_M", 2_099_502_400, "Fits"), ggufFile("Q8_0", 3_600_000_000, "Fits", true)],
+		});
+
+		renderWithProviders(<ModelManagement />);
+
+		fireEvent.click(await screen.findByTestId("model-fit-browse-tested-download-granite-4.1-3b"));
+		await waitFor(() => expect((screen.getByLabelText("Q4_K_M") as HTMLInputElement).checked).toBe(true));
+		expect((screen.getByLabelText("Q8_0") as HTMLInputElement).checked).toBe(false);
+	});
+
+	it("keeps the picker's recommendation when the tested quant won't fit", async () => {
+		queryFns.getModelCatalogInfo.mockResolvedValue(catalogWithTested({ ...testedGranite, fitVerdict: "WontFit" }));
+		queryFns.inspectGgufRepository.mockResolvedValue({
+			repoId: "unsloth/granite-4.1-3b-GGUF",
+			hasProjector: false,
+			files: [ggufFile("Q2_K", 1_200_000_000, "Tight", true), ggufFile("Q4_K_M", 2_099_502_400, "WontFit")],
+		});
+
+		renderWithProviders(<ModelManagement />);
+
+		fireEvent.click(await screen.findByTestId("model-fit-browse-tested-download-granite-4.1-3b"));
+		await waitFor(() => expect((screen.getByLabelText("Q2_K") as HTMLInputElement).checked).toBe(true));
+		expect((screen.getByLabelText("Q4_K_M") as HTMLInputElement).checked).toBe(false);
+	});
+
+	it("lists the tested catalog models before any search and opens the quant picker for one", async () => {
+		queryFns.getModelCatalogInfo.mockResolvedValue({
+			catalogVersion: "2026.10.2",
+			source: "bundled",
+			modelCount: 45,
+			refreshSourceConfigured: false,
+			testedModels: [testedGranite],
+		});
+		queryFns.inspectGgufRepository.mockResolvedValue({
+			repoId: "unsloth/granite-4.1-3b-GGUF",
+			files: [{ fileName: "granite-4.1-3b-Q4_K_M.gguf", quant: "Q4_K_M", isDynamic: false, sizeBytes: 2_099_502_400 }],
+		});
+
+		renderWithProviders(<ModelManagement />);
+
+		const row = await screen.findByTestId("model-fit-browse-tested-row-granite-4.1-3b");
+		expect(row.textContent).toContain("Granite 4.1 3B");
+		expect(row.textContent).toContain("3.4B");
+		expect(row.textContent).toContain("Tool-capable small model with no thinking mode.");
+		fireEvent.click(screen.getByTestId("model-fit-browse-tested-download-granite-4.1-3b"));
+
+		// The same quant picker a browse row opens, inspecting the tested model's repo.
+		const dialog = await screen.findByRole("dialog");
+		expect(dialog.textContent).toContain("unsloth/granite-4.1-3b-GGUF");
+		fireEvent.click(await within(dialog).findByLabelText("Q4_K_M"));
+		fireEvent.click(screen.getByTestId("gguf-download-confirm"));
+		await waitFor(() =>
+			expect(mutationFns.startGgufDownload.mock.calls[0]?.[0]).toEqual({
+				body: { repoId: "unsloth/granite-4.1-3b-GGUF", fileName: "granite-4.1-3b-Q4_K_M.gguf", quant: "Q4_K_M" },
+			}),
+		);
+	});
+
+	it("hides the tested catalog models once a search is submitted", async () => {
+		queryFns.getModelCatalogInfo.mockResolvedValue({
+			catalogVersion: "2026.10.2",
+			source: "bundled",
+			modelCount: 45,
+			refreshSourceConfigured: false,
+			testedModels: [testedGranite],
+		});
+
+		renderWithProviders(<ModelManagement />);
+
+		expect(await screen.findByTestId("model-fit-browse-tested-table")).toBeTruthy();
+		fireEvent.change(screen.getByTestId("model-fit-browse-input"), { target: { value: "llama" } });
+		fireEvent.click(screen.getByTestId("model-fit-browse-search-button"));
+
+		await waitFor(() => expect(screen.queryByTestId("model-fit-browse-tested-table")).toBeNull());
+	});
+
+	it("shows no tested block and no error when the catalog read fails", async () => {
+		queryFns.getModelCatalogInfo.mockRejectedValue(new Error("catalog unavailable"));
+
+		renderWithProviders(<ModelManagement />);
+
+		expect(await screen.findByTestId("model-fit-browse-card")).toBeTruthy();
+		await waitFor(() => expect(queryFns.getModelCatalogInfo).toHaveBeenCalled());
+		expect(screen.queryByTestId("model-fit-browse-tested-table")).toBeNull();
+		expect(screen.queryByTestId("model-fit-browse-error")).toBeNull();
 	});
 
 	it("downloads a chosen quant from the browse quant picker", async () => {

@@ -71,6 +71,7 @@ internal static class ModelFitMapper
             IsTrustedPublisher = diagnostics.IsTrustedPublisher,
             Section = diagnostics.Section,
             Tier = diagnostics.Tier,
+            Tested = diagnostics.Tested,
             CatalogId = diagnostics.CatalogId,
             CatalogDisplayName = diagnostics.CatalogDisplayName,
             CatalogNotes = diagnostics.CatalogNotes,

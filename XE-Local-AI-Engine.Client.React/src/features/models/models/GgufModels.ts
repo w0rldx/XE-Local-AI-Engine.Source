@@ -18,6 +18,26 @@ export interface GgufRepository {
 	readonly isTrustedPublisher: boolean;
 }
 
+// What opens the quant picker: a repo, plus the tested quant to preselect when the pick came from a tested catalog row.
+export interface GgufDownloadTarget {
+	readonly repoId: string;
+	readonly preferredQuant?: string;
+}
+
+// Domain view-model for one curated-catalog model the authors ran through their live scenario checks, offered on the
+// browse panel before any search. ggufRepo is the repo the download dialog inspects; fitVerdict grades testedQuant only.
+export interface GgufTestedModel {
+	readonly id: string;
+	readonly displayName: string;
+	readonly ggufRepo: string;
+	readonly license: string;
+	readonly totalParamsB: number;
+	readonly notes: string | null;
+	readonly testedQuant: string;
+	readonly testedSizeBytes: number;
+	readonly fitVerdict: GgufFitVerdict;
+}
+
 // Static quality tier the backend classifier assigns to a quant (no hardware involved). Ordered best→smallest:
 // NearLossless (Q8_0/Q6_K/F16…), SweetSpot (Q5_K_*), Balanced (Q4_K_*), Small (Q3*/IQ3/IQ4/legacy), Minimal (Q2*/IQ1/IQ2).
 // String-literal union (not an enum) — matches the backend's emitted enum-name values one-to-one.
@@ -26,6 +46,22 @@ export type GgufQuantTier = "NearLossless" | "SweetSpot" | "Balanced" | "Small" 
 // Per-file hardware fit verdict the backend derives from file size vs free VRAM: Fits (size + margin ≤ free),
 // Tight (fits but margin eats in), WontFit (size > free), Unknown (VRAM probe unavailable, e.g. no GPU / WSL).
 export type GgufFitVerdict = "Fits" | "Tight" | "WontFit" | "Unknown";
+
+// Mantine badge color per hardware fit verdict; Unknown is intentionally null (no probe → render a dimmed placeholder,
+// not a misleading colored badge). Keys are exhaustive over GgufFitVerdict so a new verdict forces a compile update.
+export const fitVerdictColor: Record<GgufFitVerdict, string | null> = {
+	Fits: "green",
+	Tight: "yellow",
+	WontFit: "red",
+	Unknown: null,
+};
+
+// i18n suffix under `pages.models.gguf.download.fit.*` per verdict (Unknown has no label — it renders a dimmed dash).
+export const fitVerdictLabelKey: Record<Exclude<GgufFitVerdict, "Unknown">, string> = {
+	Fits: "fits",
+	Tight: "tight",
+	WontFit: "wontFit",
+};
 
 // Domain view-model for one selectable .gguf file inside a repo (the quant picker rows). isDynamic flags an Unsloth
 // "Dynamic" (UD-) quant so the UI can badge it; sizeBytes drives the size column. fileName is the exact file the
@@ -65,4 +101,14 @@ export interface GgufRepositoryDetail {
 export function recommendedGgufFileName(files: readonly GgufRepositoryFile[]): string | null {
 	const baseQuants = files.filter((file) => !file.isDraft);
 	return (files.find((file) => file.isRecommended) ?? baseQuants[0])?.fileName ?? null;
+}
+
+// The picker's default when opened from a tested catalog row: the file of the tested quant (case-insensitive) unless it
+// is missing or won't fit, in which case the recommended file above stays the default.
+export function preferredGgufFileName(files: readonly GgufRepositoryFile[], preferredQuant: string | undefined): string | null {
+	const preferred =
+		preferredQuant === undefined
+			? undefined
+			: files.find((file) => file.quant.toLowerCase() === preferredQuant.toLowerCase() && file.fitVerdict !== "WontFit");
+	return preferred?.fileName ?? recommendedGgufFileName(files);
 }

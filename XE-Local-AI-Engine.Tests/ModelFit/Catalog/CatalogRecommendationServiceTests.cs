@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.ModelFit.Catalog;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
+using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -287,6 +289,54 @@ public sealed class CatalogRecommendationServiceTests
         AssertEx.Equal(AttentionArchTag.Gqa, candidate.AttentionArchTag);
     }
 
+    [Test]
+    public async Task BuildRecommendationsAsync_FailedOrTimedOutInspections_AreNamedInOneWarning_ButANonFittingEntryIsNot()
+    {
+        var entries = new[]
+        {
+            Entry("broken", useCases: ["general"], tier: "S"),
+            Entry("timed-out", useCases: ["general"], tier: "S"),
+            Entry("too-big", useCases: ["general"], tier: "S"),
+            Entry("fine", useCases: ["general"], tier: "S")
+        };
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.InspectRepoAsync("org/broken-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromException<GgufRepoDetail>(new HttpRequestException("hub unreachable")));
+        // The per-repo timeout surfaces as a cancellation the caller did not request.
+        discovery.InspectRepoAsync("org/timed-out-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromException<GgufRepoDetail>(new OperationCanceledException()));
+        discovery.InspectRepoAsync("org/too-big-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/too-big-GGUF", File("Q4_K_M", paramCountB: 2000))));
+        discovery.InspectRepoAsync("org/fine-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/fine-GGUF", File("Q4_K_M", paramCountB: 1))));
+        var logger = new RecordingLogger<CatalogRecommendationService>();
+        var service = BuildService(entries, discovery, installedTag: "b9692", logger);
+
+        var result = await service.BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 8192, GpuProfile(64 * Gb), Empty, CancellationToken.None);
+
+        AssertEx.Equal("fine", result.Recommended.Concat(result.CanRun).Single().Entry.Id);
+        var warnings = logger.Entries.Where(entry => entry.Level == LogLevel.Warning).ToList();
+        AssertEx.Equal(1, warnings.Count);
+        AssertEx.True(warnings[0].Message.Contains("broken, timed-out", StringComparison.Ordinal), warnings[0].Message);
+        AssertEx.False(warnings[0].Message.Contains("too-big", StringComparison.Ordinal), "an entry that only failed to fit is not a skip.");
+    }
+
+    [Test]
+    public async Task BuildRecommendationsAsync_NonFittingEntryAlone_LogsNoWarning()
+    {
+        var entries = new[]
+        {
+            Entry("too-big", useCases: ["general"], tier: "S")
+        };
+        var logger = new RecordingLogger<CatalogRecommendationService>();
+        var service = BuildService(entries, DiscoveryReturning(entries, paramCountB: 2000), installedTag: "b9692", logger);
+
+        var result = await service.BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 8192, GpuProfile(64 * Gb), Empty, CancellationToken.None);
+
+        AssertEx.Empty(result.Recommended.Concat(result.CanRun));
+        AssertEx.False(logger.Entries.Any(entry => entry.Level == LogLevel.Warning), "a model that does not fit is not an inspection failure.");
+    }
+
     private static IReadOnlySet<string> Empty { get; } = new HashSet<string>(StringComparer.Ordinal);
 
     private static ModelCatalogEntry Entry(string id,
@@ -315,7 +365,10 @@ public sealed class CatalogRecommendationServiceTests
             Notes: null);
     }
 
-    private static CatalogRecommendationService BuildService(IReadOnlyList<ModelCatalogEntry> entries, IHuggingFaceGgufDiscovery discovery, string installedTag)
+    private static CatalogRecommendationService BuildService(IReadOnlyList<ModelCatalogEntry> entries,
+        IHuggingFaceGgufDiscovery discovery,
+        string installedTag,
+        ILogger<CatalogRecommendationService>? logger = null)
     {
         var document = new ModelCatalogDocument(SchemaVersion: 1, "test", UpdatedAt: null, entries);
         var snapshot = new ModelCatalogSnapshot
@@ -339,7 +392,7 @@ public sealed class CatalogRecommendationServiceTests
             CheckedAtUtc = null
         });
 
-        return new CatalogRecommendationService(catalogProvider, discovery, new MemoryFitEstimator(), updateState, NullLogger<CatalogRecommendationService>.Instance);
+        return new CatalogRecommendationService(catalogProvider, discovery, new MemoryFitEstimator(), updateState, logger ?? NullLogger<CatalogRecommendationService>.Instance);
     }
 
     private static IHuggingFaceGgufDiscovery DiscoveryReturning(IReadOnlyList<ModelCatalogEntry> entries, double paramCountB)

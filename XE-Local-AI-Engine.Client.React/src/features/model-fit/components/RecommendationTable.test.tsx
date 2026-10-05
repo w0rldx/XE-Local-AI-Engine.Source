@@ -48,6 +48,7 @@ function makeRecommendation(overrides: Partial<ModelFitRecommendation>): ModelFi
 		isTrustedPublisher: true,
 		section: "recommended",
 		tier: null,
+		tested: false,
 		catalogId: null,
 		catalogDisplayName: null,
 		catalogNotes: null,
@@ -287,6 +288,19 @@ describe("RecommendationTable", () => {
 		expect(screen.queryByTestId("model-fit-tier-badge-2")).toBeNull();
 	});
 
+	it("shows a tested badge with its tooltip for a tested catalog row and none for an untested one", async () => {
+		const tested = makeRecommendation({ rank: 1, tier: "S", tested: true });
+		const untested = makeRecommendation({ rank: 2, tier: "S", tested: false });
+
+		renderTable(<RecommendationTable recommendations={[tested, untested]} />);
+
+		const badge = screen.getByTestId("model-fit-tested-badge-1");
+		expect(badge.textContent).toBe("Tested");
+		expect(screen.queryByTestId("model-fit-tested-badge-2")).toBeNull();
+		fireEvent.mouseEnter(badge);
+		expect(await screen.findByText("The authors ran this model through their live scenario checks.")).toBeTruthy();
+	});
+
 	it("prefers the catalog display name as the primary label and shows the raw model name as secondary text", () => {
 		const catalogBacked = makeRecommendation({
 			rank: 1,
@@ -421,6 +435,7 @@ describe("RecommendationTable", () => {
 
 		expect(screen.getByTestId("model-fit-recommendation-row-1")).toBeTruthy();
 		expect(screen.queryByTestId("model-fit-tier-badge-1")).toBeNull();
+		expect(screen.queryByTestId("model-fit-tested-badge-1")).toBeNull();
 		expect(screen.queryByTestId("model-fit-moe-offload-badge-1")).toBeNull();
 		expect(screen.queryByTestId("model-fit-catalog-notes-1")).toBeNull();
 	});

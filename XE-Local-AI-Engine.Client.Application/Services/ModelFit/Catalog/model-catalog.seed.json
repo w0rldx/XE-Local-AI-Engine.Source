@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026.10.1",
-  "updatedAt": "2026-10-04",
+  "catalogVersion": "2026.10.3",
+  "updatedAt": "2026-10-05",
   "models": [
     {
       "id": "qwen3-0.6b",
@@ -131,7 +131,10 @@
       "moe": false,
       "contextLength": 262144,
       "minLlamaCppTag": "b10201",
-      "releaseDate": "2026-06-10"
+      "releaseDate": "2026-06-10",
+      "tested": true,
+      "testedQuant": "Q4_K_M",
+      "testedSizeBytes": 2740937888
     },
     {
       "id": "qwen3.5-9b",
@@ -148,7 +151,10 @@
       "contextLength": 262144,
       "minLlamaCppTag": "b10201",
       "releaseDate": "2026-06-10",
-      "notes": "Strong general-purpose default at the 9B size class."
+      "notes": "Strong general-purpose default at the 9B size class.",
+      "tested": true,
+      "testedQuant": "Q4_K_M",
+      "testedSizeBytes": 5680522464
     },
     {
       "id": "qwen3.5-27b",
@@ -215,7 +221,10 @@
       "contextLength": 262144,
       "minLlamaCppTag": "b10201",
       "releaseDate": "2026-04-20",
-      "notes": "MoE sibling of Qwen3.6 27B — can run with experts offloaded to system RAM on 12-24GB GPUs."
+      "notes": "MoE sibling of Qwen3.6 27B — can run with experts offloaded to system RAM on 12-24GB GPUs.",
+      "tested": true,
+      "testedQuant": "UD-Q4_K_M",
+      "testedSizeBytes": 22134528992
     },
     {
       "id": "qwen3.8-27b",
@@ -232,7 +241,10 @@
       "contextLength": 262144,
       "minLlamaCppTag": "b10201",
       "releaseDate": "2026-08-19",
-      "notes": "Current Qwen flagship dense model."
+      "notes": "Current Qwen flagship dense model.",
+      "tested": true,
+      "testedQuant": "UD-Q4_K_M",
+      "testedSizeBytes": 16464440224
     },
     {
       "id": "gemma3-4b",
@@ -382,7 +394,10 @@
       "contextLength": 131072,
       "minLlamaCppTag": "b10201",
       "releaseDate": "2026-04-06",
-      "notes": "Tool-capable small model with no thinking mode."
+      "notes": "Tool-capable small model with no thinking mode.",
+      "tested": true,
+      "testedQuant": "Q4_K_M",
+      "testedSizeBytes": 2099502400
     },
     {
       "id": "qwen2.5-coder-7b",

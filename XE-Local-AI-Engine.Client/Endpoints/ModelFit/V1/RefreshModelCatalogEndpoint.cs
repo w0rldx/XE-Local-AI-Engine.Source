@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
 
 /// <summary>
 ///     FastEndpoints handler for an operator-forced catalog refresh (POST model-fit/catalog/refresh): it bypasses the
@@ -21,14 +22,18 @@ public sealed class RefreshModelCatalogEndpoint : EndpointWithoutRequest<ModelCa
 {
     private readonly IModelCatalogProvider _catalogProvider;
     private readonly IOptions<ModelCatalogOptions> _options;
+    private readonly IGgufVariantRecommender _recommender;
 
     public RefreshModelCatalogEndpoint(IModelCatalogProvider catalogProvider,
-        IOptions<ModelCatalogOptions> options)
+        IOptions<ModelCatalogOptions> options,
+        IGgufVariantRecommender recommender)
     {
         ArgumentNullException.ThrowIfNull(catalogProvider);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(recommender);
         _catalogProvider = catalogProvider;
         _options = options;
+        _recommender = recommender;
     }
 
     public override void Configure()
@@ -41,6 +46,8 @@ public sealed class RefreshModelCatalogEndpoint : EndpointWithoutRequest<ModelCa
     {
         var snapshot = await _catalogProvider.RefreshAsync(ct);
         var refreshSourceConfigured = !string.IsNullOrWhiteSpace(_options.Value.RefreshUrl);
-        await Send.OkAsync(snapshot.ToResponse(refreshSourceConfigured), ct);
+        // Same verdicts as GetModelCatalogInfoEndpoint: the cached hardware profile, never the live process-VRAM probe.
+        var verdicts = await _recommender.ClassifyAgainstProfileAsync([.. snapshot.TestedEntries().Select(entry => entry.TestedSizeBytes.GetValueOrDefault())], ct);
+        await Send.OkAsync(snapshot.ToResponse(refreshSourceConfigured, verdicts), ct);
     }
 }

@@ -79,9 +79,8 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
     /// <remarks>
     ///     Header reads remain eager because the model-fit advisor's quant-ladder walk (<c>GgufFileSelector.SelectBestFit</c>) needs
     ///     header-only fields such as block/head counts and embedding length for <c>MemoryFitEstimator.Estimate</c>. Ranking from file
-    ///     name and size alone would change fits-the-budget verdicts and could select a different quant. Bounded concurrency in this
-    ///     class plus TTL caching in <see cref="HfHubClient" /> and <see cref="GgufHeaderReader" /> reduce inspection latency without
-    ///     changing selection.
+    ///     name and size alone would change fits-the-budget verdicts. Two steps: an early-stop read per file, then one complete read
+    ///     per architecture signature (<see cref="CompletePartialHeadersAsync" />), both bounded and TTL-cached.
     /// </remarks>
     public Task<GgufRepoDetail> InspectRepoAsync(string repoId, CancellationToken ct)
     {
@@ -138,9 +137,12 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
 
         usable = GroupShards(usable);
 
-        var headers = includeHeaderMetadata
-            ? await ReadHeadersAsync(detail.RepoId, detail.Revision, usable, ct).ConfigureAwait(false)
-            : null;
+        GgufHeaderMetadata[]? headers = null;
+        if (includeHeaderMetadata)
+        {
+            headers = await ReadHeadersAsync(detail.RepoId, detail.Revision, usable, ct).ConfigureAwait(false);
+            await CompletePartialHeadersAsync(detail.RepoId, detail.Revision, usable, headers, ct).ConfigureAwait(false);
+        }
 
         var files = new List<GgufRepoFile>(usable.Count);
         for (var i = 0; i < usable.Count; i++)
@@ -260,6 +262,69 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
 
         await Task.WhenAll(reads).ConfigureAwait(false);
         return results;
+    }
+
+    /// <summary>
+    ///     Second step of the header read: for each architecture signature among the early-stopped (partial) headers,
+    ///     reads the smallest file's whole header once and reuses it for every file of that signature.
+    /// </summary>
+    /// <remarks>
+    ///     Keys a tool appended after the tokenizer are recovered without paying the vocabulary once per quant. The
+    ///     complete header is used only when its own signature matches; a failed or mismatched read leaves the group's
+    ///     partial metadata. <see cref="GgufHeaderMetadata.QuantType" /> stays each file's own.
+    /// </remarks>
+    private async Task CompletePartialHeadersAsync(string repoId,
+        string revision,
+        IReadOnlyList<UsableFile> usable,
+        GgufHeaderMetadata[] headers,
+        CancellationToken ct)
+    {
+        var groups = Enumerable.Range(start: 0, usable.Count)
+                               .Where(i => headers[i].IsPartial)
+                               .GroupBy(i => Signature(headers[i]))
+                               .ToList();
+        if (groups.Count == 0)
+        {
+            return;
+        }
+
+        var concurrency = Math.Max(val1: 1, _options.HeaderReadConcurrency);
+        using var gate = new SemaphoreSlim(concurrency, concurrency);
+
+        var reads = groups.Select(async group =>
+        {
+            var smallest = group.OrderBy(i => usable[i].File.SizeBytes).ThenBy(i => usable[i].File.FileName, StringComparer.Ordinal).First();
+            GgufHeaderMetadata complete;
+            await gate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                complete = await _headerReader.ReadCompleteHeaderAsync(repoId, usable[smallest].File.FileName, revision, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                gate.Release();
+            }
+
+            if (Signature(complete) != group.Key)
+            {
+                return;
+            }
+
+            foreach (var i in group)
+            {
+                headers[i] = complete with
+                {
+                    QuantType = headers[i].QuantType
+                };
+            }
+        });
+
+        await Task.WhenAll(reads).ConfigureAwait(false);
+    }
+
+    private static (string? Architecture, long? BlockCount, long? EmbeddingLength, long? HeadCount, long? HeadCountKv) Signature(GgufHeaderMetadata header)
+    {
+        return (header.Architecture, header.BlockCount, header.EmbeddingLength, header.AttentionHeadCount, header.AttentionHeadCountKV);
     }
 
     /// <summary>

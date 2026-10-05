@@ -3208,6 +3208,7 @@
 					"untrustedPublisherHint": "This publisher is not a known GGUF packager — review the repo before downloading.",
 					"download": "Download",
 					"noGguf": "No GGUF",
+					"clearSearch": "Clear search",
 					"columns": {
 						"repo": "Repository",
 						"downloads": "Downloads",
@@ -3215,6 +3216,17 @@
 						"updated": "Updated",
 						"license": "License",
 						"action": "Action"
+					},
+					"tested": {
+						"title": "Tested by the authors",
+						"hint": "These models passed the authors' live scenario checks. Pick one to choose a quantization that fits this machine, or search Hugging Face above.",
+						"columns": {
+							"model": "Model",
+							"size": "Size",
+							"testedQuant": "Tested quant",
+							"notes": "Notes"
+						},
+						"installed": "Installed"
 					}
 				},
 				"download": {
@@ -4292,6 +4304,10 @@
 					"s": "S",
 					"a": "A",
 					"b": "B"
+				},
+				"tested": {
+					"badge": "Tested",
+					"tooltip": "The authors ran this model through their live scenario checks."
 				},
 				"moeOffload": {
 					"badge": "Experts on CPU — slower, higher quality",

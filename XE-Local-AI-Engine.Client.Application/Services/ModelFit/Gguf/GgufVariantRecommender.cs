@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
 
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Inference;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -13,8 +14,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <remarks>
 ///     Resolves the active llama.cpp backend the same way the inference profiler does
 ///     (<see cref="IGpuVariantSelector" /> → <see cref="InferenceBackends.FromVariant" />) and probes the llama.cpp
-///     process-local VRAM budget once via <see cref="IProcessVramBudgetProbe" />. Read-time computation; degrades to
-///     "unknown" rather than throwing when the backend or probe is unavailable.
+///     process-local VRAM budget once via <see cref="IProcessVramBudgetProbe" />. Without a VRAM budget a CPU-mode node is
+///     graded against <see cref="MemoryFitEstimator.ResolveFitBudgetBytes" /> (available RAM); otherwise, or on a probe
+///     failure, the verdict degrades to "unknown" rather than throwing.
 /// </remarks>
 public sealed class GgufVariantRecommender : IGgufVariantRecommender
 {
@@ -55,14 +57,14 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
             return [];
         }
 
-        var freeVramBytes = await TryResolveFreeVramAsync(ct);
+        var budgetBytes = await TryResolveFitBudgetAsync(ct);
 
         var tiers = new GgufQuantTier[files.Count];
         var verdicts = new GgufFitVerdict[files.Count];
         for (var i = 0; i < files.Count; i++)
         {
             tiers[i] = GgufQuantQuality.Classify(files[i].Quant);
-            verdicts[i] = ClassifyFit(files[i].SizeBytes, freeVramBytes);
+            verdicts[i] = ClassifyFit(files[i].SizeBytes, budgetBytes);
         }
 
         // A speculative-decoding drafter is never THE recommended variant: it is a companion to the base weights, not a
@@ -84,15 +86,71 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         return annotations;
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<GgufFitVerdict>> ClassifyAgainstProfileAsync(IReadOnlyList<long> sizesBytes, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(sizesBytes);
+
+        if (sizesBytes.Count == 0)
+        {
+            return [];
+        }
+
+        var budgetBytes = await TryResolveProfileBudgetAsync(ct);
+        return [.. sizesBytes.Select(size => ClassifyFit(size, budgetBytes))];
+    }
+
+    // The advisor's budget from the memoized effective profile: the companion reserve comes off a GPU budget only, never off RAM.
+    // Any non-cancellation failure degrades to "unknown" (null), so a page read never fails over it.
+    private async Task<long?> TryResolveProfileBudgetAsync(CancellationToken ct)
+    {
+        try
+        {
+            // Never GetEffectiveProfileAsync here: on a cold or stale audit it would run the device probe (up to 15 s) inside a page read.
+            if (await _runtimeAudit.PeekEffectiveProfileAsync(ct) is not { } profile)
+            {
+                return null;
+            }
+
+            var budget = MemoryFitEstimator.ResolveFitBudgetBytes(profile);
+            if (budget <= 0)
+            {
+                return null;
+            }
+
+            if (!MemoryFitEstimator.UsesGpuBudget(profile))
+            {
+                return budget;
+            }
+
+            var reserve = await _companionReserve.ResolveGpuBytesAsync(profile, ct);
+            return Math.Max(1, budget - reserve);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            _logger.LogWarning(exception, "Hardware-profile budget could not be resolved for a GGUF fit verdict; treating the budget as unknown.");
+            return null;
+        }
+    }
+
     // Resolve the active backend exactly as the inference profiler does, then probe the process-local budget once, less the knowledge companions' reserve.
     // Any non-cancellation failure degrades to "unknown" (null) — the picker must never 500 over a missing GPU/probe.
-    private async Task<long?> TryResolveFreeVramAsync(CancellationToken ct)
+    private async Task<long?> TryResolveFitBudgetAsync(CancellationToken ct)
     {
         try
         {
             var variant = await _variantSelector.SelectVariantAsync(ct);
             var backend = InferenceBackends.FromVariant(variant);
             var budget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct);
+            if (budget is null)
+            {
+                // No VRAM budget: a CPU-mode profile is graded against the advisor's RAM budget, with no companion GPU reserve.
+                var cpuProfile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, ct);
+                return MemoryFitEstimator.UsesGpuBudget(cpuProfile) || cpuProfile.AvailableRamBytes is not > 0
+                    ? null
+                    : MemoryFitEstimator.ResolveFitBudgetBytes(cpuProfile);
+            }
+
             if (budget is not > 0)
             {
                 return budget;
@@ -117,9 +175,9 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         }
     }
 
-    private static GgufFitVerdict ClassifyFit(long sizeBytes, long? freeVramBytes)
+    private static GgufFitVerdict ClassifyFit(long sizeBytes, long? budgetBytes)
     {
-        if (freeVramBytes is not { } free)
+        if (budgetBytes is not { } free)
         {
             return GgufFitVerdict.Unknown;
         }
@@ -139,10 +197,10 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
     /// </summary>
     /// <remarks>
     ///     When some files fit, the highest quality tier among them wins, ties broken by larger size; otherwise the
-    ///     best Tight file by the same order. When free VRAM is known but nothing fits, the smallest file wins. When
-    ///     VRAM is unknown (no probe ran), a SweetSpot file is preferred, then a Balanced one, then the median file by
-    ///     size. Drafters (companions, not chat models) never compete; neither do F32/F16/BF16 files while a quantized
-    ///     file remains, since they tie Q8_0's tier and would win on size at 2-4x the download.
+    ///     best Tight file by the same order. When the budget (VRAM, or RAM in CPU mode) is known but nothing fits, the
+    ///     smallest file wins; when it is unknown, a SweetSpot file, then a Balanced one, then the median. Drafters never
+    ///     compete; neither do F32/F16/BF16 files while a quantized file remains, since they tie Q8_0's tier and would
+    ///     win on size at 2-4x the download.
     /// </remarks>
     private static int PickRecommendedIndex(IReadOnlyList<GgufRepoFile> files,
         IReadOnlyList<GgufQuantTier> tiers,

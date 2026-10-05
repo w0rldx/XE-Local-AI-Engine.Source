@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ModelFit.Catalog;
 
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog.Implementation;
@@ -111,5 +112,32 @@ public sealed class ModelCatalogBundledLoaderTests
         var document = ModelCatalogBundledLoader.Load(NullLogger.Instance);
 
         AssertEx.True(document.Models.Any(m => m.Moe && m.ActiveParamsB is > 0), "expected at least one MoE entry with a positive activeParamsB.");
+    }
+
+    [Test]
+    public void Load_BundledSeedCatalog_TestedFlagMatchesTheModelMatrix()
+    {
+        // The "tested" badge claims the authors ran the model through scripts/run-model-matrix-local.sh, so the flag
+        // must name exactly the catalog entries whose repo the matrix pins. A matrix model absent from the catalog is fine.
+        var document = ModelCatalogBundledLoader.Load(NullLogger.Instance);
+        using var matrix = JsonDocument.Parse(File.ReadAllText(RepositoryPaths.Combine("scripts", "model-matrix", "models.json")));
+        // Each matrix repo pins one file today; ToDictionary throws on a duplicate repo, which then needs a rule for which file is "the" tested quant.
+        var matrixFiles = matrix.RootElement.GetProperty("models")
+                                .EnumerateArray()
+                                .ToDictionary(model => model.GetProperty("repo").GetString()!,
+                                    model => (Quant: model.GetProperty("modelName").GetString()!.Split(':')[^1], SizeBytes: model.GetProperty("sizeBytes").GetInt64()),
+                                    StringComparer.OrdinalIgnoreCase);
+
+        var mismatched = document.Models
+                                 .Where(entry => entry.Tested != matrixFiles.ContainsKey(entry.GgufRepo)
+                                                 || (entry.Tested && (entry.TestedQuant, entry.TestedSizeBytes) != matrixFiles[entry.GgufRepo]))
+                                 .Select(entry => $"{entry.Id} (tested: {entry.Tested}, testedQuant: {entry.TestedQuant}, testedSizeBytes: {entry.TestedSizeBytes})")
+                                 .ToList();
+
+        AssertEx.True(mismatched.Count == 0,
+            $"Catalog entries whose tested fields disagree with scripts/model-matrix/models.json: {string.Join(", ", mismatched)}. "
+            + "Fix model-catalog.seed.json: \"tested\" is true exactly when the entry's ggufRepo is a matrix repo, and then \"testedQuant\" "
+            + "is the matrix modelName after the last ':' and \"testedSizeBytes\" the matrix sizeBytes.");
+        AssertEx.True(document.Models.Any(entry => entry.Tested), "No bundled catalog entry is flagged tested; the sync check would pass vacuously.");
     }
 }

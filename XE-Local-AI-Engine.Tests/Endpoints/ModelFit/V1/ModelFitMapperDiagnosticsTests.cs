@@ -22,7 +22,7 @@ public sealed class ModelFitMapperDiagnosticsTests
     public void ToResponse_WithAFullBlob_CopiesEveryField()
     {
         const string diagnostics = """
-                                   {"release_date":"2025-03-12","is_trusted_publisher":false,"section":"recommended","tier":"balanced",
+                                   {"release_date":"2025-03-12","is_trusted_publisher":false,"section":"recommended","tier":"balanced","tested":true,
                                     "catalog_id":"qwen3-8b","catalog_display_name":"Qwen3 8B","catalog_notes":"notes","expert_offload":true,
                                     "gpu_gb":6.5,"cpu_gb":1.25,"kv_quant":"Q8_0","kv_quant_estimated_gb":10.965,"kv_quant_headroom_gb":3.125,
                                     "kv_quant_fits":false,"kv_quant_requires_flash_attention":true,"kv_bytes_per_token":640,
@@ -35,6 +35,7 @@ public sealed class ModelFitMapperDiagnosticsTests
         AssertEx.False(row.IsTrustedPublisher, "an explicit false in the blob wins over a trusted model name.");
         AssertEx.Equal("recommended", row.Section);
         AssertEx.Equal("balanced", row.Tier);
+        AssertEx.True(row.Tested);
         AssertEx.Equal("qwen3-8b", row.CatalogId);
         AssertEx.Equal("Qwen3 8B", row.CatalogDisplayName);
         AssertEx.Equal("notes", row.CatalogNotes);
@@ -75,6 +76,7 @@ public sealed class ModelFitMapperDiagnosticsTests
         AssertEx.False(untrusted.IsTrustedPublisher, "a blob without is_trusted_publisher derives trust from the model name.");
         AssertEx.Equal("explore", trusted.Section);
         AssertEx.False(trusted.ExpertsOffloaded);
+        AssertEx.False(trusted.Tested, "a snapshot row written before the tested flag shipped reads as untested.");
         AssertEx.True(trusted.Tier is null && trusted.CatalogId is null && trusted.CatalogDisplayName is null && trusted.CatalogNotes is null);
         AssertEx.True(trusted.GpuGb is null && trusted.CpuGb is null);
         AssertEx.True(trusted.KvQuant is null && trusted.KvQuantEstimatedGb is null && trusted.KvQuantHeadroomGb is null);
@@ -86,7 +88,7 @@ public sealed class ModelFitMapperDiagnosticsTests
     public void ToResponse_WithWrongTypedValues_ReadsEachAsItsDefault()
     {
         const string diagnostics = """
-                                   {"release_date":20250312,"is_trusted_publisher":"yes","section":7,"tier":null,"expert_offload":"true",
+                                   {"release_date":20250312,"is_trusted_publisher":"yes","section":7,"tier":null,"tested":"true","expert_offload":"true",
                                     "gpu_gb":"6.5","kv_quant_fits":1,"kv_bytes_per_token":640.5,"kv_quant_estimated_gb":1e400}
                                    """;
 
@@ -96,6 +98,7 @@ public sealed class ModelFitMapperDiagnosticsTests
         AssertEx.True(row.IsTrustedPublisher, "a non-boolean is_trusted_publisher falls back to the name-derived signal.");
         AssertEx.Equal("explore", row.Section);
         AssertEx.True(row.Tier is null);
+        AssertEx.False(row.Tested);
         AssertEx.False(row.ExpertsOffloaded);
         AssertEx.True(row.GpuGb is null);
         AssertEx.True(row.KvQuantFits is null);

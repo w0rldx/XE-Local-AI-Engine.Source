@@ -288,7 +288,7 @@ public sealed class MemoryFitEstimator
     }
 
     // Whether an estimate for this profile is scored against the GPU budget rather than the CPU/RAM degrade budget.
-    private static bool UsesGpuBudget(HardwareProfile profile)
+    internal static bool UsesGpuBudget(HardwareProfile profile)
     {
         return profile is { GpuAccelAvailable: true, VramKnown: true } && profile.VramBytes is > 0;
     }

@@ -4,8 +4,14 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 ///     Standardized GGUF header metadata extracted via a range read. Any field absent from the header is
 ///     <see langword="null" />.
 /// </summary>
-internal sealed class GgufHeaderMetadata
+internal sealed record GgufHeaderMetadata
 {
+    /// <summary>
+    ///     True when the remote read stopped at the tokenizer with the architecture block set, before the key-value
+    ///     section ended: keys written after that point were not read.
+    /// </summary>
+    public bool IsPartial { get; init; }
+
     public required string? Architecture { get; init; }
 
     public required string? QuantType { get; init; }

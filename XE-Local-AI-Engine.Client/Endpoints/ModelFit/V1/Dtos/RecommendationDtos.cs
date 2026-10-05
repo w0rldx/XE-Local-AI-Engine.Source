@@ -64,6 +64,12 @@ public sealed class ModelFitRecommendationResponse
     /// <summary>The catalog entry's editorial tier (<c>S</c>/<c>A</c>/<c>B</c>), or <c>null</c> for an <c>explore</c> row.</summary>
     public string? Tier { get; init; }
 
+    /// <summary>
+    ///     <c>true</c> when the authors ran this catalog model through their live scenario checks. Display-only;
+    ///     <c>false</c> for an <c>explore</c> row and for a snapshot row written before the flag shipped.
+    /// </summary>
+    public bool Tested { get; init; }
+
     /// <summary>The catalog entry id, or <c>null</c> for an <c>explore</c> row.</summary>
     public string? CatalogId { get; init; }
 

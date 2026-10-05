@@ -37,4 +37,13 @@ public interface IRuntimeDeviceAudit
     ///     GPU is actually working the effective profile is the raw profile unchanged.
     /// </remarks>
     Task<HardwareProfile> GetEffectiveProfileAsync(bool forceRefreshProfile, CancellationToken ct);
+
+    /// <summary>
+    ///     The effective profile built on the memoized audit (<see cref="PeekCached" />), or <see langword="null" /> when none is cached.
+    ///     Never computes the audit, so it never starts a device probe.
+    /// </summary>
+    Task<HardwareProfile?> PeekEffectiveProfileAsync(CancellationToken ct)
+    {
+        return Task.FromResult<HardwareProfile?>(null);
+    }
 }

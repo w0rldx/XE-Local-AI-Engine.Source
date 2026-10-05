@@ -22,6 +22,10 @@ public sealed class GgufDiscoveryPerfTests
 {
     private const string RepoId = "bartowski/Many-Quant-GGUF";
     private const string Commit = "c0ffee00000000000000000000000000000000";
+    private const long ProbeBytes = 64 * 1024;
+
+    // The ~380 KiB large-vocabulary header outgrows 64, 128 and 256 KiB, so a complete read issues four requests.
+    private const int CompleteReadRequests = 4;
 
     // Real, parser-recognized quant tokens so every generated file passes IsUsableGgufFile.
     private static readonly string[] QuantTokens =
@@ -106,6 +110,141 @@ public sealed class GgufDiscoveryPerfTests
         AssertEx.Equal(expected: 2, harness.Handler.RangeCallCountByFile[fileName]);
     }
 
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task InspectRepo_LargeTokenizer_ReadsItOncePerRepo_AndEveryFileCarriesTheOptionalKeys(bool optionalKeysAfterTokenizer)
+    {
+        // Normal order, and the mixed order a post-conversion tool produces (optional keys appended after the tokenizer).
+        var header = LargeVocabHeader(blockCount: 32, keyLength: 256, optionalKeysAfterTokenizer);
+        using var harness = new PerfHarness(repoDetail: BuildRepoDetailJson(count: 3), headerBytesFor: _ => header, headerProbeBytes: ProbeBytes);
+
+        var files = (await harness.Discovery.InspectRepoAsync(RepoId, CancellationToken.None)).Files;
+
+        // One first probe per file, plus ONE complete read of the smallest file (64, 128, 256, 512 KiB).
+        AssertEx.Equal(expected: 1 + CompleteReadRequests, RangeCalls(harness, QuantTokens[0]));
+        AssertEx.Equal(expected: 1, RangeCalls(harness, QuantTokens[1]));
+        AssertEx.Equal(expected: 1, RangeCalls(harness, QuantTokens[2]));
+        foreach (var file in files)
+        {
+            AssertEx.Equal(expected: 4_000_000_000L, file.ParamCount!.Value);
+            AssertEx.Equal(expected: 32L, file.BlockCount!.Value);
+            AssertEx.Equal(expected: 256L, file.AttentionKeyLength!.Value);
+            AssertEx.Equal(expected: 256L, file.AttentionValueLength!.Value);
+            AssertEx.Equal(expected: 4L, file.FullAttentionInterval!.Value);
+            // The quant label is per file: never borrowed from the complete read of another file.
+            AssertEx.Null(file.QuantType);
+        }
+    }
+
+    [Test]
+    public async Task InspectRepo_TwoArchitectureSignatures_OneCompleteReadEach_AndNoValuesCross()
+    {
+        var model = LargeVocabHeader(blockCount: 32, keyLength: 256, optionalKeysAfterTokenizer: true);
+        var drafter = LargeVocabHeader(blockCount: 2, keyLength: 64, optionalKeysAfterTokenizer: true);
+        using var harness = new PerfHarness(repoDetail: BuildRepoDetailJson(count: 3),
+            headerBytesFor: fileName => fileName == FileNameFor(QuantTokens[2]) ? drafter : model,
+            headerProbeBytes: ProbeBytes);
+
+        var files = (await harness.Discovery.InspectRepoAsync(RepoId, CancellationToken.None)).Files;
+
+        AssertEx.Equal(expected: 1 + CompleteReadRequests, RangeCalls(harness, QuantTokens[0]));
+        AssertEx.Equal(expected: 1, RangeCalls(harness, QuantTokens[1]));
+        AssertEx.Equal(expected: 1 + CompleteReadRequests, RangeCalls(harness, QuantTokens[2]));
+        foreach (var quant in QuantTokens[..2])
+        {
+            var file = files.Single(f => f.Quant == quant);
+            AssertEx.Equal(expected: 32L, file.BlockCount!.Value);
+            AssertEx.Equal(expected: 256L, file.AttentionKeyLength!.Value);
+        }
+
+        var draft = files.Single(f => f.Quant == QuantTokens[2]);
+        AssertEx.Equal(expected: 2L, draft.BlockCount!.Value);
+        AssertEx.Equal(expected: 64L, draft.AttentionKeyLength!.Value);
+    }
+
+    [Test]
+    public async Task InspectRepo_CompleteReadFails_KeepsThePartialMetadata()
+    {
+        var header = LargeVocabHeader(blockCount: 32, keyLength: 256, optionalKeysAfterTokenizer: true);
+        using var harness = new PerfHarness(repoDetail: BuildRepoDetailJson(count: 3),
+            headerBytesFor: _ => header,
+            headerProbeBytes: ProbeBytes,
+            failRangesAbove: ProbeBytes);
+
+        var files = (await harness.Discovery.InspectRepoAsync(RepoId, CancellationToken.None)).Files;
+
+        AssertEx.Equal(expected: 3, files.Count);
+        foreach (var file in files)
+        {
+            AssertEx.Equal(expected: 32L, file.BlockCount!.Value);
+            AssertEx.Null(file.AttentionKeyLength);
+        }
+    }
+
+    private static int RangeCalls(PerfHarness harness, string quant)
+    {
+        return harness.Handler.RangeCallCountByFile.GetValueOrDefault(FileNameFor(quant));
+    }
+
+    // The fit-relevant keys come first, then a vocabulary far past the 64 KiB probe; the optional keys sit before or after it.
+    private static byte[] LargeVocabHeader(uint blockCount, uint keyLength, bool optionalKeysAfterTokenizer)
+    {
+        var builder = new GgufHeaderBytesBuilder()
+                      .WithString("general.architecture", "qwen35")
+                      .WithUint64("general.parameter_count", value: 4_000_000_000UL)
+                      .WithUint32("qwen35.block_count", blockCount)
+                      .WithUint32("qwen35.embedding_length", value: 2560)
+                      .WithUint32("qwen35.attention.head_count", value: 16)
+                      .WithUint32("qwen35.attention.head_count_kv", value: 4);
+        if (!optionalKeysAfterTokenizer)
+        {
+            WithOptionalKeys(builder, keyLength);
+        }
+
+        builder.WithString("tokenizer.ggml.model", "gpt2")
+               .WithStringArray("tokenizer.ggml.tokens", BuildVocab(20_000))
+               .WithString("tokenizer.chat_template", "{{ messages }}");
+        if (optionalKeysAfterTokenizer)
+        {
+            WithOptionalKeys(builder, keyLength);
+        }
+
+        return builder.WithUint32("general.file_type", value: 15).Build();
+    }
+
+    private static void WithOptionalKeys(GgufHeaderBytesBuilder builder, uint keyLength)
+    {
+        builder.WithUint32("qwen35.attention.key_length", keyLength)
+               .WithUint32("qwen35.attention.value_length", keyLength)
+               .WithUint32("qwen35.full_attention_interval", value: 4);
+    }
+
+    [Test]
+    public async Task InspectRepo_ArchitectureKeysBehindTheTokenizer_StillGrowsUntilTheyParse()
+    {
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "llama")
+                     .WithStringArray("tokenizer.ggml.tokens", BuildVocab(20_000))
+                     .WithUint32("llama.block_count", value: 28)
+                     .WithUint32("llama.embedding_length", value: 3072)
+                     .WithUint32("llama.attention.head_count", value: 24)
+                     .WithUint32("llama.attention.head_count_kv", value: 8)
+                     .Build();
+        using var harness = new PerfHarness(repoDetail: BuildRepoDetailJson(count: 1), headerBytesFor: _ => header, headerProbeBytes: ProbeBytes);
+
+        var file = (await harness.Discovery.InspectRepoAsync(RepoId, CancellationToken.None)).Files.Single();
+
+        AssertEx.True(harness.Handler.RangeCallCountByFile[FileNameFor(QuantTokens[0])] > 1, "an incomplete architecture block must keep growing the range.");
+        AssertEx.Equal(expected: 28L, file.BlockCount!.Value);
+        AssertEx.Equal(expected: 8L, file.AttentionHeadCountKV!.Value);
+    }
+
+    private static string[] BuildVocab(int count)
+    {
+        return [.. Enumerable.Range(0, count).Select(static i => $"token_{i}")];
+    }
+
     private static string FileNameFor(string quant)
     {
         return $"model-{quant}.gguf";
@@ -145,9 +284,12 @@ public sealed class GgufDiscoveryPerfTests
             int headerReadConcurrency = 6,
             TimeSpan? headerDelay = null,
             TimeSpan? headerCacheTtl = null,
-            TimeProvider? timeProvider = null)
+            TimeProvider? timeProvider = null,
+            Func<string, byte[]>? headerBytesFor = null,
+            long headerProbeBytes = 4L * 1024 * 1024,
+            long? failRangesAbove = null)
         {
-            Handler = new TrackingStubHandler(listing, repoDetail, headerDelay ?? TimeSpan.Zero);
+            Handler = new TrackingStubHandler(listing, repoDetail, headerDelay ?? TimeSpan.Zero, headerBytesFor, failRangesAbove);
             _hubHttp = new HttpClient(Handler, disposeHandler: false);
             _downloadHttp = new HttpClient(Handler, disposeHandler: false);
 
@@ -155,7 +297,8 @@ public sealed class GgufDiscoveryPerfTests
             {
                 HeaderReadConcurrency = headerReadConcurrency,
                 HeaderCacheTtl = headerCacheTtl ?? TimeSpan.FromDays(30),
-                HubMetadataCacheTtl = TimeSpan.FromHours(6)
+                HubMetadataCacheTtl = TimeSpan.FromHours(6),
+                HeaderProbeBytes = headerProbeBytes
             };
 
             var clock = timeProvider ?? TimeProvider.System;
@@ -186,16 +329,20 @@ public sealed class GgufDiscoveryPerfTests
         private readonly string? _listing;
         private readonly string? _repoDetail;
         private readonly TimeSpan _headerDelay;
+        private readonly Func<string, byte[]>? _headerBytesFor;
+        private readonly long? _failRangesAbove;
         private int _inFlight;
         private int _listCallCount;
         private int _repoDetailCallCount;
         private int _maxObservedConcurrency;
 
-        public TrackingStubHandler(string? listing, string? repoDetail, TimeSpan headerDelay)
+        public TrackingStubHandler(string? listing, string? repoDetail, TimeSpan headerDelay, Func<string, byte[]>? headerBytesFor, long? failRangesAbove)
         {
             _listing = listing;
             _repoDetail = repoDetail;
             _headerDelay = headerDelay;
+            _headerBytesFor = headerBytesFor;
+            _failRangesAbove = failRangesAbove;
         }
 
         public int ListCallCount => _listCallCount;
@@ -226,8 +373,13 @@ public sealed class GgufDiscoveryPerfTests
                         await Task.Delay(_headerDelay, cancellationToken);
                     }
 
+                    if (request.Headers.Range?.Ranges.FirstOrDefault()?.To + 1 > _failRangesAbove)
+                    {
+                        return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+                    }
+
                     var index = Array.IndexOf(QuantTokens, fileName.Replace("model-", "", StringComparison.Ordinal).Replace(".gguf", "", StringComparison.Ordinal));
-                    return BuildRangeResponse(request, HeaderBytesFor(Math.Max(index, val2: 0)));
+                    return BuildRangeResponse(request, _headerBytesFor?.Invoke(fileName) ?? HeaderBytesFor(Math.Max(index, val2: 0)));
                 }
                 finally
                 {

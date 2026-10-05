@@ -144,5 +144,22 @@ public static class ModelCatalogValidator
         {
             errors.Add($"{prefix}.releaseDate must be an ISO date (yyyy-MM-dd).");
         }
+
+        if (entry.Tested)
+        {
+            if (string.IsNullOrWhiteSpace(entry.TestedQuant))
+            {
+                errors.Add($"{prefix}.testedQuant is required when tested is true.");
+            }
+
+            if (entry.TestedSizeBytes is not > 0)
+            {
+                errors.Add($"{prefix}.testedSizeBytes must be positive when tested is true.");
+            }
+        }
+        else if (entry.TestedQuant is not null || entry.TestedSizeBytes is not null)
+        {
+            errors.Add($"{prefix}.testedQuant and testedSizeBytes are only allowed when tested is true.");
+        }
     }
 }

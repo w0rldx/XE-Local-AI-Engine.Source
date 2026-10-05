@@ -32,6 +32,8 @@ public sealed class ModelFitRecommendationDiagnostics
 
     public string? Tier { get; private init; }
 
+    public bool Tested { get; private init; }
+
     public string? CatalogId { get; private init; }
 
     public string? CatalogDisplayName { get; private init; }
@@ -90,6 +92,7 @@ public sealed class ModelFitRecommendationDiagnostics
                 IsTrustedPublisher = ReadBool(root, "is_trusted_publisher") ?? fallback.IsTrustedPublisher,
                 Section = ReadString(root, "section") ?? fallback.Section,
                 Tier = ReadString(root, "tier"),
+                Tested = ReadBool(root, "tested") ?? false,
                 CatalogId = ReadString(root, "catalog_id"),
                 CatalogDisplayName = ReadString(root, "catalog_display_name"),
                 CatalogNotes = ReadString(root, "catalog_notes"),

@@ -1,12 +1,33 @@
-import { Anchor, Badge, Button, Card, Group, Loader, Stack, Table, Text, TextInput, Title, Tooltip } from "@mantine/core";
+import {
+	Anchor,
+	Badge,
+	Button,
+	Card,
+	CloseButton,
+	Group,
+	Loader,
+	Stack,
+	Table,
+	Text,
+	TextInput,
+	Title,
+	Tooltip,
+} from "@mantine/core";
 import { IconAlertTriangle, IconCloudDownload, IconExternalLink, IconSearch } from "@tabler/icons-react";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import type { GgufRepository } from "@/features/models/models/GgufModels";
+import {
+	fitVerdictColor,
+	fitVerdictLabelKey,
+	type GgufDownloadTarget,
+	type GgufRepository,
+	type GgufTestedModel,
+} from "@/features/models/models/GgufModels";
 
 interface GgufBrowsePanelProps {
 	repositories: readonly GgufRepository[];
@@ -14,13 +35,19 @@ interface GgufBrowsePanelProps {
 	error: unknown;
 	hasSearched: boolean;
 	onSearch: (query: string) => void;
-	onDownload: (repository: GgufRepository) => void;
+	onDownload: (target: GgufDownloadTarget) => void;
 	downloadingRepoId: string | null;
+	// Curated-catalog models the authors tested, offered before any search; empty hides the block.
+	testedModels: readonly GgufTestedModel[];
+	// Lower-cased repo ids with at least one installed quant (installed GGUF models are named `{repo}:{quant}`).
+	installedRepoIds: ReadonlySet<string>;
 }
 
 // HF GGUF browse/select panel: a search box runs browseGgufRepositories, results list each candidate repo with its
 // metadata and a select-to-download action (startGgufDownload by the parent). The committed search term is lifted to
-// the page (it keys the browse query); the raw input box value is local component state until submitted.
+// the page (it keys the browse query); the raw input box value is local component state until submitted. Until a
+// search is submitted, or after the field is cleared, the tested catalog models are listed so a new user has something
+// to pick without searching.
 export function GgufBrowsePanel({
 	repositories,
 	isLoading,
@@ -29,6 +56,8 @@ export function GgufBrowsePanel({
 	onSearch,
 	onDownload,
 	downloadingRepoId,
+	testedModels,
+	installedRepoIds,
 }: GgufBrowsePanelProps) {
 	const { t } = useTranslation();
 	const [input, setInput] = useState("");
@@ -36,6 +65,11 @@ export function GgufBrowsePanel({
 	const handleSubmit = (event: FormEvent): void => {
 		event.preventDefault();
 		onSearch(input.trim());
+	};
+
+	const handleClear = (): void => {
+		setInput("");
+		onSearch("");
 	};
 
 	return (
@@ -56,6 +90,16 @@ export function GgufBrowsePanel({
 							placeholder={t("pages.models.gguf.browse.searchPlaceholder", "e.g. llama 3.1 8b")}
 							value={input}
 							onChange={(event) => setInput(event.currentTarget.value)}
+							rightSection={
+								input.length > 0 || hasSearched ? (
+									<CloseButton
+										size="sm"
+										onClick={handleClear}
+										aria-label={t("pages.models.gguf.browse.clearSearch", "Clear search")}
+										data-testid="model-fit-browse-clear"
+									/>
+								) : null
+							}
 							data-testid="model-fit-browse-input"
 						/>
 						<Button
@@ -69,6 +113,103 @@ export function GgufBrowsePanel({
 						</Button>
 					</Group>
 				</form>
+
+				{!hasSearched && testedModels.length > 0 ? (
+					<Stack gap="xs">
+						<Title order={3} size="h5">
+							{t("pages.models.gguf.browse.tested.title", "Tested by the authors")}
+						</Title>
+						<Text size="sm" c="dimmed">
+							{t(
+								"pages.models.gguf.browse.tested.hint",
+								"These models passed the authors' live scenario checks. Pick one to choose a quantization that fits this machine, or search Hugging Face above.",
+							)}
+						</Text>
+						<Table.ScrollContainer minWidth={760}>
+							<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="model-fit-browse-tested-table">
+								<Table.Thead>
+									<Table.Tr>
+										<Table.Th>{t("pages.models.gguf.browse.tested.columns.model", "Model")}</Table.Th>
+										<Table.Th>{t("pages.models.gguf.browse.tested.columns.size", "Size")}</Table.Th>
+										<Table.Th>{t("pages.models.gguf.browse.tested.columns.testedQuant", "Tested quant")}</Table.Th>
+										<Table.Th>{t("pages.models.gguf.browse.columns.license", "License")}</Table.Th>
+										<Table.Th>{t("pages.models.gguf.browse.tested.columns.notes", "Notes")}</Table.Th>
+										<Table.Th>{t("pages.models.gguf.browse.columns.action", "Action")}</Table.Th>
+									</Table.Tr>
+								</Table.Thead>
+								<Table.Tbody>
+									{testedModels.map((model) => {
+										const fitColor = fitVerdictColor[model.fitVerdict];
+										const fitLabelKey = model.fitVerdict === "Unknown" ? null : fitVerdictLabelKey[model.fitVerdict];
+										return (
+											<Table.Tr key={model.id} data-testid={`model-fit-browse-tested-row-${model.id}`}>
+												<Table.Td>
+													<Group gap="xs" wrap="nowrap">
+														<Text size="sm" fw={500}>
+															{model.displayName}
+														</Text>
+														{installedRepoIds.has(model.ggufRepo.toLowerCase()) ? (
+															<Badge
+																color="teal"
+																variant="light"
+																size="sm"
+																data-testid={`model-fit-browse-tested-installed-${model.id}`}
+															>
+																{t("pages.models.gguf.browse.tested.installed", "Installed")}
+															</Badge>
+														) : null}
+													</Group>
+													<Anchor
+														href={`https://huggingface.co/${model.ggufRepo}`}
+														target="_blank"
+														rel="noopener noreferrer"
+														size="xs"
+													>
+														{model.ggufRepo}
+														<IconExternalLink size={12} style={{ marginLeft: 4, verticalAlign: "middle" }} />
+													</Anchor>
+												</Table.Td>
+												<Table.Td>{`${model.totalParamsB}B`}</Table.Td>
+												<Table.Td>
+													<Group gap="xs" wrap="nowrap">
+														<Text size="sm" data-testid={`model-fit-browse-tested-quant-${model.id}`}>
+															{`${model.testedQuant} · ${formatBytesAsGb(model.testedSizeBytes)}`}
+														</Text>
+														{fitColor !== null && fitLabelKey !== null ? (
+															<Badge
+																color={fitColor}
+																variant="light"
+																size="sm"
+																data-testid={`model-fit-browse-tested-fit-${model.id}`}
+															>
+																{t(`pages.models.gguf.download.fit.${fitLabelKey}`, model.fitVerdict)}
+															</Badge>
+														) : null}
+													</Group>
+												</Table.Td>
+												<Table.Td>{model.license}</Table.Td>
+												<Table.Td>{model.notes ?? "—"}</Table.Td>
+												<Table.Td>
+													<Button
+														size="xs"
+														variant="light"
+														leftSection={<IconCloudDownload size={14} />}
+														loading={downloadingRepoId === model.ggufRepo}
+														disabled={downloadingRepoId === model.ggufRepo}
+														onClick={() => onDownload({ repoId: model.ggufRepo, preferredQuant: model.testedQuant })}
+														data-testid={`model-fit-browse-tested-download-${model.id}`}
+													>
+														{t("pages.models.gguf.browse.download", "Download")}
+													</Button>
+												</Table.Td>
+											</Table.Tr>
+										);
+									})}
+								</Table.Tbody>
+							</Table>
+						</Table.ScrollContainer>
+					</Stack>
+				) : null}
 
 				{error ? (
 					<InlineErrorAlert
@@ -90,7 +231,7 @@ export function GgufBrowsePanel({
 					</Text>
 				) : null}
 
-				{!isLoading && !error && repositories.length > 0 ? (
+				{!isLoading && !error && hasSearched && repositories.length > 0 ? (
 					<Table.ScrollContainer minWidth={760}>
 						<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="model-fit-browse-table">
 							<Table.Thead>

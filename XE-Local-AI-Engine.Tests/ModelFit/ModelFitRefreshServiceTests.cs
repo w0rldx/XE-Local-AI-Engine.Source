@@ -654,6 +654,11 @@ public sealed class ModelFitRefreshServiceTests
         AssertEx.ContainsSingle(rows, row => row.ModelName == GgufModelName.Format(sharedRepo, "Q4_K_M"));
         AssertEx.ContainsSingle(rows, row => row.ModelName == "org/other-GGUF:Q4_K_M");
         AssertEx.True(rows.Select(row => row.Rank).SequenceEqual(Enumerable.Range(1, rows.Count)), "ranks must stay contiguous after the duplicate is dropped.");
+        // The catalog entry's tested flag rides the diagnostics blob; an explore row never carries it.
+        var catalogRow = rows.Single(row => row.ModelName == GgufModelName.Format(sharedRepo, "Q4_K_M"));
+        var exploreRow = rows.Single(row => row.ModelName == "org/other-GGUF:Q4_K_M");
+        AssertEx.True(ModelFitRecommendationDiagnostics.Parse(catalogRow.DiagnosticsJson, catalogRow.ModelName).Tested);
+        AssertEx.False(ModelFitRecommendationDiagnostics.Parse(exploreRow.DiagnosticsJson, exploreRow.ModelName).Tested);
     }
 
     private static async Task<ICatalogRecommendationService> CatalogRecommending(string repoId, HardwareProfile profile)
@@ -678,7 +683,8 @@ public sealed class ModelFitRefreshServiceTests
                 ContextLength: 8192,
                 MinLlamaCppTag: "b10201",
                 ReleaseDate: "2026-01-01",
-                Notes: null),
+                Notes: null,
+                Tested: true),
             File = selected.File,
             Estimate = selected.Estimate,
             ModelName = GgufModelName.Format(repoId, "Q4_K_M"),

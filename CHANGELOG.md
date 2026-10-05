@@ -166,6 +166,7 @@ published.
 - **Runtime RAM/VRAM widget** — live RAM and VRAM in the top bar, with image and transcription residents listed and draft-only models unloaded sooner.
 - **Vault key custody** — the persisted `node.key` is wrapped under the admin password and a one-time recovery code; a locked node serves only an unlock page. ADR 0018.
 - **Granite 4.1 3B in the curated catalog** — IBM's 3B model (`unsloth/granite-4.1-3b-GGUF`, tier A, needs llama.cpp `b10201`); tool-capable, no thinking mode.
+- **"Tested" badge on Model Recommendations** — catalog models the authors ran through their live scenario checks (the pinned model matrix) carry a "Tested" badge next to the tier; display-only, ranking is unchanged. Model Management lists the same models as "Tested by the authors" before any Hugging Face search, each with a Download that opens the quant picker. Each row shows the tested quant, its size, whether it fits this machine and whether the model is installed; the picker preselects the tested quant unless it won't fit, and clearing the search brings the list back.
 
 ### Changed
 
@@ -241,6 +242,12 @@ published.
 
 ### Fixed
 
+- The model advisor dropped every catalog entry with a large tokenizer vocabulary (all Qwen3.5, 3.6 and 3.8 entries):
+  the remote GGUF header read fetched the whole tokenizer for each quant file and ran into the per-repository
+  timeout. The tokenizer is now read once per repository and architecture instead of once per quant file, and
+  skipped entries are named in one warning.
+- The download quant picker showed no fit verdict on a CPU-only or CPU-fallback node. It now grades against
+  available RAM there.
 - The welcome tour opened on top of the still-unanswered external-access chooser, because the onboarding provider
   wrapped the whole router. It now mounts inside the app layout, whose guard admits only a node whose profile is
   decided.

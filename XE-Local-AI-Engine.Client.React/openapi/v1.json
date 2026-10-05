@@ -41913,7 +41913,8 @@
           "catalogVersion",
           "source",
           "modelCount",
-          "refreshSourceConfigured"
+          "refreshSourceConfigured",
+          "testedModels"
         ],
         "properties": {
           "catalogVersion": {
@@ -41940,6 +41941,61 @@
           },
           "refreshSourceConfigured": {
             "type": "boolean"
+          },
+          "testedModels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ModelCatalogTestedModelResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1ModelCatalogTestedModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "displayName",
+          "publisher",
+          "ggufRepo",
+          "license",
+          "totalParamsB",
+          "testedQuant",
+          "testedSizeBytes",
+          "fitVerdict"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "ggufRepo": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string"
+          },
+          "totalParamsB": {
+            "type": "number",
+            "format": "double"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "testedQuant": {
+            "type": "string"
+          },
+          "testedSizeBytes": {
+            "type": "integer"
+          },
+          "fitVerdict": {
+            "type": "string"
           }
         }
       },
@@ -42021,6 +42077,9 @@
           "tier": {
             "type": "string",
             "nullable": true
+          },
+          "tested": {
+            "type": "boolean"
           },
           "catalogId": {
             "type": "string",

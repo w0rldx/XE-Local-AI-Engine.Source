@@ -57,6 +57,32 @@ function TierBadge({ tier, rank }: { tier: ModelFitRecommendation["tier"]; rank:
 	);
 }
 
+// The tested badge sits next to the tier badge when the authors ran this catalog model through their live scenario
+// checks. Display-only: it never affects ranking. Absent for an untested or non-catalog row.
+function TestedBadge({ tested, rank }: { tested: boolean; rank: number }) {
+	const { t } = useTranslation();
+	if (!tested) {
+		return null;
+	}
+	return (
+		<Tooltip
+			label={t("pages.modelFit.recommendations.tested.tooltip", "The authors ran this model through their live scenario checks.")}
+			multiline={true}
+			maw={260}
+		>
+			<Badge
+				color="teal"
+				variant="light"
+				size="sm"
+				leftSection={<IconCheck size={12} />}
+				data-testid={`model-fit-tested-badge-${rank}`}
+			>
+				{t("pages.modelFit.recommendations.tested.badge", "Tested")}
+			</Badge>
+		</Tooltip>
+	);
+}
+
 // The MoE-offload badge is an honesty signal: when the advisor's fit estimate offloads some Mixture-of-Experts
 // layers to CPU/RAM instead of running the whole model on GPU, the row is slower than a plain GPU fit but preserves
 // more quality than dropping to a smaller quant. The tooltip breaks down the GPU/RAM split when the advisor reported
@@ -232,6 +258,7 @@ export function RecommendationTable({ recommendations, onDownload, downloadingMo
 											{recommendation.catalogDisplayName ?? recommendation.modelName}
 										</Text>
 										<TierBadge tier={recommendation.tier} rank={recommendation.rank} />
+										<TestedBadge tested={recommendation.tested} rank={recommendation.rank} />
 									</Group>
 									{recommendation.catalogDisplayName ? (
 										<Text size="xs" c="dimmed">

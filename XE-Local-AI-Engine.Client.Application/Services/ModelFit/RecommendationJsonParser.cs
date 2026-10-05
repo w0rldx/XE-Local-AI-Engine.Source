@@ -128,6 +128,7 @@ public static class RecommendationJsonParser
             // extensibility seam — additive, no new columns. Absent for a pre-existing (explore-only) snapshot row.
             wroteAny |= CopyProperty(model, "section", writer);
             wroteAny |= CopyProperty(model, "tier", writer);
+            wroteAny |= CopyProperty(model, "tested", writer);
             wroteAny |= CopyProperty(model, "catalog_id", writer);
             wroteAny |= CopyProperty(model, "catalog_display_name", writer);
             wroteAny |= CopyProperty(model, "catalog_notes", writer);

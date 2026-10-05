@@ -62,6 +62,7 @@ function toModelFitRecommendation(
 		isTrustedPublisher: dto.isTrustedPublisher ?? false,
 		section: toRecommendationSection(dto.section),
 		tier: toCatalogTier(dto.tier),
+		tested: dto.tested ?? false,
 		catalogId: dto.catalogId ?? null,
 		catalogDisplayName: dto.catalogDisplayName ?? null,
 		catalogNotes: dto.catalogNotes ?? null,

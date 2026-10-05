@@ -129,6 +129,24 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
     {
         var raw = await _hardwareProfiler.GetProfileAsync(forceRefreshProfile, ct);
         var audit = await GetAuditAsync(forceRefresh: false, ct);
+        return ApplyCpuFallback(raw, audit);
+    }
+
+    /// <inheritdoc />
+    public async Task<HardwareProfile?> PeekEffectiveProfileAsync(CancellationToken ct)
+    {
+        if (PeekCached() is not { } audit)
+        {
+            return null;
+        }
+
+        // A memoized audit was computed after a non-force profile read, so this one is served from the profiler's cache.
+        var raw = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct);
+        return ApplyCpuFallback(raw, audit);
+    }
+
+    private static HardwareProfile ApplyCpuFallback(HardwareProfile raw, RuntimeDeviceAuditState audit)
+    {
         if (!audit.CpuFallback)
         {
             return raw;

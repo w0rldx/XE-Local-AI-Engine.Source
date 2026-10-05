@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse } from "@/core/api/generated";
-import { toGgufRepositoryDetail } from "@/features/models/models/GgufMappers";
-import { type GgufRepositoryFile, recommendedGgufFileName } from "@/features/models/models/GgufModels";
+import { toGgufRepositoryDetail, toGgufTestedModel } from "@/features/models/models/GgufMappers";
+import { type GgufRepositoryFile, preferredGgufFileName, recommendedGgufFileName } from "@/features/models/models/GgufModels";
 
 describe("toGgufRepositoryDetail file mapping", () => {
 	it("maps the new quality/fit/recommended fields from the wire shape", () => {
@@ -167,5 +167,65 @@ describe("recommendedGgufFileName", () => {
 
 	it("returns null for an empty list", () => {
 		expect(recommendedGgufFileName([])).toBeNull();
+	});
+});
+
+describe("toGgufTestedModel", () => {
+	it("maps a tested catalog model with its tested quant, size and fit, and coalesces an absent note to null", () => {
+		const model = toGgufTestedModel({
+			id: "granite-4.1-3b",
+			displayName: "Granite 4.1 3B",
+			publisher: "IBM",
+			ggufRepo: "unsloth/granite-4.1-3b-GGUF",
+			license: "apache-2.0",
+			totalParamsB: 3.4,
+			testedQuant: "Q4_K_M",
+			testedSizeBytes: 2_099_502_400,
+			fitVerdict: "Tight",
+		});
+
+		expect(model).toEqual({
+			id: "granite-4.1-3b",
+			displayName: "Granite 4.1 3B",
+			ggufRepo: "unsloth/granite-4.1-3b-GGUF",
+			license: "apache-2.0",
+			totalParamsB: 3.4,
+			notes: null,
+			testedQuant: "Q4_K_M",
+			testedSizeBytes: 2_099_502_400,
+			fitVerdict: "Tight",
+		});
+	});
+});
+
+describe("preferredGgufFileName", () => {
+	const file = (quant: string, fitVerdict: GgufRepositoryFile["fitVerdict"], isRecommended = false): GgufRepositoryFile => ({
+		fileName: `model-${quant}.gguf`,
+		quant,
+		isDynamic: quant.startsWith("UD-"),
+		isDraft: false,
+		sizeBytes: 1,
+		qualityTier: "Balanced",
+		fitVerdict,
+		isRecommended,
+	});
+
+	it("selects the tested quant case-insensitively over the recommended file", () => {
+		const files = [file("UD-Q4_K_M", "Fits"), file("Q8_0", "Fits", true)];
+
+		expect(preferredGgufFileName(files, "ud-q4_k_m")).toBe("model-UD-Q4_K_M.gguf");
+	});
+
+	it("keeps the recommended file when the tested quant won't fit", () => {
+		const files = [file("Q4_K_M", "WontFit"), file("Q2_K", "Tight", true)];
+
+		expect(preferredGgufFileName(files, "Q4_K_M")).toBe("model-Q2_K.gguf");
+	});
+
+	it("keeps the recommended file when the repo does not offer the tested quant or none is given", () => {
+		const files = [file("Q5_K_M", "Fits", true)];
+
+		expect(preferredGgufFileName(files, "Q4_K_M")).toBe("model-Q5_K_M.gguf");
+		expect(preferredGgufFileName(files, undefined)).toBe("model-Q5_K_M.gguf");
 	});
 });

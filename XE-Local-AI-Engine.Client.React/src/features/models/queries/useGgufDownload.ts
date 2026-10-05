@@ -5,11 +5,12 @@ import {
 	browseGgufRepositoriesOptions,
 	cancelGgufDownloadMutation,
 	getGgufDownloadsQueryKey,
+	getModelCatalogInfoOptions,
 	inspectGgufRepositoryOptions,
 	startGgufDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { toGgufRepository, toGgufRepositoryDetail } from "@/features/models/models/GgufMappers";
+import { toGgufRepository, toGgufRepositoryDetail, toGgufTestedModel } from "@/features/models/models/GgufMappers";
 import type { GgufAcquisitionStatus } from "@/features/models/models/GgufAcquisitionModels";
 import { useActiveGgufAcquisitions } from "@/features/models/queries/useGgufAcquisitions";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
@@ -48,6 +49,16 @@ export function useBrowseGgufRepositories(query: string, enabled: boolean) {
 		...withResponseValidation(browseGgufRepositoriesOptions({ query: { query: trimmed } })),
 		select: (data) => (data.items ?? []).map(toGgufRepository),
 		enabled: enabled && trimmed.length > 0,
+	});
+}
+
+// The curated catalog's tested models, offered on the browse panel before any search. Reads the catalog-info endpoint
+// (sharing its cache key with the advisor's catalog card); enabled gates it on the modelFit capability.
+export function useTestedCatalogModels(enabled: boolean) {
+	return useQuery({
+		...withResponseValidation(getModelCatalogInfoOptions()),
+		select: (data) => (data.testedModels ?? []).map(toGgufTestedModel),
+		enabled,
 	});
 }
 
