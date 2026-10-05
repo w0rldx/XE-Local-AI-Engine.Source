@@ -457,9 +457,17 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
                      databasePath,
                      databasePath + "-wal",
                      databasePath + "-shm"
-                 }.Where(File.Exists))
+                 })
         {
-            var bytes = await File.ReadAllBytesAsync(path);
+            // The fixture's connection is still open, so the WAL family is live; Windows refuses ReadAllBytes's Read-only share.
+            AssertEx.True(File.Exists(path), $"{Path.GetFileName(path)} must exist while the connection is open, or its scan verifies nothing.");
+            byte[] bytes;
+            await using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                bytes = new byte[stream.Length];
+                await stream.ReadExactlyAsync(bytes);
+            }
+
             AssertEx.False(bytes.AsSpan().IndexOf(Encoding.UTF8.GetBytes(task)) >= 0, $"Task plaintext leaked into {Path.GetFileName(path)}.");
             AssertEx.False(bytes.AsSpan().IndexOf(Encoding.UTF8.GetBytes(instructions)) >= 0, $"Instructions plaintext leaked into {Path.GetFileName(path)}.");
             AssertEx.False(bytes.AsSpan().IndexOf(Encoding.UTF8.GetBytes(result)) >= 0, $"Result plaintext leaked into {Path.GetFileName(path)}.");

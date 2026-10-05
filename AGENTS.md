@@ -62,7 +62,8 @@ Solution: `XE-Local-AI-Engine.slnx`. Full layout and dependency rules: `docs/wik
 - `XE-Local-AI-Engine.Tests`, `AI.Agent.Tests`, `Client.Persistence.Tests` — TUnit; `Tests.E2ETests` — Playwright, opt-in.
 - `Client.Testing` — shared host fixtures; `Testing.FakeOllama` — in-memory fake model server used by tests;
   `Testing.FakeDocker` — in-memory fake Docker Engine API so the container tests need no daemon.
-- `.github/workflows/` — besides `build-and-test.yml` and `release.yml`: `dev-build.yml` (daily Development snapshots), `e2e.yml`, `package-velopack.yml`.
+- `.github/workflows/` — besides `build-and-test.yml` and `release.yml`: `dev-build.yml` (daily Development snapshots), `e2e.yml`, `package-velopack.yml`,
+  `windows-tests.yml` (advisory Windows test job, not a release gate).
 - `scripts/` — dev lifecycle, validation gates, smoke runners. `publish/` — packaging. `tools/training/` — the
   shipped Python training runtime (own `pyproject.toml`; never `uv sync` inside it).
 
@@ -166,6 +167,9 @@ CI runs `.github/workflows/build-and-test.yml` on PRs and pushes to `develop` (f
 name branch protection requires. Within a leg, projects run concurrently, each with its own `--results-directory`
 (MTP resolves `--coverage-output` relative to it, so shared directories overwrite each other's Cobertura report);
 the commands above are the local gate. Shape and rationale: `docs/wiki/13-testing-and-validation.md`, `docs/agent-knowledge.md` §1.
+`windows-tests.yml` runs on the same triggers on `windows-latest` and is advisory (not required, nothing `needs` it,
+not called by `release.yml` or `dev-build.yml`): it runs the Windows-only test classes of `XE-Local-AI-Engine.Tests`
+and all of `XE-Local-AI-Engine.Client.Persistence.Tests` through their native test hosts.
 
 Opt-in live runners (nothing invokes them; ask before running, run before a tester RC):
 

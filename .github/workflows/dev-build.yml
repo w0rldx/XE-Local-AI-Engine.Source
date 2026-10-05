@@ -440,13 +440,36 @@ jobs:
           DEV_VERSION: ${{ needs.decide.outputs.dev_version }}
         run: |
           set -euo pipefail
-          curl -fsSL "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$DEV_TAG" > public-release.json
+          # Never send a token here: this step proves the release is readable anonymously. Anonymous calls from a
+          # shared runner address can still be refused transiently (run 37260446189: HTTP 403 for a release that
+          # was published correctly), so every non-2xx answer is retried with a bounded back-off, and the final
+          # failure prints the status, the rate-limit headers and the body, which --fail used to hide.
+          anonymous_get() {
+            local url="$1" out="$2" status="" attempt
+            for attempt in 1 2 3 4 5; do
+              status=$(curl -sSL -D "$out.headers" -o "$out" -w '%{http_code}' "$url") || status=000
+              if [[ "$status" == 2* ]]; then
+                return 0
+              fi
+              echo "Attempt $attempt/5: HTTP $status from $url" >&2
+              if [[ "$attempt" -lt 5 ]]; then
+                sleep $(( attempt * 15 ))
+              fi
+            done
+            echo "ERROR: anonymous GET $url failed with HTTP $status." >&2
+            grep -i '^x-ratelimit-' "$out.headers" >&2 || true
+            echo "Response body:" >&2
+            cat "$out" >&2 || true
+            return 1
+          }
+          anonymous_get "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$DEV_TAG" public-release.json
           jq -e '.draft == false and .prerelease == true' public-release.json >/dev/null
           for channel in win-dev linux-dev; do
             feed_url=$(jq -r --arg name "releases.$channel.json" \
               '.assets[] | select(.name == $name) | .browser_download_url' public-release.json)
             test -n "$feed_url"
-            curl -fsSL "$feed_url" | grep -F "$DEV_VERSION" >/dev/null
+            anonymous_get "$feed_url" "public-feed-$channel.json"
+            grep -F "$DEV_VERSION" "public-feed-$channel.json" >/dev/null
           done
 
       - name: Record publication summary

@@ -11,6 +11,7 @@ PACKAGE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "package-velopack.yml"
 DEV_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "dev-build.yml"
 PACKAGE_VERSIONS = REPO_ROOT / "Directory.Packages.props"
 BUILD_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "build-and-test.yml"
+WINDOWS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "windows-tests.yml"
 VERSION_READER = REPO_ROOT / "scripts" / "read-release-version.py"
 PACKAGE_RC = REPO_ROOT / "publish" / "package-rc.sh"
 PACKAGE_TESTER_WIN = REPO_ROOT / "publish" / "package-tester-win.ps1"
@@ -463,6 +464,33 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertIn("for channel in win-dev linux-dev; do", self.dev_source)
         self.assertIn('--arg name "releases.$channel.json"', self.dev_source)
         self.assertIn('grep -F "$DEV_VERSION"', self.dev_source)
+
+    def test_dev_build_anonymous_verification_retries_but_never_sends_a_token(self) -> None:
+        step = re.search(
+            r"- name: Verify anonymous Development release and both -dev feeds\n(?P<body>.*?)\n      - name:",
+            self.dev_source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(step)
+        body = step.group("body")
+        for credential in ("GH_TOKEN", "GITHUB_TOKEN", "secrets.", "Authorization", "gh api"):
+            self.assertNotIn(credential, body)
+        self.assertIn("for attempt in 1 2 3 4 5; do", body)
+        self.assertNotIn("curl -f", body)
+
+    def test_windows_test_job_is_advisory_and_never_passes_on_zero_tests(self) -> None:
+        windows_source = WINDOWS_WORKFLOW.read_text(encoding="utf-8")
+        # Advisory: no release gate may reach it, and nothing may call it as one.
+        for caller in (self.build_source, self.source, self.dev_source):
+            self.assertNotIn("windows-tests.yml", caller)
+        self.assertNotIn("workflow_call", windows_source)
+        self.assertIn("runs-on: windows-latest", windows_source)
+        # Native TUnit hosts with a tree-node filter; `dotnet test` reports zero tests for TUnit here.
+        self.assertNotRegex(windows_source, r"(?m)^\s+dotnet test\b")
+        self.assertNotIn(" --filter", windows_source)
+        self.assertIn("--treenode-filter", windows_source)
+        for hollow_guard in ("$exitCode -eq 8", "zero tests executed", "matched no test"):
+            self.assertIn(hollow_guard, windows_source)
 
     def test_vpk_version_pin_is_consistent_across_every_release_surface(self) -> None:
         pins = [

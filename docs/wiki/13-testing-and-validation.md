@@ -350,6 +350,8 @@ One design choice worth preserving in the file: **`TZ=Europe/Berlin`** on the ba
 
 **`e2e.yml`** runs on manual dispatch, or on a `develop` PR opted in with the `run-e2e` label — it is deliberately not a blocking merge gate, since it builds the SPA in-fixture and needs Playwright browsers. E2E is otherwise a manual lane: [`scripts/run-e2e-local.sh`](../../scripts/run-e2e-local.sh), or the raw commands with `-p:RunE2ETests=true`.
 
+**`windows-tests.yml`** is the one Windows test job, on the same triggers as `build-and-test.yml`. It is advisory: not a required status check, not part of `build-and-test.yml`, so neither `release.yml` nor `dev-build.yml` waits on it. On `windows-latest`, with the machine time zone set non-UTC through `tzutil`, it builds `XE-Local-AI-Engine.Tests` and `XE-Local-AI-Engine.Client.Persistence.Tests` in Release and runs their native test hosts directly (the bash gate scripts are Linux-bound): the Windows-gated and Windows-product classes of the former by `--treenode-filter`, all of the latter. It fails on a host exit, a filter or filter class that matched nothing, zero executed tests, or a test skipped for a not-Windows reason, and writes per-host counts and every skip reason to the step summary.
+
 ### Release-path gates
 
 Two gates ride the packaging path rather than any test suite:

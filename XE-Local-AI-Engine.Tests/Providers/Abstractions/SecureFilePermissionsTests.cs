@@ -50,9 +50,11 @@ public sealed class SecureFilePermissionsTests
         var path = temp.FilePath("secret.enc");
         Directory.CreateDirectory(path);
 
-        _ = await AssertEx.ThrowsAsync<IOException>(async () =>
+        var thrown = await AssertEx.ThrowsAsync<Exception>(async () =>
             await SecureFilePermissions.WriteAllBytesAtomicAsync(path, Encoding.UTF8.GetBytes("next"), CancellationToken.None));
 
+        // rename(2) onto a directory is EISDIR (IOException); MoveFileEx onto one is ERROR_ACCESS_DENIED (UnauthorizedAccessException).
+        AssertEx.Equal(OperatingSystem.IsWindows() ? typeof(UnauthorizedAccessException) : typeof(IOException), thrown.GetType());
         AssertEx.True(Directory.Exists(path));
         AssertEx.Equal(expected: 0, Directory.GetFiles(temp.Path).Length);
     }
