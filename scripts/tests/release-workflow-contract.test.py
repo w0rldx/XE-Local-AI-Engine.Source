@@ -465,6 +465,19 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertIn('--arg name "releases.$channel.json"', self.dev_source)
         self.assertIn('grep -F "$DEV_VERSION"', self.dev_source)
 
+    def test_dev_build_anonymous_verification_retries_but_never_sends_a_token(self) -> None:
+        step = re.search(
+            r"- name: Verify anonymous Development release and both -dev feeds\n(?P<body>.*?)\n      - name:",
+            self.dev_source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(step)
+        body = step.group("body")
+        for credential in ("GH_TOKEN", "GITHUB_TOKEN", "secrets.", "Authorization", "gh api"):
+            self.assertNotIn(credential, body)
+        self.assertIn("for attempt in 1 2 3 4 5; do", body)
+        self.assertNotIn("curl -f", body)
+
     def test_windows_test_job_is_advisory_and_never_passes_on_zero_tests(self) -> None:
         windows_source = WINDOWS_WORKFLOW.read_text(encoding="utf-8")
         # Advisory: no release gate may reach it, and nothing may call it as one.
