@@ -28,6 +28,13 @@ public interface IRuntimeAcquisitionStatusRegistry
     ///     neither of which may block or fail on a push.
     /// </remarks>
     void Report(RuntimeAcquisitionUpdate update);
+
+    /// <summary>Atomically replaces a matching Failed status with Idle, sequenced and pushed like a reported Idle; returns whether it cleared.</summary>
+    /// <remarks>
+    ///     Matches only a <see cref="RuntimeAcquisitionPhase.Failed" /> for <paramref name="variant" /> and <paramref name="tag" /> whose reason starts with
+    ///     <paramref name="reasonPrefix" />. Anything else is left alone, with nothing written or pushed.
+    /// </remarks>
+    bool TryClearFailure(string variant, string tag, string reasonPrefix);
 }
 
 /// <summary>

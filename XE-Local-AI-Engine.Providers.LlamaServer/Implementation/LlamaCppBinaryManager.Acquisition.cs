@@ -120,6 +120,18 @@ public sealed partial class LlamaCppBinaryManager
         }
 
         /// <summary>
+        ///     Returns the snapshot to <see cref="RuntimeAcquisitionPhase.Idle" /> when it still holds a Failed for THIS variant and tag whose reason starts with
+        ///     <paramref name="reasonPrefix" />. Any other status, including another acquisition's failure, is left alone, so an ordinary cache hit writes nothing.
+        /// </summary>
+        public void ClearFailureStartingWith(string reasonPrefix)
+        {
+            if (_tag is not null)
+            {
+                _registry?.TryClearFailure(_variant.ToString(), _tag, reasonPrefix);
+            }
+        }
+
+        /// <summary>
         ///     Closes a reported acquisition as failed, with a sanitized reason. Silent when nothing was acquired, so a
         ///     failure in a step this manager never announced (e.g. a rejected request) never surfaces as a runtime
         ///     acquisition failure.

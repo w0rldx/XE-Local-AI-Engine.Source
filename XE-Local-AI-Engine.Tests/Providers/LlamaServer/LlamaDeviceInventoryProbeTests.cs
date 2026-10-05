@@ -189,6 +189,8 @@ public sealed class LlamaDeviceInventoryProbeTests
             AssertEx.False(halfInstalled.ProbeSucceeded);
             AssertEx.False(File.Exists(Path.Combine(serverDir, "spawned")), "No --list-devices process may run against a half-CUDA dir.");
 
+            await File.WriteAllTextAsync(Path.Combine(serverDir, "cublas64_12.dll"), "fake-cublas");
+            await File.WriteAllTextAsync(Path.Combine(serverDir, "cublasLt64_12.dll"), "fake-cublaslt");
             await File.WriteAllTextAsync(Path.Combine(serverDir, "cudart64_12.dll"), "fake-cuda-runtime");
 
             var complete = await probe.GetDeviceInventoryAsync(GpuVariant.Cuda, CancellationToken.None);

@@ -8,6 +8,8 @@ using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -67,6 +69,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private readonly ILlamaCppReleaseCatalog? _catalog;
     private readonly HttpClient _httpClient;
     private readonly IInstalledRuntimeStore? _installedRuntimeStore;
+    private readonly ILogger<LlamaCppBinaryManager> _logger;
     private readonly ICudaManagedBuildSignal? _managedCudaSignal;
     private readonly OSPlatform _os;
     private readonly LlamaServerRuntimeOverrideOptions? _overrideOptions;
@@ -100,7 +103,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         IInstalledRuntimeStore? installedRuntimeStore = null,
         LlamaServerRuntimeOverrideOptions? overrideOptions = null,
         ICudaManagedBuildSignal? managedCudaSignal = null,
-        IRuntimeAcquisitionStatusRegistry? acquisitionStatus = null)
+        IRuntimeAcquisitionStatusRegistry? acquisitionStatus = null,
+        ILogger<LlamaCppBinaryManager>? logger = null)
         : this(httpClient,
             cacheRoot ?? RuntimeCacheDirectory.Resolve(),
             activeTag ?? LlamaCppReleasePins.PinnedTag,
@@ -111,7 +115,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             installedRuntimeStore,
             overrideOptions,
             managedCudaSignal,
-            acquisitionStatus)
+            acquisitionStatus,
+            logger: logger)
     {
     }
 
@@ -130,8 +135,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         LlamaServerRuntimeOverrideOptions? overrideOptions = null,
         ICudaManagedBuildSignal? managedCudaSignal = null,
         IRuntimeAcquisitionStatusRegistry? acquisitionStatus = null,
-        Func<OSPlatform, Architecture, GpuVariant, LlamaCppAssetPin?>? pinResolver = null)
+        Func<OSPlatform, Architecture, GpuVariant, LlamaCppAssetPin?>? pinResolver = null,
+        ILogger<LlamaCppBinaryManager>? logger = null)
     {
+        _logger = logger ?? NullLogger<LlamaCppBinaryManager>.Instance;
         _pinResolver = pinResolver ?? LlamaCppReleasePins.ResolveForAcquisition;
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
@@ -224,13 +231,22 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             var cachedServer = ResolveServerPath(variantDir, pin);
             if (cachedServer is not null)
             {
-                // Idempotent: when the cudart DLLs are already present next to the server this is a no-op; a cached CUDA dir
-                // that is somehow missing them gets them topped up from the pinned companion before the binary is served.
-                await EnsureCudartRuntimeAsync(resolvedTag, pin, cudartAsset: null, variant, variantDir, cachedServer, reporter, ct).ConfigureAwait(false);
+                // A published Windows-CUDA dir missing part of its companion set is repaired best-effort; a failed or impossible repair serves it as it is, as before.
+                var repairFailed = variant == GpuVariant.Cuda && _os == OSPlatform.Windows && !CudartRuntimePresent(Path.GetDirectoryName(cachedServer)!)
+                                   && !await TryRepairCudaCompanionSetAsync(resolvedTag, pin, isPinnedFallback, cachedServer, reporter, ct).ConfigureAwait(false);
                 await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, ct).ConfigureAwait(false);
 
-                // Silent on a pure cache hit — this runs on every model spawn, so a Completed here would flood the hub.
-                reporter.Complete();
+                // Silent on a pure cache hit — this runs on every model spawn, so a Completed here would flood the hub. A failed repair keeps its Failed; a set
+                // confirmed complete clears only the Failed an earlier repair of this same runtime wrote (completed elsewhere, e.g. by another node).
+                if (!repairFailed)
+                {
+                    if (variant == GpuVariant.Cuda && _os == OSPlatform.Windows)
+                    {
+                        reporter.ClearFailureStartingWith(CudaRepairFailurePrefix);
+                    }
+
+                    reporter.Complete();
+                }
                 return new LlamaBinary
                 {
                     ServerExecutablePath = cachedServer,
@@ -343,8 +359,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
         var variantDir = Path.Combine(_cacheRoot, "llama.cpp", resolvedTag, VariantSlug(variant));
 
-        // Filesystem probes only, nothing created. A Windows-CUDA dir missing cudart is NOT topped up (that downloads) and reads as NOT installed: it enumerates
-        // no GPU, and the device probe would cache that against an exe mtime the later top-up never changes. The next ensure repairs it.
+        // Filesystem probes only, nothing created. A Windows-CUDA dir missing any companion DLL family is NOT topped up (that downloads) and reads as NOT installed: it enumerates
+        // no GPU, and the device probe would cache that against an exe mtime the later top-up never changes. The next ensure repairs a pinned-tag dir.
         var cachedServer = ResolveServerPath(variantDir, pin);
         if (cachedServer is not null && variant == GpuVariant.Cuda && _os == OSPlatform.Windows && !CudartRuntimePresent(Path.GetDirectoryName(cachedServer)!))
         {
@@ -623,8 +639,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             throw new LlamaRuntimeException("The llama.cpp CUDA runtime could not be installed (server directory is unresolved).");
         }
 
-        // Idempotency: the cudart core DLL already next to the server means a hash-valid CUDA dir is being reused — skip. Like the non-Windows-CUDA return above it
-        // leaves the reporter untouched (nothing is acquired, so nothing may be announced); this method is step 2 of 2 and reports under CudartStepIndex.
+        // Idempotency: a staged tree that already carries the complete set needs no companion — skip, reporter untouched (nothing acquired, nothing announced).
+        // Only staging dirs come here; a published dir is repaired by TryRepairCudaCompanionSetAsync. This is step 2 of 2 (CudartStepIndex).
         if (CudartRuntimePresent(serverDir))
         {
             return;
@@ -684,18 +700,153 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             throw;
         }
 
-        if (!CudartRuntimePresent(serverDir))
+        if (MissingCudaCompanionFamily(serverDir) is { } missingFamily)
         {
+            var message = IncompleteCompanionSetMessage(missingFamily, serverDir);
             TryDeleteDirectory(variantDir);
-            throw new LlamaRuntimeException("The llama.cpp CUDA runtime archive did not contain the expected runtime libraries.");
+            throw new LlamaRuntimeException(message);
         }
     }
 
-    /// <summary>True when the core CUDA runtime DLL is present next to the server (the pairing has already happened).</summary>
+    /// <summary>
+    ///     Best-effort repair of a PUBLISHED Windows-CUDA dir missing part of its companion set. False when it did not complete; the dir is served as before.
+    /// </summary>
+    /// <remarks>
+    ///     The companion is checked in temp first; a failure up to there touches nothing. The DLLs then land one file at a time, never moving the dir, which
+    ///     Windows refuses while a shell, Explorer, a scan or a server holds it open. A failed landing never removes or truncates a file that was there; it
+    ///     may have added complete files, and the set reads incomplete until a retry lands the rest. Only the pinned tag is repaired: the pin's companion
+    ///     name and digest belong to that release alone.
+    /// </remarks>
+    private async Task<bool> TryRepairCudaCompanionSetAsync(string tag, LlamaCppAssetPin pin, bool isPinnedTag, string serverPath, AcquisitionReporter reporter,
+        CancellationToken ct)
+    {
+        var serverDir = Path.GetDirectoryName(serverPath)!;
+        if (!isPinnedTag)
+        {
+            Diagnose(() => _logger.LogWarning("The CUDA runtime libraries of llama.cpp {Tag} are incomplete (no {Family} next to the server), so it runs without CUDA; reinstalling that tag repairs it.",
+                tag,
+                MissingCudaCompanionFamily(serverDir)));
+            return false;
+        }
+
+        var companionDir = Path.Combine(Path.GetTempPath(), $"llamacpp-cudart-repair-{Guid.NewGuid():N}");
+        try
+        {
+            if (pin.CudartAssetName is not { Length: > 0 } cudartName || pin.CudartSha256 is not { Length: > 0 } cudartDigest)
+            {
+                throw new LlamaRuntimeException("The pinned llama.cpp CUDA runtime is missing its companion runtime archive metadata.");
+            }
+
+            await DownloadVerifyFlattenCudartAsync(LlamaCppReleasePins.DownloadUri(tag, cudartName), cudartName, cudartDigest, expectedSize: 0, companionDir, reporter, ct)
+                .ConfigureAwait(false);
+            if (MissingCudaCompanionFamily(companionDir) is { } missingFamily)
+            {
+                throw new LlamaRuntimeException(IncompleteCompanionSetMessage(missingFamily, companionDir));
+            }
+
+            // A target of the verified length is kept: a running server may have it loaded, and Windows refuses to replace a loaded DLL. Any other target
+            // (missing, or cut short by an older build's non-atomic copy) is replaced whole by rename.
+            foreach (var dll in CudartLast(Directory.EnumerateFiles(companionDir, "*.dll")))
+            {
+                var target = Path.Combine(serverDir, Path.GetFileName(dll));
+                try
+                {
+                    if (!File.Exists(target) || new FileInfo(target).Length != new FileInfo(dll).Length)
+                    {
+                        LandFile(dll, target);
+                    }
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // The name only: this reason is shown in the UI. The full path goes to the log with the inner exception.
+                    throw new LlamaRuntimeException(
+                        $"{Path.GetFileName(dll)} could not be written to the runtime folder. Closing programs that use the runtime folder and retrying helps.",
+                        exception);
+                }
+            }
+
+            if (MissingCudaCompanionFamily(serverDir) is { } stillMissing)
+            {
+                throw new LlamaRuntimeException(IncompleteCompanionSetMessage(stillMissing, serverDir));
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            // Failed, not Idle: the runtime still serves, but without CUDA on a CUDA box, and an Idle would hide that again. The banner's retry re-runs this repair.
+            var reason = exception is LlamaRuntimeException ? exception.Message : "The runtime folder could not be read or written.";
+            Diagnose(() => _logger.LogWarning(exception,
+                "Repairing the incomplete CUDA runtime libraries of llama.cpp {Tag} in {ServerDir} failed; the runtime is served without them and the next ensure retries.",
+                tag,
+                serverDir));
+            Diagnose(() => reporter.Fail(new LlamaRuntimeException($"{CudaRepairFailurePrefix} {reason}", exception)));
+            return false;
+        }
+        finally
+        {
+            TryDeleteDirectory(companionDir);
+        }
+
+        // The served dir changed under an unchanged exe: the device audit must re-probe rather than serve its memo.
+        _managedCudaSignal?.NotifyBinaryChanged();
+        return true;
+
+        // A throwing logger or status sink must not cost the fallback to the served runtime; cancellation is not a diagnostic failure and still propagates.
+        static void Diagnose(Action write)
+        {
+            try
+            {
+                write();
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // Diagnostics only: the repair's outcome is already decided.
+            }
+        }
+    }
+
+    /// <summary>The sanitized failure for a companion set missing <paramref name="missingFamily" />, listing the DLL names (never paths) in <paramref name="dir" />.</summary>
+    internal static string IncompleteCompanionSetMessage(string missingFamily, string dir)
+    {
+        string found;
+        try
+        {
+            var names = Directory.EnumerateFiles(dir, "*.dll", SearchOption.TopDirectoryOnly).Select(Path.GetFileName).Order(StringComparer.OrdinalIgnoreCase).ToList();
+            found = names.Count > 0 ? string.Join(", ", names) : "none";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Diagnostic only: a failed listing must never replace the error it decorates.
+            found = "could not be listed";
+        }
+
+        return $"The llama.cpp CUDA runtime archive did not contain the expected runtime libraries: no {missingFamily} next to the server. DLLs found: {found}.";
+    }
+
+    /// <summary>
+    ///     The DLL families the Windows-CUDA companion archive delivers; ggml-cuda loads only with all three next to the server. The one place to adjust if a
+    ///     release renames them.
+    /// </summary>
+    private static readonly string[] CudaCompanionFamilies = ["cudart64_*.dll", "cublas64_*.dll", "cublasLt64_*.dll"];
+
+    /// <summary>How every Failed status of a published-dir repair starts; the one mark a later cache hit clears it by, never another acquisition's failure.</summary>
+    private const string CudaRepairFailurePrefix =
+        "The CUDA runtime libraries of the installed llama.cpp runtime are incomplete and could not be repaired, so it runs without CUDA until a retry succeeds.";
+
+    /// <summary>True when the complete CUDA companion set is present next to the server (the pairing has already happened).</summary>
     private static bool CudartRuntimePresent(string serverDir)
     {
-        return Directory.Exists(serverDir)
-               && Directory.EnumerateFiles(serverDir, "cudart64_*.dll", SearchOption.TopDirectoryOnly).Any();
+        return MissingCudaCompanionFamily(serverDir) is null;
+    }
+
+    /// <summary>The first <see cref="CudaCompanionFamilies" /> pattern with no file next to the server, or <see langword="null" /> when the set is complete.</summary>
+    private static string? MissingCudaCompanionFamily(string serverDir)
+    {
+        return CudaCompanionFamilies.FirstOrDefault(family =>
+            !Directory.Exists(serverDir) || !Directory.EnumerateFiles(serverDir, family, SearchOption.TopDirectoryOnly).Any());
     }
 
     /// <summary>
@@ -770,26 +921,35 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
     /// <summary>Copies every <c>*.dll</c> found anywhere under <paramref name="sourceRoot" /> into <paramref name="serverDir" /> (flattened, overwriting).</summary>
     /// <remarks>
-    ///     The <c>cudart64_*</c> marker <see cref="CudartRuntimePresent" /> keys on lands LAST, each file by an atomic rename: a top-up of a published dir
+    ///     The <c>cudart64_*</c> marker, one of the families <see cref="CudartRuntimePresent" /> requires, lands LAST, each file by an atomic rename: a top-up of a published dir
     ///     must never read as installed (to the device probe) or as paired (to the next ensure's skip) before every runtime DLL is complete.
     /// </remarks>
     internal static void FlattenDllsInto(string sourceRoot, string serverDir)
     {
         Directory.CreateDirectory(serverDir);
-        var dlls = Directory.EnumerateFiles(sourceRoot, "*.dll", SearchOption.AllDirectories)
-            .OrderBy(dll => Path.GetFileName(dll).StartsWith("cudart64_", StringComparison.OrdinalIgnoreCase));
-        foreach (var dll in dlls)
+        foreach (var dll in CudartLast(Directory.EnumerateFiles(sourceRoot, "*.dll", SearchOption.AllDirectories)))
         {
-            var partial = Path.Combine(serverDir, $".{Guid.NewGuid():N}.partial");
-            try
-            {
-                File.Copy(dll, partial);
-                File.Move(partial, Path.Combine(serverDir, Path.GetFileName(dll)), overwrite: true);
-            }
-            finally
-            {
-                TryDeleteFile(partial);
-            }
+            LandFile(dll, Path.Combine(serverDir, Path.GetFileName(dll)));
+        }
+    }
+
+    private static IEnumerable<string> CudartLast(IEnumerable<string> dlls)
+    {
+        return dlls.OrderBy(dll => Path.GetFileName(dll).StartsWith("cudart64_", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Copies <paramref name="source" /> to a <c>.partial</c> next to <paramref name="target" />, then renames it over the target; no partial outlives a failure.</summary>
+    private static void LandFile(string source, string target)
+    {
+        var partial = Path.Combine(Path.GetDirectoryName(target)!, $".{Guid.NewGuid():N}.partial");
+        try
+        {
+            File.Copy(source, partial);
+            File.Move(partial, target, overwrite: true);
+        }
+        finally
+        {
+            TryDeleteFile(partial);
         }
     }
 
@@ -1120,9 +1280,19 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             Directory.Move(stagingDir, variantDir);
         }
-        catch when (aside is not null)
+        catch (Exception moveIn) when (aside is not null)
         {
-            Directory.Move(aside, variantDir);
+            try
+            {
+                Directory.Move(aside, variantDir);
+            }
+            catch (Exception restore)
+            {
+                // The variant dir is gone; the old tree's location goes to the log with this exception (never to a user-facing message). A later ensure re-acquires.
+                throw new IOException($"Publishing '{variantDir}' failed and restoring its previous contents failed too; they remain at '{aside}'.",
+                    new AggregateException(moveIn, restore));
+            }
+
             throw;
         }
 

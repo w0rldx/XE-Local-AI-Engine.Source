@@ -330,7 +330,7 @@ public sealed class RuntimeAcquisitionProgressTests
         var cudartName = AssertEx.NotNull(LlamaCppReleasePins.DeriveCudartAssetName(pin.AssetName));
 
         var mainArchive = BuildZip((pin.ServerRelativePath, "fake-llama-server"));
-        var cudartArchive = BuildZip(("cudart64_12.dll", "fake-cuda-runtime"));
+        var cudartArchive = BuildZip(("cudart64_12.dll", "fake-cuda-runtime"), ("cublas64_12.dll", "fake-cublas"), ("cublasLt64_12.dll", "fake-cublaslt"));
         using var handler = new ScriptedHandler(uri => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent(uri.AbsoluteUri.Contains(cudartName, StringComparison.Ordinal) ? cudartArchive : mainArchive)
@@ -524,6 +524,20 @@ public sealed class RuntimeAcquisitionProgressTests
                     StepCount = update.StepCount,
                     SanitizedError = update.SanitizedError
                 });
+            }
+        }
+
+        public bool TryClearFailure(string variant, string tag, string reasonPrefix)
+        {
+            lock (_gate)
+            {
+                if (!RuntimeAcquisitionStatusRegistry.IsFailureOf(Current, variant, tag, reasonPrefix))
+                {
+                    return false;
+                }
+
+                Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Idle, Variant = variant, Tag = tag, StepCount = Current.StepCount });
+                return true;
             }
         }
     }

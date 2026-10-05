@@ -71,38 +71,86 @@ public sealed class RuntimeAcquisitionStatusRegistry : IRuntimeAcquisitionStatus
         RuntimeAcquisitionStatusEvent? toPush;
         lock (_gate)
         {
-            // Byte updates repeat within one (phase, step); a phase or step transition — and every terminal status —
-            // must reach connected clients immediately or the UI narrates the wrong stage.
-            var isRepeatWithinStep = string.Equals(_current.Phase, update.Phase.ToString(), StringComparison.Ordinal)
-                                     && _current.StepIndex == update.StepIndex
-                                     && !IsTerminal(update.Phase);
-
-            // The write itself is unconditional, so the hydrate endpoint always serves the freshest bytes even while a
-            // push is being throttled.
-            _current = new RuntimeAcquisitionStatusEvent
-            {
-                Sequence = ++_sequence,
-                Phase = update.Phase.ToString(),
-                Variant = update.Variant,
-                Tag = update.Tag,
-                CompletedBytes = update.CompletedBytes,
-                TotalBytes = update.TotalBytes,
-                StepIndex = update.StepIndex,
-                StepCount = update.StepCount,
-                SanitizedError = update.SanitizedError
-            };
-
-            var now = _timeProvider.GetUtcNow().UtcTicks;
-            if (isRepeatWithinStep && now - _lastPushTicks < ProgressPushInterval.Ticks)
-            {
-                return;
-            }
-
-            _lastPushTicks = now;
-            toPush = _current;
+            toPush = WriteLocked(update);
         }
 
-        _ = PublishAsync(toPush);
+        if (toPush is not null)
+        {
+            _ = PublishAsync(toPush);
+        }
+    }
+
+    /// <inheritdoc />
+    public bool TryClearFailure(string variant, string tag, string reasonPrefix)
+    {
+        RuntimeAcquisitionStatusEvent? toPush;
+        lock (_gate)
+        {
+            // The check and the write share the lock, so a status another acquisition reported after the caller looked is never overwritten.
+            if (!IsFailureOf(_current, variant, tag, reasonPrefix))
+            {
+                return false;
+            }
+
+            toPush = WriteLocked(new RuntimeAcquisitionUpdate
+            {
+                Phase = RuntimeAcquisitionPhase.Idle,
+                Variant = variant,
+                Tag = tag,
+                StepIndex = 1,
+                StepCount = _current.StepCount
+            });
+        }
+
+        if (toPush is not null)
+        {
+            _ = PublishAsync(toPush);
+        }
+
+        return true;
+    }
+
+    /// <summary>The condition <see cref="TryClearFailure" /> clears under: a Failed for this variant and tag whose reason starts with the prefix.</summary>
+    internal static bool IsFailureOf(RuntimeAcquisitionStatusEvent status, string variant, string tag, string reasonPrefix)
+    {
+        return string.Equals(status.Phase, nameof(RuntimeAcquisitionPhase.Failed), StringComparison.Ordinal)
+               && string.Equals(status.Variant, variant, StringComparison.Ordinal)
+               && string.Equals(status.Tag, tag, StringComparison.Ordinal)
+               && status.SanitizedError?.StartsWith(reasonPrefix, StringComparison.Ordinal) == true;
+    }
+
+    /// <summary>Records <paramref name="update" /> under <see cref="_gate" />; returns the status to push, or <see langword="null" /> when the throttle holds it.</summary>
+    private RuntimeAcquisitionStatusEvent? WriteLocked(RuntimeAcquisitionUpdate update)
+    {
+        // Byte updates repeat within one (phase, step); a phase or step transition — and every terminal status —
+        // must reach connected clients immediately or the UI narrates the wrong stage.
+        var isRepeatWithinStep = string.Equals(_current.Phase, update.Phase.ToString(), StringComparison.Ordinal)
+                                 && _current.StepIndex == update.StepIndex
+                                 && !IsTerminal(update.Phase);
+
+        // The write itself is unconditional, so the hydrate endpoint always serves the freshest bytes even while a
+        // push is being throttled.
+        _current = new RuntimeAcquisitionStatusEvent
+        {
+            Sequence = ++_sequence,
+            Phase = update.Phase.ToString(),
+            Variant = update.Variant,
+            Tag = update.Tag,
+            CompletedBytes = update.CompletedBytes,
+            TotalBytes = update.TotalBytes,
+            StepIndex = update.StepIndex,
+            StepCount = update.StepCount,
+            SanitizedError = update.SanitizedError
+        };
+
+        var now = _timeProvider.GetUtcNow().UtcTicks;
+        if (isRepeatWithinStep && now - _lastPushTicks < ProgressPushInterval.Ticks)
+        {
+            return null;
+        }
+
+        _lastPushTicks = now;
+        return _current;
     }
 
     private static bool IsTerminal(RuntimeAcquisitionPhase phase)

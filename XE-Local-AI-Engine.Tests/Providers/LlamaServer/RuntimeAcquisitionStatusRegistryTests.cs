@@ -296,6 +296,54 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
         AssertEx.NotNull(provider.GetRequiredService<ILlamaServerCapabilityManifestProbe>());
     }
 
+    [Test]
+    public void TryClearFailure_OnTheMatchingFailure_WritesAndPushesIdle()
+    {
+        var publisher = new RecordingPublisher();
+        var registry = Build(publisher, out _);
+        registry.Report(Failed("Cuda", "b1", "Repair failed. Offline."));
+
+        AssertEx.True(registry.TryClearFailure("Cuda", "b1", "Repair failed."));
+
+        AssertEx.Equal(nameof(RuntimeAcquisitionPhase.Idle), registry.Current.Phase);
+        AssertEx.Equal(expected: 2L, registry.Current.Sequence);
+        AssertEx.Equal(expected: 2, publisher.Pushed.Count);
+        AssertEx.Equal(nameof(RuntimeAcquisitionPhase.Idle), publisher.Pushed[^1].Phase);
+    }
+
+    [Test]
+    [Arguments(RuntimeAcquisitionPhase.Downloading, "Cuda", "b1", "Repair failed. Offline.")]
+    [Arguments(RuntimeAcquisitionPhase.Failed, "Vulkan", "b1", "Repair failed. Offline.")]
+    [Arguments(RuntimeAcquisitionPhase.Failed, "Cuda", "b2", "Repair failed. Offline.")]
+    [Arguments(RuntimeAcquisitionPhase.Failed, "Cuda", "b1", "The download failed.")]
+    public void TryClearFailure_OnAnyOtherStatus_WritesAndPushesNothing(RuntimeAcquisitionPhase phase, string variant, string tag, string reason)
+    {
+        // Also the race the check guards: a status another acquisition reported after the caller looked is never replaced.
+        var publisher = new RecordingPublisher();
+        var registry = Build(publisher, out _);
+        registry.Report(Failed(variant, tag, reason, phase));
+
+        AssertEx.False(registry.TryClearFailure("Cuda", "b1", "Repair failed."));
+
+        AssertEx.Equal(phase.ToString(), registry.Current.Phase);
+        AssertEx.Equal(reason, registry.Current.SanitizedError);
+        AssertEx.Equal(expected: 1L, registry.Current.Sequence);
+        AssertEx.Equal(expected: 1, publisher.Pushed.Count);
+    }
+
+    private static RuntimeAcquisitionUpdate Failed(string variant, string tag, string reason, RuntimeAcquisitionPhase phase = RuntimeAcquisitionPhase.Failed)
+    {
+        return new RuntimeAcquisitionUpdate
+        {
+            Phase = phase,
+            Variant = variant,
+            Tag = tag,
+            StepIndex = 2,
+            StepCount = 2,
+            SanitizedError = reason
+        };
+    }
+
     private static RuntimeAcquisitionStatusRegistry Build(RecordingPublisher publisher, out ManualTimeProvider time)
     {
         time = new ManualTimeProvider(DateTimeOffset.UnixEpoch);

@@ -66,7 +66,8 @@ function rateKeyForStep(stepIndex: number): string {
 
 /** Resolves the variant to re-ensure on retry. A probe that failed before choosing one leaves `variant` null; cpu is the always-available fallback. */
 function retryVariant(status: RuntimeAcquisitionStatus): LlamaCppVariant {
-	const reported = status.variant;
+	// The status carries the server's enum name ("Cuda"); the ensure route takes the lower-case variant.
+	const reported = status.variant?.toLowerCase();
 	return llamaCppVariants.find((variant) => variant === reported) ?? "cpu";
 }
 

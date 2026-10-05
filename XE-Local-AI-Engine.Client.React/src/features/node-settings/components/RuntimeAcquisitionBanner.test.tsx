@@ -143,6 +143,16 @@ describe("RuntimeAcquisitionBanner", () => {
 		expect(hooksMock.ensureMutate).toHaveBeenCalledWith("cuda");
 	});
 
+	it("retries the failed variant when the status carries the server's enum name", () => {
+		// The hub and the hydrate endpoint send GpuVariant.ToString(), "Cuda", never the lower-case route value.
+		hooksMock.status = status({ sequence: 10, phase: "Failed", sanitizedError: "could not be repaired", variant: "Cuda" });
+
+		renderBanner();
+
+		fireEvent.click(screen.getByTestId("runtime-acquisition-banner-retry"));
+		expect(hooksMock.ensureMutate).toHaveBeenCalledWith("cuda");
+	});
+
 	it("falls back to a generic reason when the failure carries no sanitized message", () => {
 		hooksMock.status = status({ sequence: 9, phase: "Failed", sanitizedError: null, variant: null });
 

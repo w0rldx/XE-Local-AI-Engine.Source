@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -585,6 +586,17 @@ public sealed class FirstRunModelProvisioningServiceTests
             StepCount = 1,
             SanitizedError = null
         };
+
+        public bool TryClearFailure(string variant, string tag, string reasonPrefix)
+        {
+            if (!RuntimeAcquisitionStatusRegistry.IsFailureOf(Current, variant, tag, reasonPrefix))
+            {
+                return false;
+            }
+
+            Report(new RuntimeAcquisitionUpdate { Phase = RuntimeAcquisitionPhase.Idle, Variant = variant, Tag = tag, StepCount = Current.StepCount });
+            return true;
+        }
 
         public void Report(RuntimeAcquisitionUpdate update)
         {
