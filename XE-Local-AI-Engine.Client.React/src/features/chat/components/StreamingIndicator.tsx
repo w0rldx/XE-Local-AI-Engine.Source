@@ -78,7 +78,7 @@ export function StreamingIndicator({
 				leftSection={<IconClock size={12} />}
 				data-testid="chat-stream-queued-indicator"
 			>
-				{t("pages.chat.queued", "Queued — waiting for current task")}
+				{t("pages.chat.queued", "Queued — starts after the node's current benchmark, training run or chat")}
 			</Badge>
 		);
 	}

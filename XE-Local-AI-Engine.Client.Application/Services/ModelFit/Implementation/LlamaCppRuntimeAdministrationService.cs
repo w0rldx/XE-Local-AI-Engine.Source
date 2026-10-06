@@ -119,7 +119,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
     public async Task<LlamaCppRuntimeMutationResult> EnsureAsync(GpuVariant variant,
         CancellationToken cancellationToken = default)
     {
-        var admission = await TryAcquirePrebuiltMutationAsync(cancellationToken);
+        var admission = await TryAcquirePrebuiltMutationAsync(variant, cancellationToken);
         await using var lease = admission.Lease;
         if (lease is null || admission.BlockedMessage is not null)
         {
@@ -201,7 +201,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
                     "The llama.cpp runtime catalog is unavailable or has no matching asset for the requested tag.");
             }
 
-            var admission = await TryAcquirePrebuiltMutationAsync(cancellationToken);
+            var admission = await TryAcquirePrebuiltMutationAsync(ensureVariant: null, cancellationToken);
             await using var lease = admission.Lease;
             if (lease is null || admission.BlockedMessage is not null)
             {
@@ -237,7 +237,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         CancellationToken cancellationToken = default)
     {
         var selectedVariant = variant ?? await _variantSelector.SelectVariantAsync(cancellationToken);
-        var admission = await TryAcquirePrebuiltMutationAsync(cancellationToken);
+        var admission = await TryAcquirePrebuiltMutationAsync(ensureVariant: null, cancellationToken);
         if (admission.Lease is null || admission.BlockedMessage is not null)
         {
             if (admission.Lease is not null)
@@ -272,7 +272,10 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         };
     }
 
-    private async Task<PrebuiltMutationAdmission> TryAcquirePrebuiltMutationAsync(CancellationToken cancellationToken)
+    // An ensureVariant equal to the installed source build's variant passes the source-build block: EnsureBinaryAsync
+    // serves that build, still under the lease and the active-build and running-process checks below.
+    private async Task<PrebuiltMutationAdmission> TryAcquirePrebuiltMutationAsync(GpuVariant? ensureVariant,
+        CancellationToken cancellationToken)
     {
         if (await _nodeRuntimeSettings.GetKeepModelWarmEnabledAsync(cancellationToken))
         {
@@ -299,7 +302,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         try
         {
             var installed = await _installedRuntimeStore.ReadAsync(cancellationToken);
-            if (installed?.SourceBuildPath is { Length: > 0 })
+            if (installed?.SourceBuildPath is { Length: > 0 } && installed.Variant != ensureVariant)
             {
                 return new PrebuiltMutationAdmission
                 {

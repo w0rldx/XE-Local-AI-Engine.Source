@@ -12,11 +12,13 @@ using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Import;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Tools;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     The pre-migration half of the one-shot Open Canvas import, exercised over the real upgrade path: a database
@@ -281,6 +283,8 @@ public sealed class CanvasWorkflowImportReadTests
             Substitute.For<IToolInvocationService>(),
             Substitute.For<INodeRuntimeSettings>(),
             Substitute.For<ILocalModelProviderResolver>(),
+            Substitute.For<IGgufModelStore>(),
+            Substitute.For<IModelTrustResolver>(),
             Options.Create(new GraphWorkflowOptions()));
         await CanvasWorkflowImport.ImportAsync(context, definitions, store, snapshot, logger);
     }

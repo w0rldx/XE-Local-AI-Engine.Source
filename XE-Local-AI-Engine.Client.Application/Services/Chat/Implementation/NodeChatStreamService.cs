@@ -690,7 +690,9 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             }
             else if (preparation.IsBusy)
             {
-                error = "The AgentHome workspace is busy. Try again after the current operation finishes.";
+                error = "The AgentHome workspace is busy: another conversation is using it and may be waiting for a tool approval. "
+                        + "An unanswered approval expires on its own after the \"Max pending tool-call age\" node setting. "
+                        + "Try again after that operation finishes.";
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Runs;
 
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -189,6 +190,11 @@ public sealed class TrainingRunService : ITrainingRunService
         var eligible = samples.Where(static sample => sample.ReviewState != TrainingSampleReviewState.Rejected).ToArray();
         var holdoutFraction = await ResolveHoldoutFractionAsync(dataset, cancellationToken);
         var split = Split(eligible, holdoutFraction);
+        if (split.Holdout.Count == 0)
+        {
+            // A run that holds nothing back can never be evaluated, so its artifacts can never pass the quality gate.
+            throw new TrainingRunRejectedException(HoldoutTooSmallMessage(eligible.Length, holdoutFraction));
+        }
 
         await _workspace.WriteFrozenDatasetAsync(dataset.Id, freezeId, plaintext, cancellationToken);
         return new TrainingRunFreezeV1
@@ -203,6 +209,20 @@ public sealed class TrainingRunService : ITrainingRunService
             HoldoutSampleIds = split.Holdout,
             HoldoutSequences = split.HoldoutSequences
         };
+    }
+
+    /// <summary>The refusal for a dataset too small for <see cref="Split" /> to hold back a single sample of any kind.</summary>
+    internal static string HoldoutTooSmallMessage(int sampleCount, double holdoutFraction)
+    {
+        // The smallest kind size whose floored share is one sample, counted rather than derived from 1 / fraction.
+        var needed = 1;
+        while ((int)Math.Floor(needed * holdoutFraction) < 1)
+        {
+            needed++;
+        }
+
+        return string.Create(CultureInfo.InvariantCulture,
+            $"The dataset has {sampleCount} reviewable samples, too few to hold any back for evaluation: the hold-out takes {Math.Round(holdoutFraction * 100)}% of each sample kind, so at least one kind needs {needed} samples.");
     }
 
     private async Task<double> ResolveHoldoutFractionAsync(TrainingDatasetRecord dataset, CancellationToken cancellationToken)

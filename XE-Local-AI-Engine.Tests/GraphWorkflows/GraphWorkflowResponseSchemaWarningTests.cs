@@ -4,9 +4,11 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Tools;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -137,6 +139,49 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
         AssertEx.Contains(warning.Message, "Pause", message: "the surviving warning must be the pause one, not a reworded schema one.");
     }
 
+    /// <summary>
+    ///     An LLM call pinned to a model the run would refuse as not installed must say so at validate, naming node and
+    ///     model, and still validate: the warning channel never blocks a save.
+    /// </summary>
+    [Test]
+    public async Task ValidateAsync_WhenAnLlmCallPinsAnUninstalledModel_WarnsNamingTheNodeAndTheModel()
+    {
+        var service = BuildService(LocalModel, LlamaServerProviderConstants.ProviderName);
+
+        var result = await service.ValidateAsync(LlmCallGraph(LocalModel));
+
+        AssertEx.True(result.IsValid, "a missing model is a warning, never an error.");
+        var warning = AssertEx.NotNull(result.Warnings.SingleOrDefault(), $"one node, one warning: {string.Join(" | ", result.Warnings)}");
+        AssertEx.Equal("analyze", warning.Key);
+        AssertEx.Contains(warning.Message, $"'{LocalModel}'", message: "the author has to know which pin to fix.");
+    }
+
+    /// <summary>The same pin to a model the runtime gate accepts says nothing, so the warning means what the run will do.</summary>
+    [Test]
+    public async Task ValidateAsync_WhenAnLlmCallPinsAnInstalledLocalModel_DoesNotWarn()
+    {
+        var providers = Substitute.For<ILocalModelProviderResolver>();
+        providers.ResolveProviderNameForModelAsync(LocalModel, Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult(LlamaServerProviderConstants.ProviderName));
+        var ggufModels = Substitute.For<IGgufModelStore>();
+        ggufModels.ExistsAsync(LocalModel, Arg.Any<CancellationToken>()).Returns(true);
+        var service = BuildService(providers, ggufModels);
+
+        var result = await service.ValidateAsync(LlmCallGraph(LocalModel));
+
+        AssertEx.Empty(result.Warnings);
+    }
+
+    /// <summary>An unpinned LLM call runs the node default, unknown here, so there is nothing to warn about.</summary>
+    [Test]
+    public async Task ValidateAsync_WhenAnLlmCallPinsNoModel_DoesNotWarn()
+    {
+        var service = BuildService(LocalModel, LlamaServerProviderConstants.ProviderName);
+
+        var result = await service.ValidateAsync(LlmCallGraph(model: null));
+
+        AssertEx.Empty(result.Warnings);
+    }
+
     private static IGraphWorkflowDefinitionService BuildService(string model, string providerName)
     {
         var providers = Substitute.For<ILocalModelProviderResolver>();
@@ -144,11 +189,31 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
         return BuildService(providers);
     }
 
-    private static IGraphWorkflowDefinitionService BuildService(ILocalModelProviderResolver providers) =>
-        new GraphWorkflowDefinitionService(Substitute.For<IGraphWorkflowStore>(),
+    // The registry is empty unless a test says otherwise: an Agent node is never asked about it, so the schema tests
+    // above stay single-warning on a node with nothing installed.
+    private static IGraphWorkflowDefinitionService BuildService(ILocalModelProviderResolver providers, IGgufModelStore? ggufModels = null)
+    {
+        var trust = Substitute.For<IModelTrustResolver>();
+        trust.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(ModelTrustLocality.Local);
+        return new GraphWorkflowDefinitionService(Substitute.For<IGraphWorkflowStore>(),
             Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().Build(),
             providers,
+            ggufModels ?? Substitute.For<IGgufModelStore>(),
+            trust,
             Options.Create(new GraphWorkflowOptions()));
+    }
+
+    private static string LlmCallGraph(string? model)
+    {
+        var pin = model is null ? string.Empty : $""", "model": "{model}" """;
+        return $$"""
+                 { "schemaVersion": 1,
+                   "nodes": [{ "key": "start", "kind": "Start" },
+                             { "key": "analyze", "kind": "LlmCall", "config": { "prompt": "Summarize it."{{pin}} } },
+                             { "key": "done", "kind": "End", "config": { "outcome": "completed" } }],
+                   "edges": [{ "key": "e1", "from": "start", "to": "analyze" }, { "key": "e2", "from": "analyze", "to": "done" }] }
+                 """;
+    }
 
     // One Agent node whose schema earns the warning on every count: a relocated keyword, an optional property and an
     // object the runtime would close.

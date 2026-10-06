@@ -1,8 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
@@ -30,6 +32,14 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
     /// </summary>
     internal const string OutdatedPolicyVersionMessage =
         "The judge policy was stored under an older judge version. Re-save the judge to upgrade it (this forces a re-judge).";
+
+    /// <summary>
+    ///     The fixed, path-free failure text for a judging the context budget refused. Names the judge policy's own
+    ///     window and the inputs the operator controls; the graded answer is already cut to fit (see ForJudge).
+    /// </summary>
+    internal static string ContextWindowExceededMessage(int judgeContextTokens) =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"The judge prompt (the task, the rubric, the reference answer if set, and the answer under review) did not fit the judge's {judgeContextTokens}-token context window. Raise \"Judge context tokens\" in the project's judge settings, or shorten the rubric or the reference answer.");
 
     /// <summary>
     ///     The judge turn's constrained-decoding schema, parsed once. Cloned out of its document because a
@@ -265,7 +275,10 @@ public sealed class BenchmarkJudgeExecutor : IBenchmarkJudgeExecutor
             var terminal = capture.TerminalState;
             if (terminal?.Status != InvocationStatus.Completed)
             {
-                throw new BenchmarkExecutionException(InvocationFailedMessage);
+                // A context refusal names the judge's window and its remedy; anything else stays generic.
+                throw new BenchmarkExecutionException(terminal?.FailureCategory == FailureCategory.ContextWindowExceeded
+                    ? ContextWindowExceededMessage(runtime.RequestedContextTokens)
+                    : InvocationFailedMessage);
             }
 
             // Fail-closed parse against the attempt's own rubric, then the SERVER computes 0..100 — the judge only ever

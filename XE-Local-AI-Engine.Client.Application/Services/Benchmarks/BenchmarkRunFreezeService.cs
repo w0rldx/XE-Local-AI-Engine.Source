@@ -69,6 +69,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
     private readonly IAgentDefinitionResolver _agentResolver;
     private readonly IGgufModelCapabilityResolver _modelCapabilities;
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
+    private readonly IModelClassificationStore _classifications;
     private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy;
     private readonly IBenchmarkFreezeDependencyService _dependencies;
     private readonly IBenchmarkRuntimeSnapshotFactory _snapshots;
@@ -117,6 +118,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         IAgentDefinitionResolver agentResolver,
         IGgufModelCapabilityResolver modelCapabilities,
         IBenchmarkInstalledModelLeaseProvider installedModels,
+        IModelClassificationStore classifications,
         IBenchmarkEligibilityPolicy eligibilityPolicy,
         IBenchmarkFreezeDependencyService dependencies,
         IBenchmarkRuntimeSnapshotFactory snapshots,
@@ -135,6 +137,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         ArgumentNullException.ThrowIfNull(agentResolver);
         ArgumentNullException.ThrowIfNull(modelCapabilities);
         ArgumentNullException.ThrowIfNull(installedModels);
+        ArgumentNullException.ThrowIfNull(classifications);
         ArgumentNullException.ThrowIfNull(eligibilityPolicy);
         ArgumentNullException.ThrowIfNull(dependencies);
         ArgumentNullException.ThrowIfNull(snapshots);
@@ -150,6 +153,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         _agentResolver = agentResolver;
         _modelCapabilities = modelCapabilities;
         _installedModels = installedModels;
+        _classifications = classifications;
         _eligibilityPolicy = eligibilityPolicy;
         _dependencies = dependencies;
         _snapshots = snapshots;
@@ -260,7 +264,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         var freezeScope = scope ?? ownedScope!;
         var trimmedPrimary = primaryModelName.Trim();
         var primary = (await freezeScope.AcquireAsync(trimmedPrimary, AcquireVerifiedAsync, cancellationToken)).Snapshot;
-        BenchmarkModelEligibility.Validate(primary, "primary");
+        BenchmarkModelEligibility.Validate(primary, await _classifications.GetByNameAsync(primary.ModelName, cancellationToken), "primary");
 
         // The judge is no longer part of the freeze: its runtime is resolved per attempt, against the policy
         // revision that attempt is judged under, so a judge change never re-freezes a run.

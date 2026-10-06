@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>How long a benchmark phase waits for local capacity before it gives up.</summary>
@@ -78,6 +79,9 @@ internal sealed class BenchmarkAdmissionContext
 /// <summary>The one admission path both benchmark executors take, so the wait and the log line cannot diverge.</summary>
 internal static class BenchmarkCapacityAdmission
 {
+    /// <summary>Room for the rejection reason inside the stored 1024-character failure text, after the fixed sentences.</summary>
+    internal const int MaxReasonChars = 600;
+
     /// <summary>
     ///     Decides capacity, retrying a <see cref="CapacityVerdict.RejectInsufficient" /> on <paramref name="budget" />'s
     ///     cadence and out of <paramref name="budget" />'s remaining share. Returns the first non-rejecting decision —
@@ -128,7 +132,14 @@ internal static class BenchmarkCapacityAdmission
 
             if (budget.Remaining == 0)
             {
-                throw new BenchmarkExecutionException($"{context.RejectedMessage} No capacity became free after {budget.Budget.TotalSeconds:0} s.");
+                // The reason names what is loaded and what to eject; trimmed so a long resident list cannot crowd out the rest.
+                var reason = ConversationSummarizer.TruncateAtRuneBoundary(decision.Reason, MaxReasonChars);
+                if (reason.Length < decision.Reason.Length)
+                {
+                    reason += "…";
+                }
+
+                throw new BenchmarkExecutionException($"{context.RejectedMessage} No capacity became free after {budget.Budget.TotalSeconds:0} s. {reason}");
             }
 
             attempt++;

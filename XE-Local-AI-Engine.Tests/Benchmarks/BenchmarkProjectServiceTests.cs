@@ -1040,7 +1040,7 @@ public sealed class BenchmarkProjectServiceTests
                        }
                    ]);
 
-            Service = new BenchmarkProjectService(Store, agents, Models, runtimes, Catalog);
+            Service = new BenchmarkProjectService(Store, agents, Models, runtimes, Catalog, Substitute.For<IModelClassificationStore>());
         }
 
         public const string BaseModelName = "base.gguf";

@@ -25,16 +25,16 @@ public static class GraphWorkflowGraphContract
     ///     proportional to how many there are, so a cap applied to the finished graph would bound none of it.
     /// </remarks>
     public static int ValidateAndCountNodes(string graphJson, int maxNodes) =>
-        ValidateAndParse(graphJson, maxNodes).Nodes.Count;
+        GraphWorkflowGraph.Parse(graphJson, maxNodes).Nodes.Count;
 
-    /// <summary>The same save-time validation, keeping the graph it parsed.</summary>
+    /// <summary>The same save-time validation, keeping the graph it parsed and handing its per-element errors back.</summary>
     /// <remarks>
     ///     The tool gate has to say which NODE names each refused tool, and the deduplicated
     ///     <see cref="GraphWorkflowGraph.ToolNodeNames" /> carries no keys, so it walks the nodes — over this graph
-    ///     rather than over a second parse of the same document.
+    ///     rather than over a second parse, and alongside the parser's own errors so the author gets both at once.
     /// </remarks>
-    internal static GraphWorkflowGraph ValidateAndParse(string graphJson, int maxNodes) =>
-        GraphWorkflowGraph.Parse(graphJson, maxNodes);
+    internal static GraphWorkflowGraph ValidateAndParse(string graphJson, int maxNodes, List<GraphWorkflowValidationError> errors) =>
+        GraphWorkflowGraph.Parse(graphJson, maxNodes, errors);
 
     /// <summary>
     ///     Which decisions a node run of <paramref name="kind" /> in <paramref name="status" /> can take: a pause's two

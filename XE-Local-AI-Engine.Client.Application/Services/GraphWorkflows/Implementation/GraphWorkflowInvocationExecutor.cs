@@ -505,7 +505,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                     services.GetRequiredService<ILocalModelProviderResolver>(),
                     cancellationToken))
             {
-                return Invalid($"Graph workflow {callName} nodes require an installed node-managed GGUF chat model.");
+                return Invalid($"Graph workflow {callName} nodes require an installed node-managed GGUF chat model; node '{node.NodeKey}' would run '{effectiveModel}', which is not one.");
             }
 
             var classification = await services.GetRequiredService<IModelClassificationStore>().GetByNameAsync(effectiveModel, cancellationToken);

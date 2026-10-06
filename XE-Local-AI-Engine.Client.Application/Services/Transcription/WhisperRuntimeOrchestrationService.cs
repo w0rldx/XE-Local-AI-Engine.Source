@@ -8,11 +8,10 @@ using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 ///     backend selection, the prerequisite checklist, and the managed source build's verbs.
 /// </summary>
 /// <remarks>
-///     It also carries the backend selection behind the model recommendation, the start / cancel / remove / status verbs, and
-///     the activity snapshot a <c>409 runtime-busy</c> envelope carries. An endpoint is the HTTP edge and may not take a
-///     concrete provider's contract itself (the endpoint-dependency rule), so each call arrives here unchanged: this type adds
-///     no policy, decides nothing about refusals, outcomes or the OS gate, and re-exposes only what those six endpoints call.
-///     The build service's host-start recovery and shutdown drain, and the activity gate's leases, stay off deliberately.
+///     It also carries the build verbs, the activity snapshot a <c>409 runtime-busy</c> envelope carries, and the
+///     transcription lease the audio upload takes before it touches the session. An endpoint may not take a provider's
+///     contract itself (the endpoint-dependency rule), so each call arrives here unchanged: this type adds no policy and
+///     re-exposes only what those endpoints call. Host-start recovery, the shutdown drain and the other leases stay off.
 /// </remarks>
 public sealed class WhisperRuntimeOrchestrationService
 {
@@ -81,5 +80,11 @@ public sealed class WhisperRuntimeOrchestrationService
     public WhisperRuntimeActivitySnapshot GetActivitySnapshot()
     {
         return _activityGate.GetSnapshot();
+    }
+
+    /// <summary>A transcription lease, or <see langword="null" /> while a runtime build, removal or eject holds the runtime.</summary>
+    public IWhisperRuntimeActivityLease? TryAcquireTranscriptionLease()
+    {
+        return _activityGate.TryAcquireTranscriptionLease();
     }
 }

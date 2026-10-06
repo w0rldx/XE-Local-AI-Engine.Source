@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -278,6 +279,57 @@ public sealed class BenchmarkJudgeExecutorTests
     }
 
     [Test]
+    public async Task Execute_WhenTheContextBudgetRefusedTheJudge_NamesTheWindowAndTheRemedy()
+    {
+        // Live (F-55): a judge the context budget refused failed as "The benchmark judge invocation failed", which says
+        // nothing the user can act on. It names the judge policy's own window and remedy, never the primary run's agent advice.
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed);
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        string? failureMessage = null;
+        store.MarkJudgeFailedAsync(run.Id, 2, Arg.Do<string>(message => failureMessage = message), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
+                 Version = 5
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(call =>
+              {
+                  var refused = State(call.Arg<InvocationExecutionContext>().Package.InvocationId, string.Empty);
+                  refused.Status = InvocationStatus.Failed;
+                  refused.FailureCategory = FailureCategory.ContextWindowExceeded;
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher, new InvocationStateChangedEventArgs(refused));
+                  return Task.CompletedTask;
+              });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner, PassthroughSupervisor());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork
+        {
+            QueueSequence = 2,
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Judge,
+            Attempt = 1,
+            Version = 2,
+            Run = run,
+            JudgeAttemptId = AttemptId
+        }, CancellationToken.None);
+
+        AssertEx.Equal(BenchmarkJudgeExecutor.ContextWindowExceededMessage(4096), AssertEx.NotNull(failureMessage));
+        AssertEx.Contains(failureMessage!, "the judge's 4096-token context window");
+        AssertEx.Contains(failureMessage!, "Raise \"Judge context tokens\"");
+        AssertEx.False(failureMessage!.Contains("agent", StringComparison.OrdinalIgnoreCase), "a judge runs no agent");
+    }
+
+    [Test]
     public async Task Execute_WhenCapacityRejects_FailsOnlyJudgeWithoutDispatcherOrGeneration()
     {
         var installed = Installed();
@@ -394,7 +446,13 @@ public sealed class BenchmarkJudgeExecutorTests
                  Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
                  Version = 5
              });
-        var capacity = new JudgeCapacityService(CapacityVerdict.RejectInsufficient);
+        // F-55: the decision's reason says what is loaded and what to eject; a long resident list is cut, not the whole text.
+        const string ReasonHead = "Insufficient capacity for 'judge.gguf' (Chat): not enough free memory for another model. Loaded now: ";
+        var capacity = new JudgeCapacityService(CapacityVerdict.RejectInsufficient)
+        {
+            Reason = ReasonHead + string.Join(", ", Enumerable.Range(0, 100).Select(static index => $"'model-{index}.gguf' (Chat)"))
+                     + ". Eject one of them or pick a loaded model."
+        };
         var runner = Substitute.For<IInvocationRunner>();
         await using var lease = new FakeLease(installed);
         var executor = Executor(store,
@@ -424,6 +482,9 @@ public sealed class BenchmarkJudgeExecutorTests
         AssertEx.Equal(4, capacity.DecisionCount);
         await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
         AssertEx.Contains(AssertEx.NotNull(failureMessage), "No capacity became free after");
+        AssertEx.Contains(failureMessage!, "No capacity became free after 0 s. " + ReasonHead + "'model-0.gguf' (Chat)");
+        AssertEx.True(failureMessage!.EndsWith('…'), "a reason longer than the cap is cut and marked");
+        AssertEx.True(failureMessage.Length <= 1024, "the whole text fits the stored failure column");
     }
 
     [Test]
@@ -1334,6 +1395,7 @@ public sealed class BenchmarkJudgeExecutorTests
 
         public CapacityRequest? LastRequest { get; private set; }
         public int DecisionCount { get; private set; }
+        public string Reason { get; init; } = "capacity";
         public TrackingDisposable Reservation { get; } = new();
 
         public Task<CapacityDecision> DecideAsync(string modelName, ModelRole role, CancellationToken ct) =>
@@ -1351,7 +1413,7 @@ public sealed class BenchmarkJudgeExecutorTests
             return Task.FromResult(new CapacityDecision
             {
                 Verdict = verdict,
-                Reason = "capacity",
+                Reason = Reason,
                 OllamaEvictionWarning = false,
                 Reservation = verdict == CapacityVerdict.Allow ? Reservation : null
             });

@@ -15,6 +15,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
     private readonly IDevelopmentCloudAttemptContextService _cloudContext;
     private readonly IDevelopmentCoderModel _coderModel;
     private readonly IDevelopmentAttemptLiveBroker? _liveBroker;
+    private readonly IHostApplicationLifetime? _lifetime;
     private readonly ILogger<DevelopmentCoderAttemptRunner> _logger;
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentPatchEvidenceService _patchEvidence;
@@ -33,7 +34,8 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         IOptions<DevelopmentOptions> options,
         ILogger<DevelopmentCoderAttemptRunner> logger,
         TimeProvider timeProvider,
-        IDevelopmentAttemptLiveBroker? liveBroker = null)
+        IDevelopmentAttemptLiveBroker? liveBroker = null,
+        IHostApplicationLifetime? lifetime = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -46,6 +48,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _liveBroker = liveBroker;
+        _lifetime = lifetime;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
@@ -121,6 +124,11 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                 ManifestHash = evidence.ManifestHash,
                 ChangedFiles = evidence.ChangedFiles.Select(static item => item.Path).ToArray()
             };
+        }
+        catch (OperationCanceledException) when (_lifetime?.ApplicationStopping.IsCancellationRequested == true)
+        {
+            // A restart is not a user cancel: the row stays Running and startup reconciliation records it Interrupted.
+            throw;
         }
         catch (Exception exception)
         {

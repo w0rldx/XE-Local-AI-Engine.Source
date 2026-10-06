@@ -845,6 +845,7 @@ public sealed class BenchmarkRunFreezeServiceTests
                 Resolver,
                 capabilities,
                 LeaseProvider,
+                Substitute.For<IModelClassificationStore>(),
                 new BenchmarkEligibilityPolicy(),
                 dependencies,
                 snapshots,

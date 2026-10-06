@@ -90,6 +90,35 @@ public sealed class GraphWorkflowToolValidationTests
     }
 
     /// <summary>
+    ///     A parser error and a tool-gate error arrive in ONE answer, not one per validate. The broken node's config
+    ///     never parsed into a tool, so it earns the parser's complaint alone: the gate must not pile a second on it.
+    /// </summary>
+    [Test]
+    public async Task ValidateAsync_WithAParserErrorAndARefusedTool_ReportsBothInOneAnswer()
+    {
+        const string graph = """
+                             { "schemaVersion": 1,
+                               "nodes": [{ "key": "start", "kind": "Start" },
+                                         { "key": "runner", "kind": "Tool", "config": { "toolName": "run_python" } },
+                                         { "key": "broken", "kind": "Tool", "config": { } },
+                                         { "key": "done", "kind": "End", "config": { "outcome": "completed" } }],
+                               "edges": [{ "key": "e1", "from": "start", "to": "runner" },
+                                         { "key": "e2", "from": "runner", "to": "broken" },
+                                         { "key": "e3", "from": "broken", "to": "done" }] }
+                             """;
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        var definitions = scope.ServiceProvider.GetRequiredService<IGraphWorkflowDefinitionService>();
+
+        var result = await definitions.ValidateAsync(graph);
+
+        AssertEx.Equal("broken,runner",
+            string.Join(',', result.Errors.Select(static error => error.Key).Order(StringComparer.Ordinal)),
+            $"the parser's error and the gate's, one each: {string.Join(" | ", result.Errors)}");
+        AssertEx.Contains(result.Errors, static error => error.Key == "broken" && error.Message.Contains("toolName", StringComparison.Ordinal));
+        AssertEx.Contains(result.Errors, static error => error.Key == "runner" && error.Message.Contains("run_python", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     ///     The whole reason the check runs twice. The definition is saved while its tools are invocable and started
     ///     after the envelope tightened away from them: run start wins, and it wins BEFORE the run row is written, so
     ///     the operator learns at the start rather than three nodes in.

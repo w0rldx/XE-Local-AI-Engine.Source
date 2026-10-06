@@ -1217,6 +1217,9 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.NotNull(terminalRequest);
         AssertEx.Equal(NodeChatMessageStatusValues.Failed, terminalRequest!.Status);
         AssertEx.Contains(terminalRequest.Error, "workspace is busy", StringComparison.OrdinalIgnoreCase);
+        // A parked approval in another conversation is the common holder; the operator must learn it and that it expires.
+        AssertEx.Contains(terminalRequest.Error, "tool approval", StringComparison.Ordinal);
+        AssertEx.Contains(terminalRequest.Error, "\"Max pending tool-call age\"", StringComparison.Ordinal);
         AssertEx.True(events.Any(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantFailed));
         AssertEx.Equal(expected: 1, lease.DisposeCount);
         AssertEx.Equal(expected: 0, lease.AmbientScopeEnterCount);

@@ -14,8 +14,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <remarks>
 ///     Resolves the active llama.cpp backend the same way the inference profiler does
 ///     (<see cref="IGpuVariantSelector" /> → <see cref="InferenceBackends.FromVariant" />) and probes the llama.cpp
-///     process-local VRAM budget once via <see cref="IProcessVramBudgetProbe" />. Without a VRAM budget a CPU-mode node is
-///     graded against <see cref="MemoryFitEstimator.ResolveFitBudgetBytes" /> (available RAM); otherwise, or on a probe
+///     process-local VRAM budget once via <see cref="IProcessVramBudgetProbe" />. Without a process budget the node is
+///     graded against the profile's <see cref="MemoryFitEstimator.ResolveFitBudgetBytes" />; with neither, or on a probe
 ///     failure, the verdict degrades to "unknown" rather than throwing.
 /// </remarks>
 public sealed class GgufVariantRecommender : IGgufVariantRecommender
@@ -100,37 +100,41 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         return [.. sizesBytes.Select(size => ClassifyFit(size, budgetBytes))];
     }
 
-    // The advisor's budget from the memoized effective profile: the companion reserve comes off a GPU budget only, never off RAM.
+    // The advisor's budget from the memoized effective profile.
     // Any non-cancellation failure degrades to "unknown" (null), so a page read never fails over it.
     private async Task<long?> TryResolveProfileBudgetAsync(CancellationToken ct)
     {
         try
         {
             // Never GetEffectiveProfileAsync here: on a cold or stale audit it would run the device probe (up to 15 s) inside a page read.
-            if (await _runtimeAudit.PeekEffectiveProfileAsync(ct) is not { } profile)
-            {
-                return null;
-            }
-
-            var budget = MemoryFitEstimator.ResolveFitBudgetBytes(profile);
-            if (budget <= 0)
-            {
-                return null;
-            }
-
-            if (!MemoryFitEstimator.UsesGpuBudget(profile))
-            {
-                return budget;
-            }
-
-            var reserve = await _companionReserve.ResolveGpuBytesAsync(profile, ct);
-            return Math.Max(1, budget - reserve);
+            return await _runtimeAudit.PeekEffectiveProfileAsync(ct) is { } profile
+                ? await ResolveProfileBudgetAsync(profile, ct)
+                : null;
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             _logger.LogWarning(exception, "Hardware-profile budget could not be resolved for a GGUF fit verdict; treating the budget as unknown.");
             return null;
         }
+    }
+
+    // The profile's fit budget (free VRAM when measured, else total VRAM, or available RAM in CPU mode); the companion
+    // reserve comes off a GPU budget only. Null when the profile knows no budget.
+    private async Task<long?> ResolveProfileBudgetAsync(HardwareProfile profile, CancellationToken ct)
+    {
+        var budget = MemoryFitEstimator.ResolveFitBudgetBytes(profile);
+        if (budget <= 0)
+        {
+            return null;
+        }
+
+        if (!MemoryFitEstimator.UsesGpuBudget(profile))
+        {
+            return budget;
+        }
+
+        var reserve = await _companionReserve.ResolveGpuBytesAsync(profile, ct);
+        return Math.Max(1, budget - reserve);
     }
 
     // Resolve the active backend exactly as the inference profiler does, then probe the process-local budget once, less the knowledge companions' reserve.
@@ -144,11 +148,9 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
             var budget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(backend, ct);
             if (budget is null)
             {
-                // No VRAM budget: a CPU-mode profile is graded against the advisor's RAM budget, with no companion GPU reserve.
-                var cpuProfile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, ct);
-                return MemoryFitEstimator.UsesGpuBudget(cpuProfile) || cpuProfile.AvailableRamBytes is not > 0
-                    ? null
-                    : MemoryFitEstimator.ResolveFitBudgetBytes(cpuProfile);
+                // No process budget (no runtime installed yet): grade against the profile budget the tested-model list uses.
+                var fallbackProfile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, ct);
+                return await ResolveProfileBudgetAsync(fallbackProfile, ct);
             }
 
             if (budget is not > 0)

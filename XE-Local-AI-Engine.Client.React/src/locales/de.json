@@ -884,7 +884,7 @@
 			"noOnlineClientNodes": "Keine Online-Client-Nodes verfügbar. Kopple und verbinde zuerst einen Worker-Node, bevor du Unterhaltungen erstellst.",
 			"waitingForStreamedResponse": "Warte auf gestreamte Antwort",
 			"waitingForResponse": "Warte auf Antwort",
-			"queued": "In Warteschlange — warte auf aktuelle Aufgabe",
+			"queued": "In Warteschlange — startet nach dem laufenden Benchmark, Training oder Chat",
 			"loadingModel": "Modell wird geladen…",
 			"remoteViewOnlyTitle": "Remote-Unterhaltung",
 			"remoteViewOnly": "Diese Unterhaltung wurde von einem gekoppelten Client gestartet und ist auf diesem Knoten nur lesbar.",

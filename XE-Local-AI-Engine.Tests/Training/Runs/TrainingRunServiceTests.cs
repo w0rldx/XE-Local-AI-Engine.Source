@@ -89,6 +89,44 @@ public sealed class TrainingRunServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RunCreate_WhenTheHoldoutWouldBeEmpty_IsRejectedWithTheCountsAndLeavesNothingBehind()
+    {
+        // Live (F-59): three samples at a quarter hold-out floor to nothing held back. The run used to start and could
+        // only dead-end later: evaluation refuses an empty hold-out, so its artifacts could never pass the quality gate.
+        await using var provider = await BuildProviderAsync(Guid.NewGuid().ToString("N"));
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var fixture = await SeedAsync(context, sampleCount: 3);
+        var service = BuildService(context);
+
+        var rejection = await AssertEx.ThrowsAsync<TrainingRunRejectedException>(() =>
+            service.CreateAsync(new CreateTrainingRunCommand
+            {
+                DatasetId = fixture.DatasetId,
+                ExpectedDatasetVersion = fixture.DatasetVersion,
+                BaseArtifactId = fixture.BaseArtifactId,
+                LicenseConfirmed = true
+            }));
+
+        AssertEx.Equal(TrainingRunService.HoldoutTooSmallMessage(3, 0.25), rejection.Message);
+        AssertEx.Contains(rejection.Message, "has 3 reviewable samples");
+        AssertEx.Contains(rejection.Message, "25% of each sample kind, so at least one kind needs 4 samples");
+        var runStore = new TrainingRunStore(context, TimeProvider.System);
+        AssertEx.Null(await runStore.ClaimNextAsync(), "A refused creation must queue nothing.");
+        var frozenDirectory = Path.Combine(_root, "training", "datasets", fixture.DatasetId.ToString(), "frozen");
+        AssertEx.True(!Directory.Exists(frozenDirectory) || Directory.GetFiles(frozenDirectory).Length == 0,
+            "A refused creation must not leave a frozen copy on disk.");
+    }
+
+    [Test]
+    public void HoldoutTooSmallMessage_NamesTheSmallestKindSizeThatHoldsOneSampleBack()
+    {
+        AssertEx.Contains(TrainingRunService.HoldoutTooSmallMessage(2, 0.05), "5% of each sample kind, so at least one kind needs 20 samples");
+        AssertEx.Contains(TrainingRunService.HoldoutTooSmallMessage(2, 0.1), "10% of each sample kind, so at least one kind needs 10 samples");
+        AssertEx.Contains(TrainingRunService.HoldoutTooSmallMessage(2, 0.3), "30% of each sample kind, so at least one kind needs 4 samples");
+    }
+
+    [Test]
     public async Task DatasetFreeze_EditAfterEnqueue_DoesNotAffectRun()
     {
         await using var provider = await BuildProviderAsync(Guid.NewGuid().ToString("N"));
@@ -270,14 +308,15 @@ public sealed class TrainingRunServiceTests : IDisposable
     private TrainingRunWorkspace BuildWorkspace() =>
         new(new FakeNodeDataDirectory(_root), _keyHolder);
 
-    private static async Task<RunFixture> SeedAsync(NodeChatDbContext context)
+    /// <summary>A quarter is held back, so the default four samples hold back exactly one.</summary>
+    private static async Task<RunFixture> SeedAsync(NodeChatDbContext context, int sampleCount = 4)
     {
         var datasets = new TrainingDatasetStore(context, TimeProvider.System);
         var definition = await datasets.CreateDefinitionAsync(new TrainingDefinitionInput
         {
             Name = "tool calling",
             Kind = TrainingDatasetKind.ToolCalling,
-            DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"holdoutFraction":0.2}""")
+            DefinitionJson = Encoding.UTF8.GetBytes("""{"schemaVersion":1,"holdoutFraction":0.25}""")
         });
         var dataset = await datasets.CreateDatasetAndEnqueueAsync(new TrainingDatasetEnqueueCommand
         {
@@ -286,7 +325,7 @@ public sealed class TrainingRunServiceTests : IDisposable
             Name = "dataset"
         });
         _ = await datasets.ClaimNextAsync();
-        for (var index = 0; index < 4; index++)
+        for (var index = 0; index < sampleCount; index++)
         {
             _ = await datasets.AppendSampleAsync(new TrainingSampleInput
             {

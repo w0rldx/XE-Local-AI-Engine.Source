@@ -52,6 +52,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
     private readonly IBenchmarkStore _benchmarkStore;
     private readonly IAgentDefinitionStore _agentDefinitionStore;
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
+    private readonly IModelClassificationStore _classifications;
     private readonly IBenchmarkJudgeRuntimeResolver _judgeRuntimeResolver;
     private readonly IBenchmarkQueueSignal? _queueSignal;
     private readonly IBenchmarkPairwisePlanner? _pairwisePlanner;
@@ -61,6 +62,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         IBenchmarkInstalledModelLeaseProvider installedModels,
         IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
         IBenchmarkCatalogService catalog,
+        IModelClassificationStore classifications,
         IBenchmarkQueueSignal? queueSignal = null,
         IBenchmarkPairwisePlanner? pairwisePlanner = null)
     {
@@ -69,7 +71,9 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         ArgumentNullException.ThrowIfNull(agentDefinitionStore);
         ArgumentNullException.ThrowIfNull(installedModels);
         ArgumentNullException.ThrowIfNull(judgeRuntimeResolver);
+        ArgumentNullException.ThrowIfNull(classifications);
         _catalog = catalog;
+        _classifications = classifications;
         _benchmarkStore = benchmarkStore;
         _agentDefinitionStore = agentDefinitionStore;
         _installedModels = installedModels;
@@ -558,7 +562,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         try
         {
             await using var lease = await _installedModels.AcquireAsync(modelName, cancellationToken);
-            BenchmarkModelEligibility.ValidateJudge(lease.Snapshot);
+            BenchmarkModelEligibility.ValidateJudge(lease.Snapshot, await _classifications.GetByNameAsync(lease.Snapshot.ModelName, cancellationToken));
             var policy = new BenchmarkJudgePolicyV1(BenchmarkJudgePolicyModelV1.FromSnapshot(BenchmarkInstalledModelSnapshotMapper.ToSnapshot(lease.Snapshot)),
                 draft.ContextTokens,
                 BenchmarkJudgePolicyVersions.PromptVersion,

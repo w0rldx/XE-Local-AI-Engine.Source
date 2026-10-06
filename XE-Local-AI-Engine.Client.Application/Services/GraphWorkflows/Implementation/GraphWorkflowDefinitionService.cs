@@ -3,8 +3,11 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Tools;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -21,23 +24,33 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
 
     private readonly ILocalModelProviderResolver _providers;
 
+    private readonly IGgufModelStore _ggufModels;
+
+    private readonly IModelTrustResolver _trust;
+
     private readonly IOptions<GraphWorkflowOptions> _options;
 
     public GraphWorkflowDefinitionService(IGraphWorkflowStore store,
         IToolInvocationService tools,
         INodeRuntimeSettings runtimeSettings,
         ILocalModelProviderResolver providers,
+        IGgufModelStore ggufModels,
+        IModelTrustResolver trust,
         IOptions<GraphWorkflowOptions> options)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(tools);
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(providers);
+        ArgumentNullException.ThrowIfNull(ggufModels);
+        ArgumentNullException.ThrowIfNull(trust);
         ArgumentNullException.ThrowIfNull(options);
         _store = store;
         _tools = tools;
         _runtimeSettings = runtimeSettings;
         _providers = providers;
+        _ggufModels = ggufModels;
+        _trust = trust;
         _options = options;
     }
 
@@ -115,8 +128,8 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
     ///     A blank document becomes the same structured refusal every other whole-document failure produces, so
     ///     <see cref="ValidateAsync" /> can promise never to throw rather than leaking the parser's argument guard. It
     ///     answers the PARSED graph rather than a node count, because two callers want the count and one wants the
-    ///     warnings and re-parsing for either would run the rule set twice. The tool gate runs AFTER the parse and only
-    ///     if it succeeded: the structural rules throw first, and a graph nobody can walk has no tools worth naming.
+    ///     warnings and re-parsing for either would run the rule set twice. The tool gate runs once the structural rules
+    ///     passed, beside the per-node errors, so one answer carries both; a config that failed to parse is no tool node.
     /// </remarks>
     private async Task<GraphWorkflowGraph> ValidateAndParseAsync(string graphJson, CancellationToken cancellationToken)
     {
@@ -125,11 +138,12 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
             throw new GraphWorkflowValidationException("A graph workflow definition needs a graph.");
         }
 
-        var graph = GraphWorkflowGraphContract.ValidateAndParse(graphJson, _options.Value.MaxNodesPerDefinition);
-        var toolErrors = await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, _runtimeSettings, cancellationToken);
-        return toolErrors.Count == 0
+        var errors = new List<GraphWorkflowValidationError>();
+        var graph = GraphWorkflowGraphContract.ValidateAndParse(graphJson, _options.Value.MaxNodesPerDefinition, errors);
+        errors.AddRange(await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, _runtimeSettings, cancellationToken));
+        return errors.Count == 0
             ? graph
-            : throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(toolErrors));
+            : throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(errors));
     }
 
     /// <summary>
@@ -170,7 +184,51 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
             }
         }
 
-        return suppressed.Count == 0 ? graph.Warnings : [.. graph.Warnings.Where(warning => !suppressed.Contains(warning))];
+        var warnings = suppressed.Count == 0 ? graph.Warnings : [.. graph.Warnings.Where(warning => !suppressed.Contains(warning))];
+        var uninstalled = await UninstalledModelWarningsAsync(graph, cancellationToken);
+        return uninstalled.Count == 0 ? warnings : [.. warnings, .. uninstalled];
+    }
+
+    /// <summary>One warning per LLM call or decision model node pinned to a model a run of that node would refuse as not installed.</summary>
+    /// <remarks>
+    ///     Asked through <see cref="NodeLocalModelGate" />, the predicate the executor refuses those nodes with, so the
+    ///     two cannot disagree. Agent nodes are left out: their run takes any node-local model, an Ollama one included,
+    ///     and refuses a cloud one in its own words. A lookup that faults says nothing, so validation still never throws.
+    /// </remarks>
+    private async Task<IReadOnlyList<GraphWorkflowValidationError>> UninstalledModelWarningsAsync(GraphWorkflowGraph graph, CancellationToken cancellationToken)
+    {
+        var warnings = new List<GraphWorkflowValidationError>();
+        foreach (var node in graph.Nodes.Values.OrderBy(static node => node.NodeKey, StringComparer.Ordinal))
+        {
+            var model = node.Config switch
+            {
+                GraphWorkflowLlmCallConfig { Model: { } llmModel } => llmModel,
+                GraphWorkflowDecisionModelConfig { Model: { } decisionModel } => decisionModel,
+                _ => null
+            };
+            if (!string.IsNullOrWhiteSpace(model) && await IsNotInstalledAsync(model, cancellationToken))
+            {
+                warnings.Add(new GraphWorkflowValidationError(node.NodeKey,
+                    $"Node '{node.NodeKey}' pins model '{model}', which is not an installed node-managed GGUF chat model, so a run will refuse this node. "
+                    + "Install the model or pin another one."));
+            }
+        }
+
+        return warnings;
+    }
+
+    /// <summary>Whether the runtime would refuse <paramref name="model" /> as not installed, answering <see langword="false" /> when the lookup cannot say.</summary>
+    private async Task<bool> IsNotInstalledAsync(string model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return !await NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync(model, _ggufModels, _trust, _providers, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Same contract as ServedByLlamaServerAsync: a warning is never worth failing a validation over.
+            return false;
+        }
     }
 
     /// <summary>

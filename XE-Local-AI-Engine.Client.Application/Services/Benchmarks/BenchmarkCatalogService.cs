@@ -21,6 +21,7 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
     private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy;
     private readonly IGgufModelStore _ggufModels;
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
+    private readonly IModelClassificationStore _classifications;
     private readonly ILogger<BenchmarkCatalogService> _logger;
 
     public BenchmarkCatalogService(IAgentDefinitionStore agentDefinitions,
@@ -29,6 +30,7 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
         IBenchmarkEligibilityPolicy eligibilityPolicy,
         IGgufModelStore ggufModels,
         IBenchmarkInstalledModelLeaseProvider installedModels,
+        IModelClassificationStore classifications,
         ILogger<BenchmarkCatalogService> logger)
     {
         ArgumentNullException.ThrowIfNull(agentDefinitions);
@@ -37,6 +39,7 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
         ArgumentNullException.ThrowIfNull(eligibilityPolicy);
         ArgumentNullException.ThrowIfNull(ggufModels);
         ArgumentNullException.ThrowIfNull(installedModels);
+        ArgumentNullException.ThrowIfNull(classifications);
         ArgumentNullException.ThrowIfNull(logger);
         _agentDefinitions = agentDefinitions;
         _agentResolver = agentResolver;
@@ -44,6 +47,7 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
         _eligibilityPolicy = eligibilityPolicy;
         _ggufModels = ggufModels;
         _installedModels = installedModels;
+        _classifications = classifications;
         _logger = logger;
     }
 
@@ -190,7 +194,11 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
             throw new BenchmarkNotFoundException("Benchmark model was not found.");
         }
 
-        BenchmarkModelEligibility.Validate(facts.ProviderName, facts.Role, "benchmark");
+        BenchmarkModelEligibility.Validate(facts.ProviderName,
+            facts.Role,
+            facts.ModelName,
+            await _classifications.GetByNameAsync(facts.ModelName, cancellationToken),
+            "benchmark");
         return facts;
     }
 
@@ -218,7 +226,9 @@ internal sealed class BenchmarkCatalogService : IBenchmarkCatalogService
 
         try
         {
-            BenchmarkModelEligibility.Validate(lease.Snapshot, "benchmark");
+            BenchmarkModelEligibility.Validate(lease.Snapshot,
+                await _classifications.GetByNameAsync(lease.Snapshot.ModelName, cancellationToken),
+                "benchmark");
             return lease;
         }
         catch

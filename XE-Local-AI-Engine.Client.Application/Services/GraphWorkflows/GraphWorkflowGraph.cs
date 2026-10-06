@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Decisions;
 ///     routing truth.
 /// </summary>
 /// <remarks>
-///     <see cref="Parse" /> is the only entry point and parsing IS the validation: a graph that survives it is one the
+///     <see cref="Parse(string, int)" /> is the only entry point and parsing IS the validation: a graph that survives it is one the
 ///     dispatcher can route without a second opinion. Save time and run start share it, so a graph accepted at save is
 ///     one that will start.
 /// </remarks>
@@ -273,7 +273,20 @@ internal sealed class GraphWorkflowGraph
     /// </remarks>
     public static GraphWorkflowGraph Parse(string graphJson, int maxNodes = int.MaxValue)
     {
+        var errors = new List<GraphWorkflowValidationError>();
+        var graph = Parse(graphJson, maxNodes, errors);
+        return errors.Count == 0 ? graph : throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(errors));
+    }
+
+    /// <summary>The same parse, handing the accumulated per-node and per-edge errors back with the graph instead of throwing them.</summary>
+    /// <remarks>
+    ///     For a caller that adds its own per-node errors and wants every one in a single answer. The throw-first rules
+    ///     still throw, so the graph handed back always routes; a node whose config failed to parse carries an empty config.
+    /// </remarks>
+    public static GraphWorkflowGraph Parse(string graphJson, int maxNodes, List<GraphWorkflowValidationError> errors)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(graphJson);
+        ArgumentNullException.ThrowIfNull(errors);
 
         using var document = ParseDocument(graphJson);
         var root = document.RootElement;
@@ -292,8 +305,6 @@ internal sealed class GraphWorkflowGraph
         var kind = ParseGraphKind(root);
         var chat = ParseChatSettings(root, kind);
 
-        var errors = new List<GraphWorkflowValidationError>();
-
         // ONE namespace for node and edge keys: an edge key colliding with a node key makes an element lookup
         // ambiguous in the editor for no gain.
         var keys = new HashSet<string>(StringComparer.Ordinal);
@@ -301,11 +312,6 @@ internal sealed class GraphWorkflowGraph
         var edges = ParseEdges(root, nodes, keys, errors);
         var graph = new GraphWorkflowGraph(kind, chat, nodes, edges);
         graph.Validate(errors);
-        if (errors.Count > 0)
-        {
-            throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(errors));
-        }
-
         return graph;
     }
 

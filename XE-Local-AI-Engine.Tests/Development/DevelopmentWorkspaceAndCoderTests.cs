@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -1228,6 +1229,67 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     }
 
     /// <summary>
+    ///     A restart cancels the attempt through the same token a user cancel trips. Only the user's cancel may record
+    ///     <c>Cancelled</c>; a host stopping leaves the row Running so startup reconciliation records it Interrupted.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task CoderRunner_WhenCancelled_TerminalizesOnlyWhenTheHostIsNotStopping(bool hostStopping)
+    {
+        var snapshot = Snapshot("identity");
+        var store = CancellationStore(snapshot);
+        var options = Options.Create(OptionsValue());
+        var runner = new DevelopmentCoderAttemptRunner(store,
+            new CancellingWorkspaceProvider(),
+            Substitute.For<IDevelopmentSandboxRuntimeProvider>(),
+            new DevelopmentPatchEvidenceService(options),
+            Substitute.For<IDevelopmentArtifactBlobStore>(),
+            new WritingCoderModel(),
+            new UnexpectedCloudContextService(),
+            options,
+            NullLogger<DevelopmentCoderAttemptRunner>.Instance,
+            TimeProvider.System,
+            liveBroker: null,
+            Lifetime(hostStopping));
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, _root)));
+
+        AssertCancellationRecorded(store, hostStopping);
+    }
+
+    /// <summary>The reviewer's half of the same rule: F-47 was found on a reviewer attempt.</summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task ReviewerRunner_WhenCancelled_TerminalizesOnlyWhenTheHostIsNotStopping(bool hostStopping)
+    {
+        var snapshot = Snapshot("identity") with
+        {
+            AttemptRole = DevelopmentAttemptRole.Reviewer,
+            TaskStatus = DevelopmentTaskStatus.InReview
+        };
+        var store = CancellationStore(snapshot);
+        var options = Options.Create(OptionsValue());
+        var blob = Substitute.For<IDevelopmentArtifactBlobStore>();
+        var runner = new DevelopmentReviewerAttemptRunner(store,
+            new CancellingWorkspaceProvider(),
+            Substitute.For<IDevelopmentSandboxRuntimeProvider>(),
+            new DevelopmentEvidenceService(store, blob, new DevelopmentPatchEvidenceService(options)),
+            new UnreachableReviewerModel(),
+            new UnexpectedCloudContextService(),
+            options,
+            TimeProvider.System,
+            NullLogger<DevelopmentReviewerAttemptRunner>.Instance,
+            liveBroker: null,
+            Lifetime(hostStopping));
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, _root)));
+
+        AssertCancellationRecorded(store, hostStopping);
+    }
+
+    /// <summary>
     ///     A test-write refusal reaches the operator in the POLICY's own words. It used to be replaced by "violated
     ///     a workspace security policy", so a workflow node spent its whole retry budget — roughly ten minutes of real
     ///     model time, live — without ever telling anyone which rule it broke or what to change. The failure-code prefix
@@ -1568,6 +1630,34 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.Equal(expected: 0, result.ExitCode, result.StandardError);
     }
 
+    private static IDevelopmentStore CancellationStore(DevelopmentExecutionSnapshot snapshot)
+    {
+        var store = Substitute.For<IDevelopmentStore>();
+        store.GetExecutionSnapshotAsync(snapshot.AttemptId, Arg.Any<CancellationToken>()).Returns(snapshot);
+        store.TerminalizeAttemptAsync(Arg.Any<DevelopmentTerminalizeAttemptCommand>(), Arg.Any<CancellationToken>())
+             .Returns(_ => Operation(snapshot, artifactId: null));
+        return store;
+    }
+
+    private static IHostApplicationLifetime Lifetime(bool stopping)
+    {
+        var lifetime = Substitute.For<IHostApplicationLifetime>();
+        lifetime.ApplicationStopping.Returns(new CancellationToken(stopping));
+        return lifetime;
+    }
+
+    private static void AssertCancellationRecorded(IDevelopmentStore store, bool hostStopping)
+    {
+        if (hostStopping)
+        {
+            _ = store.DidNotReceive().TerminalizeAttemptAsync(Arg.Any<DevelopmentTerminalizeAttemptCommand>(), Arg.Any<CancellationToken>());
+            return;
+        }
+
+        _ = store.Received(1).TerminalizeAttemptAsync(Arg.Is<DevelopmentTerminalizeAttemptCommand>(command => command.Status == PersistenceDevelopmentAttemptStatus.Cancelled),
+            Arg.Any<CancellationToken>());
+    }
+
     private static DevelopmentOperationResult Operation(DevelopmentExecutionSnapshot snapshot, Guid? artifactId)
     {
         return new DevelopmentOperationResult(snapshot.ProjectId,
@@ -1784,6 +1874,28 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             IReadOnlyList<Guid>? inputArtifactIds = null,
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("The local-only coder fixture must not build a cloud context.");
+    }
+
+    // Stands in for any cancellation the attempt token delivers mid-run; the runners cannot tell which one it was.
+    private sealed class CancellingWorkspaceProvider : IDevelopmentWorkspaceProvider
+    {
+        public Task<DevelopmentWorkspaceSession> PrepareAsync(DevelopmentExecutionSnapshot snapshot,
+            DevelopmentRepositoryBinding repository,
+            CancellationToken cancellationToken = default) =>
+            throw new OperationCanceledException("The attempt was cancelled.");
+    }
+
+    private sealed class UnreachableReviewerModel : IDevelopmentReviewerModel
+    {
+        public Task<DevelopmentReviewerModelResult> RunAsync(string modelId,
+            string prompt,
+            IDevelopmentWorkspaceTools tools,
+            int maxOutputTokens,
+            int maxToolCalls,
+            DevelopmentAttemptLiveProgress? liveProgress = null,
+            DevelopmentCloudRoleRoute? cloudRoute = null,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The cancellation lands before the reviewer model is reached.");
     }
 
     private sealed class ThrowingChatClient : IChatClient

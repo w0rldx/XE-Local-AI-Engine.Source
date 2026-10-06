@@ -200,7 +200,7 @@ describe("ChatMessageList streaming status placement", () => {
 
 		const bubble = screen.getByTestId("chat-message-bubble-assistant-1");
 		const queued = screen.getByTestId("chat-stream-queued-indicator");
-		expect(queued.textContent).toContain("Queued — waiting for current task");
+		expect(queued.textContent).toContain("Queued — starts after the node's current benchmark, training run or chat");
 		expect(bubble.contains(queued)).toBe(true);
 		expect(bubble.textContent).not.toContain("Waiting for response");
 	});

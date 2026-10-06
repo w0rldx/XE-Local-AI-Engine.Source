@@ -32,6 +32,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
     private readonly IDevelopmentEvidenceService _evidence;
     private readonly IDevelopmentCloudAttemptContextService _cloudContext;
     private readonly IDevelopmentAttemptLiveBroker? _liveBroker;
+    private readonly IHostApplicationLifetime? _lifetime;
     private readonly ILogger<DevelopmentReviewerAttemptRunner> _logger;
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentReviewerModel _reviewerModel;
@@ -49,7 +50,8 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         IOptions<DevelopmentOptions> options,
         TimeProvider timeProvider,
         ILogger<DevelopmentReviewerAttemptRunner> logger,
-        IDevelopmentAttemptLiveBroker? liveBroker = null)
+        IDevelopmentAttemptLiveBroker? liveBroker = null,
+        IHostApplicationLifetime? lifetime = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -62,6 +64,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         _options = options.Value;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _liveBroker = liveBroker;
+        _lifetime = lifetime;
     }
 
     public async Task<DevelopmentReviewerAttemptResult> RunAsync(Guid attemptId,
@@ -183,6 +186,11 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 TaskStatus = target,
                 SubjectHash = evidence.Current.SubjectHash
             };
+        }
+        catch (OperationCanceledException) when (_lifetime?.ApplicationStopping.IsCancellationRequested == true)
+        {
+            // A restart is not a user cancel: the row stays Running and startup reconciliation records it Interrupted.
+            throw;
         }
         catch (Exception exception)
         {

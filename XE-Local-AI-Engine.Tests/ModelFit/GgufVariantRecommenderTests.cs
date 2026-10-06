@@ -189,9 +189,9 @@ public sealed class GgufVariantRecommenderTests
     [Test]
     public async Task Annotate_NoProbe_VerdictsUnknown_AndRecommendsSweetSpot()
     {
-        // No probe (free VRAM null) → every verdict is Unknown and the recommendation falls back to the quality
-        // sweet-spot (Q5_K_M) over the balanced/near-lossless alternatives.
-        var recommender = Build(freeVramBytes: null);
+        // No probe (free VRAM null) and a profile with no budget → every verdict is Unknown and the recommendation falls
+        // back to the quality sweet-spot (Q5_K_M) over the balanced/near-lossless alternatives.
+        var recommender = Build(freeVramBytes: null, profile: CpuProfile(availableRamBytes: 0));
         var files = new[]
         {
             RepoFile("Q4_K_M", 4 * Gib),
@@ -209,8 +209,8 @@ public sealed class GgufVariantRecommenderTests
     [Test]
     public async Task Annotate_NoProbe_NoSweetSpot_RecommendsBalanced()
     {
-        // No probe and no sweet-spot file → fall back to the balanced default (Q4_K_M) over near-lossless/minimal.
-        var recommender = Build(freeVramBytes: null);
+        // No budget and no sweet-spot file → fall back to the balanced default (Q4_K_M) over near-lossless/minimal.
+        var recommender = Build(freeVramBytes: null, profile: CpuProfile(availableRamBytes: 0));
         var files = new[]
         {
             RepoFile("Q8_0", 9 * Gib),
@@ -309,6 +309,30 @@ public sealed class GgufVariantRecommenderTests
         AssertEx.Equal(1, result.Count(static a => a.IsRecommended));
         AssertEx.True(IsRecommended(result, "Q4_K_M"));
         await companionReserve.DidNotReceive().ResolveGpuBytesAsync(Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Annotate_GpuProfileWithNoRuntimeInstalled_GradesAgainstTheProfileBudgetTheTestedListUses()
+    {
+        // No runtime yet, so the probe has no process budget. The GPU profile's free VRAM (12 GiB) less a 2 GiB reserve
+        // grades the files exactly as ClassifyAgainstProfileAsync grades the same sizes on the tested-model list.
+        long[] sizes = [4 * Gib, 9 * Gib, 11 * Gib];
+        var recommender = Build(freeVramBytes: null, companionReserveBytes: 2 * Gib, profile: GpuProfile(freeVramBytes: 12 * Gib));
+        var files = new[]
+        {
+            RepoFile("Q4_K_M", sizes[0]),
+            RepoFile("Q6_K", sizes[1]),
+            RepoFile("Q8_0", sizes[2])
+        };
+
+        var result = await recommender.AnnotateAsync(files, CancellationToken.None);
+        var (profileRecommender, _, _, _) = BuildForProfile(GpuProfile(freeVramBytes: 12 * Gib), companionReserveBytes: 2 * Gib);
+        var testedList = await profileRecommender.ClassifyAgainstProfileAsync(sizes, CancellationToken.None);
+
+        GgufFitVerdict[] verdicts = [.. result.Select(static annotation => annotation.FitVerdict)];
+        AssertEx.True(verdicts.SequenceEqual([GgufFitVerdict.Fits, GgufFitVerdict.Tight, GgufFitVerdict.WontFit]), string.Join(", ", verdicts));
+        AssertEx.True(verdicts.SequenceEqual(testedList), "The quant chooser and the tested-model list must share one budget formula.");
+        AssertEx.True(IsRecommended(result, "Q4_K_M"));
     }
 
     [Test]

@@ -177,6 +177,8 @@ public sealed class GraphWorkflowAgentExecutorTests
 
         AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass);
         AssertEx.Contains(analyze.Error, "installed node-managed GGUF");
+        AssertEx.Contains(analyze.Error, "'analyze'", message: "the refusal must name the node, or the operator cannot tell which pin to fix.");
+        AssertEx.Contains(analyze.Error, $"'{model}'", message: "the refusal must name the model it would have run.");
         AssertEx.Empty(harness.Invocations.Packages);
         AssertEx.Empty(Capacity(harness).ReservationsFor(model));
     }

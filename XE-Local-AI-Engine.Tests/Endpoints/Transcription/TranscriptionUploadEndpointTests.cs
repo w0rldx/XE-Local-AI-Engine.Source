@@ -265,6 +265,41 @@ public sealed class TranscriptionUploadEndpointTests
         AssertEmptyUploadDirectory(factory);
     }
 
+    [Test]
+    public async Task Upload_WhileTheRuntimeIsReservedForABuild_Returns409RuntimeBusyAndLeavesTheSessionCreated()
+    {
+        var transcriber = new FakeWhisperTranscriber();
+        await using var factory = FactoryWith(transcriber);
+        using var client = factory.CreateClient();
+        var sessionId = await CreateSessionAsync(factory, client);
+        var gate = factory.Services.GetRequiredService<IWhisperRuntimeActivityGate>();
+
+        // The reservation a running whisper source build holds for its whole run.
+        await using (AssertEx.NotNull(gate.TryAcquireMutationReservation()))
+        {
+            using var refused = await UploadAsync(factory, client, sessionId, "clip.wav", ReadFixtureWav());
+
+            AssertEx.Equal(HttpStatusCode.Conflict, refused.StatusCode, await refused.Content.ReadAsStringAsync());
+            var body = await ReadJsonAsync(refused);
+            AssertEx.Equal("runtime-busy", body.GetProperty("reason").GetString());
+            AssertEx.True(body.GetProperty("activity").GetProperty("mutationReserved").GetBoolean());
+        }
+
+        AssertEx.Equal(expected: 0, transcriber.CallCount, "A refused upload must never reach the runtime.");
+        AssertEmptyUploadDirectory(factory);
+        using (var read = Authorized(factory, HttpMethod.Get, $"{ApiPrefix}/transcription/sessions/{sessionId}"))
+        using (var session = await client.SendAsync(read))
+        {
+            var detail = await ReadJsonAsync(session);
+            AssertEx.Equal("Created", detail.GetProperty("session").GetProperty("status").GetString());
+        }
+
+        // Once the build lets go, the same session transcribes, and the request's own lease is released on the way out.
+        using var accepted = await UploadAsync(factory, client, sessionId, "clip.wav", ReadFixtureWav());
+        AssertEx.Equal(HttpStatusCode.OK, accepted.StatusCode, await accepted.Content.ReadAsStringAsync());
+        AssertEx.Equal(expected: 0, gate.GetSnapshot().ActiveTranscriptionCount);
+    }
+
     private static byte[] ReadFixtureWav() =>
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Transcription", "jfk.wav"));
 

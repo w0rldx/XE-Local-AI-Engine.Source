@@ -68,6 +68,7 @@ public sealed class BenchmarkCatalogServiceTests
             {
                 ["model"] = CreateSnapshot("model", null)
             }),
+            Substitute.For<IModelClassificationStore>(),
             NullLogger<BenchmarkCatalogService>.Instance);
 
         var result = await service.ListEligibleAgentsAsync("model");
@@ -213,7 +214,50 @@ public sealed class BenchmarkCatalogServiceTests
             "Only the entry without a recorded aggregate identity may be verified.");
     }
 
-    private static BenchmarkCatalogService CreateService(IGgufModelStore models, IBenchmarkInstalledModelLeaseProvider leases)
+    /// <summary>
+    ///     A reranker GGUF is stored with the chat role (the download leaves the role unknown and the store defaults it),
+    ///     so only its kind tells it apart. The list and the per-model check agree, and an operator override wins.
+    /// </summary>
+    [Test]
+    public async Task ListModels_DropsARerankerStoredWithTheChatRoleUnlessTheOperatorOverrodeItToChat()
+    {
+        const string Reranker = "gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M";
+        const string OverriddenReranker = "acme/rerank-tuned-chat-GGUF:Q4_K_M";
+        var models = Substitute.For<IGgufModelStore>();
+        models.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns([
+            Descriptor(Reranker, 8192),
+            Descriptor(OverriddenReranker, 8192),
+            Descriptor("chat", 8192)
+        ]);
+        var leases = new LeaseProvider(new Dictionary<string, InstalledModelSnapshot>(StringComparer.OrdinalIgnoreCase)
+        {
+            [Reranker] = CreateSnapshot(Reranker, LocalModelOrigin.HuggingFace),
+            [OverriddenReranker] = CreateSnapshot(OverriddenReranker, LocalModelOrigin.HuggingFace),
+            ["chat"] = CreateSnapshot("chat", LocalModelOrigin.HuggingFace)
+        });
+        var classifications = Substitute.For<IModelClassificationStore>();
+        classifications.GetByNameAsync(OverriddenReranker, Arg.Any<CancellationToken>()).Returns(new ModelClassificationRecord
+        {
+            ModelName = OverriddenReranker,
+            Digest = null,
+            DetectedKind = ModelKind.Unknown,
+            DetectedCapabilitiesJson = null,
+            OverrideKind = ModelKind.Chat,
+            DetectedAtUtc = null,
+            UpdatedAtUtc = 1
+        });
+        var service = CreateService(models, leases, classifications);
+
+        var result = await service.ListEligibleModelsAsync(4096);
+
+        AssertEx.True(result.Select(static model => model.ModelName).SequenceEqual([OverriddenReranker, "chat"], StringComparer.Ordinal),
+            "The reranker must not be offered; the operator's chat override must be.");
+        _ = await AssertEx.ThrowsAsync<BenchmarkEligibilityException>(() => service.ListEligibleAgentsAsync(Reranker));
+    }
+
+    private static BenchmarkCatalogService CreateService(IGgufModelStore models,
+        IBenchmarkInstalledModelLeaseProvider leases,
+        IModelClassificationStore? classifications = null)
     {
         var definitions = Substitute.For<IAgentDefinitionStore>();
         var resolver = Substitute.For<IAgentDefinitionResolver>();
@@ -224,6 +268,7 @@ public sealed class BenchmarkCatalogServiceTests
             new BenchmarkEligibilityPolicy(),
             models,
             leases,
+            classifications ?? Substitute.For<IModelClassificationStore>(),
             NullLogger<BenchmarkCatalogService>.Instance);
     }
 

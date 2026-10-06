@@ -226,6 +226,62 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
     }
 
     [Test]
+    public async Task EnsureAsync_OfTheInstalledSourceBuildVariant_ServesTheManagedBuildUnderTheLease()
+    {
+#pragma warning disable CA2000 // Ownership transfers to the administration service, which disposes the admission lease after the ensure.
+        var lease = new RecordingLease();
+#pragma warning restore CA2000
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
+        supervisor.CountRunningProcesses().Returns(0);
+        var installedStore = Substitute.For<IInstalledRuntimeStore>();
+        installedStore.ReadAsync(Arg.Any<CancellationToken>())
+                      .Returns(new InstalledRuntimeState("b10201", "(source-build:cuda)", new string('a', 64), GpuVariant.Cuda, DateTimeOffset.UtcNow, "/cache/llama.cpp/source-cuda/bin"));
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        binaryManager.EnsureBinaryAsync(GpuVariant.Cuda, lease, Arg.Any<CancellationToken>())
+                     .Returns(new LlamaBinary
+                     {
+                         ServerExecutablePath = "/cache/llama.cpp/source-cuda/bin/llama-server",
+                         Version = "b10201",
+                         Variant = GpuVariant.Cuda,
+                         IsPinnedFallback = false
+                     });
+        var service = CreateService(binaryManager, supervisor, installedStore);
+
+        var result = await service.EnsureAsync(GpuVariant.Cuda);
+
+        AssertEx.True(result.Succeeded, result.DisplayMessage);
+        AssertEx.Equal("cuda", result.Binary!.Variant);
+        AssertEx.Equal(1, lease.DisposeCount);
+    }
+
+    [Test]
+    public async Task EnsureAsync_OfAnotherVariantThanTheInstalledSourceBuild_StillAnswersTheSourceBuildRefusal()
+    {
+#pragma warning disable CA2000 // Ownership transfers to the administration service, which disposes the rejected admission lease.
+        var lease = new RecordingLease();
+#pragma warning restore CA2000
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
+        supervisor.CountRunningProcesses().Returns(0);
+        var installedStore = Substitute.For<IInstalledRuntimeStore>();
+        installedStore.ReadAsync(Arg.Any<CancellationToken>())
+                      .Returns(new InstalledRuntimeState("b10201", "(source-build:cuda)", new string('a', 64), GpuVariant.Cuda, DateTimeOffset.UtcNow, "/cache/llama.cpp/source-cuda/bin"));
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var service = CreateService(binaryManager, supervisor, installedStore);
+
+        var result = await service.EnsureAsync(GpuVariant.Vulkan);
+
+        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, result.Failure);
+        AssertEx.Equal("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.", result.DisplayMessage);
+        await lease.Disposed;
+        await binaryManager.DidNotReceiveWithAnyArgs()
+                           .EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<ILlamaServerRuntimeMutationLease>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task GetStatusAsync_ReportsTheOverrideVariantOnlyWhileAnOverrideIsSet()
     {
         var withOverride = CreateService(Substitute.For<ILlamaCppBinaryManager>(),
