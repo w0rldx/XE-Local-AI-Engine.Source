@@ -11,9 +11,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     connect (no caller cancellation) presents as a connection failure, while a genuine caller cancellation is left
 ///     untouched.
 /// </summary>
-// The HttpMessageInvoker (disposeHandler defaults to true) owns and disposes the handler chain it is given, so the
-// handler/inner-handler instances constructed inline do not need separate disposal in these tests.
-#pragma warning disable CA2000
 [Category(TestCategories.Unit)]
 public sealed class OllamaConnectFailureHandlerTests
 {
@@ -22,11 +19,25 @@ public sealed class OllamaConnectFailureHandlerTests
         return new HttpRequestMessage(HttpMethod.Get, "http://localhost:11434/api/tags");
     }
 
+    private static HttpMessageInvoker Invoker(Exception failure)
+    {
+#pragma warning disable CA2000 // The invoker (disposeHandler defaults to true) owns and disposes the handler chain.
+        return new HttpMessageInvoker(new OllamaConnectFailureHandler(new ThrowingHandler(failure)));
+#pragma warning restore CA2000
+    }
+
+    private static HttpMessageInvoker Invoker(HttpResponseMessage response)
+    {
+#pragma warning disable CA2000 // The invoker (disposeHandler defaults to true) owns and disposes the handler chain.
+        return new HttpMessageInvoker(new OllamaConnectFailureHandler(new RespondingHandler(response)));
+#pragma warning restore CA2000
+    }
+
     [Test]
     public async Task SendAsync_WhenConnectTimeoutFiresWithoutCallerCancellation_TranslatesToHttpRequestException()
     {
         var connectTimeout = new TaskCanceledException("connect timed out", new TimeoutException());
-        using var invoker = new HttpMessageInvoker(new OllamaConnectFailureHandler(new ThrowingHandler(connectTimeout)));
+        using var invoker = Invoker(connectTimeout);
 
         var thrown = await AssertEx.ThrowsAsync<HttpRequestException>(() => invoker.SendAsync(Request(), CancellationToken.None));
 
@@ -39,7 +50,7 @@ public sealed class OllamaConnectFailureHandlerTests
     {
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
-        using var invoker = new HttpMessageInvoker(new OllamaConnectFailureHandler(new ThrowingHandler(new OperationCanceledException())));
+        using var invoker = Invoker(new OperationCanceledException());
 
         // A signalled caller token means a real cancellation: it must NOT be turned into an HttpRequestException.
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => invoker.SendAsync(Request(), cts.Token));
@@ -49,9 +60,10 @@ public sealed class OllamaConnectFailureHandlerTests
     public async Task SendAsync_WhenInnerSucceeds_PassesResponseThrough()
     {
         using var ok = new HttpResponseMessage(HttpStatusCode.OK);
-        using var invoker = new HttpMessageInvoker(new OllamaConnectFailureHandler(new RespondingHandler(ok)));
+        using var invoker = Invoker(ok);
 
-        var response = await invoker.SendAsync(Request(), CancellationToken.None);
+        using var request = Request();
+        var response = await invoker.SendAsync(request, CancellationToken.None);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -60,7 +72,7 @@ public sealed class OllamaConnectFailureHandlerTests
     public async Task SendAsync_WhenInnerThrowsHttpRequestException_PropagatesUnchanged()
     {
         var refused = new HttpRequestException("connection refused");
-        using var invoker = new HttpMessageInvoker(new OllamaConnectFailureHandler(new ThrowingHandler(refused)));
+        using var invoker = Invoker(refused);
 
         var thrown = await AssertEx.ThrowsAsync<HttpRequestException>(() => invoker.SendAsync(Request(), CancellationToken.None));
 
@@ -97,5 +109,3 @@ public sealed class OllamaConnectFailureHandlerTests
         }
     }
 }
-
-#pragma warning restore CA2000

@@ -67,9 +67,7 @@ internal static class StreamingProcessRunner
 
         // The handle takes ownership of the started process: its Dispose tree-kills the group and disposes the process.
         // StartStreaming disposes the process on a start failure, so ownership is cleanly transferred to the handle.
-#pragma warning disable CA2000 // Ownership transferred to the handle (Wrap disposes on a construction failure); the using disposes the handle.
-        using var handle = LinuxProcessGroupHandle.Wrap(StartStreaming(startInfo, logSink));
-#pragma warning restore CA2000
+        using var handle = LinuxProcessGroupHandle.Start(() => StartStreaming(startInfo, logSink));
         var process = handle.Process;
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);

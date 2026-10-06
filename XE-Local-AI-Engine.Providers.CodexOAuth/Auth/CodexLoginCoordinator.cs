@@ -194,7 +194,7 @@ public sealed class CodexLoginCoordinator : ICodexLoginCoordinator, IDisposable
         {
             // Forced sync: reached from the synchronous ICodexLoginCoordinator.Start() supersede path and from
             // IDisposable.Dispose(); neither can await CancelAsync().
-#pragma warning disable MA0045
+#pragma warning disable MA0045 // Contract-forced: sync Start() and Dispose().
             cts.Cancel();
 #pragma warning restore MA0045
         }

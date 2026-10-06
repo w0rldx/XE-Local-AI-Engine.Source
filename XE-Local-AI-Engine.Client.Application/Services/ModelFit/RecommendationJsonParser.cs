@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 
 using System.Text;
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
@@ -109,13 +110,10 @@ public static class RecommendationJsonParser
     /// <summary>Builds a small sanitized JSON of extras kept for the UI/audit. Returns <c>null</c> when there is nothing to keep.</summary>
     private static string? BuildDiagnostics(JsonElement model)
     {
-        using var buffer = new MemoryStream();
-#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
-        using (var writer = new Utf8JsonWriter(buffer))
-#pragma warning restore MA0045
+        var wroteAny = false;
+        var bytes = Utf8JsonBuffer.Write(writer =>
         {
             writer.WriteStartObject();
-            var wroteAny = false;
             wroteAny |= CopyProperty(model, "category", writer);
             wroteAny |= CopyProperty(model, "score_components", writer);
             wroteAny |= CopyProperty(model, "is_moe", writer);
@@ -149,14 +147,9 @@ public static class RecommendationJsonParser
             wroteAny |= CopyProperty(model, "kv_bytes_per_token_quant", writer);
             wroteAny |= CopyProperty(model, "attention_arch", writer);
             writer.WriteEndObject();
+        });
 
-            if (!wroteAny)
-            {
-                return null;
-            }
-        }
-
-        return Encoding.UTF8.GetString(buffer.ToArray());
+        return wroteAny ? Encoding.UTF8.GetString(bytes) : null;
     }
 
     private static bool CopyProperty(JsonElement model, string propertyName, Utf8JsonWriter writer)

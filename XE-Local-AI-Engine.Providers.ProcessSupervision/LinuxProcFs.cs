@@ -20,7 +20,7 @@ internal static partial class LinuxProcFs
         try
         {
             // Forced sync: reached from the synchronous startup reaper and scanner contracts; the source is procfs, which never blocks on a device.
-#pragma warning disable MA0045
+#pragma warning disable MA0045 // Contract-forced: sync reaper/scanner contracts, procfs read.
             raw = File.ReadAllText(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/stat"));
 #pragma warning restore MA0045
         }

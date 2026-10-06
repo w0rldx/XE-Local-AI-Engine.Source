@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 using System.Text;
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Common;
 
 /// <summary>A node run's <c>InputJson</c> document, and the one merge every writer of it goes through.</summary>
 /// <remarks>
@@ -38,10 +39,7 @@ internal static class DevWorkflowNodeInputs
     /// <remarks>A merge therefore replaces its own members rather than nesting a round inside the one before it.</remarks>
     public static string Merge(string? inputJson, Action<Utf8JsonWriter>? write, params string[] drop)
     {
-        using var buffer = new MemoryStream();
-#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
-        using (var writer = new Utf8JsonWriter(buffer))
-#pragma warning restore MA0045
+        var bytes = Utf8JsonBuffer.Write(writer =>
         {
             writer.WriteStartObject();
             using (var existing = Parse(inputJson))
@@ -59,9 +57,9 @@ internal static class DevWorkflowNodeInputs
 
             write?.Invoke(writer);
             writer.WriteEndObject();
-        }
+        });
 
-        return Encoding.UTF8.GetString(buffer.ToArray());
+        return Encoding.UTF8.GetString(bytes);
     }
 
     /// <summary>Writes <paramref name="json" /> as a value if it parses as one, and as a plain string if it does not.</summary>

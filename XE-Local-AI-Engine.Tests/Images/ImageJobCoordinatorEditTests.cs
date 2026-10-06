@@ -243,7 +243,7 @@ public sealed class ImageJobCoordinatorEditTests
             var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
             // Ownership transfers to the returned Harness, whose Dispose disposes the coordinator.
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // Ownership transfers to the returned Harness.
             var coordinator = new ImageJobCoordinator(runtime,
                 images,
                 scopeFactory,

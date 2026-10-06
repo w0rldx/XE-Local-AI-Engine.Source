@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 
 using System.Text;
-using System.Text.Json;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>Compiles a custom tool's declared parameters into the JSON schema the model is offered.</summary>
@@ -30,10 +30,7 @@ internal static class CustomToolSchemaCompiler
     {
         ArgumentNullException.ThrowIfNull(parameters);
 
-        using var stream = new MemoryStream();
-#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
-        using (var writer = new Utf8JsonWriter(stream))
-#pragma warning restore MA0045
+        var bytes = Utf8JsonBuffer.Write(writer =>
         {
             writer.WriteStartObject();
             writer.WriteString("type", "object");
@@ -83,9 +80,9 @@ internal static class CustomToolSchemaCompiler
             // because the schema fully enumerates the tool's inputs (the arg-repair wrapper rejects extras).
             writer.WriteBoolean("additionalProperties", value: false);
             writer.WriteEndObject();
-        }
+        });
 
-        return Encoding.UTF8.GetString(stream.ToArray());
+        return Encoding.UTF8.GetString(bytes);
     }
 
     private static string MapType(string declaredType)

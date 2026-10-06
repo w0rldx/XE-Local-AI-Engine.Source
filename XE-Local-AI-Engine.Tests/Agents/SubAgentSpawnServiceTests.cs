@@ -1818,7 +1818,7 @@ public sealed class SubAgentSpawnServiceTests
         {
             // Ownership of the reservation transfers to the SUT, which disposes it on child exit (the assertion the
             // tests make). The analyzer cannot see the transfer through the mocked decision, so suppress here.
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // Ownership transfers to the SUT (see above).
             var reservation = new TrackingDisposable(() => _reservationDisposed = true);
 #pragma warning restore CA2000
             _capacity.DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())

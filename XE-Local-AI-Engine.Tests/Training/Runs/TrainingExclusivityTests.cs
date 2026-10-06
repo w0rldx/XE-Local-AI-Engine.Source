@@ -427,7 +427,7 @@ public sealed class TrainingExclusivityTests
     {
         supervisor ??= Substitute.For<ILlamaServerProcessSupervisor>();
         // Owned by the returned service, which the caller disposes with a using.
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // Owned by the returned service.
         var signal = new TrainingRunQueueSignal();
 #pragma warning restore CA2000
         if (supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>()) is null)

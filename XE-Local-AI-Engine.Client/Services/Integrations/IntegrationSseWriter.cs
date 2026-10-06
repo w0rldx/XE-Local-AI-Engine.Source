@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Common;
 
 /// <summary>What the writer decided, so the route can pick a status. There is no 404 here: the writer has no store.</summary>
 internal enum IntegrationSseWriteOutcome
@@ -113,11 +114,8 @@ internal sealed class IntegrationSseWriter : IDisposable
 
     private static void WriteJson(SseItem<IntegrationStreamEvent> item, IBufferWriter<byte> writer)
     {
-#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
-        using var json = new Utf8JsonWriter(writer);
-#pragma warning restore MA0045
         // Compact JSON never contains a raw newline, so `data:` is always exactly one line whatever a payload holds.
-        JsonSerializer.Serialize(json, item.Data, JsonOptions);
+        Utf8JsonBuffer.Write(writer, json => JsonSerializer.Serialize(json, item.Data, JsonOptions));
     }
 
     private static async IAsyncEnumerable<SseItem<IntegrationStreamEvent>> OneAsync(IntegrationStreamEvent streamEvent)

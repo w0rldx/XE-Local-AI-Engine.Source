@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Development.Implementation;
 
 using System.Security.Cryptography;
-using System.Text.Json;
+using XE_Local_AI_Engine.Client.Common;
 
 public sealed class DevelopmentCloudContextBuilder : IDevelopmentCloudContextBuilder
 {
@@ -129,10 +129,7 @@ public sealed class DevelopmentCloudContextBuilder : IDevelopmentCloudContextBui
         string policyText,
         IReadOnlyList<DevelopmentCloudContextExcerpt> excerpts)
     {
-        using var stream = new MemoryStream();
-#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
-        using (var writer = new Utf8JsonWriter(stream))
-#pragma warning restore MA0045
+        return Utf8JsonBuffer.Write(writer =>
         {
             writer.WriteStartObject();
             writer.WriteString("bundleId", request.BundleId);
@@ -157,8 +154,6 @@ public sealed class DevelopmentCloudContextBuilder : IDevelopmentCloudContextBui
 
             writer.WriteEndArray();
             writer.WriteEndObject();
-        }
-
-        return stream.ToArray();
+        });
     }
 }

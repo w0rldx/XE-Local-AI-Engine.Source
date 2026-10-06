@@ -121,7 +121,7 @@ public sealed class ProcessSpawnReceiptStore
         try
         {
             // Forced sync: read from the synchronous startup reaper; a receipt is a few hundred bytes on local disk.
-#pragma warning disable MA0045
+#pragma warning disable MA0045 // Contract-forced: sync startup reaper.
             return JsonSerializer.Deserialize<ProcessSpawnReceipt>(File.ReadAllBytes(file), SerializerOptions);
 #pragma warning restore MA0045
         }

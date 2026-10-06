@@ -62,7 +62,7 @@ public static class NodeSqlitePragmas
         Justification = "PRAGMA text is composed only from a validated internal integer and fixed keywords — never user input; PRAGMAs do not accept bound parameters for these values.")]
     // Forced sync: this is the documented sync twin of ApplyAsync, called from EF Core's synchronous
     // DbConnectionInterceptor.ConnectionOpened (NodeSqliteConnectionInterceptor) which has no async shape.
-#pragma warning disable MA0045
+#pragma warning disable MA0045 // Contract-forced: EF Core's sync ConnectionOpened interceptor.
     public static void Apply(DbConnection connection, NodeSqlitePragmaSettings settings, ILogger? logger)
     {
         ArgumentNullException.ThrowIfNull(connection);

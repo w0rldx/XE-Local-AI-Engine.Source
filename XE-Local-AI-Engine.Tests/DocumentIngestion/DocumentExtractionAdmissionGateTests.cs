@@ -12,7 +12,7 @@ public sealed class DocumentExtractionAdmissionGateTests
         using var gate = new DocumentExtractionAdmissionGate(maxConcurrentExtractions: 1);
 
         // The leases are disposed explicitly below; CA2000 cannot track an out-var through an assertion.
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // The out-var leases are disposed explicitly below.
         AssertEx.True(gate.TryAcquire(out var first), "the first extraction is admitted.");
         AssertEx.False(gate.TryAcquire(out var blocked), "a second extraction is rejected while the gate is full.");
 #pragma warning restore CA2000

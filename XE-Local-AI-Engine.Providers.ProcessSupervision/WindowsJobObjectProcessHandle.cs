@@ -107,6 +107,18 @@ public sealed partial class WindowsJobObjectProcessHandle : IProcessTreeHandle
         }
     }
 
+    /// <summary>
+    ///     Starts a process through <paramref name="start" /> and contains it as <see cref="Wrap" /> does. A start
+    ///     failure propagates unchanged; only a containment failure goes through <paramref name="containmentFailure" />.
+    /// </summary>
+    public static WindowsJobObjectProcessHandle Start(Func<Process> start,
+        Func<Exception, Exception> containmentFailure,
+        ProcessStderrTail? stderrTail = null)
+    {
+        ArgumentNullException.ThrowIfNull(start);
+        return Wrap(start(), containmentFailure, stderrTail);
+    }
+
     private static void ConfigureKillOnClose(SafeJobHandle job)
     {
         var info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION

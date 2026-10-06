@@ -44,7 +44,7 @@ public sealed class EmbeddingTelemetryHopTests
         // Declared before the generator so it outlives the call and is disposed after it. CA2000 is scoped off for
         // the two objects it cannot see through: the handler transfers to the HttpClient (disposeHandler: true) and
         // the transport is a thin pipeline wrapper that owns nothing of its own.
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // Handler and transport ownership transfers the analyzer cannot see.
         using var httpClient = new HttpClient(recorder.CreateHandler(), disposeHandler: true);
         using var generator = OpenAICompatibleClientFactory.CreateEmbeddingGenerator(new Uri("http://127.0.0.1:1/v1/"),
             modelId,

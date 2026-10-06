@@ -85,12 +85,9 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
     [SupportedOSPlatform("windows")]
     private IProcessTreeHandle LaunchWindows(ProcessStartInfo startInfo, string label, Action<string>? capture)
     {
-        // Wrap takes ownership of the process and disposes it on any containment failure.
-#pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a containment failure.
-        var process = StartProcess(startInfo, label, capture);
-        return WindowsJobObjectProcessHandle.Wrap(process,
+        // The handle takes ownership of the process and disposes it on any containment failure.
+        return WindowsJobObjectProcessHandle.Start(() => StartProcess(startInfo, label, capture),
             static ex => new LlamaRuntimeException("The local model runtime could not be contained for safe shutdown.", ex));
-#pragma warning restore CA2000
     }
 
     [SupportedOSPlatform("linux")]
@@ -102,16 +99,12 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
         startInfo.FileName = SetsidLocator.ResolveAbsolutePath();
         startInfo.ArgumentList.Insert(index: 0, serverPath);
 
-#pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return LinuxProcessGroupHandle.Wrap(StartProcess(startInfo, label, capture));
-#pragma warning restore CA2000
+        return LinuxProcessGroupHandle.Start(() => StartProcess(startInfo, label, capture));
     }
 
     private IProcessTreeHandle LaunchPlain(ProcessStartInfo startInfo, string label, Action<string>? capture)
     {
-#pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return PlainProcessHandle.Wrap(StartProcess(startInfo, label, capture));
-#pragma warning restore CA2000
+        return PlainProcessHandle.Start(() => StartProcess(startInfo, label, capture));
     }
 
     private Process StartProcess(ProcessStartInfo startInfo, string label, Action<string>? capture)

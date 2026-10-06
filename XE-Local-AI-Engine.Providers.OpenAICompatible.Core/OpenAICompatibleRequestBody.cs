@@ -52,7 +52,7 @@ public static class OpenAICompatibleRequestBody
 
         // SCME0001: ChatCompletionOptions.Patch is [Experimental] but the ONLY seam serializing an arbitrary top-level
         // body field, and MEAI's adapter serializes this options object Patch included; scoped to the single call.
-#pragma warning disable SCME0001
+#pragma warning disable SCME0001 // Experimental ChatCompletionOptions.Patch opt-in (see above).
         body.Patch.Set(EncodePath(jsonPath), value);
 #pragma warning restore SCME0001
     }

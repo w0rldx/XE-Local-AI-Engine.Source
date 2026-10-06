@@ -164,7 +164,7 @@ public sealed class GenAiErrorDescriptionRedactionProcessorTests
         // Same ownership shape as EmbeddingTelemetryHopTests: the HttpClient is owned here because
         // HttpClientPipelineTransport does not take ownership, and CA2000 cannot see through the handler transfer
         // (disposeHandler: true) or the transport wrapper, which owns nothing of its own.
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // Handler and transport ownership transfers the analyzer cannot see.
         using var httpClient = new HttpClient(recorder.CreateHandler(), disposeHandler: true);
         using var generator = OpenAICompatibleClientFactory.CreateEmbeddingGenerator(new Uri("http://127.0.0.1:1/v1/"),
             modelId,

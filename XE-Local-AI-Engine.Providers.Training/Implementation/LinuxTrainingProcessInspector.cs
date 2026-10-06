@@ -146,7 +146,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
         {
             // Forced sync: reached from the synchronous ITrainingProcessSpawner.Inspect contract and from the spawner's
             // post-start identity read; the source is procfs, which never blocks on a device.
-#pragma warning disable MA0045
+#pragma warning disable MA0045 // Contract-forced: sync Inspect contract, procfs read.
             raw = File.ReadAllText(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/stat"));
 #pragma warning restore MA0045
         }
@@ -194,7 +194,7 @@ internal sealed partial class LinuxTrainingProcessInspector : ITrainingProcessIn
         try
         {
             // Forced sync: same synchronous ITrainingProcessSpawner.Inspect contract as TryReadStat; procfs source.
-#pragma warning disable MA0045
+#pragma warning disable MA0045 // Contract-forced: sync Inspect contract, procfs read.
             raw = File.ReadAllBytes(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/environ"));
 #pragma warning restore MA0045
         }

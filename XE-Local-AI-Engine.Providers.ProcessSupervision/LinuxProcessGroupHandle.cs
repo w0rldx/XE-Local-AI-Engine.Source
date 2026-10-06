@@ -92,6 +92,13 @@ public sealed partial class LinuxProcessGroupHandle : IProcessTreeHandle
         }
     }
 
+    /// <summary>Starts a process through <paramref name="start" /> and wraps it, so the caller never holds a bare process.</summary>
+    public static LinuxProcessGroupHandle Start(Func<Process> start, ProcessStderrTail? stderrTail = null)
+    {
+        ArgumentNullException.ThrowIfNull(start);
+        return Wrap(start(), stderrTail);
+    }
+
     // int kill(pid_t pid, int sig); — a negative pid signals the process group abs(pid).
     [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]

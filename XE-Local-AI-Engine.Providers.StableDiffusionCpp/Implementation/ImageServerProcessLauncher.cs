@@ -86,12 +86,9 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
     [SupportedOSPlatform("windows")]
     private IProcessTreeHandle LaunchWindows(ProcessStartInfo startInfo, string label, ProcessStderrTail stderrTail)
     {
-#pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a containment failure.
-        var process = StartProcess(startInfo, label, stderrTail);
-        return WindowsJobObjectProcessHandle.Wrap(process,
+        return WindowsJobObjectProcessHandle.Start(() => StartProcess(startInfo, label, stderrTail),
             static ex => new StableDiffusionRuntimeException("The image runtime could not be contained for safe shutdown.", ex),
             stderrTail);
-#pragma warning restore CA2000
     }
 
     [SupportedOSPlatform("linux")]
@@ -103,16 +100,12 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
         startInfo.FileName = SetsidLocator.ResolveAbsolutePath();
         startInfo.ArgumentList.Insert(index: 0, serverPath);
 
-#pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return LinuxProcessGroupHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
-#pragma warning restore CA2000
+        return LinuxProcessGroupHandle.Start(() => StartProcess(startInfo, label, stderrTail), stderrTail);
     }
 
     private IProcessTreeHandle LaunchPlain(ProcessStartInfo startInfo, string label, ProcessStderrTail stderrTail)
     {
-#pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
-        return PlainProcessHandle.Wrap(StartProcess(startInfo, label, stderrTail), stderrTail);
-#pragma warning restore CA2000
+        return PlainProcessHandle.Start(() => StartProcess(startInfo, label, stderrTail), stderrTail);
     }
 
     private Process StartProcess(ProcessStartInfo startInfo, string label, ProcessStderrTail stderrTail)

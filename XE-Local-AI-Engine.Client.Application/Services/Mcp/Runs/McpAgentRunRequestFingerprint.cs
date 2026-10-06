@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 
-using System.Buffers;
-using System.Text.Json;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 
 internal sealed class McpAgentRunRequestFingerprint
@@ -20,9 +19,7 @@ internal sealed class McpAgentRunRequestFingerprint
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var canonical = new ArrayBufferWriter<byte>();
-#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
-        using (var writer = new Utf8JsonWriter(canonical))
+        var canonical = Utf8JsonBuffer.Write(writer =>
         {
             writer.WriteStartObject();
             writer.WriteNumber("version", request.Binding.InboundContext.IsAgentic ? AgenticCanonicalVersion : DelegateCanonicalVersion);
@@ -48,10 +45,9 @@ internal sealed class McpAgentRunRequestFingerprint
             }
 
             writer.WriteEndObject();
-        }
-#pragma warning restore MA0045
+        });
 
-        return _protector.ComputeRequestFingerprint(canonical.WrittenSpan);
+        return _protector.ComputeRequestFingerprint(canonical);
     }
 
     private static string? NullIfWhiteSpace(string? value) =>

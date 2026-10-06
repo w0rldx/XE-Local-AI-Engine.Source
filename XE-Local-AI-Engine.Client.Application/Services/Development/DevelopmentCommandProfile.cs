@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Client.Common;
 
 /// <summary>
 ///     One command the Development catalog can run, fully materialized: the executable, the exact argument vector, and
@@ -56,13 +57,7 @@ internal sealed record DevelopmentCommandProfile(
     /// </remarks>
     public byte[] ToCanonicalUtf8()
     {
-        var buffer = new MemoryStream();
-#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
-        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions
-               {
-                   Indented = false
-               }))
-#pragma warning restore MA0045
+        return Utf8JsonBuffer.Write(writer =>
         {
             writer.WriteStartObject();
             writer.WriteString("profileId", ProfileId);
@@ -130,9 +125,10 @@ internal sealed record DevelopmentCommandProfile(
             writer.WriteEndArray();
             writer.WriteBoolean("isCustom", IsCustom);
             writer.WriteEndObject();
-        }
-
-        return buffer.ToArray();
+        }, new JsonWriterOptions
+        {
+            Indented = false
+        });
     }
 
     /// <summary>Lowercase hex SHA-256 over <see cref="ToCanonicalUtf8" />, 64 characters wide.</summary>

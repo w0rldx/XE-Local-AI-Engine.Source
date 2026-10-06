@@ -1,10 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
-using System.Buffers;
 using System.Security.Cryptography;
-using System.Text.Json;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -210,10 +209,7 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
         McpInboundExecutionContext inboundContext)
     {
         IReadOnlyList<AllowedToolDto> immutableAllowedTools = Array.AsReadOnly(allowedTools.ToArray());
-        var canonical = new ArrayBufferWriter<byte>();
-#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
-        using (var writer = new Utf8JsonWriter(canonical))
-#pragma warning restore MA0045
+        var canonical = Utf8JsonBuffer.Write(writer =>
         {
             writer.WriteStartObject();
             writer.WriteNumber("version", inboundContext.IsAgentic ? AgenticFingerprintVersion : DelegateFingerprintVersion);
@@ -262,9 +258,9 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 
             writer.WriteEndArray();
             writer.WriteEndObject();
-        }
+        });
 
-        var fingerprint = Convert.ToHexString(HMACSHA256.HashData(_nodeKey.Key.Span, canonical.WrittenSpan));
+        var fingerprint = Convert.ToHexString(HMACSHA256.HashData(_nodeKey.Key.Span, canonical));
         return new McpExecutionBinding
         {
             BindingFingerprint = fingerprint,

@@ -90,7 +90,7 @@ internal static class StartupDiagnostics
                 $"[{TimeProvider.System.GetLocalNow():yyyy-MM-dd HH:mm:ss.fff zzz}] {message}{Environment.NewLine}");
             // Forced sync: the only callers are the synchronous Fail/MissingRuntime result helpers and the synchronous
             // Velopack Main path, none of which can await (see Program.Main).
-#pragma warning disable MA0045
+#pragma warning disable MA0045 // Contract-forced: sync Main caller.
             var path = Path.Combine(directory, LogFileName);
             TrimIfLarge(path);
             File.AppendAllText(path, line);
@@ -117,7 +117,7 @@ internal static class StartupDiagnostics
         }
 
         // Forced sync for the same reason as RecordTo's append: its only caller cannot await.
-#pragma warning disable MA0045
+#pragma warning disable MA0045 // Contract-forced: sync Main caller.
         using var stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
         var tail = new byte[KeepBytes];
         stream.Seek(-KeepBytes, SeekOrigin.End);

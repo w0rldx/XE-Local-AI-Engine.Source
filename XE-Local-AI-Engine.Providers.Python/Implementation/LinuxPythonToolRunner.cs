@@ -77,9 +77,7 @@ public sealed class LinuxPythonToolRunner : IPythonToolRunner
             startInfo.Environment[entry.Key] = entry.Value;
         }
 
-#pragma warning disable CA2000 // Ownership transferred to the handle (Wrap disposes on a construction failure); the using disposes the handle.
-        using var handle = LinuxProcessGroupHandle.Wrap(PythonToolRunner.StartStreaming(startInfo, logSink));
-#pragma warning restore CA2000
+        using var handle = LinuxProcessGroupHandle.Start(() => PythonToolRunner.StartStreaming(startInfo, logSink));
         var process = handle.Process;
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);

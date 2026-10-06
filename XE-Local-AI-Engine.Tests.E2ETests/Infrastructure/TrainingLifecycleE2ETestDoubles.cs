@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
-#pragma warning disable CA1725, S927 // Compact external-seam fakes keep local names; the production contracts remain unchanged.
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -82,10 +81,10 @@ public static class TrainingLifecycleE2ETestDoubles
             RejectionReason = null
         };
 
-        public Task<TrainingRunDefaults> ComputeAsync(Guid id, CancellationToken ct = default) =>
+        public Task<TrainingRunDefaults> ComputeAsync(Guid baseArtifactId, CancellationToken cancellationToken = default) =>
             Task.FromResult(Value);
 
-        public Task<TrainingRunDefaults> ResolveAsync(Guid id, TrainingRunOptionsV1? requested, CancellationToken ct = default) =>
+        public Task<TrainingRunDefaults> ResolveAsync(Guid baseArtifactId, TrainingRunOptionsV1? requested, CancellationToken cancellationToken = default) =>
             Task.FromResult(requested is null
                 ? Value
                 : Value with
@@ -93,7 +92,7 @@ public static class TrainingLifecycleE2ETestDoubles
                     Options = requested
                 });
 
-        public Task<TrainingFootprintEstimate> EstimateAsync(Guid id, TrainingRunOptionsV1 options, CancellationToken ct = default) =>
+        public Task<TrainingFootprintEstimate> EstimateAsync(Guid baseArtifactId, TrainingRunOptionsV1 options, CancellationToken cancellationToken = default) =>
             Task.FromResult(Value.Estimate);
     }
 
@@ -106,13 +105,13 @@ public static class TrainingLifecycleE2ETestDoubles
             ContentFingerprint = InstalledBaseFingerprint
         };
 
-        public Task<IReadOnlyList<InstalledBaseModelLink>> SuggestAsync(string repo, CancellationToken ct = default) =>
+        public Task<IReadOnlyList<InstalledBaseModelLink>> SuggestAsync(string baseRepoId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<InstalledBaseModelLink>>([Link]);
 
-        public Task<InstalledBaseModelLink?> ResolveAsync(string repo, string? name, CancellationToken ct = default) =>
-            string.IsNullOrWhiteSpace(name) || string.Equals(name, InstalledBaseModel, StringComparison.Ordinal)
+        public Task<InstalledBaseModelLink?> ResolveAsync(string baseRepoId, string? explicitModelName, CancellationToken cancellationToken = default) =>
+            string.IsNullOrWhiteSpace(explicitModelName) || string.Equals(explicitModelName, InstalledBaseModel, StringComparison.Ordinal)
                 ? Task.FromResult<InstalledBaseModelLink?>(Link)
-                : throw new TrainingRunRejectedException($"'{name}' is not the deterministic E2E base model.");
+                : throw new TrainingRunRejectedException($"'{explicitModelName}' is not the deterministic E2E base model.");
     }
 
     public sealed class Runtime : ITrainingRuntimeService
@@ -149,7 +148,7 @@ public static class TrainingLifecycleE2ETestDoubles
 
     public sealed class Capacity : ITrainingCapacityGate
     {
-        public Task<TrainingCapacityReservation> ReserveAsync(TrainingFootprintEstimate estimate, CancellationToken ct = default) =>
+        public Task<TrainingCapacityReservation> ReserveAsync(TrainingFootprintEstimate estimate, CancellationToken cancellationToken = default) =>
             Task.FromResult(new TrainingCapacityReservation
             {
                 Granted = true,
@@ -221,18 +220,18 @@ public static class TrainingLifecycleE2ETestDoubles
                 RunToken = "e2e-token"
             };
 
-            public async IAsyncEnumerable<string> ReadOutputAsync([EnumeratorCancellation] CancellationToken ct)
+            public async IAsyncEnumerable<string> ReadOutputAsync([EnumeratorCancellation] CancellationToken cancellationToken)
             {
                 foreach (var line in _lines)
                 {
-                    ct.ThrowIfCancellationRequested();
+                    cancellationToken.ThrowIfCancellationRequested();
                     yield return line;
                 }
 
                 await Task.CompletedTask;
             }
 
-            public Task<int> WaitForExitAsync(CancellationToken ct) =>
+            public Task<int> WaitForExitAsync(CancellationToken cancellationToken) =>
                 Task.FromResult(0);
 
             public void RequestStop() { }
@@ -280,7 +279,7 @@ public static class TrainingLifecycleE2ETestDoubles
                 IsPinnedFallback = true
             });
 
-        public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, ILlamaServerRuntimeMutationLease lease, CancellationToken ct) =>
+        public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, ILlamaServerRuntimeMutationLease mutationLease, CancellationToken ct) =>
             EnsureBinaryAsync(variant, ct);
 
         // The fixture writes the server file in its constructor, so it is genuinely already installed.
@@ -293,10 +292,10 @@ public static class TrainingLifecycleE2ETestDoubles
                 IsPinnedFallback = true
             });
 
-        public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digest, long size, GpuVariant variant, CancellationToken ct) =>
+        public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        public Task<InstalledRuntimeState> AdoptCudaSourceBuildAsync(string directory, string tag, CancellationToken ct) =>
+        public Task<InstalledRuntimeState> AdoptCudaSourceBuildAsync(string buildBinDir, string tag, CancellationToken ct) =>
             throw new NotSupportedException();
 
         public Task RemoveSourceBuildAsync(CancellationToken ct) =>
@@ -311,7 +310,7 @@ public static class TrainingLifecycleE2ETestDoubles
 
     public sealed class Inspector : IGgufImportInspector
     {
-        public Task<GgufImportInspection> InspectAsync(GgufImportSource source, GgufImportInspectionMode mode, CancellationToken ct) =>
+        public Task<GgufImportInspection> InspectAsync(GgufImportSource source, GgufImportInspectionMode mode, CancellationToken cancellationToken) =>
             Task.FromResult(new GgufImportInspection
             {
                 SizeBytes = new FileInfo(source.AbsolutePath).Length,
@@ -399,16 +398,16 @@ public static class TrainingLifecycleE2ETestDoubles
             return path;
         }
 
-        public async Task<ITrainingEvaluationInstalledModelLease> AcquireAsync(string modelName, CancellationToken ct) =>
-            new Lease(_path, await ShaAsync(_path, ct));
+        public async Task<ITrainingEvaluationInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken) =>
+            new Lease(_path, await ShaAsync(_path, cancellationToken));
 
-        public Task<string?> ResolveModelFilePathAsync(string name, CancellationToken ct) =>
+        public Task<string?> ResolveModelFilePathAsync(string modelName, CancellationToken ct) =>
             Task.FromResult<string?>(_path);
 
-        public Task<GgufAdapterLaunch?> ResolveAdapterLaunchAsync(string name, CancellationToken ct) =>
+        public Task<GgufAdapterLaunch?> ResolveAdapterLaunchAsync(string modelName, CancellationToken ct) =>
             Task.FromResult<GgufAdapterLaunch?>(null);
 
-        public Task<string?> ResolveProjectorFilePathAsync(string name, CancellationToken ct) =>
+        public Task<string?> ResolveProjectorFilePathAsync(string modelName, CancellationToken ct) =>
             Task.FromResult<string?>(null);
 
         public Task<IReadOnlyList<LocalModelDescriptor>> ListInstalledModelsAsync(CancellationToken ct) =>
@@ -431,13 +430,13 @@ public static class TrainingLifecycleE2ETestDoubles
         public Task<GgufModelHandle> EnsureModelAsync(GgufModelRequest request, IProgress<PullProgress>? progress, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        public Task DeleteModelAsync(string name, CancellationToken ct) =>
+        public Task DeleteModelAsync(string modelName, CancellationToken ct) =>
             Task.CompletedTask;
 
-        public Task<bool> ExistsAsync(string name, CancellationToken ct) =>
+        public Task<bool> ExistsAsync(string modelName, CancellationToken ct) =>
             Task.FromResult(true);
 
-        public Task<GgufModelFootprintFacts?> ResolveModelFootprintFactsAsync(string name, CancellationToken ct) =>
+        public Task<GgufModelFootprintFacts?> ResolveModelFootprintFactsAsync(string modelName, CancellationToken ct) =>
             Task.FromResult<GgufModelFootprintFacts?>(null);
 
         private static async Task<string> ShaAsync(string path, CancellationToken ct)
@@ -470,12 +469,12 @@ public static class TrainingLifecycleE2ETestDoubles
     public sealed class EvaluationHarness : ITransientLlamaServerEvaluationHarness
     {
         public async Task<TransientLlamaServerEvaluationResult<T>> RunAsync<T>(TransientLlamaServerEvaluationRequest request,
-            Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task> bind,
+            Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task> bindProvenance,
             Func<TransientLlamaServerEvaluationSession, CancellationToken, Task<T>> body, CancellationToken ct)
         {
             var model = await IdentityAsync(request.ModelFilePath, request.AdapterFilePath, ct);
             var launch = LaunchReceipt();
-            await bind(new TransientLlamaServerEvaluationProvenance
+            await bindProvenance(new TransientLlamaServerEvaluationProvenance
             {
                 Model = model,
                 Launch = launch
@@ -568,7 +567,7 @@ public static class TrainingLifecycleE2ETestDoubles
 
         private sealed class ScriptedChatClient : IChatClient
         {
-            public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken ct = default) =>
+            public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
                 Task.FromResult(options?.ToolMode == ChatToolMode.RequireAny
                     ? new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
                     {
@@ -580,14 +579,14 @@ public static class TrainingLifecycleE2ETestDoubles
                     : new ChatResponse(new ChatMessage(ChatRole.Assistant, "no tool call")));
 
             public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
-                ChatOptions? options = null, [EnumeratorCancellation] CancellationToken ct = default)
+                ChatOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
             {
                 await Task.CompletedTask;
                 yield break;
             }
 
-            public object? GetService(Type type, object? key = null) =>
-                type.IsInstanceOfType(this) && key is null ? this : null;
+            public object? GetService(Type serviceType, object? serviceKey = null) =>
+                serviceType.IsInstanceOfType(this) && serviceKey is null ? this : null;
 
             public void Dispose() { }
         }
@@ -603,9 +602,9 @@ public static class TrainingLifecycleE2ETestDoubles
         }
 
         public async Task<PreparedGgufImport> PrepareAsync(GgufImportSource source, GgufImportDestination destination,
-            IProgress<GgufImportProgress>? progress, CancellationToken ct)
+            IProgress<GgufImportProgress>? progress, CancellationToken cancellationToken)
         {
-            var bytes = await File.ReadAllBytesAsync(source.AbsolutePath, ct);
+            var bytes = await File.ReadAllBytesAsync(source.AbsolutePath, cancellationToken);
             var sha = Convert.ToHexStringLower(SHA256.HashData(bytes));
             var entry = new GgufModelRegistryEntry
             {
@@ -651,24 +650,23 @@ public static class TrainingLifecycleE2ETestDoubles
             };
         }
 
-        public Task<GgufImportCommitReceipt> CommitAsync(PreparedGgufImport prepared, CancellationToken ct)
+        public Task<GgufImportCommitReceipt> CommitAsync(PreparedGgufImport preparedImport, CancellationToken cancellationToken)
         {
             _verdicts.Record(Stage.Promoted);
             return Task.FromResult(new GgufImportCommitReceipt
             {
-                RegistryEntry = prepared.RegistryEntry,
-                FinalGgufPath = prepared.RegistryEntry.LocalPath,
-                FinalSidecarPath = prepared.RegistryEntry.LocalPath + ".xe-model.json",
-                WeightMemberFingerprint = prepared.WeightMemberFingerprint,
-                ModelContentFingerprint = prepared.ModelContentFingerprint
+                RegistryEntry = preparedImport.RegistryEntry,
+                FinalGgufPath = preparedImport.RegistryEntry.LocalPath,
+                FinalSidecarPath = preparedImport.RegistryEntry.LocalPath + ".xe-model.json",
+                WeightMemberFingerprint = preparedImport.WeightMemberFingerprint,
+                ModelContentFingerprint = preparedImport.ModelContentFingerprint
             });
         }
 
-        public Task RollbackCommittedAsync(GgufImportCommitReceipt receipt, CancellationToken ct) =>
+        public Task RollbackCommittedAsync(GgufImportCommitReceipt commitReceipt, CancellationToken cancellationToken) =>
             Task.CompletedTask;
 
-        public Task DiscardPreparedAsync(PreparedGgufImport prepared, CancellationToken ct) =>
+        public Task DiscardPreparedAsync(PreparedGgufImport preparedImport, CancellationToken cancellationToken) =>
             Task.CompletedTask;
     }
 }
-#pragma warning restore CA1725, S927

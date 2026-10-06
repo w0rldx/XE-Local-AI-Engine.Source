@@ -47,7 +47,7 @@ internal static class GgufStoreTestInfrastructure
         // X-Linked-Etag, preserving the pre-Xet test semantics. Xet-path tests pass an explicit resolve client below.
         // CA2000: this client wraps an in-memory fake handler (no sockets/unmanaged resource) and lives for the test's
         // duration as a field of the returned download client — GC-reclaimed at test end; disposing it here would break it.
-#pragma warning disable CA2000
+#pragma warning disable CA2000 // Lives as a field of the returned download client.
         var resolveHttp = new HttpClient(new ScriptedHandler(static (_, _) => new HttpResponseMessage()));
 #pragma warning restore CA2000
         return DownloadClient(http, resolveHttp, tokenStore, probe, options);

@@ -38,7 +38,7 @@ internal sealed class AgentInstructionProvider : IAgentInstructionProvider
 
         // Forced sync: IAgentInstructionProvider is a synchronous contract read from synchronous composition paths, and
         // the source is an embedded manifest resource in this assembly's own image, so there is no device I/O to await.
-#pragma warning disable MA0045
+#pragma warning disable MA0045 // Contract-forced: sync IAgentInstructionProvider, embedded resource.
         using var stream = assembly.GetManifestResourceStream(resourceName);
 
         if (stream is null)

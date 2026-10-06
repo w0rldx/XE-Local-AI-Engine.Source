@@ -175,7 +175,7 @@ internal sealed class ExternalReasoningRewritingChatClient : DelegatingChatClien
 
         // SCME0001: the SDK model's JsonPatch is [Experimental], but it is the only place a server's unmapped fields
         // survive deserialization and reading it is strictly additive, so the suppression is scoped to these reads.
-#pragma warning disable SCME0001
+#pragma warning disable SCME0001 // Experimental JsonPatch opt-in, scoped to the three Patch readers below.
         return ReadFirstChoiceString(ref completion.Patch, NonStreamingReasoningPath);
     }
 

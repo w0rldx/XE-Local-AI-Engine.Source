@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.CloudProviders;
 using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using Azure;
 using Azure.Core;
 using Azure.Identity;
@@ -277,10 +278,8 @@ public sealed class AzureFoundryProviderSurfaceTests
             CancellationToken cancellationToken = default)
         {
             await Task.CompletedTask;
-            throw _toThrow;
-#pragma warning disable CS0162 // Unreachable: satisfies the iterator contract.
+            ExceptionDispatchInfo.Throw(_toThrow);
             yield break;
-#pragma warning restore CS0162
         }
 
         public object? GetService(Type serviceType, object? serviceKey = null)

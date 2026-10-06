@@ -81,4 +81,11 @@ public sealed class PlainProcessHandle : IProcessTreeHandle
             throw;
         }
     }
+
+    /// <summary>Starts a process through <paramref name="start" /> and wraps it, so the caller never holds a bare process.</summary>
+    public static PlainProcessHandle Start(Func<Process> start, ProcessStderrTail? stderrTail = null)
+    {
+        ArgumentNullException.ThrowIfNull(start);
+        return Wrap(start(), stderrTail);
+    }
 }

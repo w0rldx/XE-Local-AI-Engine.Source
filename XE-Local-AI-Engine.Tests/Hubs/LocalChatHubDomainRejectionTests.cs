@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Hubs;
 
+using System.Runtime.ExceptionServices;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -271,18 +272,14 @@ public sealed class LocalChatHubDomainRejectionTests
     private static async IAsyncEnumerable<ChatStreamEvent> ThrowsReadOnly(Guid conversationId)
     {
         await Task.Yield();
-        throw new NodeChatReadOnlyConversationException(conversationId);
-#pragma warning disable CS0162 // Unreachable: required to make this an iterator rather than a plain async method.
+        ExceptionDispatchInfo.Throw(new NodeChatReadOnlyConversationException(conversationId));
         yield break;
-#pragma warning restore CS0162
     }
 
     private static async IAsyncEnumerable<ChatStreamEvent> ThrowsAsync(Exception exception)
     {
         await Task.Yield();
-        throw exception;
-#pragma warning disable CS0162 // Unreachable: required to make this an iterator rather than a plain async method.
+        ExceptionDispatchInfo.Throw(exception);
         yield break;
-#pragma warning restore CS0162
     }
 }

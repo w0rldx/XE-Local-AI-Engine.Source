@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.Ollama;
 
 using System.Net;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using NSubstitute;
 using OllamaSharp;
 using OllamaSharp.Models;
@@ -181,10 +182,8 @@ public sealed class OllamaModelServiceTests
     {
         ct.ThrowIfCancellationRequested();
         await Task.CompletedTask;
-        throw failure;
-#pragma warning disable CS0162 // Unreachable: the compiler needs a yield to make this an iterator.
+        ExceptionDispatchInfo.Throw(failure);
         yield break;
-#pragma warning restore CS0162
     }
 
     private static async Task<ServiceTestContext> CreateContextAsync(params string[] models)

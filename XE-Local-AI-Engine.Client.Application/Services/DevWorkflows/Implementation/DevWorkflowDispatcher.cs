@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -1027,10 +1028,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                           .FirstOrDefault(edge => DevWorkflowCondition.Evaluate(edge.Condition, document?.RootElement))
                           ?.To;
 
-        using var buffer = new MemoryStream();
-#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
-        using (var writer = new Utf8JsonWriter(buffer))
-#pragma warning restore MA0045
+        var bytes = Utf8JsonBuffer.Write(writer =>
         {
             writer.WriteStartObject();
             if (document is not null)
@@ -1053,9 +1051,9 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             }
 
             writer.WriteEndObject();
-        }
+        });
 
-        return Encoding.UTF8.GetString(buffer.ToArray());
+        return Encoding.UTF8.GetString(bytes);
     }
 
     /// <summary>The upstream document, or null when there is none or it is not an object this can carry through.</summary>
