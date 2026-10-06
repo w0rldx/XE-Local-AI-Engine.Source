@@ -263,7 +263,7 @@ def check_agent_knowledge_entries(root: Path) -> CheckResult:
                     f"condense entries or move narrative to {AGENT_KNOWLEDGE_EVIDENCE}",
                 )
             )
-        # ponytail: headings inside fenced code blocks are not skipped; a `###` line in a fence splits an entry.
+        # Known limit: headings inside fenced code blocks are not skipped; a `###` line in a fence splits an entry.
         for match in ENTRY_HEADING_RE.finditer(text):
             title = match.group("title").strip()
             if title.startswith("PROPOSED"):

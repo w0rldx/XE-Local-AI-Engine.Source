@@ -22,7 +22,7 @@ public sealed class ManagedPythonStatusService
     /// <summary>
     ///     <c>installed-training-runtime.json</c> does not record a revision, so both sides report this one.
     /// </summary>
-    /// <remarks>ponytail: never mismatches today; record it in the state file the day the Training profile changes shape without its lockfile.</remarks>
+    /// <remarks>Never mismatches today; record it in the state file the day the Training profile changes shape without its lockfile.</remarks>
     private const int TrainingProfileRevision = 1;
 
     private readonly ComputePythonEnvironment _compute;

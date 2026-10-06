@@ -3610,9 +3610,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:source-map-js@1.2.1",
+			"id": "frontend:source-map-js@1.2.2",
 			"name": "source-map-js",
-			"version": "1.2.1",
+			"version": "1.2.2",
 			"license": "BSD-3-Clause",
 			"homepageUrl": "https://github.com/7rulnik/source-map-js",
 			"source": "frontend"

@@ -119,7 +119,7 @@ export function ImageModelBrowsePanel({ installedModelNames, isInstalling, onIns
 	const allUnsupported = files.length > 0 && files.every((file) => file.unsupportedReason);
 	const canInstall =
 		openRepoId !== null && trimmedName.length > 0 && hasDiffusion && !duplicateRole && !isNameTaken && !allUnsupported;
-	// ponytail: one message for every reason code; the backend emits only `diffusers_layout_unsupported` today.
+	// One message for every reason code; the backend emits only `diffusers_layout_unsupported` today.
 	const unsupportedMessage = t(
 		"pages.images.models.browse.files.diffusersLayoutUnsupported",
 		"This repository stores the model in Diffusers layout, which the local image runtime cannot load. Pick a single-file GGUF or safetensors checkpoint.",

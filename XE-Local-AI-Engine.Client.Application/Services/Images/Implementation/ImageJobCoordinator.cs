@@ -463,7 +463,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
         foreach (var process in residents)
         {
-            // ponytail: a request starting between the list and this eject is drained for EjectDrainTimeout, then refuses the job; a non-draining try-evict on the supervisor if that bites.
+            // A request starting between the list and this eject is drained for EjectDrainTimeout, then refuses the job; a non-draining try-evict on the supervisor if that bites.
             var outcome = await _llamaSupervisor.EjectAsync(process.ModelName, process.Role, force: false, token);
             if (outcome == LlamaServerEjectOutcome.TimedOutStillBusy)
             {

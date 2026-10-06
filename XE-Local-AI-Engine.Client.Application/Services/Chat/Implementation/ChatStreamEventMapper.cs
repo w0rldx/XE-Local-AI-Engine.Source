@@ -224,7 +224,7 @@ internal static class ChatStreamEventMapper
 
         parts.CompleteToolCall(payload.ToolCallId, payload.ToolName, payload.Result, payload.IsError, sequence);
 
-        // Only images render; other binary blocks keep just their placeholder in Result. ponytail: inline data URIs under a
+        // Only images render; other binary blocks keep just their placeholder in Result. Inline data URIs under a
         // fixed 1 MiB cap keep the metadata row bounded; store media as files if tools start returning larger ones.
         foreach (var image in payload.Media)
         {

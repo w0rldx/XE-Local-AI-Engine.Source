@@ -127,7 +127,7 @@ public static class ConversationStateReducer
             : 0;
     }
 
-    // ponytail: fixed three-tier drop order (history, then routine facts, then intent) is the ceiling; upgrade path is
+    // Known ceiling: fixed three-tier drop order (history, then routine facts, then intent); upgrade path is
     // a category-aware re-distillation that merges entries instead of dropping them.
     private static List<string> EnforceBudget(List<ConversationStateEntry> entries, ConversationCompactionOptions options)
     {

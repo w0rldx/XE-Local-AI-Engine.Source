@@ -38,7 +38,7 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
     private readonly WhisperRuntimeOptions _options;
     private readonly IWhisperServerSupervisor _supervisor;
 
-    // ponytail: one latch per transcriber instance, so a node that runs for weeks warns about silent windows once in its
+    // One latch per transcriber instance, so a node that runs for weeks warns about silent windows once in its
     // life. Move to a per-session or time-windowed latch if the first warning scrolling away ever hides a regression.
     private int _silentWindowFallbackWarned;
 

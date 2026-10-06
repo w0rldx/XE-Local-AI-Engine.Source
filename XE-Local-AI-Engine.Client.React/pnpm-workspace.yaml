@@ -10,6 +10,8 @@ overrides:
   # vitest 5 needs why-is-node-running ^3.2.1; 3.2.2 dropped npm provenance, which trustPolicy no-downgrade refuses.
   # Pinned to the attested 3.2.1. Drop once a provenance-attested 3.2.x above 3.2.1 is published.
   'why-is-node-running@3': '3.2.1'
+  # source-map-js (via postcss) GHSA-68fv-2mgg-jv7q covers >=1.0.0 <1.2.2; 1.2.2 is the fixed patch.
+  'source-map-js@>=1.0.0 <1.2.2': '1.2.2'
 
 allowBuilds:
   msgpackr-extract: true
@@ -19,3 +21,7 @@ allowBuilds:
 
 trustPolicyExclude:
   - 'semver@6.3.1'
+
+minimumReleaseAgeExclude:
+  # Security patch for GHSA-68fv-2mgg-jv7q, exempt from the 7-day hold; removable once past it (2026-10-07).
+  - 'source-map-js@1.2.2'
