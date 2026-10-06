@@ -69,6 +69,9 @@ internal static class AddNodeGraphWorkflowsExtensions
         builder.Services.AddSingleton<GraphWorkflowChatPublisher>();
         builder.Services.AddSingleton<IConversationDeletionObserver, GraphWorkflowConversationDeletionObserver>();
 
+        // What a lane raises when its work lands, read by the dispatcher's sweep pump. Its own singleton, so no lane depends on the dispatcher.
+        builder.Services.AddSingleton<GraphWorkflowSweepWake>();
+
         // The five kinds that run inside the tick. A singleton because it holds nothing per run — only the output cap.
         builder.Services.AddSingleton<GraphWorkflowInlineExecutor>();
 

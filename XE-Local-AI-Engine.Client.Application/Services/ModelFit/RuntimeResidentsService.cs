@@ -6,8 +6,8 @@ using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>
-///     The image and whisper daemons held in memory, for the top-bar widget's 5-second poll. llama.cpp rows stay on
-///     <see cref="LlamaCppRuntimeOrchestrationService" />.
+///     The image and whisper daemons held in memory, for the top-bar widget, which refetches on the residency hub's tick.
+///     llama.cpp rows stay on <see cref="LlamaCppRuntimeOrchestrationService" />.
 /// </summary>
 /// <remarks>
 ///     Reads the two supervisors' in-memory state, the two activity gates and the cached transcription switch only: no disk, no probe,

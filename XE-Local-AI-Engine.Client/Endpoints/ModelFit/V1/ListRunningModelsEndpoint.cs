@@ -13,9 +13,9 @@ using XE_Local_AI_Engine.Client.Services.ModelFit;
 /// </summary>
 /// <remarks>
 ///     There is no dedicated list-running seam: the rows are derived from the llama-server process supervisor's
-///     <see cref="LlamaCppRuntimeOrchestrationService.CheckHealthAsync" /> snapshot. A process-probe or transport
-///     failure returns an OK-empty list so the running panel can poll and degrade; any other exception is a defect and
-///     is left to surface as a 500 rather than be disguised as "nothing is running".
+///     <see cref="LlamaCppRuntimeOrchestrationService.CheckHealthAsync" /> snapshot, refetched on the residency hub's
+///     tick. A process-probe or transport failure returns an OK-empty list so the running panel degrades; any other
+///     exception is a defect and is left to surface as a 500 rather than be disguised as "nothing is running".
 /// </remarks>
 public sealed class ListRunningModelsEndpoint : EndpointWithoutRequest<ListRunningModelsResponse>
 {

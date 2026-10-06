@@ -121,7 +121,10 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     ///         time provider only to decide whether a running row is past its node's timeout.
     ///     </para>
     /// </summary>
-    public GraphWorkflowDispatcher CreateReplacementDispatcher(INodeRuntimeSettings? runtimeSettings = null, TimeProvider? clock = null)
+    /// <param name="sweepWake">A wake of the test's own, so the container's pump cannot take a raise this dispatcher should see.</param>
+    public GraphWorkflowDispatcher CreateReplacementDispatcher(INodeRuntimeSettings? runtimeSettings = null,
+        TimeProvider? clock = null,
+        GraphWorkflowSweepWake? sweepWake = null)
     {
         _replacement = new GraphWorkflowDispatcher(Services.GetRequiredService<IServiceScopeFactory>(),
             Services.GetRequiredService<GraphWorkflowInlineExecutor>(),
@@ -129,6 +132,7 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
             // The container's lanes, not a second set: slot counts are a property of the NODE, and a restart that
             // handed itself fresh ones would be simulating a machine with twice the capacity.
             Services.GetServices<IGraphWorkflowNodeExecutor>(),
+            sweepWake ?? Services.GetRequiredService<GraphWorkflowSweepWake>(),
             Options.Create(new GraphWorkflowOptions
             {
                 MaxConcurrentRuns = CurrentOptions().MaxConcurrentRuns,

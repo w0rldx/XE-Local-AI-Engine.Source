@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -31,6 +32,7 @@ public sealed class ServerPushHubTests
     [Arguments(LocalApiRoutes.KnowledgeBase.Hub)]
     [Arguments(LocalApiRoutes.ModelFit.DownloadHub)]
     [Arguments(LocalApiRoutes.ModelFit.LlamaCppAcquisitionHub)]
+    [Arguments(LocalApiRoutes.ModelFit.ResidencyHub)]
     public async Task Negotiate_WhenTokenMissing_ReturnsUnauthorized(string hubPath)
     {
         using var client = Factory.CreateClient();
@@ -49,6 +51,7 @@ public sealed class ServerPushHubTests
     [Arguments(typeof(KnowledgeBaseHub))]
     [Arguments(typeof(GgufDownloadHub))]
     [Arguments(typeof(RuntimeAcquisitionHub))]
+    [Arguments(typeof(RuntimeResidencyHub))]
     public void Hub_RequiresTheOperatorPolicyOnTheJwtScheme(Type hubType)
     {
         var authorize = AssertEx.NotNull(hubType.GetCustomAttribute<AuthorizeAttribute>());
@@ -61,6 +64,7 @@ public sealed class ServerPushHubTests
     [Arguments(typeof(KnowledgeBaseHub))]
     [Arguments(typeof(GgufDownloadHub))]
     [Arguments(typeof(RuntimeAcquisitionHub))]
+    [Arguments(typeof(RuntimeResidencyHub))]
     public void Hub_ExposesNoClientCallableServerMethods(Type hubType)
     {
         // These hubs are push-only by design. A public instance method declared on one would silently become an
@@ -148,6 +152,23 @@ public sealed class ServerPushHubTests
         AssertEx.Equal(expected: 2, evt.StepCount);
     }
 
+    [Test]
+    public async Task RuntimeResidencyChangeNotifier_TickIsReceivedByAnAuthorizedClient()
+    {
+        await using var connection = Connect(LocalApiRoutes.ModelFit.ResidencyHub);
+        var received = new TaskCompletionSource<RuntimeResidencyChangedHubMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = connection.On<RuntimeResidencyChangedHubMessage>(RuntimeResidencyHubEvents.Changed, evt => received.TrySetResult(evt));
+        await connection.StartAndAwaitRegistrationAsync();
+
+        // The host's registration, not the provider no-op, is what every supervisor and gate resolves.
+        var notifier = Factory.Services.GetRequiredService<IRuntimeResidencyChangeNotifier>();
+        AssertEx.True(notifier is RuntimeResidencyChangePublisher, $"Resolved {notifier.GetType().Name}, not the hub-backed publisher.");
+        notifier.NotifyChanged();
+
+        var evt = await received.Task.WaitAsync(TestBudgets.Contended);
+        AssertEx.True(evt.Sequence >= 1);
+    }
+
     private HubConnection Connect(string hubPath)
     {
         var factory = Factory;
@@ -160,5 +181,4 @@ public sealed class ServerPushHubTests
                })
                .WithNodeJsonProtocol()
                .Build();
-    }
-}
+    }}

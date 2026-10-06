@@ -15,6 +15,8 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
     private const string WatchdogExpiredCode = "watchdog_expired";
     private const string InternalFailureCode = "internal_failure";
 
+    private static readonly TimeSpan FailureBackoff = TimeSpan.FromMilliseconds(250);
+
     private readonly McpAgentRunCancellationRegistry _cancellations;
     private readonly ILogger<McpAgentRunDispatcher> _logger;
     private readonly McpAgentRunMetrics _metrics;
@@ -22,10 +24,12 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
     private readonly SemaphoreSlim _claimGate = new(initialCount: 1, maxCount: 1);
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
+    private readonly McpAgentRunWakeSignal _wake;
     private int _stopping;
 
     public McpAgentRunDispatcher(IServiceScopeFactory scopeFactory,
         McpAgentRunCancellationRegistry cancellations,
+        McpAgentRunWakeSignal wake,
         McpAgentRunMetrics metrics,
         IOptions<McpAgentRunOptions> options,
         TimeProvider timeProvider,
@@ -33,6 +37,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
+        _wake = wake ?? throw new ArgumentNullException(nameof(wake));
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -84,7 +89,7 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
                 var registered = await TryClaimAndRegisterNextAsync(stoppingToken);
                 if (registered is null)
                 {
-                    await Task.Delay(TimeSpan.FromMilliseconds(_options.PollIntervalMilliseconds),
+                    _ = await _wake.WaitAsync(TimeSpan.FromMilliseconds(_options.PollIntervalMilliseconds),
                         _timeProvider,
                         stoppingToken);
                     continue;
@@ -465,9 +470,8 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
     {
         try
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(_options.PollIntervalMilliseconds),
-                _timeProvider,
-                stoppingToken);
+            // Fixed rather than the fallback poll interval: that interval is now a slow safety sweep, not a retry cadence.
+            await Task.Delay(FailureBackoff, _timeProvider, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {

@@ -88,6 +88,8 @@ vi.mock("@/features/tools/queries/useToolCatalog", () => ({
 	useToolCatalog: () => ({ data: [], isLoading: false, error: null }),
 }));
 
+vi.mock("@/core/api/signalr/useRuntimeResidencyHub", () => ({ useRuntimeResidencyHub: () => ({ isLive: false }) }));
+
 import { AgentsPage } from "@/features/agents/pages/AgentsPage";
 import { testMantineTheme } from "@/test/MantineTestRender";
 

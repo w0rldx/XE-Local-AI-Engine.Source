@@ -759,6 +759,8 @@ namespace XE_Local_AI_Engine.Client
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<RuntimeAcquisitionHub>(LocalApiRoutes.ModelFit.LlamaCppAcquisitionHub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+            app.MapHub<RuntimeResidencyHub>(LocalApiRoutes.ModelFit.ResidencyHub)
+               .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<KnowledgeBaseHub>(LocalApiRoutes.KnowledgeBase.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<ImageJobHub>(LocalApiRoutes.Images.Hub)

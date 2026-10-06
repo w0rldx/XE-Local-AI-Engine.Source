@@ -89,6 +89,7 @@ export function IntegrationExecutionsPage() {
 		};
 	}, [selectExecution]);
 
+	// Case (d): integrators start executions outside the SPA and no hub announces them, so this page-scoped list polls.
 	// Polling is UNCONDITIONAL. Gating it on "any row is active" would read the very list a poll has to fetch, so an
 	// empty or all-terminal window — the first load of a fresh node included — would switch the refresh off and a run
 	// started by an integrator elsewhere would never appear.

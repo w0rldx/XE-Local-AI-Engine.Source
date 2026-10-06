@@ -15,6 +15,8 @@ import { server } from "@/test/msw/Server";
 import { createProvidersWrapper, renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
+vi.mock("@/core/api/signalr/useRuntimeResidencyHub", () => ({ useRuntimeResidencyHub: () => ({ isLive: false }) }));
+
 // The form embeds the prompt assist, which reads the installed chat models and the running set on mount.
 setupMswServer(
 	jsonRoute("get", "models", {

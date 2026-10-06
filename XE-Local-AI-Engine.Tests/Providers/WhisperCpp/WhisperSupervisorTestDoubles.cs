@@ -58,6 +58,7 @@ internal sealed class FakeWhisperProcessLauncher : IWhisperServerProcessLauncher
 /// <summary>An in-memory handle whose exit and tree-kill are directly controllable by the test.</summary>
 internal sealed class FakeWhisperProcessHandle : IProcessTreeHandle
 {
+    private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _exited;
     private int _killed;
 
@@ -78,14 +79,25 @@ internal sealed class FakeWhisperProcessHandle : IProcessTreeHandle
 
     public string? StderrTail { get; private set; }
 
-    // The image and transcription supervisors never wait on a handle; a change that starts to must give this fake a real wait.
-    public Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct) =>
-        throw new NotSupportedException("This supervisor does not wait on its process handle.");
+    // The supervisor waits on the registered daemon's exit to tick residency; completes on a kill or a simulated exit.
+    public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
+    {
+        try
+        {
+            await _exitSignal.Task.WaitAsync(timeout, ct);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+    }
 
     public void TreeKill()
     {
         Interlocked.Exchange(ref _killed, value: 1);
         Interlocked.Exchange(ref _exited, value: 1);
+        _exitSignal.TrySetResult();
     }
 
     public void Dispose()
@@ -99,6 +111,7 @@ internal sealed class FakeWhisperProcessHandle : IProcessTreeHandle
         ExitCode = exitCode;
         StderrTail = stderrTail;
         Interlocked.Exchange(ref _exited, value: 1);
+        _exitSignal.TrySetResult();
     }
 }
 
@@ -285,7 +298,8 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
         string? modelsDirectory = null,
         ILogger<WhisperServerProcessSupervisor>? logger = null,
         WhisperCudaFailureSignal? cudaFailureSignal = null,
-        ProcessSpawnReceiptStore? spawnReceipts = null)
+        ProcessSpawnReceiptStore? spawnReceipts = null,
+        IRuntimeResidencyChangeNotifier? residencyNotifier = null)
     {
         Launcher = launcher ?? new FakeWhisperProcessLauncher();
         ReadinessProbe = readinessProbe ?? new FakeWhisperReadinessProbe();
@@ -316,7 +330,8 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
             loadAdmission,
             ActivityGate,
             CudaFailureSignal,
-            spawnReceipts);
+            spawnReceipts,
+            residencyNotifier);
     }
 
     public WhisperServerProcessSupervisor Supervisor { get; }

@@ -508,6 +508,7 @@ public sealed class ImageServerSupervisorTests
     private sealed class LatchedImageProcessHandle : IProcessTreeHandle
     {
         private readonly ImageKillLatch? _killLatch;
+        private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _exited;
         private int _killed;
 
@@ -528,14 +529,26 @@ public sealed class ImageServerSupervisorTests
 
         public string? StderrTail => null;
 
-        public Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct) =>
-            throw new NotSupportedException("The image supervisor does not wait on its process handle.");
+        // The supervisor's residency exit watch waits here; it completes on the kill.
+        public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
+        {
+            try
+            {
+                await _exitSignal.Task.WaitAsync(timeout, ct);
+                return true;
+            }
+            catch (TimeoutException)
+            {
+                return false;
+            }
+        }
 
         public void TreeKill()
         {
             _killLatch?.Wait();
             Interlocked.Exchange(ref _killed, value: 1);
             Interlocked.Exchange(ref _exited, value: 1);
+            _exitSignal.TrySetResult();
         }
 
         public void Dispose()

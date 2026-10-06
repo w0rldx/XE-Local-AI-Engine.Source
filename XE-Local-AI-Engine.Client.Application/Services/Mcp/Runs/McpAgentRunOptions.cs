@@ -9,7 +9,8 @@ public sealed class McpAgentRunOptions
 
     public int WatchdogMinutes { get; init; } = 30;
 
-    public int PollIntervalMilliseconds { get; init; } = 250;
+    /// <summary>The idle worker's safety sweep. An admission wakes a worker at once; this only bounds a missed wake.</summary>
+    public int PollIntervalMilliseconds { get; init; } = 5000;
 
     public int CompactionIntervalMinutes { get; init; } = 15;
 

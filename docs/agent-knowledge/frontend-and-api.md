@@ -36,6 +36,17 @@ budget. Monaco workers load through Vite `?worker` so the editor stays offline. 
 `GraphWorkflowNodeConfigPanel.tsx`; `config/bundle-budget.json`.
 [evidence](../agent-knowledge-evidence.md#ui-race-failures)
 
+### Push first: a `refetchInterval` is a bounded fallback, never the default
+
+**Rule:** state our own process changes reaches the UI over a SignalR hub, with the REST GET as the one-shot hydrate on
+mount. A `refetchInterval` is allowed only when (a) the value is sampled and has no event (`model-fit/resources`),
+(b) it is the fallback while the hub is degraded, plus a floor of 60 s or slower behind a live hub, (c) it is conditional on an active job no hub covers, or (d) it is a
+page-scoped view of state that changes outside the SPA and has no hub, at 5 s or slower. Never a fast poll beside a
+live hub that invalidates the same query, app-wide only under (a) or (b); each one carries a comment naming its case.
+**Prevents:** an idle header polling residency on every page, and a poll duplicating a mounted hub. **Authority:**
+`useSchedulerHub` (`pollIntervalMs`), `useRuntimeResidencyHub`, `Context.ts` (`QueryClient` defaults); wiki 09;
+operator decision 2026-10-06.
+
 ### Never put `role="button"` on a container that holds other interactive controls
 
 **Rule:** a `<button>` or `role="button"` makes its descendants presentational, so nested menus, actions or links
@@ -56,7 +67,7 @@ scrollbar fix that skips every autosize site and dialog body. **Authority:** `co
 
 ### A UI that polls image or whisper residency reads `model-fit/runtime-residents`, never a runtime status route or `isBusy`
 
-**Rule:** poll `GET model-fit/runtime-residents` for image and whisper residents (llama.cpp stays on `model-fit/running`), never `GET transcription/runtime` or `GET images/runtime`, and never read an activity snapshot's `isBusy` as "work is running" or "eject allowed": it counts a resident daemon, while the row's `canEject` repeats the gate's eviction-reservation refusal. **Prevents:** a per-poll settings load, installed-runtime read and model recommendation from the transcription status route; an eject button disabled whenever anything is loaded. **Authority:** `RuntimeResidentsService`, `TranscriptionRuntimeService.GetRuntimeAsync`, `ImageRuntimeActivitySnapshot.IsBusy`, `TryAcquireEvictionReservation` on both activity gates; wiki 14 and 24, 2026-09-29.
+**Rule:** read `GET model-fit/runtime-residents` for image and whisper residents (llama.cpp stays on `model-fit/running`; `RuntimeResidencyHub` ticks refresh both, they poll only while it is degraded), never `GET transcription/runtime` or `GET images/runtime`, and never read an activity snapshot's `isBusy` as "work is running" or "eject allowed": it counts a resident daemon, while the row's `canEject` repeats the gate's eviction-reservation refusal. **Prevents:** a per-poll settings load, installed-runtime read and model recommendation from the transcription status route; an eject button disabled whenever anything is loaded. **Authority:** `RuntimeResidentsService`, `TranscriptionRuntimeService.GetRuntimeAsync`, `ImageRuntimeActivitySnapshot.IsBusy`, `TryAcquireEvictionReservation` on both activity gates; wiki 14 and 24, 2026-09-29.
 
 ### A wrapper that appears when a field becomes non-empty remounts the input
 

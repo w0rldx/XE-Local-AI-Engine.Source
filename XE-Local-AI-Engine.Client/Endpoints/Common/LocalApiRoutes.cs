@@ -475,6 +475,9 @@ public static class LocalApiRoutes
         // the same sanitized payload the hydrate GET serves, stamped with the monotonic sequence the client reconciles hydrate and push by.
         public const string LlamaCppAcquisitionHub = "/api/local/v1/model-fit/llamacpp/acquisition/hub";
 
+        // SignalR push hub ticking when runtime residency changes, so the header refetches Running and RuntimeResidents instead of polling them. A full MapHub path.
+        public const string ResidencyHub = "/api/local/v1/model-fit/residency/hub";
+
         // HF access-token set/clear (IHfTokenStore). The endpoint NEVER returns the token; GET reports presence
         // only (security gate).
         public const string HfToken = "model-fit/hf-token";

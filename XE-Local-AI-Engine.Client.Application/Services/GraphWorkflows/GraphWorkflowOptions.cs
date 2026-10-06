@@ -47,14 +47,15 @@ public sealed class GraphWorkflowOptions
     public int MaxOutputJsonBytes { get; init; } = 256 * 1024;
 
     /// <summary>
-    ///     How often the dispatcher sweeps every live run, independently of the change signals it also listens for.
+    ///     How often the dispatcher sweeps every live run when nothing wakes it: commands signal their run, and a lane
+    ///     landing or a run ending wakes a sweep at once.
     /// </summary>
     /// <remarks>
-    ///     A dropped signal costs at most one interval of latency, never correctness. Floored at 100 ms by the
-    ///     validator: below that the sweep spends more time opening scopes than advancing runs.
+    ///     A safety sweep: a dropped signal costs at most one interval of latency, never correctness. Floored at 100 ms
+    ///     by the validator: below that the sweep spends more time opening scopes than advancing runs.
     /// </remarks>
     [Range(1, 3_600_000)]
-    public int DispatchIntervalMilliseconds { get; init; } = 500;
+    public int DispatchIntervalMilliseconds { get; init; } = 5000;
 
     /// <summary>How many runs may be live at once. Runs above the cap wait; they are not refused.</summary>
     [Range(1, 64)]

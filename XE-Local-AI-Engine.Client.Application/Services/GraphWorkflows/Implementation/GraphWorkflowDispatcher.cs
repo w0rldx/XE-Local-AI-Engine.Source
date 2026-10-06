@@ -80,6 +80,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     private readonly GraphWorkflowOptions _options;
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly GraphWorkflowSweepWake _sweepWake;
     private readonly TimeProvider _timeProvider;
     private int _disposed;
     private Task? _loop;
@@ -87,6 +88,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     public GraphWorkflowDispatcher(IServiceScopeFactory scopeFactory,
         GraphWorkflowInlineExecutor inline,
         IEnumerable<IGraphWorkflowNodeExecutor> executors,
+        GraphWorkflowSweepWake sweepWake,
         IOptions<GraphWorkflowOptions> options,
         INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
@@ -95,6 +97,7 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(executors);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _sweepWake = sweepWake ?? throw new ArgumentNullException(nameof(sweepWake));
         _inline = inline ?? throw new ArgumentNullException(nameof(inline));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -673,6 +676,11 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
         {
             Forget(run.Id);
         }
+        else if (outcome.Status == GraphWorkflowRunStatus.WaitingForApproval)
+        {
+            // A parked run gives up its concurrent-run place, which a Pending run may be waiting on.
+            _sweepWake.Raise();
+        }
 
         return 1;
     }
@@ -833,11 +841,15 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     private GraphWorkflowGraph Resolve(GraphWorkflowRunSnapshot run) =>
         _graphs.GetOrAdd(run.Id, _ => GraphWorkflowGraph.Parse(run.GraphJson));
 
-    /// <summary>Drops the parsed graph of a run that has ended. A run that turns out to be live again re-parses.</summary>
+    /// <summary>
+    ///     Drops the parsed graph of a run that has ended, and asks for a sweep: the place it frees under the concurrent-run
+    ///     cap is what a <c>Pending</c> run is waiting on, and only a sweep finds that run.
+    /// </summary>
     private void Forget(Guid runId)
     {
         _ = _graphs.TryRemove(runId, out _);
         _ = _publishRetries.TryRemove(runId, out _);
+        _sweepWake.Raise();
     }
 
     /// <summary>
@@ -881,12 +893,14 @@ internal sealed class GraphWorkflowDispatcher : IGraphWorkflowDispatcherSignal, 
     {
         // The first sweep is immediate: after a restart the reconciler has just left node runs re-dispatchable, and
         // waiting a whole interval to notice would add that interval to every recovery.
-        using var sweep = new PeriodicTimer(TimeSpan.FromMilliseconds(_options.DispatchIntervalMilliseconds), _timeProvider);
+        var interval = TimeSpan.FromMilliseconds(_options.DispatchIntervalMilliseconds);
         try
         {
             await SweepAsync(cancellationToken);
-            while (await sweep.WaitForNextTickAsync(cancellationToken))
+            while (!cancellationToken.IsCancellationRequested)
             {
+                // A lane landing or a run ending raises the wake; the interval is only the safety sweep behind a missed one.
+                await _sweepWake.WaitAsync(interval, _timeProvider, cancellationToken);
                 await SweepAsync(cancellationToken);
             }
         }

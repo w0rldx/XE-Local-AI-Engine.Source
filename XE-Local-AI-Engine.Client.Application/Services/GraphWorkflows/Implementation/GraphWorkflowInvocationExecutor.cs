@@ -69,9 +69,11 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     private readonly ILogger<GraphWorkflowInvocationExecutor> _logger;
     private readonly GraphWorkflowOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly GraphWorkflowSweepWake _sweepWake;
 
     public GraphWorkflowInvocationExecutor(IServiceScopeFactory scopeFactory,
         IInvocationRunner invocationRunner,
+        GraphWorkflowSweepWake sweepWake,
         IOptions<GraphWorkflowOptions> options,
         IEnumerable<IGraphWorkflowDecisionProvider> decisionProviders,
         ILogger<GraphWorkflowInvocationExecutor> logger)
@@ -79,6 +81,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         _decisionProviders = [.. decisionProviders ?? throw new ArgumentNullException(nameof(decisionProviders))];
         ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _sweepWake = sweepWake ?? throw new ArgumentNullException(nameof(sweepWake));
 
         // The runner is a SINGLETON and is injected as one: the stop and discard paths are documented as non-blocking,
         // and opening a DI scope per cancel to reach a singleton is work a hot drain loop pays for nothing.
@@ -91,7 +94,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         _lane = new GraphWorkflowInFlightLane<GraphWorkflowAgentTurn>(_options.MaxConcurrentRuns,
             // A dropped turn's token is not enough on its own: the runner is what knows how to unwind one parked in a
             // provider stream, and a superseded entry never comes back through StopAsync to say so.
-            flight => CancelInvocation(flight.InvocationId));
+            flight => CancelInvocation(flight.InvocationId),
+            _sweepWake.Raise);
     }
 
     public bool Owns(GraphWorkflowNodeKind kind) =>
@@ -734,7 +738,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     ///     than a local, which flow analysis would otherwise prove always-null because it cannot see the handler fire
     ///     synchronously from the completion report.
     /// </remarks>
-    private static async Task<InvocationState?> RunInvocationAsync(IWorkerEventDispatcher eventDispatcher,
+    private async Task<InvocationState?> RunInvocationAsync(IWorkerEventDispatcher eventDispatcher,
         IInvocationRunner invocationRunner,
         RuntimePackage package,
         StrongBox<bool> leaseAcquired,
@@ -753,6 +757,9 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
 
         var lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken);
         leaseAcquired.Value = true;
+
+        // The row still reads Queued; a sweep is what writes it Running now that a model is in fact working on it.
+        _sweepWake.Raise();
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         try
         {

@@ -349,6 +349,56 @@ public sealed class McpAgentRunCoordinatorTests
         await harness.Store.Received(1).GetLedgerSnapshotAsync(Arg.Any<CancellationToken>());
     }
 
+    /// <summary>Only a NEW queued row is claimable work: a replayed or refused admission must not wake a worker for nothing.</summary>
+    [Test]
+    [Arguments(McpAgentRunAdmissionKind.Accepted, true)]
+    [Arguments(McpAgentRunAdmissionKind.Existing, false)]
+    [Arguments(McpAgentRunAdmissionKind.RequestIdConflict, false)]
+    public async Task StartAsync_WakesTheDispatcherOnlyForAnAcceptedAdmission(McpAgentRunAdmissionKind kind, bool expectedWake)
+    {
+        using var harness = new Harness();
+        var clock = new ManualTimeProvider();
+        var requestId = Guid.NewGuid();
+        harness.Resolver.ResolveAsync(Arg.Any<McpExecutionBindingRequest>(), Arg.Any<CancellationToken>())
+               .Returns(McpExecutionBindingResolution.Success(new McpExecutionBinding
+               {
+                   BindingFingerprint = Convert.ToHexString(SHA256.HashData("binding"u8)),
+                   ModelId = "local-model",
+                   Instructions = "read only",
+                   AgentDefinitionId = null,
+                   AgentDefinitionVersion = null,
+                   AllowedTools = [],
+                   ReasoningEffort = null,
+                   SupportsThinking = false
+               }));
+        harness.Store.AdmitAsync(Arg.Any<McpAgentRunAdmissionRequest>(), Arg.Any<CancellationToken>())
+               .Returns(new McpAgentRunAdmissionResult
+               {
+                   Kind = kind,
+                   Run = CreateRun(McpAgentRunStatus.Queued, version: 0, claimToken: null, McpAgentRunStopReason.None) with
+                   {
+                       RequestId = requestId
+                   }
+               });
+
+        _ = await harness.Coordinator.StartAsync(new McpAgentRunStartRequest
+            {
+                RequestId = requestId,
+                Task = "inspect the repository",
+                Binding = new McpExecutionBindingRequest
+                {
+                    ModelId = "local-model"
+                }
+            },
+            CancellationToken.None);
+
+        // A permit completes the wait without the clock moving; without one only the fallback ends it.
+        var woken = harness.Wake.WaitAsync(TimeSpan.FromSeconds(5), clock, CancellationToken.None);
+        AssertEx.Equal(expectedWake, woken.IsCompleted, "a raised wake completes the wait synchronously.");
+        clock.Advance(TimeSpan.FromSeconds(5));
+        AssertEx.Equal(expectedWake, await woken.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
     [Test]
     public async Task CancelAsync_WhenCalledRepeatedly_ReturnsRequestedThenAlreadyRequestedAndSignalsRegisteredExecution()
     {
@@ -534,6 +584,7 @@ public sealed class McpAgentRunCoordinatorTests
                 Resolver,
                 Fingerprint,
                 Cancellations,
+                Wake,
                 _metrics,
                 WorkspaceResolver,
                 Options.Create(new McpAgentRunOptions()),
@@ -542,6 +593,8 @@ public sealed class McpAgentRunCoordinatorTests
         }
 
         public McpAgentRunCancellationRegistry Cancellations { get; }
+
+        public McpAgentRunWakeSignal Wake { get; } = new(Options.Create(new McpAgentRunOptions()));
 
         public McpAgentRunCoordinator Coordinator { get; }
 
@@ -558,6 +611,7 @@ public sealed class McpAgentRunCoordinatorTests
 
         public void Dispose()
         {
+            Wake.Dispose();
             _metrics.Dispose();
             _protector.Dispose();
             _keyHolder.Dispose();

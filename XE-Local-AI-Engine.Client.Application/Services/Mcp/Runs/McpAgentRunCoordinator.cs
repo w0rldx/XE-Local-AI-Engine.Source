@@ -28,11 +28,13 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
     private readonly ISelectedFolderResolver _workspaceResolver;
     private readonly IMcpAgentRunStore _store;
     private readonly TimeProvider _timeProvider;
+    private readonly McpAgentRunWakeSignal _wake;
 
     public McpAgentRunCoordinator(IMcpAgentRunStore store,
         IMcpExecutionBindingResolver resolver,
         McpAgentRunRequestFingerprint fingerprint,
         McpAgentRunCancellationRegistry cancellations,
+        McpAgentRunWakeSignal wake,
         McpAgentRunMetrics metrics,
         ISelectedFolderResolver workspaceResolver,
         IOptions<McpAgentRunOptions> options,
@@ -43,6 +45,7 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
         _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
         _fingerprint = fingerprint ?? throw new ArgumentNullException(nameof(fingerprint));
         _cancellations = cancellations ?? throw new ArgumentNullException(nameof(cancellations));
+        _wake = wake ?? throw new ArgumentNullException(nameof(wake));
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _workspaceResolver = workspaceResolver ?? throw new ArgumentNullException(nameof(workspaceResolver));
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
@@ -134,6 +137,11 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
                     RequestingKeyPrefix = request.Binding.InboundContext.KeyPrefix
                 },
                 cancellationToken);
+            if (admission.Kind == McpAgentRunAdmissionKind.Accepted)
+            {
+                // The admission transaction has committed, so the woken worker's queue read sees the row.
+                _wake.Raise();
+            }
 
             await _metrics.RefreshAsync(_store, CancellationToken.None);
             return MapAdmission(admission);

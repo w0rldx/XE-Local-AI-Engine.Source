@@ -53,6 +53,7 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
@@ -166,6 +167,10 @@ public static class ConfigureServices
         // Hub-backed runtime-acquisition publisher: a plain AddSingleton, so it wins over the provider's TryAdd, turning the silent GPU
         // probe / download / verify / extract sequence into live pushes. IHubContext is singleton-safe for the status registry.
         builder.Services.AddSingleton<IRuntimeAcquisitionEventPublisher, RuntimeAcquisitionEventPublisher>();
+
+        // Hub-backed residency tick: a plain AddSingleton, so it wins over the three providers' TryAdd no-op, and the supervisors and
+        // activity gates all resolve this one coalescing instance. IHubContext is singleton-safe.
+        builder.Services.AddSingleton<IRuntimeResidencyChangeNotifier, RuntimeResidencyChangePublisher>();
 
         // Hub-backed knowledge-base indexing notifier, superseding the no-op AddNodeKnowledgeBase registers so document status changes
         // push live on KnowledgeBaseHub. IHubContext is singleton-safe, so the scoped ingestion service can resolve this singleton.

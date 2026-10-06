@@ -82,7 +82,7 @@ export function useIntegrationExecution(executionId: string | null, options: Int
  * says how the run ended.
  *
  * A loop inside `queryFn` rather than `useInfiniteQuery` (which is what the dev-workflows event feed uses): there
- * is no pager here. The timeline renders the whole log and re-reads it every 5 s, so one cache entry holding one
+ * is no pager here. The timeline renders the whole log and re-reads it while the run is active, so one cache entry holding one
  * ascending array keeps the `select`/`refetchInterval` contract its two consumers already have.
  *
  * Each refetch re-pages from sequence 0. The log is append-only and short in the ordinary case, and a re-read from

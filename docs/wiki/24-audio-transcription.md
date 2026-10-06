@@ -83,7 +83,7 @@ recomputes the model recommendation (device audit plus backend selection) on eve
 `GET model-fit/runtime-residents`: `RuntimeResidentsService` takes `IWhisperServerSupervisor.GetStatus()` and the
 activity gate's snapshot, both in memory, and reports one transcription row (`starting`, `active` while
 `ActiveTranscriptionCount > 0`, otherwise `idle`; none when stopped or when `Transcription:Enabled` is off) with the
-catalog id (null while starting or switching) and the daemon's own backend. The top-bar widget polls it. The row's
+catalog id (null while starting or switching) and the daemon's own backend. The top-bar widget reads it on a residency hub tick. The row's
 `canEject` and the snapshot's `isBusy` answer different questions: `isBusy` ("may the runtime be rebuilt or removed")
 counts a resident daemon and gates the source-build card's Build and Remove; `canEject` ("would
 `POST transcription/runtime/eject` be refused") repeats `WhisperRuntimeActivityGate.TryAcquireEvictionReservation`

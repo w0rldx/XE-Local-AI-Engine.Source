@@ -486,6 +486,8 @@ public sealed partial class LlamaServerProcessSupervisor
                     IsTransient = !profilingOwned && _inflightSpawns.TryGetValue(key, out var inflight) && inflight.IsTransient
                 };
                 _processes[key] = running;
+                _residencyNotifier.NotifyChanged();
+                _ = NotifyResidencyOnExitAsync(handle.WaitForExitAsync(Timeout.InfiniteTimeSpan, _shutdownCts.Token));
 
                 if (isSafeRetry)
                 {

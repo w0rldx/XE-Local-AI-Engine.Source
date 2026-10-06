@@ -1,5 +1,5 @@
 import { Code, Divider, Group, Loader, Stack, Text, Tooltip } from "@mantine/core";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -26,8 +26,8 @@ interface IntegrationExecutionDetailDialogProps {
 }
 
 /**
- * The execution record plus its persisted timeline. The dialog owns both reads, so mounting starts the 5000 ms poll
- * and closing unmounts the queries and stops it — no effect has to remember to tear anything down.
+ * The execution record plus its persisted timeline. The dialog owns both reads, so mounting an active execution starts
+ * the 5000 ms poll and closing unmounts the queries and stops it — no effect has to remember to tear anything down.
  *
  * What it renders comes from the PER-EXECUTION read wherever that read has answered, so a list poll returning a window
  * that no longer contains the row leaves the open dialog alone instead of closing it mid-read.
@@ -42,13 +42,22 @@ export function IntegrationExecutionDetailDialog({ executionId, listExecution, o
 	// effect would leave the poll one render behind.
 	const [lastKnownStatus, setLastKnownStatus] = useState<IntegrationExecutionStatus | null>(listExecution?.status ?? null);
 	const pollStatus = listExecution?.status ?? lastKnownStatus;
+	const isActive = pollStatus !== null && isActiveExecutionStatus(pollStatus);
 
-	// `outputBytes` keeps growing while the run writes outputs, so an active run's audit block polls beside the
-	// timeline rather than staying frozen at the value it had when the dialog opened.
-	const detailQuery = useIntegrationExecution(executionId, {
-		refetchInterval: pollStatus !== null && isActiveExecutionStatus(pollStatus) ? 5000 : undefined,
-	});
-	const eventsQuery = useIntegrationExecutionEvents(executionId, { refetchInterval: 5000 });
+	// Case (c), no hub carries executions: both reads poll only while the run is active. `outputBytes` keeps growing
+	// while the run writes outputs, so the audit block polls beside the timeline.
+	const detailQuery = useIntegrationExecution(executionId, { refetchInterval: isActive ? 5000 : undefined });
+	const eventsQuery = useIntegrationExecutionEvents(executionId, { refetchInterval: isActive ? 5000 : undefined });
+
+	// The poll that last read the timeline can predate the terminal events, so leaving the active state reads it once more.
+	const { refetch: refetchEvents } = eventsQuery;
+	const wasActiveRef = useRef(isActive);
+	useEffect(() => {
+		if (wasActiveRef.current && !isActive) {
+			refetchEvents().catch(() => undefined);
+		}
+		wasActiveRef.current = isActive;
+	}, [isActive, refetchEvents]);
 
 	const detail = detailQuery.data;
 	const execution = detail?.execution ?? listExecution;

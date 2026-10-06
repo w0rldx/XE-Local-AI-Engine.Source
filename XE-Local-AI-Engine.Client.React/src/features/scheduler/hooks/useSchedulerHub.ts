@@ -1,5 +1,6 @@
+import { HubConnectionState } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
@@ -26,13 +27,24 @@ const RUN_EVENTS = [
 	"scheduler.runProgress",
 ] as const;
 
+/** The run-history poll while the hub is down. */
+export const SCHEDULER_POLL_INTERVAL_MS = 5_000;
+
+/** Safety net while the hub is live, for a change no event announces: the retention sweep deleting old runs. */
+export const SCHEDULER_PUSH_FLOOR_MS = 60_000;
+
+export interface SchedulerHubState {
+	/** Run-history cadence: the fallback while the hub is down, the floor while it is live, `undefined` while connecting. */
+	readonly pollIntervalMs?: number;
+}
+
 // Subscribes to the scheduler SignalR hub for the lifetime of the mounting component. On a job-definition change
 // the jobs list is invalidated; on any run event the run history + per-run detail are invalidated. The hub is a
-// notification channel only — authoritative state is always refetched via TanStack Query. Connection failures
-// are tolerated silently (logged to console.warn) so a flaky hub never breaks the page; the queries still serve
-// their last good data and the user can refetch by re-navigating.
-export function useSchedulerHub(): void {
+// notification channel only — authoritative state is always refetched via TanStack Query. Connection failures never
+// break the page: the hook hands out a fallback poll interval until the hub is connected again.
+export function useSchedulerHub(): SchedulerHubState {
 	const queryClient = useQueryClient();
+	const [pollIntervalMs, setPollIntervalMs] = useState<number | undefined>(undefined);
 	// `t` is read through a ref so a language switch (which hands back a new `t`) re-localizes future toasts WITHOUT
 	// re-running the effect — re-running would tear down and rebuild the live hub connection. Kept current every render.
 	const { t } = useTranslation();
@@ -74,7 +86,33 @@ export function useSchedulerHub(): void {
 			connection.on(eventName, handler);
 		}
 
+		let disposed = false;
+		const degrade = (): void => {
+			if (!disposed) {
+				setPollIntervalMs(SCHEDULER_POLL_INTERVAL_MS);
+			}
+		};
+		// The hub broadcasts with no replay, so whatever happened before this (re)connect is read once over REST.
+		const resume = (): void => {
+			if (disposed) {
+				return;
+			}
+			if (connection.state !== HubConnectionState.Connected) {
+				degrade();
+				return;
+			}
+			invalidateJobs();
+			invalidateRuns();
+			setPollIntervalMs(SCHEDULER_PUSH_FLOOR_MS);
+		};
+		// release() drops these registrations, so the cleanup needs no unregister calls of its own.
+		hub.onReconnecting(degrade);
+		hub.onReconnected(resume);
+		hub.onClosed(degrade);
+		hub.whenStarted.then(resume).catch(degrade);
+
 		return () => {
+			disposed = true;
 			connection.off(JOB_DEFINITION_CHANGED, invalidateJobs);
 			for (const [eventName, handler] of runHandlers) {
 				connection.off(eventName, handler);
@@ -84,4 +122,6 @@ export function useSchedulerHub(): void {
 			hub.release();
 		};
 	}, [queryClient]);
+
+	return { pollIntervalMs };
 }

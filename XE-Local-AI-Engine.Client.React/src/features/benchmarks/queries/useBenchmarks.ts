@@ -210,6 +210,8 @@ export function useBenchmarkRuns(projectId: string | null) {
 // charts and the live pane all want the same run's detail, and three query keys for it would be three polls of it.
 const benchmarkRunDetailQuery = (runId: string) => ({
 	queryKey: benchmarkQueryKeys.run(runId),
+	// Case (c), active run only: the run hub streams into the live pane's overlay, never this cache, and the compare
+	// view and charts read it with no hub mounted; status, scores, judge and fidelity results land here by refetch alone.
 	refetchInterval: (query: { state: { data?: BenchmarkRunDetail } }) =>
 		query.state.data && isRunActive(query.state.data) ? activeRunPollIntervalMs : (false as const),
 	queryFn: async ({ signal }: { signal: AbortSignal }): Promise<BenchmarkRunDetail> => {

@@ -183,6 +183,37 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
     }
 
     [Test]
+    public void ActivityGate_EveryGrantAndRelease_TicksResidency_ARefusalDoesNot()
+    {
+        // The residents read derives Starting and CanEject from these counts, so each change must reach the header.
+        var notifier = new RecordingResidencyChangeNotifier();
+        var gate = new ImageRuntimeActivityGate(notifier);
+        var leases = new[]
+        {
+            AssertEx.NotNull(gate.TryAcquireJobLease()),
+            AssertEx.NotNull(gate.TryAcquireSpawnReadinessLease()),
+            AssertEx.NotNull(gate.TryAcquireResidentProcessLease())
+        };
+        AssertEx.Equal(expected: 3, notifier.Count);
+
+        AssertEx.Null(gate.TryAcquireEvictionReservation());
+        AssertEx.Equal(expected: 3, notifier.Count, "A refused reservation must not tick.");
+
+        foreach (var lease in leases)
+        {
+            lease.Dispose();
+        }
+
+        AssertEx.Equal(expected: 6, notifier.Count);
+        using (AssertEx.NotNull(gate.TryAcquireMutationReservation()))
+        {
+            AssertEx.Equal(expected: 7, notifier.Count);
+        }
+
+        AssertEx.Equal(expected: 8, notifier.Count);
+    }
+
+    [Test]
     public void SourceRequest_OfficialNormalizationIsIdempotentAndPinsCanonicalProvenance()
     {
         var request = new StableDiffusionCppSourceBuildRequest

@@ -212,6 +212,8 @@ export function Invocations() {
 		isFetching: monitorIsFetching,
 	} = useQuery({
 		...withResponseValidation(getInvocationMonitorOptions()),
+		// Case (d): chat in another tab, the scheduler, integrations and agents start invocations outside this page, and
+		// no hub announces them, so an idle monitor cannot tell that nothing will start.
 		refetchInterval: 5000,
 		select: toInvocationMonitor,
 	});

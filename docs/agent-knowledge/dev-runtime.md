@@ -187,6 +187,16 @@ registration time"). For "traces but no logs", first prove `OTEL_EXPORTER_OTLP_E
 startup `ILogger` records always exist, so their absence means provider forwarding, not an idle workload. Keep the observable
 test, not just the flag. **Prevents:** chasing an idle-workload theory. **Authority:** `SerilogProviderForwardingTests`.
 
+### An in-process waiter wakes on a signal; its timer is only a slow safety sweep
+
+**Rule:** a dispatcher or worker waiting for state this process writes (a queued row, a lane landing, a lease release)
+waits on a signal raised after the write commits, with its interval as a fallback of seconds, never a sub-second
+database poll. The permit or one-slot channel must survive the gap between the empty read and the wait. Poll only what
+offers no event: a child's HTTP readiness, a sampled value, a third-party API. UI half: frontend-and-api, "Push first".
+**Prevents:** an idle node querying SQLite several times a second for queued MCP runs and live graph runs.
+**Authority:** `McpAgentRunWakeSignal`, `GraphWorkflowSweepWake`, `McpAgentRunOptions.PollIntervalMilliseconds`,
+`GraphWorkflowOptions.DispatchIntervalMilliseconds`; operator decision 2026-10-06.
+
 ### The node is an MCP server too, and four things about it will bite you
 
 **Rule:** mount, `McpApiKey` policy and digest storage are in wiki 12 (§3.1a, §3.2).

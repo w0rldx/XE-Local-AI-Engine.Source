@@ -87,7 +87,8 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
             sp.GetRequiredService<ILogger<ImageServerProcessSupervisor>>(),
             sp.GetRequiredService<IGpuModelLoadAdmission>(),
             sp.GetRequiredService<IImageRuntimeActivityGate>(),
-            sp.GetRequiredKeyedService<ProcessSpawnReceiptStore>(ServerName)));
+            sp.GetRequiredKeyedService<ProcessSpawnReceiptStore>(ServerName),
+            sp.GetRequiredService<IRuntimeResidencyChangeNotifier>()));
         services.TryAddSingleton<IImageServerSupervisor>(static sp => sp.GetRequiredService<ImageServerProcessSupervisor>());
 
         // The public image-generation facade. Singleton — it holds no per-request state.

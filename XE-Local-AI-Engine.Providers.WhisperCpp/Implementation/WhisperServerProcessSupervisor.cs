@@ -53,6 +53,9 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     private readonly TimeProvider _timeProvider;
     private readonly WhisperCudaFailureSignal _cudaFailureSignal;
 
+    // Ticked after every change GetStatus shows: the starting flag, registration, detach, and the daemon's own exit.
+    private readonly IRuntimeResidencyChangeNotifier _residencyNotifier;
+
     private RunningServer? _current;
     private int _disposed;
     private long _generation;
@@ -77,7 +80,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         IGpuModelLoadAdmission? loadAdmission = null,
         IWhisperRuntimeActivityGate? runtimeActivityGate = null,
         WhisperCudaFailureSignal? cudaFailureSignal = null,
-        ProcessSpawnReceiptStore? spawnReceipts = null)
+        ProcessSpawnReceiptStore? spawnReceipts = null,
+        IRuntimeResidencyChangeNotifier? residencyNotifier = null)
     {
         _backendSelector = backendSelector ?? throw new ArgumentNullException(nameof(backendSelector));
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
@@ -90,6 +94,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         _runtimeActivityGate = runtimeActivityGate ?? new WhisperRuntimeActivityGate();
         _cudaFailureSignal = cudaFailureSignal ?? new WhisperCudaFailureSignal();
         _spawnReceipts = spawnReceipts ?? new ProcessSpawnReceiptStore(nodeDataRoot: null, "whisper-server", _logger);
+        _residencyNotifier = residencyNotifier ?? NullRuntimeResidencyChangeNotifier.Instance;
 
         // Absent a wired gate (a provider-only host, or a test), default to the no-op floor so GPU-load serialization
         // is simply off. The composition root injects the real singleton shared with the other supervisors.
@@ -525,6 +530,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
                 throw new ObjectDisposedException(nameof(WhisperServerProcessSupervisor));
             }
 
+            _residencyNotifier.NotifyChanged();
+            _ = NotifyResidencyOnExitAsync(handle.WaitForExitAsync(Timeout.InfiniteTimeSpan, _shutdownCts.Token));
             return running;
         }
         catch (Exception ex)
@@ -798,17 +805,47 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         {
             _starting = starting;
         }
+
+        _residencyNotifier.NotifyChanged();
     }
 
     /// <summary>Removes the daemon from the registry and returns it when this call won the race, else null.</summary>
     private RunningServer? Detach()
     {
+        RunningServer? running;
         lock (_stateGate)
         {
-            var running = _current;
+            running = _current;
             _current = null;
-            return running;
         }
+
+        if (running is not null)
+        {
+            _residencyNotifier.NotifyChanged();
+        }
+
+        return running;
+    }
+
+    /// <summary>Ticks residency when the registered daemon dies on its own, instead of when the reaper next notices the corpse.</summary>
+    /// <remarks>A deliberate teardown completes the wait too; that extra tick is harmless. Shutdown ends the wait silently.</remarks>
+    private async Task NotifyResidencyOnExitAsync(Task<bool> exit)
+    {
+        try
+        {
+            await exit.ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is OperationCanceledException or ObjectDisposedException)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            // Fire-and-forget, so it must not fault: the daemon state is unknown, and a re-read is the safe answer.
+            _logger.LogDebug("The whisper-server exit wait failed ({ErrorClass}); ticking residency anyway.", exception.GetType().Name);
+        }
+
+        _residencyNotifier.NotifyChanged();
     }
 
     /// <summary>
@@ -831,6 +868,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             _current = null;
             _lastExited = (running.Endpoint.Generation, running.Handle.ExitCode);
         }
+
+        _residencyNotifier.NotifyChanged();
 
         _logger.LogWarning("whisper-server for model {ModelId} (pid {ProcessId}) exited unexpectedly with exit code {ExitCode}; it is respawned on the next request. Last stderr: {StderrTail}",
             running.ModelId, running.Handle.ProcessId, running.Handle.ExitCode, running.Handle.StderrTail ?? "(none)");

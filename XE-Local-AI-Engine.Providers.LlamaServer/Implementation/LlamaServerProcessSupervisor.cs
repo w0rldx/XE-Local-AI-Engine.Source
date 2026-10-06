@@ -103,6 +103,9 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     // Capacity admission for cold embedding / reranker spawns; null in provider-only hosts and tests (no gate, today's behaviour).
     private readonly ILlamaServerPooledLaunchAdmission? _pooledLaunchAdmission;
 
+    // Ticked after every change CheckHealthAsync shows: registration, detach, a lease taken or released, an ensure and a process's own exit.
+    private readonly IRuntimeResidencyChangeNotifier _residencyNotifier;
+
     /// <summary>
     ///     Creates a supervisor over the supplied collaborators. The reaper loop starts immediately. Constructed via DI
     ///     (same-assembly factory) or in tests — the launcher/health-probe seams are internal, so the ctor is internal.
@@ -129,7 +132,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         ILlamaServerLoadTelemetry? loadTelemetry = null,
         TaskScheduler? detachedSpawnScheduler = null,
         ProcessSpawnReceiptStore? spawnReceipts = null,
-        ILlamaServerPooledLaunchAdmission? pooledLaunchAdmission = null)
+        ILlamaServerPooledLaunchAdmission? pooledLaunchAdmission = null,
+        IRuntimeResidencyChangeNotifier? residencyNotifier = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -161,6 +165,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         _layerPlacementReport = layerPlacementReport ?? new LlamaLayerPlacementReport();
         _loadTelemetry = loadTelemetry ?? new NullLlamaServerLoadTelemetry();
         _pooledLaunchAdmission = pooledLaunchAdmission;
+        _residencyNotifier = residencyNotifier ?? NullRuntimeResidencyChangeNotifier.Instance;
 
         _runtimeMutationGate = new LlamaServerRuntimeMutationGate(typeof(LlamaServerProcessSupervisor), _shutdownCts.Token);
         _reaper = new LlamaServerIdleReaper(_processes,
@@ -168,7 +173,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
             _layerPlacementReport,
             _options,
             _timeProvider,
-            _logger);
+            _logger,
+            _residencyNotifier);
 
         _reaperLoop = Task.Run(() => _reaper.ReapIdleLoopAsync(_shutdownCts.Token), _shutdownCts.Token);
     }
@@ -319,7 +325,31 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         finally
         {
             _runtimeMutationGate.EndOperation();
+
+            // Any ensure may have moved LastUsedUtc or cleared IsTransient on the process it reused or joined.
+            _residencyNotifier.NotifyChanged();
         }
+    }
+
+    /// <summary>Ticks residency when a registered process dies on its own, instead of when the reaper next prunes the corpse.</summary>
+    /// <remarks>A deliberate teardown completes the wait too; that extra tick is harmless. Shutdown ends the wait silently.</remarks>
+    private async Task NotifyResidencyOnExitAsync(Task<bool> exit)
+    {
+        try
+        {
+            await exit.ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is OperationCanceledException or ObjectDisposedException)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            // Fire-and-forget, so it must not fault: the process state is unknown, and a re-read is the safe answer.
+            _logger.LogDebug("The llama-server exit wait failed ({ErrorClass}); ticking residency anyway.", exception.GetType().Name);
+        }
+
+        _residencyNotifier.NotifyChanged();
     }
 
     /// <inheritdoc />
@@ -1014,12 +1044,14 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
     {
         private readonly RunningProcess _process;
         private readonly TimeProvider _timeProvider;
+        private readonly IRuntimeResidencyChangeNotifier _residencyNotifier;
         private int _disposed;
 
-        public InferenceLease(RunningProcess process, TimeProvider timeProvider)
+        public InferenceLease(RunningProcess process, TimeProvider timeProvider, IRuntimeResidencyChangeNotifier residencyNotifier)
         {
             _process = process;
             _timeProvider = timeProvider;
+            _residencyNotifier = residencyNotifier;
         }
 
         public bool WasEjected => _process.WasEjected;
@@ -1031,6 +1063,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
                 // Idle time runs from the END of the last use. Stamped before the release so the reaper never sees an unleased process with the stale start-of-request stamp.
                 _process.StampLastUsed(_timeProvider.GetUtcNow());
                 _process.ReleaseLease();
+                _residencyNotifier.NotifyChanged();
             }
         }
     }

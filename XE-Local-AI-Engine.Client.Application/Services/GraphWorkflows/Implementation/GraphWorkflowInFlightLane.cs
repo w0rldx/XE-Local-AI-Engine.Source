@@ -22,6 +22,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
     private readonly ConcurrentDictionary<Guid, GraphWorkflowInFlight<TResult>> _inflight = new();
     private readonly SemaphoreSlim _lane;
     private readonly Action<GraphWorkflowInFlight<TResult>>? _onDiscard;
+    private readonly Action? _onLanded;
     private readonly CancellationTokenSource _shutdown = new();
     private int _disposed;
 
@@ -30,11 +31,13 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
     ///     hooks into every drop — including the superseded ones, which never come through the executor at all. It runs
     ///     before the token is cancelled and must not block.
     /// </summary>
-    public GraphWorkflowInFlightLane(int slots, Action<GraphWorkflowInFlight<TResult>>? onDiscard = null)
+    /// <param name="onLanded">Runs once each piece of work has COMPLETED and freed its slot, so a poll it prompts sees it landed. Must not block.</param>
+    public GraphWorkflowInFlightLane(int slots, Action<GraphWorkflowInFlight<TResult>>? onDiscard = null, Action? onLanded = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(slots);
         _lane = new SemaphoreSlim(slots, slots);
         _onDiscard = onDiscard;
+        _onLanded = onLanded;
     }
 
     /// <summary>Whether this node run's work is being driven right now, or has landed and not yet been consumed.</summary>
@@ -85,6 +88,17 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
             InvocationId = invocationId,
             LeaseAcquired = leaseAcquired
         };
+
+        // A continuation, not a call at the end of the work: only once the task has completed does a poll read it as landed.
+        if (_onLanded is { } onLanded)
+        {
+            _ = flight.Work.ContinueWith(static (_, state) => ((Action)state!)(),
+                onLanded,
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
         if (_inflight.TryAdd(nodeRunId, flight))
         {
             return flight;
@@ -111,8 +125,7 @@ internal sealed class GraphWorkflowInFlightLane<TResult> : IAsyncDisposable
             return false;
         }
 
-        // simplified: the cost is up to one DispatchIntervalMilliseconds sweep before a stopped turn is noticed, where the spin noticed at once.
-        // Signalling from the work's continuation would inject the dispatcher into the lane it takes; a settable signal or completion channel breaks that, if it measures.
+        // The stopped work is noticed when it lands: the lane's onLanded continuation wakes a sweep, which polls the row it settled.
         await flight.Cancellation.CancelAsync();
         return true;
     }

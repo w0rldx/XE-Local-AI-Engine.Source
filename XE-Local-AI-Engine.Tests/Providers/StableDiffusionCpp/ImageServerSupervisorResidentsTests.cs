@@ -58,4 +58,41 @@ public sealed class ImageServerSupervisorResidentsTests
         AssertEx.Equal("sd15", resident.ModelName);
         AssertEx.True(resident.HasExited);
     }
+
+    [Test]
+    public async Task Residency_TicksOnRegistrationJobLeaseReleaseAndEviction()
+    {
+        var notifier = new RecordingResidencyChangeNotifier();
+        await using var supervisor = ImageSupervisorFactory.Create(residencyNotifier: notifier);
+
+        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        AssertEx.True(notifier.Count >= 1, "Registration must tick: the daemon is now in GetResidents.");
+
+        var beforeLease = notifier.Count;
+        var lease = AssertEx.NotNull(supervisor.TryAcquireJobLease("sd15"));
+        AssertEx.Equal(beforeLease + 1, notifier.Count);
+
+        lease.Dispose();
+        AssertEx.Equal(beforeLease + 2, notifier.Count);
+
+        await supervisor.EvictAsync("sd15", CancellationToken.None);
+        AssertEx.True(notifier.Count > beforeLease + 2, "An eviction removes the row and must tick.");
+        AssertEx.Equal(expected: 0, supervisor.GetResidents().Count);
+    }
+
+    [Test]
+    public async Task Residency_TicksWhenARegisteredDaemonDiesOnItsOwn()
+    {
+        var launcher = new FakeImageProcessLauncher();
+        var notifier = new RecordingResidencyChangeNotifier();
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, residencyNotifier: notifier);
+        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        var beforeExit = notifier.Count;
+
+        launcher.Handles.Single().SimulateExit(exitCode: 137);
+
+        // The exit watch resumes on the thread pool, so the tick lands shortly after the exit, not inside SimulateExit.
+        await AssertEx.EventuallyAsync(() => notifier.Count > beforeExit, TestBudgets.Contended,
+            "A crash must reach the header without waiting for the idle reaper's next pass.");
+    }
 }

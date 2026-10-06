@@ -144,6 +144,7 @@ describe("SchedulerPage", () => {
 		hooksMock.useSetScheduledJobEnabled.mockReturnValue(makeMutation());
 		hooksMock.useTriggerScheduledJob.mockReturnValue(makeMutation());
 		hooksMock.useCancelScheduledJobRun.mockReturnValue(makeMutation());
+		hubMock.mockReturnValue({});
 	});
 
 	afterEach(() => {
@@ -157,7 +158,23 @@ describe("SchedulerPage", () => {
 		expect(hubMock).toHaveBeenCalled();
 	});
 
-	it("polls run history as a REST fallback when scheduler hub events are missed", () => {
+	it("does not poll run history while the scheduler hub is still connecting", () => {
+		renderPage();
+
+		expect(hooksMock.useScheduledJobRuns).toHaveBeenCalledWith({}, { refetchInterval: false });
+	});
+
+	it("polls run history only at the slow floor while the scheduler hub is live", () => {
+		hubMock.mockReturnValue({ pollIntervalMs: 60_000 });
+
+		renderPage();
+
+		expect(hooksMock.useScheduledJobRuns).toHaveBeenCalledWith({}, { refetchInterval: 60_000 });
+	});
+
+	it("polls run history at the hub's fallback cadence while the hub is degraded", () => {
+		hubMock.mockReturnValue({ pollIntervalMs: 5000 });
+
 		renderPage();
 
 		expect(hooksMock.useScheduledJobRuns).toHaveBeenCalledWith({}, { refetchInterval: 5000 });

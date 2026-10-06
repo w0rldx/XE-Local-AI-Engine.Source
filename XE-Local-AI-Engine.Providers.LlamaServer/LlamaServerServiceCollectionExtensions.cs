@@ -204,6 +204,9 @@ public static class LlamaServerServiceCollectionExtensions
         // shared NodeMetrics bridge; it never participates in admission or memory accounting.
         services.TryAddSingleton<ILlamaServerLoadTelemetry, NullLlamaServerLoadTelemetry>();
 
+        // Residency tick the supervisor raises on every change the running list shows; the Client host replaces this no-op with its hub-backed publisher.
+        services.TryAddSingleton<IRuntimeResidencyChangeNotifier, NullRuntimeResidencyChangeNotifier>();
+
         // The supervisor owns all llama-server child processes for the node — strictly one singleton. Built via an
         // explicit factory because its ctor is internal (it takes the internal launcher/health-probe seams).
         services.TryAddSingleton(static sp => new LlamaServerProcessSupervisor(sp.GetRequiredService<ILlamaCppBinaryManager>(),
@@ -226,7 +229,8 @@ public static class LlamaServerServiceCollectionExtensions
             extraArgumentsResolver: sp.GetRequiredService<ILlamaServerExtraLaunchArgumentsResolver>(),
             loadTelemetry: sp.GetRequiredService<ILlamaServerLoadTelemetry>(),
             spawnReceipts: SpawnReceipts(sp),
-            pooledLaunchAdmission: sp.GetService<ILlamaServerPooledLaunchAdmission>()));
+            pooledLaunchAdmission: sp.GetService<ILlamaServerPooledLaunchAdmission>(),
+            residencyNotifier: sp.GetRequiredService<IRuntimeResidencyChangeNotifier>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
         services.TryAddSingleton<ITransientLlamaServerEvaluationHarness>(static sp =>

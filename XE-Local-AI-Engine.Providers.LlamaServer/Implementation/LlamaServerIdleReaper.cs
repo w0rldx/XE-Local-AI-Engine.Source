@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -36,14 +37,17 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     private readonly LlamaServerSupervisorOptions _options;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
+    private readonly IRuntimeResidencyChangeNotifier _residencyNotifier;
 
     internal LlamaServerIdleReaper(ConcurrentDictionary<ProcessKey, RunningProcess> processes,
         LlamaServerPortAllocator ports,
         ILlamaLayerPlacementReport layerPlacementReport,
         LlamaServerSupervisorOptions options,
         TimeProvider timeProvider,
-        ILogger logger)
+        ILogger logger,
+        IRuntimeResidencyChangeNotifier? residencyNotifier = null)
     {
+        _residencyNotifier = residencyNotifier ?? NullRuntimeResidencyChangeNotifier.Instance;
         _processes = processes ?? throw new ArgumentNullException(nameof(processes));
         _ports = ports ?? throw new ArgumentNullException(nameof(ports));
         _layerPlacementReport = layerPlacementReport ?? throw new ArgumentNullException(nameof(layerPlacementReport));
@@ -375,6 +379,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
 
         _layerPlacementReport.Remove(key.Role, key.ModelName);
         _ports.Release(running.Port);
+        _residencyNotifier.NotifyChanged();
         return running;
     }
 

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ejectRunningModelMutation, listRunningModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { useRuntimeResidencyHub } from "@/core/api/signalr/useRuntimeResidencyHub";
 import {
 	type EjectRunningModelResult,
 	toEjectRunningModelResult,
@@ -21,20 +22,26 @@ function runningModelsInvalidationKey(): readonly [{ _id: string }] {
 	return [{ _id: runningModelsOperationId }];
 }
 
-// Poll cadence (ms) while the section is mounted. llama.cpp server processes appear as chat sends warm models and
-// disappear via idle-TTL eviction or graceful ejects — none of which flow through a REST mutation this page could hang
-// an invalidation on — so without polling the list only refreshes on manual reload. No unavailable back-off is needed
-// because this endpoint reads the app's own in-process supervisor, never an optional external daemon.
+// Fallback poll cadence (ms). llama.cpp server processes appear as chat sends warm models and disappear via idle-TTL
+// eviction or graceful ejects — none of which flow through a REST mutation a page could hang an invalidation on. The
+// runtime-residency hub pushes those changes; while it is degraded the list polls at this cadence instead. No
+// unavailable back-off is needed because this endpoint reads the app's own in-process supervisor, never an optional
+// external daemon.
 export const runningModelsPollIntervalMs = 4000;
 
-// Live running-models list backing the eject UI. enabled lets the page mount it lazily (e.g. only when the section is
-// shown); a disabled query does not poll.
+// Safety net while the hub is live, for a change no server-side raise point announced.
+export const runningModelsPushFloorMs = 60_000;
+
+// Live running-models list backing the eject UI, kept current by the runtime-residency hub. enabled lets the page mount
+// it lazily (e.g. only when the section is shown); a disabled query neither polls nor connects the hub.
 export function useRunningModels(enabled = true) {
+	const { isLive } = useRuntimeResidencyHub(enabled, runningModelsInvalidationKey());
 	return useQuery({
 		...withResponseValidation(listRunningModelsOptions()),
 		select: (data) => (data.items ?? []).map(toRunningModel),
 		enabled,
-		refetchInterval: runningModelsPollIntervalMs,
+		// Hub live: the push floor only. Otherwise (b): the fallback cadence while the hub is degraded or not started.
+		refetchInterval: isLive ? runningModelsPushFloorMs : runningModelsPollIntervalMs,
 	});
 }
 

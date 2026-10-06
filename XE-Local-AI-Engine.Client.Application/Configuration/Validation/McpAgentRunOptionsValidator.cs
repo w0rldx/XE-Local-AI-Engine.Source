@@ -15,8 +15,8 @@ public sealed class McpAgentRunOptionsValidator : IValidateOptions<McpAgentRunOp
                                    "Mcp:AgentRuns:MaxConcurrentWorkers must be between 1 and 4.")
                                .AppendIf(options.WatchdogMinutes is < 1 or > 60,
                                    "Mcp:AgentRuns:WatchdogMinutes must be between 1 and 60.")
-                               .AppendIf(options.PollIntervalMilliseconds is < 50 or > 5000,
-                                   "Mcp:AgentRuns:PollIntervalMilliseconds must be between 50 and 5000.")
+                               .AppendIf(options.PollIntervalMilliseconds is < 50 or > 60_000,
+                                   "Mcp:AgentRuns:PollIntervalMilliseconds must be between 50 and 60000.")
                                .AppendIf(options.CompactionIntervalMinutes is < 1 or > 60,
                                    "Mcp:AgentRuns:CompactionIntervalMinutes must be between 1 and 60.")
                                .AppendIf(options.MaxTaskUtf8Bytes != 32 * 1024,

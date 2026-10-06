@@ -60,6 +60,9 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     // The process-wide GPU-load admission gate (shared with the llama-server supervisor). A GPU-backed image
     // load serializes its spawn-through-readiness window through it so it never races an LLM load's free-VRAM read.
     private readonly IGpuModelLoadAdmission _loadAdmission;
+
+    // Ticked after every change GetResidents shows: registration, detach, job lease and release, and a daemon's own exit.
+    private readonly IRuntimeResidencyChangeNotifier _residencyNotifier;
     private int _disposed;
 
     /// <summary>Creates the supervisor over its collaborators. The idle reaper loop starts immediately.</summary>
@@ -73,7 +76,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         ILogger<ImageServerProcessSupervisor>? logger = null,
         IGpuModelLoadAdmission? loadAdmission = null,
         IImageRuntimeActivityGate? runtimeActivityGate = null,
-        ProcessSpawnReceiptStore? spawnReceipts = null)
+        ProcessSpawnReceiptStore? spawnReceipts = null,
+        IRuntimeResidencyChangeNotifier? residencyNotifier = null)
     {
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
         _backendSelector = backendSelector ?? throw new ArgumentNullException(nameof(backendSelector));
@@ -85,6 +89,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         _logger = logger ?? NullLogger<ImageServerProcessSupervisor>.Instance;
         _runtimeActivityGate = runtimeActivityGate ?? new ImageRuntimeActivityGate();
         _spawnReceipts = spawnReceipts ?? new ProcessSpawnReceiptStore(nodeDataRoot: null, "sd-server", _logger);
+        _residencyNotifier = residencyNotifier ?? NullRuntimeResidencyChangeNotifier.Instance;
 
         // Absent a wired gate (a provider-only host / test), default to the no-op floor so GPU-load serialization is
         // simply off — the composition root injects the real singleton shared with the llama-server supervisor.
@@ -242,6 +247,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
 
         running.MarkUsed(_timeProvider.GetUtcNow());
+        _residencyNotifier.NotifyChanged();
         return new ImageJobLease(this, modelName, running, _timeProvider);
     }
 
@@ -465,6 +471,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
                 throw new ObjectDisposedException(nameof(ImageServerProcessSupervisor));
             }
 
+            _residencyNotifier.NotifyChanged();
+            _ = NotifyResidencyOnExitAsync(handle.WaitForExitAsync(Timeout.InfiniteTimeSpan, _shutdownCts.Token));
             return running;
         }
         catch (Exception ex)
@@ -775,7 +783,29 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             LogUnexpectedExit(key, running);
         }
 
+        _residencyNotifier.NotifyChanged();
         return running;
+    }
+
+    /// <summary>Ticks residency when a registered daemon dies on its own, instead of when the reaper next prunes the corpse.</summary>
+    /// <remarks>A deliberate teardown completes the wait too; that extra tick is harmless. Shutdown ends the wait silently.</remarks>
+    private async Task NotifyResidencyOnExitAsync(Task<bool> exit)
+    {
+        try
+        {
+            await exit.ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is OperationCanceledException or ObjectDisposedException)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            // Fire-and-forget, so it must not fault: the daemon state is unknown, and a re-read is the safe answer.
+            _logger.LogDebug("The sd-server exit wait failed ({ErrorClass}); ticking residency anyway.", exception.GetType().Name);
+        }
+
+        _residencyNotifier.NotifyChanged();
     }
 
     /// <summary>
@@ -1102,6 +1132,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
             {
                 _server.ReleaseJob();
+                _owner._residencyNotifier.NotifyChanged();
             }
         }
     }

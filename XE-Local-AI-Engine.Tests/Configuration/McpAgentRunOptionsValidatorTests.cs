@@ -51,14 +51,27 @@ public sealed class McpAgentRunOptionsValidatorTests
 
     [Test]
     [Arguments(49)]
-    [Arguments(5001)]
+    [Arguments(60_001)]
     public void Validate_WhenPollIntervalIsOutOfRange_ReturnsFailure(int value)
     {
         AssertFailureContains(Validate(new McpAgentRunOptions
             {
                 PollIntervalMilliseconds = value
             }),
-            "PollIntervalMilliseconds must be between 50 and 5000.");
+            "PollIntervalMilliseconds must be between 50 and 60000.");
+    }
+
+    /// <summary>The fallback is a safety sweep behind the admission wake, so it ships slow; both range ends stay accepted.</summary>
+    [Test]
+    [Arguments(50)]
+    [Arguments(60_000)]
+    public void Validate_PollIntervalDefaultsToFiveSecondsAndAcceptsBothRangeEnds(int value)
+    {
+        AssertEx.Equal(expected: 5000, new McpAgentRunOptions().PollIntervalMilliseconds);
+        AssertEx.False(Validate(new McpAgentRunOptions
+        {
+            PollIntervalMilliseconds = value
+        }).Failed);
     }
 
     [Test]

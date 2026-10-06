@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Mcp;
 
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,10 +11,13 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
+using SharedClock = XE_Local_AI_Engine.Client.Testing.Fakes.ManualTimeProvider;
 
 [Category(TestCategories.Unit)]
 public sealed class McpAgentRunDispatcherTests
 {
+    private const string DispatchAwaited = "ScriptedQueue.StopAsync awaits the dispatcher task before the using-scopes exit.";
+
     [Test]
     public async Task StopAsync_WhileQueueReadIsInFlight_DoesNotClaimOrInterruptQueuedRun()
     {
@@ -31,8 +35,10 @@ public sealed class McpAgentRunDispatcherTests
             return [queued];
         });
         await using var provider = CreateProvider(store, executor);
+        using var wake = NewWake();
         using var dispatcher = CreateDispatcher(provider.GetRequiredService<IServiceScopeFactory>(),
             registry,
+            wake,
             provider.GetRequiredService<McpAgentRunMetrics>(),
             TimeProvider.System);
         await dispatcher.StartAsync(timeout.Token);
@@ -68,8 +74,10 @@ public sealed class McpAgentRunDispatcherTests
             return [queued];
         });
         await using var provider = CreateProvider(store, executor);
+        using var wake = NewWake();
         using var dispatcher = CreateDispatcher(provider.GetRequiredService<IServiceScopeFactory>(),
             registry,
+            wake,
             provider.GetRequiredService<McpAgentRunMetrics>(),
             TimeProvider.System);
         await dispatcher.StartAsync(timeout.Token);
@@ -134,8 +142,10 @@ public sealed class McpAgentRunDispatcherTests
             return true;
         });
         await using var provider = CreateProvider(store, executor);
+        using var wake = NewWake();
         using var dispatcher = CreateDispatcher(provider.GetRequiredService<IServiceScopeFactory>(),
             registry,
+            wake,
             provider.GetRequiredService<McpAgentRunMetrics>(),
             TimeProvider.System);
 
@@ -183,8 +193,10 @@ public sealed class McpAgentRunDispatcherTests
             return true;
         });
         await using var provider = CreateProvider(store, executor);
+        using var wake = NewWake();
         using var dispatcher = CreateDispatcher(provider.GetRequiredService<IServiceScopeFactory>(),
             registry,
+            wake,
             provider.GetRequiredService<McpAgentRunMetrics>(),
             TimeProvider.System);
 
@@ -261,8 +273,10 @@ public sealed class McpAgentRunDispatcherTests
             return true;
         });
         await using var provider = CreateProvider(store, executor);
+        using var wake = NewWake();
         using var dispatcher = CreateDispatcher(provider.GetRequiredService<IServiceScopeFactory>(),
             registry,
+            wake,
             provider.GetRequiredService<McpAgentRunMetrics>(),
             clock);
         var dispatch = BackgroundServiceTestHelper.RunExecuteAsync(dispatcher, stop.Token);
@@ -283,6 +297,121 @@ public sealed class McpAgentRunDispatcherTests
         await store.Received(3).GetLedgerSnapshotAsync(Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    [SuppressMessage("Reliability", "CA2025:Ensure tasks using IDisposable instances complete before disposal", Justification = DispatchAwaited)]
+    public async Task AnIdleWorker_ClaimsAnAdmissionOnItsWake_WithoutTheClockMoving()
+    {
+        using var stop = new CancellationTokenSource();
+        var clock = new SharedClock();
+        var queue = new ScriptedQueue();
+        await using var provider = CreateProvider(queue.Store, queue.Executor);
+        using var wake = NewWake();
+        using var dispatcher = CreateDispatcher(provider.GetRequiredService<IServiceScopeFactory>(),
+            new McpAgentRunCancellationRegistry(),
+            wake,
+            provider.GetRequiredService<McpAgentRunMetrics>(),
+            clock,
+            pollIntervalMilliseconds: 5000);
+        var dispatch = BackgroundServiceTestHelper.RunExecuteAsync(dispatcher, stop.Token);
+        await ParkedAsync(clock, timers: 1);
+
+        var run = queue.Enqueue();
+        wake.Raise();
+
+        await queue.Claimed(run.RequestId).Task.WaitAsync(TestBudgets.Contended);
+        AssertEx.Equal(expected: 2, queue.ListCalls, "one empty read before the wait, one after the wake.");
+        await queue.StopAsync(stop, dispatch);
+    }
+
+    [Test]
+    [SuppressMessage("Reliability", "CA2025:Ensure tasks using IDisposable instances complete before disposal", Justification = DispatchAwaited)]
+    public async Task WithoutAWake_AnIdleWorkerReadsNothingUntilTheFallback_ThenStillClaims()
+    {
+        using var stop = new CancellationTokenSource();
+        var clock = new SharedClock();
+        var queue = new ScriptedQueue();
+        await using var provider = CreateProvider(queue.Store, queue.Executor);
+        using var wake = NewWake();
+        using var dispatcher = CreateDispatcher(provider.GetRequiredService<IServiceScopeFactory>(),
+            new McpAgentRunCancellationRegistry(),
+            wake,
+            provider.GetRequiredService<McpAgentRunMetrics>(),
+            clock,
+            pollIntervalMilliseconds: 5000);
+        var dispatch = BackgroundServiceTestHelper.RunExecuteAsync(dispatcher, stop.Token);
+        await ParkedAsync(clock, timers: 1);
+        var run = queue.Enqueue();
+
+        // The worker is parked on its fallback timer and nothing else can move it, so short of the interval it reads nothing.
+        clock.Advance(TimeSpan.FromMilliseconds(4999));
+        AssertEx.Equal(expected: 1, queue.ListCalls, "an idle worker must not read the queue before its fallback.");
+        AssertEx.False(queue.Claimed(run.RequestId).Task.IsCompleted, "nothing woke the worker yet.");
+
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        await queue.Claimed(run.RequestId).Task.WaitAsync(TestBudgets.Contended);
+        await queue.StopAsync(stop, dispatch);
+    }
+
+    [Test]
+    [SuppressMessage("Reliability", "CA2025:Ensure tasks using IDisposable instances complete before disposal", Justification = DispatchAwaited)]
+    public async Task AWakeRaisedBetweenTheEmptyReadAndTheWait_IsNotLost()
+    {
+        using var stop = new CancellationTokenSource();
+        var clock = new SharedClock();
+        var queue = new ScriptedQueue();
+        await using var provider = CreateProvider(queue.Store, queue.Executor);
+        using var wake = NewWake();
+        McpAgentRunRecord? run = null;
+
+        // The read has already produced its empty answer when the admission commits and wakes: the exact lost-wakeup window.
+        queue.AfterFirstRead = () =>
+        {
+            run = queue.Enqueue();
+            wake.Raise();
+        };
+        using var dispatcher = CreateDispatcher(provider.GetRequiredService<IServiceScopeFactory>(),
+            new McpAgentRunCancellationRegistry(),
+            wake,
+            provider.GetRequiredService<McpAgentRunMetrics>(),
+            clock,
+            pollIntervalMilliseconds: 5000);
+        var dispatch = BackgroundServiceTestHelper.RunExecuteAsync(dispatcher, stop.Token);
+
+        await queue.FirstRead.WaitAsync(TestBudgets.Contended);
+        await queue.Claimed(run!.RequestId).Task.WaitAsync(TestBudgets.Contended);
+        await queue.StopAsync(stop, dispatch);
+    }
+
+    [Test]
+    [SuppressMessage("Reliability", "CA2025:Ensure tasks using IDisposable instances complete before disposal", Justification = DispatchAwaited)]
+    public async Task TwoIdleWorkers_ClaimTwoAdmissions_WithoutTheClockMoving()
+    {
+        using var stop = new CancellationTokenSource();
+        var clock = new SharedClock();
+        var queue = new ScriptedQueue();
+        await using var provider = CreateProvider(queue.Store, queue.Executor);
+        using var wake = NewWake(workers: 2);
+        using var dispatcher = CreateDispatcher(provider.GetRequiredService<IServiceScopeFactory>(),
+            new McpAgentRunCancellationRegistry(),
+            wake,
+            provider.GetRequiredService<McpAgentRunMetrics>(),
+            clock,
+            workers: 2,
+            pollIntervalMilliseconds: 5000);
+        var dispatch = BackgroundServiceTestHelper.RunExecuteAsync(dispatcher, stop.Token);
+        await ParkedAsync(clock, timers: 2);
+
+        // Executions stay parked, so neither worker can loop back and take the second run itself: each claim needs its own wake.
+        var first = queue.Enqueue();
+        wake.Raise();
+        var second = queue.Enqueue();
+        wake.Raise();
+
+        await queue.Claimed(first.RequestId).Task.WaitAsync(TestBudgets.Contended);
+        await queue.Claimed(second.RequestId).Task.WaitAsync(TestBudgets.Contended);
+        await queue.StopAsync(stop, dispatch);
+    }
+
     private static ServiceProvider CreateProvider(IMcpAgentRunStore store, IMcpAgentRunExecutor executor)
     {
         var services = new ServiceCollection();
@@ -293,17 +422,31 @@ public sealed class McpAgentRunDispatcherTests
         return services.BuildServiceProvider();
     }
 
+    /// <summary>Completes once the idle workers have armed their fallback timers, so the clock is never moved past a wait nobody holds.</summary>
+    private static Task ParkedAsync(SharedClock clock, int timers) =>
+        AssertEx.EventuallyAsync(() => clock.ArmedTimerCount >= timers, TestBudgets.Contended, "the worker never parked on its fallback timer.");
+
+    private static McpAgentRunWakeSignal NewWake(int workers = 1) =>
+        new(Options.Create(new McpAgentRunOptions
+        {
+            MaxConcurrentWorkers = workers
+        }));
+
     private static McpAgentRunDispatcher CreateDispatcher(IServiceScopeFactory scopeFactory,
         McpAgentRunCancellationRegistry registry,
+        McpAgentRunWakeSignal wake,
         McpAgentRunMetrics metrics,
-        TimeProvider timeProvider) =>
+        TimeProvider timeProvider,
+        int workers = 1,
+        int pollIntervalMilliseconds = 50) =>
         new(scopeFactory,
             registry,
+            wake,
             metrics,
             Options.Create(new McpAgentRunOptions
             {
-                MaxConcurrentWorkers = 1,
-                PollIntervalMilliseconds = 50,
+                MaxConcurrentWorkers = workers,
+                PollIntervalMilliseconds = pollIntervalMilliseconds,
                 WatchdogMinutes = 30
             }),
             timeProvider,
@@ -358,6 +501,118 @@ public sealed class McpAgentRunDispatcherTests
                 UpdatedAtUtc = 0
             }
         };
+
+    /// <summary>A store whose queue the test fills, and an executor that parks every claim until the test releases it.</summary>
+    private sealed class ScriptedQueue
+    {
+        private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _claimed = new();
+        private readonly ConcurrentDictionary<Guid, McpAgentRunRecord> _running = new();
+        private readonly TaskCompletionSource _firstRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly Lock _gate = new();
+        private readonly List<McpAgentRunRecord> _queued = [];
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _listCalls;
+
+        public ScriptedQueue()
+        {
+            Store.ListAsync(Arg.Any<int>(), McpAgentRunStatus.Queued, Arg.Any<CancellationToken>()).Returns(_ =>
+            {
+                McpAgentRunRecord[] snapshot;
+                lock (_gate)
+                {
+                    snapshot = [.. _queued];
+                }
+
+                if (Interlocked.Increment(ref _listCalls) == 1)
+                {
+                    AfterFirstRead?.Invoke();
+                    _firstRead.TrySetResult();
+                }
+
+                return snapshot;
+            });
+            Store.TryClaimAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
+            {
+                var requestId = callInfo.ArgAt<Guid>(0);
+                McpAgentRunRecord? queued;
+                lock (_gate)
+                {
+                    queued = _queued.Find(run => run.RequestId == requestId);
+                    if (queued is not null)
+                    {
+                        _ = _queued.Remove(queued);
+                    }
+                }
+
+                if (queued is null)
+                {
+                    return new McpAgentRunClaimResult
+                    {
+                        Kind = McpAgentRunClaimKind.NotQueued,
+                        Run = null
+                    };
+                }
+
+                var claimed = queued with
+                {
+                    Status = McpAgentRunStatus.Running,
+                    Version = 1,
+                    ClaimToken = Guid.NewGuid(),
+                    ClaimedAtUtc = 2
+                };
+                _running[requestId] = claimed;
+                Claimed(requestId).TrySetResult();
+                return new McpAgentRunClaimResult
+                {
+                    Kind = McpAgentRunClaimKind.Claimed,
+                    Run = claimed
+                };
+            });
+            Store.GetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                 .Returns(callInfo => _running.GetValueOrDefault(callInfo.ArgAt<Guid>(0)));
+            Store.TryFinalizeAsync(Arg.Any<McpAgentRunFinalization>(), Arg.Any<CancellationToken>()).Returns(true);
+            Executor.ExecuteAsync(Arg.Any<McpAgentRunRecord>(), Arg.Any<CancellationToken>()).Returns(async _ =>
+            {
+                await _release.Task;
+                return SpawnOutcome.Success("done");
+            });
+        }
+
+        public IMcpAgentRunStore Store { get; } = Substitute.For<IMcpAgentRunStore>();
+
+        public IMcpAgentRunExecutor Executor { get; } = Substitute.For<IMcpAgentRunExecutor>();
+
+        public int ListCalls => Volatile.Read(ref _listCalls);
+
+        public Task FirstRead => _firstRead.Task;
+
+        /// <summary>Runs inside the first queue read, after its answer was taken and before the worker sees it.</summary>
+        public Action? AfterFirstRead { get; set; }
+
+        public McpAgentRunRecord Enqueue()
+        {
+            var run = CreateRun(McpAgentRunStatus.Queued, version: 0, claimToken: null, McpAgentRunStopReason.None) with
+            {
+                RequestId = Guid.NewGuid()
+            };
+            lock (_gate)
+            {
+                _queued.Add(run);
+            }
+
+            return run;
+        }
+
+        public TaskCompletionSource Claimed(Guid requestId) =>
+            _claimed.GetOrAdd(requestId, static _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+
+        public async Task StopAsync(CancellationTokenSource stop, Task dispatch)
+        {
+            _release.TrySetResult();
+            await stop.CancelAsync();
+            await dispatch.WaitAsync(TestBudgets.Contended, CancellationToken.None);
+        }
+    }
 
     private sealed class ManualTimeProvider : TimeProvider
     {

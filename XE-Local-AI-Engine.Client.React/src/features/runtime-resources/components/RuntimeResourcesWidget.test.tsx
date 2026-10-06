@@ -28,14 +28,26 @@ vi.mock("@/capabilities/NodeCapabilities", async (importOriginal) => {
 });
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
+// The hub's own lifecycle is pinned in useRuntimeResidencyHub.test; here it is a switch the test flips, and a record of
+// the `enabled` the widget handed it.
+const hubState = vi.hoisted(() => ({ isLive: false, enabledCalls: [] as boolean[] }));
+vi.mock("@/core/api/signalr/useRuntimeResidencyHub", () => ({
+	useRuntimeResidencyHub: (enabled: boolean) => {
+		hubState.enabledCalls.push(enabled);
+		return { isLive: hubState.isLive };
+	},
+}));
+
+import type { QueryClient } from "@tanstack/react-query";
+
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { RuntimeResourcesWidget } from "@/features/runtime-resources/components/RuntimeResourcesWidget";
 import { domainErrorRoute, jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 import { setupMswServer } from "@/test/UseMswServer";
 
-// All three polls run against MSW through the real generated SDK and response validation. A test that expects the widget
-// to stay dark declares no route, so any request it made would fail the test as undeclared.
+// All three queries run against MSW through the real generated SDK and response validation. A test that expects the
+// widget to stay dark declares no route, so any request it made would fail the test as undeclared.
 const server = setupMswServer();
 
 const gib = 1024 ** 3;
@@ -109,7 +121,14 @@ async function openPopover(): Promise<HTMLElement> {
 	return screen.findByTestId("runtime-resources-dropdown");
 }
 
+// The refetchInterval the widget's observer of one generated operation asked for.
+function refetchIntervalOf(queryClient: QueryClient, operationId: string): unknown {
+	return queryClient.getQueryCache().findAll({ queryKey: [{ _id: operationId }] })[0]?.observers[0]?.options.refetchInterval;
+}
+
 beforeEach(() => {
+	hubState.isLive = false;
+	hubState.enabledCalls.length = 0;
 	capabilityState.modelFit = true;
 	capabilityState.images = true;
 	capabilityState.transcription = true;
@@ -329,6 +348,30 @@ describe("RuntimeResourcesWidget", () => {
 		await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("An image job is still running."));
 	});
 
+	it("keeps the gauge at 5s and holds the resident lists to the push floor while the hub is live", async () => {
+		hubState.isLive = true;
+		serve([gpu(0, 32, 8)], [resident()], [runtimeResident()]);
+
+		const { queryClient } = renderWithProviders(<RuntimeResourcesWidget />, { withRouter: true });
+		await screen.findByTestId("runtime-resources-trigger");
+
+		expect(hubState.enabledCalls).toContain(true);
+		expect(refetchIntervalOf(queryClient, "getRuntimeResources")).toBe(5000);
+		expect(refetchIntervalOf(queryClient, "listRunningModels")).toBe(60_000);
+		expect(refetchIntervalOf(queryClient, "getRuntimeResidents")).toBe(60_000);
+	});
+
+	it("polls the resident lists at their fallback cadence while the hub is degraded", async () => {
+		serve([gpu(0, 32, 8)], [resident()], [runtimeResident()]);
+
+		const { queryClient } = renderWithProviders(<RuntimeResourcesWidget />, { withRouter: true });
+		await screen.findByTestId("runtime-resources-trigger");
+
+		expect(refetchIntervalOf(queryClient, "getRuntimeResources")).toBe(5000);
+		expect(refetchIntervalOf(queryClient, "listRunningModels")).toBe(4000);
+		expect(refetchIntervalOf(queryClient, "getRuntimeResidents")).toBe(5000);
+	});
+
 	it("renders nothing and polls nothing below the desktop breakpoint", async () => {
 		Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: 390 });
 
@@ -338,6 +381,8 @@ describe("RuntimeResourcesWidget", () => {
 			// No route is declared, so a poll from a narrow window would fail the test as an undeclared request.
 			await waitFor(() => expect(container.querySelector("[data-testid='runtime-resources-trigger']")).toBeNull());
 			expect(screen.queryByRole("button", { name: "Memory usage and loaded models" })).toBeNull();
+			expect(hubState.enabledCalls.length).toBeGreaterThan(0);
+			expect(hubState.enabledCalls).not.toContain(true);
 		} finally {
 			Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: 1024 });
 		}
@@ -351,6 +396,8 @@ describe("RuntimeResourcesWidget", () => {
 		// The router mounts asynchronously; wait for it before asserting the widget stayed dark.
 		await waitFor(() => expect(container.querySelector("[data-testid='runtime-resources-trigger']")).toBeNull());
 		expect(screen.queryByRole("button", { name: "Memory usage and loaded models" })).toBeNull();
+		expect(hubState.enabledCalls.length).toBeGreaterThan(0);
+		expect(hubState.enabledCalls).not.toContain(true);
 	});
 
 	it("renders nothing and polls nothing without a signed-in session", async () => {
@@ -359,5 +406,8 @@ describe("RuntimeResourcesWidget", () => {
 		renderWithProviders(<RuntimeResourcesWidget />, { withRouter: true });
 
 		await waitFor(() => expect(screen.queryByTestId("runtime-resources-trigger")).toBeNull());
+		// Signed out the hub would fail to negotiate, so it must not even try.
+		expect(hubState.enabledCalls.length).toBeGreaterThan(0);
+		expect(hubState.enabledCalls).not.toContain(true);
 	});
 });

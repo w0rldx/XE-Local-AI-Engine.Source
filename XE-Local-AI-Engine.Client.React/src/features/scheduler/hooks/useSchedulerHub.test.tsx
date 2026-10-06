@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,6 +10,7 @@ const handlers = new Map<string, (...args: unknown[]) => void>();
 
 const signalRMock = vi.hoisted(() => {
 	const connection = {
+		state: "Connected",
 		on: vi.fn(),
 		off: vi.fn(),
 		onreconnected: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock("@microsoft/signalr", () => ({
 	HubConnectionBuilder: vi.fn(function HubConnectionBuilder() {
 		return signalRMock.builder;
 	}),
+	HubConnectionState: { Connected: "Connected", Disconnected: "Disconnected" },
 	LogLevel: { Warning: 3 },
 }));
 
@@ -49,7 +51,7 @@ vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
-import { useSchedulerHub } from "@/features/scheduler/hooks/useSchedulerHub";
+import { SCHEDULER_POLL_INTERVAL_MS, SCHEDULER_PUSH_FLOOR_MS, useSchedulerHub } from "@/features/scheduler/hooks/useSchedulerHub";
 import { schedulerInvalidationKey, schedulerQueryIds } from "@/features/scheduler/queries/useScheduler";
 
 const RUN_EVENTS = [
@@ -117,6 +119,7 @@ describe("useSchedulerHub", () => {
 		signalRMock.builder.build.mockReturnValue(signalRMock.connection);
 		signalRMock.connection.start.mockResolvedValue(undefined);
 		signalRMock.connection.stop.mockResolvedValue(undefined);
+		signalRMock.connection.state = "Connected";
 	});
 
 	afterEach(() => {
@@ -191,6 +194,54 @@ describe("useSchedulerHub", () => {
 		handlers.get("scheduler.runStarted")?.();
 
 		expect(queryClient.getQueryState(fullRunsKey)?.isInvalidated).toBe(true);
+	});
+
+	it("hands out only the slow floor once connected, and re-reads jobs and runs the hub could not replay", async () => {
+		const { result } = renderHub();
+
+		await waitFor(() => {
+			expect(invalidatedKeys).toEqual(expect.arrayContaining([JOBS_KEY, RUNS_KEY, RUN_KEY]));
+		});
+		expect(result.current.pollIntervalMs).toBe(SCHEDULER_PUSH_FLOOR_MS);
+	});
+
+	it("hands out the fallback poll interval when the hub never connects", async () => {
+		signalRMock.connection.state = "Disconnected";
+		const { result } = renderHub();
+
+		await waitFor(() => {
+			expect(result.current.pollIntervalMs).toBe(SCHEDULER_POLL_INTERVAL_MS);
+		});
+		expect(invalidatedKeys).toEqual([]);
+	});
+
+	it("polls while reconnecting and drops back to the floor, with one re-read, after the reconnect", async () => {
+		const { result } = renderHub();
+		await waitFor(() => {
+			expect(invalidatedKeys).toContainEqual(RUNS_KEY);
+		});
+		const onReconnecting = signalRMock.connection.onreconnecting.mock.calls[0]?.[0] as () => void;
+		const onReconnected = signalRMock.connection.onreconnected.mock.calls[0]?.[0] as () => void;
+
+		act(() => onReconnecting());
+		expect(result.current.pollIntervalMs).toBe(SCHEDULER_POLL_INTERVAL_MS);
+
+		invalidatedKeys.length = 0;
+		act(() => onReconnected());
+		expect(result.current.pollIntervalMs).toBe(SCHEDULER_PUSH_FLOOR_MS);
+		expect(invalidatedKeys).toEqual(expect.arrayContaining([JOBS_KEY, RUNS_KEY, RUN_KEY]));
+	});
+
+	it("falls back to polling for good once the connection closes", async () => {
+		const { result } = renderHub();
+		await waitFor(() => {
+			expect(invalidatedKeys).toContainEqual(RUNS_KEY);
+		});
+		const onClose = signalRMock.connection.onclose.mock.calls[0]?.[0] as () => void;
+
+		act(() => onClose());
+
+		expect(result.current.pollIntervalMs).toBe(SCHEDULER_POLL_INTERVAL_MS);
 	});
 
 	it("unsubscribes and stops the connection on unmount", async () => {

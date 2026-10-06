@@ -37,6 +37,9 @@ public static class StableDiffusionCppServiceCollectionExtensions
         services.TryAddSingleton(overrideOptions);
 
         services.TryAddSingleton(new StableDiffusionRuntimeOptions());
+
+        // Residency tick raised by the gate and the supervisor; the Client host replaces this no-op with its hub-backed publisher.
+        services.TryAddSingleton<IRuntimeResidencyChangeNotifier, NullRuntimeResidencyChangeNotifier>();
         services.TryAddSingleton<IImageRuntimeActivityGate, ImageRuntimeActivityGate>();
         services.TryAddSingleton<IStableDiffusionInstalledRuntimeStore, StableDiffusionInstalledRuntimeStore>();
         services.TryAddSingleton<IStableDiffusionManagedSourceBuildSignal, StableDiffusionManagedSourceBuildSignal>();

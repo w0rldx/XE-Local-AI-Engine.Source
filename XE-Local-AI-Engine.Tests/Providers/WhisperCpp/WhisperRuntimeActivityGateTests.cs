@@ -111,6 +111,37 @@ public sealed class WhisperRuntimeActivityGateTests
     }
 
     [Test]
+    public void EveryGrantAndRelease_TicksResidency_ARefusalDoesNot()
+    {
+        // The residents read reports these counts, so the header must hear about each one; a refusal changed nothing.
+        var notifier = new RecordingResidencyChangeNotifier();
+        var gate = new WhisperRuntimeActivityGate(notifier);
+        var leases = new[]
+        {
+            AssertEx.NotNull(gate.TryAcquireTranscriptionLease()),
+            AssertEx.NotNull(gate.TryAcquireSpawnReadinessLease()),
+            AssertEx.NotNull(gate.TryAcquireResidentProcessLease())
+        };
+        AssertEx.Equal(expected: 3, notifier.Count);
+
+        AssertEx.Null(gate.TryAcquireMutationReservation());
+        AssertEx.Equal(expected: 3, notifier.Count, "A refused reservation must not tick.");
+
+        foreach (var lease in leases)
+        {
+            lease.Dispose();
+        }
+
+        AssertEx.Equal(expected: 6, notifier.Count);
+        using (AssertEx.NotNull(gate.TryAcquireEvictionReservation()))
+        {
+            AssertEx.Equal(expected: 7, notifier.Count);
+        }
+
+        AssertEx.Equal(expected: 8, notifier.Count);
+    }
+
+    [Test]
     public void Snapshot_WithNothingHeld_IsNotBusy()
     {
         var snapshot = new WhisperRuntimeActivityGate().GetSnapshot();

@@ -619,6 +619,15 @@ Some stores predate the nested shape and expose flat top-level action fields —
 `features/node-settings/stores/RuntimeUpdateBannerStore`. **Open decision:** converting them is an API change at
 every call site and nothing has decided it is worth doing, so they are a documented exception, not a bug.
 
+**Push first, poll only as a bounded fallback.** Server state the node itself changes reaches the SPA over a SignalR
+hub (wiki 09), and the REST GET hydrates once on mount. A `refetchInterval` needs one of four reasons, named in a
+comment at the call site: (a) a sampled value with no event (`model-fit/resources`); (b) the fallback while the hub is
+degraded (the hub hooks hand out the fast `pollIntervalMs` only then), with at most a floor of 60 s or slower behind
+a live hub as the net for a change no event announces; (c) an active job no hub covers; (d) a page-scoped view
+of state that changes outside the SPA and has no hub, at 5 s or slower. It is never a fast poll beside a live hub that
+invalidates the same query, and app-wide only under (a) or (b). The backend half is the same idea: an in-process
+waiter wakes on a signal and keeps a timer only as a slow safety sweep.
+
 ### An unsaved-changes guard on a search-param page needs `allowSameRoute`
 
 `useUnsavedChangesGuard({ isDirty })` blocks every navigation, including one that only rewrites a search

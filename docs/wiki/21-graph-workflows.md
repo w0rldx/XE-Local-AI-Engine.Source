@@ -396,9 +396,12 @@ row's reason and on its `node.failed` event.
 ### 3.4 The tick
 
 `GraphWorkflowDispatcher` is one loop with two pumps — a signal channel (bounded, drop-on-full, because a signal is a
-latency hint) and a sweep every `DispatchIntervalMilliseconds` over every live run. A dropped signal costs at most one
-interval of latency, never correctness. The first sweep runs immediately at startup rather than after an interval, so
-recovery does not pay for one.
+latency hint) and a sweep over every live run. Command paths signal their run after the commit. The sweep runs when
+`GraphWorkflowSweepWake` is raised — a lane's work landing or taking its invocation lease, a run ending, a run parking
+on a person — because what those free is node-wide and only a sweep finds the run waiting on it. Otherwise it runs
+every `DispatchIntervalMilliseconds` as a safety sweep: a dropped signal costs at most one interval of latency, never
+correctness. The first sweep runs immediately at startup rather than after an interval, so recovery does not pay for
+one.
 
 **Every dispatch-side status write happens inside a serialized `AdvanceOnceAsync` call.** A lane's work produces a
 pollable *result* and never transitions a row itself; the only other writers to a run are the human command paths.
@@ -1172,7 +1175,7 @@ node settings (**Node Settings → Workspaces**, applied on restart); their keys
 | `MaxTotalAttempts` | 50 | Every attempt one run may spend across all its nodes. The guard against a retry storm. |
 | `DefaultNodeTimeoutSeconds` | 600 | One node run's attempt, when its node names no `timeoutSeconds`. Unlike Dev Workflows, a node that declares nothing still has a deadline. |
 | `MaxOutputJsonBytes` | 262 144 | One node run's composed output document, in UTF-8 bytes, checked before it is encrypted and stored. |
-| `DispatchIntervalMilliseconds` | 500 | The sweep cadence, independent of the change signals the dispatcher also listens for. Floored at 100 ms. |
+| `DispatchIntervalMilliseconds` | 5000 | The safety-sweep cadence when nothing wakes the dispatcher; commands, lane landings and run ends wake it at once (§3.4). Floored at 100 ms. |
 | `MaxConcurrentRuns` | 4 | Executing runs at once — a run parked on a person holds no slot (§3.4) — and the size of both the shared Agent/LLM Call/DecisionModel invocation lane and the Tool lane. Runs above the cap **wait**; they are not refused. |
 | `MaxRunInputBytes` | 65 536 | A run-start input document, checked in `GraphWorkflowRunService.StartAsync` (§3.1) rather than at the endpoint, so every caller of the service is held to it. Also the budget for the inlined `upstream` map in an Agent prompt and the complete user prompt with bound JSON data in an LLM Call. |
 | `EventReplayLimit` | 200 | Events one replay may return, hub snapshot and events route alike. Ceiling 1000 — one replay is one response body. |

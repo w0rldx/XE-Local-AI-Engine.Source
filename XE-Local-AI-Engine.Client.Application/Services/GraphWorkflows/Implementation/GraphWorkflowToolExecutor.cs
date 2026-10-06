@@ -35,16 +35,19 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     private readonly GraphWorkflowInFlightLane<ToolInvocationOutcome> _lane;
     private readonly ILogger<GraphWorkflowToolExecutor> _logger;
     private readonly GraphWorkflowOptions _options;
+    private readonly GraphWorkflowSweepWake _sweepWake;
     private readonly IToolInvocationService _tools;
     private readonly WebFetchService _webFetch;
 
     public GraphWorkflowToolExecutor(IToolInvocationService tools,
         WebFetchService webFetch,
+        GraphWorkflowSweepWake sweepWake,
         IOptions<GraphWorkflowOptions> options,
         ILogger<GraphWorkflowToolExecutor> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _sweepWake = sweepWake ?? throw new ArgumentNullException(nameof(sweepWake));
 
         // Injected as the singleton it is registered as. Unlike the agent lane there is nothing scoped behind it: the
         // service opens whatever scope its own catalog read needs, per call and on purpose.
@@ -54,7 +57,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
 
         // No discard hook: a tool call is an in-process await, so a cancelled token is the whole of what unwinds one.
         // The agent lane needs one because only its runner knows how to end a turn parked in a provider stream.
-        _lane = new GraphWorkflowInFlightLane<ToolInvocationOutcome>(_options.MaxConcurrentRuns);
+        _lane = new GraphWorkflowInFlightLane<ToolInvocationOutcome>(_options.MaxConcurrentRuns, onLanded: _sweepWake.Raise);
     }
 
     public bool Owns(GraphWorkflowNodeKind kind) =>
@@ -283,6 +286,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
         // Flipped immediately, and honestly: the lane slot this body already holds is the only thing a tool call ever
         // waits for, so there is no second gate for the box to report on the way the agent lane's lease is.
         leaseAcquired.Value = true;
+        _sweepWake.Raise();
 
         // The graph author's own budget, which the service enforces as a hard deadline over the whole call — argument
         // validation included — so the dispatcher's expiry stage stays a backstop rather than a race with the answer.

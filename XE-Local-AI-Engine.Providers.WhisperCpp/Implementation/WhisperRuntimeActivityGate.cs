@@ -1,16 +1,24 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
 /// <summary>Lock-protected atomic implementation of the transcription-runtime activity gate.</summary>
+/// <remarks>Every granted lease and every release raises the residency tick, outside the lock, once the snapshot shows it.</remarks>
 public sealed class WhisperRuntimeActivityGate : IWhisperRuntimeActivityGate
 {
     private readonly Lock _gate = new();
+    private readonly IRuntimeResidencyChangeNotifier _residencyNotifier;
     private int _activeTranscriptions;
     private bool _evictionReserved;
     private bool _mutationReserved;
     private int _residentProcesses;
     private int _spawnReadiness;
+
+    public WhisperRuntimeActivityGate(IRuntimeResidencyChangeNotifier? residencyNotifier = null)
+    {
+        _residencyNotifier = residencyNotifier ?? NullRuntimeResidencyChangeNotifier.Instance;
+    }
 
     /// <inheritdoc />
     public WhisperRuntimeActivitySnapshot GetSnapshot()
@@ -32,8 +40,9 @@ public sealed class WhisperRuntimeActivityGate : IWhisperRuntimeActivityGate
             }
 
             _activeTranscriptions++;
-            return new Lease(this, LeaseKind.Transcription);
         }
+
+        return Granted(LeaseKind.Transcription);
     }
 
     /// <inheritdoc />
@@ -47,8 +56,9 @@ public sealed class WhisperRuntimeActivityGate : IWhisperRuntimeActivityGate
             }
 
             _spawnReadiness++;
-            return new Lease(this, LeaseKind.SpawnReadiness);
         }
+
+        return Granted(LeaseKind.SpawnReadiness);
     }
 
     /// <inheritdoc />
@@ -62,8 +72,9 @@ public sealed class WhisperRuntimeActivityGate : IWhisperRuntimeActivityGate
             }
 
             _residentProcesses++;
-            return new Lease(this, LeaseKind.ResidentProcess);
         }
+
+        return Granted(LeaseKind.ResidentProcess);
     }
 
     /// <inheritdoc />
@@ -79,8 +90,9 @@ public sealed class WhisperRuntimeActivityGate : IWhisperRuntimeActivityGate
             }
 
             _evictionReserved = true;
-            return new Lease(this, LeaseKind.Eviction);
         }
+
+        return Granted(LeaseKind.Eviction);
     }
 
     /// <inheritdoc />
@@ -96,8 +108,15 @@ public sealed class WhisperRuntimeActivityGate : IWhisperRuntimeActivityGate
             }
 
             _mutationReserved = true;
-            return new Lease(this, LeaseKind.Mutation);
         }
+
+        return Granted(LeaseKind.Mutation);
+    }
+
+    private Lease Granted(LeaseKind kind)
+    {
+        _residencyNotifier.NotifyChanged();
+        return new Lease(this, kind);
     }
 
     private WhisperRuntimeActivitySnapshot SnapshotUnderLock()
@@ -137,6 +156,8 @@ public sealed class WhisperRuntimeActivityGate : IWhisperRuntimeActivityGate
                     throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
             }
         }
+
+        _residencyNotifier.NotifyChanged();
     }
 
     private enum LeaseKind

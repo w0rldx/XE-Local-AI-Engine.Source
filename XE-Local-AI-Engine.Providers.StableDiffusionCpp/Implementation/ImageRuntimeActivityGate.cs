@@ -1,16 +1,24 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
 /// <summary>Lock-protected atomic implementation of the image-runtime activity gate.</summary>
+/// <remarks>Every granted lease and every release raises the residency tick, outside the lock, once the snapshot shows it.</remarks>
 public sealed class ImageRuntimeActivityGate : IImageRuntimeActivityGate
 {
     private readonly Lock _gate = new();
+    private readonly IRuntimeResidencyChangeNotifier _residencyNotifier;
     private int _activeJobs;
     private bool _evictionReserved;
     private bool _mutationReserved;
     private int _residentProcesses;
     private int _spawnReadiness;
+
+    public ImageRuntimeActivityGate(IRuntimeResidencyChangeNotifier? residencyNotifier = null)
+    {
+        _residencyNotifier = residencyNotifier ?? NullRuntimeResidencyChangeNotifier.Instance;
+    }
 
     public ImageRuntimeActivitySnapshot GetSnapshot()
     {
@@ -30,8 +38,9 @@ public sealed class ImageRuntimeActivityGate : IImageRuntimeActivityGate
             }
 
             _activeJobs++;
-            return new Lease(this, LeaseKind.Job);
         }
+
+        return Granted(LeaseKind.Job);
     }
 
     public IImageRuntimeActivityLease? TryAcquireSpawnReadinessLease()
@@ -44,8 +53,9 @@ public sealed class ImageRuntimeActivityGate : IImageRuntimeActivityGate
             }
 
             _spawnReadiness++;
-            return new Lease(this, LeaseKind.SpawnReadiness);
         }
+
+        return Granted(LeaseKind.SpawnReadiness);
     }
 
     public IImageRuntimeActivityLease? TryAcquireResidentProcessLease()
@@ -58,8 +68,9 @@ public sealed class ImageRuntimeActivityGate : IImageRuntimeActivityGate
             }
 
             _residentProcesses++;
-            return new Lease(this, LeaseKind.ResidentProcess);
         }
+
+        return Granted(LeaseKind.ResidentProcess);
     }
 
     public IImageRuntimeActivityLease? TryAcquireEvictionReservation()
@@ -72,8 +83,9 @@ public sealed class ImageRuntimeActivityGate : IImageRuntimeActivityGate
             }
 
             _evictionReserved = true;
-            return new Lease(this, LeaseKind.Eviction);
         }
+
+        return Granted(LeaseKind.Eviction);
     }
 
     public IImageRuntimeActivityLease? TryAcquireMutationReservation()
@@ -86,8 +98,15 @@ public sealed class ImageRuntimeActivityGate : IImageRuntimeActivityGate
             }
 
             _mutationReserved = true;
-            return new Lease(this, LeaseKind.Mutation);
         }
+
+        return Granted(LeaseKind.Mutation);
+    }
+
+    private Lease Granted(LeaseKind kind)
+    {
+        _residencyNotifier.NotifyChanged();
+        return new Lease(this, kind);
     }
 
     private ImageRuntimeActivitySnapshot SnapshotUnderLock()
@@ -127,6 +146,8 @@ public sealed class ImageRuntimeActivityGate : IImageRuntimeActivityGate
                     throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
             }
         }
+
+        _residencyNotifier.NotifyChanged();
     }
 
     private enum LeaseKind

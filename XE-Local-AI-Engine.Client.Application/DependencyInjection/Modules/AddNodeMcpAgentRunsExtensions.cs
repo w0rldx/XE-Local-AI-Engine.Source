@@ -27,6 +27,7 @@ internal static class AddNodeMcpAgentRunsExtensions
 
         builder.Services.AddSingleton<McpAgentRunRequestFingerprint>();
         builder.Services.AddSingleton<McpAgentRunCancellationRegistry>();
+        builder.Services.AddSingleton<McpAgentRunWakeSignal>();
         builder.Services.AddSingleton<McpAgentRunMetrics>();
         builder.Services.AddScoped<McpAgentRunAccountingService>();
         builder.Services.AddScoped<IMcpAgentRunExecutor, McpAgentRunExecutor>();

@@ -62,6 +62,7 @@ internal sealed class FakeImageProcessLauncher : IImageServerProcessLauncher
 /// <summary>An in-memory image-server handle whose exit + tree-kill are directly controllable by the test.</summary>
 internal sealed class FakeImageProcessHandle : IProcessTreeHandle
 {
+    private readonly TaskCompletionSource _exitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _exited;
     private int _killed;
 
@@ -82,14 +83,25 @@ internal sealed class FakeImageProcessHandle : IProcessTreeHandle
 
     public string? StderrTail { get; private set; }
 
-    // The image and transcription supervisors never wait on a handle; a change that starts to must give this fake a real wait.
-    public Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct) =>
-        throw new NotSupportedException("This supervisor does not wait on its process handle.");
+    // The supervisor waits on a registered daemon's exit to tick residency; completes on a kill or a simulated exit.
+    public async Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken ct)
+    {
+        try
+        {
+            await _exitSignal.Task.WaitAsync(timeout, ct);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+    }
 
     public void TreeKill()
     {
         Interlocked.Exchange(ref _killed, value: 1);
         Interlocked.Exchange(ref _exited, value: 1);
+        _exitSignal.TrySetResult();
     }
 
     public void Dispose()
@@ -103,6 +115,7 @@ internal sealed class FakeImageProcessHandle : IProcessTreeHandle
         ExitCode = exitCode;
         StderrTail = stderrTail;
         Interlocked.Exchange(ref _exited, value: 1);
+        _exitSignal.TrySetResult();
     }
 }
 
@@ -287,7 +300,8 @@ internal static class ImageSupervisorFactory
         FakeSdBinaryManager? binaryManager = null,
         IGpuModelLoadAdmission? loadAdmission = null,
         ILogger<ImageServerProcessSupervisor>? logger = null,
-        ProcessSpawnReceiptStore? spawnReceipts = null)
+        ProcessSpawnReceiptStore? spawnReceipts = null,
+        IRuntimeResidencyChangeNotifier? residencyNotifier = null)
     {
         return new ImageServerProcessSupervisor(modelStore ?? new FakeImageModelStore(),
             backendSelector ?? new FakeSdBackendSelector(),
@@ -303,6 +317,7 @@ internal static class ImageSupervisorFactory
             timeProvider ?? new AdvanceableClock(),
             logger,
             loadAdmission,
-            spawnReceipts: spawnReceipts);
+            spawnReceipts: spawnReceipts,
+            residencyNotifier: residencyNotifier);
     }
 }

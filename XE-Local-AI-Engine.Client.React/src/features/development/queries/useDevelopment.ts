@@ -22,7 +22,12 @@ import {
 	startDevelopmentNextActionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import type { DevelopmentRepository, DevelopmentTemplate } from "@/features/development/models/DevelopmentModels";
+import {
+	type DevelopmentProjectDetail,
+	type DevelopmentRepository,
+	type DevelopmentTemplate,
+	isActiveAttempt,
+} from "@/features/development/models/DevelopmentModels";
 
 export const developmentQueryIds = {
 	capability: "getDevelopmentCapability",
@@ -125,8 +130,17 @@ export function useDevelopmentProject(projectId: string | null, enabled = true) 
 	return useQuery({
 		...withResponseValidation(getDevelopmentProjectOptions({ path: { projectId: projectId ?? "" } })),
 		enabled: enabled && projectId !== null,
-		refetchInterval: projectId === null ? false : 3000,
+		refetchInterval: developmentProjectPollInterval,
 	});
+}
+
+/**
+ * Case (c) while an attempt runs: its hub streams output but refreshes this detail only on `Terminal`, so persisted
+ * events, artifacts and a coalesced terminal arrive here. Case (d) otherwise: a dev workflow starts attempts and tasks
+ * outside this page, and no hub announces them.
+ */
+export function developmentProjectPollInterval(query: { state: { data?: DevelopmentProjectDetail } }): number {
+	return query.state.data?.tasks?.some((task) => task.attempts?.some(isActiveAttempt)) ? 3000 : 5000;
 }
 
 /**

@@ -41,6 +41,9 @@ public static class WhisperCppServiceCollectionExtensions
         services.TryAddSingleton(WhisperServerRuntimeOverrideOptions.FromEnvironment());
 
         services.TryAddSingleton(new WhisperRuntimeOptions());
+
+        // Residency tick raised by the gate and the supervisor; the Client host replaces this no-op with its hub-backed publisher.
+        services.TryAddSingleton<IRuntimeResidencyChangeNotifier, NullRuntimeResidencyChangeNotifier>();
         services.TryAddSingleton<IWhisperRuntimeActivityGate, WhisperRuntimeActivityGate>();
         services.TryAddSingleton<IWhisperInstalledRuntimeStore, WhisperInstalledRuntimeStore>();
         services.TryAddSingleton<IWhisperManagedSourceBuildSignal, WhisperManagedSourceBuildSignal>();
@@ -102,7 +105,8 @@ public static class WhisperCppServiceCollectionExtensions
             sp.GetRequiredService<IGpuModelLoadAdmission>(),
             sp.GetRequiredService<IWhisperRuntimeActivityGate>(),
             sp.GetRequiredService<WhisperCudaFailureSignal>(),
-            sp.GetRequiredKeyedService<ProcessSpawnReceiptStore>(ServerName)));
+            sp.GetRequiredKeyedService<ProcessSpawnReceiptStore>(ServerName),
+            sp.GetRequiredService<IRuntimeResidencyChangeNotifier>()));
         services.TryAddSingleton<IWhisperServerSupervisor>(static sp => sp.GetRequiredService<WhisperServerProcessSupervisor>());
 
         services.TryAddSingleton<IWhisperTranscriber>(static sp =>

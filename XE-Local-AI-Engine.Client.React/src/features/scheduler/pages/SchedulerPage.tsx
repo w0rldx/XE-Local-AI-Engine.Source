@@ -33,7 +33,7 @@ export function SchedulerPage() {
 	const { confirm } = useConfirm();
 
 	// Live invalidation from the scheduler hub: a server push refetches the jobs / runs queries.
-	useSchedulerHub();
+	const schedulerHub = useSchedulerHub();
 
 	const editorTarget = useSchedulerManagementStore((state) => state.editorTarget);
 	const selectedRunId = useSchedulerManagementStore((state) => state.selectedRunId);
@@ -65,7 +65,8 @@ export function SchedulerPage() {
 
 	const templatesQuery = useScheduledJobTemplates();
 	const jobsQuery = useScheduledJobs();
-	const runsQuery = useScheduledJobRuns(runFilters, { refetchInterval: 5000 });
+	// Case (b): the fallback cadence while the hub is degraded, the slow floor while it is live; run transitions are pushed.
+	const runsQuery = useScheduledJobRuns(runFilters, { refetchInterval: schedulerHub.pollIntervalMs ?? false });
 	const runQuery = useScheduledJobRun(selectedRunId);
 
 	const createMutation = useCreateScheduledJob();

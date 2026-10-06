@@ -4,6 +4,7 @@ using System.Buffers;
 using System.Text;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Protocol;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client;
@@ -14,8 +15,8 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Pins the exact frame text the runtime-acquisition, llama.cpp source-build and training-runtime publishers put on
-///     the wire: client-method name, property names and casing, value representation and explicit nulls.
+///     Pins the exact frame text the runtime-acquisition, runtime-residency, llama.cpp source-build and training-runtime
+///     publishers put on the wire: client-method name, property names and casing, value representation and explicit nulls.
 /// </summary>
 /// <remarks>
 ///     The React hooks validate these frames with zod and silently drop one that fails the schema, so a renamed provider
@@ -119,7 +120,23 @@ public sealed class ProviderStatusHubWireTests
             WriteFrame(sent.Single()));
     }
 
-    private static (IHubContext<THub> HubContext, List<InvocationMessage> Sent) CapturingHubContext<THub>()
+    [Test]
+    public async Task RuntimeResidencyTick_KeepsItsWireFrame()
+    {
+        var (hubContext, sent) = CapturingHubContext<RuntimeResidencyHub>();
+        var clock = new ManualTimeProvider();
+        await using var publisher = new RuntimeResidencyChangePublisher(hubContext, clock, NullLogger<RuntimeResidencyChangePublisher>.Instance);
+
+        publisher.NotifyChanged();
+        clock.Advance(RuntimeResidencyChangePublisher.CoalescingWindow);
+        await AssertEx.EventuallyAsync(() => sent.Count == 1, TestBudgets.Contended);
+
+        AssertEx.Equal("{\"type\":1,\"target\":\"runtimeResidency.changed\",\"arguments\":[{\"sequence\":1}]}" + RecordSeparator,
+            WriteFrame(sent.Single()));
+    }
+
+    /// <summary>A hub context whose <c>Clients.All</c> records every send, shared with the residency publisher tests.</summary>
+    internal static (IHubContext<THub> HubContext, List<InvocationMessage> Sent) CapturingHubContext<THub>()
         where THub : Hub
     {
         var sent = new List<InvocationMessage>();

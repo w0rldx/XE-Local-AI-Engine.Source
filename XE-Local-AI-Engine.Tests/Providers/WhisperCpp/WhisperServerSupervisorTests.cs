@@ -749,4 +749,45 @@ public sealed class WhisperServerSupervisorTests
         // The ensure itself unwinds rather than completing successfully.
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => ensure);
     }
+
+    [Test]
+    public async Task Residency_TicksOnStartingReadyAndEviction()
+    {
+        var probe = new FakeWhisperReadinessProbe
+        {
+            ReadinessGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+        var notifier = new RecordingResidencyChangeNotifier();
+        await using var harness = new WhisperSupervisorHarness(readinessProbe: probe, residencyNotifier: notifier);
+
+        var ensure = harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        await probe.ReadinessReached.Task;
+        AssertEx.Equal(WhisperRuntimeState.Starting, harness.Supervisor.GetStatus().State);
+        AssertEx.True(notifier.Count >= 1, "The Starting row must reach the header while the daemon loads.");
+
+        var beforeReady = notifier.Count;
+        probe.ReadinessGate.SetResult(true);
+        await ensure;
+        AssertEx.Equal(WhisperRuntimeState.Ready, harness.Supervisor.GetStatus().State);
+        AssertEx.True(notifier.Count > beforeReady, "Ready must tick.");
+
+        var beforeEvict = notifier.Count;
+        AssertEx.True((await harness.Supervisor.EvictAsync(CancellationToken.None)).Evicted);
+        AssertEx.True(notifier.Count > beforeEvict, "An eject removes the row and must tick.");
+    }
+
+    [Test]
+    public async Task Residency_TicksWhenTheDaemonDiesOnItsOwn()
+    {
+        var notifier = new RecordingResidencyChangeNotifier();
+        await using var harness = new WhisperSupervisorHarness(residencyNotifier: notifier);
+        await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        var beforeExit = notifier.Count;
+
+        harness.Launcher.Handles.Single().SimulateExit(exitCode: 139);
+
+        // The exit watch resumes on the thread pool, so the tick lands shortly after the exit, not inside SimulateExit.
+        await AssertEx.EventuallyAsync(() => notifier.Count > beforeExit, TestBudgets.Contended,
+            "A crash must reach the header without waiting for the idle reaper's next pass.");
+    }
 }

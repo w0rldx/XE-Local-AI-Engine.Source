@@ -32,6 +32,10 @@ pnpm audit --prod --audit-level=high
 - Feature folders under `src/features/<feature>/`; shared code under `src/core/`.
 - Data layer is the generated hey-api client only; no hand-written axios calls. Server state lives in TanStack
   Query and is never mirrored into a store; Zustand holds UI-only state with atomic selectors (no `useShallow`).
+- Push first: live server state arrives over a SignalR hub, the GET hydrates once. A `refetchInterval` is a bounded
+  fallback with a comment naming its reason (sampled value, hub degraded, active job without a hub, or a page-scoped
+  no-hub view at 5 s or slower); beside a live hub at most a floor of 60 s or slower, and app-wide only for a
+  sampled value or a hub's own fallback and floor.
 - Forms are manual: Mantine + `useState` + Zod on submit. No form library.
 - User-facing strings go through react-i18next keys. Adding a language: [`docs/translating.md`](../docs/translating.md).
 - Some lint suppressions are load-bearing (the SignalR hub hooks and chat adapters; listed in wiki 16). Do not "fix" them.

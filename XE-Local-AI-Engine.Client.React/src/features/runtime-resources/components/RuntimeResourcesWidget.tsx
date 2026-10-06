@@ -85,10 +85,12 @@ export function RuntimeResourcesWidget() {
 	// Desktop only this round: below the breakpoint the header hides it, so it must not poll there either.
 	const { width } = useWindowDimensions();
 	const enabled = nodeCapabilities.modelFit && isAuthenticated && width >= DESKTOP_NAV_BREAKPOINT;
+	// Sampled value with no event: the memory gauge keeps its own poll.
 	const resourcesQuery = useRuntimeResources(enabled);
+	// The two resident lists follow the residency hub's pushes and poll only while it is degraded.
 	const runningModelsQuery = useRunningModels(enabled);
 	const ejectMutation = useEjectRunningModel();
-	// Image and transcription rows each follow their own capability; with both off the residents poll never fires.
+	// Image and transcription rows each follow their own capability; with both off the residents query never fires.
 	const residentsQuery = useRuntimeResidents(enabled && (nodeCapabilities.images || nodeCapabilities.transcription));
 	const ejectImageMutation = useEjectImageRuntime();
 	const ejectTranscriptionMutation = useEjectTranscriptionRuntime();
@@ -142,7 +144,7 @@ export function RuntimeResourcesWidget() {
 		);
 
 	const runtimeEjectMutations = { image: ejectImageMutation, transcription: ejectTranscriptionMutation };
-	// The mutations already refresh their own feature's status query; this refreshes the widget's two polls. No force:
+	// The mutations already refresh their own feature's status query; this refreshes the widget's residents and gauge. No force:
 	// a 409 (job running or queued, spawn in flight) carries the server's reason, shown as the toast.
 	const handleRuntimeEject = (runtime: ResidentRuntime) =>
 		runtimeEjectMutations[runtime].mutate(undefined, {

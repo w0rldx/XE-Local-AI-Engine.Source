@@ -403,8 +403,36 @@ describe("IntegrationExecutionsPage", () => {
 		await waitFor(() => {
 			expect(screen.getByTestId("integration-execution-detail")).toBeTruthy();
 		});
+		// A finished execution's timeline cannot grow, so it is read once and never polled.
 		expect(executionHooksMock.useIntegrationExecutionEvents).toHaveBeenCalledWith("exec-completed", {
+			refetchInterval: undefined,
+		});
+	});
+
+	it("polls the timeline while the run is active and reads it once more when the run ends", async () => {
+		const refetchEvents = vi.fn().mockResolvedValue(undefined);
+		executionHooksMock.useIntegrationExecutionEvents.mockReturnValue({ ...makeQuery([]), refetch: refetchEvents });
+		const { repoll } = renderPage();
+
+		fireEvent.click(screen.getByTestId("integration-execution-view-exec-running"));
+		await waitFor(() => {
+			expect(screen.getByTestId("integration-execution-detail")).toBeTruthy();
+		});
+		expect(executionHooksMock.useIntegrationExecutionEvents).toHaveBeenLastCalledWith("exec-running", {
 			refetchInterval: 5000,
+		});
+		expect(refetchEvents).not.toHaveBeenCalled();
+
+		executionHooksMock.useIntegrationExecutions.mockReturnValue(
+			makeListQuery(executions.map((row) => (row.id === "exec-running" ? { ...row, status: "Completed" as const } : row))),
+		);
+		repoll();
+
+		await waitFor(() => {
+			expect(refetchEvents).toHaveBeenCalledTimes(1);
+		});
+		expect(executionHooksMock.useIntegrationExecutionEvents).toHaveBeenLastCalledWith("exec-running", {
+			refetchInterval: undefined,
 		});
 	});
 

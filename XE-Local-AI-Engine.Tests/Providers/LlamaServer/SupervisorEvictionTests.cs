@@ -510,6 +510,61 @@ public sealed class SupervisorEvictionTests
         AssertEx.NotNull(supervisor.TryAcquireInferenceLease(modelName, ModelRole.Chat).Lease).Dispose();
     }
 
+    [Test]
+    public async Task Residency_TicksOnRegistrationLeaseAcquireReleaseAndEject()
+    {
+        var notifier = new RecordingResidencyChangeNotifier();
+        await using var supervisor = SupervisorFactory.Create(residencyNotifier: notifier);
+
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        AssertEx.True(notifier.Count >= 1, "Registration must tick: the process is now a running-list row.");
+
+        // IsBusy and LastUsedUtc both move on a lease, so the acquire and the release each tick exactly once.
+        var beforeLease = notifier.Count;
+        var lease = AssertEx.NotNull(supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat).Lease);
+        AssertEx.Equal(beforeLease + 1, notifier.Count);
+        lease.Dispose();
+        AssertEx.Equal(beforeLease + 2, notifier.Count);
+
+        var beforeEject = notifier.Count;
+        AssertEx.Equal(LlamaServerEjectOutcome.Ejected, await supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, CancellationToken.None));
+        AssertEx.True(notifier.Count > beforeEject, "An eject removes the row and must tick.");
+        AssertEx.Equal(expected: 0, (await supervisor.CheckHealthAsync(CancellationToken.None)).Count);
+    }
+
+    [Test]
+    public async Task Residency_TicksOnIdleReap()
+    {
+        var notifier = new RecordingResidencyChangeNotifier();
+        var time = new AdvanceableTimeProvider();
+        var ttl = TimeSpan.FromMinutes(15);
+        await using var supervisor = SupervisorFactory.Create(options: CapOf(cap: 2, ttl), timeProvider: time, residencyNotifier: notifier);
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        var beforeReap = notifier.Count;
+
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+        await supervisor.ReapIdleOnceAsync();
+
+        AssertEx.Equal(expected: 0, (await supervisor.CheckHealthAsync(CancellationToken.None)).Count);
+        AssertEx.True(notifier.Count > beforeReap, "An idle reap removes the row and must tick.");
+    }
+
+    [Test]
+    public async Task Residency_TicksWhenAProcessDiesOnItsOwn()
+    {
+        var launcher = new FakeProcessLauncher();
+        var notifier = new RecordingResidencyChangeNotifier();
+        await using var supervisor = SupervisorFactory.Create(launcher, residencyNotifier: notifier);
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        var beforeExit = notifier.Count;
+
+        launcher.Handles.Single().SimulateExit(exitCode: 137);
+
+        // The exit watch resumes on the thread pool, so the tick lands shortly after the exit, not inside SimulateExit.
+        await AssertEx.EventuallyAsync(() => notifier.Count > beforeExit, TestBudgets.Contended,
+            "A crash must reach the header without waiting for the idle reaper's next pass.");
+    }
+
     private static LlamaServerSupervisorOptions CapOf(int cap, TimeSpan ttl)
     {
         return new LlamaServerSupervisorOptions
