@@ -28,7 +28,7 @@ internal sealed class RuntimeResidencyChangePublisher : IRuntimeResidencyChangeN
     private readonly ITimer _timer;
     private bool _armed;
     private bool _disposed;
-    private DateTimeOffset? _lastTickAt;
+    private long? _lastTickTimestamp;
     private Task _lastSend = Task.CompletedTask;
     private long _sequence;
 
@@ -57,13 +57,8 @@ internal sealed class RuntimeResidencyChangePublisher : IRuntimeResidencyChangeN
                 return;
             }
 
-            var untilSpacing = _lastTickAt is { } lastTickAt ? lastTickAt + MinTickSpacing - _timeProvider.GetUtcNow() : TimeSpan.Zero;
-            // Clamped at the spacing: a wall clock set backwards must not hold a tick back longer than that.
-            if (untilSpacing > MinTickSpacing)
-            {
-                untilSpacing = MinTickSpacing;
-            }
-
+            // Measured on the monotonic clock, so a wall clock that is set back or forward cannot stretch or skip the spacing.
+            var untilSpacing = _lastTickTimestamp is { } lastTick ? MinTickSpacing - _timeProvider.GetElapsedTime(lastTick) : TimeSpan.Zero;
             var delay = untilSpacing > CoalescingWindow ? untilSpacing : CoalescingWindow;
 
             _armed = true;
@@ -101,7 +96,7 @@ internal sealed class RuntimeResidencyChangePublisher : IRuntimeResidencyChangeN
             }
 
             _armed = false;
-            _lastTickAt = _timeProvider.GetUtcNow();
+            _lastTickTimestamp = _timeProvider.GetTimestamp();
             _lastSend = SendAfterAsync(_lastSend, ++_sequence);
         }
     }
