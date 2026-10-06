@@ -156,7 +156,8 @@ public static class AgentServiceCollectionExtensions
                                           serviceProvider.GetRequiredService<ILogger<ToolRelevanceChatClient>>()))
                                       .Use(chatClient => new ProviderCallBudgetChatClient(chatClient,
                                           serviceProvider.GetRequiredService<ILogger<ProviderCallBudgetChatClient>>(),
-                                          serviceProvider.GetRequiredService<ITokenEstimatorCalibrationStore>()))
+                                          serviceProvider.GetRequiredService<ITokenEstimatorCalibrationStore>(),
+                                          pipelineOptions.MaxToolCallsPerResponse))
                                       .UseOpenTelemetry(serviceProvider.GetRequiredService<ILoggerFactory>(),
                                           sourceName: "Microsoft.Extensions.AI",
                                           configure: openTelemetryChatClient => openTelemetryChatClient.EnableSensitiveData = telemetryOptions.CaptureSensitiveContent)

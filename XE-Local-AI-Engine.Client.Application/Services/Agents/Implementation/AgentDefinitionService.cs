@@ -10,18 +10,6 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
     // user error (the runtime resolver also degrades below two capable participants, but authoring catches it first).
     private const int MinimumOrchestrationParticipants = 2;
 
-    // The reasoning-effort values the runtime config-hash normalizer accepts; anything else (case-insensitive) would
-    // be silently dropped to null downstream, so reject it up front rather than persist an unusable value.
-    private static readonly IReadOnlySet<string> ValidReasoningEfforts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "low",
-        "none",
-        "medium",
-        "high",
-        // Resolved per turn by the invocation runner's reasoning-effort dispatcher, never sent to a provider as-is.
-        "auto"
-    };
-
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
     private readonly ILogger<AgentDefinitionService> _logger;
 
@@ -44,7 +32,7 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
         ArgumentNullException.ThrowIfNull(input);
 
         await ValidateAsync(input, cancellationToken);
-        return await _store.AddAsync(input, cancellationToken);
+        return await _store.AddAsync(WithNormalizedReasoningEffort(input), cancellationToken);
     }
 
     public async Task<AgentDefinitionRecord?> UpdateAsync(Guid id, AgentDefinitionInput input, CancellationToken cancellationToken = default)
@@ -62,8 +50,12 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
         }
 
         await ValidateAsync(input, cancellationToken);
-        return await _store.UpdateAsync(id, input, cancellationToken);
+        return await _store.UpdateAsync(id, WithNormalizedReasoningEffort(input), cancellationToken);
     }
+
+    // Stores the canonical lowercase value (or null when blank), so every reader sees one spelling.
+    private static AgentDefinitionInput WithNormalizedReasoningEffort(AgentDefinitionInput input) =>
+        input with { ReasoningEffort = ReasoningEffortNormalizer.Normalize(input.ReasoningEffort) };
 
     public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -119,9 +111,10 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
             throw new AgentDefinitionValidationException($"Kind '{input.Kind}' is not a valid agent kind.");
         }
 
-        if (!string.IsNullOrWhiteSpace(input.ReasoningEffort) && !ValidReasoningEfforts.Contains(input.ReasoningEffort))
+        // Anything the shared normalizer rejects would be silently dropped to null downstream, so reject it up front.
+        if (!ReasoningEffortNormalizer.IsValid(input.ReasoningEffort))
         {
-            throw new AgentDefinitionValidationException($"ReasoningEffort '{input.ReasoningEffort}' is not one of low, none, medium, high, auto.");
+            throw new AgentDefinitionValidationException($"ReasoningEffort '{input.ReasoningEffort}' is not one of none, on, minimal, low, medium, high, xhigh, auto.");
         }
 
         var allowedToolNames = new HashSet<string>(input.AllowedToolNames, StringComparer.Ordinal);

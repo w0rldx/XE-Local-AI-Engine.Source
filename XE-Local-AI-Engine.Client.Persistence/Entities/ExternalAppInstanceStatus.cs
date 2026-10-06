@@ -104,6 +104,9 @@ public enum ExternalAppFailureCategory
     /// <summary>Creating, materialising, hashing or deleting something under the instance directory failed.</summary>
     StorageError,
 
+    /// <summary>The operator cancelled the operation before it completed.</summary>
+    Cancelled,
+
     /// <summary>Anything the translator cannot place, including "the engine restarted mid-operation".</summary>
     Unknown
 }

@@ -24,6 +24,8 @@ const assistantSnapshotEventType = "assistant-snapshot";
 // The server could not enqueue an event (bounded-queue overflow, oversized replay) and is asking the client to
 // resynchronize. Consumed HERE and never forwarded — it is repaired exactly like an offset gap.
 const assistantReconcileEventType = "assistant-reconcile";
+// Re-entries through ResumeMessage one stream may make before it gives up and lets the caller refetch.
+const maxRepairsPerStream = 3;
 
 /** The opening hub call for a stream: a local send, a server-driven regenerate, or a re-attach to a run. */
 export interface NodeChatStreamOpening {
@@ -80,6 +82,7 @@ export function streamNodeChatEvents(opening: NodeChatStreamOpening, signal: Abo
 			// establishes a position; re-based by every snapshot/terminal, which carry the full text.
 			let nextContentOffset: number | undefined;
 			let nextReasoningOffset: number | undefined;
+			let repairCount = 0;
 
 			const pushEvent = (event: NodeChatStreamEventDto): void => {
 				// Latch ids from the first event when not known up front, so a reconnect can resume the run.
@@ -209,6 +212,9 @@ export function streamNodeChatEvents(opening: NodeChatStreamOpening, signal: Abo
 			 * Impossible before the invocation id is latched (the very first event latches it, and a delta can only
 			 * mismatch against a position a prior frame established). If it ever is, the offending event is simply
 			 * dropped and the turn's terminal — which carries the full text — converges the state.
+			 *
+			 * Bounded per stream: a consumer that stays too slow overflows the server queue again after every repair, so
+			 * past the cap the stream ends cleanly (like the replay-cap fold) and the caller refetches the turn.
 			 */
 			const repair = (): void => {
 				if (completed || reachedTerminal || signal.aborted || !invocationId) {
@@ -216,6 +222,12 @@ export function streamNodeChatEvents(opening: NodeChatStreamOpening, signal: Abo
 				}
 				activeSubscription?.dispose();
 				activeSubscription = undefined;
+				if (repairCount >= maxRepairsPerStream) {
+					completed = true;
+					notify();
+					return;
+				}
+				repairCount += 1;
 				subscribe("ResumeMessage", [invocationId], true);
 			};
 

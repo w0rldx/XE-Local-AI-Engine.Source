@@ -585,6 +585,35 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		expect(connectionMock.connection.stream).toHaveBeenCalledTimes(2);
 	});
 
+	// A consumer that stays too slow overflows the server queue again after every repair; unbounded, it re-resumed once
+	// per overflow until the turn ended.
+	it("stops repairing after three re-entries and ends the stream cleanly so the caller refetches", async () => {
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		// Five rounds of progress followed by a queue-overflow reconcile, each on the then-current subscription. Delivery
+		// and re-subscription are synchronous, so the rounds need no awaits between them.
+		for (let round = 0; round < 5; round++) {
+			connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 0, delta: "ab", contentOffset: round * 2 }));
+			connectionMock.state.currentSubscriber?.next(
+				streamEvent({ type: "assistant-reconcile", sequence: 1, delta: undefined, contentOffset: undefined }),
+			);
+		}
+
+		const resumeCalls = connectionMock.connection.stream.mock.calls.filter(([method]) => method === "ResumeMessage");
+		expect(resumeCalls).toHaveLength(3);
+
+		// The buffered deltas drain, then the stream ends cleanly instead of waiting on a fourth resume.
+		await expect(first).resolves.toMatchObject({ value: { delta: "ab" }, done: false });
+		let step = await iterator.next();
+		while (!step.done) {
+			// biome-ignore lint/performance/noAwaitInLoops: draining an async iterator is sequential by definition.
+			step = await iterator.next();
+		}
+		expect(step).toMatchObject({ done: true, value: undefined });
+	});
+
 	it("re-bases the offsets from a resume snapshot so the following delta is not mistaken for a gap", async () => {
 		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
 		const first = iterator.next();

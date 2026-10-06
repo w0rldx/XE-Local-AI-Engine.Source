@@ -4,6 +4,7 @@ import { toast } from "@/core/ui/notifications/Toast";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { NetworkError } from "@/core/api/errors/NetworkError";
+import { getErrorStatus } from "@/core/api/errors/RetryClassification";
 import { navigateToLogin, navigateToVault } from "@/core/api/axios/LoginNavigation";
 import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import { refreshNodeAuthToken } from "@/core/auth/api/NodeAuthApi";
@@ -95,8 +96,12 @@ export const addUnauthorizedErrorInterceptor = (axiosInstance: AxiosInstance) =>
 				requestConfig.headers.Authorization = `Bearer ${token.accessToken}`;
 				return axiosInstance(requestConfig);
 			} catch (refreshError) {
-				useNodeAuthStore.getState().actions.clear();
-				redirectToLoginOnce();
+				// Only a 401 from refresh ends the session; a 429, 5xx or network failure leaves the cookie valid.
+				if (getErrorStatus(refreshError) === 401) {
+					useNodeAuthStore.getState().actions.clear();
+					redirectToLoginOnce();
+				}
+
 				return Promise.reject(refreshError);
 			}
 		},

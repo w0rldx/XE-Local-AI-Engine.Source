@@ -88,6 +88,7 @@ export const externalAppFailureCategories = [
 	"HealthCheckFailed",
 	"StoppedUnexpectedly",
 	"StorageError",
+	"Cancelled",
 	"Unknown",
 ] as const;
 export type ExternalAppFailureCategory = (typeof externalAppFailureCategories)[number];

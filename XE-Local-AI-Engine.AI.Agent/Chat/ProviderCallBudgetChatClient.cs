@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Chat;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
@@ -18,7 +19,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 /// <remarks>
 ///     The outer invocation runner budgets only its two OUTER history-growth points, so the inner tool-calling loop and
 ///     MAF participant rounds are visible only here. Gated on an ambient <see cref="ProviderCallBudget" /> scope seeded
-///     per invocation by the runner; with no scope the hop is a transparent pass-through.
+///     per invocation by the runner; with no scope only the per-response tool-call ceiling still applies.
 ///     See docs/wiki/04-agent-mode.md ("Provider-boundary budgeting").
 /// </remarks>
 internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
@@ -40,16 +41,24 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     // context window is set; read here so the per-round window matches the window the provider is actually launched with.
     private const string NumCtxKey = "num_ctx";
 
+    private static readonly Counter<long> ToolCallsDroppedCounter =
+        Meter.CreateCounter<long>("xe.agent.budget.tool_calls_dropped", description: "Tool calls dropped from one model response as duplicates or over the per-response ceiling.");
+
     private readonly ILogger<ProviderCallBudgetChatClient> _logger;
     private readonly ITokenEstimatorCalibrationStore _calibrationStore;
+    private readonly int _maxToolCallsPerResponse;
 
     public ProviderCallBudgetChatClient(IChatClient innerClient,
         ILogger<ProviderCallBudgetChatClient> logger,
-        ITokenEstimatorCalibrationStore? calibrationStore = null)
+        ITokenEstimatorCalibrationStore? calibrationStore = null,
+        int maxToolCallsPerResponse = AgentToolPipelineOptions.DefaultMaxToolCallsPerResponse)
         : base(innerClient)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _calibrationStore = calibrationStore ?? new TokenEstimatorCalibrationStore();
+        _maxToolCallsPerResponse = maxToolCallsPerResponse >= 1
+            ? maxToolCallsPerResponse
+            : throw new ArgumentOutOfRangeException(nameof(maxToolCallsPerResponse), maxToolCallsPerResponse, "At least one tool call per response must be allowed.");
     }
 
     public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
@@ -63,6 +72,17 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         {
             var response = await base.GetResponseAsync(round.Messages, round.Options, cancellationToken).ConfigureAwait(false);
             RecordObservedUsage(round, response.Usage?.InputTokenCount);
+
+            var ceiling = new ToolCallCeiling(_maxToolCallsPerResponse);
+            foreach (var message in response.Messages)
+            {
+                if (ceiling.Filter(message.Contents) is { } kept)
+                {
+                    message.Contents = kept;
+                }
+            }
+
+            LogDroppedToolCalls(ceiling);
             return response;
         }
         finally
@@ -85,6 +105,7 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         // Terminal usage arrives as a UsageContent on one of the streamed updates (llama.cpp reports it on the final
         // chunk). Last one wins, matching the invocation runner's own reading of the same signal.
         long? observedInputTokens = null;
+        var ceiling = new ToolCallCeiling(_maxToolCallsPerResponse);
         try
         {
             await foreach (var update in base.GetStreamingResponseAsync(round.Messages, round.Options, cancellationToken).ConfigureAwait(false))
@@ -98,6 +119,16 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
                             observedInputTokens = inputTokens;
                         }
                     }
+
+                    // Each streamed FunctionCallContent is a whole call, so it is decided on arrival without buffering; an
+                    // update that loses a call is re-yielded as a clone, leaving the provider's own update untouched.
+                    if (ceiling.Filter(contents) is { } kept)
+                    {
+                        var trimmed = update.Clone();
+                        trimmed.Contents = kept;
+                        yield return trimmed;
+                        continue;
+                    }
                 }
 
                 yield return update;
@@ -105,6 +136,8 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         }
         finally
         {
+            LogDroppedToolCalls(ceiling);
+
             // A streamed call is pull-based: include the complete enumerator lifetime, including any consumer
             // backpressure while the provider request remains open. This is provider-round elapsed time, not CPU time.
             budget?.RecordProviderRoundElapsed(Stopwatch.GetElapsedTime(startedTimestamp));
@@ -133,6 +166,86 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         }
 
         _calibrationStore.RecordObservedUsage(modelName, round.EstimatedInputTokens, observed);
+    }
+
+    /// <summary>One warning per trimmed model response, with the counts, never one line per dropped call.</summary>
+    private void LogDroppedToolCalls(ToolCallCeiling ceiling)
+    {
+        var dropped = ceiling.Duplicates + ceiling.OverCeiling;
+        if (dropped == 0)
+        {
+            return;
+        }
+
+        ToolCallsDroppedCounter.Add(dropped);
+        _logger.LogWarning("Model response requested {Requested} tool call(s); dropped {Duplicates} identical repeat(s) and {OverCeiling} over the per-response ceiling of {Ceiling}.",
+            ceiling.Requested,
+            ceiling.Duplicates,
+            ceiling.OverCeiling,
+            _maxToolCallsPerResponse);
+    }
+
+    /// <summary>
+    ///     Per-response tool-call filter: collapses calls identical in name and arguments to the first, then keeps the
+    ///     first <c>maxCalls</c>, so the function-invocation loop above never sees the rest.
+    /// </summary>
+    /// <remarks>
+    ///     Applied regardless of a budget scope: it bounds the tool loop, not the context window. A dropped call leaves
+    ///     no trace downstream: the loop, the observability hop and the persisted message only see the kept calls.
+    /// </remarks>
+    private sealed class ToolCallCeiling
+    {
+        private readonly HashSet<string> _signatures = new(StringComparer.Ordinal);
+        private readonly int _maxCalls;
+
+        public ToolCallCeiling(int maxCalls)
+        {
+            _maxCalls = maxCalls;
+        }
+
+        public int Requested { get; private set; }
+
+        public int Duplicates { get; private set; }
+
+        public int OverCeiling { get; private set; }
+
+        /// <summary>The contents without the dropped calls, or null when nothing was dropped (the caller keeps the original).</summary>
+        public List<AIContent>? Filter(IList<AIContent> contents)
+        {
+            List<AIContent>? kept = null;
+            for (var index = 0; index < contents.Count; index++)
+            {
+                var content = contents[index];
+                if (content is FunctionCallContent call && !Admit(call))
+                {
+                    kept ??= [.. contents.Take(index)];
+                    continue;
+                }
+
+                kept?.Add(content);
+            }
+
+            return kept;
+        }
+
+        private bool Admit(FunctionCallContent call)
+        {
+            Requested++;
+            var signature = call.Name + "\0" + JsonSerializer.Serialize(call.Arguments, AIJsonUtilities.DefaultOptions);
+            if (!_signatures.Add(signature))
+            {
+                Duplicates++;
+                return false;
+            }
+
+            if (_signatures.Count > _maxCalls)
+            {
+                OverCeiling++;
+                return false;
+            }
+
+            return true;
+        }
     }
 
     /// <summary>

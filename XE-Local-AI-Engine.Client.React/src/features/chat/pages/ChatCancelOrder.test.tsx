@@ -131,6 +131,7 @@ describe("Chat cancel ordering", () => {
 
 	afterEach(() => {
 		cleanup();
+		vi.useRealTimers();
 	});
 
 	it("aborts the local stream before issuing the server cancel request", async () => {
@@ -178,6 +179,162 @@ describe("Chat cancel ordering", () => {
 		// Let the aborted iterator unwind so the streaming loop's finally block runs.
 		releaseStream?.();
 		await waitFor(() => expect(adapter.getConversation).toHaveBeenCalled());
+	});
+
+	it("shows Stop for a persisted live turn that no local stream owns, and Stop cancels it", async () => {
+		// After a remount the resume came back empty while the server run goes on: only the persisted row says it is live.
+		adapter.getConversation.mockResolvedValue({
+			...conversation(),
+			messages: [
+				{
+					id: "assistant-1",
+					conversationId: "conversation-1",
+					requestId: "request-1",
+					role: "assistant",
+					content: "partial",
+					status: "streaming",
+					createdAt: "2026-05-24T00:00:00.000Z",
+					sortOrder: 1,
+				},
+			],
+		});
+
+		renderChat();
+
+		await waitFor(() => expect(adapter.resumeConversation).toHaveBeenCalled());
+		const button = await screen.findByTestId("chat-send-button");
+		await waitFor(() => expect(button.getAttribute("aria-label")).toBe("Stop"));
+
+		fireEvent.click(button);
+
+		await waitFor(() =>
+			expect(adapter.cancelMessage).toHaveBeenCalledWith({
+				conversationId: "conversation-1",
+				messageId: "assistant-1",
+				requestId: "request-1",
+			}),
+		);
+	});
+
+	it("re-reads a persisted live turn no local stream owns until it completes, then unblocks the composer", async () => {
+		// Only the poll interval is faked; waitFor and the query client keep their real timeouts.
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+		let assistantRow: ChatConversationModel["messages"][number] = {
+			id: "assistant-1",
+			conversationId: "conversation-1",
+			requestId: "request-1",
+			role: "assistant",
+			content: "partial",
+			status: "streaming",
+			createdAt: "2026-05-24T00:00:00.000Z",
+			sortOrder: 1,
+		};
+		adapter.getConversation.mockImplementation(async () => ({ ...conversation(), messages: [assistantRow] }));
+
+		renderChat();
+
+		await waitFor(() => expect(adapter.resumeConversation).toHaveBeenCalled());
+		await waitFor(() => expect(screen.getByTestId("chat-send-button").getAttribute("aria-label")).toBe("Stop"));
+
+		// The server finishes the turn; nothing streams that to this page.
+		assistantRow = { ...assistantRow, content: "final answer", status: "completed" };
+		act(() => {
+			vi.advanceTimersByTime(3_000);
+		});
+
+		expect(await screen.findByText("final answer")).toBeDefined();
+		await waitFor(() => expect(screen.getByTestId("chat-send-button").getAttribute("aria-label")).toBe("Send"));
+		fireEvent.change(screen.getByTestId("chat-input"), { target: { value: "next question" } });
+		expect((screen.getByTestId("chat-send-button") as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	it("lets a slow re-read of a persisted live turn land instead of restarting it every interval", async () => {
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+		const streamingRow: ChatConversationModel["messages"][number] = {
+			id: "assistant-1",
+			conversationId: "conversation-1",
+			requestId: "request-1",
+			role: "assistant",
+			content: "partial",
+			status: "streaming",
+			createdAt: "2026-05-24T00:00:00.000Z",
+			sortOrder: 1,
+		};
+		adapter.getConversation.mockResolvedValueOnce({ ...conversation(), messages: [streamingRow] });
+
+		renderChat();
+
+		await waitFor(() => expect(screen.getByTestId("chat-send-button").getAttribute("aria-label")).toBe("Stop"));
+		const readsBefore = adapter.getConversation.mock.calls.length;
+		let resolveSlowRead: ((value: ChatConversationModel) => void) | undefined;
+		const slowRead = new Promise<ChatConversationModel>((resolve) => {
+			resolveSlowRead = resolve;
+		});
+		adapter.getConversation.mockImplementation(() => slowRead);
+
+		// Four intervals pass while the first re-read is still in flight.
+		for (let tick = 0; tick < 4; tick++) {
+			act(() => {
+				vi.advanceTimersByTime(3_000);
+			});
+		}
+		expect(adapter.getConversation).toHaveBeenCalledTimes(readsBefore + 1);
+
+		resolveSlowRead?.({ ...conversation(), messages: [{ ...streamingRow, content: "final answer", status: "completed" }] });
+
+		expect(await screen.findByText("final answer")).toBeDefined();
+		await waitFor(() => expect(screen.getByTestId("chat-send-button").getAttribute("aria-label")).toBe("Send"));
+	});
+
+	it("does not re-read a persisted live turn while an attached resume owns it", async () => {
+		// The stream commits once per animation frame, so frames are stepped by hand alongside the poll interval.
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "requestAnimationFrame", "cancelAnimationFrame"] });
+		adapter.getConversation.mockResolvedValue({
+			...conversation(),
+			messages: [
+				{
+					id: "assistant-1",
+					conversationId: "conversation-1",
+					requestId: "request-1",
+					role: "assistant",
+					content: "",
+					status: "streaming",
+					createdAt: "2026-05-24T00:00:00.000Z",
+					sortOrder: 1,
+				},
+			],
+		});
+		let releaseStream: (() => void) | undefined;
+		const streamGate = new Promise<void>((resolve) => {
+			releaseStream = resolve;
+		});
+		adapter.resumeConversation.mockImplementationOnce(() => ({
+			async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
+				yield deltaEvent();
+				await streamGate;
+			},
+		}));
+
+		const { queryClient } = renderChat();
+
+		// The resumed delta was committed onto the persisted row, so the resume now owns the turn.
+		await waitFor(() => {
+			act(() => {
+				vi.advanceTimersToNextFrame();
+			});
+			expect(
+				queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation("conversation-1"))?.messages[0]?.updatedAt,
+			).toBe(new Date(deltaEvent().occurredAtUtc).toISOString());
+		});
+		const readsBefore = adapter.getConversation.mock.calls.length;
+
+		act(() => {
+			vi.advanceTimersByTime(30_000);
+		});
+
+		expect(adapter.getConversation).toHaveBeenCalledTimes(readsBefore);
+		releaseStream?.();
+		await waitFor(() => expect(adapter.getConversation.mock.calls.length).toBeGreaterThan(readsBefore));
 	});
 
 	it("still cancels the run server-side when the local stream handle is lost", async () => {

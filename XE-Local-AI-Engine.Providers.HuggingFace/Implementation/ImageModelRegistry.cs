@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 /// </remarks>
 internal sealed class ImageModelRegistry : IImageModelRegistry, IDisposable
 {
-    private const string ManifestFileName = "image-models.json";
+    internal const string ManifestFileName = "image-models.json";
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {

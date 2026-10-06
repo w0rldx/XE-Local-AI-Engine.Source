@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from "axios";
+import axios, { AxiosError, AxiosHeaders, type AxiosResponse, type InternalAxiosRequestConfig } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { authApiMock, routerMock } = vi.hoisted(() => ({
@@ -134,7 +134,7 @@ describe("auth axios interceptors", () => {
 		expect(useNodeAuthStore.getState().accessToken).toBe("fresh-token");
 	});
 
-	it("clears local auth and redirects to login when refresh fails", async () => {
+	it("clears local auth and redirects to login when refresh answers 401", async () => {
 		const instance = axios.create({
 			adapter: async (config) => {
 				throw unauthorizedError(config);
@@ -142,12 +142,38 @@ describe("auth axios interceptors", () => {
 		});
 		addUnauthorizedErrorInterceptor(instance);
 		useNodeAuthStore.getState().actions.setToken({ accessToken: "old-token", expiresAtUtc: "2026-05-25T12:00:00Z" });
-		authApiMock.refreshNodeAuthToken.mockRejectedValue(new Error("expired"));
+		const refreshError = unauthorizedError({ headers: new AxiosHeaders() });
+		authApiMock.refreshNodeAuthToken.mockRejectedValue(refreshError);
 
-		await expect(instance.get("/api/local/v1/protected")).rejects.toThrow("expired");
+		await expect(instance.get("/api/local/v1/protected")).rejects.toBe(refreshError);
 
 		expect(useNodeAuthStore.getState().accessToken).toBeUndefined();
 		expect(routerMock.navigate).toHaveBeenCalledWith({ to: "/login", search: { redirect: "/" } });
+	});
+
+	// F-02: a rate-limited refresh is not a sign-out; the refresh cookie is still valid.
+	it("keeps local auth and stays put when refresh is rate limited", async () => {
+		const instance = axios.create({
+			adapter: async (config) => {
+				throw unauthorizedError(config);
+			},
+		});
+		addUnauthorizedErrorInterceptor(instance);
+		useNodeAuthStore.getState().actions.setToken({ accessToken: "old-token", expiresAtUtc: "2026-05-25T12:00:00Z" });
+		const config = { headers: new AxiosHeaders() };
+		const refreshError = new AxiosError("Too Many Requests", AxiosError.ERR_BAD_REQUEST, config, undefined, {
+			data: undefined,
+			status: 429,
+			statusText: "Too Many Requests",
+			headers: {},
+			config,
+		});
+		authApiMock.refreshNodeAuthToken.mockRejectedValue(refreshError);
+
+		await expect(instance.get("/api/local/v1/protected")).rejects.toBe(refreshError);
+
+		expect(useNodeAuthStore.getState().accessToken).toBe("old-token");
+		expect(routerMock.navigate).not.toHaveBeenCalled();
 	});
 });
 

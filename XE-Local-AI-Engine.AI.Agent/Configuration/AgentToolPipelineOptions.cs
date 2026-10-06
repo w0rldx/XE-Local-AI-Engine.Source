@@ -13,6 +13,9 @@ public sealed class AgentToolPipelineOptions
 {
     public const string Section = "Agent:ToolPipeline";
 
+    /// <summary>Default for <see cref="MaxToolCallsPerResponse" />.</summary>
+    public const int DefaultMaxToolCallsPerResponse = 32;
+
     /// <summary>
     ///     Hard cap on the tool round-trips the function-invocation pipeline runs for a single request, applied via
     ///     <c>FunctionInvokingChatClient.MaximumIterationsPerRequest</c>.
@@ -49,4 +52,15 @@ public sealed class AgentToolPipelineOptions
     /// </remarks>
     [Range(1, 100)]
     public int MaxConsecutiveInvalidToolCallsPerTool { get; set; } = 3;
+
+    /// <summary>
+    ///     Ceiling on the tool calls ONE model response may hand the function-invocation loop. Default 32.
+    /// </summary>
+    /// <remarks>
+    ///     <see cref="MaximumToolIterationsPerRequest" /> counts round-trips, so a single runaway response (a small model
+    ///     once emitted 1,584 identical calls in one turn) is otherwise unbounded. Identical calls (name + arguments)
+    ///     collapse to the first; past the ceiling the rest are dropped before the loop sees them.
+    /// </remarks>
+    [Range(1, 1000)]
+    public int MaxToolCallsPerResponse { get; set; } = DefaultMaxToolCallsPerResponse;
 }

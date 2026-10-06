@@ -68,6 +68,39 @@ public sealed class AgentDefinitionServiceTests
         await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(input));
     }
 
+    // The shared normalizer's whole vocabulary is valid for a saved agent, not a private subset, and only its
+    // canonical spelling reaches the store.
+    [Test]
+    [Arguments(" XHigh ", "xhigh")]
+    [Arguments("MINIMAL", "minimal")]
+    [Arguments("On", "on")]
+    public async Task CreateAsync_WithNormalizerReasoningEffort_PersistsCanonicalValue(string requested, string expected)
+    {
+        var service = CreateService(out var store);
+        AgentDefinitionInput? persisted = null;
+        store.AddAsync(Arg.Do<AgentDefinitionInput>(input => persisted = input), Arg.Any<CancellationToken>())
+             .Returns(callInfo => CreateRecord(callInfo.Arg<AgentDefinitionInput>()));
+
+        var result = await service.CreateAsync(CreateInput(reasoningEffort: requested));
+
+        AssertEx.Equal(expected, AssertEx.NotNull(persisted).ReasoningEffort);
+        AssertEx.Equal(expected, result.ReasoningEffort);
+    }
+
+    [Test]
+    public async Task UpdateAsync_WithXHighReasoningEffort_PersistsCanonicalValue()
+    {
+        var service = CreateService(out var store);
+        var id = Guid.NewGuid();
+        AgentDefinitionInput? persisted = null;
+        store.UpdateAsync(id, Arg.Do<AgentDefinitionInput>(input => persisted = input), Arg.Any<CancellationToken>())
+             .Returns(callInfo => CreateRecord(callInfo.Arg<AgentDefinitionInput>()));
+
+        _ = await service.UpdateAsync(id, CreateInput(reasoningEffort: "XHIGH"));
+
+        AssertEx.Equal("xhigh", AssertEx.NotNull(persisted).ReasoningEffort);
+    }
+
     [Test]
     public async Task CreateAsync_WithUnknownToolName_DoesNotThrow_AndPersists()
     {

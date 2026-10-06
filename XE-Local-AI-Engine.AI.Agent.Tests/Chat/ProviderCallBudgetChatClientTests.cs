@@ -957,6 +957,74 @@ public sealed class ProviderCallBudgetChatClientTests
         }
     }
 
+    [Test]
+    public async Task GetStreamingResponseAsync_TrimsToolCallsAcrossUpdates_AndPassesUntouchedUpdatesThrough()
+    {
+        // Calls spread over two updates, no ambient budget: the ceiling bounds the tool loop whether or not a scope exists.
+        var untouched = new ChatResponseUpdate(ChatRole.Assistant, (IList<AIContent>)[new TextContent("thinking"), Call("a", 1), Call("b", 2)]);
+        var trimmedSource = new ChatResponseUpdate(ChatRole.Assistant, (IList<AIContent>)[Call("c", 1), Call("d", 3), new TextContent("tail")])
+        {
+            FinishReason = ChatFinishReason.ToolCalls
+        };
+        using var inner = new FixedUpdatesChatClient(untouched, trimmedSource);
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance, maxToolCallsPerResponse: 2);
+
+        List<ChatResponseUpdate> yielded = [];
+        await foreach (var update in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "go")]))
+        {
+            yielded.Add(update);
+        }
+
+        AssertEx.Equal(expected: 2, yielded.Count);
+        AssertEx.True(ReferenceEquals(untouched, yielded[0]), "an update that loses no call must be the provider's own instance");
+        AssertEx.False(ReferenceEquals(trimmedSource, yielded[1]), "a trimmed update must be a clone, not the provider's mutated instance");
+        AssertEx.Equal(ChatFinishReason.ToolCalls, yielded[1].FinishReason);
+        AssertEx.Equal("tail", AssertEx.NotNull(yielded[1].Contents.OfType<TextContent>().SingleOrDefault()).Text);
+        AssertEx.Empty(yielded[1].Contents.OfType<FunctionCallContent>(), "c repeats a's name and arguments, d is over the ceiling of 2");
+        AssertEx.Equal(expected: 2, trimmedSource.Contents.OfType<FunctionCallContent>().Count(), "the provider's update must not be mutated");
+
+        static FunctionCallContent Call(string callId, int n) => new(callId, "tool", new Dictionary<string, object?> { ["n"] = n });
+    }
+
+    private sealed class FixedUpdatesChatClient : IChatClient
+    {
+        private readonly ChatResponseUpdate[] _updates;
+
+        public FixedUpdatesChatClient(params ChatResponseUpdate[] updates)
+        {
+            _updates = updates;
+        }
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_updates.ToChatResponse());
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            foreach (var update in _updates)
+            {
+                yield return update;
+            }
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
+    }
+
     private sealed class TwoUpdateChatClient : IChatClient
     {
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,

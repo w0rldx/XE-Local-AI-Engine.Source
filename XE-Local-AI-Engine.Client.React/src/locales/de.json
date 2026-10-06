@@ -7423,6 +7423,7 @@
 				"HealthCheckFailed": "Die Anwendung wurde gestartet, meldete sich aber nie als bereit.",
 				"StoppedUnexpectedly": "Die Anwendung hat sich selbst beendet. Prüfen Sie die Protokolle und starten Sie sie erneut.",
 				"StorageError": "XE konnte den Speicherordner der Anwendung nicht vorbereiten.",
+				"Cancelled": "Der Vorgang wurde abgebrochen, bevor er abgeschlossen war.",
 				"Unknown": "Bei der Anwendung ist ein Problem aufgetreten, das XE nicht einordnen konnte. Prüfen Sie die Protokolle."
 			},
 			"runtime": {

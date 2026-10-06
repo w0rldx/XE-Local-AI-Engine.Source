@@ -1,3 +1,4 @@
+import { AxiosError, AxiosHeaders } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type SessionRestoreModule = typeof import("@/core/auth/utils/SessionRestore");
@@ -14,11 +15,25 @@ vi.mock("@/core/auth/api/NodeAuthApi", () => authApiMock);
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { restoreNodeAuthSession } from "@/core/auth/utils/SessionRestore";
 
-describe("restoreNodeAuthSession", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		useNodeAuthStore.getState().actions.clear();
+function refreshRejection(status: number): AxiosError {
+	return new AxiosError("Refresh failed", AxiosError.ERR_BAD_REQUEST, undefined, undefined, {
+		data: undefined,
+		status,
+		statusText: "",
+		headers: {},
+		config: { headers: new AxiosHeaders() },
 	});
+}
+
+// A set token ends a settled sign-out, so each test starts from a fresh restore.
+function resetAuth(): void {
+	vi.clearAllMocks();
+	useNodeAuthStore.getState().actions.setToken({ accessToken: "reset", expiresAtUtc: "2026-05-25T12:00:00Z" });
+	useNodeAuthStore.getState().actions.clear();
+}
+
+describe("restoreNodeAuthSession", () => {
+	beforeEach(resetAuth);
 
 	it("returns setup-required and clears local token when setup is needed", async () => {
 		useNodeAuthStore.getState().actions.setToken({ accessToken: "old", expiresAtUtc: "2026-05-25T12:00:00Z" });
@@ -39,22 +54,48 @@ describe("restoreNodeAuthSession", () => {
 		expect(useNodeAuthStore.getState().accessToken).toBe("new-token");
 	});
 
-	it("returns unauthenticated and clears token when refresh fails", async () => {
+	it("returns unauthenticated and clears token when refresh answers 401", async () => {
 		useNodeAuthStore.getState().actions.setToken({ accessToken: "old", expiresAtUtc: "2026-05-25T12:00:00Z" });
 		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false });
-		authApiMock.refreshNodeAuthToken.mockRejectedValue(new Error("expired"));
+		authApiMock.refreshNodeAuthToken.mockRejectedValue(refreshRejection(401));
 
 		await expect(restoreNodeAuthSession()).resolves.toBe("unauthenticated");
 
 		expect(useNodeAuthStore.getState().accessToken).toBeUndefined();
 	});
+
+	// F-02: a rate-limited refresh signed the operator out although the refresh cookie was still valid.
+	it("keeps the session and rethrows when refresh is rate limited", async () => {
+		useNodeAuthStore.getState().actions.setToken({ accessToken: "old", expiresAtUtc: "2026-05-25T12:00:00Z" });
+		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false });
+		const rejection = refreshRejection(429);
+		authApiMock.refreshNodeAuthToken.mockRejectedValue(rejection);
+
+		await expect(restoreNodeAuthSession()).rejects.toBe(rejection);
+
+		expect(useNodeAuthStore.getState().accessToken).toBe("old");
+	});
+
+	// The layout's failed restore is followed straight away by /login's guard; a second refresh there doubled the calls.
+	it("reuses a settled unauthenticated result until a token is set", async () => {
+		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false });
+		authApiMock.refreshNodeAuthToken.mockRejectedValue(refreshRejection(401));
+
+		await expect(restoreNodeAuthSession()).resolves.toBe("unauthenticated");
+		await expect(restoreNodeAuthSession()).resolves.toBe("unauthenticated");
+		expect(authApiMock.refreshNodeAuthToken).toHaveBeenCalledTimes(1);
+
+		useNodeAuthStore.getState().actions.setToken({ accessToken: "signed-in", expiresAtUtc: "2026-05-25T12:00:00Z" });
+		useNodeAuthStore.getState().actions.clear();
+		authApiMock.refreshNodeAuthToken.mockResolvedValue({ accessToken: "new-token", expiresAtUtc: "2026-05-25T12:15:00Z" });
+
+		await expect(restoreNodeAuthSession()).resolves.toBe("authenticated");
+		expect(authApiMock.refreshNodeAuthToken).toHaveBeenCalledTimes(2);
+	});
 });
 
 describe("restoreNodeAuthSession vault states", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		useNodeAuthStore.getState().actions.clear();
-	});
+	beforeEach(resetAuth);
 
 	it("returns vault-locked without trying to refresh", async () => {
 		useNodeAuthStore.getState().actions.setToken({ accessToken: "old", expiresAtUtc: "2026-05-25T12:00:00Z" });
@@ -77,7 +118,7 @@ describe("restoreNodeAuthSession vault states", () => {
 
 	it("returns unauthenticated for a signed-out visitor of a pending node", async () => {
 		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false, vault: "pending" });
-		authApiMock.refreshNodeAuthToken.mockRejectedValue(new Error("no cookie"));
+		authApiMock.refreshNodeAuthToken.mockRejectedValue(refreshRejection(401));
 
 		await expect(restoreNodeAuthSession()).resolves.toBe("unauthenticated");
 	});

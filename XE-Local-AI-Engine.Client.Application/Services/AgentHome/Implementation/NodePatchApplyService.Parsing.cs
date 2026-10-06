@@ -26,6 +26,13 @@ internal sealed partial class NodePatchApplyService
     /// </summary>
     private const string SymlinkMode = "120000";
 
+    private static readonly string[] WindowsReservedDeviceNames =
+    [
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+    ];
+
     private static List<string> SplitBlocks(string patchText)
     {
         var blocks = new List<string>();
@@ -100,12 +107,12 @@ internal sealed partial class NodePatchApplyService
             if (line.StartsWith("--- ", StringComparison.Ordinal)
                 && !line.StartsWith("--- /dev/null", StringComparison.Ordinal))
             {
-                bodyPaths.Add(new BodyPath(prefixSource, line[4..]));
+                bodyPaths.Add(new BodyPath(prefixSource, CutAtTab(line[4..])));
             }
             else if (line.StartsWith("+++ ", StringComparison.Ordinal)
                      && !line.StartsWith("+++ /dev/null", StringComparison.Ordinal))
             {
-                bodyPaths.Add(new BodyPath(prefixDest, line[4..]));
+                bodyPaths.Add(new BodyPath(prefixDest, CutAtTab(line[4..])));
             }
             else if (line.StartsWith("rename from ", StringComparison.Ordinal))
             {
@@ -149,8 +156,7 @@ internal sealed partial class NodePatchApplyService
             // The same refusal the body paths get: this block's header path is the only path it has, so a name the
             // host cannot write must not slip past on this branch either.
             var headerPathText = string.Create(CultureInfo.InvariantCulture, $"{headerAlias}/{headerRelative}");
-            if (HasHostInvalidNameCharacter(headerPathText)
-                || (GitQuotedPath.IsQuoted(lines[0][DiffHeaderPrefix.Length..]) && HasUnsafeControlCharacter(headerPathText)))
+            if (HasHostInvalidName(headerPathText, OperatingSystem.IsWindows()) || HasUnsafeControlCharacter(headerPathText))
             {
                 return ParsedBlock.Rejected(UnwritableNameRejection, Describe(headerAlias, headerRelative));
             }
@@ -208,9 +214,9 @@ internal sealed partial class NodePatchApplyService
                 return ParsedBlock.Rejected(GitDirectoryRejection, Describe(alias, relative));
             }
 
-            // A name the host cannot write is refused however the patch spelled it; a decoded one holding more than
-            // it was quoted for too. NAMED, unlike a raw literal, because SafeDisplayPath has escaped the text.
-            if (HasHostInvalidNameCharacter(normalized) || (wasQuoted && HasUnsafeControlCharacter(normalized)))
+            // A name the host cannot write, or one that can spoof another, is refused however the patch spelled it.
+            // NAMED, unlike a raw literal, because SafeDisplayPath has escaped the text.
+            if (HasHostInvalidName(normalized, OperatingSystem.IsWindows()) || HasUnsafeControlCharacter(normalized))
             {
                 return ParsedBlock.Rejected(UnwritableNameRejection, Describe(alias, relative));
             }
@@ -286,6 +292,16 @@ internal sealed partial class NodePatchApplyService
     }
 
     /// <summary>
+    ///     A <c>---</c>/<c>+++</c> name ends at its first TAB, as it does for git: what follows is a timestamp. A
+    ///     C-quoted name never holds a raw TAB, so the cut is right for both spellings.
+    /// </summary>
+    private static string CutAtTab(string raw)
+    {
+        var tab = raw.IndexOf('\t', StringComparison.Ordinal);
+        return tab < 0 ? raw : raw[..tab];
+    }
+
+    /// <summary>
     ///     The folder-relative name to show beside a refusal, or <see langword="null" /> when the block has no path
     ///     that is safe to echo.
     /// </summary>
@@ -358,8 +374,8 @@ internal sealed partial class NodePatchApplyService
     ///     Every code point that can move, hide or reorder the text around it — Cc, Cf (bidi overrides and isolates,
     ///     zero-width marks, the byte-order mark), Zl/Zp and any unpaired surrogate — becomes a visible
     ///     <c>\u{XXXX}</c> escape, so a spoofed name cannot render as the name it imitates. Everything else, an
-    ///     umlaut or an ideograph included, passes through: a display rule, not a character set. It decides nothing
-    ///     about whether a patch applies, and the paths git acts on come from elsewhere.
+    ///     umlaut or an ideograph included, passes through. It never rewrites a path git acts on; a name it would
+    ///     change is refused by <see cref="HasUnsafeControlCharacter" /> instead.
     /// </remarks>
     private static string SafeDisplayPath(string path)
     {
@@ -528,33 +544,51 @@ internal sealed partial class NodePatchApplyService
     }
 
     /// <summary>
-    ///     Whether any segment of a path holds a character this host cannot put in a file name, per
-    ///     <see cref="Path.GetInvalidFileNameChars" />.
+    ///     Whether any segment of a path is a name this host cannot write: a character from
+    ///     <see cref="Path.GetInvalidFileNameChars" />, or on Windows a reserved device name or a trailing dot or space.
     /// </summary>
     /// <remarks>
     ///     Asked of EVERY path, quoted or not: git C-quotes for a quote, a backslash or a control byte and nothing
-    ///     else, so <c>: &lt; &gt; | ? *</c> — all invalid on Windows — arrive unquoted. A quote and a backslash are
-    ///     ordinary bytes on a POSIX host, which keeps those names applyable there; on Windows this refuses them BY
-    ///     NAME instead of leaving git to fail mid-apply. It knows neither the reserved device names nor a trailing
-    ///     dot or space, which <see cref="Path.GetInvalidFileNameChars" /> does not cover either.
+    ///     else, so <c>: &lt; &gt; | ? *</c> — all invalid on Windows — arrive unquoted. A quote, a backslash or an
+    ///     <c>aux</c> folder is an ordinary name on a POSIX host, which keeps it applyable there; on Windows this
+    ///     refuses it BY NAME instead of leaving git to fail mid-apply or write to a device.
     /// </remarks>
-    private static bool HasHostInvalidNameCharacter(string path)
+    /// <param name="path">The decoded alias-relative path, <c>/</c>-separated.</param>
+    /// <param name="isWindows">Whether the Windows name rules apply; the production caller passes the real host.</param>
+    internal static bool HasHostInvalidName(string path, bool isWindows)
     {
         var invalid = Path.GetInvalidFileNameChars();
-        return path.Split('/').Any(segment => segment.IndexOfAny(invalid) >= 0);
+        return path.Split('/').Any(segment => segment.IndexOfAny(invalid) >= 0 || (isWindows && IsWindowsUnwritableSegment(segment)));
     }
 
     /// <summary>
-    ///     Whether a DECODED path holds a character that can move, hide or reorder the text around it.
+    ///     A reserved device name (in any case, with or without an extension) or a name Windows would silently
+    ///     shorten by dropping its trailing dot or space.
+    /// </summary>
+    private static bool IsWindowsUnwritableSegment(string segment)
+    {
+        if (segment.EndsWith('.') || segment.EndsWith(' '))
+        {
+            return true;
+        }
+
+        var extension = segment.IndexOf('.', StringComparison.Ordinal);
+        var stem = (extension < 0 ? segment : segment[..extension]).TrimEnd(' ');
+        return WindowsReservedDeviceNames.Contains(stem, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    ///     Whether a path holds a code point that can move, hide or reorder the text around it: exactly the ones
+    ///     <see cref="SafeDisplayPath" /> escapes.
     /// </summary>
     /// <remarks>
-    ///     Asked only of a path the patch C-quoted, because a raw one carrying the same character is a pinned
-    ///     contract: it is shown escaped and still applies. Reaching it through an octal escape is not, and a name
-    ///     that had to be quoted for a control byte has no business carrying more than the byte it was quoted for.
+    ///     Asked of every path, quoted or not: git leaves a bidi or zero-width character raw under
+    ///     <c>core.quotePath=false</c>, and showing such a name escaped while still writing it spoofs the name the
+    ///     operator approved. Read per code point, so an astral-plane name such as an emoji stays writable.
     /// </remarks>
     private static bool HasUnsafeControlCharacter(string path)
     {
-        return path.Any(character => IsUnsafeToDisplay(character));
+        return !string.Equals(SafeDisplayPath(path), path, StringComparison.Ordinal);
     }
 
     /// <summary>

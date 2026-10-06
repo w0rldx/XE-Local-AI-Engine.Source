@@ -19,7 +19,11 @@ import { useChatModelSelection } from "@/features/chat/hooks/useChatModelSelecti
 import { useChatRevisionSelection } from "@/features/chat/hooks/useChatRevisionSelection";
 import { useChatStreamController } from "@/features/chat/hooks/useChatStreamController";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
-import { mergeSelectedConversation, titleFromContent } from "@/features/chat/models/ChatConversationDerivations";
+import {
+	inFlightAssistantMessageId,
+	mergeSelectedConversation,
+	titleFromContent,
+} from "@/features/chat/models/ChatConversationDerivations";
 import { errorMessage } from "@/features/chat/models/ChatErrorMessage";
 import type {
 	ChatConversationListModel,
@@ -43,6 +47,8 @@ import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 // Fallback for the cache updaters below when they run before the list query has landed: an empty list with no known
 // message-size limit (which simply means the composer runs no size pre-check until the real fetch arrives).
 const emptyConversationList: ChatConversationListModel = { conversations: [] };
+
+const orphanedLiveTurnPollIntervalMs = 3_000;
 
 export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	const { t } = useTranslation();
@@ -351,7 +357,40 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		resumeNonce: scope?.resumeNonce,
 	});
 
-	const isSending = Boolean(streamingMessage?.isActive);
+	// A remount (or a resume that ended early) leaves no local stream while the server run goes on. The persisted in-flight
+	// row with the request id Stop cancels by still counts as sending, so Stop stays reachable and the composer stays
+	// blocked, as the server would refuse a send into the live turn anyway.
+	const loadedSelectedConversation = loadedSelectedConversationId ? selectedConversationData : undefined;
+	const inFlightMessageId = loadedSelectedConversation && inFlightAssistantMessageId(loadedSelectedConversation);
+	const hasPersistedLiveTurn = Boolean(
+		inFlightMessageId &&
+			loadedSelectedConversation?.messages.some((message) => message.id === inFlightMessageId && message.requestId),
+	);
+	const isStreamingLocally = Boolean(streamingMessage?.isActive);
+	const isSending = isStreamingLocally || hasPersistedLiveTurn;
+	// Nothing else observes such a turn finishing: a stream that ended without a terminal event refreshes once, and the
+	// detail query does not poll. Re-read the conversation until the row turns terminal; never while a local stream
+	// owns the cache, as a refetch would fight its per-frame commits.
+	useEffect(() => {
+		if (!hasPersistedLiveTurn || isStreamingLocally) {
+			return;
+		}
+		// A tick skips while the previous refresh is pending: invalidation cancels an in-flight fetch, so a read slower than
+		// the interval would otherwise be restarted forever and never land.
+		let refreshing = false;
+		const timer = setInterval(() => {
+			if (refreshing) {
+				return;
+			}
+			refreshing = true;
+			refreshConversation(loadedSelectedConversationId)
+				.catch(() => undefined)
+				.finally(() => {
+					refreshing = false;
+				});
+		}, orphanedLiveTurnPollIntervalMs);
+		return () => clearInterval(timer);
+	}, [hasPersistedLiveTurn, isStreamingLocally, loadedSelectedConversationId, refreshConversation]);
 	// Chat workflow mode. Off for a scoped (owner-pinned) conversation: its owner is the single writer of that thread.
 	const workflow = useChatWorkflow({
 		enabled: nodeCapabilities.graphWorkflows && !isScoped,

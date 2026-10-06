@@ -50,6 +50,15 @@ internal static class DesktopBootstrap
     /// <summary>Configuration key the HuggingFace options bind for the GGUF models directory.</summary>
     internal const string HuggingFaceModelsDirectoryKey = "HuggingFace:ModelsDirectory";
 
+    /// <summary>Configuration key the image model store options bind for the image models directory.</summary>
+    internal const string HuggingFaceImageModelsDirectoryKey = "HuggingFaceImageModels:ModelsDirectory";
+
+    /// <summary>The image models sub-directory under <see cref="ModelsFolderName" />.</summary>
+    internal const string ImageModelsFolderName = "images";
+
+    /// <summary>The image model registry's manifest file; a test pins it to <c>ImageModelRegistry.ManifestFileName</c>.</summary>
+    internal const string ImageModelManifestFileName = "image-models.json";
+
     /// <summary>Configuration key for the node's default chat model (<c>LocalChatAgentOptions.DefaultModel</c>).</summary>
     internal const string LocalChatDefaultModelKey = "Agent:LocalChat:DefaultModel";
 
@@ -70,9 +79,11 @@ internal static class DesktopBootstrap
     /// </remarks>
     /// <param name="configuration">The builder configuration, both read and appended to.</param>
     /// <param name="folderResolver">Resolves a <see cref="Environment.SpecialFolder" /> to an absolute path.</param>
+    /// <param name="applicationBaseDirectory">The install directory the image store falls back under; defaults to <see cref="AppContext.BaseDirectory" />.</param>
     /// <returns>External (operator secret), Pending (generated or legacy key injected) or Locked (v2 vault, nothing injected).</returns>
     internal static VaultState EnsureLocalDataConfiguration(IConfigurationManager configuration,
-        Func<Environment.SpecialFolder, string> folderResolver)
+        Func<Environment.SpecialFolder, string> folderResolver,
+        string? applicationBaseDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(folderResolver);
@@ -121,6 +132,15 @@ internal static class DesktopBootstrap
             overrides[HuggingFaceModelsDirectoryKey] = Path.Combine(dataDirectory, ModelsFolderName);
         }
 
+        // Without this the image store falls back under AppContext.BaseDirectory, which an app update replaces.
+        var imageModelsDirectory = Path.Combine(dataDirectory, ModelsFolderName, ImageModelsFolderName);
+        // An install whose downloads are only in the old folder stays there, so they stay visible (and replaceable by an update).
+        if (string.IsNullOrWhiteSpace(configuration[HuggingFaceImageModelsDirectoryKey])
+            && !HasOnlyLegacyImageModels(applicationBaseDirectory ?? AppContext.BaseDirectory, imageModelsDirectory))
+        {
+            overrides[HuggingFaceImageModelsDirectoryKey] = imageModelsDirectory;
+        }
+
         // Point the default chat model at the GGUF starter model desktop provisions: Agent:LocalChat:DefaultModel ships an Ollama-era id desktop never installs,
         // so a send before provisioning ends fails as "not installed". From FirstRunModel:{RepoId,Quant}; added last, so it wins over appsettings while headless/Aspire keep Ollama.
         var firstRunModel = ResolveFirstRunModelIdentity(configuration);
@@ -135,6 +155,15 @@ internal static class DesktopBootstrap
         }
 
         return vaultState;
+    }
+
+    /// <summary>
+    ///     Whether the image store's install-directory fallback holds a registry manifest and the per-user folder does not.
+    /// </summary>
+    private static bool HasOnlyLegacyImageModels(string applicationBaseDirectory, string imageModelsDirectory)
+    {
+        var legacyManifest = Path.Combine(applicationBaseDirectory, ModelsFolderName, ImageModelsFolderName, ImageModelManifestFileName);
+        return File.Exists(legacyManifest) && !File.Exists(Path.Combine(imageModelsDirectory, ImageModelManifestFileName));
     }
 
     /// <summary>Whether <paramref name="keyPath" /> holds a passphrase-wrapped v2 vault rather than a legacy raw/DPAPI key.</summary>

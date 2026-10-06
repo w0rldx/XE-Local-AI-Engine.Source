@@ -408,7 +408,7 @@ internal sealed partial class ExternalAppService
     {
         return new ExternalAppFailure
         {
-            Category = ExternalAppFailureCategory.Unknown,
+            Category = ExternalAppFailureCategory.Cancelled,
             Summary = "This operation was cancelled before it finished; the application's data was kept."
         };
     }

@@ -1,3 +1,4 @@
+import { getErrorStatus } from "@/core/api/errors/RetryClassification";
 import { getNodeAuthStatus, refreshNodeAuthToken } from "@/core/auth/api/NodeAuthApi";
 import type { NodeAuthStatusResponse } from "@/core/auth/models/NodeAuthModels";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
@@ -7,6 +8,15 @@ type NodeVaultStep = "vault-locked" | "vault-setup-required";
 export type NodeAuthRestoreResult = "authenticated" | "setup-required" | "unauthenticated" | NodeVaultStep;
 
 let restoreSessionPromise: Promise<NodeAuthRestoreResult> | undefined;
+
+// A refresh that answered 401 stays the answer until a token is set (login, setup). Without it /login's guard ran a
+// second refresh straight after the layout's failed one, and the pair burned the auth rate limit on every reload.
+let settledUnauthenticated = false;
+useNodeAuthStore.subscribe((state) => {
+	if (state.accessToken) {
+		settledUnauthenticated = false;
+	}
+});
 
 // Once the vault has been seen unlocked it stays unlocked until the engine restarts. A tab that outlives that restart
 // keeps this flag, so the vault-locked interceptor resets it (resetVaultSettled) when the relaunched engine answers
@@ -33,6 +43,10 @@ function vaultStep(status: NodeAuthStatusResponse): NodeVaultStep | undefined {
 }
 
 export async function restoreNodeAuthSession(): Promise<NodeAuthRestoreResult> {
+	if (settledUnauthenticated) {
+		return "unauthenticated";
+	}
+
 	if (restoreSessionPromise) {
 		return restoreSessionPromise;
 	}
@@ -54,8 +68,15 @@ export async function restoreNodeAuthSession(): Promise<NodeAuthRestoreResult> {
 			const token = await refreshNodeAuthToken();
 			useNodeAuthStore.getState().actions.setToken(token);
 			return step ?? "authenticated";
-		} catch {
+		} catch (error) {
+			// Only a 401 means the refresh cookie is gone. A 429, 5xx or network failure leaves a valid session behind,
+			// so it propagates to the route's error boundary (whose retry re-runs this) instead of signing the operator out.
+			if (getErrorStatus(error) !== 401) {
+				throw error;
+			}
+
 			useNodeAuthStore.getState().actions.clear();
+			settledUnauthenticated = true;
 			return "unauthenticated";
 		}
 	})().finally(() => {

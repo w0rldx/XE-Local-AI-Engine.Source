@@ -7423,6 +7423,7 @@
 				"HealthCheckFailed": "The application started but never reported itself ready.",
 				"StoppedUnexpectedly": "The application stopped on its own. Check the logs, then start it again.",
 				"StorageError": "XE could not prepare the application's storage folder.",
+				"Cancelled": "The operation was cancelled before it finished.",
 				"Unknown": "The application ran into a problem XE could not identify. Check the logs."
 			},
 			"runtime": {

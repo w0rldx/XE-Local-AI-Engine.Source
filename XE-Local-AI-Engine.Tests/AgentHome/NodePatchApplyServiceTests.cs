@@ -1955,28 +1955,118 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     }
 
     /// <summary>
-    ///     The same rule on the per-file table, which is the list the operator actually reads before approving. The
-    ///     patch here parses cleanly and only fails its <c>--check</c>, which is what leaves the file list populated.
+    ///     A name that can spoof another is refused however the patch spelled it: git leaves a bidi or zero-width
+    ///     character unquoted under <c>core.quotePath=false</c>, so the raw spelling must not slip past the guard.
     /// </summary>
     [Test]
-    public async Task PreviewAsync_WithASpoofingFileName_EscapesItInTheFileList()
+    [Arguments("right-to-left override", "\u202E", "repo-01/ev\\u{202E}il.txt")]
+    [Arguments("zero-width space", "\u200B", "repo-01/ev\\u{200B}il.txt")]
+    [Arguments("zero-width joiner", "\u200D", "repo-01/ev\\u{200D}il.txt")]
+    public async Task PreviewAndApply_WithAnUnquotedSpoofingName_RefuseAndNameItEscaped(string shape, string injected, string expected)
     {
         var harness = NewHarness();
-        harness.AddFolder("repo-01");
-        const string Name = "no\u202Etes.txt";
-        const string Patch = "diff --git a/repo-01/no\u202Etes.txt b/repo-01/no\u202Etes.txt\n"
-                             + "index 0000001..0000002 100644\n--- a/repo-01/no\u202Etes.txt\n+++ b/repo-01/no\u202Etes.txt\n"
-                             + "@@ -1 +1 @@\n-old\n+new\n";
-        await WritePatchAsync(harness, "run-spoof-files", Patch);
+        var hostRoot = harness.AddFolder("repo-01");
+        var name = "ev" + injected + "il.txt";
+        var patch = $"diff --git a/repo-01/{name} b/repo-01/{name}\nnew file mode 100644\nindex 0000000..e69de29\n"
+                    + $"--- /dev/null\n+++ b/repo-01/{name}\n@@ -0,0 +1 @@\n+text\n";
+        await WritePatchAsync(harness, "run-spoof-raw", patch);
 
         var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
         {
-            RunId = "run-spoof-files"
+            RunId = "run-spoof-raw"
+        });
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-spoof-raw"
         });
 
-        AssertEx.Contains(preview.Files, file => file.RelativePath == "no\\u{202E}tes.txt");
-        AssertEx.True(preview.Files.All(file => !file.RelativePath.Contains(Name, StringComparison.Ordinal)),
-            "the raw name must not survive into the file list");
+        AssertEx.False(preview.CanApply, shape);
+        AssertEx.Contains(preview.Rejections,
+            rejection => rejection.Path == expected && rejection.Reason.Contains("will not write", StringComparison.Ordinal),
+            $"{shape} is refused and named escaped: {Describe(preview.Rejections)}");
+        AssertEx.True(preview.Rejections.All(rejection => rejection.Path?.Contains(injected, StringComparison.Ordinal) != true),
+            $"the raw {shape} must not survive into the response");
+        AssertEx.False(result.Applied);
+        AssertEx.Empty(Directory.GetFileSystemEntries(hostRoot, "*", SearchOption.AllDirectories));
+    }
+
+    /// <summary>
+    ///     A mode-only block's unquoted header path is the only path it has, so it gets the same refusal.
+    /// </summary>
+    [Test]
+    public async Task PreviewAsync_WithAnUnquotedSpoofingModeOnlyHeader_Refuses()
+    {
+        var harness = NewHarness();
+        harness.AddFolder("repo-01");
+        const string Patch = "diff --git a/repo-01/ev\u202Eil.sh b/repo-01/ev\u202Eil.sh\nold mode 100644\nnew mode 100755\n";
+        await WritePatchAsync(harness, "run-spoof-mode-only", Patch);
+
+        var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-spoof-mode-only"
+        });
+
+        AssertEx.False(preview.CanApply);
+        AssertEx.Contains(preview.Rejections,
+            rejection => rejection.Path == "repo-01/ev\\u{202E}il.sh" && rejection.Reason.Contains("will not write", StringComparison.Ordinal),
+            Describe(preview.Rejections));
+    }
+
+    /// <summary>
+    ///     git ends an unquoted <c>---</c>/<c>+++</c> name at its first TAB; what follows is a timestamp, not part of
+    ///     the name, so the target is the file git writes.
+    /// </summary>
+    [Test]
+    public async Task ApplyApprovedAsync_WithATimestampAfterATabInTheBodyPath_TargetsTheNameBeforeIt()
+    {
+        var harness = NewHarness();
+        var hostRoot = harness.AddFolder("repo-01");
+        await File.WriteAllTextAsync(Path.Combine(hostRoot, "x.txt"), "old\n");
+        const string Patch = "diff --git a/repo-01/x.txt b/repo-01/x.txt\nindex 0000001..0000002 100644\n"
+                             + "--- a/repo-01/x.txt\t2020-01-01 00:00:00\n+++ b/repo-01/x.txt\t2020-01-01 00:00:00\n"
+                             + "@@ -1 +1 @@\n-old\n+new\n";
+        await WritePatchAsync(harness, "run-tab-timestamp", Patch);
+
+        var result = await harness.Service.ApplyApprovedAsync(new NodePatchApplyRequest
+        {
+            RunId = "run-tab-timestamp"
+        });
+
+        AssertEx.True(result.Applied, $"rejections: {Describe(result.Rejections)}");
+        AssertEx.Contains(result.AppliedFiles, file => file is { Alias: "repo-01", RelativePath: "x.txt", ChangeType: "modified" },
+            string.Join(", ", result.AppliedFiles.Select(file => file.RelativePath)));
+        AssertEx.Equal("new\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "x.txt")));
+    }
+
+    /// <summary>
+    ///     Windows reserves the device names, with or without an extension and in any case, and drops a trailing dot or
+    ///     space; a POSIX host writes all of them as ordinary names, so only a Windows host refuses them.
+    /// </summary>
+    [Test]
+    [Arguments("repo-01/aux/notes.txt")]
+    [Arguments("repo-01/src/CON")]
+    [Arguments("repo-01/src/con.txt")]
+    [Arguments("repo-01/Nul.tar.gz")]
+    [Arguments("repo-01/COM1")]
+    [Arguments("repo-01/lpt9.log")]
+    [Arguments("repo-01/src/name.")]
+    [Arguments("repo-01/folder /a.txt")]
+    public void HasHostInvalidName_WithAWindowsOnlyUnwritableSegment_RefusesOnlyOnWindows(string path)
+    {
+        AssertEx.True(NodePatchApplyService.HasHostInvalidName(path, isWindows: true), "a Windows host refuses it");
+        AssertEx.False(NodePatchApplyService.HasHostInvalidName(path, isWindows: false), "a POSIX host writes it");
+    }
+
+    /// <summary>The control: names that only resemble a device name stay writable on Windows too.</summary>
+    [Test]
+    [Arguments("repo-01/console.txt")]
+    [Arguments("repo-01/auxiliary/notes.txt")]
+    [Arguments("repo-01/COM0")]
+    [Arguments("repo-01/src/.gitignore")]
+    [Arguments("repo-01/src/a.b.txt")]
+    public void HasHostInvalidName_WithAnOrdinaryName_AcceptsOnWindows(string path)
+    {
+        AssertEx.False(NodePatchApplyService.HasHostInvalidName(path, isWindows: true));
     }
 
     /// <summary>
@@ -2004,15 +2094,15 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     }
 
     /// <summary>
-    ///     The warning's own names go through the same rule: a spoofing name reaches it from the host's work tree
-    ///     rather than from the patch text, and must be just as unable to imitate another file.
+    ///     The same refusal for a patch real git produced: the export runs with <c>core.quotePath=false</c>, so a
+    ///     spoofing name reaches the patch raw, and with it refused there is no dirty-file warning to name it in.
     /// </summary>
     [Test]
-    public async Task PreviewAsync_WithASpoofingNameOnTheHost_EscapesItInTheWarning()
+    public async Task PreviewAsync_WithASpoofingNameFromAGeneratedPatch_RefusesItNamedEscaped()
     {
         if (OperatingSystem.IsWindows())
         {
-            Skip.Test("A bidi override is not a legal character in a Windows file name, so the host file cannot be created.");
+            Skip.Test("A bidi override is not a legal character in a Windows file name, so the baseline file cannot be created.");
         }
 
         var harness = NewHarness();
@@ -2022,18 +2112,16 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var patch = await GenerateGPatchAsync("repo-01",
             hostRoot,
             ("no\u202Etes.txt", before, before.Replace("l2\n", "l2-changed\n", StringComparison.Ordinal)));
-        await InitHostRepositoryAsync(hostRoot);
-        await SeedHostAsync(hostRoot, ("no\u202Etes.txt", before.Replace("l19\n", "l19-local\n", StringComparison.Ordinal)));
-        await WritePatchAsync(harness, "run-spoof-dirty", patch);
+        await WritePatchAsync(harness, "run-spoof-generated", patch);
 
         var preview = await harness.Service.PreviewAsync(new NodePatchApplyRequest
         {
-            RunId = "run-spoof-dirty"
+            RunId = "run-spoof-generated"
         });
 
-        AssertEx.Contains(preview.DirtyTargets, entry => entry.Path == "repo-01/no\\u{202E}tes.txt");
-        AssertEx.True(preview.DirtyTargets.All(entry => !entry.Path.Contains('\u202E', StringComparison.Ordinal)),
-            "the raw override must not survive into the warning");
+        AssertEx.False(preview.CanApply);
+        AssertEx.Contains(preview.Rejections, rejection => rejection.Path == "repo-01/no\\u{202E}tes.txt", Describe(preview.Rejections));
+        AssertEx.Empty(preview.DirtyTargets);
     }
 
     /// <summary>

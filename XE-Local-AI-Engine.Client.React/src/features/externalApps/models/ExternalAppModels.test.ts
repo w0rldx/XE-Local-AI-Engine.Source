@@ -45,7 +45,7 @@ describe("external app vocabularies", () => {
 
 	it("counts exactly the members the node's enums declare", () => {
 		expect(externalAppStatuses).toHaveLength(10);
-		expect(externalAppFailureCategories).toHaveLength(13);
+		expect(externalAppFailureCategories).toHaveLength(14);
 		expect(containerRuntimeStatuses).toHaveLength(7);
 		expect(externalAppEventKinds).toHaveLength(16);
 	});

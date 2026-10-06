@@ -113,6 +113,7 @@ public sealed class ExternalAppOperationRunnerTests
         AssertEx.True(harness.Runner.Cancel(admitted.Id), "An install that is running has an entry to cancel.");
 
         var row = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Failed);
+        AssertEx.Equal(ExternalAppFailureCategory.Cancelled, row.FailureCategory);
         AssertEx.Contains(row.FailureSummary, "cancelled");
         AssertEx.Empty(harness.Runtime.CreatedContainerIds, "A cancel during the pull creates nothing.");
     }

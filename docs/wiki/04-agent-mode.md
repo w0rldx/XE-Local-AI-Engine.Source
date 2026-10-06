@@ -327,7 +327,15 @@ and calls the provider again without the runner seeing it, and MAF participant t
 invisible to the runner — so this hop is the only place that sees, and can bound, those inner rounds.
 It is gated on an ambient `ProviderCallBudget` scope seeded per invocation by the runner; with no scope
 (the eval and preview-workflow runners drive the same shared client without one) it is a transparent
-pass-through.
+pass-through, except for the tool-call ceiling below.
+
+- **Per-response tool-call ceiling.** `MaximumToolIterationsPerRequest` counts round-trips, so one runaway
+  response (a 7B model once emitted 1,584 identical calls in a single turn) was otherwise unbounded. Every
+  response, scoped or not, has calls identical in name and arguments collapsed to the first, then at most
+  `Agent:ToolPipeline:MaxToolCallsPerResponse` (default 32) kept; the rest never reach the tool loop, so no
+  result, persisted part or counter refers to them. One warning per trimmed response. In streaming each
+  `FunctionCallContent` is a whole call and is decided on arrival; only an update that loses a call is
+  re-yielded as a clone, everything else passes through unchanged.
 
 - **The window** is the per-send `num_ctx` the invocation factory writes onto
   `ChatOptions.AdditionalProperties` when one is set — read here so the per-round window matches the

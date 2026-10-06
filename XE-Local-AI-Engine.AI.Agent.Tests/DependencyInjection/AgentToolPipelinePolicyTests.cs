@@ -256,6 +256,49 @@ public sealed class AgentToolPipelinePolicyTests
         AssertEx.Equal(expected: 2, snapshot.ProviderCalls);
     }
 
+    // F-74: a 7B model emitted 1,584 calls (1,582 identical) in ONE response. The iteration cap counts round-trips, so
+    // only the per-response ceiling below the loop bounds it; every executed call must still be paired with its result.
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task RunawayResponse_CollapsesIdenticalCallsAndCapsTheRest(bool streaming)
+    {
+        const int Ceiling = 8;
+        var executed = new ConcurrentQueue<int>();
+        var tool = AIFunctionFactory.Create((int n) =>
+            {
+                executed.Enqueue(n);
+                return "tool result";
+            },
+            ToolName);
+        List<AIContent> calls = [];
+        calls.AddRange(Enumerable.Range(0, 50).Select(static index => Call($"same-{index}", n: 0)));
+        calls.AddRange(Enumerable.Range(1, 40).Select(static n => Call($"distinct-{n}", n)));
+        using var inner = new ScriptedChatClient((call, _, _) =>
+            call == 1 ? new ChatResponse(new ChatMessage(ChatRole.Assistant, calls)) : FinalAnswer());
+        using var provider = BuildProvider(inner, maxToolCallsPerResponse: Ceiling);
+        var client = provider.GetRequiredService<IChatClient>();
+        ChatResponse response;
+
+        using (ProviderCallBudget.BeginScope(BudgetOptions()))
+        {
+            response = await SendAsync(client, Options(tool), streaming);
+        }
+
+        AssertEx.Equal("done", response.Text);
+        AssertEx.True(executed.Order().SequenceEqual(Enumerable.Range(0, Ceiling)),
+            $"the 50 identical calls must run once and the total must stop at {Ceiling}; ran [{string.Join(", ", executed)}]");
+        var contents = response.Messages.SelectMany(static message => message.Contents).ToList();
+        var requestedIds = contents.OfType<FunctionCallContent>().Select(static call => call.CallId).ToHashSet(StringComparer.Ordinal);
+        var resultIds = contents.OfType<FunctionResultContent>().Select(static result => result.CallId).ToHashSet(StringComparer.Ordinal);
+        AssertEx.Equal(expected: Ceiling, requestedIds.Count, "no dropped call may survive into the returned turn");
+        AssertEx.True(requestedIds.SetEquals(resultIds), "every surviving call must be paired with exactly its own result");
+        AssertEx.Equal(expected: Ceiling, inner.ReceivedMessages[1].SelectMany(static message => message.Contents).OfType<FunctionCallContent>().Count(),
+            "the follow-up round must carry only the kept calls");
+
+        static FunctionCallContent Call(string callId, int n) => new(callId, ToolName, new Dictionary<string, object?> { ["n"] = n });
+    }
+
     [Test]
     [Arguments(false)]
     [Arguments(true)]
@@ -437,14 +480,19 @@ public sealed class AgentToolPipelinePolicyTests
     private static ServiceProvider BuildProvider(ScriptedChatClient inner,
         int maximumIterations = 10,
         IToolRelevanceSelector? selector = null,
-        int toolRelevanceThreshold = 12)
+        int toolRelevanceThreshold = 12,
+        int maxToolCallsPerResponse = AgentToolPipelineOptions.DefaultMaxToolCallsPerResponse)
     {
         var services = new ServiceCollection();
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddSingleton<IChatClient>(inner);
         services.AddOptions<AgentToolPipelineOptions>()
-                .Configure(options => options.MaximumToolIterationsPerRequest = maximumIterations);
+                .Configure(options =>
+                {
+                    options.MaximumToolIterationsPerRequest = maximumIterations;
+                    options.MaxToolCallsPerResponse = maxToolCallsPerResponse;
+                });
         services.AddOptions<AgentTelemetryOptions>();
         services.AddOptions<ToolRelevanceOptions>()
                 .Configure(options => options.Threshold = toolRelevanceThreshold);

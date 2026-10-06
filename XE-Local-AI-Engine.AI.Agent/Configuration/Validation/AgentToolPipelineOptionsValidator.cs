@@ -25,6 +25,11 @@ internal sealed class AgentToolPipelineOptionsValidator : IValidateOptions<Agent
             errors.Add("Agent:ToolPipeline:MaxConsecutiveInvalidToolCallsPerTool must be at least 1.");
         }
 
+        if (options.MaxToolCallsPerResponse < 1)
+        {
+            errors.Add("Agent:ToolPipeline:MaxToolCallsPerResponse must be at least 1.");
+        }
+
         return errors.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
     }
 }
