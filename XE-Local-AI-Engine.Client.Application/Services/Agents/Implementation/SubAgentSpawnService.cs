@@ -409,7 +409,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         return true;
     }
 
-    private async Task<(bool Success, IList<AITool>? Tools)> ResolveAgenticMcpToolsAsync(IReadOnlyList<AllowedToolDto> allowedTools,
+    private async Task<McpToolResolution> ResolveAgenticMcpToolsAsync(IReadOnlyList<AllowedToolDto> allowedTools,
         McpExecutionBindingRequest request,
         CancellationToken cancellationToken)
     {
@@ -417,18 +417,18 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             || !McpInboundExecutionContext.IsBoundedPrefix(request.InboundContext.KeyPrefix)
             || request.ExecutionRequestId == Guid.Empty)
         {
-            return (false, null);
+            return new McpToolResolution(false, null);
         }
 
         if (allowedTools.Count == 0)
         {
-            return (true, null);
+            return new McpToolResolution(true, null);
         }
 
         if (allowedTools.Any(static descriptor => string.IsNullOrWhiteSpace(descriptor.Name))
             || allowedTools.Select(static descriptor => descriptor.Name).Distinct(StringComparer.Ordinal).Count() != allowedTools.Count)
         {
-            return (false, null);
+            return new McpToolResolution(false, null);
         }
 
         var executables = await InvocationToolResolver.ResolveAsync(SubAgentSpawnPolicy.ToOfferPlaceholders(allowedTools),
@@ -441,7 +441,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         if (executables.Count != allowedTools.Count
             || executables.Select(static executable => executable.Name).Distinct(StringComparer.Ordinal).Count() != allowedTools.Count)
         {
-            return (false, null);
+            return new McpToolResolution(false, null);
         }
 
         var descriptors = allowedTools.ToDictionary(static descriptor => descriptor.Name, StringComparer.Ordinal);
@@ -450,7 +450,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         {
             if (!descriptors.TryGetValue(executable.Name, out var descriptor))
             {
-                return (false, null);
+                return new McpToolResolution(false, null);
             }
 
             if (executable is ApprovalRequiredAIFunction approvalRequired)
@@ -464,15 +464,17 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
             {
                 if (descriptor.RequiresApproval)
                 {
-                    return (false, null);
+                    return new McpToolResolution(false, null);
                 }
 
                 adapted.Add(executable);
             }
         }
 
-        return (true, adapted);
+        return new McpToolResolution(true, adapted);
     }
+
+    private readonly record struct McpToolResolution(bool Success, IList<AITool>? Tools);
 
     // Allow: a cloud spawn consumes a cloud-budget unit (DoS-of-wallet cap); a local Allow carries a ledger reservation
     // that must be released when the child exits. The reservation is null for a cloud Allow, so disposal is a no-op there.

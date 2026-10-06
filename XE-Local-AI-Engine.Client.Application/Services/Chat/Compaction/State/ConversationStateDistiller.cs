@@ -205,9 +205,11 @@ internal sealed class ConversationStateDistiller : IConversationStateDistiller
         return (int)Math.Min(derived, ceiling);
     }
 
+    internal readonly record struct UserPrompt(string Prompt, int Consumed);
+
     // Charges exactly the strings sent: the system prompt plus the user message with both fences. The state yields
     // first (trailing lines dropped) so at least a minimum message excerpt always fits; null when even that cannot.
-    internal static (string Prompt, int Consumed)? BuildUserPrompt(ConversationStateDistillerInput input, int budget)
+    internal static UserPrompt? BuildUserPrompt(ConversationStateDistillerInput input, int budget)
     {
         var state = RenderState(input.State);
         var available = budget - SystemPrompt.Length - ComposeUserPrompt(state, string.Empty).Length;
@@ -249,7 +251,7 @@ internal sealed class ConversationStateDistiller : IConversationStateDistiller
             consumed = 1;
         }
 
-        return (ComposeUserPrompt(state, messages.ToString()), consumed);
+        return new UserPrompt(ComposeUserPrompt(state, messages.ToString()), consumed);
     }
 
     private static string ComposeUserPrompt(string state, string messages) =>

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Runtime.InteropServices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -119,7 +120,7 @@ public sealed class RetentionSweeperService : BackgroundService
         // eligibility re-checked inside the transaction, so a conversation touched after selection survives.
         var candidateConversationIds = await retentionStore.ListExpiredConversationCandidatesAsync(cutoffUtc, cancellationToken);
 
-        var deletedConversations = new List<(Guid ConversationId, Guid? WorkSessionId)>(candidateConversationIds.Count);
+        var deletedConversations = new List<DeletedConversation>(candidateConversationIds.Count);
         foreach (var conversationId in candidateConversationIds)
         {
             // The owned session (1:1, may be none) is resolved BEFORE the purge: its row carries the only
@@ -131,7 +132,7 @@ public sealed class RetentionSweeperService : BackgroundService
                 cancellationToken);
             if (deleted)
             {
-                deletedConversations.Add((conversationId, workSession?.Id));
+                deletedConversations.Add(new DeletedConversation(conversationId, workSession?.Id));
             }
         }
 
@@ -292,4 +293,7 @@ public sealed class RetentionSweeperService : BackgroundService
 
         return orphanCount;
     }
+
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct DeletedConversation(Guid ConversationId, Guid? WorkSessionId);
 }

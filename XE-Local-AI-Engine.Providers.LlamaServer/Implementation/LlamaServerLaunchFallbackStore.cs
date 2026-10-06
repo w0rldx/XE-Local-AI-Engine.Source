@@ -123,13 +123,13 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         return disabled;
     }
 
-    private async Task<(HashSet<string> Disabled, bool HadLegacy)> LoadAsync(CancellationToken ct)
+    private async Task<LoadedState> LoadAsync(CancellationToken ct)
     {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var hadLegacy = false;
         if (!File.Exists(_statePath))
         {
-            return (set, hadLegacy);
+            return new LoadedState(set, hadLegacy);
         }
 
         try
@@ -158,8 +158,11 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
             // Unreadable → treat as nothing disabled.
         }
 
-        return (set, hadLegacy);
+        return new LoadedState(set, hadLegacy);
     }
+
+    /// <summary>The disabled config keys read from the file, and whether it also held legacy un-keyed entries.</summary>
+    private readonly record struct LoadedState(HashSet<string> Disabled, bool HadLegacy);
 
     /// <summary>
     ///     Opens the state file for reading the way every reader must: shared with writers and deleters, not just with

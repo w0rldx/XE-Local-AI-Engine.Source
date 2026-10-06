@@ -230,7 +230,7 @@ internal sealed class LlamaServerIdleReaper : IDisposable
     ///     reranker), a <paramref name="protectedModels" /> name, or a profiling process. The victim is tree-killed before this returns, outside
     ///     the gate; the caller's bounded re-probe covers the driver releasing its VRAM. Wiki 03, "Eviction &amp; reaper".
     /// </remarks>
-    internal async Task<(ProcessKey? Evicted, ProcessKey? Busy)> TryEvictIdleChatForMemoryAsync(ProcessKey requesting,
+    internal async Task<ChatEvictionOutcome> TryEvictIdleChatForMemoryAsync(ProcessKey requesting,
         IReadOnlyCollection<string> protectedModels,
         CancellationToken ct)
     {
@@ -272,18 +272,18 @@ internal sealed class LlamaServerIdleReaper : IDisposable
 
             if (victimKey is null || victim is null)
             {
-                return (null, busyKey);
+                return new ChatEvictionOutcome(null, busyKey);
             }
 
             // A lease taken between the scan and the claim makes the victim busy, not ineligible.
             if (!TryClaimAndDetach(victimKey.Value, victim, detached))
             {
-                return (null, victimKey);
+                return new ChatEvictionOutcome(null, victimKey);
             }
 
             _logger.LogWarning("Evicting idle chat llama-server for model {ModelName} to free memory for a load of model {RequestedModelName}.",
                 victimKey.Value.ModelName, requesting.ModelName);
-            return (victimKey, null);
+            return new ChatEvictionOutcome(victimKey, null);
         }
         finally
         {
@@ -291,6 +291,9 @@ internal sealed class LlamaServerIdleReaper : IDisposable
             KillDetachedProcesses(detached);
         }
     }
+
+    /// <summary>The evicted key, or else a key skipped only for its active lease; both null when nothing qualified.</summary>
+    internal readonly record struct ChatEvictionOutcome(ProcessKey? Evicted, ProcessKey? Busy);
 
     /// <summary>Atomically claims <paramref name="victim" /> and detaches it into <paramref name="detached" /> for a kill outside the gate.</summary>
     /// <remarks>The caller holds the admission gate.</remarks>

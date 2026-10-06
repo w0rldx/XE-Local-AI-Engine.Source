@@ -661,7 +661,7 @@ public sealed class HardwareProfilerTests
             return AvailableRamBytes;
         }
 
-        public (long TotalBytes, long AvailableBytes)? ReadOsMemoryStatus()
+        public OsMemoryStatus? ReadOsMemoryStatus()
         {
             return null;
         }

@@ -665,12 +665,14 @@ internal sealed class DevWorkflowAgentExecutor
         return $"{content[..cut]}{Environment.NewLine}(Truncated: the first {cut} of {content.Length} characters.)";
     }
 
+    private readonly record struct InputEntry(string Name, string Value);
+
     /// <summary>
     ///     The node run's input document as flat name/value lines. Nested and array values are rendered as their raw
     ///     JSON: a caller-supplied <c>inputsJson</c> is arbitrary, and reformatting it would be inventing structure it
     ///     does not have.
     /// </summary>
-    private static IReadOnlyList<(string Name, string Value)> ReadInput(string? inputJson)
+    private static IReadOnlyList<InputEntry> ReadInput(string? inputJson)
     {
         if (string.IsNullOrWhiteSpace(inputJson))
         {
@@ -689,7 +691,7 @@ internal sealed class DevWorkflowAgentExecutor
             [
                 .. document.RootElement.EnumerateObject()
                            .Where(static property => property.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
-                           .Select(static property => (property.Name,
+                           .Select(static property => new InputEntry(property.Name,
                                property.Value.ValueKind == JsonValueKind.String ? property.Value.GetString()! : property.Value.GetRawText()))
             ];
         }

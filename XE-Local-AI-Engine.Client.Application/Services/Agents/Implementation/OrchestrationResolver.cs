@@ -245,22 +245,24 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     ///     blank-scaffold case, skips the prepend, keeping the prompt byte-identical to the persona-only path.
     ///     Without this a participant ran with NO base scaffold, unlike every direct agent send.
     /// </remarks>
-    private async Task<(string Instructions, bool PlaybookWithheld)> ComposeParticipantInstructionsAsync(AgentDefinitionRecord participant, string? retrievalQuery,
+    private async Task<ComposedInstructions> ComposeParticipantInstructionsAsync(AgentDefinitionRecord participant, string? retrievalQuery,
         bool participantIsCloud, CancellationToken cancellationToken)
     {
         var (personaPrompt, playbookWithheld) = await ComposeParticipantPersonaAsync(participant, retrievalQuery, participantIsCloud, cancellationToken);
         var instructions = participant.DisableBaseScaffold
             ? personaPrompt
             : BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), personaPrompt);
-        return (instructions, playbookWithheld);
+        return new ComposedInstructions(instructions, playbookWithheld);
     }
 
-    private async Task<(string Persona, bool PlaybookWithheld)> ComposeParticipantPersonaAsync(AgentDefinitionRecord participant, string? retrievalQuery, bool participantIsCloud,
+    private readonly record struct ComposedInstructions(string Instructions, bool PlaybookWithheld);
+
+    private async Task<ComposedInstructions> ComposeParticipantPersonaAsync(AgentDefinitionRecord participant, string? retrievalQuery, bool participantIsCloud,
         CancellationToken cancellationToken)
     {
         if (!participant.PlaybookEnabled)
         {
-            return (participant.Instructions, false);
+            return new ComposedInstructions(participant.Instructions, false);
         }
 
         // The same egress gate as the single-agent path, keyed on THIS participant's effective model only, and
@@ -274,7 +276,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
                     participant.Id);
             }
 
-            return (participant.Instructions, withheld);
+            return new ComposedInstructions(participant.Instructions, withheld);
         }
 
         var enabled = await _playbookActionStore.ListEnabledByAgentAsync(participant.Id, cancellationToken);
@@ -289,7 +291,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             _retrievalOptions.MaxInjectedMemoryTokens,
             _retrievalOptions.MaxInjectedFailureMemoryTokens,
             _logger);
-        return (PlaybookPromptComposer.Compose(participant.Instructions, selected), false);
+        return new ComposedInstructions(PlaybookPromptComposer.Compose(participant.Instructions, selected), false);
     }
 
     /// <summary>

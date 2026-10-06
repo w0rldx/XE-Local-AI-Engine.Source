@@ -53,7 +53,7 @@ public sealed partial class NodeAdminMcpTools
         [Description("Optional backend: cpu, cuda, or vulkan.")]
         string? variant = null)
     {
-        return await InvokeAuditedAsync("start_runtime_acquisition", AuditArguments(("variant", variant)), async () =>
+        return await InvokeAuditedAsync("start_runtime_acquisition", AuditArguments(new KeyValuePair<string, object?>("variant", variant)), async () =>
         {
             if (!TryParseVariant(variant, out var parsedVariant))
             {

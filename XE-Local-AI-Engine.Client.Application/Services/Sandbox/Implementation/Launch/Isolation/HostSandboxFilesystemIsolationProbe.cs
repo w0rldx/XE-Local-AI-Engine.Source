@@ -164,16 +164,16 @@ internal static class HostSandboxFilesystemIsolationProbe
 
         // Positive controls first: they are what proves the chain really ran, so a negative control that "passed"
         // because nothing executed cannot be mistaken for containment.
-        var positives = new (string Key, string Expected, string Failure)[]
+        var positives = new ProbeControl[]
         {
-            ("PID", "2", "the workload was not pid 2 inside the sandbox, so the PID namespace was not created"),
-            ("WORKWRITE", "OK", "the workload could not write to its own /work jail"),
-            ("TMPWRITE", "OK", "the workload could not write to the jail-backed /tmp"),
-            ("DEVNULL", "OK", "/dev/null was not usable inside the sandbox"),
-            ("URANDOM", "OK", "/dev/urandom was not readable inside the sandbox"),
-            ("PROCREAD", "OK", "/proc was not readable inside the sandbox"),
-            ("PASSWD", "2", "the synthetic /etc/passwd did not contain exactly the two accounts the jail defines"),
-            ("RUN", "YES", "/run did not exist inside the sandbox")
+            new("PID", "2", "the workload was not pid 2 inside the sandbox, so the PID namespace was not created"),
+            new("WORKWRITE", "OK", "the workload could not write to its own /work jail"),
+            new("TMPWRITE", "OK", "the workload could not write to the jail-backed /tmp"),
+            new("DEVNULL", "OK", "/dev/null was not usable inside the sandbox"),
+            new("URANDOM", "OK", "/dev/urandom was not readable inside the sandbox"),
+            new("PROCREAD", "OK", "/proc was not readable inside the sandbox"),
+            new("PASSWD", "2", "the synthetic /etc/passwd did not contain exactly the two accounts the jail defines"),
+            new("RUN", "YES", "/run did not exist inside the sandbox")
         };
 
         foreach (var (key, expected, failure) in positives)
@@ -184,20 +184,20 @@ internal static class HostSandboxFilesystemIsolationProbe
             }
         }
 
-        var negatives = new (string Key, string Expected, string Failure)[]
+        var negatives = new ProbeControl[]
         {
-            ("HOMECANARY", "ABSENT", "a canary file under the engine user's home was visible inside the sandbox"),
-            ("SIBLINGCANARY", "ABSENT", "a canary file beside the jail — where other sandboxes live — was visible inside the sandbox"),
-            ("HOSTPID", "INVISIBLE", "a host process was visible in the sandbox's /proc"),
-            ("DEVCREATE", "EROFS", "a file could be created under /dev, so it was not remounted read-only"),
-            ("PROCCREATE", "REFUSED", "a file could be created under /proc"),
-            ("ROOTWRITE", "DENIED", "the sandbox root filesystem was writable"),
-            ("USRWRITE", "DENIED", "the read-only /usr bind was writable"),
-            ("ETCWRITE", "DENIED", "the synthetic /etc was writable"),
-            ("RUNENTRIES", "0", "/run inside the sandbox was not empty"),
-            ("BUS", "ABSENT", "the host's user bus socket path existed inside the sandbox"),
-            ("DOCKER", "ABSENT", "a docker daemon socket path existed inside the sandbox"),
-            ("LOOPBACK", "DENIED", "a loopback connect to a host listener succeeded from inside the sandbox")
+            new("HOMECANARY", "ABSENT", "a canary file under the engine user's home was visible inside the sandbox"),
+            new("SIBLINGCANARY", "ABSENT", "a canary file beside the jail — where other sandboxes live — was visible inside the sandbox"),
+            new("HOSTPID", "INVISIBLE", "a host process was visible in the sandbox's /proc"),
+            new("DEVCREATE", "EROFS", "a file could be created under /dev, so it was not remounted read-only"),
+            new("PROCCREATE", "REFUSED", "a file could be created under /proc"),
+            new("ROOTWRITE", "DENIED", "the sandbox root filesystem was writable"),
+            new("USRWRITE", "DENIED", "the read-only /usr bind was writable"),
+            new("ETCWRITE", "DENIED", "the synthetic /etc was writable"),
+            new("RUNENTRIES", "0", "/run inside the sandbox was not empty"),
+            new("BUS", "ABSENT", "the host's user bus socket path existed inside the sandbox"),
+            new("DOCKER", "ABSENT", "a docker daemon socket path existed inside the sandbox"),
+            new("LOOPBACK", "DENIED", "a loopback connect to a host listener succeeded from inside the sandbox")
         };
 
         foreach (var (key, expected, failure) in negatives)
@@ -284,7 +284,11 @@ internal static class HostSandboxFilesystemIsolationProbe
         return string.Concat("'", value.Replace("'", @"'\''", StringComparison.Ordinal), "'");
     }
 
-    private static (int ExitCode, string Output) RunChain(IReadOnlyList<string> chain, IReadOnlyDictionary<string, string> userBusEnvironment)
+    private readonly record struct ProbeControl(string Key, string Expected, string Failure);
+
+    private readonly record struct ChainResult(int ExitCode, string Output);
+
+    private static ChainResult RunChain(IReadOnlyList<string> chain, IReadOnlyDictionary<string, string> userBusEnvironment)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -332,7 +336,7 @@ internal static class HostSandboxFilesystemIsolationProbe
         var output = string.Concat(standardOutput.GetAwaiter().GetResult(), "\n", standardError.GetAwaiter().GetResult());
 #pragma warning restore MA0045
 
-        return (process.ExitCode, output);
+        return new ChainResult(process.ExitCode, output);
     }
 
     private static Dictionary<string, string> ParseFacts(string output)

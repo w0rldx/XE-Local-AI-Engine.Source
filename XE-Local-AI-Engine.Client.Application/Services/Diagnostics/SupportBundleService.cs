@@ -32,11 +32,11 @@ public sealed class SupportBundleService : ISupportBundleService
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    private static readonly (string Entry, string FileName)[] AuxiliaryLogs =
+    private static readonly AuxiliaryLog[] AuxiliaryLogs =
     [
-        ("logs/startup-crash.log", "startup-crash.log"),
-        ("logs/desktop.log", "desktop.log"),
-        ("logs/launcher.log", "launcher.log")
+        new("logs/startup-crash.log", "startup-crash.log"),
+        new("logs/desktop.log", "desktop.log"),
+        new("logs/launcher.log", "launcher.log")
     ];
 
     private readonly IReadOnlyList<string> _logDirectories;
@@ -114,7 +114,7 @@ public sealed class SupportBundleService : ISupportBundleService
     }
 
     /// <summary>The last <paramref name="maxBytes" /> of a file, cut forward to the first line break when truncated.</summary>
-    public static async Task<(string Text, bool Truncated)> ReadTailAsync(string path, int maxBytes, CancellationToken ct)
+    public static async Task<LogTail> ReadTailAsync(string path, int maxBytes, CancellationToken ct)
     {
         // The node log's active file is held open by the rolling sink, hence the sharing flags.
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, bufferSize: 4096, useAsync: true);
@@ -133,8 +133,13 @@ public sealed class SupportBundleService : ISupportBundleService
             start = newline >= 0 ? newline + 1 : 0;
         }
 
-        return (Encoding.UTF8.GetString(bytes, start, bytes.Length - start), truncated);
+        return new LogTail(Encoding.UTF8.GetString(bytes, start, bytes.Length - start), truncated);
     }
+
+    /// <summary>A file tail read by <see cref="ReadTailAsync" />: the text and whether the start was cut.</summary>
+    public readonly record struct LogTail(string Text, bool Truncated);
+
+    private readonly record struct AuxiliaryLog(string Entry, string FileName);
 
     // The free-text members: warnings, the CPU model string and settings values (model names, voice profile). The
     // rest are versions, enums, numbers and fixed vocabularies.

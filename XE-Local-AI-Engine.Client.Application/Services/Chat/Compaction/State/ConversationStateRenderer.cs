@@ -5,16 +5,16 @@ using System.Text;
 /// <summary>Renders the live entries of a state document as the plain-text block injected into a turn's context.</summary>
 public static class ConversationStateRenderer
 {
-    private static readonly (ConversationStateCategory Category, string Heading)[] Groups =
+    private static readonly CategoryGroup[] Groups =
     [
-        (ConversationStateCategory.Goal, "Goals"),
-        (ConversationStateCategory.Correction, "Corrections"),
-        (ConversationStateCategory.OpenQuestion, "Open questions"),
-        (ConversationStateCategory.Decision, "Decisions"),
-        (ConversationStateCategory.Constraint, "Constraints"),
-        (ConversationStateCategory.Fact, "Facts"),
-        (ConversationStateCategory.ToolOutcome, "Tool outcomes"),
-        (ConversationStateCategory.CompletedWork, "Completed work")
+        new(ConversationStateCategory.Goal, "Goals"),
+        new(ConversationStateCategory.Correction, "Corrections"),
+        new(ConversationStateCategory.OpenQuestion, "Open questions"),
+        new(ConversationStateCategory.Decision, "Decisions"),
+        new(ConversationStateCategory.Constraint, "Constraints"),
+        new(ConversationStateCategory.Fact, "Facts"),
+        new(ConversationStateCategory.ToolOutcome, "Tool outcomes"),
+        new(ConversationStateCategory.CompletedWork, "Completed work")
     ];
 
     /// <summary>Returns the rendered block, or null when the document has no live entry.</summary>
@@ -71,4 +71,6 @@ public static class ConversationStateRenderer
     {
         return value.ReplaceLineEndings(" ");
     }
+
+    private readonly record struct CategoryGroup(ConversationStateCategory Category, string Heading);
 }

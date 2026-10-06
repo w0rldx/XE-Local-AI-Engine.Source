@@ -122,7 +122,7 @@ internal sealed class DevelopmentOpenApiDocumentProcessor : IDocumentProcessor
         IReadOnlyDictionary<string, int> knownRanks)
     {
         var originalEntries = entries.ToArray();
-        var developmentEntries = originalEntries.Select(static (entry, index) => (Entry: entry, Index: index))
+        var developmentEntries = originalEntries.Select(static (entry, index) => new { Entry = entry, Index = index })
                                                 .Where(item => isDevelopmentEntry(item.Entry.Key))
                                                 .OrderBy(item => knownRanks.GetValueOrDefault(item.Entry.Key, int.MaxValue))
                                                 .ThenBy(static item => item.Index)

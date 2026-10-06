@@ -354,16 +354,20 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
     // Completed, and only Completed, is worth one more inference: it is the one end where the audio the speaker just
     // produced is still wanted. Every other reason maps onto a status the row can carry.
-    private static (TranscriptionSessionStatus Status, string? ErrorCode, string? ErrorMessage) MapReason(LiveEndReason reason) =>
+    private static EndStatus MapReason(LiveEndReason reason) =>
         reason switch
         {
-            LiveEndReason.Completed => (TranscriptionSessionStatus.Completed, null, null),
+            LiveEndReason.Completed => new EndStatus(TranscriptionSessionStatus.Completed, null, null),
             LiveEndReason.Cancelled or LiveEndReason.Abandoned or LiveEndReason.NeverAttached =>
-                (TranscriptionSessionStatus.Cancelled, null, null),
-            LiveEndReason.Failed => (TranscriptionSessionStatus.Failed, "live-failed",
+                new EndStatus(TranscriptionSessionStatus.Cancelled, null, null),
+            LiveEndReason.Failed => new EndStatus(TranscriptionSessionStatus.Failed, "live-failed",
                 "The live transcription lane stopped making progress."),
             _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "Unknown live transcription end reason.")
         };
+
+    private readonly record struct EndStatus(TranscriptionSessionStatus Status, string? ErrorCode, string? ErrorMessage);
+
+    private readonly record struct FinalOutcome(LiveEndReason Reason, bool GracefulFailure);
 
     private Task BeginEnd(LiveSession session, LiveEndReason reason)
     {
@@ -627,7 +631,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     }
 
     /// <summary>Closes the commit pipeline and freezes the terminal outcome under the same barrier.</summary>
-    private static async Task<(LiveEndReason Reason, bool GracefulFailure)> FinalizeAsync(LiveSession session, bool finalizedCleanly)
+    private static async Task<FinalOutcome> FinalizeAsync(LiveSession session, bool finalizedCleanly)
     {
         await session.CommitGate.WaitAsync(CancellationToken.None);
         try
@@ -641,7 +645,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
                 var selected = session.EndReason
                                ?? throw new InvalidOperationException("The live transcription session ended without a reason.");
                 var gracefulFailure = selected == LiveEndReason.Completed && !finalizedCleanly;
-                return (gracefulFailure ? LiveEndReason.Failed : selected, gracefulFailure);
+                return new FinalOutcome(gracefulFailure ? LiveEndReason.Failed : selected, gracefulFailure);
             }
         }
         finally

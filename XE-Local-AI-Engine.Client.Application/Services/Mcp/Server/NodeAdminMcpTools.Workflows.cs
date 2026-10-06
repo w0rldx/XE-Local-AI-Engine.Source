@@ -21,7 +21,7 @@ public sealed partial class NodeAdminMcpTools
         int? limit = null,
         [Description("Optional run status: pending, running, pausing, paused, waitingForApproval, cancelling, completed, failed, or cancelled.")]
         string? status = null) =>
-        InvokeAuditedAsync("list_workflow_runs", AuditArguments(("limit", limit), ("status", status)), async () =>
+        InvokeAuditedAsync("list_workflow_runs", AuditArguments(new("limit", limit), new("status", status)), async () =>
         {
             var boundedLimit = ClampWorkflowListLimit(limit);
             if (!await _runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken))
@@ -88,7 +88,7 @@ public sealed partial class NodeAdminMcpTools
         "Get one development workflow run by id: its status, node tallies, pending-decision count, failure class, sanitized terminal reason, start and end timestamps, and one bounded row per node run (key, type, status, attempt, max attempts). The pinned graph, artifact contents, work-session transcripts and host paths are never returned, and nothing here moves the run.")]
     public Task<McpWorkflowRunGetResponse> GetWorkflowRunAsync([Description("The canonical hyphenated UUID of the run, as returned by list_workflow_runs.")] string run_id,
         CancellationToken cancellationToken) =>
-        InvokeAuditedAsync("get_workflow_run", AuditArguments(("run_id", run_id)), async () =>
+        InvokeAuditedAsync("get_workflow_run", AuditArguments(new KeyValuePair<string, object?>("run_id", run_id)), async () =>
         {
             if (!await _runtimeSettings.GetDevWorkflowsEnabledAsync(cancellationToken))
             {

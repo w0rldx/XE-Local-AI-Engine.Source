@@ -17,30 +17,30 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </remarks>
 public sealed class FeatureSwitchMiddleware
 {
-    private static readonly (PathString Root, PathString Capability, Func<INodeRuntimeSettings, CancellationToken, Task<bool>> IsEnabled)[] Gates =
+    private static readonly FeatureGate[] Gates =
     [
-        (Route(LocalApiRoutes.Development.Root), Route(LocalApiRoutes.Development.Capability),
+        new(Route(LocalApiRoutes.Development.Root), Route(LocalApiRoutes.Development.Capability),
             static (settings, ct) => settings.GetDevelopmentEnabledAsync(ct)),
-        (Route(LocalApiRoutes.WorkSessions.Root), Route(LocalApiRoutes.WorkSessions.Capability),
+        new(Route(LocalApiRoutes.WorkSessions.Root), Route(LocalApiRoutes.WorkSessions.Capability),
             static (settings, ct) => settings.GetWorkSessionsEnabledAsync(ct)),
-        (Route(LocalApiRoutes.DevelopmentWorkflows.Root), Route(LocalApiRoutes.DevelopmentWorkflows.Capability),
+        new(Route(LocalApiRoutes.DevelopmentWorkflows.Root), Route(LocalApiRoutes.DevelopmentWorkflows.Capability),
             static (settings, ct) => settings.GetDevWorkflowsEnabledAsync(ct)),
-        (Route(LocalApiRoutes.GraphWorkflows.Root), Route(LocalApiRoutes.GraphWorkflows.Capability),
+        new(Route(LocalApiRoutes.GraphWorkflows.Root), Route(LocalApiRoutes.GraphWorkflows.Capability),
             static (settings, ct) => settings.GetGraphWorkflowsEnabledAsync(ct)),
-        (Route(LocalApiRoutes.Transcription.Root), PathString.Empty,
+        new(Route(LocalApiRoutes.Transcription.Root), PathString.Empty,
             static (settings, ct) => settings.GetTranscriptionEnabledAsync(ct)),
-        (Route(LocalApiRoutes.ExternalApps.Root), PathString.Empty,
+        new(Route(LocalApiRoutes.ExternalApps.Root), PathString.Empty,
             static (settings, ct) => settings.GetExternalAppsEnabledAsync(ct))
     ];
 
     /// <summary>The (method, route) pairs that only end transcription work, so they stay reachable while the switch is off.</summary>
-    private static readonly (string Method, TemplateMatcher Route)[] TranscriptionStopRoutes =
+    private static readonly StopRoute[] TranscriptionStopRoutes =
     [
-        (HttpMethods.Delete, Template(LocalApiRoutes.Transcription.SessionProcessCapture)),
-        (HttpMethods.Post, Template(LocalApiRoutes.Transcription.SessionCancel)),
-        (HttpMethods.Post, Template(LocalApiRoutes.Transcription.ModelDownloadCancel)),
-        (HttpMethods.Post, Template(LocalApiRoutes.Transcription.RuntimeSourceBuildCancel)),
-        (HttpMethods.Post, Template(LocalApiRoutes.Transcription.RuntimeEject))
+        new(HttpMethods.Delete, Template(LocalApiRoutes.Transcription.SessionProcessCapture)),
+        new(HttpMethods.Post, Template(LocalApiRoutes.Transcription.SessionCancel)),
+        new(HttpMethods.Post, Template(LocalApiRoutes.Transcription.ModelDownloadCancel)),
+        new(HttpMethods.Post, Template(LocalApiRoutes.Transcription.RuntimeSourceBuildCancel)),
+        new(HttpMethods.Post, Template(LocalApiRoutes.Transcription.RuntimeEject))
     ];
 
     private readonly RequestDelegate _next;
@@ -80,11 +80,17 @@ public sealed class FeatureSwitchMiddleware
 
     private static bool IsTranscriptionStop(HttpRequest request) =>
         Array.Exists(TranscriptionStopRoutes, stop =>
-            HttpMethods.Equals(request.Method, stop.Method) && stop.Route.TryMatch(request.Path, new RouteValueDictionary()));
+            HttpMethods.Equals(request.Method, stop.Method) && stop.Matcher.TryMatch(request.Path, new RouteValueDictionary()));
 
     private static PathString Route(string relative) =>
         new($"/{LocalApiRoutes.Prefix}/{relative}");
 
     private static TemplateMatcher Template(string relative) =>
         new(TemplateParser.Parse($"{LocalApiRoutes.Prefix}/{relative}"), new RouteValueDictionary());
+
+    /// <summary>One feature's route family, its always-reachable capability GET, and the switch that gates it.</summary>
+    private readonly record struct FeatureGate(PathString Root, PathString Capability, Func<INodeRuntimeSettings, CancellationToken, Task<bool>> IsEnabled);
+
+    /// <summary>A method and route template that stays reachable while its feature is off.</summary>
+    private readonly record struct StopRoute(string Method, TemplateMatcher Matcher);
 }

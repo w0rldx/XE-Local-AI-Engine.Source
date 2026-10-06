@@ -519,7 +519,7 @@ internal sealed class DevWorkflowGraph
     private static List<DevWorkflowGraphEdge> ParseEdges(JsonElement root, Dictionary<string, DevWorkflowGraphNode> nodes)
     {
         var edges = new List<DevWorkflowGraphEdge>();
-        var pairs = new HashSet<(string From, string To)>();
+        var pairs = new HashSet<DevWorkflowEdgeKey>();
         if (!root.TryGetProperty("edges", out var edgesElement) || edgesElement.ValueKind == JsonValueKind.Null)
         {
             return edges;
@@ -552,7 +552,7 @@ internal sealed class DevWorkflowGraph
 
             // One edge per pair. Admission judges every inbound edge on its own, so a second edge whose condition does
             // not fire is DEAD and skips the target; refusing it also keeps the pair usable as the edge rewrite's key.
-            if (!pairs.Add((from, to)))
+            if (!pairs.Add(new DevWorkflowEdgeKey(from, to)))
             {
                 throw new DevWorkflowValidationException($"The workflow graph declares edge {edge} twice. A second edge between the same two nodes "
                                                          + "cannot widen the first: each is judged on its own, and one whose condition does not fire skips the target.");
@@ -795,10 +795,10 @@ internal sealed class DevWorkflowGraph
         var sources = Nodes.Keys.ToDictionary(key => key, key => inbound[key].ToList(), StringComparer.Ordinal);
         var order = new List<string>(Nodes.Count);
         var placed = new HashSet<string>(StringComparer.Ordinal);
-        var pending = new Stack<(string NodeKey, int EdgeIndex)>();
+        var pending = new Stack<WalkFrame>();
         foreach (var root in Nodes.Keys.Where(placed.Add))
         {
-            pending.Push((root, 0));
+            pending.Push(new WalkFrame(root, 0));
             while (pending.Count > 0)
             {
                 var (nodeKey, edgeIndex) = pending.Pop();
@@ -809,10 +809,10 @@ internal sealed class DevWorkflowGraph
                     continue;
                 }
 
-                pending.Push((nodeKey, edgeIndex + 1));
+                pending.Push(new WalkFrame(nodeKey, edgeIndex + 1));
                 if (placed.Add(entering[edgeIndex].From))
                 {
-                    pending.Push((entering[edgeIndex].From, 0));
+                    pending.Push(new WalkFrame(entering[edgeIndex].From, 0));
                 }
             }
         }
@@ -1021,12 +1021,12 @@ internal sealed class DevWorkflowGraph
         var onPath = new HashSet<string>(StringComparer.Ordinal);
         var path = new List<string>();
         var finished = new HashSet<string>(StringComparer.Ordinal);
-        var pending = new Stack<(string NodeKey, int EdgeIndex)>();
+        var pending = new Stack<WalkFrame>();
         foreach (var root in Nodes.Keys.Where(key => !finished.Contains(key)))
         {
             _ = onPath.Add(root);
             path.Add(root);
-            pending.Push((root, 0));
+            pending.Push(new WalkFrame(root, 0));
             while (pending.Count > 0)
             {
                 var (nodeKey, edgeIndex) = pending.Pop();
@@ -1039,7 +1039,7 @@ internal sealed class DevWorkflowGraph
                     continue;
                 }
 
-                pending.Push((nodeKey, edgeIndex + 1));
+                pending.Push(new WalkFrame(nodeKey, edgeIndex + 1));
                 var next = leaving[edgeIndex].To;
                 if (finished.Contains(next))
                 {
@@ -1054,7 +1054,7 @@ internal sealed class DevWorkflowGraph
                 }
 
                 path.Add(next);
-                pending.Push((next, 0));
+                pending.Push(new WalkFrame(next, 0));
             }
         }
     }
@@ -1066,6 +1066,9 @@ internal sealed class DevWorkflowGraph
             throw new DevWorkflowValidationException($"{description} '{nodeKey}', which the graph does not declare.");
         }
     }
+
+    /// <summary>One frame of an iterative depth-first walk: the node and the next edge index to visit.</summary>
+    private readonly record struct WalkFrame(string NodeKey, int EdgeIndex);
 
     private static string RequiredString(JsonElement element, string name, string owner)
     {

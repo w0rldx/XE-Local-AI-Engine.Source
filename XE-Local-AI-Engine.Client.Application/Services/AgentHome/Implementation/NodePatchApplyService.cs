@@ -264,14 +264,14 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     ///     and no output, so a patch that would write nothing passes <c>--check</c>; a planned file missing from numstat is what shows
     ///     it. The ceiling in <see cref="RunSubPatchAsync" /> removes the known cause; this refuses any other one.
     /// </remarks>
-    private static async Task<(PatchApplyRejection? Rejection, string Numstat)> CheckSubPatchAsync(HostGitRunner runner,
+    private static async Task<SubPatchCheck> CheckSubPatchAsync(HostGitRunner runner,
         AliasPlan alias,
         CancellationToken cancellationToken)
     {
         var check = await RunSubPatchAsync(runner, alias, AgentHomeGit.Arguments("apply", "-p2", "--check", "--whitespace=nowarn"), cancellationToken);
         if (check is null || check.ExitCode != 0)
         {
-            return (new PatchApplyRejection
+            return new SubPatchCheck(new PatchApplyRejection
             {
                 Reason = string.Create(CultureInfo.InvariantCulture,
                     $"alias '{alias.Alias}': patch does not apply cleanly ({Redact(check?.StandardError ?? string.Empty, alias.ResolvedRoot)})")
@@ -288,11 +288,11 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         // By NAME, not count: a header-only block still prints a numstat line, which a count would accept in place of a skipped file.
         if (stats is null || stats.ExitCode != 0 || !alias.Files.All(file => reported.ContainsKey(Describe(file.Alias, file.RelativePath))))
         {
-            return (AliasRejection(alias.Alias, "git would not write every file in the patch under this folder, so nothing was applied."),
+            return new SubPatchCheck(AliasRejection(alias.Alias, "git would not write every file in the patch under this folder, so nothing was applied."),
                 string.Empty);
         }
 
-        return (null, stats.StandardOutput);
+        return new SubPatchCheck(null, stats.StandardOutput);
     }
 
     private static async Task<HostGitResult?> NumstatSubPatchAsync(HostGitRunner runner, AliasPlan alias, CancellationToken cancellationToken)
@@ -827,4 +827,6 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     // Per-file line counts as `git apply --numstat` reports them. Binary entries and unparsable counts land as zeroes.
     [StructLayout(LayoutKind.Auto)]
     private readonly record struct LineStat(int Added, int Removed);
+
+    private readonly record struct SubPatchCheck(PatchApplyRejection? Rejection, string Numstat);
 }

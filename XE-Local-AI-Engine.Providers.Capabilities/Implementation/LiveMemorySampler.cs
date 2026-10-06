@@ -73,19 +73,19 @@ internal sealed class LiveMemorySampler : ILiveMemorySampler
         };
     }
 
-    private (long TotalBytes, long AvailableBytes) ReadRam()
+    private OsMemoryStatus ReadRam()
     {
         if (_environment.IsLinux
             && _environment.ReadProcMemInfo() is { } memInfo
             && HardwareProfiler.TryParseMemInfoKilobytes(memInfo, "MemTotal", out var totalKb)
             && HardwareProfiler.TryParseMemInfoKilobytes(memInfo, "MemAvailable", out var availableKb))
         {
-            return (totalKb * 1024L, availableKb * 1024L);
+            return new OsMemoryStatus(totalKb * 1024L, availableKb * 1024L);
         }
 
         // The GC-based figures are a last resort only: they refresh after a collection, so they cannot drive a live gauge.
         return _environment.ReadOsMemoryStatus()
-               ?? (_environment.GetTotalPhysicalMemoryBytes(), _environment.GetAvailableMemoryBytes());
+               ?? new OsMemoryStatus(_environment.GetTotalPhysicalMemoryBytes(), _environment.GetAvailableMemoryBytes());
     }
 
     private async Task<IReadOnlyList<GpuMemorySample>> ProbeGpusAsync()

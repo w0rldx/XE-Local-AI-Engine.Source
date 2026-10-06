@@ -93,7 +93,7 @@ public sealed class LiveMemorySamplerTests
         var environment = new FakeEnvironment
         {
             ProcMemInfo = null,
-            OsMemoryStatus = (16L * 1024 * Mib, 6L * 1024 * Mib),
+            OsMemoryStatus = new OsMemoryStatus(16L * 1024 * Mib, 6L * 1024 * Mib),
             TotalRamBytes = 1,
             AvailableRamBytes = 1
         };
@@ -238,7 +238,7 @@ public sealed class LiveMemorySamplerTests
 
     private sealed class FakeEnvironment : IHardwareProbeEnvironment
     {
-        public (long TotalBytes, long AvailableBytes)? OsMemoryStatus { get; init; }
+        public OsMemoryStatus? OsMemoryStatus { get; init; }
 
         public string? ProcMemInfo { get; init; } = MemInfo;
 
@@ -272,7 +272,7 @@ public sealed class LiveMemorySamplerTests
             return AvailableRamBytes;
         }
 
-        public (long TotalBytes, long AvailableBytes)? ReadOsMemoryStatus()
+        public OsMemoryStatus? ReadOsMemoryStatus()
         {
             return OsMemoryStatus;
         }

@@ -389,7 +389,7 @@ public sealed partial class InvocationRunner
             // list_tools and ask_user are always offered; every other tool is costed by its own definition. Overhead is additive per
             // definition, so a tool's cost is what it adds to the pinned set's.
             List<string> pinned = [ListToolsFunction.BudgetDefinition];
-            var ranked = new List<(string Name, string Definition)>();
+            var ranked = new List<RankedTool>();
             for (var index = 0; index < package.AllowedTools.Count; index++)
             {
                 if (string.Equals(package.AllowedTools[index].Name, AskUserTool.ToolName, StringComparison.Ordinal))
@@ -398,7 +398,7 @@ public sealed partial class InvocationRunner
                 }
                 else
                 {
-                    ranked.Add((package.AllowedTools[index].Name, definitions[index]));
+                    ranked.Add(new RankedTool(package.AllowedTools[index].Name, definitions[index]));
                 }
             }
 
@@ -833,4 +833,6 @@ public sealed partial class InvocationRunner
             _ => throw new InvalidOperationException($"Unsupported message role: {role}")
         };
     }
+
+    private readonly record struct RankedTool(string Name, string Definition);
 }

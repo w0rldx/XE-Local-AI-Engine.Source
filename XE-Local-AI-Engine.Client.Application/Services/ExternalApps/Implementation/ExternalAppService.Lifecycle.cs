@@ -603,7 +603,7 @@ internal sealed partial class ExternalAppService
         var declared = manifest.Services
                                .SelectMany(service => service.Ports
                                                              .Where(port => string.Equals(port.Role, UiPortRole, StringComparison.Ordinal))
-                                                             .Select(port => (service.Name, port.ContainerPort)))
+                                                             .Select(port => new { ServiceName = service.Name, port.ContainerPort }))
                                .ToList();
 
         if (declared.Count != stored.Count)
@@ -612,8 +612,10 @@ internal sealed partial class ExternalAppService
         }
 
         var hostPorts = new List<ExternalAppHostPort>(declared.Count);
-        foreach (var (serviceName, containerPort) in declared)
+        foreach (var declaredPort in declared)
         {
+            var serviceName = declaredPort.ServiceName;
+            var containerPort = declaredPort.ContainerPort;
             var match = stored.FirstOrDefault(port => string.Equals(port.Service, serviceName, StringComparison.Ordinal)
                                                       && port.ContainerPort == containerPort);
             if (match is null)

@@ -227,7 +227,7 @@ internal sealed class WebFetchService
             or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect;
 
     /// <summary>Reads at most <see cref="MaxBodyBytes" /> of a body as text; <c>web_search</c> reads its backends through it too.</summary>
-    internal static async Task<(string Text, bool Capped)> ReadCappedAsync(HttpContent content, CancellationToken cancellationToken)
+    internal static async Task<CappedBody> ReadCappedAsync(HttpContent content, CancellationToken cancellationToken)
     {
         var stream = await content.ReadAsStreamAsync(cancellationToken);
         await using (stream)
@@ -248,7 +248,7 @@ internal sealed class WebFetchService
             }
 
             var capped = body.Length > MaxBodyBytes;
-            return (ResolveEncoding(content).GetString(body.GetBuffer(), 0, (int)Math.Min(body.Length, MaxBodyBytes)), capped);
+            return new CappedBody(ResolveEncoding(content).GetString(body.GetBuffer(), 0, (int)Math.Min(body.Length, MaxBodyBytes)), capped);
         }
     }
 
@@ -275,7 +275,7 @@ internal sealed class WebFetchService
     private static async Task<WebFetchPage> BuildPageAsync(Uri requested, Uri final, string mediaType, string body, bool bodyCapped, int maxContentChars, CancellationToken cancellationToken)
     {
         var isHtml = mediaType is "text/html" or "application/xhtml+xml";
-        var (title, text) = isHtml ? await ExtractHtmlAsync(final, body, cancellationToken) : (null, body);
+        var (title, text) = isHtml ? await ExtractHtmlAsync(final, body, cancellationToken) : new ExtractedText(null, body);
         text = CollapseBlankLines(text);
 
         var truncated = bodyCapped || text.Length > maxContentChars;
@@ -336,6 +336,8 @@ internal sealed class WebFetchService
         return JsonSerializer.Serialize(payload, SerializerOptions);
     }
 
+    internal readonly record struct CappedBody(string Text, bool Capped);
+
     /// <summary>
     ///     Main-content extraction: SmartReader's Readability port first, the whole visible body text when it finds no
     ///     article (a short page, a listing) or when the page is too large for it.
@@ -346,7 +348,9 @@ internal sealed class WebFetchService
     ///     only sees a page within <see cref="MaxReadabilityElements" /> and <see cref="MaxReadabilityDepth" /> (worst
     ///     measured shape about 1 s); a larger page gets the body text.
     /// </remarks>
-    internal static async Task<(string? Title, string Text)> ExtractHtmlAsync(Uri url, string html, CancellationToken cancellationToken)
+    internal readonly record struct ExtractedText(string? Title, string Text);
+
+    internal static async Task<ExtractedText> ExtractHtmlAsync(Uri url, string html, CancellationToken cancellationToken)
     {
         using var document = await new HtmlParser().ParseDocumentAsync(html, cancellationToken);
         if (FitsReadability(document))
@@ -355,7 +359,7 @@ internal sealed class WebFetchService
             cancellationToken.ThrowIfCancellationRequested();
             if (article.IsReadable && !string.IsNullOrWhiteSpace(article.TextContent))
             {
-                return (NullIfBlank(article.Title), article.TextContent);
+                return new ExtractedText(NullIfBlank(article.Title), article.TextContent);
             }
         }
 
@@ -364,7 +368,7 @@ internal sealed class WebFetchService
             element.Remove();
         }
 
-        return (NullIfBlank(document.Title), document.Body?.TextContent ?? string.Empty);
+        return new ExtractedText(NullIfBlank(document.Title), document.Body?.TextContent ?? string.Empty);
     }
 
     private static bool FitsReadability(IHtmlDocument document) =>

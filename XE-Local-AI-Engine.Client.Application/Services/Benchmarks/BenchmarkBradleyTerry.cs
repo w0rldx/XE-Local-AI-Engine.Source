@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
+using System.Runtime.InteropServices;
+
 /// <summary>
 ///     One pairwise verdict, already normalized to its canonical unordered pair: <see cref="RunAId" /> is the
 ///     smaller GUID and <see cref="Verdict" /> says which of the two won regardless of which side the judge was
@@ -137,7 +139,7 @@ public static class BenchmarkBradleyTerry
             };
         }
 
-        var indexByRun = runs.Select(static (run, index) => (run, index)).ToDictionary(static entry => entry.run, static entry => entry.index);
+        var indexByRun = runs.Select(static (run, index) => new { run, index }).ToDictionary(static entry => entry.run, static entry => entry.index);
         var pairs = Aggregate(verdicts, indexByRun);
         var component = LargestComponent(pairs, runs.Length);
         var fitted = pairs.Where(pair => component.Contains(pair.IndexA)).ToArray();
@@ -238,18 +240,19 @@ public static class BenchmarkBradleyTerry
     /// </remarks>
     private static PairAggregate[] Aggregate(IReadOnlyList<BenchmarkPairwiseVerdict> verdicts, IReadOnlyDictionary<Guid, int> indexByRun)
     {
-        var byPair = new Dictionary<(int A, int B), (double WinsA, double WinsB, int Total)>();
+        var byPair = new Dictionary<PairKey, PairTally>();
         foreach (var verdict in verdicts)
         {
-            var key = (indexByRun[verdict.RunAId], indexByRun[verdict.RunBId]);
+            var key = new PairKey(indexByRun[verdict.RunAId], indexByRun[verdict.RunBId]);
             _ = byPair.TryGetValue(key, out var current);
-            var (creditA, creditB) = verdict.Verdict switch
+            var creditA = verdict.Verdict switch
             {
-                VerdictA => (1.0, 0.0),
-                VerdictB => (0.0, 1.0),
-                _ => (0.5, 0.5)
+                VerdictA => 1.0,
+                VerdictB => 0.0,
+                _ => 0.5
             };
-            byPair[key] = (current.WinsA + creditA, current.WinsB + creditB, current.Total + 1);
+            var creditB = 1.0 - creditA;
+            byPair[key] = new PairTally(current.WinsA + creditA, current.WinsB + creditB, current.Total + 1);
         }
 
         return
@@ -430,11 +433,11 @@ public static class BenchmarkBradleyTerry
 #pragma warning restore S2245
         for (var replicate = 0; replicate < replicates; replicate++)
         {
-            var drawn = new Dictionary<(int A, int B), PairAggregate>();
+            var drawn = new Dictionary<PairKey, PairAggregate>();
             for (var draw = 0; draw < pairs.Count; draw++)
             {
                 var pair = pairs[random.Next(pairs.Count)];
-                var key = (pair.IndexA, pair.IndexB);
+                var key = new PairKey(pair.IndexA, pair.IndexB);
                 drawn[key] = drawn.TryGetValue(key, out var existing)
                     ? existing with
                     {
@@ -484,6 +487,12 @@ public static class BenchmarkBradleyTerry
         var rank = (int)Math.Ceiling(quantile * ordered.Count) - 1;
         return ordered[Math.Clamp(rank, 0, ordered.Count - 1)];
     }
+
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct PairKey(int A, int B);
+
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct PairTally(double WinsA, double WinsB, int Total);
 
     private sealed record PairAggregate
     {

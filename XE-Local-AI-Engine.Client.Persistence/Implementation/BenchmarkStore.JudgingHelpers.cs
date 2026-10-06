@@ -13,7 +13,7 @@ public sealed partial class BenchmarkStore
     /// <returns>
     ///     The revision the project ends up on, or <see langword="null" /> when judging was turned off.
     /// </returns>
-    private async Task<(BenchmarkJudgePolicyRevision Revision, bool WasCreated)?> ApplyJudgePolicyChangeAsync(BenchmarkProject project,
+    private async Task<JudgePolicyRevisionOutcome?> ApplyJudgePolicyChangeAsync(BenchmarkProject project,
         BenchmarkJudgePolicyChangeInput change,
         long now,
         CancellationToken cancellationToken)
@@ -39,7 +39,7 @@ public sealed partial class BenchmarkStore
         // cohort, or saving an unrelated field edit would drop every ranked run out of the ranking.
         if (current is not null && string.Equals(current.PolicyHash, change.PolicyHash, StringComparison.Ordinal))
         {
-            return (current, false);
+            return new JudgePolicyRevisionOutcome(current, false);
         }
 
         return await RepointJudgePolicyAsync(project, policyJson, change.PolicyHash, now, cancellationToken);
@@ -49,7 +49,7 @@ public sealed partial class BenchmarkStore
     ///     Get-or-creates the revision for this policy, starts it on a fresh cohort, and points the project at it. The
     ///     caller owns the transaction and the project version bump.
     /// </summary>
-    private async Task<(BenchmarkJudgePolicyRevision Revision, bool WasCreated)> RepointJudgePolicyAsync(BenchmarkProject project,
+    private async Task<JudgePolicyRevisionOutcome> RepointJudgePolicyAsync(BenchmarkProject project,
         ReadOnlyMemory<byte> policyJson,
         string policyHash,
         long now,
@@ -64,8 +64,11 @@ public sealed partial class BenchmarkStore
         }
 
         project.CurrentJudgePolicyRevisionId = revision.Id;
-        return (revision, wasCreated);
+        return new JudgePolicyRevisionOutcome(revision, wasCreated);
     }
+
+    /// <summary>The judge-policy revision a write resolved to, and whether that write created it.</summary>
+    private readonly record struct JudgePolicyRevisionOutcome(BenchmarkJudgePolicyRevision Revision, bool WasCreated);
 
     /// <summary>
     ///     The project's eligible runs and — with a seed — one fresh Queued attempt each, inserted inside the caller's

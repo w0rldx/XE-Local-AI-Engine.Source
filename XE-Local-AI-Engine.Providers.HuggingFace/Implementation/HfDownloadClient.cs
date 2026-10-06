@@ -1274,7 +1274,7 @@ internal sealed class HfDownloadClient
             }
         }
 
-        public static async Task<(long Total, string Revision, long[] Cursors)?> TryReadRecordAsync(string sidecarPath, CancellationToken ct)
+        public static async Task<ResumeRecord?> TryReadRecordAsync(string sidecarPath, CancellationToken ct)
         {
             string content;
             try
@@ -1308,8 +1308,11 @@ internal sealed class HfDownloadClient
                 }
             }
 
-            return (total, fields[2], cursors);
+            return new ResumeRecord(total, fields[2], cursors);
         }
+
+        /// <summary>One parsed sidecar line: the expected total length, the revision and the per-chunk cursors.</summary>
+        public readonly record struct ResumeRecord(long Total, string Revision, long[] Cursors);
 
         private static bool IsUsable(long[] cursors, long totalBytes, int chunkCount, long chunkSize)
         {

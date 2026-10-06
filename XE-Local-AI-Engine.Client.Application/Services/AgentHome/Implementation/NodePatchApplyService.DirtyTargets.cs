@@ -43,7 +43,9 @@ internal sealed partial class NodePatchApplyService
             };
     }
 
-    private static async Task<(IReadOnlyList<PatchApplyDirtyEntry> Entries, bool Unavailable)> ReadDirtyTargetsAsync(HostGitRunner runner,
+    private readonly record struct DirtyTargets(IReadOnlyList<PatchApplyDirtyEntry> Entries, bool Unavailable);
+
+    private static async Task<DirtyTargets> ReadDirtyTargetsAsync(HostGitRunner runner,
         IReadOnlyList<AliasPlan> aliases,
         CancellationToken cancellationToken)
     {
@@ -69,7 +71,7 @@ internal sealed partial class NodePatchApplyService
             }
         }
 
-        return (entries, unavailable);
+        return new DirtyTargets(entries, unavailable);
     }
 
     /// <summary>

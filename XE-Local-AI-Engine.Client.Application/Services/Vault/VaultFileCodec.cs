@@ -95,7 +95,7 @@ public static class VaultFileCodec
 
     /// <summary>Wraps <paramref name="masterKey" /> under a password and a fresh recovery code.</summary>
     /// <returns>The vault file and the formatted recovery code, which is shown once and never stored.</returns>
-    public static (VaultFile File, string RecoveryCode) Create(ReadOnlySpan<byte> masterKey,
+    public static VaultCreation Create(ReadOnlySpan<byte> masterKey,
         string password,
         DateTimeOffset nowUtc,
         int iterations = VaultKdf.DefaultIterations)
@@ -133,7 +133,11 @@ public static class VaultFileCodec
                 CreatedUtc = nowUtc,
                 RewrappedUtc = null
             };
-            return (file, VaultKdf.FormatRecoveryCode(code));
+            return new VaultCreation
+            {
+                File = file,
+                RecoveryCode = VaultKdf.FormatRecoveryCode(code)
+            };
         }
         finally
         {
@@ -204,7 +208,7 @@ public static class VaultFileCodec
         }
     }
 
-    private static (VaultKdfParameters Kdf, VaultPasswordWrap Wrap) WrapWithPassword(ReadOnlySpan<byte> masterKey,
+    private static PasswordSlot WrapWithPassword(ReadOnlySpan<byte> masterKey,
         string password,
         int iterations)
     {
@@ -218,7 +222,7 @@ public static class VaultFileCodec
         try
         {
             var (nonce, ct) = Wrap(kek, masterKey, PasswordAad);
-            return (new VaultKdfParameters
+            return new PasswordSlot(new VaultKdfParameters
                 {
                     Alg = VaultKdf.Algorithm,
                     Iterations = iterations,
@@ -236,12 +240,16 @@ public static class VaultFileCodec
         }
     }
 
-    private static (byte[] Nonce, byte[] Ct) Wrap(ReadOnlySpan<byte> kek, ReadOnlySpan<byte> masterKey, ReadOnlySpan<byte> aad)
+    private static SealedKey Wrap(ReadOnlySpan<byte> kek, ReadOnlySpan<byte> masterKey, ReadOnlySpan<byte> aad)
     {
         var nonce = RandomNumberGenerator.GetBytes(Cipher.NonceSize);
         var sealedKey = Cipher.Encrypt(kek, nonce, masterKey, aad);
-        return (nonce, [.. sealedKey.Ciphertext, .. sealedKey.Tag]);
+        return new SealedKey(nonce, [.. sealedKey.Ciphertext, .. sealedKey.Tag]);
     }
+
+    private readonly record struct PasswordSlot(VaultKdfParameters Kdf, VaultPasswordWrap WrappedKey);
+
+    private readonly record struct SealedKey(byte[] Nonce, byte[] Ct);
 
     private static byte[] Unwrap(ReadOnlySpan<byte> kek, ReadOnlySpan<byte> nonce, ReadOnlySpan<byte> ctWithTag, ReadOnlySpan<byte> aad)
     {
@@ -261,6 +269,20 @@ public static class VaultFileCodec
         if (masterKey.Length != VaultKdf.KeyLength)
         {
             throw new ArgumentException($"The node master key is exactly {VaultKdf.KeyLength} bytes.", nameof(masterKey));
+        }
+    }
+
+    /// <summary>A new vault file and its one-time recovery code; a class, so no generated ToString can print the code.</summary>
+    public sealed class VaultCreation
+    {
+        public required VaultFile File { get; init; }
+
+        public required string RecoveryCode { get; init; }
+
+        public void Deconstruct(out VaultFile file, out string recoveryCode)
+        {
+            file = File;
+            recoveryCode = RecoveryCode;
         }
     }
 }

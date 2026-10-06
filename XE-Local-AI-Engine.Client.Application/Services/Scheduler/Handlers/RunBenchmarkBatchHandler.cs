@@ -380,7 +380,7 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
         var cells = models.SelectMany(model => kvCacheTypes.Select(kvCacheType =>
                           {
                               BenchmarkKvCacheType.TryNormalize(kvCacheType, out var normalized);
-                              return (Model: model, KvCacheType: normalized);
+                              return new MatrixCell(model, normalized);
                           }))
                           .ToArray();
         if (cells.Length > MaxCells)
@@ -397,12 +397,15 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
         };
     }
 
+    /// <summary>One model and KV-cache type pairing of the expanded matrix.</summary>
+    private readonly record struct MatrixCell(string Model, string? KvCacheType);
+
     /// <summary>Validated, code-facing parameters for one <c>run-benchmark-batch</c> fire, matrix already expanded.</summary>
     private sealed record RunBenchmarkBatchParameters
     {
         public required Guid ProjectId { get; init; }
 
-        public required IReadOnlyList<(string Model, string? KvCacheType)> Cells { get; init; }
+        public required IReadOnlyList<MatrixCell> Cells { get; init; }
 
         public required int RepeatCount { get; init; }
 

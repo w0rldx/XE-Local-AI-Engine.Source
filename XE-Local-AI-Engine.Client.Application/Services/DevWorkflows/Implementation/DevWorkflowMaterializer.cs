@@ -441,15 +441,17 @@ internal sealed class DevWorkflowMaterializer
         // it to the projection, which parses conditions into a form this cannot write back.
         var conditions = edges.OfType<JsonObject>()
                               .Where(static edge => edge["condition"] is not null)
-                              .ToDictionary(static edge => (edge["from"]!.GetValue<string>(), edge["to"]!.GetValue<string>()));
+                              .ToDictionary(static edge => new DevWorkflowEdgeKey(edge["from"]!.GetValue<string>(), edge["to"]!.GetValue<string>()));
 
         // A leaf of the template is what the join waits for, computed from the template's OWN edges, so the join waits for every task's last node rather than firing while they run.
         // simplified: an `Any` join is the author's — one task through it leaves a single live inbound edge, which parse refuses, so the run fails as unroutable rather than hanging.
         var leaves = subtree.Where(key => !graph.OutboundEdges(key).Any(edge => subtree.Contains(edge.To))).ToList();
         var clones = new List<Clone>();
-        var wired = new HashSet<(string From, string To)>();
-        foreach (var (task, index) in tasks.Select(static (task, index) => (task, index + 1)))
+        var wired = new HashSet<DevWorkflowEdgeKey>();
+        var index = 0;
+        foreach (var task in tasks)
         {
+            index++;
             var brief = JsonSerializer.Serialize(new DevTaskBrief
             {
                 Title = Present(task.Title),
@@ -476,7 +478,7 @@ internal sealed class DevWorkflowMaterializer
 
                 foreach (var edge in graph.OutboundEdges(key).Where(edge => subtree.Contains(edge.To)))
                 {
-                    Wire(CloneKey(key, task.Id!), CloneKey(edge.To, task.Id!), conditions.GetValueOrDefault((edge.From, edge.To))?["condition"]?.DeepClone());
+                    Wire(CloneKey(key, task.Id!), CloneKey(edge.To, task.Id!), conditions.GetValueOrDefault(new DevWorkflowEdgeKey(edge.From, edge.To))?["condition"]?.DeepClone());
                 }
             }
 
@@ -509,7 +511,7 @@ internal sealed class DevWorkflowMaterializer
 
         void Wire(string from, string to, JsonNode? condition)
         {
-            if (!wired.Add((from, to)))
+            if (!wired.Add(new DevWorkflowEdgeKey(from, to)))
             {
                 return;
             }

@@ -970,7 +970,7 @@ internal sealed class GraphWorkflowGraph
 
         // Parallel edges over one pair are legal and are how an author says "either of these"; two UNCONDITIONAL ones
         // are not, because the second could only ever repeat the first.
-        foreach (var pair in Edges.GroupBy(static edge => (edge.From, edge.To)))
+        foreach (var pair in Edges.GroupBy(static edge => new { edge.From, edge.To }))
         {
             var unconditional = pair.Where(static edge => edge.Condition is null).ToList();
             if (unconditional.Count > 1)
@@ -1356,12 +1356,12 @@ internal sealed class GraphWorkflowGraph
         var onPath = new HashSet<string>(StringComparer.Ordinal);
         var path = new List<string>();
         var finished = new HashSet<string>(StringComparer.Ordinal);
-        var pending = new Stack<(string NodeKey, int EdgeIndex)>();
+        var pending = new Stack<PendingEdge>();
         foreach (var root in Nodes.Keys.Where(key => !finished.Contains(key)))
         {
             _ = onPath.Add(root);
             path.Add(root);
-            pending.Push((root, 0));
+            pending.Push(new PendingEdge(root, 0));
             while (pending.Count > 0)
             {
                 var (nodeKey, edgeIndex) = pending.Pop();
@@ -1374,7 +1374,7 @@ internal sealed class GraphWorkflowGraph
                     continue;
                 }
 
-                pending.Push((nodeKey, edgeIndex + 1));
+                pending.Push(new PendingEdge(nodeKey, edgeIndex + 1));
                 var next = outbound[edgeIndex].To;
                 if (finished.Contains(next))
                 {
@@ -1391,7 +1391,7 @@ internal sealed class GraphWorkflowGraph
                 }
 
                 path.Add(next);
-                pending.Push((next, 0));
+                pending.Push(new PendingEdge(next, 0));
             }
         }
     }
@@ -1544,4 +1544,6 @@ internal sealed class GraphWorkflowGraph
             ? parsed
             : throw new GraphWorkflowValidationException($"The '{name}' on node '{nodeKey}' must be a whole number.");
     }
+
+    private readonly record struct PendingEdge(string NodeKey, int EdgeIndex);
 }

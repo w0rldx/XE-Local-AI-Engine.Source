@@ -109,7 +109,7 @@ internal sealed partial class IntegrationExecutionCoordinator
         string? failureCategory,
         string? failureSummary)
     {
-        var outcome = (Status: status, FailureCategory: failureCategory, FailureSummary: failureSummary);
+        var outcome = new TerminalOutcome(status, failureCategory, failureSummary);
 
         for (var attempt = 1; attempt <= MaxTerminalAttempts; attempt++)
         {
@@ -143,13 +143,15 @@ internal sealed partial class IntegrationExecutionCoordinator
     ///     every artefact the caller can read. The cancel endpoint's 202 says the stop was REQUESTED, never that it
     ///     arrived in time.
     /// </remarks>
-    private static (IntegrationExecutionStatus Status, string? FailureCategory, string? FailureSummary) HonourStopMarker(IntegrationExecutionSnapshot row,
+    private static TerminalOutcome HonourStopMarker(IntegrationExecutionSnapshot row,
         IntegrationExecutionStatus status,
         string? failureCategory,
         string? failureSummary) =>
         row.StopRequestedAtUtc is not null && status is not (IntegrationExecutionStatus.Cancelled or IntegrationExecutionStatus.Completed)
-            ? (IntegrationExecutionStatus.Cancelled, null, null)
-            : (status, failureCategory, failureSummary);
+            ? new TerminalOutcome(IntegrationExecutionStatus.Cancelled, null, null)
+            : new TerminalOutcome(status, failureCategory, failureSummary);
+
+    private readonly record struct TerminalOutcome(IntegrationExecutionStatus Status, string? FailureCategory, string? FailureSummary);
 
     private async Task<bool> TryTerminalizeOnceAsync(ExecutionRunContext context,
         IReadOnlySet<IntegrationExecutionStatus> expectedStatuses,

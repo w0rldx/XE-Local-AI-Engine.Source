@@ -41,16 +41,16 @@ public sealed class BenchmarkPairwisePlanner : IBenchmarkPairwisePlanner
         ArgumentNullException.ThrowIfNull(candidates);
         var paired = candidates.Take(maximumRuns).ToArray();
         var slots = new List<BenchmarkPairwiseSlot>();
-        foreach (var group in paired.GroupBy(static candidate => (candidate.TaskCaseId, candidate.TaskInputHash)))
+        foreach (var group in paired.GroupBy(static candidate => new { candidate.TaskCaseId, candidate.TaskInputHash }))
         {
             var members = group.ToArray();
             for (var first = 0; first < members.Length; first++)
             {
                 for (var second = first + 1; second < members.Length; second++)
                 {
-                    var (runA, runB) = members[first].RunId.CompareTo(members[second].RunId) < 0
-                        ? (members[first].RunId, members[second].RunId)
-                        : (members[second].RunId, members[first].RunId);
+                    var firstIsLower = members[first].RunId.CompareTo(members[second].RunId) < 0;
+                    var runA = firstIsLower ? members[first].RunId : members[second].RunId;
+                    var runB = firstIsLower ? members[second].RunId : members[first].RunId;
                     slots.Add(new BenchmarkPairwiseSlot
                     {
                         RunAId = runA,

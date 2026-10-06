@@ -55,6 +55,11 @@
          assemblies, ArchUnitNET governs WHERE a type is allowed to live inside one. Only the core package is
          referenced; the TngTech.ArchUnitNET.TUnit adapter is deliberately not, see PlacementConventionTests. -->
     <PackageVersion Include="TngTech.ArchUnitNET" Version="0.13.4" />
+    <!-- Syntax-only parser for NoTupleConventionTests (a text scan cannot tell a tuple type from a parameter
+         list). Test-project only, MIT; no Compilation or semantic model is built. Transitive pinning makes this
+         the version everywhere, and Microsoft.EntityFrameworkCore.Design requires exactly 5.0.0 through
+         Microsoft.CodeAnalysis.CSharp.Workspaces: move the two together. -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
     <!-- Newest intended prerelease; banned-API hard wall (RS0030) over BannedSymbols.txt. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />

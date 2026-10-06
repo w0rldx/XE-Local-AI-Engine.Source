@@ -27,11 +27,11 @@ public sealed partial class NodeAdminMcpTools
         bool include_projector = true)
     {
         return await InvokeAuditedAsync("start_model_pull",
-            AuditArguments(("repo_id", repo_id),
-                ("file_name", file_name),
-                ("quant", quant),
-                ("revision", revision),
-                ("include_projector", include_projector)),
+            AuditArguments(new("repo_id", repo_id),
+                new("file_name", file_name),
+                new("quant", quant),
+                new("revision", revision),
+                new("include_projector", include_projector)),
             async () =>
             {
                 if (string.IsNullOrWhiteSpace(repo_id))
@@ -93,7 +93,7 @@ public sealed partial class NodeAdminMcpTools
     [Description("Poll a background GGUF model pull by canonical model name.")]
     public Task<McpModelPullResponse> GetModelPull([Description("Canonical model name returned by start_model_pull.")] string model_name)
     {
-        return InvokeAuditedAsync("get_model_pull", AuditArguments(("model_name", model_name)), () =>
+        return InvokeAuditedAsync("get_model_pull", AuditArguments(new KeyValuePair<string, object?>("model_name", model_name)), () =>
         {
             if (string.IsNullOrWhiteSpace(model_name))
             {
@@ -147,7 +147,7 @@ public sealed partial class NodeAdminMcpTools
     [McpServerTool(Name = "cancel_model_pull", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Request cooperative cancellation of a background GGUF model pull.")]
     public Task<McpModelPullCancelResponse> CancelModelPull([Description("Canonical model name returned by start_model_pull.")] string model_name) =>
-        InvokeAuditedAsync("cancel_model_pull", AuditArguments(("model_name", model_name)), () =>
+        InvokeAuditedAsync("cancel_model_pull", AuditArguments(new KeyValuePair<string, object?>("model_name", model_name)), () =>
                 Task.FromResult(new McpModelPullCancelResponse
                 {
                     Cancelled = !string.IsNullOrWhiteSpace(model_name)
@@ -159,7 +159,7 @@ public sealed partial class NodeAdminMcpTools
     [Description("Delete a locally installed model through the node's coordinated deletion service.")]
     public async Task<McpModelDeleteResponse> DeleteModelAsync(string model_name, CancellationToken cancellationToken)
     {
-        return await InvokeAuditedAsync("delete_model", AuditArguments(("model_name", model_name)), async () =>
+        return await InvokeAuditedAsync("delete_model", AuditArguments(new KeyValuePair<string, object?>("model_name", model_name)), async () =>
         {
             var result = await _localModelAdministrationService.DeleteAsync(model_name, cancellationToken);
             return new McpModelDeleteResponse
@@ -176,7 +176,7 @@ public sealed partial class NodeAdminMcpTools
     [Description("Select an installed local model as the node default.")]
     public async Task<McpDefaultModelResponse> SetDefaultModelAsync(string model_name, CancellationToken cancellationToken)
     {
-        return await InvokeAuditedAsync("set_default_model", AuditArguments(("model_name", model_name)), async () =>
+        return await InvokeAuditedAsync("set_default_model", AuditArguments(new KeyValuePair<string, object?>("model_name", model_name)), async () =>
         {
             var result = await _localModelAdministrationService.SelectDefaultAsync(model_name,
                 LocalModelSelectionPolicy.InstalledLocalOnly,

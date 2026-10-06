@@ -312,7 +312,7 @@ internal sealed class DevWorkflowRetryPolicy
 
         // Composed before anything is touched, so an illegal move is refused while the run still stands where it did. The target is built LAST so the event log reads decision, then the
         // answers being discarded, then the node being re-run — the order a person reconstructs the round in.
-        var moves = new List<(TransitionDevWorkflowNodeRunCommand Command, Guid NodeRunId, DateTimeOffset? DelayUntil)>(reset.Count + 1);
+        var moves = new List<PlannedMove>(reset.Count + 1);
         foreach (var row in reset)
         {
             // Only the node that failed ended failed. The rest are re-run because the answer they gave is about to describe something gone, and stamping "failed" would say they broke.
@@ -330,7 +330,7 @@ internal sealed class DevWorkflowRetryPolicy
                     },
                     outcome: null,
                     inputJson: null);
-            moves.Add((command, row.Id, delayUntil));
+            moves.Add(new PlannedMove(command, row.Id, delayUntil));
         }
 
         var (targetCommand, targetDelay) = ReAttempt(run,
@@ -345,7 +345,7 @@ internal sealed class DevWorkflowRetryPolicy
             },
             outcome: null,
             PriorFailure(target.InputJson, nodeRun.NodeKey, nodeRun.Attempt, failure.OutputJson));
-        moves.Add((targetCommand, target.Id, targetDelay));
+        moves.Add(new PlannedMove(targetCommand, target.Id, targetDelay));
 
         // Quiesce EVERY superseded row before the transaction opens: a rollback cannot undo a stopped session, and a lane still driving one would settle it back off the discarded
         // answer — an Any join can leave the target itself live. Asked AGAIN here, because the first check ran before the moves were composed and the refusal below lands too late.
@@ -523,7 +523,7 @@ internal sealed class DevWorkflowRetryPolicy
     ///     The one re-attempt move, composed but not written: the fix loop needs every move it makes in hand before it
     ///     writes any of them, because they go to the store as one transaction.
     /// </summary>
-    private (TransitionDevWorkflowNodeRunCommand Command, DateTimeOffset? DelayUntil) ReAttempt(DevWorkflowRunSnapshot run,
+    private ReAttemptMove ReAttempt(DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         int delaySeconds,
         RetryDetail detail,
@@ -532,7 +532,7 @@ internal sealed class DevWorkflowRetryPolicy
     {
         var delayUntil = delaySeconds > 0 ? _timeProvider.GetUtcNow().AddSeconds(delaySeconds) : (DateTimeOffset?)null;
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Pending, nodeRun.NodeKey);
-        return (new TransitionDevWorkflowNodeRunCommand
+        return new ReAttemptMove(new TransitionDevWorkflowNodeRunCommand
         {
             RunId = run.Id,
             NodeRunId = nodeRun.Id,
@@ -551,6 +551,10 @@ internal sealed class DevWorkflowRetryPolicy
             MaxTotalAttempts = _options.MaxTotalAttempts
         }, delayUntil);
     }
+
+    private readonly record struct ReAttemptMove(TransitionDevWorkflowNodeRunCommand Command, DateTimeOffset? DelayUntil);
+
+    private readonly record struct PlannedMove(TransitionDevWorkflowNodeRunCommand Command, Guid NodeRunId, DateTimeOffset? DelayUntil);
 
     /// <summary>
     ///     Records or clears when a re-attempt may be admitted.

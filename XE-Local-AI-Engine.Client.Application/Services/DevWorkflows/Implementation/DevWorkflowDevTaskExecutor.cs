@@ -1111,9 +1111,9 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///     Authored from numbers this engine wrote, so there is nothing in it to sanitize. <c>HasCounts</c> is false
     ///     when nothing ran, which is the difference between a verdict and a sentence that sounds like one.
     /// </remarks>
-    private static (string Text, bool HasCounts) DescribeCounts(string? inputJson, string failingNodeKey)
+    private static CountsDescription DescribeCounts(string? inputJson, string failingNodeKey)
     {
-        (string Text, bool HasCounts) generic = ($"Node '{failingNodeKey}' rejected this implementation and asked for it to be done again.", false);
+        var generic = new CountsDescription($"Node '{failingNodeKey}' rejected this implementation and asked for it to be done again.", false);
         if (string.IsNullOrWhiteSpace(inputJson))
         {
             return generic;
@@ -1137,7 +1137,7 @@ internal sealed class DevWorkflowDevTaskExecutor
             // coder reading it is being asked to redo approved work on no evidence at all.
             return commandsRun <= 0 && commandsFailed <= 0 && testsFailed <= 0
                 ? generic
-                : (string.Create(CultureInfo.InvariantCulture,
+                : new CountsDescription(string.Create(CultureInfo.InvariantCulture,
                     $"{generic.Text} {commandsFailed} of {commandsRun} commands failed, {testsFailed} tests failed."), true);
         }
         catch (JsonException)
@@ -1173,8 +1173,12 @@ internal sealed class DevWorkflowDevTaskExecutor
     ///     Dev Mode's two scoped services, or nothing when Development Mode is switched off — in which case it is not
     ///     registered at all, which is why these are asked for rather than injected.
     /// </summary>
-    private (IDevelopmentStore? Development, IDevelopmentManagementService? Management) Resolve() =>
-        (_services.GetService<IDevelopmentStore>(), _services.GetService<IDevelopmentManagementService>());
+    private DevModeServices Resolve() =>
+        new(_services.GetService<IDevelopmentStore>(), _services.GetService<IDevelopmentManagementService>());
+
+    private readonly record struct DevModeServices(IDevelopmentStore? Development, IDevelopmentManagementService? Management);
+
+    private readonly record struct CountsDescription(string Text, bool HasCounts);
 
     private async Task<int> BlockAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,

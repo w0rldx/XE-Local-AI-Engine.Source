@@ -22,7 +22,7 @@ internal static class ProcessAudioCaptureCandidates
     /// </remarks>
     /// <param name="sessions">One entry per enumerated session: its process id, and whether that session is active.</param>
     /// <param name="resolveName">Resolves a display name, called once per distinct process id.</param>
-    internal static IReadOnlyList<ProcessAudioCaptureCandidate> Aggregate(IEnumerable<(int ProcessId, bool Active)> sessions,
+    internal static IReadOnlyList<ProcessAudioCaptureCandidate> Aggregate(IEnumerable<AudioSession> sessions,
         Func<int, string> resolveName)
     {
         ArgumentNullException.ThrowIfNull(sessions);
@@ -53,4 +53,7 @@ internal static class ProcessAudioCaptureCandidates
                .ThenBy(candidate => candidate.ProcessId)
         ];
     }
+
+    /// <summary>One enumerated audio session: its owning process id and whether the session is active.</summary>
+    internal readonly record struct AudioSession(int ProcessId, bool Active);
 }

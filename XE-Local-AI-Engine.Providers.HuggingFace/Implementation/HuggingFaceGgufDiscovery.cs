@@ -347,10 +347,12 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
         };
     }
 
-    private static (string? Architecture, long? BlockCount, long? EmbeddingLength, long? HeadCount, long? HeadCountKv) Signature(GgufHeaderMetadata header)
+    private static HeaderSignature Signature(GgufHeaderMetadata header)
     {
-        return (header.Architecture, header.BlockCount, header.EmbeddingLength, header.AttentionHeadCount, header.AttentionHeadCountKV);
+        return new HeaderSignature(header.Architecture, header.BlockCount, header.EmbeddingLength, header.AttentionHeadCount, header.AttentionHeadCountKV);
     }
+
+    private readonly record struct HeaderSignature(string? Architecture, long? BlockCount, long? EmbeddingLength, long? HeadCount, long? HeadCountKv);
 
     /// <summary>
     ///     llama.cpp's split-GGUF naming convention for a model too large for one file:

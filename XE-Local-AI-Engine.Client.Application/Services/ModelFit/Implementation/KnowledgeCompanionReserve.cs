@@ -45,15 +45,15 @@ public sealed class KnowledgeCompanionReserve : IKnowledgeCompanionReserve
     public async Task<long> ResolveGpuBytesAsync(HardwareProfile profile, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(profile);
-        var companions = new List<(string ModelName, ModelRole Role)>(capacity: 2);
+        var companions = new List<Companion>(capacity: 2);
         if (!string.IsNullOrWhiteSpace(_options.RerankerModelName))
         {
-            companions.Add((_options.RerankerModelName, ModelRole.Reranker));
+            companions.Add(new Companion(_options.RerankerModelName, ModelRole.Reranker));
         }
 
         if (await TryResolveLlamaCppEmbedderAsync(ct) is { } embedder)
         {
-            companions.Add((embedder, ModelRole.Embedding));
+            companions.Add(new Companion(embedder, ModelRole.Embedding));
         }
 
         // Only a measured free figure (the same test the fit budget uses) already nets out a resident companion; total VRAM does not.
@@ -128,4 +128,6 @@ public sealed class KnowledgeCompanionReserve : IKnowledgeCompanionReserve
     /// <summary>Reduces a positive VRAM figure by the reserve, clamped to one byte; an absent or non-positive figure is left as is.</summary>
     private static long? Reduce(long? bytes, long reserveBytes) =>
         bytes is > 0 ? Math.Max(1, bytes.Value - reserveBytes) : bytes;
+
+    private readonly record struct Companion(string ModelName, ModelRole Role);
 }

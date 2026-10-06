@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Chat;
 
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -28,14 +29,14 @@ internal sealed class GraphWorkflowChatPublisher
     }
 
     /// <summary>Publishes what is due and answers how many node runs it stamped and how many it could not publish.</summary>
-    public async Task<(int Written, int Failed)> PublishAsync(IGraphWorkflowStore store, GraphWorkflowRunSnapshot run, GraphWorkflowGraph graph, CancellationToken cancellationToken)
+    public async Task<PublishCounts> PublishAsync(IGraphWorkflowStore store, GraphWorkflowRunSnapshot run, GraphWorkflowGraph graph, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(graph);
         if (run.ConversationId is not { } conversationId)
         {
-            return (0, 0);
+            return new PublishCounts(0, 0);
         }
 
         var written = 0;
@@ -71,8 +72,11 @@ internal sealed class GraphWorkflowChatPublisher
             }
         }
 
-        return (written, failed);
+        return new PublishCounts(written, failed);
     }
+
+    [StructLayout(LayoutKind.Auto)]
+    public readonly record struct PublishCounts(int Written, int Failed);
 
     private static bool PublishesToChat(GraphWorkflowNodeConfig config) =>
         config switch

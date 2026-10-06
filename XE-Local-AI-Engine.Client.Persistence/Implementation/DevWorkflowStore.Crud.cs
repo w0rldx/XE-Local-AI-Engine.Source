@@ -567,7 +567,7 @@ public sealed partial class DevWorkflowStore
             var judged = verdicts.ToDictionary(verdict => verdict.NodeRunId);
             var now = Now();
             var reconciled = new List<DevWorkflowReconciledNodeRun>(stranded.Count);
-            var repairs = new List<(DevWorkflowRun Run, TransitionDevWorkflowNodeRunCommand Command)>();
+            var repairs = new List<NodeRunRepair>();
             foreach (var nodeRun in stranded)
             {
                 if (!runs.TryGetValue(nodeRun.RunId, out var run))
@@ -613,8 +613,8 @@ public sealed partial class DevWorkflowStore
                 run.Version++;
                 run.UpdatedAtUtc = now;
                 repairs.AddRange(matched
-                    ? verdict!.Repairs.Select(command => (run, command))
-                    : [(run, BlockUnjudged(nodeRun, unjudged!))]);
+                    ? verdict!.Repairs.Select(command => new NodeRunRepair(run, command))
+                    : [new NodeRunRepair(run, BlockUnjudged(nodeRun, unjudged!))]);
             }
 
             // The run comes from the row the collapse took, never from the command: the collapse is the authority on
@@ -892,4 +892,7 @@ public sealed partial class DevWorkflowStore
 
         public required DevWorkflowNodeRunStatus Status { get; init; }
     }
+
+    /// <summary>One repair a reconciliation queues: the run it belongs to and the node-run transition to apply.</summary>
+    private readonly record struct NodeRunRepair(DevWorkflowRun Run, TransitionDevWorkflowNodeRunCommand Command);
 }

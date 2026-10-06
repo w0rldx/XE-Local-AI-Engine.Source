@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
 
+using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
@@ -129,7 +130,7 @@ public sealed class BenchmarkComparisonService
     ///     left out for the same reason it is left out of the cell mean. A run naming no item is a pre-suite singleton
     ///     and can be shared with nothing.
     /// </remarks>
-    private static (int[] A, int[] B) SharedQuality(BenchmarkCellRecord left, BenchmarkCellRecord right, IReadOnlySet<Guid> scorable)
+    private static SharedScores SharedQuality(BenchmarkCellRecord left, BenchmarkCellRecord right, IReadOnlySet<Guid> scorable)
     {
         var rightByItem = Rankable(right, scorable);
         var a = new List<int>();
@@ -146,17 +147,22 @@ public sealed class BenchmarkComparisonService
             b.Add(rightByItem[itemId].Quality);
         }
 
-        return ([.. a], [.. b]);
+        return new SharedScores([.. a], [.. b]);
     }
 
-    private static Dictionary<Guid, (int Index, int Quality)> Rankable(BenchmarkCellRecord cell, IReadOnlySet<Guid> scorable)
+    private readonly record struct SharedScores(int[] A, int[] B);
+
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct RankedScore(int Index, int Quality);
+
+    private static Dictionary<Guid, RankedScore> Rankable(BenchmarkCellRecord cell, IReadOnlySet<Guid> scorable)
     {
-        var scores = new Dictionary<Guid, (int Index, int Quality)>();
+        var scores = new Dictionary<Guid, RankedScore>();
 
         // Both nulls are already excluded by the filter, so the GetValueOrDefault calls cannot reach their defaults.
         foreach (var item in cell.Items.Where(item => item is { TaskItemId: not null, QualityScore: not null } && scorable.Contains(item.TaskItemId.GetValueOrDefault())))
         {
-            scores.TryAdd(item.TaskItemId.GetValueOrDefault(), (item.TaskItemIndex ?? int.MaxValue, item.QualityScore.GetValueOrDefault()));
+            scores.TryAdd(item.TaskItemId.GetValueOrDefault(), new RankedScore(item.TaskItemIndex ?? int.MaxValue, item.QualityScore.GetValueOrDefault()));
         }
 
         return scores;

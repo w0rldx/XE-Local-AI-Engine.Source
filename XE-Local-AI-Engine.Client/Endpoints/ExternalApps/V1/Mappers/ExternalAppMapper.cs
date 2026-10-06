@@ -485,19 +485,19 @@ internal static class ExternalAppMapper
     private static IReadOnlyList<ExternalAppPublishedPortView> ToPublishedPortViews(ApplicationManifest manifest,
         IReadOnlyList<ExternalAppPublishedPort> publishedPorts)
     {
-        var openPaths = new Dictionary<(string Service, int ContainerPort), string>();
+        var openPaths = new Dictionary<ServicePortKey, string>();
         foreach (var service in manifest.Services)
         {
             foreach (var port in service.Ports.Where(static port => port.OpenPath is not null))
             {
-                openPaths[(service.Name, port.ContainerPort)] = port.OpenPath!;
+                openPaths[new ServicePortKey(service.Name, port.ContainerPort)] = port.OpenPath!;
             }
         }
 
         var views = new List<ExternalAppPublishedPortView>(publishedPorts.Count);
         foreach (var published in publishedPorts)
         {
-            var openPath = openPaths.GetValueOrDefault((published.Service, published.ContainerPort));
+            var openPath = openPaths.GetValueOrDefault(new ServicePortKey(published.Service, published.ContainerPort));
 
             views.Add(new ExternalAppPublishedPortView
             {
@@ -513,6 +513,9 @@ internal static class ExternalAppMapper
 
         return views;
     }
+
+    /// <summary>A service's container port, the key an open path is declared under.</summary>
+    private readonly record struct ServicePortKey(string Service, int ContainerPort);
 
     /// <summary>
     ///     The catalog's <c>generatedAtUtc</c> is authored as an ISO-8601 string; the wire carries unix milliseconds

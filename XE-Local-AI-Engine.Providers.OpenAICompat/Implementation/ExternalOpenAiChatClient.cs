@@ -94,7 +94,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
         _initGate.Dispose();
     }
 
-    private async Task<(IChatClient Client, ExternalProviderModelDescriptor Model)> EnsureInnerAsync(CancellationToken ct)
+    private async Task<InnerTarget> EnsureInnerAsync(CancellationToken ct)
     {
         var transportBinding = await _registry.TryResolveTransportBindingAsync(_modelId, ct).ConfigureAwait(false)
                                ?? throw new ExternalProviderModelUnavailableException();
@@ -107,7 +107,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
         var current = Volatile.Read(ref _resolved);
         if (current is not null && current.Identity == identity)
         {
-            return (current.Client, registration.Model);
+            return new InnerTarget(current.Client, registration.Model);
         }
 
         await _initGate.WaitAsync(ct).ConfigureAwait(false);
@@ -116,7 +116,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
             current = Volatile.Read(ref _resolved);
             if (current is not null && current.Identity == identity)
             {
-                return (current.Client, registration.Model);
+                return new InnerTarget(current.Client, registration.Model);
             }
 
             // The built stack is transferred into _resolved, which owns it until it is replaced (the previous one is
@@ -126,7 +126,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
 #pragma warning restore CA2000
             Volatile.Write(ref _resolved, built);
             current?.Dispose();
-            return (built.Client, registration.Model);
+            return new InnerTarget(built.Client, registration.Model);
         }
         finally
         {
@@ -253,4 +253,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
             _httpClient.Dispose();
         }
     }
+
+    /// <summary>The adapter to send through and the model descriptor its request options are shaped for.</summary>
+    private readonly record struct InnerTarget(IChatClient Client, ExternalProviderModelDescriptor Model);
 }

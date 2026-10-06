@@ -598,7 +598,7 @@ public sealed class TranscriptionService : ITranscriptionService
         var stream = new FileStream(audioPath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 64 * 1024, useAsync: true);
         await using (stream)
         {
-            var pending = new List<(TranscriptChannel Channel, WhisperTranscriptSegment Segment)>();
+            var pending = new List<ChannelSegment>();
             string? detectedLanguage = null;
             double durationSeconds = 0;
 
@@ -618,7 +618,7 @@ public sealed class TranscriptionService : ITranscriptionService
 
                 detectedLanguage ??= transcribed.DetectedLanguageCode;
                 durationSeconds = Math.Max(durationSeconds, transcribed.DurationSeconds);
-                pending.AddRange(transcribed.Segments.Select(segment => (channel, segment)));
+                pending.AddRange(transcribed.Segments.Select(segment => new ChannelSegment(channel, segment)));
             }
 
             var segments = pending
@@ -730,6 +730,8 @@ public sealed class TranscriptionService : ITranscriptionService
     // The provider speaks fractional seconds; the entity speaks whole milliseconds.
     private static long ToMilliseconds(double seconds) =>
         (long)Math.Round(seconds * 1000);
+
+    private readonly record struct ChannelSegment(TranscriptChannel Channel, WhisperTranscriptSegment Segment);
 
     private static TranscriptionSessionConfig DeserializeConfig(string configJson)
     {

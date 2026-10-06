@@ -306,9 +306,9 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
                 // present. A blank CallId is a supported shape, and correlating on it would leave such a pair in separate groups — the orphan this prevents.
                 var (requestId, toolCall) = content switch
                 {
-                    ToolApprovalRequestContent request => (request.RequestId, request.ToolCall),
-                    ToolApprovalResponseContent response => (response.RequestId, response.ToolCall),
-                    _ => ((string?)null, (ToolCallContent?)null)
+                    ToolApprovalRequestContent request => new ApprovalKey(request.RequestId, request.ToolCall),
+                    ToolApprovalResponseContent response => new ApprovalKey(response.RequestId, response.ToolCall),
+                    _ => new ApprovalKey(null, null)
                 };
 
                 if (string.IsNullOrEmpty(requestId))
@@ -711,4 +711,6 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         var marker = $"[truncated: {omitted} chars omitted]";
         return excerptChars > 0 ? $"{value[..excerptChars]}\n{marker}" : marker;
     }
+
+    private readonly record struct ApprovalKey(string? RequestId, ToolCallContent? ToolCall);
 }

@@ -431,26 +431,29 @@ public sealed class NodeInfoService : INodeInfoService
     }
 
     // Starts a section; WaitAsync bounds a provider that ignores its token.
-    private static async Task<(string Section, T? Value, string? Failure)> CaptureAsync<T>(string section,
+    private static async Task<SectionCapture<T>> CaptureAsync<T>(string section,
         Func<CancellationToken, Task<T>> capture,
         CancellationToken token)
         where T : class
     {
         try
         {
-            return (section, await capture(token).WaitAsync(token), null);
+            return new SectionCapture<T>(section, await capture(token).WaitAsync(token), null);
         }
         catch (OperationCanceledException)
         {
-            return (section, null, "did not answer in time");
+            return new SectionCapture<T>(section, null, "did not answer in time");
         }
         catch (Exception exception)
         {
-            return (section, null, exception.GetType().Name);
+            return new SectionCapture<T>(section, null, exception.GetType().Name);
         }
     }
 
-    private async Task<T?> Collect<T>(Task<(string Section, T? Value, string? Failure)> pending, List<string> warnings)
+    private readonly record struct SectionCapture<T>(string Section, T? Value, string? Failure)
+        where T : class;
+
+    private async Task<T?> Collect<T>(Task<SectionCapture<T>> pending, List<string> warnings)
         where T : class
     {
         var (section, value, failure) = await pending;

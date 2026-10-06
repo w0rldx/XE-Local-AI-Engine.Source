@@ -22,7 +22,7 @@ internal static class ExternalProviderConfigProjection
     ///     one hand-edited connection must not take the operator's other connections offline with it. Its models then
     ///     resolve to null, which every consumer already treats as fail-closed.
     /// </remarks>
-    public static (IReadOnlyList<ExternalProviderModelRegistration> Registrations, IReadOnlyDictionary<string, string> KeysByConnectionId) Project(StoredExternalProviderConfig config)
+    public static Projection Project(StoredExternalProviderConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
 
@@ -53,6 +53,18 @@ internal static class ExternalProviderConfigProjection
                 }));
         }
 
-        return (registrations, keys);
+        return new Projection
+        {
+            Registrations = registrations,
+            KeysByConnectionId = keys
+        };
+    }
+
+    /// <summary>The projected registrations and API keys; a class, so no generated ToString can print a key.</summary>
+    public sealed class Projection
+    {
+        public required IReadOnlyList<ExternalProviderModelRegistration> Registrations { get; init; }
+
+        public required IReadOnlyDictionary<string, string> KeysByConnectionId { get; init; }
     }
 }

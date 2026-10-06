@@ -148,7 +148,7 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
     ///     exits, or the timeout passes. setsid(2) runs before the exec, so group leadership alone still reads setsid's path.
     /// </summary>
     /// <param name="waitForExit">Blocks up to the given interval and returns true once the child has exited.</param>
-    internal static (TrainingProcessStat? Stat, bool LeadsGroup, string? ExecutablePath) AwaitTrainerIdentity(int pid,
+    internal static TrainerIdentity AwaitTrainerIdentity(int pid,
         Func<int, TrainingProcessStat?> readStat,
         Func<int, string?> readExecutable,
         string launcherPath,
@@ -163,16 +163,19 @@ internal sealed class LinuxTrainingProcessSpawner : ITrainingProcessSpawner
             var executable = readExecutable(pid);
             if (leadsGroup && executable is not null && !string.Equals(executable, launcherPath, StringComparison.Ordinal))
             {
-                return (stat, true, executable);
+                return new TrainerIdentity(stat, LeadsGroup: true, executable);
             }
 
             // Unconfirmed: a path read now may still be setsid's, and pinning it would make the reaper reject the trainer.
             if (stat is null || timeProvider.GetUtcNow() >= deadline || waitForExit(GroupLeaderPollInterval))
             {
-                return (stat, leadsGroup, null);
+                return new TrainerIdentity(stat, leadsGroup, null);
             }
         }
     }
+
+    /// <summary>The trainer's last stat read, whether it leads its own group, and its confirmed executable path, if any.</summary>
+    internal readonly record struct TrainerIdentity(TrainingProcessStat? Stat, bool LeadsGroup, string? ExecutablePath);
 
     /// <summary>The symlink-resolved path, matching how <c>/proc/[pid]/exe</c> reports it.</summary>
     private static string ResolveFinalPath(string path)

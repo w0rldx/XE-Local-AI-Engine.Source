@@ -282,7 +282,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     ///     A catalog-lane failure never fails the whole refresh — the explore lane still succeeds on its own (see
     ///     <see cref="BuildCatalogRecommendationsAsync" />).
     /// </remarks>
-    private async Task<(IReadOnlyList<AdvisorRecommendation> Recommendations, IReadOnlyList<string> SkippedCatalogEntries)> BuildRecommendationsAsync(
+    private async Task<RecommendationSet> BuildRecommendationsAsync(
         ModelFitRefreshRequest request,
         string quant,
         int ctxTarget,
@@ -305,8 +305,11 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             catalogModelNames,
             cancellationToken);
 
-        return ([.. catalogRecommendations, .. exploreRecommendations], skippedCatalogEntries);
+        return new RecommendationSet([.. catalogRecommendations, .. exploreRecommendations], skippedCatalogEntries);
     }
+
+    /// <summary>Recommendation rows plus the catalog entries the lane skipped.</summary>
+    private readonly record struct RecommendationSet(IReadOnlyList<AdvisorRecommendation> Recommendations, IReadOnlyList<string> SkippedCatalogEntries);
 
     /// <summary>
     ///     Runs the catalog ranking lane and maps its "Recommended" / "Can run" sections (each already ordered tier →
@@ -317,7 +320,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     ///     empty must never fail the run, since the explore lane alone is still a useful recommendation set. A failed
     ///     lane reports no skipped entries.
     /// </remarks>
-    private async Task<(IReadOnlyList<AdvisorRecommendation> Rows, IReadOnlyList<string> SkippedEntryNames)> BuildCatalogRecommendationsAsync(
+    private async Task<RecommendationSet> BuildCatalogRecommendationsAsync(
         ModelFitRefreshRequest request,
         string quant,
         int ctxTarget,
@@ -332,7 +335,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
             var recommended = result.Recommended.Take(request.Limit).Select(candidate => ToAdvisorRecommendation(candidate, "recommended"));
             var canRun = result.CanRun.Take(request.Limit).Select(candidate => ToAdvisorRecommendation(candidate, "canRun"));
-            return ([.. recommended, .. canRun], result.SkippedEntryNames);
+            return new RecommendationSet([.. recommended, .. canRun], result.SkippedEntryNames);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -341,7 +344,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         catch (Exception exception) when (exception is HttpRequestException or IOException or TimeoutException or InvalidOperationException)
         {
             _logger.LogWarning(exception, "Catalog recommendation lane failed; the run continues with the explore lane only.");
-            return ([], []);
+            return new RecommendationSet([], []);
         }
     }
 

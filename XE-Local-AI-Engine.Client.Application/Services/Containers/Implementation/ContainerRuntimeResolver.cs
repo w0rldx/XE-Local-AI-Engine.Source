@@ -131,7 +131,9 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         };
     }
 
-    private async Task<(ContainerRuntimeResolution Resolution, DockerDaemonEndpoint Endpoint)> ResolveWithEndpointAsync(ContainerRuntimeSelection? instanceOverride,
+    private readonly record struct ResolvedRuntime(ContainerRuntimeResolution Resolution, DockerDaemonEndpoint Endpoint);
+
+    private async Task<ResolvedRuntime> ResolveWithEndpointAsync(ContainerRuntimeSelection? instanceOverride,
         bool forceRefresh,
         string? confirmingDaemonId,
         CancellationToken cancellationToken)
@@ -149,7 +151,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
                 && _cachedSelection == selection
                 && _timeProvider.GetUtcNow() - _cachedAtUtc < TimeSpan.FromSeconds(options.ResolutionCacheSeconds))
             {
-                return (_cached, _cachedEndpoint);
+                return new ResolvedRuntime(_cached, _cachedEndpoint);
             }
 
             var (resolution, endpoint) = await ProbeAsync(options, confirmingDaemonId, cancellationToken);
@@ -159,7 +161,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
             _cachedSelection = selection;
             _cachedAtUtc = _timeProvider.GetUtcNow();
 
-            return (resolution, endpoint);
+            return new ResolvedRuntime(resolution, endpoint);
         }
         finally
         {
@@ -193,7 +195,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         return selection;
     }
 
-    private async Task<(ContainerRuntimeResolution Resolution, DockerDaemonEndpoint Endpoint)> ProbeAsync(ContainerRuntimeOptions options,
+    private async Task<ResolvedRuntime> ProbeAsync(ContainerRuntimeOptions options,
         string? confirmingDaemonId,
         CancellationToken cancellationToken)
     {
@@ -203,7 +205,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         // daemon and each fit a token, so the refusal names only the faulty component (DockerDaemonEndpoint.Display).
         if (endpoint.DisclosingComponent is { } disclosing)
         {
-            return (Reported(Refused(endpoint,
+            return new ResolvedRuntime(Reported(Refused(endpoint,
                 "The Docker daemon endpoint " + DescribeSource(endpoint.Source) + " carries " + disclosing + " in its URI. "
                 + "It is refused without being repeated back, because a secret that has reached a log file or an "
                 + "error message is no longer a secret. Remove " + disclosing + " from the endpoint, and treat "
@@ -214,7 +216,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         // daemon today and its messages must not change, so the refusal lives here rather than in the shared probe.
         if (!IsLocalTransport(endpoint))
         {
-            return (Reported(Refused(endpoint,
+            return new ResolvedRuntime(Reported(Refused(endpoint,
                 $"Remote daemons are not supported in this version. The endpoint {endpoint.Display} "
                 + $"({DescribeSource(endpoint.Source)}) uses the '{endpoint.Uri.Scheme}' transport; applications run only "
                 + "against a local Docker socket or named pipe, because a container on another host cannot be given this "
@@ -241,7 +243,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
             _logger,
             cancellationToken);
 
-        return (Reported(Describe(outcome, endpoint, options)), endpoint);
+        return new ResolvedRuntime(Reported(Describe(outcome, endpoint, options)), endpoint);
     }
 
     /// <summary>One line per unavailable resolution, mirroring Development Mode's transport-failure line.</summary>

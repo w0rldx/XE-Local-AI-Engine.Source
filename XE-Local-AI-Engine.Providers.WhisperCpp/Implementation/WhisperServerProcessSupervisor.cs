@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
@@ -64,7 +65,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     ///     The last daemon torn down after exiting on its own, so every lane that had a request against it hears
     ///     "the process exited", not only the one whose report detached it. Guarded by <see cref="_stateGate" />.
     /// </summary>
-    private (long Generation, int? ExitCode)? _lastExited;
+    private ExitedDaemon? _lastExited;
 
     private bool _starting;
 
@@ -270,7 +271,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         if (running is null || running.Endpoint.Generation != generation)
         {
             // Another lane's report (or the reaper) already tore this daemon down.
-            (long Generation, int? ExitCode)? lastExited;
+            ExitedDaemon? lastExited;
             lock (_stateGate)
             {
                 lastExited = _lastExited;
@@ -866,7 +867,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             }
 
             _current = null;
-            _lastExited = (running.Endpoint.Generation, running.Handle.ExitCode);
+            _lastExited = new ExitedDaemon(running.Endpoint.Generation, running.Handle.ExitCode);
         }
 
         _residencyNotifier.NotifyChanged();
@@ -1144,4 +1145,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             _activityLease.Dispose();
         }
     }
+
+    /// <summary>A daemon that exited on its own: its endpoint generation and exit code.</summary>
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct ExitedDaemon(long Generation, int? ExitCode);
 }

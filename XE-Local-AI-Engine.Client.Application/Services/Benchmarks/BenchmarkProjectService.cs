@@ -381,7 +381,9 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         await _benchmarkStore.GetProjectAsync(projectId, cancellationToken)
         ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
 
-    private async Task<(BenchmarkProjectInput Input, BenchmarkJudgePolicyV1? Policy)> ValidateAsync(BenchmarkProjectDraft draft,
+    private readonly record struct ValidatedProject(BenchmarkProjectInput Input, BenchmarkJudgePolicyV1? Policy);
+
+    private async Task<ValidatedProject> ValidateAsync(BenchmarkProjectDraft draft,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(draft);
@@ -405,7 +407,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
             NormalizeModelName(draft.FidelityKldBaseModelName),
             cancellationToken);
         var policy = draft.Judge is null ? null : await BuildPolicyAsync(draft.Judge, cancellationToken);
-        return (new BenchmarkProjectInput
+        return new ValidatedProject(new BenchmarkProjectInput
             {
                 Id = draft.Id,
                 Name = draft.Name.Trim(),

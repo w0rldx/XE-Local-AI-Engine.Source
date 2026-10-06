@@ -36,15 +36,18 @@ internal static class GgufDownloadEndpointSupport
         var (statusCode, title) = exception.Reason switch
         {
             HuggingFaceDownloadFailure.DestinationConflict or HuggingFaceDownloadFailure.HashMismatch =>
-                (StatusCodes.Status409Conflict, "The repository did not provide exact metadata compatible with this acquisition."),
+                new DownloadProblem(StatusCodes.Status409Conflict, "The repository did not provide exact metadata compatible with this acquisition."),
             HuggingFaceDownloadFailure.NotFound =>
-                (StatusCodes.Status404NotFound, "The requested repository, revision, or file was not found."),
+                new DownloadProblem(StatusCodes.Status404NotFound, "The requested repository, revision, or file was not found."),
             HuggingFaceDownloadFailure.Gated or HuggingFaceDownloadFailure.Unauthorized =>
-                (StatusCodes.Status403Forbidden, "The repository is gated or the configured Hugging Face token was rejected."),
+                new DownloadProblem(StatusCodes.Status403Forbidden, "The repository is gated or the configured Hugging Face token was rejected."),
             HuggingFaceDownloadFailure.DiskFull =>
-                (StatusCodes.Status507InsufficientStorage, "There is not enough free disk space for the selected model."),
-            _ => (StatusCodes.Status503ServiceUnavailable, "Hugging Face could not be reached.")
+                new DownloadProblem(StatusCodes.Status507InsufficientStorage, "There is not enough free disk space for the selected model."),
+            _ => new DownloadProblem(StatusCodes.Status503ServiceUnavailable, "Hugging Face could not be reached.")
         };
         return Results.Problem(statusCode: statusCode, title: title, detail: exception.Message);
     }
+
+    /// <summary>The HTTP status and problem title a download failure maps to.</summary>
+    private readonly record struct DownloadProblem(int StatusCode, string Title);
 }

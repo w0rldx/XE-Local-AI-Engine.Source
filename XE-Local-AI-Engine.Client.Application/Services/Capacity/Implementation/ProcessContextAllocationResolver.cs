@@ -94,8 +94,11 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
         var kvCacheQuant = NormalizeKvCacheQuant(kvCacheType);
         var contentIdentity = facts.ContentIdentity ?? $"{modelName}:{facts.FileSizeBytes}";
         var key = BuildCacheKey(contentIdentity, role, variant, resolved, kvCacheQuant);
-        var state = (Resolver: this, Key: key, ContentIdentity: contentIdentity, Role: role, Variant: variant, Resolved: resolved, Facts: facts,
-            KvCacheQuant: kvCacheQuant);
+        var state = new
+        {
+            Resolver = this, Key = key, ContentIdentity = contentIdentity, Role = role, Variant = variant, Resolved = resolved, Facts = facts,
+            KvCacheQuant = kvCacheQuant
+        };
         var lazy = _cache.GetOrAdd(key,
             static (_, captured) => new Lazy<Task<ProcessContextAllocation?>>(() => captured.Resolver.ResolveCoreAsync(captured.Key,
                     captured.ContentIdentity,

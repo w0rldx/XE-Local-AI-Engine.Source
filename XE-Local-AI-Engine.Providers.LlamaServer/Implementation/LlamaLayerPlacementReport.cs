@@ -28,7 +28,9 @@ internal sealed class LlamaLayerPlacementReport : ILlamaLayerPlacementReport
     /// </remarks>
     public LlamaLayerPlacement? Current =>
         _observations.Values
-                     .MaxBy(static observation => (observation.Placement.IsPartial, observation.Sequence))
+                     .OrderByDescending(static observation => observation.Placement.IsPartial)
+                     .ThenByDescending(static observation => observation.Sequence)
+                     .FirstOrDefault()
                      ?.Placement;
 
     /// <inheritdoc />

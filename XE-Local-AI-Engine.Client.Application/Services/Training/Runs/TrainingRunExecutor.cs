@@ -438,15 +438,17 @@ public sealed class TrainingRunExecutor : ITrainingRunExecutor
         var cancelled = state.Cancelled || exitCode == CancelledExitCode || (cancelRequested && state.WatchdogReason is null);
         var (status, message) = state switch
         {
-            { WatchdogReason: { } reason } => (TrainingWorkStatus.Failed, reason),
-            _ when cancelled => (TrainingWorkStatus.Cancelled, "The training run was cancelled."),
-            { Done: true, ErrorMessage: null } when exitCode == 0 => (TrainingWorkStatus.Succeeded, (string?)null),
-            { ErrorMessage: { } error } when !string.IsNullOrWhiteSpace(error) => (TrainingWorkStatus.Failed, error),
-            _ => (TrainingWorkStatus.Failed, $"The trainer exited with status {exitCode}.")
+            { WatchdogReason: { } reason } => new RunOutcome(TrainingWorkStatus.Failed, reason),
+            _ when cancelled => new RunOutcome(TrainingWorkStatus.Cancelled, "The training run was cancelled."),
+            { Done: true, ErrorMessage: null } when exitCode == 0 => new RunOutcome(TrainingWorkStatus.Succeeded, null),
+            { ErrorMessage: { } error } when !string.IsNullOrWhiteSpace(error) => new RunOutcome(TrainingWorkStatus.Failed, error),
+            _ => new RunOutcome(TrainingWorkStatus.Failed, $"The trainer exited with status {exitCode}.")
         };
 
         await TerminalizeAsync(runId, status, message);
     }
+
+    private readonly record struct RunOutcome(TrainingWorkStatus Status, string? Message);
 
     private async Task TerminalizeAsync(Guid runId, TrainingWorkStatus status, string? message)
     {

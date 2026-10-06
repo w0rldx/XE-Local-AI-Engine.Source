@@ -37,7 +37,9 @@ public sealed class BenchmarkFreezeScope : IAsyncDisposable
         _leases.Clear();
     }
 
-    internal async Task<(LlamaServerLaunchCapabilities? Capabilities, GpuVariant Variant)> InspectAsync(IBenchmarkPhaseLaunchResolver resolver,
+    internal readonly record struct LaunchInspection(LlamaServerLaunchCapabilities? Capabilities, GpuVariant Variant);
+
+    internal async Task<LaunchInspection> InspectAsync(IBenchmarkPhaseLaunchResolver resolver,
         CancellationToken cancellationToken)
     {
         if (!_inspected)
@@ -48,7 +50,7 @@ public sealed class BenchmarkFreezeScope : IAsyncDisposable
             Inspections++;
         }
 
-        return (_capabilities, _variant!.Value);
+        return new LaunchInspection(_capabilities, _variant!.Value);
     }
 
     internal async Task<IBenchmarkInstalledModelLease> AcquireAsync(string modelName,

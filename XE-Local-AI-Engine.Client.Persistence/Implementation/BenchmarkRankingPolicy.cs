@@ -26,7 +26,7 @@ internal static class BenchmarkRankingPolicy
     ///     there no judge attempt exists and the fit alone decides the exclusion.
     /// </param>
     /// <returns><c>Rankable</c> says whether a score could ever rank this run, so the ranking's denominator cannot drift.</returns>
-    public static (BenchmarkRunJudgeView Judge, int? QualityScore, string Source, bool Rankable) ApplyRunExclusions(BenchmarkRunJudgeView judge,
+    public static RunExclusionOutcome ApplyRunExclusions(BenchmarkRunJudgeView judge,
         int? userScore,
         bool isWarmup,
         string? primaryStopReason,
@@ -44,10 +44,10 @@ internal static class BenchmarkRankingPolicy
             var (score, source) = ComputeQuality(userScore, judge, pairwise);
             if (pairwise is null)
             {
-                return (judge, score, source, true);
+                return new RunExclusionOutcome(judge, score, source, true);
             }
 
-            return (judge with
+            return new RunExclusionOutcome(judge with
             {
                 RankExclusionReason = userScore is null ? pairwise.Reason : null
             }, score, source, true);
@@ -55,11 +55,17 @@ internal static class BenchmarkRankingPolicy
 
         // The more specific cause wins: "your question changed" before "the suite around it changed".
         var reason = StaleReason(revised, setRevised) ?? unanswered;
-        return (judge with
+        return new RunExclusionOutcome(judge with
         {
             RankExclusionReason = isWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : reason
         }, null, BenchmarkQualityScoreSources.None, false);
     }
+
+    /// <summary>The judge view after the run-level exclusions, the quality score and its source, and whether a score could ever rank the run.</summary>
+    public readonly record struct RunExclusionOutcome(BenchmarkRunJudgeView Judge, int? QualityScore, string Source, bool Rankable);
+
+    /// <summary>A run's ranking value and the source it came from.</summary>
+    public readonly record struct QualityOutcome(int? QualityScore, string Source);
 
     /// <summary>
     ///     Which stale-identity reason a run carries, or <see langword="null" /> when neither stamp moved. The more
@@ -135,26 +141,28 @@ internal static class BenchmarkRankingPolicy
     /// <remarks>
     ///     A score from an outdated policy or a different judge runtime is still shown, it just does not rank.
     /// </remarks>
-    public static (int? QualityScore, string Source) ComputeQuality(int? userScore, BenchmarkRunJudgeView judge, PairwiseRunView? pairwise = null)
+    public static QualityOutcome ComputeQuality(int? userScore, BenchmarkRunJudgeView judge, PairwiseRunView? pairwise = null)
     {
         if (userScore is { } operatorScore)
         {
-            return (operatorScore, BenchmarkQualityScoreSources.User);
+            return new QualityOutcome(operatorScore, BenchmarkQualityScoreSources.User);
         }
 
         // Pairwise mode ranks through the cohort's active fit and NEVER through a judge attempt: there are no pointwise attempts in such a cohort, and a leftover
         // one from a previous revision is exactly what the fit scope exists to keep out of the ranking.
         if (pairwise is not null)
         {
-            return pairwise.Score is { } fitted ? (fitted, BenchmarkQualityScoreSources.Pairwise) : (null, BenchmarkQualityScoreSources.None);
+            return pairwise.Score is { } fitted
+                ? new QualityOutcome(fitted, BenchmarkQualityScoreSources.Pairwise)
+                : new QualityOutcome(null, BenchmarkQualityScoreSources.None);
         }
 
         var judgeScore = judge is { State: BenchmarkRunJudgeStates.Succeeded, PolicyCurrent: true, ExecutionCurrent: true }
             ? judge.Score
             : null;
         return judgeScore is { } score
-            ? (score, BenchmarkQualityScoreSources.Judge)
-            : (null, BenchmarkQualityScoreSources.None);
+            ? new QualityOutcome(score, BenchmarkQualityScoreSources.Judge)
+            : new QualityOutcome(null, BenchmarkQualityScoreSources.None);
     }
 
     /// <summary>One run's place in the active fit: the strength that ranks it, or the reason it has none.</summary>

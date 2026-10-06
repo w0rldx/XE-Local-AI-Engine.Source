@@ -134,7 +134,7 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
 
     private IReadOnlyList<ProcessAudioCaptureCandidate> ListCandidatesCore()
     {
-        var sessions = new List<(int ProcessId, bool Active)>();
+        var sessions = new List<ProcessAudioCaptureCandidates.AudioSession>();
 
         // Every one of these wraps a COM object; leaving one undisposed defers the release to the RCW finalizer, and the picker
         // is a poll-able route, so an undisposed collection per poll piles audio-engine releases onto a collection that may lag.
@@ -153,7 +153,7 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
         return ProcessAudioCaptureCandidates.Aggregate(sessions, ResolveProcessName);
     }
 
-    private static void CollectDeviceSessions(MMDevice device, List<(int ProcessId, bool Active)> sessions)
+    private static void CollectDeviceSessions(MMDevice device, List<ProcessAudioCaptureCandidates.AudioSession> sessions)
     {
         using var manager = device.AudioSessionManager;
         using var collection = manager.Sessions;
@@ -173,7 +173,7 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
                 continue;
             }
 
-            sessions.Add(((int)session.GetProcessID, state == AudioSessionState.AudioSessionStateActive));
+            sessions.Add(new ProcessAudioCaptureCandidates.AudioSession((int)session.GetProcessID, state == AudioSessionState.AudioSessionStateActive));
         }
     }
 

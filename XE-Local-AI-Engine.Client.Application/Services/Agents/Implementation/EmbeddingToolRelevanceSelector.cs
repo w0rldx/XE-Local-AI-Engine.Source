@@ -196,7 +196,7 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
         }
 
         var selected = rankable
-                       .Select((candidateIndex, position) => (Index: candidateIndex, Score: CosineScore(queryVector, candidateVectors[position])))
+                       .Select((candidateIndex, position) => new { Index = candidateIndex, Score = CosineScore(queryVector, candidateVectors[position]) })
                        .OrderByDescending(static scored => scored.Score)
                        .ThenBy(static scored => scored.Index)
                        .Take(rankedSlots)

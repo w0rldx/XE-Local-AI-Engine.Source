@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 
+using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
@@ -106,7 +107,7 @@ public sealed record TurnPolicy
     ///     The per-send <c>num_ctx</c> override wins, else the configured default. The benchmark freeze budgets against the same numbers
     ///     (<c>InvocationRunner.BudgetFirstRound</c>), so its pre-flight refusal cannot drift from what <see cref="Resolve" /> sets.
     /// </remarks>
-    internal static (int? RequestedContextTokens, int ContextCapacityTokens, int ReservedOutputTokens) ResolveContextBudget(RuntimePackage package,
+    internal static ContextBudget ResolveContextBudget(RuntimePackage package,
         ConversationContextBudgetOptions budgetOptions,
         int defaultContextTokens)
     {
@@ -114,8 +115,12 @@ public sealed record TurnPolicy
         var reserved = ResolveReservedOutputTokens(package.ReservedOutputTokensOverride,
             package.SamplingOptions?.MaxOutputTokens,
             budgetOptions.ReservedOutputTokenFloor);
-        return (requestedContext, requestedContext ?? defaultContextTokens, reserved);
+        return new ContextBudget(requestedContext, requestedContext ?? defaultContextTokens, reserved);
     }
+
+    /// <summary>The window the turn asked for, if any, the capacity it gets and the output tokens reserved from it.</summary>
+    [StructLayout(LayoutKind.Auto)]
+    internal readonly record struct ContextBudget(int? RequestedContextTokens, int ContextCapacityTokens, int ReservedOutputTokens);
 
     /// <summary>The output tokens held back from the window before the input is measured.</summary>
     /// <remarks>

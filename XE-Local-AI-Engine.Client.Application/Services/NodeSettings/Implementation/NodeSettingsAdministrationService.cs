@@ -289,11 +289,11 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
         StoredNodeSettings previous,
         CancellationToken cancellationToken)
     {
-        (NodeSettingsField Field, string? Value, string? Previous)[] fields =
+        FieldChange[] fields =
         [
-            (NodeSettingsField.PlaybookAnalysisModelName, settings.PlaybookAnalysisModelName, previous.PlaybookAnalysisModelName),
-            (NodeSettingsField.PlaybookEvalModelName, settings.PlaybookEvalModelName, previous.PlaybookEvalModelName),
-            (NodeSettingsField.MemoryExtractionModelName, settings.MemoryExtractionModelName, previous.MemoryExtractionModelName)
+            new(NodeSettingsField.PlaybookAnalysisModelName, settings.PlaybookAnalysisModelName, previous.PlaybookAnalysisModelName),
+            new(NodeSettingsField.PlaybookEvalModelName, settings.PlaybookEvalModelName, previous.PlaybookEvalModelName),
+            new(NodeSettingsField.MemoryExtractionModelName, settings.MemoryExtractionModelName, previous.MemoryExtractionModelName)
         ];
         foreach (var (field, value, previousValue) in fields)
         {
@@ -307,6 +307,8 @@ internal sealed class NodeSettingsAdministrationService : INodeSettingsAdministr
 
         return null;
     }
+
+    private readonly record struct FieldChange(NodeSettingsField Field, string? Value, string? Previous);
 
     private async Task<bool> IsNodeLocalModelAsync(string modelName, CancellationToken cancellationToken)
     {

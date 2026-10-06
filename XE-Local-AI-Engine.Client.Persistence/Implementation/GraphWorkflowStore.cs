@@ -810,7 +810,7 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
                                        .ToDictionaryAsync(static entity => entity.Id, cancellationToken);
             var judged = verdicts.ToDictionary(static verdict => verdict.NodeRunId);
             var reconciled = new List<GraphWorkflowReconciledNodeRun>(stranded.Count);
-            var repairs = new List<(GraphWorkflowRun Run, TransitionGraphWorkflowNodeRunCommand Command)>();
+            var repairs = new List<NodeRunRepair>();
             foreach (var nodeRun in stranded)
             {
                 if (!runs.TryGetValue(nodeRun.RunId, out var run))
@@ -846,8 +846,8 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
                 _ = AddEvent(run, GraphWorkflowEventTypes.NodeInterrupted, nodeRun.NodeKey, ReasonDetail(sanitizedReason));
                 run.Version++;
                 repairs.AddRange(matched
-                    ? verdict!.Repairs.Select(command => (run, command))
-                    : [(run, SettleUnjudged(nodeRun, unjudged!))]);
+                    ? verdict!.Repairs.Select(command => new NodeRunRepair(run, command))
+                    : [new NodeRunRepair(run, SettleUnjudged(nodeRun, unjudged!))]);
             }
 
             foreach (var (run, command) in repairs)
@@ -1333,4 +1333,7 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
 
     private static string Text(byte[] value) =>
         Encoding.UTF8.GetString(value);
+
+    /// <summary>One repair a reconciliation queues: the run it belongs to and the node-run transition to apply.</summary>
+    private readonly record struct NodeRunRepair(GraphWorkflowRun Run, TransitionGraphWorkflowNodeRunCommand Command);
 }

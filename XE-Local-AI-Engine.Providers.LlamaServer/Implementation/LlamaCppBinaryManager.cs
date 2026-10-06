@@ -1113,7 +1113,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     Runs one download → SHA256 verify → extract pass. Returns the staging dir on success, or the non-fatal
     ///     failure cause to drive a single retry. Cancellation propagates rather than being swallowed.
     /// </summary>
-    private async Task<(string? StagingDir, Exception? Error)> TryDownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir,
+    private async Task<DownloadAttempt> TryDownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir,
         AcquisitionReporter? reporter, int stepIndex,
         CancellationToken ct)
     {
@@ -1129,7 +1129,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             // When the catalog reported a size, the on-disk length must match it exactly before we trust+hash the file.
             if (expectedSize > 0 && new FileInfo(tempArchive).Length != expectedSize)
             {
-                return (null, new LlamaRuntimeException("The llama.cpp runtime download did not match its expected size."));
+                return new DownloadAttempt(null, new LlamaRuntimeException("The llama.cpp runtime download did not match its expected size."));
             }
 
             // Verification and extraction of a few-hundred-MB archive are not instant; without their own phases the UI
@@ -1137,11 +1137,11 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             reporter?.Report(RuntimeAcquisitionPhase.Verifying, stepIndex);
             if (!await HashMatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
             {
-                return (null, new LlamaRuntimeException("The llama.cpp runtime download failed integrity verification."));
+                return new DownloadAttempt(null, new LlamaRuntimeException("The llama.cpp runtime download failed integrity verification."));
             }
 
             reporter?.Report(RuntimeAcquisitionPhase.Extracting, stepIndex);
-            return (await ExtractArchiveAsync(tempArchive, assetName, variantDir, ct).ConfigureAwait(false), null);
+            return new DownloadAttempt(await ExtractArchiveAsync(tempArchive, assetName, variantDir, ct).ConfigureAwait(false), null);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -1149,13 +1149,16 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
         catch (Exception exception)
         {
-            return (null, exception);
+            return new DownloadAttempt(null, exception);
         }
         finally
         {
             TryDeleteFile(tempArchive);
         }
     }
+
+    /// <summary>One download pass: the staging dir on success, otherwise the failure cause.</summary>
+    private readonly record struct DownloadAttempt(string? StagingDir, Exception? Error);
 
     private async Task DownloadToFileAsync(Uri url, string destination, long expectedSize, AcquisitionReporter? reporter, int stepIndex, CancellationToken ct)
     {

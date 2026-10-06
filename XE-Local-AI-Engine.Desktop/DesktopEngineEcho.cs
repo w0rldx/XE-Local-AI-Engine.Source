@@ -14,7 +14,7 @@ internal sealed class DesktopEngineEcho : IAsyncDisposable
 {
     internal const int Capacity = 1024;
 
-    private readonly Channel<(bool Error, string Text)> _pending = Channel.CreateBounded<(bool Error, string Text)>(new BoundedChannelOptions(Capacity)
+    private readonly Channel<EchoEntry> _pending = Channel.CreateBounded<EchoEntry>(new BoundedChannelOptions(Capacity)
     {
         FullMode = BoundedChannelFullMode.DropOldest,
         SingleReader = true
@@ -27,11 +27,11 @@ internal sealed class DesktopEngineEcho : IAsyncDisposable
 
     /// <summary>Queues one standard-output line; never blocks.</summary>
     internal void Output(string line) =>
-        _pending.Writer.TryWrite((false, line));
+        _pending.Writer.TryWrite(new EchoEntry(false, line));
 
     /// <summary>Queues a raw standard-error chunk; never blocks.</summary>
     internal void Error(string text) =>
-        _pending.Writer.TryWrite((true, text));
+        _pending.Writer.TryWrite(new EchoEntry(true, text));
 
     public async ValueTask DisposeAsync()
     {
@@ -67,4 +67,7 @@ internal sealed class DesktopEngineEcho : IAsyncDisposable
             }
         }
     }
+
+    /// <summary>One queued echo: whether it goes to standard error, and its text.</summary>
+    private readonly record struct EchoEntry(bool Error, string Text);
 }

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -73,10 +74,10 @@ public sealed partial class LlamaServerProcessSupervisor
     ///     claim, and claims already taken are released through <see cref="RunningProcess.ReleaseEvictionClaim" />: an
     ///     abandoned claim refuses every future lease, an ownership-blind clear erases an operator eject's own mark.
     /// </remarks>
-    private async Task<(ModelRole Role, int ActiveLeases, LlamaServerProfilingRefusalReason Reason)?> TryEvictAllRolesForProfilingAsync(string modelName)
+    private async Task<ProfilingRefusal?> TryEvictAllRolesForProfilingAsync(string modelName)
     {
-        var claimed = new List<(ProcessKey Key, RunningProcess Process, long Claim)>();
-        var exited = new List<(ProcessKey Key, RunningProcess Process, long Claim)>();
+        var claimed = new List<EvictionClaim>();
+        var exited = new List<EvictionClaim>();
         foreach (var role in Enum.GetValues<ModelRole>())
         {
             var key = new ProcessKey(modelName, role);
@@ -89,7 +90,7 @@ public sealed partial class LlamaServerProcessSupervisor
             // and it is never claimed, so a refusal leaves an operator eject's own mark on it untouched.
             if (running.Handle.HasExited)
             {
-                exited.Add((key, running, Claim: 0));
+                exited.Add(new EvictionClaim(key, running, Claim: 0));
                 continue;
             }
 
@@ -108,10 +109,10 @@ public sealed partial class LlamaServerProcessSupervisor
                     : LlamaServerProfilingRefusalReason.InUse;
                 _logger.LogInformation("Profiling for model {ModelName} was skipped: role {Role} could not be claimed ({Reason}, {ActiveLeases} in-flight request(s)).",
                     modelName, role, reason, activeLeases);
-                return (role, activeLeases, reason);
+                return new ProfilingRefusal(role, activeLeases, reason);
             }
 
-            claimed.Add((key, running, claim));
+            claimed.Add(new EvictionClaim(key, running, claim));
         }
 
         foreach (var (key, running, _) in exited.Concat(claimed))
@@ -292,4 +293,11 @@ public sealed partial class LlamaServerProcessSupervisor
             return running.ActiveLeases == 0;
         }
     }
+
+    /// <summary>The role that refused a profiling claim, what it was serving and why.</summary>
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct ProfilingRefusal(ModelRole Role, int ActiveLeases, LlamaServerProfilingRefusalReason Reason);
+
+    /// <summary>A process taken for profiling's eviction and the claim token it was taken with (0 for an exited one).</summary>
+    private readonly record struct EvictionClaim(ProcessKey Key, RunningProcess Process, long Claim);
 }

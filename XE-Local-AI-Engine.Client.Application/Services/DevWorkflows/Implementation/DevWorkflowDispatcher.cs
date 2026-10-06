@@ -526,7 +526,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///     Answers with the reason the run should end when a gate was answered in a way none of its out-edges accepts.
     ///     Deliberately not written here: that is the RUN's transition, and this method only moves node runs.
     /// </remarks>
-    private static async Task<(int Written, string? GateRejection)> SettleDecisionsAsync(IDevWorkflowStore store,
+    private static async Task<SettledDecisions> SettleDecisionsAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowGraph graph,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
@@ -536,7 +536,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                               .ToList();
         if (waiting.Count == 0)
         {
-            return (0, null);
+            return new SettledDecisions(0, null);
         }
 
         var decisions = await store.ListDecisionsAsync(run.Id, cancellationToken);
@@ -646,10 +646,10 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             }
         }
 
-        return (written, rejection);
+        return new SettledDecisions(written, rejection);
 
-        static (DevWorkflowNodeRunStatus Target, string? Outcome, bool IncrementAttempt) Resolve(DevWorkflowDecisionKind decision) =>
-            (DevWorkflowStateMachine.TargetFor(decision),
+        static DecisionTransition Resolve(DevWorkflowDecisionKind decision) =>
+            new(DevWorkflowStateMachine.TargetFor(decision),
                 decision switch
                 {
                     DevWorkflowDecisionKind.Reject => DevWorkflowOutcomes.Rejected,
@@ -677,6 +677,10 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 _ => null
             };
     }
+
+    private readonly record struct SettledDecisions(int Written, string? GateRejection);
+
+    private readonly record struct DecisionTransition(DevWorkflowNodeRunStatus Target, string? Outcome, bool IncrementAttempt);
 
     /// <summary>
     ///     Completes a <c>Pausing</c> or <c>Cancelling</c> transition once nothing is live any more, and admits nothing

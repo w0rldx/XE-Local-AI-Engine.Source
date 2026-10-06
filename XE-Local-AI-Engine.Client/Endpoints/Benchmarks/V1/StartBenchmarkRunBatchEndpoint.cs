@@ -76,9 +76,9 @@ public sealed class StartBenchmarkRunBatchEndpoint : Endpoint<StartBenchmarkRunB
     {
         var (code, message) = item.Kind switch
         {
-            BenchmarkRunBatchRejectionKind.NotAttempted => (BenchmarkErrorCode.NotAttempted, item.Message),
-            BenchmarkRunBatchRejectionKind.TimeBudget => (BenchmarkErrorCode.BatchTimeBudget, item.Message),
-            _ when item.Failure is NotSupportedException => (BenchmarkErrorCode.UnsupportedSnapshot, item.Message),
+            BenchmarkRunBatchRejectionKind.NotAttempted => new Rejection(BenchmarkErrorCode.NotAttempted, item.Message),
+            BenchmarkRunBatchRejectionKind.TimeBudget => new Rejection(BenchmarkErrorCode.BatchTimeBudget, item.Message),
+            _ when item.Failure is NotSupportedException => new Rejection(BenchmarkErrorCode.UnsupportedSnapshot, item.Message),
             _ when item.Failure is not null => Classify(item.Failure),
             _ => throw new InvalidOperationException("A failed benchmark batch item must carry its failure.")
         };
@@ -92,9 +92,12 @@ public sealed class StartBenchmarkRunBatchEndpoint : Endpoint<StartBenchmarkRunB
         };
     }
 
-    private static (BenchmarkErrorCode Code, string Message) Classify(Exception exception)
+    private static Rejection Classify(Exception exception)
     {
         var (_, code, message) = BenchmarkEndpointSupport.Classify(exception);
-        return (code, message);
+        return new Rejection(code, message);
     }
+
+    /// <summary>The error code and message a rejected batch item reports.</summary>
+    private readonly record struct Rejection(BenchmarkErrorCode Code, string Message);
 }

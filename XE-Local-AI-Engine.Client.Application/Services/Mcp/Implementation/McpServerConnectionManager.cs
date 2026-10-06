@@ -643,7 +643,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     /// <summary>
     ///     Retires a session a call just failed on and records why, so the next call reconnects instead of reusing it.
     /// </summary>
-    private async Task<(McpConnectionFailureReason Reason, string Detail, string ServerName)> AbandonSessionAsync(Guid serverId, ClientSession session, Exception exception)
+    private async Task<AbandonedSession> AbandonSessionAsync(Guid serverId, ClientSession session, Exception exception)
     {
         McpServerRecord? record;
         lock (_stateLock)
@@ -653,7 +653,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
         var (reason, detail) = session.Client.Completion.IsCompleted
             ? DescribeCompletion(await session.Client.Completion, record)
-            : (Classify(exception, hasHeaders: record?.Headers.Count > 0, inSession: true), string.Empty);
+            : new SessionFailure(Classify(exception, hasHeaders: record?.Headers.Count > 0, inSession: true), string.Empty);
         if (detail.Length == 0)
         {
             detail = SafeMessage(reason);
@@ -680,8 +680,12 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         }
 
         await DisposeSessionSafelyAsync(session);
-        return (reason, detail, record?.Name ?? "unknown");
+        return new AbandonedSession(reason, detail, record?.Name ?? "unknown");
     }
+
+    private readonly record struct AbandonedSession(McpConnectionFailureReason Reason, string Detail, string ServerName);
+
+    private readonly record struct SessionFailure(McpConnectionFailureReason Reason, string Detail);
 
     private static bool IsTransportFault(Exception exception)
     {
@@ -727,17 +731,17 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         await DisposeSessionSafelyAsync(session);
     }
 
-    private static (McpConnectionFailureReason Reason, string Detail) DescribeCompletion(ClientCompletionDetails details, McpServerRecord? record)
+    private static SessionFailure DescribeCompletion(ClientCompletionDetails details, McpServerRecord? record)
     {
         return details switch
         {
-            StdioClientCompletionDetails stdio => (McpConnectionFailureReason.ServerExited,
+            StdioClientCompletionDetails stdio => new SessionFailure(McpConnectionFailureReason.ServerExited,
                 AppendStderrTail(string.Create(CultureInfo.InvariantCulture,
                         $"{SafeMessage(McpConnectionFailureReason.ServerExited)} Exit code {stdio.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}."),
                     JoinTail(stdio.StandardErrorTail), record)),
-            HttpClientCompletionDetails { HttpStatusCode: HttpStatusCode.NotFound } => (McpConnectionFailureReason.SessionLost, SafeMessage(McpConnectionFailureReason.SessionLost)),
-            HttpClientCompletionDetails => (McpConnectionFailureReason.Transport, SafeMessage(McpConnectionFailureReason.Transport)),
-            _ => (McpConnectionFailureReason.ServerExited, SafeMessage(McpConnectionFailureReason.ServerExited))
+            HttpClientCompletionDetails { HttpStatusCode: HttpStatusCode.NotFound } => new SessionFailure(McpConnectionFailureReason.SessionLost, SafeMessage(McpConnectionFailureReason.SessionLost)),
+            HttpClientCompletionDetails => new SessionFailure(McpConnectionFailureReason.Transport, SafeMessage(McpConnectionFailureReason.Transport)),
+            _ => new SessionFailure(McpConnectionFailureReason.ServerExited, SafeMessage(McpConnectionFailureReason.ServerExited))
         };
     }
 
@@ -869,14 +873,14 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         lock (_stateLock)
         {
             var idle = _servers.Values
-                               .SelectMany(static entry => entry.Conversations.Select(pair => (Entry: entry, ConversationId: pair.Key, Session: pair.Value)))
+                               .SelectMany(static entry => entry.Conversations.Select(pair => new { Entry = entry, ConversationId = pair.Key, Session = pair.Value }))
                                .Where(item => item.Session.LastUsedUtc <= cutoff && Volatile.Read(ref item.Session.ActiveCalls) == 0)
                                .ToList();
-            foreach (var (entry, conversationId, session) in idle)
+            foreach (var item in idle)
             {
-                _ = entry.Conversations.Remove(conversationId);
-                session.Closing = true;
-                expired.Add(session);
+                _ = item.Entry.Conversations.Remove(item.ConversationId);
+                item.Session.Closing = true;
+                expired.Add(item.Session);
             }
         }
 

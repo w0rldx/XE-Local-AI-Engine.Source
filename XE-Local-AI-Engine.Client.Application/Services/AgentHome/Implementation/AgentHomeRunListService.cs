@@ -378,12 +378,12 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
     ///     The flag exists for the reader that SHOWS these lines: joined text with a gap in it and no note would read
     ///     as a complete log that simply says nothing about the middle of the run.
     /// </remarks>
-    private static async Task<(IReadOnlyList<string> Lines, bool Truncated)> ReadBoundedLinesAsync(string path, CancellationToken cancellationToken)
+    private static async Task<BoundedLines> ReadBoundedLinesAsync(string path, CancellationToken cancellationToken)
     {
         await using var stream = TryOpenRunFile(path, EventsMaxBytes);
         if (stream is null)
         {
-            return ([], false);
+            return new BoundedLines([], false);
         }
 
         byte[] head;
@@ -406,17 +406,19 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            return ([], false);
+            return new BoundedLines([], false);
         }
 
         // Each window drops the edge line it cannot have in full: the head ends mid-line when it hit its cap, and a
         // tail taken at all starts mid-line.
-        return
-            ([
+        return new BoundedLines(
+            [
                 .. SplitLines(head, dropFirst: false, dropLast: tail.Length > 0),
                 .. SplitLines(tail, dropFirst: true, dropLast: false)
             ], tail.Length > 0);
     }
+
+    private readonly record struct BoundedLines(IReadOnlyList<string> Lines, bool Truncated);
 
     private static async Task<byte[]> ReadSegmentAsync(FileStream stream, long offset, int count, CancellationToken cancellationToken)
     {

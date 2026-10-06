@@ -16,7 +16,7 @@ public sealed partial class NodeAdminMcpTools
     // Tool parameter names are snake_case: they are MCP's public JSON contract.
     public async Task<McpAgentResponse> GetAgentAsync(string agent_id, CancellationToken cancellationToken)
     {
-        return await InvokeAuditedAsync("get_agent", AuditArguments(("agent_id", agent_id)), async () =>
+        return await InvokeAuditedAsync("get_agent", AuditArguments(new KeyValuePair<string, object?>("agent_id", agent_id)), async () =>
         {
             var (record, ambiguous) = await FindAgentAsync(agent_id, cancellationToken);
             if (ambiguous)
@@ -122,7 +122,7 @@ public sealed partial class NodeAdminMcpTools
             memory_extraction_enabled,
             disable_base_scaffold,
             generation_metadata,
-            ("agent_id", agent_id));
+            new KeyValuePair<string, object?>("agent_id", agent_id));
         return await InvokeAuditedAsync("update_agent", arguments, async () =>
         {
             var (existing, ambiguous) = await FindAgentAsync(agent_id, cancellationToken);
@@ -160,7 +160,7 @@ public sealed partial class NodeAdminMcpTools
     [Description("Delete a saved agent by id or exact name.")]
     public async Task<McpAgentDeleteResponse> DeleteAgentAsync(string agent_id, CancellationToken cancellationToken)
     {
-        return await InvokeAuditedAsync("delete_agent", AuditArguments(("agent_id", agent_id)), async () =>
+        return await InvokeAuditedAsync("delete_agent", AuditArguments(new KeyValuePair<string, object?>("agent_id", agent_id)), async () =>
         {
             var (existing, ambiguous) = await FindAgentAsync(agent_id, cancellationToken);
             if (ambiguous)
@@ -201,17 +201,19 @@ public sealed partial class NodeAdminMcpTools
     private const string AmbiguousNameMessage = "Several saved agents share this name. Use the agent id instead.";
 
     // Q5: names are not unique, so a name that matches several agents is refused instead of acting on the first row (I-D6).
-    private async Task<(AgentDefinitionRecord? Record, bool Ambiguous)> FindAgentAsync(string key, CancellationToken cancellationToken)
+    private async Task<AgentLookup> FindAgentAsync(string key, CancellationToken cancellationToken)
     {
         try
         {
-            return (await _agentDefinitionService.GetByKeyAsync(key, cancellationToken), false);
+            return new AgentLookup(await _agentDefinitionService.GetByKeyAsync(key, cancellationToken), false);
         }
         catch (AgentDefinitionAmbiguousNameException)
         {
-            return (null, true);
+            return new AgentLookup(null, true);
         }
     }
+
+    private readonly record struct AgentLookup(AgentDefinitionRecord? Record, bool Ambiguous);
 
     private static McpAgentResponse AgentNameAmbiguous() =>
         new()

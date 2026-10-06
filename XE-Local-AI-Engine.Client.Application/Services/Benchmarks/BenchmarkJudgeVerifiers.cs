@@ -109,17 +109,23 @@ public static class BenchmarkJudgeVerifiers
         }
     }
 
-    private static (bool Passed, string Detail) VerifyExact(BenchmarkVerifierSpec spec, string answer)
+    private readonly record struct VerifierOutcome(bool Passed, string Detail);
+
+    private static VerifierOutcome Pass(string detail) => new(true, detail);
+
+    private static VerifierOutcome Fail(string detail) => new(false, detail);
+
+    private static VerifierOutcome VerifyExact(BenchmarkVerifierSpec spec, string answer)
     {
         var expected = Normalize(spec.ExpectedText ?? string.Empty, spec.Normalize);
         var actual = Normalize(answer, spec.Normalize);
         var comparison = spec.Normalize.CaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         return string.Equals(expected, actual, comparison)
-            ? (true, "The normalized answer equals the expected text.")
-            : (false, $"Expected '{Bound(expected, 120)}' but the normalized answer was '{Bound(actual, 120)}'.");
+            ? Pass("The normalized answer equals the expected text.")
+            : Fail($"Expected '{Bound(expected, 120)}' but the normalized answer was '{Bound(actual, 120)}'.");
     }
 
-    private static (bool Passed, string Detail) VerifyRegex(BenchmarkVerifierSpec spec, string answer)
+    private static VerifierOutcome VerifyRegex(BenchmarkVerifierSpec spec, string answer)
     {
         var pattern = spec.Pattern ?? throw new BenchmarkExecutionException("The regex criterion has no compiled pattern.");
         var matched = pattern.IsMatch(answer);
@@ -130,10 +136,10 @@ public static class BenchmarkJudgeVerifiers
             (false, true) => "The answer matches the forbidden pattern.",
             _ => "The answer does not match the forbidden pattern."
         };
-        return (matched == spec.MustMatch, detail);
+        return new VerifierOutcome(matched == spec.MustMatch, detail);
     }
 
-    private static (bool Passed, string Detail) VerifyJsonSchema(BenchmarkVerifierSpec spec, string answer)
+    private static VerifierOutcome VerifyJsonSchema(BenchmarkVerifierSpec spec, string answer)
     {
         var candidate = ExtractJson(answer);
         JsonDocument document;
@@ -143,21 +149,21 @@ public static class BenchmarkJudgeVerifiers
         }
         catch (JsonException)
         {
-            return (false, "The answer is not valid JSON.");
+            return Fail("The answer is not valid JSON.");
         }
 
         using (document)
         {
             var failure = SchemaFailure(spec.Schema, document.RootElement, "$");
-            return failure is null ? (true, "The answer validates against the schema.") : (false, failure);
+            return failure is null ? Pass("The answer validates against the schema.") : Fail(failure);
         }
     }
 
-    private static (bool Passed, string Detail) VerifyMathAnswer(BenchmarkVerifierSpec spec, string answer)
+    private static VerifierOutcome VerifyMathAnswer(BenchmarkVerifierSpec spec, string answer)
     {
         if (!BenchmarkMathAnswer.TryExtract(answer, out var value, out var source))
         {
-            return (false, $"No numeric answer could be read from the output (tried {BenchmarkMathAnswer.ExtractionOrder}).");
+            return Fail($"No numeric answer could be read from the output (tried {BenchmarkMathAnswer.ExtractionOrder}).");
         }
 
         var tolerance = Math.Max(spec.AbsoluteTolerance, spec.RelativeTolerance * Math.Abs(spec.ExpectedNumber));
@@ -165,46 +171,46 @@ public static class BenchmarkJudgeVerifiers
         var expectedText = spec.ExpectedNumber.ToString("R", CultureInfo.InvariantCulture);
         var actualText = value.ToString("R", CultureInfo.InvariantCulture);
         return difference <= tolerance
-            ? (true, $"Read {actualText} from the {source} rule; expected {expectedText}.")
-            : (false, $"Read {actualText} from the {source} rule; expected {expectedText}.");
+            ? Pass($"Read {actualText} from the {source} rule; expected {expectedText}.")
+            : Fail($"Read {actualText} from the {source} rule; expected {expectedText}.");
     }
 
-    private static (bool Passed, string Detail) VerifyConstraint(BenchmarkVerifierSpec spec, string answer)
+    private static VerifierOutcome VerifyConstraint(BenchmarkVerifierSpec spec, string answer)
     {
         var config = spec.Constraint ?? throw new BenchmarkExecutionException("The constraint criterion has no configuration.");
         var words = answer.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length;
         if (config.MinWords is { } minimum && words < minimum)
         {
-            return (false, $"The answer has {words} words, fewer than the required {minimum}.");
+            return Fail($"The answer has {words} words, fewer than the required {minimum}.");
         }
 
         if (config.MaxWords is { } maximum && words > maximum)
         {
-            return (false, $"The answer has {words} words, more than the permitted {maximum}.");
+            return Fail($"The answer has {words} words, more than the permitted {maximum}.");
         }
 
         if (config.MustContain?.FirstOrDefault(term => !answer.Contains(term, StringComparison.OrdinalIgnoreCase)) is { } missing)
         {
-            return (false, $"The answer does not contain '{Bound(missing, 64)}'.");
+            return Fail($"The answer does not contain '{Bound(missing, 64)}'.");
         }
 
         if (config.MustNotContain?.FirstOrDefault(term => answer.Contains(term, StringComparison.OrdinalIgnoreCase)) is { } forbidden)
         {
-            return (false, $"The answer contains the forbidden '{Bound(forbidden, 64)}'.");
+            return Fail($"The answer contains the forbidden '{Bound(forbidden, 64)}'.");
         }
 
         return config.Format switch
         {
             BenchmarkConstraintConfigV1.FormatJson => IsJson(answer)
-                ? (true, $"The answer is JSON and satisfies every constraint ({words} words).")
-                : (false, "The answer is not valid JSON."),
+                ? Pass($"The answer is JSON and satisfies every constraint ({words} words).")
+                : Fail("The answer is not valid JSON."),
             BenchmarkConstraintConfigV1.FormatMarkdownList => IsMarkdownList(answer)
-                ? (true, $"The answer is a markdown list and satisfies every constraint ({words} words).")
-                : (false, "The answer is not a markdown list."),
+                ? Pass($"The answer is a markdown list and satisfies every constraint ({words} words).")
+                : Fail("The answer is not a markdown list."),
             BenchmarkConstraintConfigV1.FormatNoMarkdown => MarkdownEmphasis.IsMatch(answer) || IsMarkdownList(answer)
-                ? (false, "The answer contains markdown formatting.")
-                : (true, $"The answer is plain text and satisfies every constraint ({words} words)."),
-            _ => (true, $"The answer satisfies every constraint ({words} words).")
+                ? Fail("The answer contains markdown formatting.")
+                : Pass($"The answer is plain text and satisfies every constraint ({words} words)."),
+            _ => Pass($"The answer satisfies every constraint ({words} words).")
         };
     }
 

@@ -348,6 +348,20 @@ Converting a record to a class degrades a structural `AssertEx.Equal` on that ty
 with no compiler warning, so such a conversion is judged on the full backend gate, never on the classes it
 touched.
 
+**Production code uses no tuples.** A tuple type (`(bool Ok, string Error)`, `Task<(…)>`, `List<(…)>`,
+`ValueTuple<…>`, `Tuple<…>`) and a tuple-valued expression (a return, an argument, a collection element, a
+LINQ projection, a dictionary key, `var x = (a, b)`) are both out: the shape gets a name. The default name is a
+nested positional `readonly record struct` with the member's accessibility, named for what it carries
+(`ParseOutcome`, not `Pair`): it keeps the tuple's value semantics and zero allocation, deconstructs at the call
+site, and `record struct` is outside the positional-record rule above. A shape that carries a secret becomes a
+`sealed class` so no generated `ToString()` can print it; a shape that crosses an interface or several types
+goes to the folder's family file; a purely local projection is an anonymous type. What stays allowed is syntax
+that only takes things apart: a tuple as the subject of a `switch`, a deconstruction target or swap
+(`(a, b) = (b, a)`), `var (a, b) = call;`, `foreach (var (k, v) in dictionary)`, and positional patterns.
+`NoTupleConventionTests` walks every enforced file's syntax tree and holds production at zero;
+`XE-Local-AI-Engine.Tests/Architecture/TupleAllowlist.txt` grandfathers the test projects per file and is
+shrink-only in both directions, so a test that loses a tuple lowers or deletes its line in the same commit.
+
 ### `ConfigureAwait` is contextual
 
 `ConfigureAwait(false)` is written in the **library** projects — `Providers.*`, `AI.Agent`, `AI.Contracts` — which

@@ -22,18 +22,18 @@ public sealed class GraphWorkflowOptionsValidator : IValidateOptions<GraphWorkfl
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        (string Name, int Value, int Floor)[] floors =
+        OptionFloor[] floors =
         [
-            (nameof(options.MaxNodesPerDefinition), options.MaxNodesPerDefinition, 2),
-            (nameof(options.MaxNodeRunsPerRun), options.MaxNodeRunsPerRun, 2),
-            (nameof(options.MaxTotalAttempts), options.MaxTotalAttempts, 1),
-            (nameof(options.DefaultNodeTimeoutSeconds), options.DefaultNodeTimeoutSeconds, 1),
-            (nameof(options.MaxOutputJsonBytes), options.MaxOutputJsonBytes, 1024),
-            (nameof(options.DispatchIntervalMilliseconds), options.DispatchIntervalMilliseconds, 100),
-            (nameof(options.MaxConcurrentRuns), options.MaxConcurrentRuns, 1),
-            (nameof(options.MaxRunInputBytes), options.MaxRunInputBytes, 1024),
-            (nameof(options.EventReplayLimit), options.EventReplayLimit, 1),
-            (nameof(options.MaxSteersPerNode), options.MaxSteersPerNode, 1)
+            new(nameof(options.MaxNodesPerDefinition), options.MaxNodesPerDefinition, 2),
+            new(nameof(options.MaxNodeRunsPerRun), options.MaxNodeRunsPerRun, 2),
+            new(nameof(options.MaxTotalAttempts), options.MaxTotalAttempts, 1),
+            new(nameof(options.DefaultNodeTimeoutSeconds), options.DefaultNodeTimeoutSeconds, 1),
+            new(nameof(options.MaxOutputJsonBytes), options.MaxOutputJsonBytes, 1024),
+            new(nameof(options.DispatchIntervalMilliseconds), options.DispatchIntervalMilliseconds, 100),
+            new(nameof(options.MaxConcurrentRuns), options.MaxConcurrentRuns, 1),
+            new(nameof(options.MaxRunInputBytes), options.MaxRunInputBytes, 1024),
+            new(nameof(options.EventReplayLimit), options.EventReplayLimit, 1),
+            new(nameof(options.MaxSteersPerNode), options.MaxSteersPerNode, 1)
         ];
 
         var failures = new List<string>();
@@ -59,4 +59,6 @@ public sealed class GraphWorkflowOptionsValidator : IValidateOptions<GraphWorkfl
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
+
+    private readonly record struct OptionFloor(string Name, int Value, int Floor);
 }

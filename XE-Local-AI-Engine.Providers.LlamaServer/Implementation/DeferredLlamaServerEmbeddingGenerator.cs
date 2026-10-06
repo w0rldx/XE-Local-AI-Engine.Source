@@ -95,7 +95,7 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
     ///     every caller already handles, once the bounded retry is spent, so retrieval degrades to its lexical fallback
     ///     instead of failing unclassified. Why a retry rather than proceeding: wiki 03.
     /// </remarks>
-    private async Task<(IEmbeddingGenerator<string, Embedding<float>> Inner, ILlamaServerInferenceLease? Lease)> EnsureLeasedInnerAsync(CancellationToken ct)
+    private async Task<LeasedInner> EnsureLeasedInnerAsync(CancellationToken ct)
     {
         var attempt = 0;
         while (true)
@@ -112,7 +112,7 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
             var unresolved = acquisition.Lease is null && !acquisition.ProcessProfiling && fromCache;
             if (!acquisition.ProcessProfiling && !unresolved)
             {
-                return (inner, acquisition.Lease);
+                return new LeasedInner(inner, acquisition.Lease);
             }
 
             InvalidateInner();
@@ -187,12 +187,12 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
         _initGate.Dispose();
     }
 
-    private async Task<(IEmbeddingGenerator<string, Embedding<float>> Inner, bool FromCache)> EnsureInnerAsync(CancellationToken ct)
+    private async Task<ResolvedInner> EnsureInnerAsync(CancellationToken ct)
     {
         var existing = Volatile.Read(ref _inner);
         if (existing is not null)
         {
-            return (existing, true);
+            return new ResolvedInner(existing, FromCache: true);
         }
 
         await _initGate.WaitAsync(ct).ConfigureAwait(false);
@@ -200,7 +200,7 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
         {
             if (_inner is not null)
             {
-                return (_inner, true);
+                return new ResolvedInner(_inner, FromCache: true);
             }
 
             LlamaServerEndpoint endpoint;
@@ -215,13 +215,21 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
                 throw new IOException(exception.Message, exception);
             }
 
+#pragma warning disable CA2000 // Ownership moves to _inner through Volatile.Write, which the analyzer cannot see; Dispose releases it.
             var built = LlamaServerOpenAIAdapterFactory.CreateEmbeddingGenerator(endpoint.BaseAddress, _modelName, _networkTimeout);
+#pragma warning restore CA2000
             Volatile.Write(ref _inner, built);
-            return (built, false);
+            return new ResolvedInner(built, FromCache: false);
         }
         finally
         {
             _initGate.Release();
         }
     }
+
+    /// <summary>The adapter to embed through and the request-lifetime lease over its process, if one was taken.</summary>
+    private readonly record struct LeasedInner(IEmbeddingGenerator<string, Embedding<float>> Inner, ILlamaServerInferenceLease? Lease);
+
+    /// <summary>The cached or freshly built adapter, and whether it came from the cache.</summary>
+    private readonly record struct ResolvedInner(IEmbeddingGenerator<string, Embedding<float>> Inner, bool FromCache);
 }

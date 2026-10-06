@@ -65,8 +65,11 @@ internal static class SandboxProviderSelector
     /// <remarks>
     ///     Exposed because the guarantee is an enumeration, and an enumeration the test cannot read is not a guarantee.
     /// </remarks>
-    internal static IReadOnlyList<(string Name, SandboxToolchainSource Toolchain)> BackendRanking { get; } =
-        [.. ByAscendingPrivilege.Select(static backend => (backend.Name, backend.Toolchain))];
+    internal static IReadOnlyList<RankedBackend> BackendRanking { get; } =
+        [.. ByAscendingPrivilege.Select(static backend => new RankedBackend(backend.Name, backend.Toolchain))];
+
+    /// <summary>One entry of <see cref="BackendRanking" />.</summary>
+    internal readonly record struct RankedBackend(string Name, SandboxToolchainSource Toolchain);
 
     /// <summary>
     ///     Resolves the AgentHome/Coder sandbox for <see cref="SandboxWorkloads.AgentHome" />, constrained by

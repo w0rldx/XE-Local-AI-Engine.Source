@@ -57,11 +57,14 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    /// <summary>One completed, content-bearing message of the selected path with the anchor sequence it folds under.</summary>
+    internal readonly record struct AnchoredMessage(NodeChatPersistedMessageDto Message, int Anchor);
+
     /// <summary>
     ///     The completed, content-bearing messages of the selected path after the state watermark (and at or below
     ///     <paramref name="upToAnchorSequence" />), in anchor order: the span compaction folds, seen from the state side.
     /// </summary>
-    internal static List<(NodeChatPersistedMessageDto Message, int Anchor)> PendingMessages(NodeChatConversationDto conversation, int? upToAnchorSequence)
+    internal static List<AnchoredMessage> PendingMessages(NodeChatConversationDto conversation, int? upToAnchorSequence)
     {
         ArgumentNullException.ThrowIfNull(conversation);
         var anchorSequence = SelectedPathResolver.CreateAnchorResolver(conversation.Messages);
@@ -69,7 +72,7 @@ internal sealed class ConversationStateDistillationService : IConversationStateD
         return SelectedPathResolver.Resolve(conversation.Messages, conversation.SelectedPath)
                                    .Where(static message => !string.IsNullOrWhiteSpace(message.Content)
                                                             && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
-                                   .Select(message => (Message: message, Anchor: anchorSequence(message)))
+                                   .Select(message => new AnchoredMessage(message, anchorSequence(message)))
                                    .Where(pair => (watermark is null || pair.Anchor > watermark.Value) && (upToAnchorSequence is null || pair.Anchor <= upToAnchorSequence.Value))
                                    .OrderBy(static pair => pair.Anchor)
                                    .ToList();

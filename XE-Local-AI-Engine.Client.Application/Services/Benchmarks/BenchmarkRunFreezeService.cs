@@ -361,11 +361,11 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
 
         // One snapshot per DISTINCT (item, sampling), memoized; answer-variance repeats differ ONLY in the seed.
         // The ITEM half of the key is load-bearing: keyed on the seed alone, every run answers item 0's prompt while its task_item_id column claims otherwise, and nothing fails loudly.
-        var serializedSnapshots = new Dictionary<(Guid ItemId, string Seed), byte[]>();
+        var serializedSnapshots = new Dictionary<SnapshotKey, byte[]>();
 
         byte[] SnapshotFor(FrozenTaskItem item, BenchmarkSamplingSnapshotV1 sampling)
         {
-            var key = (item.Item.Id, sampling.SeedValue ?? string.Empty);
+            var key = new SnapshotKey(item.Item.Id, sampling.SeedValue ?? string.Empty);
             if (serializedSnapshots.TryGetValue(key, out var cached))
             {
                 return cached;
@@ -515,24 +515,28 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         }
     }
 
+    private readonly record struct SnapshotKey(Guid ItemId, string Seed);
+
+    private readonly record struct RepeatSampling(int RepeatIndex, BenchmarkSamplingSnapshotV1 Sampling);
+
     /// <summary>The sampling one repeat is frozen with.</summary>
     /// <remarks>
     ///     Throughput mode hands back the shared deterministic sampling untouched. Answer-variance mode advances the
     ///     seed by the repeat index off the same base seed and applies the requested temperature, so the runs of a
     ///     group differ in exactly one input — which is what makes the spread of answers attributable.
     /// </remarks>
-    private static (int RepeatIndex, BenchmarkSamplingSnapshotV1 Sampling) SamplingFor(BenchmarkSamplingSnapshotV1 deterministic,
+    private static RepeatSampling SamplingFor(BenchmarkSamplingSnapshotV1 deterministic,
         BenchmarkRepeatMode mode,
         double temperature,
         int repeatIndex)
     {
         if (mode != BenchmarkRepeatMode.AnswerVariance)
         {
-            return (repeatIndex, deterministic);
+            return new RepeatSampling(repeatIndex, deterministic);
         }
 
         var baseSeed = SeedValue.TryParse(deterministic.SeedValue, out var parsed, out _) ? parsed ?? 0L : 0L;
-        return (repeatIndex, deterministic with
+        return new RepeatSampling(repeatIndex, deterministic with
         {
             Temperature = temperature,
             SeedValue = (baseSeed + repeatIndex).ToString(CultureInfo.InvariantCulture)

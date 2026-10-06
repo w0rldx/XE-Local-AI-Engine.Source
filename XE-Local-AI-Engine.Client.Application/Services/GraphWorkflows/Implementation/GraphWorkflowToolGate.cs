@@ -73,7 +73,7 @@ internal static class GraphWorkflowToolGate
         return
         [
             .. graph.Nodes.Values.OrderBy(static node => node.NodeKey, StringComparer.Ordinal)
-                    .Select(node => (node.NodeKey, Error: node.Config is GraphWorkflowToolConfig config ? ErrorFor(config, names) : null))
+                    .Select(node => new { node.NodeKey, Error = node.Config is GraphWorkflowToolConfig config ? ErrorFor(config, names) : null })
                     .Where(static entry => entry.Error is not null)
                     .Select(static entry => new GraphWorkflowValidationError(entry.NodeKey, entry.Error!))
         ];

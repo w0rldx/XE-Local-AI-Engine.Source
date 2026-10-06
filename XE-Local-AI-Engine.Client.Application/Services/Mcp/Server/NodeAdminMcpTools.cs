@@ -157,28 +157,28 @@ public sealed partial class NodeAdminMcpTools
         bool memoryExtractionEnabled,
         bool disableBaseScaffold,
         McpGenerationMetadataInput? generationMetadata,
-        params (string Name, object? Value)[] additionalArguments) =>
+        params KeyValuePair<string, object?>[] additionalArguments) =>
         AuditArguments([
-            ("name", name),
-            ("instructions", instructions),
-            ("description", description),
-            ("model_profile", modelProfile),
-            ("reasoning_effort", reasoningEffort),
-            ("kind", kind),
-            ("allowed_tool_names", allowedToolNames),
-            ("tool_approvals", toolApprovals),
-            ("orchestration_topology_json", orchestrationTopologyJson),
-            ("allowed_skill_ids", allowedSkillIds),
-            ("playbook_enabled", playbookEnabled),
-            ("default_temporary_chat", defaultTemporaryChat),
-            ("memory_extraction_enabled", memoryExtractionEnabled),
-            ("disable_base_scaffold", disableBaseScaffold),
-            ("generation_metadata", generationMetadata),
+            new("name", name),
+            new("instructions", instructions),
+            new("description", description),
+            new("model_profile", modelProfile),
+            new("reasoning_effort", reasoningEffort),
+            new("kind", kind),
+            new("allowed_tool_names", allowedToolNames),
+            new("tool_approvals", toolApprovals),
+            new("orchestration_topology_json", orchestrationTopologyJson),
+            new("allowed_skill_ids", allowedSkillIds),
+            new("playbook_enabled", playbookEnabled),
+            new("default_temporary_chat", defaultTemporaryChat),
+            new("memory_extraction_enabled", memoryExtractionEnabled),
+            new("disable_base_scaffold", disableBaseScaffold),
+            new("generation_metadata", generationMetadata),
             .. additionalArguments
         ]);
 
-    private static IReadOnlyList<KeyValuePair<string, object?>> AuditArguments(params (string Name, object? Value)[] arguments) =>
-        [.. arguments.Select(static argument => new KeyValuePair<string, object?>(argument.Name, argument.Value))];
+    private static IReadOnlyList<KeyValuePair<string, object?>> AuditArguments(params KeyValuePair<string, object?>[] arguments) =>
+        [.. arguments];
 
     private static string FormatAuditArguments(IReadOnlyList<KeyValuePair<string, object?>> arguments) =>
         arguments.Count == 0

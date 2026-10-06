@@ -416,14 +416,16 @@ internal sealed class McpAgentRunDispatcher : BackgroundService
         }
     }
 
+    private readonly record struct MarkerOutcome(McpAgentRunStatus Status, string FailureCode, string DisplayMessage);
+
     private async Task FinalizeMarkerWinnerAsync(IMcpAgentRunStore store, McpAgentRunRecord current, Guid claimToken)
     {
         var (status, failureCode, displayMessage) = current.StopReason switch
         {
-            McpAgentRunStopReason.UserCancellation => (McpAgentRunStatus.Cancelled, McpExecutionFailureCodes.Cancelled, "Cancelled."),
-            McpAgentRunStopReason.WatchdogExpired => (McpAgentRunStatus.Failed, WatchdogExpiredCode, "The run exceeded its execution deadline."),
-            McpAgentRunStopReason.HostShutdown => (McpAgentRunStatus.Interrupted, InterruptedCode, "Interrupted by application shutdown."),
-            _ => (McpAgentRunStatus.Interrupted, InterruptedCode, "The run was interrupted.")
+            McpAgentRunStopReason.UserCancellation => new MarkerOutcome(McpAgentRunStatus.Cancelled, McpExecutionFailureCodes.Cancelled, "Cancelled."),
+            McpAgentRunStopReason.WatchdogExpired => new MarkerOutcome(McpAgentRunStatus.Failed, WatchdogExpiredCode, "The run exceeded its execution deadline."),
+            McpAgentRunStopReason.HostShutdown => new MarkerOutcome(McpAgentRunStatus.Interrupted, InterruptedCode, "Interrupted by application shutdown."),
+            _ => new MarkerOutcome(McpAgentRunStatus.Interrupted, InterruptedCode, "The run was interrupted.")
         };
 
         var finalized = await store.TryFinalizeAsync(new McpAgentRunFinalization

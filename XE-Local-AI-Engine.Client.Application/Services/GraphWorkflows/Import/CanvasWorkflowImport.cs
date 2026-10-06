@@ -545,7 +545,7 @@ public static class CanvasWorkflowImport
         }
 
         var mapped = new JsonArray();
-        var pairs = new HashSet<(string From, string To)>();
+        var pairs = new HashSet<WirePair>();
         var strandedDebug = new HashSet<string>(StringComparer.Ordinal);
         var circularDebug = new HashSet<string>(StringComparer.Ordinal);
         var index = 0;
@@ -572,7 +572,7 @@ public static class CanvasWorkflowImport
                     continue;
                 }
 
-                if (!pairs.Add((from, to)))
+                if (!pairs.Add(new WirePair(from, to)))
                 {
                     continue;
                 }
@@ -629,7 +629,7 @@ public static class CanvasWorkflowImport
     /// </remarks>
     private static void AddPauseContextEdges(HashSet<string> pauseKeys,
         IReadOnlyDictionary<string, JsonObject> nodeByKey,
-        HashSet<(string From, string To)> pairs,
+        HashSet<WirePair> pairs,
         HashSet<string> used,
         JsonArray mapped,
         int index)
@@ -682,7 +682,7 @@ public static class CanvasWorkflowImport
 
             // A pair the canvas already wires needs no second edge — and a second UNCONDITIONAL one over the same
             // pair is a validation error. A self-loop would be a cycle.
-            if (string.Equals(ancestor, successor, StringComparison.Ordinal) || !pairs.Add((ancestor, successor)))
+            if (string.Equals(ancestor, successor, StringComparison.Ordinal) || !pairs.Add(new WirePair(ancestor, successor)))
             {
                 continue;
             }
@@ -716,6 +716,8 @@ public static class CanvasWorkflowImport
             ? parsed
             : null;
 
+    private readonly record struct WirePair(string From, string To);
+
     /// <summary>
     ///     The nodes a pause's content really comes from: its predecessors, with consecutive Pause nodes walked
     ///     through, because a pause's own output is the approval rather than the answer.
@@ -725,7 +727,7 @@ public static class CanvasWorkflowImport
     ///     answer — its output is the run's input, which is exactly the content a node behind the pause would
     ///     otherwise have read.
     /// </remarks>
-    private static List<string> NonPauseAncestors(string pause, HashSet<string> pauseKeys, List<(string From, string To)> wiring)
+    private static List<string> NonPauseAncestors(string pause, HashSet<string> pauseKeys, List<WirePair> wiring)
     {
         var resolved = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal)

@@ -804,7 +804,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         // The arrival-ordered queue the matching FunctionResultContent — which carries the call's own blank id — is paired back through. An approval-gated
         // tool on an id-less provider therefore correlates only its FIRST card: a limitation of having no id, and not one this widens.
-        var pendingSurrogateResults = new Queue<(string Name, string CallId)>();
+        var pendingSurrogateResults = new Queue<SurrogateCall>();
         var surrogateCallCount = 1;
 
         // Which tools this turn already surfaced a ToolDisabled notice for, so a model that keeps calling a disabled tool — each further call short-circuits
@@ -977,7 +977,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                                     _ = usedSurrogateNames.Add(callName);
                                     openSurrogateCallIds[callName] = callId;
-                                    pendingSurrogateResults.Enqueue((callName, callId));
+                                    pendingSurrogateResults.Enqueue(new SurrogateCall(callName, callId));
                                 }
 
                                 // callName, not functionCall.Name: the local above null-coalesces the property the compiler still treats as maybe-null.
@@ -1276,21 +1276,26 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
     }
 
+    private readonly record struct SurrogateCall(string Name, string CallId);
+
     // Model-matrix F2: a small model can repeat itself until the window or the turn timeout ends it. A frozen benchmark keeps
     // the pre-node-settings behaviour: no default cap, no length notice, the fixed thinking ladder.
-    private async Task<(ChatOutputCap OutputCap, ReasoningBudgets ReasoningBudgets)> ResolveOutputPolicyAsync(RuntimePackage package, CancellationToken invocationToken)
+    private async Task<OutputPolicy> ResolveOutputPolicyAsync(RuntimePackage package, CancellationToken invocationToken)
     {
         if (package.UsesFrozenBenchmarkPolicy)
         {
-            return (new ChatOutputCap
+            return new OutputPolicy(new ChatOutputCap
             {
                 Mode = StoredNodeSettings.ChatOutputCapModeOff,
                 MaxTokens = 0
             }, ReasoningBudgets.Frozen);
         }
 
-        return (await _runtimeSettings.GetChatOutputCapAsync(invocationToken), await _runtimeSettings.GetReasoningBudgetsAsync(invocationToken));
+        return new OutputPolicy(await _runtimeSettings.GetChatOutputCapAsync(invocationToken), await _runtimeSettings.GetReasoningBudgetsAsync(invocationToken));
     }
+
+    /// <summary>The output cap and reasoning budgets a turn runs under: frozen for benchmarks, else the node settings.</summary>
+    private readonly record struct OutputPolicy(ChatOutputCap OutputCap, ReasoningBudgets ReasoningBudgets);
 
     // Qwen-family templates write a call as <tool_call>…</tool_call>; inside the reasoning block llama-server leaves it unparsed.
     private static bool ReasoningCarriesToolCall(StreamState stream, int reasoningStart) =>

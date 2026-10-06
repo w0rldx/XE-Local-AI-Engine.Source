@@ -29,7 +29,7 @@ internal interface IHardwareProbeEnvironment
     long GetAvailableMemoryBytes();
 
     /// <summary>A fresh Windows reading of total and available physical RAM; <see langword="null" /> elsewhere or on failure.</summary>
-    (long TotalBytes, long AvailableBytes)? ReadOsMemoryStatus();
+    OsMemoryStatus? ReadOsMemoryStatus();
 
     /// <summary>Free disk bytes on the volume hosting <paramref name="path" />; <c>0</c> when it cannot be resolved.</summary>
     long GetFreeDiskBytes(string path);

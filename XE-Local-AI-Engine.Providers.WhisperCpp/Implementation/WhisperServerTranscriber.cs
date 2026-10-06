@@ -106,14 +106,14 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         }
     }
 
-    private async Task<(WhisperServerEndpoint Endpoint, IWhisperTranscriptionLease Lease)> EnsureLeasedAsync(string modelId, CancellationToken ct)
+    private async Task<LeasedEndpoint> EnsureLeasedAsync(string modelId, CancellationToken ct)
     {
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var endpoint = await _supervisor.EnsureRunningAsync(modelId, ct).ConfigureAwait(false);
             if (_supervisor.TryAcquireTranscriptionLease(endpoint.ModelId, endpoint.Generation) is { } lease)
             {
-                return (endpoint, lease);
+                return new LeasedEndpoint(endpoint, lease);
             }
         }
 
@@ -379,4 +379,7 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         [JsonPropertyName("avg_logprob")]
         public double? AvgLogprob { get; init; }
     }
+
+    /// <summary>The daemon endpoint to post to and the transcription lease held over it.</summary>
+    private readonly record struct LeasedEndpoint(WhisperServerEndpoint Endpoint, IWhisperTranscriptionLease Lease);
 }

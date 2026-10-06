@@ -725,11 +725,11 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
         }
 
         // Returns the longest prefix whose UTF-8 encoding fits the budget, never splitting a rune.
-        private static (string Text, bool Truncated) TruncateToByteBudget(string value, int budget)
+        private static TruncatedText TruncateToByteBudget(string value, int budget)
         {
             if (Encoding.UTF8.GetByteCount(value) <= budget)
             {
-                return (value, false);
+                return new TruncatedText(value, false);
             }
 
             var used = 0;
@@ -747,7 +747,9 @@ internal sealed class AgentHomeGoalExecutor : IAgentHomeGoalExecutor
                 lastCharIndex = charIndex;
             }
 
-            return (value[..lastCharIndex], true);
+            return new TruncatedText(value[..lastCharIndex], true);
         }
+
+        private readonly record struct TruncatedText(string Text, bool Truncated);
     }
 }

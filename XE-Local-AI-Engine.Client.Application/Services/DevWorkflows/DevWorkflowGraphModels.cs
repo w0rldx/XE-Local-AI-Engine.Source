@@ -115,3 +115,6 @@ internal sealed record DevWorkflowGraphEdge(string From, string To, DevWorkflowC
     public override string ToString() =>
         $"'{From}' → '{To}'";
 }
+
+/// <summary>The endpoints of one edge, the key a graph holds at most one edge for.</summary>
+internal readonly record struct DevWorkflowEdgeKey(string From, string To);

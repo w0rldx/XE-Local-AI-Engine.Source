@@ -39,24 +39,24 @@ public sealed partial class NodeAdminMcpTools
         string? reranker_model_name = null,
         string? auto_effort_fast_model_name = null)
     {
-        var arguments = AuditArguments(("default_model_name", default_model_name),
-            ("enable_tools", enable_tools),
-            ("tool_capable_models", tool_capable_models),
-            ("hugging_face_default_quant", hugging_face_default_quant),
-            ("llama_max_loaded_processes", llama_max_loaded_processes),
-            ("llama_idle_time_to_live_seconds", llama_idle_time_to_live_seconds),
-            ("keep_model_warm_enabled", keep_model_warm_enabled),
-            ("keep_model_warm_model_name", keep_model_warm_model_name),
-            ("keep_model_warm_interval_seconds", keep_model_warm_interval_seconds),
-            ("max_message_request_timeout_seconds", max_message_request_timeout_seconds),
-            ("chat_cache_reuse", chat_cache_reuse),
-            ("speculative_mode", speculative_mode),
-            ("speculative_draft_model_name", speculative_draft_model_name),
-            ("speculative_draft_max_tokens", speculative_draft_max_tokens),
-            ("speculative_draft_gpu_layers", speculative_draft_gpu_layers),
-            ("kv_cache_type", kv_cache_type),
-            ("reranker_model_name", reranker_model_name),
-            ("auto_effort_fast_model_name", auto_effort_fast_model_name));
+        var arguments = AuditArguments(new("default_model_name", default_model_name),
+            new("enable_tools", enable_tools),
+            new("tool_capable_models", tool_capable_models),
+            new("hugging_face_default_quant", hugging_face_default_quant),
+            new("llama_max_loaded_processes", llama_max_loaded_processes),
+            new("llama_idle_time_to_live_seconds", llama_idle_time_to_live_seconds),
+            new("keep_model_warm_enabled", keep_model_warm_enabled),
+            new("keep_model_warm_model_name", keep_model_warm_model_name),
+            new("keep_model_warm_interval_seconds", keep_model_warm_interval_seconds),
+            new("max_message_request_timeout_seconds", max_message_request_timeout_seconds),
+            new("chat_cache_reuse", chat_cache_reuse),
+            new("speculative_mode", speculative_mode),
+            new("speculative_draft_model_name", speculative_draft_model_name),
+            new("speculative_draft_max_tokens", speculative_draft_max_tokens),
+            new("speculative_draft_gpu_layers", speculative_draft_gpu_layers),
+            new("kv_cache_type", kv_cache_type),
+            new("reranker_model_name", reranker_model_name),
+            new("auto_effort_fast_model_name", auto_effort_fast_model_name));
         return await InvokeAuditedAsync("update_node_settings", arguments, async () =>
         {
             var result = await _nodeSettingsAdministrationService.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch

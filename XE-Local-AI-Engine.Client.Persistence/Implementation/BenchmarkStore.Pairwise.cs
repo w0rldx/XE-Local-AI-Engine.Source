@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -180,7 +181,7 @@ public sealed partial class BenchmarkStore
         var taken = existing.Where(static entry => entry.Status is BenchmarkJudgeAttemptStatus.Queued
                                 or BenchmarkJudgeAttemptStatus.Running
                                 or BenchmarkJudgeAttemptStatus.Succeeded)
-                            .Select(static entry => (entry.RunAId, entry.RunBId, entry.Order))
+                            .Select(static entry => new ComparisonSlotKey(entry.RunAId, entry.RunBId, entry.Order))
                             .ToHashSet();
         var sequence = existing.Length == 0 ? 0 : existing.Max(static entry => entry.Sequence);
         var now = Now();
@@ -189,7 +190,7 @@ public sealed partial class BenchmarkStore
         {
             foreach (var order in ComparisonOrders)
             {
-                if (taken.Contains((slot.RunAId, slot.RunBId, order)))
+                if (taken.Contains(new ComparisonSlotKey(slot.RunAId, slot.RunBId, order)))
                 {
                     continue;
                 }
@@ -503,4 +504,8 @@ public sealed partial class BenchmarkStore
                 entity.FlashAttentionMode, entity.IntendedLaunchIdentity, entity.IntendedExecutableSha256,
                 entity.LaunchIdentityScheme)
         };
+
+    /// <summary>One ordered comparison slot of a run pair, the key the live-slot check matches on.</summary>
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct ComparisonSlotKey(Guid RunAId, Guid RunBId, int Order);
 }

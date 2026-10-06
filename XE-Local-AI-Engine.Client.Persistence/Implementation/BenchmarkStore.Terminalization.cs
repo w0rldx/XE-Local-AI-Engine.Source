@@ -223,7 +223,7 @@ public sealed partial class BenchmarkStore
     ///     Get-or-create by <c>(project, hash)</c>: insert, and on the unique conflict re-query, so two racing
     ///     activations of the same policy converge on one row instead of minting a duplicate revision.
     /// </summary>
-    private async Task<(BenchmarkJudgePolicyRevision Revision, bool WasCreated)> GetOrCreateJudgePolicyRevisionAsync(Guid projectId,
+    private async Task<JudgePolicyRevisionOutcome> GetOrCreateJudgePolicyRevisionAsync(Guid projectId,
         ReadOnlyMemory<byte> policyJson,
         string policyHash,
         long now,
@@ -233,7 +233,7 @@ public sealed partial class BenchmarkStore
                                        .SingleOrDefaultAsync(entity => entity.ProjectId == projectId && entity.PolicyHash == policyHash, cancellationToken);
         if (existing is not null)
         {
-            return (existing, false);
+            return new JudgePolicyRevisionOutcome(existing, false);
         }
 
         var lastRevision = await _dbContext.BenchmarkJudgePolicyRevisions
@@ -269,9 +269,9 @@ public sealed partial class BenchmarkStore
                 throw;
             }
 
-            return (raced, false);
+            return new JudgePolicyRevisionOutcome(raced, false);
         }
 
-        return (revision, true);
+        return new JudgePolicyRevisionOutcome(revision, true);
     }
 }

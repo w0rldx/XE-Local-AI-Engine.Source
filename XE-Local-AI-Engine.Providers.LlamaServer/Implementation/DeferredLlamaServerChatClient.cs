@@ -654,18 +654,18 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     ///     benchmark's own profiling process, handed to it by <c>RunExclusiveBenchmarkAsync</c> for the measurement, so
     ///     it takes none. See wiki 03, "Deferred chat / embedding clients".
     /// </remarks>
-    private async Task<(LlamaServerEndpoint Endpoint, bool Bound)> ResolveEndpointCoreAsync(CancellationToken ct)
+    private async Task<ResolvedEndpoint> ResolveEndpointCoreAsync(CancellationToken ct)
     {
         if (_endpointBinding?.GetBoundEndpoint(_modelName, ModelRole.Chat) is { } bound)
         {
-            return (bound, true);
+            return new ResolvedEndpoint(bound, Bound: true);
         }
 
         // The intent overloads are called only for a transient or background client, so a supervisor double that stubs just the plain members keeps serving every other client.
         var endpoint = _residencyIntent == ModelResidencyIntent.Interactive
             ? await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct).ConfigureAwait(false)
             : await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, _residencyIntent, ct).ConfigureAwait(false);
-        return (endpoint, false);
+        return new ResolvedEndpoint(endpoint, Bound: false);
     }
 
     private LlamaServerLeaseAcquisition TryAcquireLease() =>
@@ -701,4 +701,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
     /// <summary><see cref="Bound" /> marks an endpoint that came from the endpoint binding — see ResolveEndpointCoreAsync.</summary>
     private readonly record struct ResolvedChatClient(IChatClient Client, Uri BaseAddress, bool Bound);
+
+    /// <summary>The endpoint to talk to; <see cref="Bound" /> as on <see cref="ResolvedChatClient" />.</summary>
+    private readonly record struct ResolvedEndpoint(LlamaServerEndpoint Endpoint, bool Bound);
 }

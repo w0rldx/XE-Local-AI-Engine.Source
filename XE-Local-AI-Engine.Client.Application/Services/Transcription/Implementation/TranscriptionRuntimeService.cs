@@ -142,13 +142,13 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
     {
         var models = WhisperModelCatalog.Models;
         var recommendedIndex = models.ToList().IndexOf(recommended);
-        var installed = models.Select((entry, index) => (entry, index)).Where(row => _pathResolver.IsInstalled(row.entry)).ToList();
+        var installed = models.Select((entry, index) => new { entry, index }).Where(row => _pathResolver.IsInstalled(row.entry)).ToList();
         if (installed.Count == 0)
         {
             return recommended.Id;
         }
 
-        return installed.LastOrDefault(row => row.index <= recommendedIndex).entry?.Id ?? installed[0].entry.Id;
+        return installed.LastOrDefault(row => row.index <= recommendedIndex)?.entry.Id ?? installed[0].entry.Id;
     }
 
     private TranscriptionModelCatalogView BuildCatalogView(string? selectedModelId, string recommendedModelId)

@@ -112,7 +112,7 @@ internal sealed class DevWorkflowApplyCommands
     ///     is not at the exact approved base, which is what the SECOND patch of one fan-out finds.
     ///     See docs/wiki/25-dev-workflows.md ("The integration half").
     /// </remarks>
-    private async Task<(AppliedTask Entry, string? FailureClass)> ApplyOneAsync(Guid projectId,
+    private async Task<ApplyOutcome> ApplyOneAsync(Guid projectId,
         DevWorkflowNodeRunSnapshot implementation,
         DevelopmentTaskSnapshot task,
         string title,
@@ -130,7 +130,7 @@ internal sealed class DevWorkflowApplyCommands
             var result = await _management.ApplyAsync(projectId, task.Id, operationId, run.Id, cancellationToken);
             if (!string.Equals(result.Phase, DevelopmentOperationPhases.ApplyBlocked, StringComparison.Ordinal))
             {
-                return (new AppliedTask
+                return new ApplyOutcome(new AppliedTask
                 {
                     NodeKey = implementation.NodeKey,
                     TaskId = task.Id,
@@ -141,7 +141,7 @@ internal sealed class DevWorkflowApplyCommands
             }
 
             var blocked = $"The Development apply gate declined '{title}': the repository is not at the exact base the approved patch was reviewed against.";
-            return (new AppliedTask
+            return new ApplyOutcome(new AppliedTask
             {
                 NodeKey = implementation.NodeKey,
                 TaskId = task.Id,
@@ -154,20 +154,22 @@ internal sealed class DevWorkflowApplyCommands
         {
             // The evidence chain refused, and asking again answers none of those, so this goes straight to a human. A
             // task already stood down gets the lane's sentence in front of Dev Mode's precondition complaint.
-            return (Refusal(implementation, task, title, exception, StoodDown(task, title)), DevWorkflowFailureClasses.Policy);
+            return new ApplyOutcome(Refusal(implementation, task, title, exception, StoodDown(task, title)), DevWorkflowFailureClasses.Policy);
         }
         catch (Exception exception) when (exception is DevelopmentRepositoryStateConflictException or KeyNotFoundException)
         {
             // The node cannot run AS CONFIGURED: a repository that needs reconnecting, or a row that is gone.
-            return (Refusal(implementation, task, title, exception), DevWorkflowFailureClasses.Configuration);
+            return new ApplyOutcome(Refusal(implementation, task, title, exception), DevWorkflowFailureClasses.Configuration);
         }
         catch (DevelopmentConcurrencyException exception)
         {
             // Something else was writing this project's ledger. Transient, and retryable once — the apply either landed,
             // in which case the next attempt finds the task Completed and says so, or it did not happen at all.
-            return (Refusal(implementation, task, title, exception), DevWorkflowFailureClasses.Internal);
+            return new ApplyOutcome(Refusal(implementation, task, title, exception), DevWorkflowFailureClasses.Internal);
         }
     }
+
+    private readonly record struct ApplyOutcome(AppliedTask Entry, string? FailureClass);
 
     /// <summary>The schema's own bound on <c>terminal_reason</c> (<c>DevWorkflowNodeRunConfiguration</c>).</summary>
     private const int MaxTerminalReason = 1024;

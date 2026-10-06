@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 
@@ -16,7 +17,7 @@ using Microsoft.Extensions.Options;
 internal sealed class ConversationMaintenanceDispatcher : IConversationMaintenanceDispatcher
 {
     private readonly Channel<ConversationMaintenanceJob> _queue;
-    private readonly ConcurrentDictionary<(Guid ConversationId, ConversationMaintenanceKind Kind), byte> _pending = new();
+    private readonly ConcurrentDictionary<PendingKey, byte> _pending = new();
     private readonly ILogger<ConversationMaintenanceDispatcher> _logger;
 
     public ConversationMaintenanceDispatcher(IOptions<ConversationCompactionOptions> options, ILogger<ConversationMaintenanceDispatcher> logger)
@@ -39,7 +40,7 @@ internal sealed class ConversationMaintenanceDispatcher : IConversationMaintenan
     {
         ArgumentNullException.ThrowIfNull(job);
 
-        var key = (job.ConversationId, job.Kind);
+        var key = new PendingKey(job.ConversationId, job.Kind);
         if (!_pending.TryAdd(key, 0))
         {
             _logger.LogDebug("Conversation {ConversationId} already has a queued or running {Kind} job; the new one is coalesced into it.", job.ConversationId, job.Kind);
@@ -58,7 +59,7 @@ internal sealed class ConversationMaintenanceDispatcher : IConversationMaintenan
     /// <summary>Releases the coalescing slot once the worker has finished (or dropped) <paramref name="job" />.</summary>
     public void Complete(ConversationMaintenanceJob job)
     {
-        _ = _pending.TryRemove((job.ConversationId, job.Kind), out _);
+        _ = _pending.TryRemove(new PendingKey(job.ConversationId, job.Kind), out _);
     }
 
     /// <summary>Stops accepting jobs; idempotent. The worker's read loop then drains what is buffered and ends.</summary>
@@ -66,4 +67,7 @@ internal sealed class ConversationMaintenanceDispatcher : IConversationMaintenan
     {
         _ = _queue.Writer.TryComplete();
     }
+
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct PendingKey(Guid ConversationId, ConversationMaintenanceKind Kind);
 }

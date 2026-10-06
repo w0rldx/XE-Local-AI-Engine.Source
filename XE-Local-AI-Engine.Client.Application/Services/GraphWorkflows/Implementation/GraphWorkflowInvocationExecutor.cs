@@ -1110,8 +1110,10 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         };
     }
 
+    private readonly record struct ConversationAttachments(Guid ConversationId, IReadOnlyList<AttachmentReference> References);
+
     /// <summary>The chat-bound run's conversation and attachment references, or none when the run input carries no such thing.</summary>
-    private static (Guid ConversationId, IReadOnlyList<AttachmentReference> References) AttachmentReferences(string inputJson)
+    private static ConversationAttachments AttachmentReferences(string inputJson)
     {
         if (GraphWorkflowDocuments.Resolve(inputJson, "run.input") is not { ValueKind: JsonValueKind.Object } input
             || !input.TryGetProperty("conversationId", out var conversation)
@@ -1120,7 +1122,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             || !input.TryGetProperty("attachments", out var attachments)
             || attachments.ValueKind != JsonValueKind.Array)
         {
-            return (Guid.Empty, []);
+            return new ConversationAttachments(Guid.Empty, []);
         }
 
         var references = new List<AttachmentReference>();
@@ -1140,7 +1142,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             }
         }
 
-        return (conversationId, references);
+        return new ConversationAttachments(conversationId, references);
     }
 
     private static string? StringMember(JsonElement element, string name) =>

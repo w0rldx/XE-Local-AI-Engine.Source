@@ -101,7 +101,7 @@ internal sealed partial class HardwareProbeEnvironment : IHardwareProbeEnvironme
     }
 
     /// <inheritdoc />
-    public (long TotalBytes, long AvailableBytes)? ReadOsMemoryStatus()
+    public OsMemoryStatus? ReadOsMemoryStatus()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -113,7 +113,7 @@ internal sealed partial class HardwareProbeEnvironment : IHardwareProbeEnvironme
         {
             Length = (uint)Marshal.SizeOf<MemoryStatusEx>()
         };
-        return GlobalMemoryStatusEx(ref status) ? ((long)status.TotalPhys, (long)status.AvailPhys) : null;
+        return GlobalMemoryStatusEx(ref status) ? new OsMemoryStatus((long)status.TotalPhys, (long)status.AvailPhys) : null;
     }
 
     /// <inheritdoc />

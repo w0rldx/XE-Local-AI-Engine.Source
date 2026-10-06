@@ -249,9 +249,9 @@ public sealed partial class LlamaCppBinaryManager
         // arch falls back to the managed checks.
         var (modeOffset, uidOffset) = RuntimeInformation.ProcessArchitecture switch
         {
-            Architecture.X64 => (24, 28),
-            Architecture.Arm64 => (16, 24),
-            _ => (-1, -1)
+            Architecture.X64 => new StatFieldOffsets(24, 28),
+            Architecture.Arm64 => new StatFieldOffsets(16, 24),
+            _ => new StatFieldOffsets(-1, -1)
         };
 
         if (modeOffset < 0)
@@ -297,4 +297,8 @@ public sealed partial class LlamaCppBinaryManager
     [LibraryImport("libc", EntryPoint = "geteuid")]
     [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
     private static partial uint GetEuid();
+
+    /// <summary>Byte offsets of <c>st_mode</c> and <c>st_uid</c> in glibc's <c>struct stat</c>; -1 when unmapped.</summary>
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct StatFieldOffsets(int ModeOffset, int UidOffset);
 }

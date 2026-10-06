@@ -158,7 +158,7 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
     ///     its own id, revision and input hash, so the caps count them, a freeze stamps them onto runs, and the
     ///     staleness exclusions reach them without any of those knowing what NIAH is.
     /// </remarks>
-    private async Task<(BenchmarkTaskItemInput Input, IReadOnlyList<BenchmarkTaskItemInput>? Children)> ToInputAsync(Guid projectId,
+    private async Task<ItemInputs> ToInputAsync(Guid projectId,
         Guid itemId,
         BenchmarkTaskItemDraft draft,
         CancellationToken cancellationToken)
@@ -199,8 +199,10 @@ public sealed class BenchmarkTaskItemService : IBenchmarkTaskItemService
         await EnsureOverridesFitRubricAsync(projectId,
             [input, .. children ?? []],
             cancellationToken);
-        return (input, children);
+        return new ItemInputs(input, children);
     }
+
+    private readonly record struct ItemInputs(BenchmarkTaskItemInput Input, IReadOnlyList<BenchmarkTaskItemInput>? Children);
 
     /// <summary>
     ///     Every verifier override an item carries must name a criterion the project's CURRENT judge rubric has, and

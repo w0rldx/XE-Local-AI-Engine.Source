@@ -95,7 +95,7 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
             ? "The engine exited before readiness."
             : "The engine exited before readiness. It reported: " + errorTail.Trim();
 
-    private static async Task<(DesktopEngineSession? Session, string? ErrorTail)> StartOwnedAsync(DesktopStartupOptions options, CancellationToken cancellationToken)
+    private static async Task<OwnedStart> StartOwnedAsync(DesktopStartupOptions options, CancellationToken cancellationToken)
     {
         var pipeName = "xe-desktop-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
         var start = CreateOwnedStartInfo(options, pipeName);
@@ -139,14 +139,14 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
                 }
 
                 // Read before the finally disposes the session: this is the only surviving trace of why it died.
-                return (null, session.ErrorTail);
+                return new OwnedStart(null, session.ErrorTail);
             }
 
             await startup;
             session._origin = await ReadOwnedReadyAsync(options.DataDirectory, process.Id, deadline.Token);
             var ownedSession = session;
             session = null;
-            return (ownedSession, null);
+            return new OwnedStart(ownedSession, null);
         }
         finally
         {
@@ -440,4 +440,7 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
 
         return ValidateOrigin(root.GetProperty("url").GetString(), root.GetProperty("dataDir").GetString(), directory);
     }
+
+    /// <summary>An owned start's outcome: the ready session, or none and the engine's last stderr words.</summary>
+    private readonly record struct OwnedStart(DesktopEngineSession? Session, string? ErrorTail);
 }

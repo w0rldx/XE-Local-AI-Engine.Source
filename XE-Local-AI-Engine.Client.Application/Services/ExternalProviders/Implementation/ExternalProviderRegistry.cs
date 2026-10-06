@@ -188,7 +188,9 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
         {
             // Shared with the reconciler (see ExternalProviderConfigProjection): the pass that DELETES drift derives its
             // registration set from the same projection this cache is built from, or the two would disagree about what is registered.
-            var (registrations, keys) = ExternalProviderConfigProjection.Project(config);
+            var projection = ExternalProviderConfigProjection.Project(config);
+            var registrations = projection.Registrations;
+            var keys = projection.KeysByConnectionId;
 
             // Last write wins on a duplicate id, which the store's per-connection validation already prevents; the
             // tolerant build is what keeps a hand-edited file from faulting the whole registry.

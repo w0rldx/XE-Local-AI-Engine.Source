@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ExternalProviders.Implementation;
 
+using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -93,7 +94,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         return report;
     }
 
-    private async Task<(int Written, int Removed)> ReconcileProviderMapAsync(IReadOnlyList<string> registered,
+    private async Task<MapRepair> ReconcileProviderMapAsync(IReadOnlyList<string> registered,
         HashSet<string> registeredIds,
         CancellationToken cancellationToken)
     {
@@ -135,7 +136,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
             }
         }
 
-        return (written, removed);
+        return new MapRepair(written, removed);
     }
 
     private async Task<bool> TryWriteMapRowAsync(string modelId, CancellationToken cancellationToken)
@@ -216,7 +217,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         }
     }
 
-    private async Task<(int Added, int Removed, bool DefaultCleared)> ReconcileNodeSettingsAsync(IReadOnlyList<ExternalProviderModelRegistration> registrations,
+    private async Task<AllowListDiff> ReconcileNodeSettingsAsync(IReadOnlyList<ExternalProviderModelRegistration> registrations,
         HashSet<string> registeredSet,
         CancellationToken cancellationToken)
     {
@@ -230,7 +231,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         var preview = await _settingsStore.LoadAsync(cancellationToken);
         if (Diff(preview, desired, registeredSet) is (0, 0, false))
         {
-            return (0, 0, false);
+            return new AllowListDiff(0, 0, false);
         }
 
         var added = 0;
@@ -265,7 +266,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
             _logger.LogInformation("Cleared the node default model: '{ModelName}' is an external model that is no longer registered.", clearedDefault);
         }
 
-        return (added, removed, defaultCleared);
+        return new AllowListDiff(added, removed, defaultCleared);
     }
 
     /// <summary>
@@ -277,7 +278,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
     ///     would route it to a provider that reports no such model. Clearing it is what makes a crash between
     ///     "connection deleted" and "default cleared" self-heal on the next boot.
     /// </remarks>
-    private static (int Added, int Removed, bool DefaultCleared) Diff(StoredNodeSettings stored,
+    private static AllowListDiff Diff(StoredNodeSettings stored,
         IReadOnlyList<string> desired,
         HashSet<string> registeredIds)
     {
@@ -286,8 +287,13 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
                              && (ExternalModelId.Canonicalize(stored.DefaultModelName) is not { } canonicalDefault
                                  || !registeredIds.Contains(canonicalDefault));
 
-        return (desired.Except(previousExternal, StringComparer.Ordinal).Count(),
+        return new AllowListDiff(desired.Except(previousExternal, StringComparer.Ordinal).Count(),
             previousExternal.Except(desired, StringComparer.Ordinal).Count(),
             defaultCleared);
     }
+
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct MapRepair(int Written, int Removed);
+
+    private readonly record struct AllowListDiff(int Added, int Removed, bool DefaultCleared);
 }

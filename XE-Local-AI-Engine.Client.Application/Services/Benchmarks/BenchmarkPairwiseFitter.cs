@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
+using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.Implementation;
@@ -131,9 +132,10 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
         }
 
         var succeeded = cohort.Comparisons.Where(static comparison => comparison.Status == BenchmarkJudgeAttemptStatus.Succeeded)
-                              .Select(static comparison => (comparison.RunAId, comparison.RunBId, comparison.Order))
+                              .Select(static comparison => new OrderedComparison(comparison.RunAId, comparison.RunBId, comparison.Order))
                               .ToHashSet();
-        return plan.Slots.All(slot => succeeded.Contains((slot.RunAId, slot.RunBId, 0)) && succeeded.Contains((slot.RunAId, slot.RunBId, 1)));
+        return plan.Slots.All(slot => succeeded.Contains(new OrderedComparison(slot.RunAId, slot.RunBId, 0))
+                                      && succeeded.Contains(new OrderedComparison(slot.RunAId, slot.RunBId, 1)));
     }
 
     /// <summary>The gates that run BEFORE the arithmetic.</summary>
@@ -213,6 +215,9 @@ public sealed class BenchmarkPairwiseFitter : IBenchmarkPairwiseFitter
             judgeExecutionKey = cohort.ReferenceExecutionKey ?? string.Empty,
             comparisonSetVersion = cohort.ComparisonSetVersion
         });
+
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct OrderedComparison(Guid RunAId, Guid RunBId, int Order);
 
     /// <summary>One row of the auditable answer to "which verdicts produced this number".</summary>
     private sealed record FittedVerdict

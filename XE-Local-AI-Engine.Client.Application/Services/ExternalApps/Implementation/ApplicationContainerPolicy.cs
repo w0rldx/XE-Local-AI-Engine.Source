@@ -250,11 +250,11 @@ internal static class ApplicationContainerPolicy
             violations.Add($"the container has {observed.DeviceCount.ToString(CultureInfo.InvariantCulture)} device mapping(s); applications get none");
         }
 
-        foreach (var (name, mode) in new[]
+        foreach (var (name, mode) in new KeyValuePair<string, string>[]
                  {
-                     ("pid", observed.PidMode),
-                     ("ipc", observed.IpcMode),
-                     ("uts", observed.UtsMode)
+                     new("pid", observed.PidMode),
+                     new("ipc", observed.IpcMode),
+                     new("uts", observed.UtsMode)
                  })
         {
             if (string.Equals(mode, HostMode, StringComparison.OrdinalIgnoreCase))

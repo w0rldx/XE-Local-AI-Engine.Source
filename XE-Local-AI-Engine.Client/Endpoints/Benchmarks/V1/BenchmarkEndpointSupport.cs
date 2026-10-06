@@ -62,22 +62,25 @@ internal static class BenchmarkEndpointSupport
     ///     <see cref="IResult" /> is not a thing you can do. One switch, so a per-item rejection and a single-run
     ///     failure can never disagree.
     /// </remarks>
-    public static (int StatusCode, BenchmarkErrorCode Code, string Message) Classify(Exception exception) =>
+    public static ErrorClassification Classify(Exception exception) =>
         exception switch
         {
-            BenchmarkNotFoundException or KeyNotFoundException => (StatusCodes.Status404NotFound, BenchmarkErrorCode.NotFound,
+            BenchmarkNotFoundException or KeyNotFoundException => new ErrorClassification(StatusCodes.Status404NotFound, BenchmarkErrorCode.NotFound,
                 "The requested benchmark resource was not found."),
-            BenchmarkValidationException => (StatusCodes.Status400BadRequest, BenchmarkErrorCode.InvalidRequest, exception.Message),
+            BenchmarkValidationException => new ErrorClassification(StatusCodes.Status400BadRequest, BenchmarkErrorCode.InvalidRequest, exception.Message),
 
-            BenchmarkEligibilityException => (StatusCodes.Status422UnprocessableEntity, ClassifyEligibility(exception.Message), exception.Message),
-            BenchmarkUnsupportedKvCacheTypeException => (StatusCodes.Status422UnprocessableEntity, BenchmarkErrorCode.UnsupportedKvCacheType,
+            BenchmarkEligibilityException => new ErrorClassification(StatusCodes.Status422UnprocessableEntity, ClassifyEligibility(exception.Message), exception.Message),
+            BenchmarkUnsupportedKvCacheTypeException => new ErrorClassification(StatusCodes.Status422UnprocessableEntity, BenchmarkErrorCode.UnsupportedKvCacheType,
                 exception.Message),
-            BenchmarkJudgePolicyChangedException => (StatusCodes.Status409Conflict, BenchmarkErrorCode.JudgePolicyChanged,
+            BenchmarkJudgePolicyChangedException => new ErrorClassification(StatusCodes.Status409Conflict, BenchmarkErrorCode.JudgePolicyChanged,
                 "The project's judge policy changed. Refresh and retry."),
-            BenchmarkConflictException conflict => (StatusCodes.Status409Conflict, ClassifyConflict(conflict.Code),
+            BenchmarkConflictException conflict => new ErrorClassification(StatusCodes.Status409Conflict, ClassifyConflict(conflict.Code),
                 SafeConflictMessage(conflict.Code)),
             _ => throw exception
         };
+
+    /// <summary>The HTTP status, error code and client-safe message one benchmark failure maps to.</summary>
+    public readonly record struct ErrorClassification(int StatusCode, BenchmarkErrorCode Code, string Message);
 
     /// <summary>
     ///     Builds the problem body. <paramref name="code" /> is emitted as its enum name (matching the string the

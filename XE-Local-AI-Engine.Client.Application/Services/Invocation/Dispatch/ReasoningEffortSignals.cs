@@ -56,11 +56,13 @@ public static class ReasoningEffortSignals
         "kurz", "in einem satz", "schnell", "nur kurz"
     ]);
 
+    public readonly record struct TierDecision(ReasoningTier Tier, string ReasonCode);
+
     /// <summary>
     ///     Scores one turn and names the tier, plus the single rule that decided it. Pure: the same inputs always
     ///     produce the same answer.
     /// </summary>
-    public static (ReasoningTier Tier, string ReasonCode) Resolve(string latestUserText, bool hasAttachments, int conversationDepth)
+    public static TierDecision Resolve(string latestUserText, bool hasAttachments, int conversationDepth)
     {
         var text = latestUserText ?? string.Empty;
 
@@ -126,15 +128,15 @@ public static class ReasoningEffortSignals
 
         if (score >= DeepScoreThreshold)
         {
-            return (ReasoningTier.Deep, DeepReason(hasCodeFence, hasDeepPhrase, isLong, isDeepContext));
+            return new TierDecision(ReasoningTier.Deep, DeepReason(hasCodeFence, hasDeepPhrase, isLong, isDeepContext));
         }
 
         if (score <= FastScoreThreshold)
         {
-            return (ReasoningTier.Fast, hasFastPhrase ? ReasoningDispatchReasons.FastPhrase : ReasoningDispatchReasons.ShortTurn);
+            return new TierDecision(ReasoningTier.Fast, hasFastPhrase ? ReasoningDispatchReasons.FastPhrase : ReasoningDispatchReasons.ShortTurn);
         }
 
-        return (ReasoningTier.Normal, ReasoningDispatchReasons.Balanced);
+        return new TierDecision(ReasoningTier.Normal, ReasoningDispatchReasons.Balanced);
     }
 
     /// <summary>The heaviest signal that pushed the turn up, so the notice names the rule a reader can act on.</summary>

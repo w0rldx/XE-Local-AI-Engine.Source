@@ -505,30 +505,33 @@ internal static class NodeSettingsEndpointDtoMapper
     ///     falling back to the stored value, and stamps <c>custom</c> UNCONDITIONALLY, never re-derived: the stamp
     ///     records that the operator edited switches. Any other save preserves all four, disturbing no decided node.
     /// </remarks>
-    private static (string? Profile, bool? ApplicationUpdates, bool? RuntimeUpdates, bool? FirstRunModel) ApplyExternalAccess(SaveNodeSettingsRequest request,
+    private static ExternalAccessStamp ApplyExternalAccess(SaveNodeSettingsRequest request,
         StoredNodeSettings currentSettings)
     {
         if (StoredNodeSettings.IsExternalAccessPreset(request.ExternalAccessProfile))
         {
             var enabled = string.Equals(request.ExternalAccessProfile, StoredNodeSettings.ExternalAccessProfileRecommended, StringComparison.Ordinal);
-            return (request.ExternalAccessProfile, enabled, enabled, enabled);
+            return new ExternalAccessStamp(request.ExternalAccessProfile, enabled, enabled, enabled);
         }
 
         if (request.AutoCheckApplicationUpdates is null
             && request.AutoCheckRuntimeUpdates is null
             && request.AutoProvisionFirstRunModel is null)
         {
-            return (currentSettings.ExternalAccessProfile,
+            return new ExternalAccessStamp(currentSettings.ExternalAccessProfile,
                 currentSettings.AutoCheckApplicationUpdates,
                 currentSettings.AutoCheckRuntimeUpdates,
                 currentSettings.AutoProvisionFirstRunModel);
         }
 
-        return (StoredNodeSettings.ExternalAccessProfileCustom,
+        return new ExternalAccessStamp(StoredNodeSettings.ExternalAccessProfileCustom,
             request.AutoCheckApplicationUpdates ?? currentSettings.AutoCheckApplicationUpdates,
             request.AutoCheckRuntimeUpdates ?? currentSettings.AutoCheckRuntimeUpdates,
             request.AutoProvisionFirstRunModel ?? currentSettings.AutoProvisionFirstRunModel);
     }
+
+    /// <summary>The external-access profile stamp and the three switches it describes.</summary>
+    private readonly record struct ExternalAccessStamp(string? Profile, bool? ApplicationUpdates, bool? RuntimeUpdates, bool? FirstRunModel);
 
     /// <summary>Null keeps the stored value; <see cref="StoredNodeSettings.TokenSettingUnset" /> clears it back to the shipped default.</summary>
     private static int? KeepOrUnsetTokens(int? requested, int? current)

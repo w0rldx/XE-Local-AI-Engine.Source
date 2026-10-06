@@ -310,15 +310,17 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     ///     blank scaffold resource, skips the prepend entirely, so its resolved prompt and config hash are
     ///     byte-identical to the persona-only path.
     /// </remarks>
-    private async Task<(string Prompt, bool PlaybookWithheld)> ComposePromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, bool effectiveModelIsCloud,
+    private async Task<ComposedPrompt> ComposePromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, bool effectiveModelIsCloud,
         CancellationToken cancellationToken)
     {
         var (personaPrompt, playbookWithheld) = await ComposePersonaPromptAsync(definition, retrievalQuery, effectiveModelIsCloud, cancellationToken);
         var prompt = definition.DisableBaseScaffold
             ? personaPrompt
             : BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), personaPrompt);
-        return (prompt, playbookWithheld);
+        return new ComposedPrompt(prompt, playbookWithheld);
     }
+
+    private readonly record struct ComposedPrompt(string Prompt, bool PlaybookWithheld);
 
     /// <summary>
     ///     Folds the definition's enabled playbook actions into its prompt when the playbook is enabled.
@@ -330,12 +332,12 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     ///     <paramref name="retrievalQuery" /> only the top-k most relevant actions are injected; at or below it, or
     ///     with a blank query, the budget-capped static prepend keeps a within-budget prompt byte-identical as well.
     /// </remarks>
-    private async Task<(string Prompt, bool PlaybookWithheld)> ComposePersonaPromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, bool effectiveModelIsCloud,
+    private async Task<ComposedPrompt> ComposePersonaPromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, bool effectiveModelIsCloud,
         CancellationToken cancellationToken)
     {
         if (!definition.PlaybookEnabled)
         {
-            return (definition.Instructions, false);
+            return new ComposedPrompt(definition.Instructions, false);
         }
 
         if (effectiveModelIsCloud && !await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken))
@@ -348,7 +350,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
                     definition.Id);
             }
 
-            return (definition.Instructions, withheld);
+            return new ComposedPrompt(definition.Instructions, withheld);
         }
 
         var enabled = await _playbookActionStore.ListEnabledByAgentAsync(definition.Id, cancellationToken);
@@ -361,7 +363,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             _retrievalOptions.MaxInjectedMemoryTokens,
             _retrievalOptions.MaxInjectedFailureMemoryTokens,
             _logger);
-        return (PlaybookPromptComposer.Compose(definition.Instructions, selected), false);
+        return new ComposedPrompt(PlaybookPromptComposer.Compose(definition.Instructions, selected), false);
     }
 
     private async Task<IReadOnlyList<AllowedToolDto>> ProjectAllowedToolsAsync(AgentDefinitionRecord definition, string? effectiveModelId, bool supportsTools, bool effectiveModelIsCloud,

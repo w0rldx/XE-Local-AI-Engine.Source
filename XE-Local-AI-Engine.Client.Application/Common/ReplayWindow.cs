@@ -10,11 +10,14 @@ namespace XE_Local_AI_Engine.Client.Common;
 /// </remarks>
 public static class ReplayWindow
 {
-    public static async Task<(IReadOnlyList<T> Items, bool Truncated)> ReadAsync<T>(int limit, Func<int, Task<IReadOnlyList<T>>> read)
+    public static async Task<ReplayPage<T>> ReadAsync<T>(int limit, Func<int, Task<IReadOnlyList<T>>> read)
     {
         ArgumentNullException.ThrowIfNull(read);
 
         var rows = await read(limit + 1);
-        return rows.Count > limit ? ([.. rows.Take(limit)], true) : (rows, false);
+        return rows.Count > limit ? new ReplayPage<T>([.. rows.Take(limit)], true) : new ReplayPage<T>(rows, false);
     }
+
+    /// <summary>One replay read: the rows within the limit and whether more rows were observed past it.</summary>
+    public readonly record struct ReplayPage<T>(IReadOnlyList<T> Items, bool Truncated);
 }

@@ -306,7 +306,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             {
                 live = _live.GetOrAdd(state.InvocationId,
                     static (_, arg) => new LiveInvocation(arg.InitialState, arg.Options),
-                    (InitialState: state, Options: _options));
+                    new LiveInvocationSeed(state, _options));
             }
 
             live.Publish(state);
@@ -763,4 +763,6 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             _channel.Writer.TryComplete();
         }
     }
+
+    private readonly record struct LiveInvocationSeed(InvocationState InitialState, ChatStreamBudgetOptions Options);
 }

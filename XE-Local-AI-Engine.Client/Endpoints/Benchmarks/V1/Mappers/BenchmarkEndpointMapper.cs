@@ -449,11 +449,11 @@ internal static class BenchmarkEndpointMapper
     ///     snapshot no longer validates should still render rather than fail its own detail read. Detail only: the
     ///     listing projection never loads the snapshot column, so it arrives empty and both facts are null.
     /// </remarks>
-    private static (int? Tokens, bool? Applicable) ReadReasoningBudget(ReadOnlyMemory<byte> snapshotJson)
+    private static ReasoningBudget ReadReasoningBudget(ReadOnlyMemory<byte> snapshotJson)
     {
         if (snapshotJson.IsEmpty)
         {
-            return (null, null);
+            return new ReasoningBudget(null, null);
         }
 
         try
@@ -463,20 +463,23 @@ internal static class BenchmarkEndpointMapper
                 || !sampling.TryGetProperty("reasoningBudgetTokens", out var tokens)
                 || tokens.ValueKind != JsonValueKind.Number)
             {
-                return (null, null);
+                return new ReasoningBudget(null, null);
             }
 
             // Absent means a run frozen before the field existed; the executor reads that as the inert true, so this
             // must agree rather than reporting "not applicable" for every legacy run.
             var applicable = !sampling.TryGetProperty("reasoningBudgetEnforceable", out var enforceable)
                              || enforceable.ValueKind != JsonValueKind.False;
-            return (tokens.GetInt32(), applicable);
+            return new ReasoningBudget(tokens.GetInt32(), applicable);
         }
         catch (JsonException)
         {
-            return (null, null);
+            return new ReasoningBudget(null, null);
         }
     }
+
+    /// <summary>The frozen reasoning-budget token count and whether the budget applied, both null when unknown.</summary>
+    private readonly record struct ReasoningBudget(int? Tokens, bool? Applicable);
 
     private static JsonElement? ParseJson(ReadOnlyMemory<byte>? payload)
     {

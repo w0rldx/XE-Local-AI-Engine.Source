@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -188,7 +189,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
     ///     marker is neither an addition nor a removal. A binary or pure-rename block therefore contributes nothing,
     ///     matching git's own "not a line count" convention for them.
     /// </remarks>
-    private static (int Added, int Removed) CountChangedLines(string patchText)
+    private static LineCounts CountChangedLines(string patchText)
     {
         var added = 0;
         var removed = 0;
@@ -214,8 +215,11 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             }
         }
 
-        return (added, removed);
+        return new LineCounts(added, removed);
     }
+
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct LineCounts(int Added, int Removed);
 
     /// <summary>
     ///     Compares the paths the goal loop recorded writing with the paths the diff reports and classifies whatever
