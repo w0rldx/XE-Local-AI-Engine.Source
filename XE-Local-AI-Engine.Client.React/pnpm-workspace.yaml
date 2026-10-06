@@ -2,18 +2,11 @@ minimumReleaseAge: 10080
 minimumReleaseAgeStrict: false
 trustPolicy: no-downgrade
 
-# Force the transitive nanoid (via rrweb > postcss) off the <3.3.18 line that carries
-# GHSA-2v37-7h3g-55p8 (zero-size custom generators loop). 3.3.18 is a compatible patch.
 overrides:
-  'nanoid@<3.3.18': '^3.3.18'
   # Security patches for vulnerable transitive copies pulled by Hey API and Monaco Editor.
   'js-yaml@<4.3.2': '4.3.2'
   # dompurify advisory covers >=3.4.13 <=3.4.15; 3.4.16 is the fixed patch.
   'dompurify@<3.4.16': '3.4.16'
-  # brace-expansion (via minimatch@10) advisory covers >=4.0.0 <5.0.12; 5.0.12 is the fixed patch.
-  'brace-expansion@>=4.0.0 <5.0.12': '5.0.12'
-  # Dev-only ajv copy under stylelint and react-doctor; GHSA-5jgf-p345-68v8 and siblings.
-  'fast-uri@<3.1.7': '3.1.7'
   # vitest 5 needs why-is-node-running ^3.2.1; 3.2.2 dropped npm provenance, which trustPolicy no-downgrade refuses.
   # Pinned to the attested 3.2.1. Drop once a provenance-attested 3.2.x above 3.2.1 is published.
   'why-is-node-running@3': '3.2.1'
@@ -26,33 +19,3 @@ allowBuilds:
 
 trustPolicyExclude:
   - 'semver@6.3.1'
-
-minimumReleaseAgeExclude:
-  # Security patch for GHSA-2v37-7h3g-55p8; wanted fresh, so exempt from the 7-day maturity hold.
-  - 'nanoid@3.3.18'
-  - '@xyflow/react@12.11.0'
-  - '@xyflow/system@0.0.77'
-  - '@mantine/colors-generator@9.3.0'
-  - '@mantine/core@9.3.0'
-  - '@mantine/hooks@9.3.0'
-  - '@mantine/notifications@9.3.0'
-  - '@mantine/store@9.3.0'
-  - '@tanstack/form-core@1.32.1'
-  - '@tanstack/form-devtools@0.2.28'
-  - '@tanstack/query-core@5.100.14'
-  - '@tanstack/query-devtools@5.100.14'
-  - '@tanstack/react-form-devtools@0.2.28'
-  - '@tanstack/react-form@1.32.1'
-  - '@tanstack/react-query-devtools@5.100.14'
-  - '@tanstack/react-query@5.100.14'
-  - '@tanstack/router-core@1.171.6'
-  - '@tanstack/router-generator@1.167.10'
-  - '@tanstack/router-plugin@1.168.11'
-  - '@tanstack/router-utils@1.162.1'
-  - '@vitest/coverage-v8@5.0.2'
-  - '@vitest/mocker@5.0.2'
-  - '@vitest/pretty-format@5.0.2'
-  - '@vitest/spy@5.0.2'
-  - '@vitest/ui@5.0.2'
-  - '@vitest/utils@5.0.2'
-  - vitest@5.0.2
