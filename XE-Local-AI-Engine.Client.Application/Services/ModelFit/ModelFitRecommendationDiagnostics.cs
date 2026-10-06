@@ -34,6 +34,9 @@ public sealed class ModelFitRecommendationDiagnostics
 
     public bool Tested { get; private init; }
 
+    /// <summary>Whether the repository is gated; a row written before the advisor emitted the flag reads false.</summary>
+    public bool IsGated { get; private init; }
+
     public string? CatalogId { get; private init; }
 
     public string? CatalogDisplayName { get; private init; }
@@ -93,6 +96,7 @@ public sealed class ModelFitRecommendationDiagnostics
                 Section = ReadString(root, "section") ?? fallback.Section,
                 Tier = ReadString(root, "tier"),
                 Tested = ReadBool(root, "tested") ?? false,
+                IsGated = ReadBool(root, "is_gated") ?? false,
                 CatalogId = ReadString(root, "catalog_id"),
                 CatalogDisplayName = ReadString(root, "catalog_display_name"),
                 CatalogNotes = ReadString(root, "catalog_notes"),

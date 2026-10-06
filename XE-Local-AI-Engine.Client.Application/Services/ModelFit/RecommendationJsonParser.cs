@@ -129,6 +129,7 @@ public static class RecommendationJsonParser
             wroteAny |= CopyProperty(model, "section", writer);
             wroteAny |= CopyProperty(model, "tier", writer);
             wroteAny |= CopyProperty(model, "tested", writer);
+            wroteAny |= CopyProperty(model, "is_gated", writer);
             wroteAny |= CopyProperty(model, "catalog_id", writer);
             wroteAny |= CopyProperty(model, "catalog_display_name", writer);
             wroteAny |= CopyProperty(model, "catalog_notes", writer);

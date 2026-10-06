@@ -64,6 +64,27 @@ export const fitVerdictLabelKey: Record<Exclude<GgufFitVerdict, "Unknown">, stri
 	WontFit: "wontFit",
 };
 
+const testedFitGroupRank: Record<GgufFitVerdict, number> = { Fits: 0, Tight: 1, WontFit: 2, Unknown: 3 };
+
+// Best fitting first: Fits then Tight, each largest model first, then WontFit smallest first; ties by id (ordinal). While
+// any verdict is Unknown the server order is kept, so a first landing reorders once, when the verdicts arrive.
+export function sortTestedModelsByFit(models: readonly GgufTestedModel[]): readonly GgufTestedModel[] {
+	if (models.some((model) => model.fitVerdict === "Unknown")) {
+		return models;
+	}
+	return [...models].sort((a, b) => {
+		const group = testedFitGroupRank[a.fitVerdict] - testedFitGroupRank[b.fitVerdict];
+		if (group !== 0) {
+			return group;
+		}
+		const size = a.fitVerdict === "WontFit" ? a.totalParamsB - b.totalParamsB : b.totalParamsB - a.totalParamsB;
+		if (size !== 0) {
+			return size;
+		}
+		return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+	});
+}
+
 // Domain view-model for one selectable .gguf file inside a repo (the quant picker rows). isDynamic flags an Unsloth
 // "Dynamic" (UD-) quant so the UI can badge it; sizeBytes drives the size column. fileName is the exact file the
 // download requests verbatim (so a chosen quant resolves unambiguously, including UD- quants). qualityTier/fitVerdict

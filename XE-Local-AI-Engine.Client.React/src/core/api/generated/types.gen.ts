@@ -4690,6 +4690,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationRespon
 	section: string;
 	tier?: string | null;
 	tested?: boolean;
+	isGated?: boolean;
 	catalogId?: string | null;
 	catalogDisplayName?: string | null;
 	catalogNotes?: string | null;

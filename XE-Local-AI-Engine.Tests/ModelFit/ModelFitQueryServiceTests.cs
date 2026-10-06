@@ -269,7 +269,7 @@ public sealed class ModelFitQueryServiceTests
         // DiagnosticsJson are extracted by ModelFitMapper.ToResponse() and surface on the response DTO.
         var harness = Harness.Create();
         var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
-        const string diagnosticsJson = """{"release_date":"2026-01-15","is_trusted_publisher":false}""";
+        const string diagnosticsJson = """{"release_date":"2026-01-15","is_trusted_publisher":false,"is_gated":true}""";
         harness.RecommendationStore.Seed(snapshotId,
             new ModelFitRecommendationInput
             {
@@ -295,6 +295,7 @@ public sealed class ModelFitQueryServiceTests
         var response = view!.ToResponse();
         AssertEx.Equal("2026-01-15", response.Recommendations[0].ReleaseDate);
         AssertEx.False(response.Recommendations[0].IsTrustedPublisher);
+        AssertEx.True(response.Recommendations[0].IsGated);
     }
 
     [Test]

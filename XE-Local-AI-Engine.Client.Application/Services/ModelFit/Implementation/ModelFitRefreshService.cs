@@ -365,6 +365,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             Section = section,
             Tier = entry.Tier,
             Tested = entry.Tested,
+            IsGated = candidate.IsGated,
             CatalogId = entry.Id,
             CatalogDisplayName = entry.DisplayName,
             CatalogNotes = entry.Notes,
@@ -615,6 +616,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             Quant = file.Quant,
             Estimate = estimate,
             IsInstalled = installedKeys.Contains(modelName),
+            IsGated = detail.IsGated,
             IsTrustedPublisher = summary.IsTrustedPublisher,
             Downloads = summary.Downloads,
             LastModified = summary.LastModified,
@@ -707,6 +709,11 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 if (recommendation.Tested)
                 {
                     writer.WriteBoolean("tested", value: true);
+                }
+
+                if (recommendation.IsGated)
+                {
+                    writer.WriteBoolean("is_gated", value: true);
                 }
 
                 if (recommendation.CatalogId is not null)
@@ -842,6 +849,9 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
         /// <summary>Whether the catalog entry is flagged as live-scenario tested; always <see langword="false" /> for an explore-lane row.</summary>
         public bool Tested { get; init; }
+
+        /// <summary>Whether the repository is gated (licence acceptance and a token needed to download), in either lane.</summary>
+        public bool IsGated { get; init; }
 
         /// <summary>The catalog entry id, or <see langword="null" /> for an explore-lane row.</summary>
         public string? CatalogId { get; init; }

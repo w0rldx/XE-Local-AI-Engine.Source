@@ -1,5 +1,13 @@
 import { Badge, Button, Group, Stack, Table, Text, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconCheck, IconCloudDownload, IconCpu, IconDownload, IconServer2 } from "@tabler/icons-react";
+import {
+	IconAlertTriangle,
+	IconCheck,
+	IconCloudDownload,
+	IconCpu,
+	IconDownload,
+	IconLock,
+	IconServer2,
+} from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
@@ -78,6 +86,35 @@ function TestedBadge({ tested, rank }: { tested: boolean; rank: number }) {
 				data-testid={`model-fit-tested-badge-${rank}`}
 			>
 				{t("pages.modelFit.recommendations.tested.badge", "Tested")}
+			</Badge>
+		</Tooltip>
+	);
+}
+
+// The gated badge sits next to the tested badge when the Hugging Face repository needs an accepted license and a token.
+// Without a token the header read fails, so the row's estimate rests on file size alone; the tooltip says both.
+function GatedBadge({ isGated, rank }: { isGated: boolean; rank: number }) {
+	const { t } = useTranslation();
+	if (!isGated) {
+		return null;
+	}
+	return (
+		<Tooltip
+			label={t(
+				"pages.modelFit.recommendations.gated.tooltip",
+				"This Hugging Face repository is gated. Downloading it needs the license accepted on Hugging Face and an access token in Node Settings. Without a token, the size estimate is based on the file size alone.",
+			)}
+			multiline={true}
+			maw={280}
+		>
+			<Badge
+				color="yellow"
+				variant="light"
+				size="sm"
+				leftSection={<IconLock size={12} />}
+				data-testid={`model-fit-gated-badge-${rank}`}
+			>
+				{t("pages.modelFit.recommendations.gated.badge", "Gated")}
 			</Badge>
 		</Tooltip>
 	);
@@ -259,6 +296,7 @@ export function RecommendationTable({ recommendations, onDownload, downloadingMo
 										</Text>
 										<TierBadge tier={recommendation.tier} rank={recommendation.rank} />
 										<TestedBadge tested={recommendation.tested} rank={recommendation.rank} />
+										<GatedBadge isGated={recommendation.isGated} rank={recommendation.rank} />
 									</Group>
 									{recommendation.catalogDisplayName ? (
 										<Text size="xs" c="dimmed">

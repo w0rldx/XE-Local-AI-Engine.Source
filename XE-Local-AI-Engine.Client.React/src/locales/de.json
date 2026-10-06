@@ -3226,7 +3226,9 @@
 							"testedQuant": "Getestete Quantisierung",
 							"notes": "Hinweise"
 						},
-						"installed": "Installiert"
+						"installed": "Installiert",
+						"fitHint": "Vergleicht die Größe der getesteten Datei mit dem freien Speicher dieses Rechners. Die genaue Größenberechnung, einschließlich Kontext, übernimmt die Seite Modellempfehlungen.",
+						"fitHintWontFit": "Die getestete Quantisierung passt nicht auf diesen Rechner. „Herunterladen“ öffnet die Auswahl, die kleinere Quantisierungen anbietet."
 					}
 				},
 				"download": {
@@ -4310,6 +4312,10 @@
 				"tested": {
 					"badge": "Getestet",
 					"tooltip": "Die Autoren haben dieses Modell in ihren Live-Szenarien geprüft."
+				},
+				"gated": {
+					"badge": "Gesperrt",
+					"tooltip": "Dieses Hugging-Face-Repository ist zugangsbeschränkt. Für den Download müssen Sie die Lizenz auf Hugging Face akzeptieren und in den Node-Einstellungen ein Zugriffstoken hinterlegen. Ohne Token beruht die Größenschätzung allein auf der Dateigröße."
 				},
 				"moeOffload": {
 					"badge": "Experten auf CPU – langsamer, höhere Qualität",

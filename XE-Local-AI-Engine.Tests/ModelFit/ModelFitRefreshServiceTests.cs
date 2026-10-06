@@ -689,7 +689,45 @@ public sealed class ModelFitRefreshServiceTests
         }
     }
 
-    private static async Task<ICatalogRecommendationService> CatalogRecommending(string repoId, HardwareProfile profile, IReadOnlyList<string>? skippedEntryNames = null)
+    [Test]
+    public async Task Advisor_Recommend_PersistsIsGated_InBothLanes_OnlyWhenTheRepoIsGated()
+    {
+        const string catalogRepo = "google/gemma-3-12b-it-qat-q4_0-gguf";
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([Summary("org/gated-GGUF"), Summary("org/open-GGUF")]));
+        discovery.InspectRepoAsync("org/gated-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(new GgufRepoDetail
+                 {
+                     RepoId = "org/gated-GGUF",
+                     IsGated = true,
+                     License = "gemma",
+                     Files = [File("Q4_K_M", paramCount: 1_000_000_000L)]
+                 }));
+        discovery.InspectRepoAsync("org/open-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/open-GGUF", File("Q4_K_M", paramCount: 1_000_000_000L))));
+        var profile = GpuProfile(12 * Gb);
+        var catalog = await CatalogRecommending(catalogRepo, profile, isGated: true);
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, profile, catalog: catalog);
+        var result = await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+
+        AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
+        var rows = recommendationStore.RowsFor(snapshotStore.Snapshots.Values.Single().Id);
+        var catalogRow = rows.Single(row => row.ModelName == GgufModelName.Format(catalogRepo, "Q4_K_M"));
+        var gatedExploreRow = rows.Single(row => row.ModelName == "org/gated-GGUF:Q4_K_M");
+        var openExploreRow = rows.Single(row => row.ModelName == "org/open-GGUF:Q4_K_M");
+        AssertEx.True(ModelFitRecommendationDiagnostics.Parse(catalogRow.DiagnosticsJson, catalogRow.ModelName).IsGated);
+        AssertEx.True(ModelFitRecommendationDiagnostics.Parse(gatedExploreRow.DiagnosticsJson, gatedExploreRow.ModelName).IsGated);
+        AssertEx.False(AssertEx.NotNull(openExploreRow.DiagnosticsJson).Contains("is_gated", StringComparison.Ordinal), "the flag is written only when true.");
+    }
+
+    private static async Task<ICatalogRecommendationService> CatalogRecommending(string repoId,
+        HardwareProfile profile,
+        IReadOnlyList<string>? skippedEntryNames = null,
+        bool isGated = false)
     {
         var file = File("Q4_K_M", paramCount: 1_000_000_000L);
         var selected = GgufFileSelector.SelectBestFit(new MemoryFitEstimator(), [file], "Q4_K_M", ctxTarget: 8192, profile)!;
@@ -716,7 +754,8 @@ public sealed class ModelFitRefreshServiceTests
             File = selected.File,
             Estimate = selected.Estimate,
             ModelName = GgufModelName.Format(repoId, "Q4_K_M"),
-            IsInstalled = false
+            IsInstalled = false,
+            IsGated = isGated
         };
         var catalog = Substitute.For<ICatalogRecommendationService>();
         catalog.BuildRecommendationsAsync(Arg.Any<string?>(),

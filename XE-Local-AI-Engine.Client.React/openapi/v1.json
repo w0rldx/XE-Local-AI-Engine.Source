@@ -42088,6 +42088,9 @@
           "tested": {
             "type": "boolean"
           },
+          "isGated": {
+            "type": "boolean"
+          },
           "catalogId": {
             "type": "string",
             "nullable": true

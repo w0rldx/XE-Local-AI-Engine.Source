@@ -197,6 +197,7 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
             Estimate = estimate,
             ModelName = modelName,
             IsInstalled = installedKeys.Contains(modelName),
+            IsGated = detail.IsGated,
             KvQuantAdvisory = kvQuantAdvisory,
             KvBytesPerTokenAtCtx = BuildKvBytesPerTokenAtCtx(file, ctxTarget, attention),
             AttentionArchTag = AttentionArchTag.Resolve(attention, file.AttentionHeadCount, file.AttentionHeadCountKV)

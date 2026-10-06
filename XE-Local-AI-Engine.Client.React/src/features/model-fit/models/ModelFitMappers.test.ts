@@ -70,6 +70,24 @@ describe("toLatestRecommendations — releaseDate and isTrustedPublisher mapping
 
 		expect(result.recommendations[0]?.tested).toBe(false);
 	});
+
+	it("maps isGated true from the DTO field", () => {
+		const result = toLatestRecommendations(wrapInResponse(makeRecDto({ isGated: true })));
+
+		expect(result.recommendations[0]?.isGated).toBe(true);
+	});
+
+	it("maps isGated false from the DTO field", () => {
+		const result = toLatestRecommendations(wrapInResponse(makeRecDto({ isGated: false })));
+
+		expect(result.recommendations[0]?.isGated).toBe(false);
+	});
+
+	it("coalesces an absent isGated to false", () => {
+		const result = toLatestRecommendations(wrapInResponse(makeRecDto()));
+
+		expect(result.recommendations[0]?.isGated).toBe(false);
+	});
 });
 
 describe("toLatestRecommendations — skipped catalog entries", () => {

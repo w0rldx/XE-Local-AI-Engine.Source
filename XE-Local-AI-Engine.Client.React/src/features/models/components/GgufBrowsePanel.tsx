@@ -176,14 +176,30 @@ export function GgufBrowsePanel({
 															{`${model.testedQuant} · ${formatBytesAsGb(model.testedSizeBytes)}`}
 														</Text>
 														{fitColor !== null && fitLabelKey !== null ? (
-															<Badge
-																color={fitColor}
-																variant="light"
-																size="sm"
-																data-testid={`model-fit-browse-tested-fit-${model.id}`}
+															<Tooltip
+																label={
+																	model.fitVerdict === "WontFit"
+																		? t(
+																				"pages.models.gguf.browse.tested.fitHintWontFit",
+																				"The tested quant does not fit this machine. Download opens the picker, which offers smaller quants.",
+																			)
+																		: t(
+																				"pages.models.gguf.browse.tested.fitHint",
+																				"Compares the tested file's size with this machine's free memory. The Model Recommendations page does the detailed sizing, including context.",
+																			)
+																}
+																multiline={true}
+																maw={260}
 															>
-																{t(`pages.models.gguf.download.fit.${fitLabelKey}`, model.fitVerdict)}
-															</Badge>
+																<Badge
+																	color={fitColor}
+																	variant="light"
+																	size="sm"
+																	data-testid={`model-fit-browse-tested-fit-${model.id}`}
+																>
+																	{t(`pages.models.gguf.download.fit.${fitLabelKey}`, model.fitVerdict)}
+																</Badge>
+															</Tooltip>
 														) : null}
 													</Group>
 												</Table.Td>

@@ -4779,6 +4779,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResp
 	section: z.string(),
 	tier: z.string().nullish(),
 	tested: z.boolean().optional(),
+	isGated: z.boolean().optional(),
 	catalogId: z.string().nullish(),
 	catalogDisplayName: z.string().nullish(),
 	catalogNotes: z.string().nullish(),

@@ -6,6 +6,7 @@ using System.Net;
 using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -262,6 +263,85 @@ public sealed class GgufDiscoveryPerfTests
         AssertEx.Equal(expected: 300, harness.Handler.RangeCallCountByFile.Values.Sum());
     }
 
+    [Test]
+    [Arguments(HttpStatusCode.Unauthorized)]
+    [Arguments(HttpStatusCode.Forbidden)]
+    [Arguments(HttpStatusCode.NotFound)]
+    [Arguments(HttpStatusCode.TooManyRequests)]
+    [Arguments(HttpStatusCode.InternalServerError)]
+    public async Task HeaderRead_FirstRangeHttpError_IsNotCached_TheNextReadAsksAgain(HttpStatusCode status)
+    {
+        using var harness = new PerfHarness(rangeStatus: status);
+        const string fileName = "gated-Q4_0.gguf";
+
+        var first = await harness.HeaderReader.ReadHeaderAsync(RepoId, fileName, Commit, CancellationToken.None);
+        var second = await harness.HeaderReader.ReadHeaderAsync(RepoId, fileName, Commit, CancellationToken.None);
+
+        AssertEx.Equal(GgufHeaderMetadata.Empty, first);
+        AssertEx.Equal(GgufHeaderMetadata.Empty, second);
+        AssertEx.Equal(expected: 2, harness.Handler.RangeCallCountByFile[fileName], "a failed first range must not be cached.");
+    }
+
+    [Test]
+    public async Task HeaderRead_Success_IsCached_TheNextReadMakesNoRequest()
+    {
+        using var harness = new PerfHarness();
+        const string fileName = "open-Q4_0.gguf";
+
+        var first = await harness.HeaderReader.ReadHeaderAsync(RepoId, fileName, Commit, CancellationToken.None);
+        var second = await harness.HeaderReader.ReadHeaderAsync(RepoId, fileName, Commit, CancellationToken.None);
+
+        AssertEx.Equal("llama", first.Architecture);
+        AssertEx.Equal(first, second);
+        AssertEx.Equal(expected: 1, harness.Handler.RangeCallCountByFile[fileName]);
+    }
+
+    [Test]
+    public async Task HeaderRead_ConcurrentReadsOfAFailingFirstRange_AllReturnEmpty()
+    {
+        using var harness = new PerfHarness(rangeStatus: HttpStatusCode.Unauthorized);
+        const string fileName = "gated-Q4_0.gguf";
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 4)
+                                                   .Select(_ => harness.HeaderReader.ReadHeaderAsync(RepoId, fileName, Commit, CancellationToken.None)));
+
+        foreach (var result in results)
+        {
+            AssertEx.Equal(GgufHeaderMetadata.Empty, result);
+        }
+
+        // Every waiter finds the entry still empty after the gate, so each one asks the server itself.
+        AssertEx.Equal(expected: 4, harness.Handler.RangeCallCountByFile[fileName]);
+    }
+
+    [Test]
+    public async Task HeaderRead_WithToken_EveryRangeCarriesTheBearer_AndTheTokenIsReadOncePerRead()
+    {
+        var tokenStore = GgufStoreTestInfrastructure.TokenStore("hf_test_token");
+        var header = LargeVocabHeader(blockCount: 32, keyLength: 256, optionalKeysAfterTokenizer: true);
+        using var harness = new PerfHarness(headerBytesFor: _ => header, headerProbeBytes: ProbeBytes, tokenStore: tokenStore);
+
+        await harness.HeaderReader.ReadCompleteHeaderAsync(RepoId, FileNameFor(QuantTokens[0]), Commit, CancellationToken.None);
+
+        AssertEx.Equal(CompleteReadRequests, harness.Handler.RangeAuthorizations.Count);
+        foreach (var authorization in harness.Handler.RangeAuthorizations)
+        {
+            AssertEx.Equal("Bearer hf_test_token", authorization);
+        }
+
+        await tokenStore.Received(1).GetTokenAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task HeaderRead_WithoutToken_SendsNoAuthorization()
+    {
+        using var harness = new PerfHarness();
+
+        await harness.HeaderReader.ReadHeaderAsync(RepoId, FileNameFor(QuantTokens[0]), Commit, CancellationToken.None);
+
+        AssertEx.Null(harness.Handler.RangeAuthorizations.Single());
+    }
+
     private static int RangeCalls(PerfHarness harness, string quant)
     {
         return harness.Handler.RangeCallCountByFile.GetValueOrDefault(FileNameFor(quant));
@@ -367,9 +447,11 @@ public sealed class GgufDiscoveryPerfTests
             TimeProvider? timeProvider = null,
             Func<string, byte[]>? headerBytesFor = null,
             long headerProbeBytes = 4L * 1024 * 1024,
-            long? failRangesAbove = null)
+            long? failRangesAbove = null,
+            HttpStatusCode? rangeStatus = null,
+            IHfTokenStore? tokenStore = null)
         {
-            Handler = new TrackingStubHandler(listing, repoDetail, headerDelay ?? TimeSpan.Zero, headerBytesFor, failRangesAbove);
+            Handler = new TrackingStubHandler(listing, repoDetail, headerDelay ?? TimeSpan.Zero, headerBytesFor, failRangesAbove, rangeStatus);
             _hubHttp = new HttpClient(Handler, disposeHandler: false);
             _downloadHttp = new HttpClient(Handler, disposeHandler: false);
 
@@ -383,7 +465,7 @@ public sealed class GgufDiscoveryPerfTests
 
             var clock = timeProvider ?? TimeProvider.System;
             var hubClient = new HfHubClient(_hubHttp, options, NullLogger<HfHubClient>.Instance, clock);
-            HeaderReader = new GgufHeaderReader(_downloadHttp, options, NullLogger<GgufHeaderReader>.Instance, clock);
+            HeaderReader = new GgufHeaderReader(_downloadHttp, tokenStore ?? GgufStoreTestInfrastructure.NoTokenStore(), options, NullLogger<GgufHeaderReader>.Instance, clock);
             Discovery = new HuggingFaceGgufDiscovery(hubClient, HeaderReader, options, NullLogger<HuggingFaceGgufDiscovery>.Instance);
         }
 
@@ -413,19 +495,29 @@ public sealed class GgufDiscoveryPerfTests
         private readonly TimeSpan _headerDelay;
         private readonly Func<string, byte[]>? _headerBytesFor;
         private readonly long? _failRangesAbove;
+        private readonly HttpStatusCode? _rangeStatus;
         private int _inFlight;
         private int _listCallCount;
         private int _repoDetailCallCount;
         private int _maxObservedConcurrency;
 
-        public TrackingStubHandler(string? listing, string? repoDetail, TimeSpan headerDelay, Func<string, byte[]>? headerBytesFor, long? failRangesAbove)
+        public TrackingStubHandler(string? listing,
+            string? repoDetail,
+            TimeSpan headerDelay,
+            Func<string, byte[]>? headerBytesFor,
+            long? failRangesAbove,
+            HttpStatusCode? rangeStatus)
         {
             _listing = listing;
             _repoDetail = repoDetail;
             _headerDelay = headerDelay;
             _headerBytesFor = headerBytesFor;
             _failRangesAbove = failRangesAbove;
+            _rangeStatus = rangeStatus;
         }
+
+        // The Authorization header of every range request, "<scheme> <parameter>" or null when absent.
+        public ConcurrentQueue<string?> RangeAuthorizations { get; } = new();
 
         public int ListCallCount => _listCallCount;
 
@@ -443,6 +535,7 @@ public sealed class GgufDiscoveryPerfTests
             {
                 var fileName = url[(url.LastIndexOf('/') + 1)..];
                 RangeCallCountByFile.AddOrUpdate(fileName, addValue: 1, (_, existing) => existing + 1);
+                RangeAuthorizations.Enqueue(request.Headers.Authorization?.ToString());
 
                 var concurrent = Interlocked.Increment(ref _inFlight);
                 InterlockedMax(ref _maxObservedConcurrency, concurrent);
@@ -453,6 +546,11 @@ public sealed class GgufDiscoveryPerfTests
                         // real-timer: per-request latency is the input of a parallelism measurement — the observed
                         // concurrency above is only meaningful while requests genuinely overlap in time.
                         await Task.Delay(_headerDelay, cancellationToken);
+                    }
+
+                    if (_rangeStatus is { } status)
+                    {
+                        return new HttpResponseMessage(status);
                     }
 
                     if (request.Headers.Range?.Ranges.FirstOrDefault()?.To + 1 > _failRangesAbove)

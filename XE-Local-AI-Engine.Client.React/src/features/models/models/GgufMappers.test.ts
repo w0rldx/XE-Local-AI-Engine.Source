@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse } from "@/core/api/generated";
 import { toGgufRepositoryDetail, toGgufTestedModel } from "@/features/models/models/GgufMappers";
-import { type GgufRepositoryFile, preferredGgufFileName, recommendedGgufFileName } from "@/features/models/models/GgufModels";
+import {
+	type GgufFitVerdict,
+	type GgufRepositoryFile,
+	type GgufTestedModel,
+	preferredGgufFileName,
+	recommendedGgufFileName,
+	sortTestedModelsByFit,
+} from "@/features/models/models/GgufModels";
 
 describe("toGgufRepositoryDetail file mapping", () => {
 	it("maps the new quality/fit/recommended fields from the wire shape", () => {
@@ -264,5 +271,65 @@ describe("preferredGgufFileName", () => {
 
 		expect(preferredGgufFileName(files, "Q4_K_M")).toBe("model-Q5_K_M.gguf");
 		expect(preferredGgufFileName(files, undefined)).toBe("model-Q5_K_M.gguf");
+	});
+});
+
+describe("sortTestedModelsByFit", () => {
+	const tested = (id: string, totalParamsB: number, fitVerdict: GgufFitVerdict): GgufTestedModel => ({
+		id,
+		displayName: id,
+		ggufRepo: `owner/${id}`,
+		license: "apache-2.0",
+		totalParamsB,
+		notes: null,
+		testedQuant: "Q4_K_M",
+		testedSizeBytes: 1,
+		fitVerdict,
+	});
+	const ids = (models: readonly GgufTestedModel[]): string[] => models.map((model) => model.id);
+
+	it("lists Fits then Tight largest first, then WontFit smallest first", () => {
+		const models = [
+			tested("wont-big", 70, "WontFit"),
+			tested("fits-small", 3, "Fits"),
+			tested("tight-small", 8, "Tight"),
+			tested("wont-small", 32, "WontFit"),
+			tested("fits-big", 14, "Fits"),
+			tested("tight-big", 27, "Tight"),
+		];
+
+		expect(ids(sortTestedModelsByFit(models))).toEqual([
+			"fits-big",
+			"fits-small",
+			"tight-big",
+			"tight-small",
+			"wont-small",
+			"wont-big",
+		]);
+	});
+
+	it("keeps the given order while any verdict is Unknown", () => {
+		const models = [tested("b", 3, "WontFit"), tested("a", 14, "Unknown"), tested("c", 8, "Fits")];
+
+		expect(ids(sortTestedModelsByFit(models))).toEqual(["b", "a", "c"]);
+	});
+
+	it("breaks a size tie by id", () => {
+		const models = [
+			tested("qwen", 8, "Fits"),
+			tested("granite", 8, "Fits"),
+			tested("z", 8, "WontFit"),
+			tested("y", 8, "WontFit"),
+		];
+
+		expect(ids(sortTestedModelsByFit(models))).toEqual(["granite", "qwen", "y", "z"]);
+	});
+
+	it("does not mutate its input", () => {
+		const models = [tested("small", 3, "Fits"), tested("big", 14, "Fits")];
+
+		sortTestedModelsByFit(models);
+
+		expect(ids(models)).toEqual(["small", "big"]);
 	});
 });

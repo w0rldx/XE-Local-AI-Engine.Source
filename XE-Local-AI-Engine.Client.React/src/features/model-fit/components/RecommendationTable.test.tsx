@@ -49,6 +49,7 @@ function makeRecommendation(overrides: Partial<ModelFitRecommendation>): ModelFi
 		section: "recommended",
 		tier: null,
 		tested: false,
+		isGated: false,
 		catalogId: null,
 		catalogDisplayName: null,
 		catalogNotes: null,
@@ -299,6 +300,19 @@ describe("RecommendationTable", () => {
 		expect(screen.queryByTestId("model-fit-tested-badge-2")).toBeNull();
 		fireEvent.mouseEnter(badge);
 		expect(await screen.findByText("The authors ran this model through their live scenario checks.")).toBeTruthy();
+	});
+
+	it("shows a gated badge with its tooltip for a gated repository and none otherwise", async () => {
+		const gated = makeRecommendation({ rank: 1, isGated: true });
+		const open = makeRecommendation({ rank: 2, isGated: false });
+
+		renderTable(<RecommendationTable recommendations={[gated, open]} />);
+
+		const badge = screen.getByTestId("model-fit-gated-badge-1");
+		expect(badge.textContent).toBe("Gated");
+		expect(screen.queryByTestId("model-fit-gated-badge-2")).toBeNull();
+		fireEvent.mouseEnter(badge);
+		expect(await screen.findByText(/This Hugging Face repository is gated\./)).toBeTruthy();
 	});
 
 	it("prefers the catalog display name as the primary label and shows the raw model name as secondary text", () => {

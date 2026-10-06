@@ -84,7 +84,7 @@ internal static class GgufStoreTestInfrastructure
         var http = new HttpClient(new ScriptedHandler(static (_, _) =>
             throw new InvalidOperationException("The installed-model list must read headers from disk, never over HTTP.")));
 #pragma warning restore CA2000
-        return new GgufHeaderReader(http, options, NullLogger<GgufHeaderReader>.Instance, TimeProvider.System);
+        return new GgufHeaderReader(http, NoTokenStore(), options, NullLogger<GgufHeaderReader>.Instance, TimeProvider.System);
     }
 
     public static IHfTokenStore NoTokenStore()

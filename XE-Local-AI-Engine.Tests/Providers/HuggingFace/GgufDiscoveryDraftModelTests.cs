@@ -139,7 +139,7 @@ public sealed class GgufDiscoveryDraftModelTests
 
             var options = new HuggingFaceOptions();
             var hubClient = new HfHubClient(_hubHttp, options, NullLogger<HfHubClient>.Instance, TimeProvider.System);
-            var headerReader = new GgufHeaderReader(_hubHttp, options, NullLogger<GgufHeaderReader>.Instance, TimeProvider.System);
+            var headerReader = new GgufHeaderReader(_hubHttp, GgufStoreTestInfrastructure.NoTokenStore(), options, NullLogger<GgufHeaderReader>.Instance, TimeProvider.System);
             Discovery = new HuggingFaceGgufDiscovery(hubClient, headerReader, options, NullLogger<HuggingFaceGgufDiscovery>.Instance);
         }
 

@@ -149,6 +149,34 @@ public sealed class CatalogRecommendationServiceTests
     }
 
     [Test]
+    public async Task BuildRecommendationsAsync_CarriesTheRepoGatedFlag()
+    {
+        var entries = new[]
+        {
+            Entry("gated-model", useCases: ["general"], tier: "S"),
+            Entry("open-model", useCases: ["general"], tier: "S")
+        };
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.InspectRepoAsync("org/gated-model-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(new GgufRepoDetail
+                 {
+                     RepoId = "org/gated-model-GGUF",
+                     IsGated = true,
+                     License = "gemma",
+                     Files = [File("Q4_K_M", paramCountB: 1)]
+                 }));
+        discovery.InspectRepoAsync("org/open-model-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/open-model-GGUF", File("Q4_K_M", paramCountB: 1))));
+        var service = BuildService(entries, discovery, installedTag: "b9692");
+
+        var result = await service.BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 8192, GpuProfile(64 * Gb), Empty, CancellationToken.None);
+
+        var all = result.Recommended.Concat(result.CanRun).ToList();
+        AssertEx.True(all.Single(c => c.Entry.Id == "gated-model").IsGated);
+        AssertEx.False(all.Single(c => c.Entry.Id == "open-model").IsGated);
+    }
+
+    [Test]
     public async Task BuildRecommendationsAsync_CompleteMetadata_ProducesQ8KvQuantAdvisoryBelowFp16()
     {
         // Complete header metadata + a model that fits at fp16: the advisory is present, computed at Q8_0, needs flash

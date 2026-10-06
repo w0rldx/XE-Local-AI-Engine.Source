@@ -70,6 +70,12 @@ public sealed class ModelFitRecommendationResponse
     /// </summary>
     public bool Tested { get; init; }
 
+    /// <summary>
+    ///     <c>true</c> when the Hugging Face repository is gated: downloading needs an accepted licence and a token, and
+    ///     without one the fit estimate rests on file size alone. <c>false</c> for a snapshot row written before the flag shipped.
+    /// </summary>
+    public bool IsGated { get; init; }
+
     /// <summary>The catalog entry id, or <c>null</c> for an <c>explore</c> row.</summary>
     public string? CatalogId { get; init; }
 

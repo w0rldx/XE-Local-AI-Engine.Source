@@ -168,6 +168,9 @@ published.
 - **Granite 4.1 3B in the curated catalog** — IBM's 3B model (`unsloth/granite-4.1-3b-GGUF`, tier A, needs llama.cpp `b10201`); tool-capable, no thinking mode.
 - **"Tested" badge on Model Recommendations** — catalog models the authors ran through their live scenario checks (the pinned model matrix) carry a "Tested" badge next to the tier; display-only, ranking is unchanged. Model Management lists the same models as "Tested by the authors" before any Hugging Face search, each with a Download that opens the quant picker. Each row shows the tested quant, its size, whether it fits this machine and whether the model is installed; the picker preselects the tested quant unless it won't fit, and clearing the search brings the list back.
 - **Skipped catalog models named on the model advisor** — when a refresh could not read a catalog model's repository in time, the advisor page names those models under the snapshot status and says a later refresh may bring them back.
+- **"Gated" badge on Model Recommendations** — a model whose Hugging Face repository is gated carries a "Gated" badge; its tooltip says downloading needs the license accepted on Hugging Face and an access token in Node Settings, and that without a token the size estimate rests on the file size alone.
+- **Fit hint on the "Tested by the authors" list** — the fit badge has a tooltip: it compares the tested file's size with this machine's free memory (the Model Recommendations page does the detailed sizing), and on a "Won't fit" row it says Download opens the picker with smaller quants.
+- **Nomic Embed Text v1.5 in the curated catalog** — the knowledge base's one-click embedding model (`nomic-ai/nomic-embed-text-v1.5-GGUF`, tier A) is now listed under embedding; catalog version `2026.10.4`.
 
 ### Changed
 
@@ -221,6 +224,7 @@ published.
 - **Playbook memory** is gated on cloud egress and bounded in size; a turn notice says when it is withheld.
 - **The first-run starter model is Granite 4.1 3B** (`unsloth/granite-4.1-3b-GGUF` `Q4_K_M`, ~2.1 GB) instead of Qwen2.5 0.5B (~0.4 GB): it handles tools and background jobs reliably. The first download is about five times larger.
 - **The Hugging Face quant picker no longer recommends an unquantized file** (`F32`/`F16`/`BF16`) when the repository offers a quantized one; the float files stay listed with their tier and fit verdict.
+- **The "Tested by the authors" list is ordered best fitting first** — models that fit come first, then tight fits, each largest first, then the ones that won't fit, smallest first. Until this machine's fit is known the list keeps the catalog order.
 
 ### Removed
 
@@ -254,6 +258,11 @@ published.
 - On a direct first visit to Model Management, the "Tested by the authors" list showed no fit badges until something
   reloaded it, because the catalog answered before the hardware check had run. The list now reloads once the hardware
   profile is in.
+- The model advisor read GGUF headers without the stored Hugging Face token, so a gated repository was always sized
+  from its file size, and a header read the server refused (for example a 401 or a rate limit) was remembered as empty
+  until restart. Header reads now send the token, and a refused read is asked again on the next refresh.
+- The Qwen3.5 entries in the curated catalog carried release dates months after their actual release; they now carry
+  the dates of their Hugging Face repositories.
 - The download quant picker showed no fit verdict on a CPU-only or CPU-fallback node. It now grades against
   available RAM there.
 - The welcome tour opened on top of the still-unanswered external-access chooser, because the onboarding provider

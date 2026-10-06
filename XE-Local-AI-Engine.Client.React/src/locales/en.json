@@ -3226,7 +3226,9 @@
 							"testedQuant": "Tested quant",
 							"notes": "Notes"
 						},
-						"installed": "Installed"
+						"installed": "Installed",
+						"fitHint": "Compares the tested file's size with this machine's free memory. The Model Recommendations page does the detailed sizing, including context.",
+						"fitHintWontFit": "The tested quant does not fit this machine. Download opens the picker, which offers smaller quants."
 					}
 				},
 				"download": {
@@ -4310,6 +4312,10 @@
 				"tested": {
 					"badge": "Tested",
 					"tooltip": "The authors ran this model through their live scenario checks."
+				},
+				"gated": {
+					"badge": "Gated",
+					"tooltip": "This Hugging Face repository is gated. Downloading it needs the license accepted on Hugging Face and an access token in Node Settings. Without a token, the size estimate is based on the file size alone."
 				},
 				"moeOffload": {
 					"badge": "Experts on CPU — slower, higher quality",

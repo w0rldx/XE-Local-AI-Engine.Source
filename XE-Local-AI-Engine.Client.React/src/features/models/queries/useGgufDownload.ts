@@ -13,6 +13,7 @@ import {
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toGgufRepository, toGgufRepositoryDetail, toGgufTestedModel } from "@/features/models/models/GgufMappers";
 import type { GgufAcquisitionStatus } from "@/features/models/models/GgufAcquisitionModels";
+import { sortTestedModelsByFit } from "@/features/models/models/GgufModels";
 import { useActiveGgufAcquisitions } from "@/features/models/queries/useGgufAcquisitions";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
@@ -62,7 +63,7 @@ export function useBrowseGgufRepositories(query: string, enabled: boolean) {
 export function useTestedCatalogModels(enabled: boolean) {
 	const catalog = useQuery({
 		...withResponseValidation(getModelCatalogInfoOptions()),
-		select: (data) => (data.testedModels ?? []).map(toGgufTestedModel),
+		select: (data) => sortTestedModelsByFit((data.testedModels ?? []).map(toGgufTestedModel)),
 		enabled,
 	});
 	const profileUpdatedAt = useQuery({

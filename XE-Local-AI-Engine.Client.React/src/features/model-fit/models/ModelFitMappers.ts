@@ -63,6 +63,7 @@ function toModelFitRecommendation(
 		section: toRecommendationSection(dto.section),
 		tier: toCatalogTier(dto.tier),
 		tested: dto.tested ?? false,
+		isGated: dto.isGated ?? false,
 		catalogId: dto.catalogId ?? null,
 		catalogDisplayName: dto.catalogDisplayName ?? null,
 		catalogNotes: dto.catalogNotes ?? null,

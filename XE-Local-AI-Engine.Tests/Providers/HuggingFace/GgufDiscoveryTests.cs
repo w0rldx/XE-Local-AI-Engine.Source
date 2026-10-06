@@ -408,14 +408,42 @@ public sealed class GgufDiscoveryTests
         AssertEx.Equal(Commit, file.Revision);
     }
 
+    [Test]
+    public async Task GgufDiscovery_InspectsGatedRepo_RangeReadUnauthorized_ListsTheFileWithoutHeaderFields()
+    {
+        // A gated repo lists its files anonymously, but the header range read answers 401 without an accepted licence.
+        var detail = $$"""
+                       {
+                         "id": "{{RepoId}}",
+                         "sha": "{{Commit}}",
+                         "gated": "manual",
+                         "siblings": [
+                           { "rfilename": "model-Q4_0.gguf", "size": 4000, "lfs": { "sha256": "aaaa", "size": 4000 } }
+                         ]
+                       }
+                       """;
+
+        using var harness = BuildHarness(repoDetail: detail, headerBytes: MinimalHeaderBytes(), rangeStatus: HttpStatusCode.Unauthorized);
+
+        var result = await harness.Discovery.InspectRepoAsync(RepoId, CancellationToken.None);
+
+        AssertEx.True(result.IsGated, "gated:\"manual\" must map to IsGated=true.");
+        var file = result.Files.Single();
+        AssertEx.Equal("Q4_0", file.Quant);
+        AssertEx.Equal(expected: 4000L, file.SizeBytes);
+        AssertEx.Null(file.Architecture);
+        AssertEx.Null(file.BlockCount);
+        AssertEx.Null(file.ContextLength);
+    }
+
     private static byte[] MinimalHeaderBytes()
     {
         return new GgufHeaderBytesBuilder().WithString("general.architecture", "llama").Build();
     }
 
-    private static DiscoveryHarness BuildHarness(string? listing = null, string? repoDetail = null, byte[]? headerBytes = null)
+    private static DiscoveryHarness BuildHarness(string? listing = null, string? repoDetail = null, byte[]? headerBytes = null, HttpStatusCode? rangeStatus = null)
     {
-        return new DiscoveryHarness(listing, repoDetail, headerBytes);
+        return new DiscoveryHarness(listing, repoDetail, headerBytes, rangeStatus);
     }
 
     /// <summary>
@@ -427,15 +455,15 @@ public sealed class GgufDiscoveryTests
         private readonly HttpClient _downloadHttp;
         private readonly HttpClient _hubHttp;
 
-        public DiscoveryHarness(string? listing, string? repoDetail, byte[]? headerBytes)
+        public DiscoveryHarness(string? listing, string? repoDetail, byte[]? headerBytes, HttpStatusCode? rangeStatus)
         {
-            Handler = new StubHandler(listing, repoDetail, headerBytes);
+            Handler = new StubHandler(listing, repoDetail, headerBytes, rangeStatus);
             _hubHttp = new HttpClient(Handler, disposeHandler: false);
             _downloadHttp = new HttpClient(Handler, disposeHandler: false);
 
             var options = new HuggingFaceOptions();
             var hubClient = new HfHubClient(_hubHttp, options, NullLogger<HfHubClient>.Instance, TimeProvider.System);
-            var headerReader = new GgufHeaderReader(_downloadHttp, options, NullLogger<GgufHeaderReader>.Instance, TimeProvider.System);
+            var headerReader = new GgufHeaderReader(_downloadHttp, GgufStoreTestInfrastructure.NoTokenStore(), options, NullLogger<GgufHeaderReader>.Instance, TimeProvider.System);
             Discovery = new HuggingFaceGgufDiscovery(hubClient, headerReader, options, NullLogger<HuggingFaceGgufDiscovery>.Instance);
         }
 
@@ -460,12 +488,14 @@ public sealed class GgufDiscoveryTests
         private readonly string? _listing;
         private readonly string? _repoDetail;
         private readonly byte[]? _headerBytes;
+        private readonly HttpStatusCode? _rangeStatus;
 
-        public StubHandler(string? listing = null, string? repoDetail = null, byte[]? headerBytes = null)
+        public StubHandler(string? listing = null, string? repoDetail = null, byte[]? headerBytes = null, HttpStatusCode? rangeStatus = null)
         {
             _listing = listing;
             _repoDetail = repoDetail;
             _headerBytes = headerBytes;
+            _rangeStatus = rangeStatus;
         }
 
         public string LastListUrl { get; private set; } = string.Empty;
@@ -478,7 +508,9 @@ public sealed class GgufDiscoveryTests
 
             if (url.Contains("/resolve/", StringComparison.Ordinal))
             {
-                return Task.FromResult(BuildRangeResponse(request, _headerBytes ?? []));
+                return Task.FromResult(_rangeStatus is { } status
+                    ? new HttpResponseMessage(status)
+                    : BuildRangeResponse(request, _headerBytes ?? []));
             }
 
             if (url.Contains("/api/models/", StringComparison.Ordinal))

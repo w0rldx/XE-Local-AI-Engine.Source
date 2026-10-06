@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026.10.3",
-  "updatedAt": "2026-10-05",
+  "catalogVersion": "2026.10.4",
+  "updatedAt": "2026-10-06",
   "models": [
     {
       "id": "qwen3-0.6b",
@@ -115,7 +115,7 @@
       "moe": false,
       "contextLength": 262144,
       "minLlamaCppTag": "b10201",
-      "releaseDate": "2026-06-10"
+      "releaseDate": "2026-02-28"
     },
     {
       "id": "qwen3.5-4b",
@@ -131,7 +131,7 @@
       "moe": false,
       "contextLength": 262144,
       "minLlamaCppTag": "b10201",
-      "releaseDate": "2026-06-10",
+      "releaseDate": "2026-02-27",
       "tested": true,
       "testedQuant": "Q4_K_M",
       "testedSizeBytes": 2740937888
@@ -150,7 +150,7 @@
       "moe": false,
       "contextLength": 262144,
       "minLlamaCppTag": "b10201",
-      "releaseDate": "2026-06-10",
+      "releaseDate": "2026-02-27",
       "notes": "Strong general-purpose default at the 9B size class.",
       "tested": true,
       "testedQuant": "Q4_K_M",
@@ -170,7 +170,7 @@
       "moe": false,
       "contextLength": 262144,
       "minLlamaCppTag": "b10201",
-      "releaseDate": "2026-06-10"
+      "releaseDate": "2026-02-24"
     },
     {
       "id": "qwen3.5-35b-a3b",
@@ -186,7 +186,7 @@
       "moe": true,
       "contextLength": 262144,
       "minLlamaCppTag": "b10201",
-      "releaseDate": "2026-06-15",
+      "releaseDate": "2026-02-24",
       "notes": "Mixture-of-Experts — can run with experts offloaded to system RAM on 12-24GB GPUs."
     },
     {
@@ -705,6 +705,23 @@
       "contextLength": 2048,
       "minLlamaCppTag": "b9692",
       "releaseDate": "2025-02-01"
+    },
+    {
+      "id": "nomic-embed-text-v1.5",
+      "family": "Nomic Embed",
+      "displayName": "Nomic Embed Text v1.5",
+      "publisher": "Nomic AI",
+      "ggufRepo": "nomic-ai/nomic-embed-text-v1.5-GGUF",
+      "license": "apache-2.0",
+      "tier": "A",
+      "useCases": ["embedding"],
+      "totalParamsB": 0.137,
+      "activeParamsB": null,
+      "moe": false,
+      "contextLength": 2048,
+      "minLlamaCppTag": "b9692",
+      "releaseDate": "2024-02-10",
+      "notes": "The knowledge base's one-click embedding model."
     },
     {
       "id": "llama-3.1-8b-instruct",

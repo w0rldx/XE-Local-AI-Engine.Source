@@ -27,18 +27,21 @@ internal sealed class GgufHeaderReader
     private const int HeaderCacheMaxEntries = 1024;
 
     private readonly HttpClient _httpClient;
+    private readonly IHfTokenStore _tokenStore;
     private readonly ILogger<GgufHeaderReader> _logger;
     private readonly HuggingFaceOptions _options;
     private readonly TtlCache<GgufHeaderMetadata> _headerCache;
 
-    public GgufHeaderReader(HttpClient httpClient, HuggingFaceOptions options, ILogger<GgufHeaderReader> logger, TimeProvider timeProvider)
+    public GgufHeaderReader(HttpClient httpClient, IHfTokenStore tokenStore, HuggingFaceOptions options, ILogger<GgufHeaderReader> logger, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(tokenStore);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _httpClient = httpClient;
+        _tokenStore = tokenStore;
         _options = options;
         _logger = logger;
         _headerCache = new TtlCache<GgufHeaderMetadata>(timeProvider, HeaderCacheMaxEntries);
@@ -51,7 +54,8 @@ internal sealed class GgufHeaderReader
     /// <remarks>
     ///     Stops at the tokenizer once the architecture block is set (<see cref="GgufHeaderMetadata.IsPartial" />); keys
     ///     after it are not read. Never throws on a short read or a non-GGUF file (all-null metadata instead). Cached for
-    ///     <see cref="HuggingFaceOptions.HeaderCacheTtl" /> by repo + filename + resolved revision (immutable).
+    ///     <see cref="HuggingFaceOptions.HeaderCacheTtl" /> by repo + filename + resolved revision (immutable), except a
+    ///     read whose first range got an HTTP error status: that one returns all-null metadata uncached.
     /// </remarks>
     public Task<GgufHeaderMetadata> ReadHeaderAsync(string repoId, string fileName, string revision, CancellationToken ct)
     {
@@ -67,7 +71,7 @@ internal sealed class GgufHeaderReader
         return ReadCachedAsync(repoId, fileName, revision, "complete", static _ => false, ct);
     }
 
-    private Task<GgufHeaderMetadata> ReadCachedAsync(string repoId,
+    private async Task<GgufHeaderMetadata> ReadCachedAsync(string repoId,
         string fileName,
         string revision,
         string mode,
@@ -80,7 +84,16 @@ internal sealed class GgufHeaderReader
         var rev = string.IsNullOrWhiteSpace(revision) ? "main" : revision;
         var cacheKey = $"{repoId}::{fileName}::{rev}::{mode}";
 
-        return _headerCache.GetOrAddAsync(cacheKey, _options.HeaderCacheTtl, token => FetchHeaderAsync(repoId, fileName, rev, isSufficient, token), ct);
+        try
+        {
+            return await _headerCache.GetOrAddAsync(cacheKey, _options.HeaderCacheTtl, token => FetchHeaderAsync(repoId, fileName, rev, isSufficient, token), ct)
+                                     .ConfigureAwait(false);
+        }
+        catch (FirstRangeFailedException)
+        {
+            // A throwing factory caches nothing, so the next read asks again (a token added later, a lifted rate limit).
+            return GgufHeaderMetadata.Empty;
+        }
     }
 
     private async Task<GgufHeaderMetadata> FetchHeaderAsync(string repoId, string fileName, string rev, Func<ParsedHeader, bool> isSufficient, CancellationToken ct)
@@ -92,7 +105,23 @@ internal sealed class GgufHeaderReader
 
         try
         {
-            return await ReadGrowingAsync((requested, token) => FetchRangeAsync(url, requested, token), probe, hardCap, isSufficient, ct)
+            var authToken = await _tokenStore.GetTokenAsync(ct).ConfigureAwait(false);
+            var firstRange = true;
+            return await ReadGrowingAsync(async (requested, token) =>
+                    {
+                        var bytes = await FetchRangeAsync(url, authToken, requested, token).ConfigureAwait(false);
+                        if (bytes is null && firstRange)
+                        {
+                            throw new FirstRangeFailedException();
+                        }
+
+                        firstRange = false;
+                        return bytes;
+                    },
+                    probe,
+                    hardCap,
+                    isSufficient,
+                    ct)
                 .ConfigureAwait(false);
         }
         catch (HttpRequestException ex)
@@ -236,10 +265,15 @@ internal sealed class GgufHeaderReader
         return read == toRead ? buffer : buffer[..read];
     }
 
-    private async Task<byte[]?> FetchRangeAsync(string url, long count, CancellationToken ct)
+    private async Task<byte[]?> FetchRangeAsync(string url, string? authToken, long count, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Range = new RangeHeaderValue(from: 0, Math.Max(val1: 0, count - 1));
+        if (!string.IsNullOrWhiteSpace(authToken))
+        {
+            // Token-bearing requests only; the value is never logged or surfaced.
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", authToken);
+        }
 
         using var response = await _httpClient
                                    .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
@@ -310,6 +344,11 @@ internal sealed class GgufHeaderReader
     ///     a <c>tokenizer.*</c> key was reached.
     /// </summary>
     private sealed record ParsedHeader(GgufHeaderMetadata Metadata, bool Truncated, bool ReachedTokenizer = false);
+
+    /// <summary>The first range of a remote read got an HTTP error status, so the read has no bytes and must not be cached.</summary>
+    private sealed class FirstRangeFailedException : InvalidOperationException
+    {
+    }
 
     private static GgufHeaderMetadata Build(IReadOnlyDictionary<string, object> values)
     {

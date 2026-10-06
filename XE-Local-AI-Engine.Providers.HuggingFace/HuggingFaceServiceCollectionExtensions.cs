@@ -72,6 +72,7 @@ public static class HuggingFaceServiceCollectionExtensions
             sp.GetRequiredService<TimeProvider>()));
 
         services.TryAddSingleton(static sp => new GgufHeaderReader(sp.GetRequiredService<IHttpClientFactory>().CreateClient(DownloadHttpClientName),
+            sp.GetRequiredService<IHfTokenStore>(),
             sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetRequiredService<ILogger<GgufHeaderReader>>(),
             sp.GetRequiredService<TimeProvider>()));

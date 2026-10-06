@@ -149,6 +149,7 @@ public sealed class RecommendationJsonParserTests
                                   "section": "recommended",
                                   "tier": "S",
                                   "tested": true,
+                                  "is_gated": true,
                                   "catalog_id": "moe-model",
                                   "catalog_display_name": "MoE Model 30B-A3B",
                                   "catalog_notes": "Runs with experts offloaded to system RAM.",
@@ -167,6 +168,7 @@ public sealed class RecommendationJsonParserTests
         AssertEx.Contains(diagnostics, "\"section\":\"recommended\"");
         AssertEx.Contains(diagnostics, "\"tier\":\"S\"");
         AssertEx.Contains(diagnostics, "\"tested\":true");
+        AssertEx.Contains(diagnostics, "\"is_gated\":true");
         AssertEx.Contains(diagnostics, "\"catalog_id\":\"moe-model\"");
         AssertEx.Contains(diagnostics, "\"expert_offload\":true");
         AssertEx.Contains(diagnostics, "\"gpu_gb\":10.5");

@@ -74,6 +74,7 @@ internal static class ModelFitMapper
             Section = diagnostics.Section,
             Tier = diagnostics.Tier,
             Tested = diagnostics.Tested,
+            IsGated = diagnostics.IsGated,
             CatalogId = diagnostics.CatalogId,
             CatalogDisplayName = diagnostics.CatalogDisplayName,
             CatalogNotes = diagnostics.CatalogNotes,

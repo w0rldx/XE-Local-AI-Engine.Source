@@ -603,6 +603,52 @@ describe("ModelManagement", () => {
 		expect(screen.queryByTestId("model-fit-browse-tested-fit-qwen3.8-27b")).toBeNull();
 	});
 
+	it("lists the tested models best fitting first", async () => {
+		queryFns.getModelCatalogInfo.mockResolvedValue(
+			catalogWithTested(
+				{ ...testedGranite, id: "wont-fit-70b", totalParamsB: 70, fitVerdict: "WontFit" },
+				{ ...testedGranite, id: "tight-27b", totalParamsB: 27, fitVerdict: "Tight" },
+				testedGranite,
+				{ ...testedGranite, id: "fits-14b", totalParamsB: 14, fitVerdict: "Fits" },
+			),
+		);
+
+		renderWithProviders(<ModelManagement />);
+
+		const table = await screen.findByTestId("model-fit-browse-tested-table");
+		await waitFor(() => expect(within(table).getAllByTestId(/^model-fit-browse-tested-row-/)).toHaveLength(4));
+		expect(
+			within(table)
+				.getAllByTestId(/^model-fit-browse-tested-row-/)
+				.map((row) => row.getAttribute("data-testid")),
+		).toEqual([
+			"model-fit-browse-tested-row-fits-14b",
+			"model-fit-browse-tested-row-granite-4.1-3b",
+			"model-fit-browse-tested-row-tight-27b",
+			"model-fit-browse-tested-row-wont-fit-70b",
+		]);
+	});
+
+	it("explains a Fits badge as a file-size check against free memory", async () => {
+		queryFns.getModelCatalogInfo.mockResolvedValue(catalogWithTested(testedGranite));
+
+		renderWithProviders(<ModelManagement />);
+
+		fireEvent.mouseEnter(await screen.findByTestId("model-fit-browse-tested-fit-granite-4.1-3b"));
+		expect(await screen.findByText(/Compares the tested file's size with this machine's free memory\./)).toBeTruthy();
+		expect(screen.queryByText(/The tested quant does not fit this machine\./)).toBeNull();
+	});
+
+	it("explains a Won't fit badge as the picker offering smaller quants", async () => {
+		queryFns.getModelCatalogInfo.mockResolvedValue(catalogWithTested({ ...testedGranite, fitVerdict: "WontFit" }));
+
+		renderWithProviders(<ModelManagement />);
+
+		fireEvent.mouseEnter(await screen.findByTestId("model-fit-browse-tested-fit-granite-4.1-3b"));
+		expect(await screen.findByText(/The tested quant does not fit this machine\./)).toBeTruthy();
+		expect(screen.queryByText(/Compares the tested file's size/)).toBeNull();
+	});
+
 	// A second observer of the profile query: it renders in the same commit that hands the settled profile to the tested
 	// list, so once it shows, the list's refetch effect has run.
 	function ProfileSettledProbe() {
