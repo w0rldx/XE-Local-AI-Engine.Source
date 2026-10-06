@@ -877,7 +877,7 @@
 						"noMisleadingInstantiator": "error",
 						"noNonNullAssertedOptionalChain": "off",
 						"noRedeclare": "off",
-						"noTsIgnore": "off",
+						"noTsIgnore": "error",
 						"noUnsafeDeclarationMerging": "error",
 						"useAdjacentOverloadSignatures": "off",
 						"useAwait": "off",

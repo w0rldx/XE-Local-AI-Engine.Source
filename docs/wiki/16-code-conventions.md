@@ -654,12 +654,11 @@ broken." Config is `doctor.config.jsonc` (JSONC for comments; a `.json` with `//
 
 Some findings are intentional idioms carrying a justification comment; removing the suppression
 reintroduces a real bug:
-- **`no-ref-current-in-render`** in the SignalR hub hooks (`useSchedulerHub`,
-  `useModelFitSchedulerEvents`, `useImageJobHub`) — the *latest-value ref* idiom;
-  making these effect deps would tear down and rebuild the hub connection mid-negotiation.
-- **`effect-needs-cleanup`** on those hooks — the cleanup is real but hidden behind a shared refcount
-  (`hub.release()` + `connection.off(...)`); the rule can't see the indirection.
-- **`async-await-in-loop`** in the chat SignalR adapters (`NodeChatAdapter`, `NodeChatConnection`,
+- **`effect-needs-cleanup`** on the shared-connection SignalR hub hooks (`useSchedulerHub`,
+  `useModelFitSchedulerEvents`, `useRuntimeResidencyHub`) — the cleanup is real but hidden behind a shared
+  refcount (`hub.release()` + `connection.off(...)`); the rule only recognises teardown of a connection
+  created inline in the effect.
+- **`async-await-in-loop`** in the chat SignalR transport (`NodeChatConnection`, `NodeChatStreamTransport`,
   `NodeChatStreamGuard`) — wire-order sequential awaits; parallelizing would race one connection.
 
 ### God-component decomposition is a reviewed pass, not a drive-by

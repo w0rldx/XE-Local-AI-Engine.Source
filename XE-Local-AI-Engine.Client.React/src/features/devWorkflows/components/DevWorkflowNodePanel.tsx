@@ -27,6 +27,8 @@ import {
 	toDevWorkflowNodeType,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
 
+const EMPTY_EVENTS: readonly DevWorkflowRunEventResponse[] = [];
+
 export interface DevWorkflowNodePanelProps {
 	readonly nodeRun?: DevWorkflowNodeRunDetailResponse;
 	readonly isPending: boolean;
@@ -64,7 +66,7 @@ export function DevWorkflowNodePanel({
 	isDeciding,
 	decideError,
 	artifactNameById,
-	events = [],
+	events = EMPTY_EVENTS,
 	run,
 	onDecide,
 	onShowArtifacts,

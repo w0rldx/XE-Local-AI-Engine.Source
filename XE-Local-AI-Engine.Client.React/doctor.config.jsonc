@@ -8,5 +8,11 @@
 			"src/core/api/Generated.runtime.ts",
 			"src/core/api/axios/AxiosInstance.ts"
 		]
+	},
+	// A form owns its draft and reports a flag about it (dirty, acknowledged, signed in) to the page from an effect,
+	// which is what drives the page's unsaved-changes guard. That is deliberate, and these two rules flag only it.
+	"rules": {
+		"react-doctor/no-prop-callback-in-effect": "off",
+		"react-doctor/no-pass-live-state-to-parent": "off"
 	}
 }

@@ -35,6 +35,8 @@ const webAccessToolNames: ReadonlySet<string> = new Set(["web_search", "web_fetc
 // Unioned into every agent's offer by the backend (AskUserToolOffer.EnsureOffered), so it cannot be unchecked.
 const askUserToolName = "ask_user";
 
+const EMPTY_TOOL_NAMES: readonly string[] = [];
+
 // Synthesize a catalog entry for a tool that is selected on the definition but no longer present in the live
 // catalog (e.g. an MCP tool whose server was disabled/removed). It is shown so the user can still see and
 // deselect it; it defaults to requiresApproval=true (the strict default), an unknown source, and the fail-closed
@@ -71,7 +73,7 @@ export function AgentToolSelector({
 	const catalogQuery = useToolCatalog();
 
 	// The Default Assistant's checked set is the server's offer, never the (empty) stored list.
-	const checkedToolNames = isDefaultAssistant ? (defaultOfferToolNames ?? []) : selectedToolNames;
+	const checkedToolNames = isDefaultAssistant ? (defaultOfferToolNames ?? EMPTY_TOOL_NAMES) : selectedToolNames;
 	const defaultOfferLoading = isDefaultAssistant && defaultOfferToolNames === undefined && !defaultOfferError;
 
 	// Render the live catalog plus any checked tools that are not in it (so they stay visible and deselectable).

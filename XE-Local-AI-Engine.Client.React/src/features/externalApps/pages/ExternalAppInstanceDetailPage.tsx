@@ -29,6 +29,7 @@ import {
 	toExternalAppStatus,
 } from "@/features/externalApps/models/ExternalAppModels";
 import {
+	type ExternalAppVariableDefinition,
 	type ExternalAppVariableValues,
 	initialVariableValues,
 	storedSecretNames,
@@ -47,6 +48,8 @@ interface ExternalAppInstanceDetailPageProps {
 }
 
 const keyPrefix = "pages.externalApps.detail";
+
+const EMPTY_VARIABLE_DEFINITIONS: readonly ExternalAppVariableDefinition[] = [];
 
 /**
  * One installed application.
@@ -235,7 +238,7 @@ function SettingsTab({ instance }: { instance: NonNullable<ReturnType<typeof use
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const save = useUpdateExternalAppVariables();
-	const definitions = instance.manifest?.variables ?? [];
+	const definitions = instance.manifest?.variables ?? EMPTY_VARIABLE_DEFINITIONS;
 	const [values, setValues] = useState<ExternalAppVariableValues>({});
 	// The installed manifest the form's values were last built against, not a boolean — see the reconcile effect. The
 	// instance carries no manifest hash, so the snapshot's own `manifestVersion` is its identity; an update is the only

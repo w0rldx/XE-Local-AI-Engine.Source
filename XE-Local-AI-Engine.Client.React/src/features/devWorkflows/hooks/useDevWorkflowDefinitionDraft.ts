@@ -30,7 +30,8 @@ export function useDevWorkflowDefinitionDraft(definition: DevWorkflowDefinitionR
 	// caret with it, the other hands a reordered row the state of the row it displaced.
 	const [nodeRows, setNodeRows] = useState<readonly DraftRow<DevWorkflowGraphNode>[]>([]);
 	const [edgeRows, setEdgeRows] = useState<readonly DraftRow<DevWorkflowGraphEdge>[]>([]);
-	const [schemaVersion, setSchemaVersion] = useState(1);
+	// Not editable: read straight from the stored document, so it needs no seeding.
+	const schemaVersion = definition?.graph?.schemaVersion ?? 1;
 	// The graph-level waiver of GRAPH-C4-2, held as a boolean and sent back as `true` or not at all: a template that
 	// never waived anything must not GAIN an explicit `false`, which would rewrite a stored document to say something
 	// it never said.
@@ -44,7 +45,6 @@ export function useDevWorkflowDefinitionDraft(definition: DevWorkflowDefinitionR
 	// biome-ignore lint/correctness/useExhaustiveDependencies: seeding is keyed on identity, not on the document object.
 	useEffect(() => {
 		setName(definition?.name ?? "");
-		setSchemaVersion(definition?.graph?.schemaVersion ?? 1);
 		setAllowUngatedWrites(definition?.graph?.allowUngatedWrites === true);
 		setNodeRows((definition?.graph?.nodes ?? []).map(toRow));
 		setEdgeRows((definition?.graph?.edges ?? []).map(toRow));

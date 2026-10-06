@@ -47,5 +47,12 @@ test("keeps React Doctor exact-pinned, engine-compatible, offline, advisory, and
 		"react-doctor . --yes --no-telemetry --no-supply-chain --no-cache --no-dead-code --no-parallel --blocking none --no-color",
 	);
 	assert.doesNotMatch(packageJson.scripts.validate, /doctor/);
-	assert.doesNotMatch(doctorConfig, /"rules"/);
+});
+
+test("turns off only the two rules that flag a form reporting its flags to the page", () => {
+	const rulesBlock = doctorConfig.match(/"rules"\s*:\s*\{([^}]*)\}/);
+	assert.ok(rulesBlock, "doctor.config.jsonc has no top-level rules block");
+	const entries = [...rulesBlock[1].matchAll(/"([^"]+)"\s*:\s*"([^"]+)"/g)].map(([, rule, level]) => `${rule}=${level}`);
+	assert.deepEqual(entries, ["react-doctor/no-prop-callback-in-effect=off", "react-doctor/no-pass-live-state-to-parent=off"]);
+	assert.equal(doctorConfig.match(/"rules"/g)?.length, 1);
 });

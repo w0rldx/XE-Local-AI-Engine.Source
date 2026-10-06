@@ -27,6 +27,10 @@ would run an unreviewed artifact and make results irreproducible.
 
 `doctor.config.jsonc` excludes generated API clients, generated route files, and generated runtime/axios surfaces.
 Do not treat findings in generated code as hand-editable work; change the generator or source contract instead.
+It also turns off two rules, `no-prop-callback-in-effect` and `no-pass-live-state-to-parent`: their only findings
+were forms reporting a flag about their draft (dirty, acknowledged, signed in) to the page from an effect, which is
+the deliberate shape behind the unsaved-changes guard. A tooling test pins that rule list; widening it is a
+reviewed change, not a way to clear findings.
 
 The committed package script disables telemetry, scoring, supply-chain requests, caches, dead-code analysis,
 parallel workers, and color. It uses `--blocking none`, so React Doctor remains advisory and does not fail solely
