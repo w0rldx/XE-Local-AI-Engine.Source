@@ -56,6 +56,17 @@ public sealed record SandboxHandle
     public string? WorkingRoot { get; init; }
 
     /// <summary>
+    ///     The paths a <see cref="SandboxIsolationMode.Filesystem" /> sandbox presents to its commands, as the provider created them; read
+    ///     through <see cref="SandboxIsolatedPaths.Of" />.
+    /// </summary>
+    /// <remarks>
+    ///     Reported by the provider rather than assumed by the caller, because the view depends on the mechanism that served the boundary:
+    ///     <see cref="SandboxIsolatedPaths.Posix" /> under the Linux mount namespace, the jail's host paths under the Windows AppContainer
+    ///     boundary (ADR 0019). <see langword="null" /> without isolation; null WITH isolation is a provider bug a consumer refuses.
+    /// </remarks>
+    public SandboxIsolatedPaths? IsolatedPaths { get; init; }
+
+    /// <summary>
     ///     Translates a host path into the path that names the same bytes inside this sandbox, or <see langword="null" /> when no mount
     ///     covers it.
     /// </summary>

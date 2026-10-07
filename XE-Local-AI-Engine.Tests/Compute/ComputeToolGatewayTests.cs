@@ -115,8 +115,8 @@ public sealed class ComputeToolGatewayTests
 
         var jailRoot = AssertEx.NotNull(provider.LastJailRoot);
         var environment = AssertEx.NotNull(provider.CommandRequests[0].Environment);
-        AssertEx.Equal(SandboxIsolatedPaths.Home, environment["HOME"]);
-        AssertEx.Equal(SandboxIsolatedPaths.Temp, environment["TMPDIR"]);
+        AssertEx.Equal(SandboxIsolatedPaths.Posix.Home, environment["HOME"]);
+        AssertEx.Equal(SandboxIsolatedPaths.Posix.Temp, environment["TMPDIR"]);
         AssertEx.Equal(environment["TMPDIR"], environment["TMP"]);
         AssertEx.Equal(environment["TMPDIR"], environment["TEMP"]);
         AssertEx.NotEqual(environment["HOME"], environment["TMPDIR"],
@@ -131,6 +131,80 @@ public sealed class ComputeToolGatewayTests
 
         AssertEx.Equal("1", environment["PYTHONNOUSERSITE"]);
         AssertEx.Equal("1", environment["PYTHONDONTWRITEBYTECODE"]);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_ComposesTheScratchEnvironmentFromTheHandle_NotFromAConstant()
+    {
+        // Under the Windows AppContainer boundary there is no mount namespace, so the provider reports the jail's HOST paths and the
+        // script's HOME must be those — /work/home would name nothing on that host (ADR 0019).
+        var hostJail = new SandboxIsolatedPaths
+        {
+            Work = "/host/jail",
+            Home = "/host/jail/home",
+            Temp = "/host/jail/.tmp"
+        };
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            IsolatedPaths = hostJail
+        };
+
+        _ = await CreateGateway(provider).ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
+
+        var environment = AssertEx.NotNull(provider.CommandRequests[0].Environment);
+        AssertEx.Equal(hostJail.Home, environment["HOME"]);
+        AssertEx.Equal(hostJail.Temp, environment["TMPDIR"]);
+        AssertEx.Equal(hostJail.Temp, environment["TMP"]);
+        AssertEx.Equal(hostJail.Temp, environment["TEMP"]);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenAnIsolatedHandleReportsNoPaths_FailsRatherThanGuessingAHome()
+    {
+        // A provider that claims Filesystem isolation without reporting its view is a bug; a guessed HOME could name a directory outside
+        // the jail on the wrong platform, so the call fails loudly instead.
+        var provider = new RecordingSandboxProvider(Contained)
+        {
+            IsolatedPaths = null
+        };
+
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => CreateGateway(provider).ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        }));
+
+        AssertEx.Empty(provider.CommandRequests, "nothing may run with an environment the provider did not report");
+        AssertEx.Equal(expected: 1, provider.KilledSandboxIds.Count, "the jail is still torn down");
+    }
+
+    [Test]
+    public void IsolatedPaths_OnWindows_PointTheProfileVariablesAtTheJailHome()
+    {
+        // The Windows half of the composition, asserted on every host: USERPROFILE/APPDATA/LOCALAPPDATA would otherwise lead a tool
+        // to the real profile, which the AppContainer boundary denies, and the call would fail far from its cause.
+        var paths = SandboxIsolatedPaths.ForHostJail(Path.Combine(Path.GetTempPath(), "jail"));
+
+        var windows = paths.ToEnvironment(includeWindowsProfile: true);
+        var posix = paths.ToEnvironment(includeWindowsProfile: false);
+
+        foreach (var name in new[] { "USERPROFILE", "APPDATA", "LOCALAPPDATA" })
+        {
+            AssertEx.Equal(paths.Home, windows[name]);
+            AssertEx.False(posix.ContainsKey(name), $"{name} is a Windows variable and is not set elsewhere");
+        }
+
+        AssertEx.Equal(Path.Combine(paths.Work, SandboxIsolatedPaths.HomeDirectoryName), paths.Home);
+        AssertEx.Equal(Path.Combine(paths.Work, SandboxIsolatedPaths.TempDirectoryName), paths.Temp);
+        AssertEx.Equal(new SandboxIsolatedPaths
+        {
+            Work = "/work",
+            Home = "/work/home",
+            Temp = "/tmp"
+        }, SandboxIsolatedPaths.Posix,
+            "the Linux view is unchanged by this round");
     }
 
     [Test]
@@ -1054,6 +1128,9 @@ public sealed class ComputeToolGatewayTests
         /// <summary>Runs while the script "executes": a test reads state there, or throws to fail or cancel the call.</summary>
         public Action? OnExecute { get; init; }
 
+        /// <summary>The view this fake reports for an isolated sandbox; a test swaps in a Windows-shaped one.</summary>
+        public SandboxIsolatedPaths? IsolatedPaths { get; init; } = SandboxIsolatedPaths.Posix;
+
         public string ProviderName => "recording";
 
         public SandboxProviderCapabilities Capabilities { get; }
@@ -1082,7 +1159,9 @@ public sealed class ComputeToolGatewayTests
                 AttachKey = request.AttachKey,
                 CreatedAt = DateTimeOffset.UnixEpoch,
                 ManifestVersion = request.AttachKey.ManifestVersion,
-                WorkingRoot = jail
+                WorkingRoot = jail,
+                Isolation = request.Isolation,
+                IsolatedPaths = request.Isolation == SandboxIsolationMode.Filesystem ? IsolatedPaths : null
             });
         }
 

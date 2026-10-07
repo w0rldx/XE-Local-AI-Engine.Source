@@ -52,13 +52,13 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     ///     Below the jail deliberately: the provider's disk watchdog meters the JAIL, so a scratch directory anywhere
     ///     else is unmetered space a script can fill while the ceiling it was given reports nothing.
     /// </remarks>
-    private const string HomeDirectoryName = "home";
+    private const string HomeDirectoryName = SandboxIsolatedPaths.HomeDirectoryName;
 
     /// <summary>
     ///     The jail subdirectory behind <see cref="SandboxIsolatedPaths.Temp" />. A second directory rather than one
     ///     shared with the home: a script clearing its <c>tempfile</c> leftovers must not wipe its own home.
     /// </summary>
-    private const string TempDirectoryName = ".tmp";
+    private const string TempDirectoryName = SandboxIsolatedPaths.TempDirectoryName;
 
     private readonly IComputePythonEnvironment _environment;
     private readonly IAgentHomeIdentityProvider _identityProvider;
@@ -136,8 +136,9 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         if (!_provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation))
         {
             _logger.LogWarning(
-                "run_python refused: the '{Provider}' sandbox provider cannot isolate the compute sandbox filesystem on this host, and that boundary is not optional. Install bubblewrap (bwrap) together with the user-namespace support the sandbox containment probe reports as missing, or leave Compute:Enabled off.",
-                _provider.ProviderName);
+                "run_python refused: the '{Provider}' sandbox provider cannot isolate the compute sandbox filesystem on this host, and that boundary is not optional. {Remedy}, or leave Compute:Enabled off.",
+                _provider.ProviderName,
+                SandboxBoundaryRemedy.ForThisHost());
             return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.NoIsolation,
                 "run_python rejected: this node cannot isolate the compute sandbox filesystem, and the tool never runs a script that could read or write the rest of the machine.");
         }
@@ -175,7 +176,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             }
 
             await EnsureScratchAsync(handle, cancellationToken);
-            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(runtime.InterpreterPath, code, invocationId, request.TimeoutSeconds), cancellationToken);
+            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(handle, runtime.InterpreterPath, code, invocationId, request.TimeoutSeconds), cancellationToken);
             return ComputeExecutionOutcome.Executed(result);
         }
         catch (ComputeEnvironmentException exception)
@@ -207,9 +208,9 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     /// </summary>
     /// <remarks>
     ///     The provider's surface is the one that applies the jail's path and symlink guards, and the only one that
-    ///     stays correct for a provider whose sandbox paths are not host paths. Nothing is returned, because under
-    ///     isolation the paths the CHILD sees are fixed — <see cref="SandboxIsolatedPaths.Home" /> and
-    ///     <see cref="SandboxIsolatedPaths.Temp" />, not host paths at all. What the call buys is that both directories
+    ///     stays correct for a provider whose sandbox paths are not host paths. Nothing is returned, because the paths
+    ///     the CHILD sees are the ones the handle reports (<see cref="SandboxHandle.IsolatedPaths" />), which under a
+    ///     mount namespace are not host paths at all. What the call buys is that both directories
     ///     EXIST and are empty before the command starts, rather than being assumed of a provider's launch path.
     /// </remarks>
     private async Task EnsureScratchAsync(SandboxHandle handle, CancellationToken cancellationToken)
@@ -283,7 +284,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         };
     }
 
-    private SandboxCommandRequest BuildCommandRequest(string interpreter, string code, string invocationId, int? requestedTimeoutSeconds)
+    private SandboxCommandRequest BuildCommandRequest(SandboxHandle handle, string interpreter, string code, string invocationId, int? requestedTimeoutSeconds)
     {
         var timeoutSeconds = requestedTimeoutSeconds is { } requested && requested > 0 && requested < _options.TimeoutSeconds
             ? requested
@@ -298,15 +299,14 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             // closure and not the working directory or the operator's environment. `-` reads the program from stdin, so it never hits disk or argv.
             Arguments = ["-I", "-"],
             StandardInput = code,
-            Environment = BuildEnvironment(),
+            Environment = BuildEnvironment(handle),
             Timeout = TimeSpan.FromSeconds(timeoutSeconds)
         };
     }
 
     /// <summary>
-    ///     The environment the script runs with, expressed in the SANDBOX's view of the filesystem: every path is an
-    ///     in-jail path (<see cref="SandboxIsolatedPaths" />), because under isolation a host path names nothing the
-    ///     child can reach.
+    ///     The environment the script runs with, in the view the provider reported for THIS sandbox
+    ///     (<see cref="SandboxHandle.IsolatedPaths" />): in-jail paths under bwrap, the jail's host paths under the AppContainer boundary.
     /// </summary>
     /// <remarks>
     ///     The isolated chain sets the same variables in its own fixed allow-list and these are emitted after it, so this is a deliberate
@@ -315,14 +315,15 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     ///     caching somewhere unmetered. The numeric-library thread pinning is NOT restated: it derives from
     ///     <see cref="SandboxCreateRequest.ThreadLimit" />, and naming it twice would let it and the CPU ceiling drift apart.
     /// </remarks>
-    private static IReadOnlyDictionary<string, string> BuildEnvironment()
+    private static IReadOnlyDictionary<string, string> BuildEnvironment(SandboxHandle handle)
     {
-        return new Dictionary<string, string>(StringComparer.Ordinal)
+        // The create request asked for Filesystem fail-closed, so a handle without the boundary is a provider that ignored it: refused,
+        // never served with a guessed HOME.
+        var paths = SandboxIsolatedPaths.Of(handle)
+                    ?? throw new InvalidOperationException(
+                        $"The '{handle.ProviderName}' sandbox provider returned a sandbox without the filesystem isolation run_python requested.");
+        return new Dictionary<string, string>(paths.ToEnvironment(), StringComparer.Ordinal)
         {
-            ["HOME"] = SandboxIsolatedPaths.Home,
-            ["TMPDIR"] = SandboxIsolatedPaths.Temp,
-            ["TMP"] = SandboxIsolatedPaths.Temp,
-            ["TEMP"] = SandboxIsolatedPaths.Temp,
             // The venv is bound READ-ONLY, so a user-site directory could not be written even if one resolved; the
             // point of the variable is that the interpreter must not go looking for one it might find bound.
             ["PYTHONNOUSERSITE"] = "1",

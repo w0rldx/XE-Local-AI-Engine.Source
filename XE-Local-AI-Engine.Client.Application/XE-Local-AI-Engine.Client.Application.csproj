@@ -29,6 +29,9 @@
     <!-- MSAL confidential-client for the Entra ID authorization-code sign-in flow (see Directory.Packages.props). -->
     <PackageReference Include="Microsoft.Identity.Client"/>
     <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal"/>
+    <!-- MXC ProcessContainer, the Windows Preview sandbox launch mechanism. Every type that calls it carries
+         [SupportedOSPlatform("windows")]: see Services/Sandbox/Implementation/Launch/Mxc. -->
+    <PackageReference Include="Microsoft.Mxc.Sdk"/>
     <PackageReference Include="ModelContextProtocol"/>
     <!-- Windows per-application audio capture (WASAPI process loopback). `NAudio.Wasapi`, never the `NAudio`
          meta-package: see Directory.Packages.props for why, and Services/Transcription/Capture for the

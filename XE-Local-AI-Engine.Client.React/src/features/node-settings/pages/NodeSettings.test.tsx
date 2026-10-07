@@ -14,6 +14,9 @@ const settingsResponse = {
 	maxAllowedMessageRequestTimeoutSeconds: 3600,
 };
 
+const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));
+vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmMock }) }));
+
 const { toastMock } = vi.hoisted(() => ({
 	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn(), warning: vi.fn(), progress: vi.fn() },
 }));
@@ -420,6 +423,52 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 
 	// Seeding only on the first load was wrong the other way round: mounting against a cached response latched the
 	// draft to the CACHE, so the mount refetch's fresher values never landed and a Save wrote the stale ones back.
+	// Turning execution previews on widens what sandboxed code may run under, so the save asks first and names the residual
+	// risk; declining sends nothing and keeps the draft, accepting saves the switch with everything else.
+	it("confirms before saving execution previews turned on, and saves nothing when declined", async () => {
+		renderPage("general");
+		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
+
+		confirmMock.mockResolvedValueOnce(false);
+		clickSwitch("node-settings-feature-execution-previews");
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
+		expect(String(confirmMock.mock.calls[0]?.[0]?.description)).toContain("no CPU, memory or process-count limit");
+		expect(generatedMock.saveFn).not.toHaveBeenCalled();
+
+		confirmMock.mockResolvedValueOnce(true);
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
+				body: { executionPreviewsEnabled: true, maxMessageRequestTimeoutSeconds: 600 },
+			}),
+		);
+		expect(confirmMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("saves execution previews turned off without asking", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, executionPreviewsEnabled: true }),
+		});
+		renderPage("general");
+		await waitFor(() =>
+			expect((screen.getByTestId("node-settings-feature-execution-previews") as HTMLInputElement).checked).toBe(true),
+		);
+
+		clickSwitch("node-settings-feature-execution-previews");
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
+				body: { executionPreviewsEnabled: false, maxMessageRequestTimeoutSeconds: 600 },
+			}),
+		);
+		expect(confirmMock).not.toHaveBeenCalled();
+	});
+
 	it("adopts a fresher server state on mount over a stale cache while the draft is untouched", async () => {
 		generatedMock.getNodeSettingsOptions.mockReturnValue({
 			queryKey: ["getNodeSettings"],

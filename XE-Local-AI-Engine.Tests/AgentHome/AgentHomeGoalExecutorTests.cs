@@ -521,7 +521,7 @@ public sealed class AgentHomeGoalExecutorTests : IDisposable
         // own view (SandboxIsolatedPaths.Work) rather than a host path — the redaction has nothing left to do, which
         // is the stronger form of the same invariant. The redaction still matters on a host that cannot isolate,
         // where pwd really would print the jail's host path; that is covered by the jail-root assertion above.
-        AssertEx.Contains(client.Results[0], SandboxIsolatedPaths.Work, StringComparison.Ordinal,
+        AssertEx.Contains(client.Results[0], SandboxIsolatedPaths.Posix.Work, StringComparison.Ordinal,
             "the command must report its location in the sandbox's own namespace");
     }
 

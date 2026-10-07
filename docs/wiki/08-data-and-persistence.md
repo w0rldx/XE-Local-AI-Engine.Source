@@ -453,7 +453,7 @@ cap/TTL) the seed IS the hardcoded default.
 
 **The appsettings keys that became node settings in the second round.** Forty-seven former appsettings-only
 knobs are stored fields now; each keeps its old configuration key as the seed, so a node that never saves one behaves
-exactly as before, and the UI shows the shipped default for an unset numeric knob. The migrated switches, the nine feature switches included, report
+exactly as before, and the UI shows the shipped default for an unset numeric knob. The migrated switches, the ten feature switches included, report
 their effective value (stored, else the configuration seed), so a switch an appsettings seed turned on shows on and
 can be turned off. The four retention windows (conversations, agent execution logs, scheduler history, AgentHome
 runs) report their effective value the same way, so a seeded window shows what the next sweep actually uses. A blank background model (playbook analysis, playbook eval, memory extraction) inherits the

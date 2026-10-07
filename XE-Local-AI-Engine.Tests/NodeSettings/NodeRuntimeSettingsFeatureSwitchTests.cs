@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
-///     The nine feature switches resolve stored &gt; configuration seed &gt; the options class's code default, through the async
+///     The ten feature switches resolve stored &gt; configuration seed &gt; the options class's code default, through the async
 ///     getter, its sync twin and the effective values alike.
 /// </summary>
 [Category(TestCategories.Unit)]
@@ -66,7 +66,13 @@ public sealed class NodeRuntimeSettingsFeatureSwitchTests
             {
                 DevWorkflowsEnabled = v
             },
-            static (r, ct) => r.GetDevWorkflowsEnabledAsync(ct), static r => r.GetDevWorkflowsEnabled(), static e => e.DevWorkflowsEnabled)
+            static (r, ct) => r.GetDevWorkflowsEnabledAsync(ct), static r => r.GetDevWorkflowsEnabled(), static e => e.DevWorkflowsEnabled),
+        // No options class: a security-widening switch whose code default is OFF, stated here rather than borrowed (ADR 0019).
+        new("ExecutionPreviews:Enabled", codeDefault: false, static (s, v) => s with
+            {
+                ExecutionPreviewsEnabled = v
+            },
+            static (r, ct) => r.GetExecutionPreviewsEnabledAsync(ct), static r => r.GetExecutionPreviewsEnabled(), static e => e.ExecutionPreviewsEnabled)
     ];
 
     [Test]

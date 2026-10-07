@@ -6,5 +6,13 @@
     "Authors": "UTF.Unknown contributors",
     "ProjectUrl": "https://github.com/CharsetDetector/UTF-unknown",
     "LicenseUrl": "https://github.com/CharsetDetector/UTF-unknown/blob/master/license/MPL-1.1.txt"
+  },
+  {
+    "Id": "Microsoft.Mxc.Sdk",
+    "Version": "1.0.0",
+    "License": "MIT",
+    "Authors": "Microsoft",
+    "ProjectUrl": "https://github.com/microsoft/mxc",
+    "LicenseUrl": "https://github.com/microsoft/mxc/blob/v1.0.0/LICENSE.md"
   }
 ]

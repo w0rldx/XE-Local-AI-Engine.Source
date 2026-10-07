@@ -59,4 +59,6 @@ public sealed record NodeSettingsEffectiveValues
     public required bool SchedulerEnabled { get; init; }
 
     public required bool DevWorkflowsEnabled { get; init; }
+
+    public required bool ExecutionPreviewsEnabled { get; init; }
 }

@@ -31,6 +31,7 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
 import { HfTokenPanel } from "@/features/node-settings/components/HfTokenPanel";
@@ -61,6 +62,7 @@ import {
 	toNodeSettingsFieldBounds,
 	toNodeSettingsFieldsForm,
 	touchesRestartGatedField,
+	turnsOnExecutionPreviews,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 import {
 	type NodeSettingsTimeoutInput,
@@ -94,6 +96,7 @@ interface NodeSettingsProps {
 export function NodeSettings({ section, onSectionChange, updateChannelSelector }: NodeSettingsProps) {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
+	const { confirm } = useConfirm();
 	const {
 		data: settings,
 		isLoading: settingsIsLoading,
@@ -271,7 +274,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector }
 		}
 	};
 
-	const handleSave = (): void => {
+	const handleSave = async (): Promise<void> => {
 		if (timeoutToSave === undefined) {
 			selectSection("chat");
 			return;
@@ -282,6 +285,22 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector }
 		}
 		if (Object.keys(draftRequest.errors).length > 0) {
 			showErrors(draftRequest.errors);
+			return;
+		}
+		// Turning execution previews on widens what a sandboxed workload may run under, so the operator confirms it knowing the
+		// residual risk; declining keeps the whole draft so nothing else they edited is lost.
+		if (
+			turnsOnExecutionPreviews(draftRequest.body) &&
+			!(await confirm({
+				title: t("pages.nodeSettings.executionPreviewsConfirm.title", "Turn on execution previews?"),
+				description: t(
+					"pages.nodeSettings.executionPreviewsConfirm.description",
+					"Preview sandbox mechanisms will run Python and sandboxed MCP servers. On Windows that is the AppContainer boundary: the code cannot read your user profile or the engine's data, but it runs with no CPU, memory or process-count limit (only the time limit stops it), and it can see host path names. Turn this on only if you accept that.",
+				),
+				confirmationText: t("pages.nodeSettings.executionPreviewsConfirm.confirm", "Turn on"),
+				cancellationText: t("pages.nodeSettings.executionPreviewsConfirm.cancel", "Cancel"),
+			}))
+		) {
 			return;
 		}
 		setFieldErrors({});

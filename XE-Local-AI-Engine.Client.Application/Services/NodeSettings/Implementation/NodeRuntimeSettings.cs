@@ -106,6 +106,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     private readonly bool _agentHomeEnabledSeed;
     private readonly bool _schedulerEnabledSeed;
     private readonly bool _devWorkflowsEnabledSeed;
+    private readonly bool _executionPreviewsEnabledSeed;
 
     public NodeRuntimeSettings(INodeSettingsStore store,
         IConfiguration configuration,
@@ -240,6 +241,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         _agentHomeEnabledSeed = BoolSeed(configuration, $"{AgentHomeOptions.SectionName}:Enabled", false);
         _schedulerEnabledSeed = BoolSeed(configuration, $"{SchedulerOptions.Section}:Enabled", true);
         _devWorkflowsEnabledSeed = BoolSeed(configuration, $"{DevWorkflowOptions.Section}:Enabled", false);
+        _executionPreviewsEnabledSeed = BoolSeed(configuration, "ExecutionPreviews:Enabled", false);
 
         // From configuration, not IOptions<OrchestrationAgentOptions>, to avoid a DI cycle: OrchestrationAgentOptions is itself Configure-d FROM
         // this accessor at the composition root, so taking IOptions<OrchestrationAgentOptions> here would depend on the option it configures.
@@ -624,7 +626,8 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
             ComputeEnabled = stored.ComputeEnabled ?? _computeEnabledSeed,
             AgentHomeEnabled = stored.AgentHomeEnabled ?? _agentHomeEnabledSeed,
             SchedulerEnabled = stored.SchedulerEnabled ?? _schedulerEnabledSeed,
-            DevWorkflowsEnabled = stored.DevWorkflowsEnabled ?? _devWorkflowsEnabledSeed
+            DevWorkflowsEnabled = stored.DevWorkflowsEnabled ?? _devWorkflowsEnabledSeed,
+            ExecutionPreviewsEnabled = stored.ExecutionPreviewsEnabled ?? _executionPreviewsEnabledSeed
         };
     }
 
@@ -654,6 +657,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public async Task<bool> GetDevWorkflowsEnabledAsync(CancellationToken cancellationToken = default) =>
         (await LoadAsync(cancellationToken)).DevWorkflowsEnabled ?? _devWorkflowsEnabledSeed;
+
+    public async Task<bool> GetExecutionPreviewsEnabledAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).ExecutionPreviewsEnabled ?? _executionPreviewsEnabledSeed;
 
     public async Task<bool> GetChatRetentionEnabledAsync(CancellationToken cancellationToken = default) =>
         (await LoadAsync(cancellationToken)).ChatRetentionEnabled ?? _chatRetentionEnabledSeed;
@@ -878,6 +884,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public bool GetDevWorkflowsEnabled() =>
         LoadStored().DevWorkflowsEnabled ?? _devWorkflowsEnabledSeed;
+
+    public bool GetExecutionPreviewsEnabled() =>
+        LoadStored().ExecutionPreviewsEnabled ?? _executionPreviewsEnabledSeed;
 
     private static int IntSeed(IConfiguration configuration, string key, int floor, int fallback) =>
         configuration.GetValue<int?>(key) is { } configured && configured >= floor ? configured : fallback;

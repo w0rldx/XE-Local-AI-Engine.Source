@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 
-using System.Diagnostics;
-
 /// <summary>
 ///     A single in-flight command: the spawned process plus the per-command cancel source that best-effort cancel
 ///     and sandbox kill fire to make <see cref="ProcessSandboxRuntimeProvider.ExecuteAsync" /> return a non-throwing
@@ -11,14 +9,14 @@ internal sealed class InFlightExecution
 {
     private readonly CancellationTokenSource _cancelSource;
 
-    public InFlightExecution(Process process, CancellationTokenSource cancelSource, string? scopeUnitName = null)
+    public InFlightExecution(ISandboxChildProcess process, CancellationTokenSource cancelSource, string? scopeUnitName = null)
     {
         Process = process;
         _cancelSource = cancelSource;
         ScopeUnitName = scopeUnitName;
     }
 
-    public Process Process { get; }
+    public ISandboxChildProcess Process { get; }
 
     /// <summary>The transient systemd scope this command runs in, when it runs behind a filesystem boundary.</summary>
     /// <remarks>

@@ -19,6 +19,7 @@ import {
 	toNodeSettingsFieldsForm,
 	touchesRestartGatedField,
 	toUsageRateRows,
+	turnsOnExecutionPreviews,
 	type UsageRateRow,
 	validateOptionalHttpUrl,
 	validateToolCapableModels,
@@ -1626,6 +1627,7 @@ describe("feature switches", () => {
 		"computeEnabled",
 		"externalAppsEnabled",
 		"transcriptionEnabled",
+		"executionPreviewsEnabled",
 	] as const;
 
 	it("defaults mirror the C# code defaults of the BoolSeed calls", () => {
@@ -1639,7 +1641,23 @@ describe("feature switches", () => {
 			agentHomeEnabled: false,
 			schedulerEnabled: true,
 			devWorkflowsEnabled: false,
+			executionPreviewsEnabled: false,
 		});
+	});
+
+	it("flags only the off-to-on change of execution previews for confirmation", () => {
+		const turnedOn = buildNodeSettingsRequest({ ...baseline, executionPreviewsEnabled: true }, baseline, bounds, false);
+		expect(turnedOn.body).toEqual({ executionPreviewsEnabled: true });
+		expect(turnsOnExecutionPreviews(turnedOn.body)).toBe(true);
+
+		const loaded = { ...baseline, executionPreviewsEnabled: true };
+		const turnedOff = buildNodeSettingsRequest({ ...loaded, executionPreviewsEnabled: false }, loaded, bounds, false);
+		expect(turnedOff.body).toEqual({ executionPreviewsEnabled: false });
+		expect(turnsOnExecutionPreviews(turnedOff.body)).toBe(false);
+		// Already on and untouched: the body does not carry it, so a later unrelated save is not asked about it again.
+		expect(
+			turnsOnExecutionPreviews(buildNodeSettingsRequest({ ...loaded, computeEnabled: true }, loaded, bounds, false).body),
+		).toBe(false);
 	});
 
 	it("takes the effective value from the response, false included, and the default only when absent", () => {

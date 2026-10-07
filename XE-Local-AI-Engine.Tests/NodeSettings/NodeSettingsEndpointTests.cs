@@ -1387,6 +1387,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.False(unsaved.TranscriptionEnabled);
         AssertEx.True(unsaved.GraphWorkflowsEnabled, "an unseeded switch reports its code default");
         AssertEx.False(unsaved.DevWorkflowsEnabled);
+        AssertEx.False(unsaved.ExecutionPreviewsEnabled, "execution previews are off unless the operator turns them on");
 
         using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
         putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
@@ -1399,7 +1400,8 @@ public sealed class NodeSettingsEndpointTests
             ComputeEnabled = true,
             AgentHomeEnabled = false,
             SchedulerEnabled = false,
-            DevWorkflowsEnabled = true
+            DevWorkflowsEnabled = true,
+            ExecutionPreviewsEnabled = true
         });
         using var putResponse = await client.SendAsync(putRequest);
         AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
@@ -1412,6 +1414,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(expected: false, saved.AgentHomeEnabled);
         AssertEx.Equal(expected: false, saved.SchedulerEnabled);
         AssertEx.Equal(expected: true, saved.DevWorkflowsEnabled);
+        AssertEx.Equal(expected: true, saved.ExecutionPreviewsEnabled);
 
         using var secondGet = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
         using var secondGetResponse = await client.SendAsync(secondGet);
@@ -1425,6 +1428,7 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.False(reread.AgentHomeEnabled);
         AssertEx.False(reread.SchedulerEnabled);
         AssertEx.True(reread.DevWorkflowsEnabled);
+        AssertEx.True(reread.ExecutionPreviewsEnabled);
     }
 
     [Test]

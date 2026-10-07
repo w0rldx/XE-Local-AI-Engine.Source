@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Architecture;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -10,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -56,7 +58,9 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
                                                    | SandboxProviderCapabilities.SupportsResourceLimits
                                                    | SandboxProviderCapabilities.SupportsNetworkPolicy
                                                    | SandboxProviderCapabilities.SupportsFilesystemIsolation
-                                                   | SandboxProviderCapabilities.SupportsHostFilesystemBoundary,
+                                                   | SandboxProviderCapabilities.SupportsHostFilesystemBoundary
+                                                   // The Windows AppContainer boundary, advertised only while eligible (ADR 0019).
+                                                   | SandboxProviderCapabilities.SupportsAppContainerBoundary,
             [DockerSandboxRuntimeProvider.Name] = SandboxProviderCapabilities.SupportsCopyInto
                                                   | SandboxProviderCapabilities.SupportsCopyOut
                                                   | SandboxProviderCapabilities.SupportsReadOnlyMounts
@@ -325,6 +329,94 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
         }
     }
 
+    /// <summary>
+    ///     A Preview mechanism widens nothing until the operator enables it: a measured Preview boundary serves no filesystem-floor row with
+    ///     previews off, and serves them on the process backend, within the maximum, with previews on.
+    /// </summary>
+    [Test]
+    public void APreviewMechanism_ServesNoDeclaration_UntilExecutionPreviewsAreEnabled()
+    {
+        var containment = SandboxContainment.None with
+        {
+            AppContainerBoundary = PreviewBoundary()
+        };
+
+        using var disabled = CreateProcessProvider(containment, previewsEnabled: false);
+        using var enabled = CreateProcessProvider(containment, previewsEnabled: true);
+
+        AssertEx.False(disabled.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsAppContainerBoundary));
+        AssertEx.False(disabled.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsHostFilesystemBoundary));
+        AssertEx.True(enabled.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsAppContainerBoundary));
+        AssertEx.Equal(enabled.Capabilities, enabled.Capabilities & MaximumCapabilities[ProcessSandboxRuntimeProvider.Name]);
+
+        foreach (var (name, requirements) in EnumerateDeclarations().Where(static d => d.Requirements.IsolationFloor == SandboxIsolationMode.Filesystem))
+        {
+            AssertEx.NotNull(SandboxProviderSelector.FindUnmetAxis(requirements, SandboxToolchainSource.HostToolchain, () => disabled.Capabilities),
+                $"{name} must not be served through a disabled Preview mechanism.");
+            AssertEx.Null(SandboxProviderSelector.FindUnmetAxis(requirements, SandboxToolchainSource.HostToolchain, () => enabled.Capabilities),
+                $"{name} must be served once previews are enabled (ADR 0019, Q5).");
+        }
+    }
+
+    /// <summary>
+    ///     A Preview mechanism serves FLOOR workloads only (ADR 0019): a where-advertised preference asks only of a Stable boundary.
+    /// </summary>
+    [Test]
+    public void APreviewMechanism_ServesOnlyFloorDeclarations_WhileAStableOneServesThePreferenceToo()
+    {
+        var previewBoundary = SandboxContainment.None with
+        {
+            AppContainerBoundary = PreviewBoundary()
+        };
+        using var preview = CreateProcessProvider(previewBoundary, previewsEnabled: true);
+        const SandboxProviderCapabilities stableBoundary = SandboxProviderCapabilities.SupportsFilesystemIsolation
+                                                           | SandboxProviderCapabilities.SupportsHostFilesystemBoundary;
+
+        foreach (var (name, requirements) in EnumerateDeclarations())
+        {
+            var floor = requirements.IsolationFloor == SandboxIsolationMode.Filesystem;
+            AssertEx.Equal(floor ? SandboxIsolationMode.Filesystem : SandboxIsolationMode.None,
+                requirements.RequestedIsolation(preview.Capabilities),
+                $"{name}: only a Filesystem floor may be served through a Preview mechanism.");
+            AssertEx.Equal(floor || requirements.RequestsFilesystemIsolationWhereAdvertised ? SandboxIsolationMode.Filesystem : SandboxIsolationMode.None,
+                requirements.RequestedIsolation(stableBoundary),
+                $"{name}: a Stable boundary serves the floor and the where-advertised preference alike.");
+        }
+
+        AssertEx.Equal(SandboxIsolationMode.None, SandboxWorkloads.AgentHome.RequestedIsolation(preview.Capabilities));
+        AssertEx.Equal(SandboxIsolationMode.Filesystem, SandboxWorkloads.RunPython.RequestedIsolation(preview.Capabilities));
+        AssertEx.Equal(SandboxIsolationMode.Filesystem, SandboxWorkloads.McpStdio.RequestedIsolation(preview.Capabilities));
+    }
+
+    private static ProcessSandboxRuntimeProvider CreateProcessProvider(SandboxContainment containment, bool previewsEnabled)
+    {
+        return new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()),
+            TimeProvider.System,
+            logger: null,
+            new SandboxLauncher(new FixedProbe(containment)),
+            previewPolicy: new FixedPreviewPolicy(previewsEnabled));
+    }
+
+    private sealed class FixedProbe : ISandboxContainmentProbe
+    {
+        public FixedProbe(SandboxContainment containment)
+        {
+            Containment = containment;
+        }
+
+        public SandboxContainment Containment { get; }
+    }
+
+    private sealed class FixedPreviewPolicy : IExecutionPreviewPolicy
+    {
+        public FixedPreviewPolicy(bool enabled)
+        {
+            PreviewMechanismsEnabled = enabled;
+        }
+
+        public bool PreviewMechanismsEnabled { get; }
+    }
+
     private static IEnumerable<(string Name, SandboxRequirements Requirements)> EnumerateDeclarations()
     {
         return typeof(SandboxWorkloads)
@@ -358,5 +450,15 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
         services.AddSingleton<ProcessSandboxRuntimeProvider>();
         services.AddSingleton<DockerSandboxRuntimeProvider>();
         return services.BuildServiceProvider();
+    }
+
+    private static SandboxAppContainerBoundary PreviewBoundary()
+    {
+        return new SandboxAppContainerBoundary
+        {
+            Mechanism = "mxc-processcontainer",
+            Tier = "AppContainerDacl",
+            Maturity = SandboxMechanismMaturity.Preview
+        };
     }
 }

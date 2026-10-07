@@ -22,15 +22,17 @@ internal sealed class SandboxLifecycleRegistry
 {
     private readonly string _jailRoot;
     private readonly ISandboxLauncher _launcher;
+    private readonly IExecutionPreviewPolicy? _previewPolicy;
     private readonly ConcurrentDictionary<string, JailState> _sandboxes = new(StringComparer.Ordinal);
     private readonly Lock _sync = new();
     private readonly TimeProvider _timeProvider;
 
-    public SandboxLifecycleRegistry(string jailRoot, ISandboxLauncher launcher, TimeProvider timeProvider)
+    public SandboxLifecycleRegistry(string jailRoot, ISandboxLauncher launcher, TimeProvider timeProvider, IExecutionPreviewPolicy? previewPolicy = null)
     {
         _jailRoot = jailRoot ?? throw new ArgumentNullException(nameof(jailRoot));
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _previewPolicy = previewPolicy;
     }
 
     public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
@@ -77,8 +79,9 @@ internal sealed class SandboxLifecycleRegistry
                 // the boundary the sandbox really has rather than the one its caller asked for.
                 Isolation = launchPolicy.Isolation,
                 // A host child sees host paths, so the jail names the same bytes inside and out, which is what lets a caller compose a
-                // child-visible path under it. Under isolation the CHILD sees it at SandboxIsolatedPaths.Work; this stays the HOST path.
-                WorkingRoot = jailDirectory
+                // child-visible path under it. Under bwrap the CHILD sees it at SandboxIsolatedPaths.Posix.Work; this stays the HOST path.
+                WorkingRoot = jailDirectory,
+                IsolatedPaths = ResolveIsolatedPaths(launchPolicy, jailDirectory)
             };
             _sandboxes[sandboxId] = new JailState(handle,
                 jailDirectory,
@@ -170,10 +173,15 @@ internal sealed class SandboxLifecycleRegistry
         // A filesystem boundary is never a preference: a caller asking for it is asking to be TOLD when it is absent, since everything it
         // does next depends on the answer. Rejected fail-closed where the probe could not measure it, with the measured reason attached.
         var wantsIsolation = request.Isolation == SandboxIsolationMode.Filesystem;
-        if (wantsIsolation && !containment.SupportsFilesystemIsolation)
+
+        // bwrap serves it where measured; otherwise the AppContainer boundary, only while ELIGIBLE, decided now (ADR 0019).
+        var appContainerBoundary = wantsIsolation && !containment.SupportsFilesystemIsolation
+            ? containment.EligibleAppContainerBoundary(_previewPolicy?.PreviewMechanismsEnabled == true)
+            : null;
+        if (wantsIsolation && !containment.SupportsFilesystemIsolation && appContainerBoundary is null)
         {
             throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
-                $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot isolate the host filesystem on this host ({containment.FilesystemIsolationUnavailableReason ?? "no mechanism is available"}), so SandboxIsolationMode.Filesystem cannot be honored. Gate the request on SupportsFilesystemIsolation, or use a provider that advertises it."));
+                $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot isolate the host filesystem on this host ({FilesystemUnavailableReason(containment)}), so SandboxIsolationMode.Filesystem cannot be honored. Gate the request on SupportsFilesystemIsolation, or use a provider that advertises it."));
         }
 
         // An isolated jail is tightened to 0700 and never exposed at its host pathname, neither of which is a thing to do to a user's own
@@ -194,8 +202,9 @@ internal sealed class SandboxLifecycleRegistry
 
         // Rejected at CREATE time as well as at launch time: naming an unbindable tree is a configuration mistake, and finding out at the
         // first command — after provisioning, in a result string — is far worse than finding out when the sandbox is asked for.
-        var shadowed = (request.ReadOnlyTrees ?? [])
-            .FirstOrDefault(tree => !SandboxIsolatedChain.CanBindReadOnlyTree(Path.TrimEndingDirectorySeparator(Path.GetFullPath(tree))));
+        var shadowed = appContainerBoundary is not null // bwrap's rule only: the AppContainer boundary owns no mount points
+            ? null
+            : (request.ReadOnlyTrees ?? []).FirstOrDefault(tree => !SandboxIsolatedChain.CanBindReadOnlyTree(Path.TrimEndingDirectorySeparator(Path.GetFullPath(tree))));
         if (shadowed is not null)
         {
             throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
@@ -215,6 +224,13 @@ internal sealed class SandboxLifecycleRegistry
         // running without the ceiling the caller asked for is exactly the silent downgrade this contract exists to prevent.
         var limits = request.ResourceLimits;
         var wantsLimits = limits is not null && (limits.CpuCount.HasValue || limits.MemoryMb.HasValue || limits.PidsLimit.HasValue);
+        // Isolation skips the systemd gate below only for bwrap's chain; the AppContainer boundary has no ceiling at all (ADR 0019 Q3).
+        if (wantsLimits && appContainerBoundary is not null)
+        {
+            throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
+                $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider serves SandboxIsolationMode.Filesystem here through the {appContainerBoundary.Mechanism} AppContainer boundary (Preview, ADR 0019 Q3): the AppContainer boundary enforces no CPU, memory or process ceiling; omit SandboxResourceLimits for a timeout-only run."));
+        }
+
         if (wantsLimits && !wantsIsolation && !containment.SupportsResourceLimits)
         {
             throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
@@ -236,8 +252,29 @@ internal sealed class SandboxLifecycleRegistry
             Isolation = wantsIsolation ? SandboxIsolationMode.Filesystem : SandboxIsolationMode.None,
             ReadOnlyTrees = wantsIsolation ? [.. request.ReadOnlyTrees ?? []] : [],
             ThreadLimit = request.ThreadLimit ?? 1,
+            AppContainerBoundary = appContainerBoundary,
             Role = request.RuntimeProfile
         };
+    }
+
+    // The view the serving mechanism presents: the mount namespace's fixed POSIX paths, or — with no namespace under the AppContainer
+    // boundary — the jail's own host paths. Consumers compose HOME/TMPDIR from this, never from a constant.
+    private static SandboxIsolatedPaths? ResolveIsolatedPaths(SandboxLaunchPolicy launchPolicy, string jailDirectory)
+    {
+        if (launchPolicy.Isolation != SandboxIsolationMode.Filesystem)
+        {
+            return null;
+        }
+
+        return launchPolicy.AppContainerBoundary is null ? SandboxIsolatedPaths.Posix : SandboxIsolatedPaths.ForHostJail(jailDirectory);
+    }
+
+    // A measured-but-ineligible boundary is named as such, so the refusal says what the operator can change rather than "no mechanism".
+    private static string FilesystemUnavailableReason(SandboxContainment containment)
+    {
+        return containment.SupportsAppContainerBoundary
+            ? SandboxContainment.ExecutionPreviewsDisabledReason
+            : containment.FilesystemIsolationUnavailableReason ?? "no mechanism is available";
     }
 
     /// <summary>
@@ -393,7 +430,7 @@ internal sealed class SandboxLifecycleRegistry
 #pragma warning restore MA0045
             }
 
-            SandboxProcessTree.TreeKill(inFlight.Process);
+            inFlight.Process.Kill();
         }
 
         state.InFlight.Clear();

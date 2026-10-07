@@ -94,9 +94,15 @@ Do not assume these exist or "restore" retired designs.
   2026-09-09); `OrchestrationAgentFactory` calls only `CreateHandoffBuilderWith`.
 - **Approval policy is tighten-only;** category-wide loosening is not built. The scheduler runs a saved local
   single agent, strips approval tools, writes no conversation and compiles no orchestration.
-- **Sandbox providers:** fake, process, opt-in Development Docker. OpenSandbox is not built and nothing selects it or MXC
-  silently; Development Docker is interim, not a hard security boundary (ADR 0004,
+- **Sandbox providers:** fake, process, opt-in Development Docker. OpenSandbox is not built and nothing selects it;
+  Development Docker is interim, not a hard security boundary (ADR 0004,
   `docs/roadmaps/development-mode-container-status.md`).
+- **MXC is a Windows launch mechanism, not a provider** (ADR 0019): `Microsoft.Mxc.Sdk` 1.0.0 (NuGet, net8.0, natives
+  bundled) inside `ProcessSandboxRuntimeProvider`, Preview maturity, served only while the Operator-only
+  `ExecutionPreviewsEnabled` setting is on and only to `Filesystem`-floor workloads (Sandboxed MCP; `run_python` still
+  has its own Linux-only runtime gate). No
+  ceilings on Windows (timeout only); the Linux bwrap chain is not moved behind MXC. No hardcoded OS floor: availability is
+  `GetPlatformSupport` + `Probe`, and missing `wxc-host-prep` makes it unavailable with the command named.
 - **Playbook retrieval** is embedding-ranked with lexical fallback; adaptive memory is per-agent only.
 - **No background refresh** of the cloud chat-client selection snapshot (`ActiveCloudChatClientFactory`); the
   `MA0045` pragmas mark the sync fill.

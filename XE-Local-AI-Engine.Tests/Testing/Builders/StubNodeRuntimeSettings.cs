@@ -118,6 +118,7 @@ public sealed class StubNodeRuntimeSettings
     private bool _agentHomeEnabled = true;
     private bool _schedulerEnabled = true;
     private bool _devWorkflowsEnabled = true;
+    private bool _executionPreviewsEnabled;
 
     // A READ, not a value: the wait-until-decided gate re-reads the profile on every poll tick, so a test that flips the
     // decision mid-wait needs the substitute to answer differently on the second call. Same shape as the tool-relevance
@@ -736,6 +737,12 @@ public sealed class StubNodeRuntimeSettings
         return this;
     }
 
+    public StubNodeRuntimeSettings WithExecutionPreviewsEnabled(bool value)
+    {
+        _executionPreviewsEnabled = value;
+        return this;
+    }
+
     public INodeRuntimeSettings Build()
     {
         var settings = Substitute.For<INodeRuntimeSettings>();
@@ -892,6 +899,8 @@ public sealed class StubNodeRuntimeSettings
         settings.GetSchedulerEnabled().Returns(_ => _schedulerEnabled);
         settings.GetDevWorkflowsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _devWorkflowsEnabled);
         settings.GetDevWorkflowsEnabled().Returns(_ => _devWorkflowsEnabled);
+        settings.GetExecutionPreviewsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _executionPreviewsEnabled);
+        settings.GetExecutionPreviewsEnabled().Returns(_ => _executionPreviewsEnabled);
         settings.ResolveEffectiveValues(Arg.Any<StoredNodeSettings>())
                 .Returns(call =>
                 {
@@ -924,7 +933,8 @@ public sealed class StubNodeRuntimeSettings
                         ComputeEnabled = stored.ComputeEnabled ?? _computeEnabled,
                         AgentHomeEnabled = stored.AgentHomeEnabled ?? _agentHomeEnabled,
                         SchedulerEnabled = stored.SchedulerEnabled ?? _schedulerEnabled,
-                        DevWorkflowsEnabled = stored.DevWorkflowsEnabled ?? _devWorkflowsEnabled
+                        DevWorkflowsEnabled = stored.DevWorkflowsEnabled ?? _devWorkflowsEnabled,
+                        ExecutionPreviewsEnabled = stored.ExecutionPreviewsEnabled ?? _executionPreviewsEnabled
                     };
                 });
         return settings;

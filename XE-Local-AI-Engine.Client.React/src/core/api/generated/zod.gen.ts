@@ -1959,6 +1959,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummary
 	provider: z.string(),
 	backend: z.string(),
 	level: z.string(),
+	maturity: z.string(),
 	filesystemIsolation: z.boolean(),
 	networkIsolation: z.boolean(),
 	networkIsolationRequired: z.boolean(),
@@ -8470,6 +8471,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 	agentHomeEnabled: z.boolean().optional(),
 	schedulerEnabled: z.boolean().optional(),
 	devWorkflowsEnabled: z.boolean().optional(),
+	executionPreviewsEnabled: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest = z.object({
@@ -8623,6 +8625,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	agentHomeEnabled: z.boolean().nullish(),
 	schedulerEnabled: z.boolean().nullish(),
 	devWorkflowsEnabled: z.boolean().nullish(),
+	executionPreviewsEnabled: z.boolean().nullish(),
 });
 
 export const zXeLocalAiEngineClientServicesTrainingDatasetsDatasetExportFormat = z.enum(["Jsonl", "Hermes"]);

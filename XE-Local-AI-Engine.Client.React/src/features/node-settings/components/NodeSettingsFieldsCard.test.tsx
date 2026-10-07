@@ -959,9 +959,10 @@ describe("NodeSettingsFieldsCard — feature switches", () => {
 		"external-apps",
 		"transcription",
 		"scheduler",
+		"execution-previews",
 	].map((name) => `node-settings-feature-${name}`);
 
-	it("places the Features card with all nine switches in the general section only", () => {
+	it("places the Features card with all ten switches in the general section only", () => {
 		renderCard({ section: "general" });
 		const card = screen.getByTestId("node-settings-features-card");
 		expect(within(card).getByText("Features")).toBeTruthy();

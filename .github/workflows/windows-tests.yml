@@ -98,7 +98,10 @@ jobs:
             'ProcessAudioCaptureTests', 'ProviderLauncherSharedHandleTests', 'PathContainmentTests',
             'SecureFilePermissionsTests', 'DockerDaemonEndpointResolverTests', 'SingleInstanceLeaseTests',
             'WindowsLauncherApplicationTests', 'FrameworkDependentVelopackBootstrapTests', 'DesktopLifecycleTests',
-            'DesktopParentLifetimeTests', 'DesktopPortStoreTests'
+            'DesktopParentLifetimeTests', 'DesktopPortStoreTests',
+            # MXC sandbox mechanism. The execution test skips here (no host prep on this runner); the windows-sandbox
+            # leg in build-and-test.yml preps the host and requires it to run.
+            'MxcSandboxRuntimeWindowsTests', 'MxcAclResidueSweeperWindowsTests', 'ProcessSandboxAppContainerWindowsTests'
           )
           # Skip reasons that mean "this host is not Windows": TUnit's [RunOn(OS.Windows)] message, the named-pipe
           # preflight's runtime skip and JunctionSupport's probe. Any of them on this runner is a failure.

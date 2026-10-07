@@ -988,7 +988,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         // This is not defensive padding: the first version named only the non-isolated path, and the deliberate-break
         // proof caught it — with the guard REMOVED the tests still passed, because the payload could never have
         // created its marker. A negative control that cannot fire proves nothing.
-        return $"/usr/bin/touch {SandboxIsolatedPaths.Work}{AgentHomeGit.WorkspaceSelectedRoot}/{markerRelativePath} "
+        return $"/usr/bin/touch {SandboxIsolatedPaths.Posix.Work}{AgentHomeGit.WorkspaceSelectedRoot}/{markerRelativePath} "
                + $"{AgentHomeGit.WorkspaceSelectedRoot}/{markerRelativePath}";
     }
 

@@ -165,6 +165,7 @@ public sealed class NodeInfoService : INodeInfoService
         nameof(StoredNodeSettings.ComputeEnabled),
         nameof(StoredNodeSettings.AgentHomeEnabled),
         nameof(StoredNodeSettings.DevWorkflowsEnabled),
+        nameof(StoredNodeSettings.ExecutionPreviewsEnabled),
         nameof(StoredNodeSettings.DevelopmentMaxToolCalls),
         nameof(StoredNodeSettings.DevelopmentMaxOutputTokens),
         nameof(StoredNodeSettings.AgentHomeMaxInnerToolCalls),

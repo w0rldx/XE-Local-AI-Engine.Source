@@ -56,6 +56,7 @@ describe("SandboxIsolationPanel", () => {
 				provider: "process",
 				backend: "process",
 				level: "None",
+				maturity: "Stable",
 				filesystemIsolation: false,
 				networkIsolation: false,
 				networkIsolationRequired: true,
@@ -86,6 +87,7 @@ describe("SandboxIsolationPanel", () => {
 				provider: "process",
 				backend: "process",
 				level: "Confined",
+				maturity: "Stable",
 				filesystemIsolation: false,
 				networkIsolation: true,
 				networkIsolationRequired: false,
@@ -100,6 +102,7 @@ describe("SandboxIsolationPanel", () => {
 				provider: "process",
 				backend: "bwrap",
 				level: "Isolated",
+				maturity: "Stable",
 				filesystemIsolation: true,
 				networkIsolation: true,
 				networkIsolationRequired: true,
@@ -113,6 +116,7 @@ describe("SandboxIsolationPanel", () => {
 				provider: "process",
 				backend: "bwrap",
 				level: "Isolated",
+				maturity: "Stable",
 				filesystemIsolation: true,
 				networkIsolation: true,
 				// Denial is a precondition from the declaration's own network floor, with no node switch set — the
@@ -130,6 +134,7 @@ describe("SandboxIsolationPanel", () => {
 				provider: "process",
 				backend: "process",
 				level: "Confined",
+				maturity: "Stable",
 				filesystemIsolation: false,
 				networkIsolation: true,
 				networkIsolationRequired: false,
@@ -144,6 +149,7 @@ describe("SandboxIsolationPanel", () => {
 				provider: "fake",
 				backend: "none",
 				level: "None",
+				maturity: "Stable",
 				filesystemIsolation: false,
 				networkIsolation: false,
 				networkIsolationRequired: false,
@@ -205,6 +211,46 @@ describe("SandboxIsolationPanel", () => {
 		expect(screen.getByTestId("sandbox-isolation-limits-reason-work-session").textContent).toContain(
 			"does not advertise resource ceilings",
 		);
+	});
+
+	// A boundary served through a Preview mechanism (the Windows AppContainer boundary, ADR 0019) is shown as such: never the
+	// Isolated label an operator reads as "done", and with its maturity next to it.
+	it("renders a preview-served role as a preview, never as Isolated", () => {
+		renderPanel([
+			{
+				role: "run_python",
+				provider: "process",
+				backend: "appcontainer",
+				level: "PreviewIsolated",
+				maturity: "Preview",
+				filesystemIsolation: true,
+				networkIsolation: false,
+				networkIsolationRequired: true,
+				resourceLimits: false,
+				readOnlyMounts: false,
+				filesystemIsolationUnavailableReason: null,
+				resourceLimitsUnavailableReason: "the AppContainer boundary imposes no ceilings",
+			},
+			{
+				role: "agent-home",
+				provider: "process",
+				backend: "bwrap",
+				level: "Isolated",
+				maturity: "Stable",
+				filesystemIsolation: true,
+				networkIsolation: true,
+				networkIsolationRequired: false,
+				resourceLimits: true,
+				readOnlyMounts: false,
+				filesystemIsolationUnavailableReason: null,
+				resourceLimitsUnavailableReason: null,
+			},
+		]);
+
+		expect(screen.getByTestId("sandbox-isolation-level-run_python").textContent).toBe("Isolated (preview)");
+		expect(screen.getByTestId("sandbox-isolation-maturity-run_python").textContent).toBe("Preview");
+		expect(screen.getByTestId("sandbox-isolation-level-agent-home").textContent).toBe("Isolated");
+		expect(screen.getByTestId("sandbox-isolation-maturity-agent-home").textContent).toBe("Stable");
 	});
 
 	it("renders nothing rather than an empty table when the backend reported no roles", () => {

@@ -1833,6 +1833,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryRe
 	provider: string;
 	backend: string;
 	level: string;
+	maturity: string;
 	filesystemIsolation: boolean;
 	networkIsolation: boolean;
 	networkIsolationRequired: boolean;
@@ -5099,6 +5100,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	agentHomeEnabled?: boolean;
 	schedulerEnabled?: boolean;
 	devWorkflowsEnabled?: boolean;
+	executionPreviewsEnabled?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest = {
@@ -5234,6 +5236,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	agentHomeEnabled?: boolean | null;
 	schedulerEnabled?: boolean | null;
 	devWorkflowsEnabled?: boolean | null;
+	executionPreviewsEnabled?: boolean | null;
 };
 
 export type XeLocalAiEngineClientEndpointsProxyV1GeneratedLocalModelProxyApiKeyResponse = {

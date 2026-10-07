@@ -206,13 +206,13 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         {
             throw new SandboxCapabilityNotSupportedException(
                 $"The MCP server '{_record.Name}' is registered at the Sandboxed trust tier, and this node's '{_provider.ProviderName}' sandbox cannot isolate a process from the host filesystem. "
-                + "Install bubblewrap (bwrap) together with the user-namespace support the sandbox containment probe reports as missing, or change this server to the Privileged host tier if it genuinely needs access to this machine.");
+                + SandboxBoundaryRemedy.ForThisHost() + ", or change this server to the Privileged host tier if it genuinely needs access to this machine.");
         }
 
         // In the jail a missing command is just an early exit, so it is checked here against the JAIL's PATH (see JailSearchPath):
         // this node's PATH never reaches the jail, so a command found only there would pass and still not start.
         var jailPath = JailSearchPath(_record);
-        if (ResolveExecutablePath(_record.Command, jailPath) is null)
+        if (ResolveExecutablePath(_record.Command, jailPath, ExecutableExtensions(_record, OperatingSystem.IsWindows())) is null)
         {
             throw new FileNotFoundException($"The MCP server '{_record.Name}' command '{_record.Command}' was not found on the sandbox PATH ({jailPath}). "
                                             + "The sandbox does not see this node's PATH: use an absolute path, or set PATH in the server's environment to include the directory holding the command.");
@@ -224,7 +224,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         ISandboxInteractiveProcess? process = null;
         try
         {
-            process = await _provider.StartInteractiveAsync(handle, BuildCommandRequest(), cancellationToken);
+            process = await _provider.StartInteractiveAsync(handle, BuildCommandRequest(handle), cancellationToken);
 
             // StreamClientTransport's first argument is the stream the client WRITES to reach the server, and the
             // second is the one it READS the server's replies from — so they are the child's stdin and stdout.
@@ -268,8 +268,9 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
                 + "Point the server's command or working directory at the directory holding its own files instead — a subdirectory is fine, it is the root itself that cannot be bound.");
         }
 
+        // The chain-owned mount points are a bwrap fact: the Windows AppContainer boundary grants a tree in place and owns none (ADR 0019).
         if (!Directory.Exists(canonical)
-            || !SandboxIsolatedChain.CanBindReadOnlyTree(canonical)
+            || (!OperatingSystem.IsWindows() && !SandboxIsolatedChain.CanBindReadOnlyTree(canonical))
             || trees.Contains(canonical, StringComparer.Ordinal))
         {
             return;
@@ -438,7 +439,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             // resource ceiling this is not a preference a provider may quietly drop.
             Isolation = SandboxIsolationMode.Filesystem,
             ReadOnlyTrees = ResolveReadOnlyTrees(_record,
-                command => ResolveExecutablePath(command, JailSearchPath(_record)),
+                command => ResolveExecutablePath(command, JailSearchPath(_record), ExecutableExtensions(_record, OperatingSystem.IsWindows())),
                 BuildSensitiveHostRoots(_nodeDataDirectory.Root)),
             // Stated though the isolated chain's --unshare-net is what enforces it, so the intent is legible at the
             // one place a reader looks for it.
@@ -454,46 +455,82 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     }
 
     /// <summary>
-    ///     The <c>PATH</c> the child resolves a bare command against inside the jail: the registration's own when it sets
-    ///     one (the chain applies it last, so it REPLACES the default), otherwise <see cref="SandboxIsolatedChain.SandboxPath" />.
+    ///     The <c>PATH</c> the child resolves a bare command against in the jail: the registration's own when set (applied last, so it
+    ///     REPLACES the default), otherwise the platform default.
     /// </summary>
+    /// <remarks>
+    ///     <see cref="SandboxIsolatedChain.SandboxPath" /> inside the Linux mount namespace; the host <c>PATH</c> the process provider
+    ///     passes through under the Windows AppContainer boundary, which has no namespace and so no path of its own.
+    /// </remarks>
     internal static string JailSearchPath(McpServerRecord record)
     {
-        return record.Environment.TryGetValue("PATH", out var path) && !string.IsNullOrWhiteSpace(path)
-            ? path
+        return JailSearchPath(record, OperatingSystem.IsWindows());
+    }
+
+    internal static string JailSearchPath(McpServerRecord record, bool windowsHost)
+    {
+        if (record.Environment.TryGetValue("PATH", out var path) && !string.IsNullOrWhiteSpace(path))
+        {
+            return path;
+        }
+
+        return windowsHost
+            ? Environment.GetEnvironmentVariable("PATH") ?? string.Empty
             : SandboxIsolatedChain.SandboxPath;
     }
 
     /// <summary>
+    ///     The extensions a Windows host tries after an extensionless command's exact name: the registration's <c>PATHEXT</c>, else the
+    ///     host's, else the system default. None on Linux, where a command name is looked up exactly.
+    /// </summary>
+    internal static IReadOnlyList<string> ExecutableExtensions(McpServerRecord record, bool windowsHost)
+    {
+        if (!windowsHost)
+        {
+            return [];
+        }
+
+        var pathExt = record.Environment.TryGetValue("PATHEXT", out var own) && !string.IsNullOrWhiteSpace(own)
+            ? own
+            : Environment.GetEnvironmentVariable("PATHEXT");
+        return (string.IsNullOrWhiteSpace(pathExt) ? ".COM;.EXE;.BAT;.CMD" : pathExt)
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    /// <summary>
     ///     Finds the HOST path of a configured command so its directory can be bound read-only, a bare name being
-    ///     looked up on <paramref name="searchPath" />, the jail's <c>PATH</c> (see <see cref="JailSearchPath" />).
+    ///     looked up on <paramref name="searchPath" />, the jail's <c>PATH</c> (see <see cref="JailSearchPath(McpServerRecord)" />).
     /// </summary>
     /// <remarks>
     ///     It chooses a mount and never composes the launch: the child resolves its own executable against the
     ///     sandbox's <c>PATH</c>. Only the executable's directory is bound, never a symlink target elsewhere or a shebang's
-    ///     interpreter, which is why the Sandboxed tier runs self-contained servers only.
+    ///     interpreter, which is why the Sandboxed tier runs self-contained servers only. An extensionless name is tried exactly first,
+    ///     then with each of <paramref name="extensions" /> (<see cref="ExecutableExtensions" />), per directory, as Windows does.
     /// </remarks>
-    internal static string? ResolveExecutablePath(string command, string searchPath)
+    internal static string? ResolveExecutablePath(string command, string searchPath, IReadOnlyList<string>? extensions = null)
     {
+        string[] suffixes = extensions is { Count: > 0 } && !Path.HasExtension(command) ? ["", .. extensions] : [""];
+        string? Probe(string candidate) =>
+            suffixes.Select(suffix => candidate + suffix).FirstOrDefault(File.Exists) is { } found ? Path.GetFullPath(found) : null;
+
         if (command.Contains(Path.DirectorySeparatorChar, StringComparison.Ordinal)
             || command.Contains(Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
         {
-            return File.Exists(command) ? Path.GetFullPath(command) : null;
+            return Probe(command);
         }
 
         foreach (var directory in searchPath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
-            var candidate = Path.Combine(directory, command);
-            if (File.Exists(candidate))
+            if (Probe(Path.Combine(directory, command)) is { } resolved)
             {
-                return Path.GetFullPath(candidate);
+                return resolved;
             }
         }
 
         return null;
     }
 
-    private SandboxCommandRequest BuildCommandRequest()
+    internal SandboxCommandRequest BuildCommandRequest(SandboxHandle handle)
     {
         return new SandboxCommandRequest
         {
@@ -502,8 +539,33 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             Arguments = [.. _record.Arguments],
             // No working directory: the jail IS the working directory, and the configured one is bound READ-ONLY instead (see
             // ResolveReadOnlyTrees), since a third-party server has no reason to write into the tree it was installed from.
-            Environment = _record.Environment.Count == 0 ? null : _record.Environment
+            Environment = BuildEnvironment(handle, _record.Environment)
         };
+    }
+
+    /// <summary>
+    ///     The server's environment: this sandbox's reported scratch paths (<see cref="SandboxHandle.IsolatedPaths" />), then the
+    ///     registration's own variables on top, so an operator can still override <c>HOME</c>.
+    /// </summary>
+    /// <remarks>
+    ///     The scratch overlay applies only to a host-path view (the Windows AppContainer boundary), where nothing else would give the
+    ///     server a jail-backed <c>HOME</c>. The chain-served <see cref="SandboxIsolatedPaths.Posix" /> view gets none: bwrap's chain
+    ///     already sets those four variables, and repeating them would emit duplicate <c>--setenv</c> arguments.
+    /// </remarks>
+    internal static IReadOnlyDictionary<string, string>? BuildEnvironment(SandboxHandle handle, IReadOnlyDictionary<string, string> registered)
+    {
+        if (SandboxIsolatedPaths.Of(handle) is not { } paths || paths == SandboxIsolatedPaths.Posix)
+        {
+            return registered.Count == 0 ? null : registered;
+        }
+
+        var environment = new Dictionary<string, string>(paths.ToEnvironment(), StringComparer.Ordinal);
+        foreach (var (name, value) in registered)
+        {
+            environment[name] = value;
+        }
+
+        return environment;
     }
 
     /// <summary>

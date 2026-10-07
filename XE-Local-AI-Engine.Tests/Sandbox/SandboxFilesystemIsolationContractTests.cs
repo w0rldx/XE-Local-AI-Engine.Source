@@ -131,6 +131,98 @@ public sealed class SandboxFilesystemIsolationContractTests
         await Task.CompletedTask;
     }
 
+    /// <summary>The three flags a served AppContainer boundary advertises together (ADR 0019).</summary>
+    private const SandboxProviderCapabilities AppContainerFloor = SandboxProviderCapabilities.SupportsAppContainerBoundary
+                                                                  | SandboxProviderCapabilities.SupportsFilesystemIsolation
+                                                                  | SandboxProviderCapabilities.SupportsHostFilesystemBoundary;
+
+    [Test]
+    public async Task APreviewBoundary_WithPreviewsDisabled_IsNeitherAdvertisedNorAccepted()
+    {
+        // Measured is not eligible: the probe found the mechanism, the operator has not enabled previews, so nothing may be served
+        // through it — and the refusal names the switch rather than a missing install.
+        using var provider = CreateProvider(new StubProbe(PreviewBoundaryContainment()), new SwitchablePreviewPolicy(enabled: false));
+
+        AssertEx.Equal(SandboxProviderCapabilities.None, provider.Capabilities & AppContainerFloor,
+            "a disabled Preview mechanism must advertise none of the boundary flags");
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() =>
+            provider.CreateOrAttachAsync(IsolatedRequest()));
+        AssertEx.Contains(exception.Message, SandboxContainment.ExecutionPreviewsDisabledReason);
+    }
+
+    [Test]
+    public async Task APreviewBoundary_WithPreviewsEnabled_ServesTheFilesystemFloor_AndReportsTheJailsHostPaths()
+    {
+        using var provider = CreateProvider(new StubProbe(PreviewBoundaryContainment()), new SwitchablePreviewPolicy(enabled: true));
+
+        AssertEx.Equal(AppContainerFloor, provider.Capabilities & AppContainerFloor);
+
+        // A tree under /usr is a bwrap shadowing problem only: the AppContainer boundary grants trees in place, so it is accepted.
+        var handle = await provider.CreateOrAttachAsync(IsolatedRequest() with
+        {
+            ReadOnlyTrees = ["/usr/lib/python3"]
+        });
+        try
+        {
+            AssertEx.Equal(SandboxIsolationMode.Filesystem, handle.Isolation);
+            var jail = AssertEx.NotNull(handle.WorkingRoot);
+            // No mount namespace: the child sees the jail at its host path, so the handle must say so rather than claim /work.
+            AssertEx.Equal(SandboxIsolatedPaths.ForHostJail(jail), handle.IsolatedPaths);
+        }
+        finally
+        {
+            await provider.KillAsync(handle);
+        }
+    }
+
+    [Test]
+    public async Task ThePreviewSwitch_IsReadPerCall_SoTurningItOffWithdrawsTheBoundaryWithoutARestart()
+    {
+        var policy = new SwitchablePreviewPolicy(enabled: true);
+        using var provider = CreateProvider(new StubProbe(PreviewBoundaryContainment()), policy);
+        AssertEx.Equal(AppContainerFloor, provider.Capabilities & AppContainerFloor);
+
+        policy.Enabled = false;
+
+        AssertEx.Equal(SandboxProviderCapabilities.None, provider.Capabilities & AppContainerFloor);
+        _ = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(IsolatedRequest()));
+    }
+
+    [Test]
+    public async Task TheBwrapBoundary_ReportsThePosixView_AndIsUnaffectedByThePreviewSwitch()
+    {
+        // The Linux behaviour this round must not move: bwrap is Stable, served without previews, and its handle reports /work.
+        using var provider = CreateProvider(new StubProbe(SandboxContainment.None with
+        {
+            FilesystemIsolation = FakeIsolation()
+        }), new SwitchablePreviewPolicy(enabled: false));
+
+        AssertEx.False(provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsAppContainerBoundary));
+        var handle = await provider.CreateOrAttachAsync(IsolatedRequest());
+        try
+        {
+            AssertEx.Equal(SandboxIsolatedPaths.Posix, handle.IsolatedPaths);
+        }
+        finally
+        {
+            await provider.KillAsync(handle);
+        }
+
+        using var notIsolated = CreateProvider(new StubProbe(SandboxContainment.None));
+        var plain = await notIsolated.CreateOrAttachAsync(IsolatedRequest() with
+        {
+            Isolation = SandboxIsolationMode.None
+        });
+        try
+        {
+            AssertEx.Null(plain.IsolatedPaths, "a sandbox without isolation reports no isolated view");
+        }
+        finally
+        {
+            await notIsolated.KillAsync(plain);
+        }
+    }
+
     [Test]
     public async Task CreateRequest_RefusesANonPositiveThreadLimit()
     {
@@ -283,7 +375,7 @@ public sealed class SandboxFilesystemIsolationContractTests
         };
     }
 
-    private static ProcessSandboxRuntimeProvider CreateProvider(ISandboxContainmentProbe probe)
+    private static ProcessSandboxRuntimeProvider CreateProvider(ISandboxContainmentProbe probe, IExecutionPreviewPolicy? previewPolicy = null)
     {
         return new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions
             {
@@ -292,7 +384,30 @@ public sealed class SandboxFilesystemIsolationContractTests
             }),
             TimeProvider.System,
             logger: null,
-            new SandboxLauncher(probe));
+            new SandboxLauncher(probe),
+            previewPolicy: previewPolicy);
+    }
+
+    // What a Windows host with the MXC probe green measures: no bwrap, a Preview AppContainer boundary.
+    private static SandboxContainment PreviewBoundaryContainment()
+    {
+        return SandboxContainment.None with
+        {
+            FilesystemIsolationUnavailableReason = "the host is not Linux",
+            AppContainerBoundary = PreviewBoundary()
+        };
+    }
+
+    private sealed class SwitchablePreviewPolicy : IExecutionPreviewPolicy
+    {
+        public SwitchablePreviewPolicy(bool enabled)
+        {
+            Enabled = enabled;
+        }
+
+        public bool Enabled { get; set; }
+
+        public bool PreviewMechanismsEnabled => Enabled;
     }
 
     private sealed class StubProbe : ISandboxContainmentProbe
@@ -303,5 +418,15 @@ public sealed class SandboxFilesystemIsolationContractTests
         }
 
         public SandboxContainment Containment { get; }
+    }
+
+    private static SandboxAppContainerBoundary PreviewBoundary()
+    {
+        return new SandboxAppContainerBoundary
+        {
+            Mechanism = "mxc-processcontainer",
+            Tier = "AppContainerDacl",
+            Maturity = SandboxMechanismMaturity.Preview
+        };
     }
 }

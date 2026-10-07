@@ -606,6 +606,7 @@
 				"provider": "Provider",
 				"backend": "Backend",
 				"level": "Level",
+				"maturity": "Maturity",
 				"filesystem": "Filesystem",
 				"network": "Network",
 				"limits": "Resource limits",
@@ -617,7 +618,12 @@
 				"levels": {
 					"isolated": "Isolated",
 					"confined": "Confined",
-					"none": "None"
+					"none": "None",
+					"previewIsolated": "Isolated (preview)"
+				},
+				"maturities": {
+					"stable": "Stable",
+					"preview": "Preview"
 				}
 			}
 		},
@@ -2733,6 +2739,10 @@
 					"label": "Development workflows",
 					"description": "Durable, graph-based work items whose runs survive a restart. Needs work sessions. The built-in workflow definitions are seeded on the next restart."
 				},
+				"executionPreviewsEnabled": {
+					"label": "Execution previews",
+					"description": "Lets Preview sandbox mechanisms run Python and sandboxed MCP servers. On Windows this is the AppContainer boundary: no CPU, memory or process limit, only the time limit, and host path names stay visible. Applies to the next sandbox."
+				},
 				"graphWorkflowsEnabled": {
 					"label": "Graph workflows",
 					"description": "Author agent graphs on a canvas and run them."
@@ -2856,6 +2866,12 @@
 				"usage": "Usage & limits",
 				"showAdvanced": "Show advanced sections",
 				"hideAdvanced": "Hide advanced sections"
+			},
+			"executionPreviewsConfirm": {
+				"title": "Turn on execution previews?",
+				"description": "Preview sandbox mechanisms will run Python and sandboxed MCP servers. On Windows that is the AppContainer boundary: the code cannot read your user profile or the engine's data, but it runs with no CPU, memory or process-count limit (only the time limit stops it), and it can see host path names. Turn this on only if you accept that.",
+				"confirm": "Turn on",
+				"cancel": "Cancel"
 			}
 		},
 		"cloudSettings": {

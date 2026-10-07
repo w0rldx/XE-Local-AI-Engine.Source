@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -848,6 +849,149 @@ public sealed class SandboxedMcpStdioTransportTests
         {
             return ValueTask.CompletedTask;
         }
+    }
+
+    [Test]
+    public void BuildEnvironment_UnderBwrap_AddsNothingTheChainSets_SoTheArgvHasNoDuplicateSetenv()
+    {
+        // Linux unchanged: the chain already sets HOME/TMPDIR/TMP/TEMP to the POSIX view, so only the registration's variables are passed.
+        var registered = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["NODE_ENV"] = "production"
+        };
+
+        var environment = AssertEx.NotNull(SandboxedMcpStdioTransport.BuildEnvironment(IsolatedHandle(SandboxIsolatedPaths.Posix), registered));
+        AssertEx.Null(SandboxedMcpStdioTransport.BuildEnvironment(IsolatedHandle(SandboxIsolatedPaths.Posix),
+            new Dictionary<string, string>(StringComparer.Ordinal)));
+
+        var argv = SandboxIsolatedChain.Render(ChainInputs(environment), "/usr/bin/node", []);
+        var setenvNames = new List<string>();
+        for (var index = 0; index < argv.Count - 1; index++)
+        {
+            if (argv[index] == "--setenv")
+            {
+                setenvNames.Add(argv[index + 1]);
+            }
+        }
+
+        AssertEx.Equal(setenvNames.Count, setenvNames.Distinct(StringComparer.Ordinal).Count(), "every --setenv name appears once");
+        AssertEx.Contains(setenvNames, "NODE_ENV");
+    }
+
+    [Test]
+    public void BuildEnvironment_UnderTheAppContainerBoundary_PointsTheScratchAtTheJailsHostPaths()
+    {
+        var hostJail = new SandboxIsolatedPaths
+        {
+            Work = "/host/jail",
+            Home = "/host/jail/home",
+            Temp = "/host/jail/.tmp"
+        };
+
+        var environment = AssertEx.NotNull(SandboxedMcpStdioTransport.BuildEnvironment(IsolatedHandle(hostJail),
+            new Dictionary<string, string>(StringComparer.Ordinal)));
+
+        AssertEx.Equal(hostJail.Home, environment["HOME"]);
+        AssertEx.Equal(hostJail.Temp, environment["TMPDIR"]);
+    }
+
+    [Test]
+    public void BuildEnvironment_ForAnIsolatedHandleWithoutPaths_Throws()
+    {
+        _ = AssertEx.Throws<InvalidOperationException>(() => SandboxedMcpStdioTransport.BuildEnvironment(IsolatedHandle(paths: null),
+            new Dictionary<string, string>(StringComparer.Ordinal)));
+    }
+
+    [Test]
+    public void JailSearchPath_DefaultsToTheChainPathOnLinux_AndToTheHostPathOnWindows()
+    {
+        var record = StdioRecord(McpTrustTier.Sandboxed);
+
+        AssertEx.Equal("/usr/bin:/bin", SandboxedMcpStdioTransport.JailSearchPath(record, windowsHost: false), "the Linux default is unchanged");
+        AssertEx.Equal(Environment.GetEnvironmentVariable("PATH") ?? string.Empty, SandboxedMcpStdioTransport.JailSearchPath(record, windowsHost: true),
+            "the AppContainer boundary has no namespace of its own, so the child resolves against the PATH the provider passes through");
+
+        var withPath = record with
+        {
+            Environment = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["PATH"] = "/opt/server/bin"
+            }
+        };
+        AssertEx.Equal("/opt/server/bin", SandboxedMcpStdioTransport.JailSearchPath(withPath, windowsHost: true));
+    }
+
+    [Test]
+    public void ResolveExecutablePath_OnWindowsTriesPathExtAfterTheExactName_AndLinuxLooksTheNameUpExactly()
+    {
+        var withExe = CreateBindableDirectory("jail-pathext-");
+        var withBoth = CreateBindableDirectory("jail-pathext-");
+        try
+        {
+            var exe = CreateExecutable(withExe, "server.exe");
+            var exact = CreateExecutable(withBoth, "server");
+            _ = CreateExecutable(withBoth, "server.exe");
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Environment = new Dictionary<string, string>(StringComparer.Ordinal) { ["PATHEXT"] = ".COM; .exe" }
+            };
+            var windows = SandboxedMcpStdioTransport.ExecutableExtensions(record, windowsHost: true);
+            var linux = SandboxedMcpStdioTransport.ExecutableExtensions(record, windowsHost: false);
+
+            AssertEx.Equal(".COM|.exe", string.Join('|', windows), "the registration's PATHEXT wins over the host's");
+            AssertEx.Equal(exe, SandboxedMcpStdioTransport.ResolveExecutablePath("server", withExe.FullName, windows));
+            AssertEx.Equal(exe, SandboxedMcpStdioTransport.ResolveExecutablePath(Path.Combine(withExe.FullName, "server"), string.Empty, windows));
+            AssertEx.Equal(exact, SandboxedMcpStdioTransport.ResolveExecutablePath("server", withBoth.FullName, windows), "the exact name is preferred");
+            AssertEx.Empty(linux);
+            AssertEx.Null(SandboxedMcpStdioTransport.ResolveExecutablePath("server", withExe.FullName, linux), "Linux never appends an extension");
+        }
+        finally
+        {
+            withExe.Delete(recursive: true);
+            withBoth.Delete(recursive: true);
+        }
+    }
+
+    private static SandboxIsolatedChainInputs ChainInputs(IReadOnlyDictionary<string, string> environment) =>
+        new()
+        {
+            SetsidPath = "/usr/bin/setsid",
+            SystemdRunPath = "/usr/bin/systemd-run",
+            BwrapPath = "/usr/bin/bwrap",
+            ScopeUnitName = "xe-mcp-0123456789abcdef0123456789abcdef.scope",
+            RuntimeMaxSeconds = 150,
+            UserId = 1000,
+            GroupId = 1000,
+            UsrMergeEntries = [],
+            PasswdDescriptor = 10,
+            GroupDescriptor = 11,
+            NameServiceSwitchDescriptor = 12,
+            HostsDescriptor = 13,
+            JailDescriptor = 20,
+            JailTempDescriptor = 21,
+            ThreadLimit = 2,
+            AdditionalEnvironment = environment
+        };
+
+    private static SandboxHandle IsolatedHandle(SandboxIsolatedPaths? paths)
+    {
+        return new SandboxHandle
+        {
+            ProviderName = "process",
+            SandboxId = "sandbox",
+            AttachKey = new SandboxAttachKey
+            {
+                OwnerUserId = "owner",
+                NodeId = "node",
+                ProviderName = "process",
+                RuntimeProfile = SandboxedMcpStdioTransport.RuntimeProfile,
+                ManifestVersion = 1
+            },
+            CreatedAt = DateTimeOffset.UnixEpoch,
+            ManifestVersion = 1,
+            Isolation = SandboxIsolationMode.Filesystem,
+            IsolatedPaths = paths
+        };
     }
 
     private static McpServerRecord StdioRecord(McpTrustTier tier)

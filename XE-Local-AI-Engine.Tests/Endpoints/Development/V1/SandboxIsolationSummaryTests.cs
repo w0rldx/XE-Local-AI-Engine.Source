@@ -45,6 +45,7 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.Equal(ProcessSandboxRuntimeProvider.Name, summary.Provider);
         AssertEx.Equal("process", summary.Backend);
         AssertEx.Equal("None", summary.Level);
+        AssertEx.Equal("Stable", summary.Maturity);
         AssertEx.False(summary.FilesystemIsolation);
         AssertEx.False(summary.NetworkIsolation);
         AssertEx.False(summary.ResourceLimits);
@@ -360,6 +361,111 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, "not requested by this role");
     }
 
+    /// <summary>
+    ///     A Preview-served role is never "Isolated" (ADR 0019): it reports <c>PreviewIsolated</c>/<c>Preview</c>, and with previews off the
+    ///     same boundary reports the role unserved, naming the switch.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public void ToIsolationSummary_ForAPreviewBoundary_ReportsPreviewIsolatedOnlyWhilePreviewsAreEnabled(bool previewsEnabled)
+    {
+        var containment = SandboxContainment.None with
+        {
+            FilesystemIsolationUnavailableReason = "the host is not Linux",
+            AppContainerBoundary = PreviewBoundary()
+        };
+        using var provider = CreateProcessProvider(containment, previewsEnabled);
+
+        var summary = DevelopmentContractMapper.ToIsolationSummary("run_python", SandboxWorkloads.RunPython, provider, containment);
+
+        if (previewsEnabled)
+        {
+            AssertEx.True(summary.FilesystemIsolation);
+            AssertEx.Equal("PreviewIsolated", summary.Level);
+            AssertEx.Equal("Preview", summary.Maturity);
+            AssertEx.Equal("appcontainer", summary.Backend);
+            AssertEx.Null(summary.FilesystemIsolationUnavailableReason);
+        }
+        else
+        {
+            AssertEx.False(summary.FilesystemIsolation);
+            AssertEx.NotEqual("PreviewIsolated", summary.Level);
+            AssertEx.Equal("Stable", summary.Maturity);
+            AssertEx.Equal("process", summary.Backend);
+            AssertEx.Equal(SandboxContainment.ExecutionPreviewsDisabledReason, summary.FilesystemIsolationUnavailableReason);
+        }
+    }
+
+    /// <summary>
+    ///     An eligible Preview boundary serves floor roles only (ADR 0019): AgentHome's row stays unserved with the reason naming the
+    ///     scoping, while the Sandboxed MCP row reports PreviewIsolated through the appcontainer backend.
+    /// </summary>
+    [Test]
+    public void ToIsolationSummary_ForAnEligiblePreviewBoundary_ServesFloorRolesOnly()
+    {
+        var containment = SandboxContainment.None with
+        {
+            FilesystemIsolationUnavailableReason = "the host is not Linux",
+            AppContainerBoundary = PreviewBoundary()
+        };
+        using var provider = CreateProcessProvider(containment, previewsEnabled: true);
+
+        var agentHome = DevelopmentContractMapper.ToIsolationSummary("agent-home", SandboxWorkloads.AgentHome, provider, containment);
+        var mcp = DevelopmentContractMapper.ToIsolationSummary("mcp-stdio", SandboxWorkloads.McpStdio, provider, containment);
+
+        AssertEx.False(agentHome.FilesystemIsolation);
+        AssertEx.NotEqual("PreviewIsolated", agentHome.Level);
+        AssertEx.Equal("process", agentHome.Backend);
+        AssertEx.Equal(SandboxContainment.PreviewServesFloorWorkloadsOnlyReason, agentHome.FilesystemIsolationUnavailableReason);
+        AssertEx.True(mcp.FilesystemIsolation);
+        AssertEx.Equal("PreviewIsolated", mcp.Level);
+        AssertEx.Equal("appcontainer", mcp.Backend);
+    }
+
+    /// <summary>
+    ///     The MXC policy denies all network on every AppContainer launch, so a boundary-served row reports the network axis served while
+    ///     staying PreviewIsolated; a plain-process row on the same host does not inherit it.
+    /// </summary>
+    [Test]
+    public void ToIsolationSummary_ForAnEligiblePreviewBoundary_ReportsNetworkIsolationOnlyOnBoundaryServedRows()
+    {
+        var containment = SandboxContainment.None with
+        {
+            FilesystemIsolationUnavailableReason = "the host is not Linux",
+            AppContainerBoundary = PreviewBoundary()
+        };
+        using var provider = CreateProcessProvider(containment, previewsEnabled: true);
+
+        var runPython = DevelopmentContractMapper.ToIsolationSummary("run_python", SandboxWorkloads.RunPython, provider, containment);
+        var mcp = DevelopmentContractMapper.ToIsolationSummary("mcp-stdio", SandboxWorkloads.McpStdio, provider, containment);
+        var agentHome = DevelopmentContractMapper.ToIsolationSummary("agent-home", SandboxWorkloads.AgentHome, provider, containment);
+
+        foreach (var served in new[] { runPython, mcp })
+        {
+            AssertEx.True(served.NetworkIsolation);
+            AssertEx.Equal("PreviewIsolated", served.Level);
+            AssertEx.Equal("appcontainer", served.Backend);
+        }
+
+        AssertEx.False(agentHome.NetworkIsolation);
+        AssertEx.Equal("process", agentHome.Backend);
+    }
+
+    /// <summary>The Linux bwrap boundary is Stable: a fully contained host still reports "Isolated", never a Preview level.</summary>
+    [Test]
+    public void ToIsolationSummary_ForTheBwrapBoundary_StaysStableAndIsolated()
+    {
+        var containment = FullyContainedHost();
+        using var provider = CreateProcessProvider(containment, previewsEnabled: true);
+
+        var summary = DevelopmentContractMapper.ToIsolationSummary("run_python", SandboxWorkloads.RunPython, provider, containment);
+
+        AssertEx.Equal("Isolated", summary.Level);
+        AssertEx.Equal("Stable", summary.Maturity);
+        AssertEx.Equal("bwrap", summary.Backend);
+    }
+
     private static SandboxContainment FullyContainedHost()
     {
         return new SandboxContainment
@@ -388,7 +494,7 @@ public sealed class SandboxIsolationSummaryTests
         };
     }
 
-    private static ProcessSandboxRuntimeProvider CreateProcessProvider(SandboxContainment containment)
+    private static ProcessSandboxRuntimeProvider CreateProcessProvider(SandboxContainment containment, bool previewsEnabled = false)
     {
         return new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions
             {
@@ -397,7 +503,18 @@ public sealed class SandboxIsolationSummaryTests
             }),
             TimeProvider.System,
             logger: null,
-            new SandboxLauncher(new StubProbe(containment)));
+            new SandboxLauncher(new StubProbe(containment)),
+            previewPolicy: new FixedPreviewPolicy(previewsEnabled));
+    }
+
+    private sealed class FixedPreviewPolicy : IExecutionPreviewPolicy
+    {
+        public FixedPreviewPolicy(bool enabled)
+        {
+            PreviewMechanismsEnabled = enabled;
+        }
+
+        public bool PreviewMechanismsEnabled { get; }
     }
 
     private static DockerSandboxRuntimeProvider CreateDockerProvider()
@@ -426,5 +543,15 @@ public sealed class SandboxIsolationSummaryTests
     {
         public IDockerRuntimeClient Create(DockerDaemonEndpoint endpoint) =>
             new FakeDockerRuntimeClient(endpoint);
+    }
+
+    private static SandboxAppContainerBoundary PreviewBoundary()
+    {
+        return new SandboxAppContainerBoundary
+        {
+            Mechanism = "mxc-processcontainer",
+            Tier = "AppContainerDacl",
+            Maturity = SandboxMechanismMaturity.Preview
+        };
     }
 }

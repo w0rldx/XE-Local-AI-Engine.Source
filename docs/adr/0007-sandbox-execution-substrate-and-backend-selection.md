@@ -106,6 +106,10 @@ substrate has no consumer on the inference path and must never acquire one.
 "not a security boundary" qualification intact. Under this record MXC is a backend behind the same layer, and so is
 OpenSandbox under §8.8's three flip conditions. Neither is adopted here.
 
+> **Note, 2026-10-07** (no change to this record's reasoning). MXC 1.0.0 shipped on 2026-10-07 and its README no longer
+> carries the "not a security boundary" qualification quoted above (microsoft/mxc#1388). It is now the Windows **Preview**
+> launch mechanism inside the `process` backend, not a backend of its own: [ADR 0019](0019-execution-previews-and-the-appcontainer-boundary.md).
+
 **Unamended — ADR 0004 Decision §4.** `PLAN-sandbox-hardening-2026-07-01.md` stays complementary; the process backend
 is not superseded, and it remains the backend that serves every consumer with no image-backed toolchain need.
 
@@ -125,7 +129,9 @@ derivable from a repository would be `devcontainer.json` under another name.
   this record does not repeat that evaluation.
 - **Windows containment.** The process backend's Windows path is `SandboxContainment.None`
   (`HostSandboxContainmentProbe`: "the Windows Job Object path is not implemented"). This record does not change that; it
-  makes the shortfall expressible, which is a prerequisite for reporting it honestly, not a fix.
+  makes the shortfall expressible, which is a prerequisite for reporting it honestly, not a fix. *(Note, 2026-10-07: the
+  Windows probe now measures the MXC AppContainer boundary, a Preview mechanism that serves the `Filesystem` floor while the
+  operator enables it; ceilings remain absent on Windows. See [ADR 0019](0019-execution-previews-and-the-appcontainer-boundary.md).)*
 - **Renaming the SPI, or collapsing the role markers before there is a second consumer that needs it.**
 - **A trust model for MCP servers.** Trust tiers (Sandboxed / PrivilegedHost / BuiltInTrusted) are a separate decision;
   remote non-loopback HTTP MCP stays deferred.

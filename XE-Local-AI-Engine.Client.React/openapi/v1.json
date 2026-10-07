@@ -31613,6 +31613,7 @@
           "provider",
           "backend",
           "level",
+          "maturity",
           "filesystemIsolation",
           "networkIsolation",
           "networkIsolationRequired",
@@ -31632,6 +31633,9 @@
             "type": "string"
           },
           "level": {
+            "type": "string"
+          },
+          "maturity": {
             "type": "string"
           },
           "filesystemIsolation": {
@@ -43716,6 +43720,9 @@
           },
           "devWorkflowsEnabled": {
             "type": "boolean"
+          },
+          "executionPreviewsEnabled": {
+            "type": "boolean"
           }
         }
       },
@@ -44456,6 +44463,10 @@
             "nullable": true
           },
           "devWorkflowsEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "executionPreviewsEnabled": {
             "type": "boolean",
             "nullable": true
           }

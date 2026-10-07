@@ -384,7 +384,7 @@ export interface NodeSettingsFieldsForm {
 	agentHomeRunRetentionMaxRuns: number | string;
 	// Shown and edited in GB (see nodeSettingsDisplayScale).
 	agentHomeRunRetentionMaxTotalBytes: number | string;
-	// The nine feature switches (section "general", Features card). The response carries their effective value.
+	// The ten feature switches (section "general", Features card). The response carries their effective value.
 	developmentEnabled: boolean;
 	workSessionsEnabled: boolean;
 	graphWorkflowsEnabled: boolean;
@@ -394,6 +394,9 @@ export interface NodeSettingsFieldsForm {
 	agentHomeEnabled: boolean;
 	schedulerEnabled: boolean;
 	devWorkflowsEnabled: boolean;
+	// Security-widening: lets Preview sandbox mechanisms serve run_python and sandboxed MCP. Turning it on is confirmed in the
+	// save flow (see turnsOnExecutionPreviews).
+	executionPreviewsEnabled: boolean;
 }
 
 // The feature switches in display order. Explicit false is meaningful (it turns the feature off).
@@ -407,6 +410,7 @@ export const featureSwitchFields = [
 	"externalAppsEnabled",
 	"transcriptionEnabled",
 	"schedulerEnabled",
+	"executionPreviewsEnabled",
 ] as const satisfies readonly (keyof NodeSettingsFieldsForm)[];
 
 export type ChatCacheRamMode = "auto" | "off" | "custom";
@@ -681,6 +685,7 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	agentHomeEnabled: false,
 	schedulerEnabled: true,
 	devWorkflowsEnabled: false,
+	executionPreviewsEnabled: false,
 };
 
 // Coalesces a nullable numeric response field into a form value, falling back to the provided default when absent.
@@ -1144,6 +1149,12 @@ export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsField
 
 // True when a built save body carries at least one restart-gated field, so the page can tell the operator a restart is
 // needed. The request keys mirror the form keys 1:1, and the body only ever holds CHANGED fields.
+// The save turns execution previews ON. The body carries changed fields only, so a true here is always the off-to-on
+// transition, the one the page confirms before saving; turning them off widens nothing and is never asked about.
+export function turnsOnExecutionPreviews(body: SaveNodeSettingsRequest): boolean {
+	return body.executionPreviewsEnabled === true;
+}
+
 export function touchesRestartGatedField(body: SaveNodeSettingsRequest): boolean {
 	return Object.keys(body).some((key) => restartGatedNodeSettingsFields.has(key as keyof NodeSettingsFieldsForm));
 }

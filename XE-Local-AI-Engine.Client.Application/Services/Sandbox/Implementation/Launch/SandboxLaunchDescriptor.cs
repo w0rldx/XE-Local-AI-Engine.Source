@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 
+using Microsoft.Mxc.Sdk.V1;
+
 /// <summary>
 ///     The resolved wrapper chain for one sandboxed command, plus an honest record of which mechanisms were actually applied.
 /// </summary>
@@ -59,4 +61,14 @@ public sealed record SandboxLaunchDescriptor
     ///     command would exhaust the engine's table over a session.
     /// </remarks>
     public IDisposable? LaunchResources { get; init; }
+
+    /// <summary>
+    ///     The MXC ProcessContainer request when the Windows AppContainer boundary serves this launch, or <see langword="null" /> for a
+    ///     plain or bwrap-wrapped child. When set, the provider spawns through MXC instead of starting <see cref="FileName" />.
+    /// </summary>
+    /// <remarks>
+    ///     Built by <see cref="SandboxLauncher" /> through <c>MxcPolicyMapper</c>, so every request the provider spawns is the one locked
+    ///     policy; <c>MxcSandboxRuntime</c> re-asserts it with <c>MxcPolicyGuard</c> before the native call (ADR 0019).
+    /// </remarks>
+    internal ContainerRequest? MxcRequest { get; init; }
 }

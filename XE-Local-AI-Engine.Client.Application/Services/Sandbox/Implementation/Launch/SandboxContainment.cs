@@ -15,6 +15,15 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation
 /// </remarks>
 public sealed record SandboxContainment
 {
+    /// <summary>The reason a measured Preview mechanism does not serve a role: the operator has not enabled execution previews.</summary>
+    public const string ExecutionPreviewsDisabledReason = "execution previews are disabled";
+
+    /// <summary>
+    ///     The reason a where-advertised role is not served by an eligible Preview boundary: it serves floor workloads only (ADR 0019).
+    /// </summary>
+    public const string PreviewServesFloorWorkloadsOnlyReason =
+        "the Windows AppContainer boundary is a Preview mechanism and serves only workloads whose isolation floor is Filesystem (run_python, Sandboxed MCP); this role runs in its working-directory jail on the host filesystem";
+
     /// <summary>A host that can contain nothing: the plain-child fallback. Used off-Linux and when every probe fails.</summary>
     public static SandboxContainment None { get; } = new();
 
@@ -95,4 +104,32 @@ public sealed record SandboxContainment
     ///     nothing else, and a host that can impose ceilings and deny egress but has no usable <c>bwrap</c> keeps both of those.
     /// </remarks>
     public string? FilesystemIsolationUnavailableReason { get; init; }
+
+    /// <summary>The measured Windows AppContainer boundary, or <see langword="null" /> when this host cannot deliver it.</summary>
+    /// <remarks>Measured regardless of the preview setting; whether it may SERVE a role is <see cref="EligibleAppContainerBoundary" />.</remarks>
+    internal SandboxAppContainerBoundary? AppContainerBoundary { get; init; }
+
+    /// <summary>Measured reason the AppContainer boundary is unavailable (on a non-Windows host: "the host is not Windows").</summary>
+    public string? AppContainerBoundaryUnavailableReason { get; init; }
+
+    /// <summary><see langword="true" /> when the AppContainer boundary was measured on this host, eligible or not.</summary>
+    public bool SupportsAppContainerBoundary => AppContainerBoundary is not null;
+
+    /// <summary>The measured AppContainer boundary's maturity, or <see langword="null" /> when none was measured.</summary>
+    public SandboxMechanismMaturity? AppContainerBoundaryMaturity => AppContainerBoundary?.Maturity;
+
+    /// <summary>
+    ///     The AppContainer boundary when it may serve a role: a <c>Stable</c> one always, a <c>Preview</c> one only while previews are enabled.
+    /// </summary>
+    /// <remarks>
+    ///     The ONE eligibility rule, shared by the provider's <c>Capabilities</c>, the registry's launch policy and the capability summary,
+    ///     so advertisement, enforcement and the operator's view cannot disagree about whether a Preview mechanism is in force.
+    /// </remarks>
+    internal SandboxAppContainerBoundary? EligibleAppContainerBoundary(bool previewMechanismsEnabled)
+    {
+        return AppContainerBoundary is { } boundary
+               && (boundary.Maturity == SandboxMechanismMaturity.Stable || previewMechanismsEnabled)
+            ? boundary
+            : null;
+    }
 }

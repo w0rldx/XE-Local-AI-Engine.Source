@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection;
 
 using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 
 /// <summary>
 ///     Registers the node-local application services, persistence boundaries, model providers, and host-agent clients.
@@ -20,6 +21,13 @@ public static class NodeApplicationServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(startupSettings);
+
+        // FIRST hosted service, ahead of the MCP startup connector and every run dispatcher: hosted services start in registration
+        // order and this one awaits the Windows sweep of crashed MXC runs' ACL residue, so no MXC launch can overlap it (ADR 0019).
+        if (OperatingSystem.IsWindows())
+        {
+            builder.Services.AddHostedService<MxcAclResidueSweepService>();
+        }
 
         builder.AddNodeCoreOptions(configuration);
         builder.AddNodeAuth(configuration);

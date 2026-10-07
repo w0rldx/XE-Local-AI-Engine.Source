@@ -312,6 +312,12 @@ public interface INodeRuntimeSettings
     /// <summary>Whether development workflows are on (stored &gt; <c>DevWorkflows:Enabled</c> &gt; off). Read once per request, turn or tick.</summary>
     Task<bool> GetDevWorkflowsEnabledAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Whether Preview sandbox mechanisms may serve a role (stored &gt; <c>ExecutionPreviews:Enabled</c> &gt; off). Read per sandbox
+    ///     create and per capability read.
+    /// </summary>
+    Task<bool> GetExecutionPreviewsEnabledAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Whether old conversations are deleted (stored &gt; <c>ChatRetention:Enabled</c> &gt; off). Read per sweep.</summary>
     Task<bool> GetChatRetentionEnabledAsync(CancellationToken cancellationToken = default);
 
@@ -548,4 +554,6 @@ public interface INodeRuntimeSettings
     bool GetSchedulerEnabled();
 
     bool GetDevWorkflowsEnabled();
+
+    bool GetExecutionPreviewsEnabled();
 }

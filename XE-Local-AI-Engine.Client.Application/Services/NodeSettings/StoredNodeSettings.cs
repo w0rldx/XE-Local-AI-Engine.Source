@@ -1510,6 +1510,17 @@ public sealed partial record StoredNodeSettings
     public bool? DevWorkflowsEnabled { get; init; }
 
     /// <summary>
+    ///     Whether sandbox launch mechanisms of <c>Preview</c> maturity (the Windows MXC AppContainer boundary) may serve a role. Seed:
+    ///     <c>ExecutionPreviews:Enabled</c> (off). Read per call, so turning it off takes effect for the next sandbox created.
+    /// </summary>
+    /// <remarks>
+    ///     A security-WIDENING switch: on Windows it lets <c>run_python</c> and sandboxed MCP servers run under a boundary that has no
+    ///     CPU, memory or process-count ceiling. Writable only through the Operator settings endpoint, deliberately absent from
+    ///     <c>NodeSettingsAgenticPatch</c> so no MCP tool or model can turn it on. See ADR 0019.
+    /// </remarks>
+    public bool? ExecutionPreviewsEnabled { get; init; }
+
+    /// <summary>
     ///     Which container runtime application containers use: <c>auto</c> (the default) or <c>docker</c>.
     /// </summary>
     /// <remarks>

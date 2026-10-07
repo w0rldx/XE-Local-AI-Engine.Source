@@ -66,6 +66,7 @@ Superseded claims; the entries above are the active rules.
 |---|---|
 | TOCTOU guards live in a Docker provider. | They live in `ProcessSandboxRuntimeProvider` and apply to provider operations (§4). |
 | Modern `git apply` rejects `--binary` patches. | It applies them; never depend on rejection for security. |
-| `run_python` can see the host filesystem. | It requires filesystem-isolated bubblewrap and refuses otherwise; other sandboxes are unchanged (§4). |
+| `run_python` can see the host filesystem. | It requires a filesystem boundary and refuses otherwise: bubblewrap on Linux, the MXC AppContainer boundary (Preview, operator-enabled) on Windows (ADR 0019); other sandboxes are unchanged (§4). |
+| MXC is TypeScript-only, has no NuGet package, is "not a security boundary", and needs build 26100. | MXC 1.0.0 ships `Microsoft.Mxc.Sdk` on NuGet, the README caveat is gone, and the floor is whatever `GetPlatformSupport` + `Probe` report on the host; it is a Preview launch mechanism here (ADR 0019). |
 | Compute venv chmod can undo read-only mode. | Inside the namespace the read-only bind makes chmod/write fail. |
 | Compute egress is gated by `SupportsNetworkPolicy`. | Filesystem isolation/bwrap owns the network namespace; use that boundary (§4). |

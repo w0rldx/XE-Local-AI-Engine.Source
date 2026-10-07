@@ -1055,8 +1055,9 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         // never reaches the UI: each reason has one fixed wording, and the real exception is logged server-side.
         return reason switch
         {
-            McpConnectionFailureReason.SandboxUnavailable =>
-                "This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.",
+            McpConnectionFailureReason.SandboxUnavailable => OperatingSystem.IsWindows()
+                ? "This node cannot isolate the MCP server from the host filesystem. On Windows that needs the MXC AppContainer boundary (Preview) available and execution previews enabled in Node settings, or move the server to the Privileged host tier."
+                : "This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.",
             McpConnectionFailureReason.SandboxRefused =>
                 "The sandbox refused to start the MCP server: its command or working directory overlaps a protected location, or the sandbox boundary could not be established. Point it at the directory holding the server's own files.",
             McpConnectionFailureReason.ServerNotFound => "The MCP server's command was not found or could not be started.",

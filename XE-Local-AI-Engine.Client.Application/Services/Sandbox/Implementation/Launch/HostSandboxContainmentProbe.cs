@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 
 /// <summary>
 ///     The production <see cref="ISandboxContainmentProbe" />: measures what this host can really do by EXERCISING each mechanism once,
@@ -22,6 +23,20 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     // short enough that startup is never visibly delayed even when every probe fails.
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(5);
 
+    /// <summary>The AppContainer boundary's reason on every host that is not Windows.</summary>
+    internal const string NotWindowsReason = "the host is not Windows";
+
+    /// <summary>The measured AppContainer mechanism's name (ADR 0019).</summary>
+    internal const string MxcMechanism = "mxc-processcontainer";
+
+    /// <summary>Why a Windows host has no ceilings: ProcessContainer has none and the Job Object path (S1) was not built.</summary>
+    internal const string WindowsResourceLimitsReason =
+        "Windows has no CPU, memory or process-count ceiling for a sandboxed child (the MXC ProcessContainer has none and the Job Object path is not implemented); a command is bounded only by its timeout";
+
+    /// <summary>Why a Windows host has no SEPARATE egress mechanism: denial is part of the AppContainer boundary.</summary>
+    internal const string WindowsNetworkIsolationReason =
+        "Windows has no egress-denial mechanism of its own: the network is denied only inside the MXC AppContainer boundary, which serves only SandboxIsolationMode.Filesystem";
+
     // Standard locations for the wrapper binaries. PATH is consulted first; these are the fallback because the worker's
     // own PATH can be minimal under a service manager.
     private static readonly string[] BinarySearchDirectories =
@@ -39,11 +54,16 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
 
     private readonly Lazy<SandboxContainment> _containment;
     private readonly Func<IReadOnlyDictionary<string, string>, SandboxFilesystemIsolationProbeResult> _filesystemProbe;
+    private readonly Func<bool> _isWindows;
     private readonly ILogger<HostSandboxContainmentProbe> _logger;
+    private readonly IMxcSandboxRuntime? _mxcRuntime;
 
     // The logger is optional so tests can construct the probe directly; ActivatorUtilities injects it in production.
     public HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger = null)
-        : this(logger, HostSandboxFilesystemIsolationProbe.Measure)
+        : this(logger,
+            HostSandboxFilesystemIsolationProbe.Measure,
+            OperatingSystem.IsWindows() ? new MxcSandboxRuntime() : null,
+            OperatingSystem.IsWindows)
     {
         var own = _containment;
         _containment = LazyInitializer.EnsureInitialized(ref processContainment, () => own);
@@ -53,10 +73,23 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     // network results survive intact. Instances built here keep their own cache, never the process-wide one.
     internal HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger,
         Func<IReadOnlyDictionary<string, string>, SandboxFilesystemIsolationProbeResult> filesystemProbe)
+        : this(logger, filesystemProbe, mxcRuntime: null, OperatingSystem.IsWindows)
+    {
+    }
+
+    // The MXC runtime and the OS test are injectable so a Linux test drives the Windows branch through a fake runtime; the branch reaches
+    // the SDK only through the IMxcSandboxRuntime seam, so nothing Windows-only runs on the test host.
+    internal HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger,
+        Func<IReadOnlyDictionary<string, string>, SandboxFilesystemIsolationProbeResult> filesystemProbe,
+        IMxcSandboxRuntime? mxcRuntime,
+        Func<bool> isWindows)
     {
         ArgumentNullException.ThrowIfNull(filesystemProbe);
+        ArgumentNullException.ThrowIfNull(isWindows);
         _logger = logger ?? NullLogger<HostSandboxContainmentProbe>.Instance;
         _filesystemProbe = filesystemProbe;
+        _mxcRuntime = mxcRuntime;
+        _isWindows = isWindows;
         _containment = new Lazy<SandboxContainment>(Measure, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
@@ -78,23 +111,29 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             {
                 ResourceLimitsUnavailableReason = "the containment probe failed",
                 NetworkIsolationUnavailableReason = "the containment probe failed",
-                FilesystemIsolationUnavailableReason = "the containment probe failed"
+                FilesystemIsolationUnavailableReason = "the containment probe failed",
+                AppContainerBoundaryUnavailableReason = "the containment probe failed"
             };
         }
     }
 
     private SandboxContainment MeasureCore()
     {
+        if (_isWindows())
+        {
+            return MeasureWindows();
+        }
+
         if (!OperatingSystem.IsLinux())
         {
-            // Linux is the only enforcement target that shipped: the Windows Job Object path was designed and deliberately not built, so
-            // a Windows host contains nothing and must advertise nothing. A live containment gap, not a temporary state of this file.
-            const string reason = "the host is not Linux (the Windows Job Object path is not implemented)";
+            // Neither enforcement target: nothing is measured and nothing may be advertised.
+            const string reason = "the host is neither Linux nor Windows";
             return SandboxContainment.None with
             {
                 ResourceLimitsUnavailableReason = reason,
                 NetworkIsolationUnavailableReason = reason,
-                FilesystemIsolationUnavailableReason = reason
+                FilesystemIsolationUnavailableReason = reason,
+                AppContainerBoundaryUnavailableReason = NotWindowsReason
             };
         }
 
@@ -121,7 +160,9 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             EnvPath = envBinary,
             UserBusEnvironment = userBusEnvironment,
             ResourceLimitsUnavailableReason = limitsReason,
-            NetworkIsolationUnavailableReason = networkReason
+            NetworkIsolationUnavailableReason = networkReason,
+            // The AppContainer boundary is a Windows mechanism; a Linux host measures bwrap instead and never this.
+            AppContainerBoundaryUnavailableReason = NotWindowsReason
         };
 
         _logger.LogInformation(
@@ -135,6 +176,78 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             filesystem.Reason is null ? string.Empty : $" ({filesystem.Reason})");
 
         return containment;
+    }
+
+    /// <summary>
+    ///     The Windows measurement: the MXC ProcessContainer, read-only (<c>GetPlatformSupport</c> + <c>Probe</c> on the engine's own policy),
+    ///     whatever the preview setting; eligibility is decided per call, never here (ADR 0019).
+    /// </summary>
+    /// <remarks>
+    ///     The boundary is reported only when MXC accepts the policy AND reports no missing host preparation: MXC 1.0.0 warns rather than
+    ///     fails when the one-time admin prep is absent, and children then fail to start, so a warned host is unavailable WITH the exact
+    ///     command to run. The product never runs the prep itself. Ceilings and a separate egress mechanism stay unavailable, with reasons.
+    /// </remarks>
+    private SandboxContainment MeasureWindows()
+    {
+        var result = _mxcRuntime is null
+            ? new MxcProbeResult { Supported = false, Warnings = [], Reason = "the MXC runtime is not available in this process" }
+            : MxcProbe.Measure(_mxcRuntime);
+
+        SandboxAppContainerBoundary? boundary = null;
+        string? reason;
+        if (result is { Supported: true, HostPrepMissing: false, Tier: { } tier })
+        {
+            boundary = new SandboxAppContainerBoundary
+            {
+                Mechanism = MxcMechanism,
+                Tier = tier,
+                Maturity = SandboxMechanismMaturity.Preview,
+                Warnings = result.Warnings
+            };
+            reason = null;
+        }
+        else
+        {
+            reason = result.Supported ? DescribeMissingHostPrep(result.Warnings) : result.Reason ?? "MXC reported the ProcessContainer unavailable";
+        }
+
+        var containment = SandboxContainment.None with
+        {
+            AppContainerBoundary = boundary,
+            AppContainerBoundaryUnavailableReason = reason,
+            ResourceLimitsUnavailableReason = WindowsResourceLimitsReason,
+            NetworkIsolationUnavailableReason = WindowsNetworkIsolationReason,
+            FilesystemIsolationUnavailableReason = boundary is null
+                ? $"the Windows filesystem boundary is the MXC AppContainer boundary, and it is unavailable on this host: {reason}"
+                : "the Windows filesystem boundary is the MXC AppContainer boundary (Preview); it serves a role only while execution previews are enabled"
+        };
+
+        _logger.LogInformation(
+            "Sandbox containment probe (Windows): AppContainer boundary {Available}{Detail}; resource limits unavailable; separate network isolation unavailable.",
+            boundary is not null,
+            boundary is null ? $" ({reason})" : $" (mechanism {boundary.Mechanism}, tier {boundary.Tier}, maturity {boundary.Maturity}, {boundary.Warnings.Count} warning(s))");
+
+        return containment;
+    }
+
+    /// <summary>The unavailable reason for a host MXC warned is missing its one-time admin preparation, naming the exact commands.</summary>
+    internal static string DescribeMissingHostPrep(IReadOnlyList<string> warnings)
+    {
+        var commands = new List<string>(2);
+        if (warnings.Any(static warning => warning.Contains("prepare-system-drive", StringComparison.OrdinalIgnoreCase)))
+        {
+            commands.Add("'wxc-host-prep prepare-system-drive' (once per host)");
+        }
+
+        if (warnings.Any(static warning => warning.Contains("prepare-null-device", StringComparison.OrdinalIgnoreCase)))
+        {
+            commands.Add("'wxc-host-prep prepare-null-device' (after every boot)");
+        }
+
+        var action = commands.Count == 0
+            ? "run the wxc-host-prep step MXC names below"
+            : "run " + string.Join(" and ", commands);
+        return $"MXC needs one-time administrator host preparation before an AppContainer child can start: as an administrator, {action} (wxc-host-prep.exe ships in the MXC 1.0.0 release assets, not in the NuGet package). MXC reported: {string.Join(" | ", warnings)}";
     }
 
     /// <summary>Runs the filesystem-isolation measurement inside its OWN guard.</summary>

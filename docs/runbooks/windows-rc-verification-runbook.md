@@ -624,6 +624,11 @@ and is kept only so nobody re-derives it and goes looking for it on Windows:
 Sandbox containment probe: process group False, resource limits False (the host is not Linux (the Windows Job Object path is not implemented)), network isolation False (the host is not Linux (the Windows Job Object path is not implemented)).
 ```
 
+> **Note, 2026-10-07.** Builds after the MXC integration ([ADR 0019](../adr/0019-execution-previews-and-the-appcontainer-boundary.md))
+> measure the Windows AppContainer boundary and DO log one line on Windows, `Sandbox containment probe (Windows):
+> AppContainer boundary …`, naming the tier or the reason (including a missing `wxc-host-prep` step). The reason string
+> quoted above no longer exists in those builds; this section describes the RCs cut before them.
+
 **Fail looks like / next step.**
 - The **container** branch bullets ("read-only root filesystem", "all capabilities dropped") on a `process` node →
   materially false safety claim. P0 for a disclosure.

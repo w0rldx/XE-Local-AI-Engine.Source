@@ -116,6 +116,12 @@
     <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.22.0" />
     <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.22.0" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.10.0" />
+    <!-- MXC process containment (Windows ProcessContainer = AppContainer + DACL) as the Preview launch mechanism inside
+         ProcessSandboxRuntimeProvider. Pinned EXACTLY: the policy guard rejects weakening properties by name, so a new
+         SDK surface is reviewed, never floated in. Single net8.0 asset (consumable from net10.0); the package bundles its
+         natives (mxc_ffi.dll + plm.exe + WSLC files for win-x64/arm64, libmxc_ffi.so for linux, osx-arm64), so no
+         third-party binary is vendored. MIT. -->
+    <PackageVersion Include="Microsoft.Mxc.Sdk" Version="1.0.0" />
     <!-- ModelContextProtocol.AspNetCore takes an exact dependency on the matching ModelContextProtocol
          build, so these two only ever move together; a split bump fails restore with NU1107/NU1608. -->
     <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />

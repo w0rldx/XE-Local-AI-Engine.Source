@@ -55,6 +55,7 @@ const nodeSettingsFieldSections: Readonly<
 	agentHomeEnabled: "general",
 	schedulerEnabled: "general",
 	devWorkflowsEnabled: "general",
+	executionPreviewsEnabled: "general",
 	maxMessageRequestTimeoutSeconds: "chat",
 	defaultModelName: "chat",
 	enableTools: "chat",

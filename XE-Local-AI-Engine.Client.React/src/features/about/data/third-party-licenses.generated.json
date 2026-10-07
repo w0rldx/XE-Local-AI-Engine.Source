@@ -2666,6 +2666,14 @@
 			"source": "backend"
 		},
 		{
+			"id": "backend:Microsoft.Mxc.Sdk@1.0.0",
+			"name": "Microsoft.Mxc.Sdk",
+			"version": "1.0.0",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/microsoft/mxc",
+			"source": "backend"
+		},
+		{
 			"id": "backend:Microsoft.VisualStudio.SolutionPersistence@1.0.52",
 			"name": "Microsoft.VisualStudio.SolutionPersistence",
 			"version": "1.0.52",

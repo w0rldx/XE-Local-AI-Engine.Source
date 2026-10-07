@@ -27,16 +27,16 @@ internal static class SandboxIsolatedChain
     /// </remarks>
     public const string Hostname = "xe-compute";
 
-    // The three in-sandbox paths are DEFINED by the provider-neutral SandboxIsolatedPaths, not here: a caller opting into isolation names
-    // them too, its environment and working directory being in the sandbox's view, so a second spelling here would be the one that drifts.
+    // The three in-sandbox paths are DEFINED by the provider-neutral SandboxIsolatedPaths.Posix, not here: a caller composes its
+    // environment from the handle's reported view, which this chain must match, so a second spelling here would be the one that drifts.
 
     /// <summary>The writable jail's mount point inside the sandbox, and the command's working directory.</summary>
-    public const string WorkPath = SandboxIsolatedPaths.Work;
+    public const string WorkPath = SandboxIsolatedPaths.PosixWork;
 
-    private const string TempPath = SandboxIsolatedPaths.Temp;
+    private const string TempPath = SandboxIsolatedPaths.PosixTemp;
 
     /// <summary><c>HOME</c> inside the sandbox: a subdirectory of the jail, so everything it accumulates is metered.</summary>
-    public const string HomePath = SandboxIsolatedPaths.Home;
+    public const string HomePath = SandboxIsolatedPaths.PosixHome;
 
     /// <summary><c>PATH</c> inside the sandbox. Only the two system directories the read-only <c>/usr</c> bind provides.</summary>
     public const string SandboxPath = "/usr/bin:/bin";

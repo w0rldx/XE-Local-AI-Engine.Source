@@ -279,7 +279,8 @@ internal static class NodeSettingsEndpointDtoMapper
             ComputeEnabled = effective.ComputeEnabled,
             AgentHomeEnabled = effective.AgentHomeEnabled,
             SchedulerEnabled = effective.SchedulerEnabled,
-            DevWorkflowsEnabled = effective.DevWorkflowsEnabled
+            DevWorkflowsEnabled = effective.DevWorkflowsEnabled,
+            ExecutionPreviewsEnabled = effective.ExecutionPreviewsEnabled
         };
     }
 
@@ -498,7 +499,8 @@ internal static class NodeSettingsEndpointDtoMapper
             ComputeEnabled = request.ComputeEnabled ?? currentSettings.ComputeEnabled,
             AgentHomeEnabled = request.AgentHomeEnabled ?? currentSettings.AgentHomeEnabled,
             SchedulerEnabled = request.SchedulerEnabled ?? currentSettings.SchedulerEnabled,
-            DevWorkflowsEnabled = request.DevWorkflowsEnabled ?? currentSettings.DevWorkflowsEnabled
+            DevWorkflowsEnabled = request.DevWorkflowsEnabled ?? currentSettings.DevWorkflowsEnabled,
+            ExecutionPreviewsEnabled = request.ExecutionPreviewsEnabled ?? currentSettings.ExecutionPreviewsEnabled
         };
     }
 

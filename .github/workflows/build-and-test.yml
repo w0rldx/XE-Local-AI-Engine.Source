@@ -305,11 +305,129 @@ jobs:
           # upload-artifact refuses with a 409 unless the existing one may be replaced first.
           overwrite: true
 
+  # The MXC sandbox mechanism on real Windows: the Microsoft.Mxc.Sdk natives load, the ProcessContainer probe answers
+  # for the engine's policy, and a contained child is proven unable to read outside its jail or connect anywhere. Every
+  # other leg is Linux, where these classes report skipped. windows-2025 (build 26100), not windows-latest, so the OS
+  # the probe measures cannot move under the leg. The execution test needs the one-time admin host prep MXC's
+  # AppContainer + DACL tier asks for; wxc-host-prep.exe is not in the NuGet package, so it comes from the v1.0.0
+  # release zip, pinned by SHA-256 for both the zip and the extracted exe. Matches the 1.0.0 package pin in
+  # Directory.Packages.props; bump all three together.
+  windows-sandbox:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    env:
+      MXC_RELEASE_ZIP_URL: https://github.com/microsoft/mxc/releases/download/v1.0.0/mxc-release-binaries.zip
+      MXC_RELEASE_ZIP_SHA256: 0bb483b3592d0f663f2c5a7a2ae17db89cc04b82238684b0a1a9384b0fe828ed
+      MXC_HOST_PREP_ENTRY: x64/wxc-host-prep.exe
+      MXC_HOST_PREP_SHA256: 7aed7a6287283d388ca4f1717b10d5edec867307a7c6696fbd31ba44d8476304
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('Directory.Packages.props', 'global.json', '**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # The runner is elevated and ephemeral, so the prep MXC recommends is applied here; the product never runs it.
+      # prepare-null-device is per boot, which on a fresh runner is this boot.
+      - name: Apply MXC host prep (pinned wxc-host-prep.exe)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = Join-Path $env:RUNNER_TEMP 'mxc-release-binaries.zip'
+          Invoke-WebRequest -Uri $env:MXC_RELEASE_ZIP_URL -OutFile $zip
+          $zipHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
+          if ($zipHash -ne $env:MXC_RELEASE_ZIP_SHA256) { throw "mxc-release-binaries.zip SHA-256 $zipHash does not match the pin" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $exe = Join-Path $env:RUNNER_TEMP 'wxc-host-prep.exe'
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+            $entry = $archive.GetEntry($env:MXC_HOST_PREP_ENTRY)
+            if ($null -eq $entry) { throw "$env:MXC_HOST_PREP_ENTRY is not in the release zip" }
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $exe, $true)
+          } finally {
+            $archive.Dispose()
+          }
+          Remove-Item -LiteralPath $zip
+          $exeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash.ToLowerInvariant()
+          if ($exeHash -ne $env:MXC_HOST_PREP_SHA256) { throw "wxc-host-prep.exe SHA-256 $exeHash does not match the pin" }
+          foreach ($command in 'prepare-system-drive', 'prepare-null-device') {
+            & $exe $command
+            if ($LASTEXITCODE -ne 0) { throw "wxc-host-prep $command exited $LASTEXITCODE" }
+          }
+          [System.Environment]::OSVersion.Version.ToString()
+          (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').UBR
+
+      - name: Build the test project
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet build XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "dotnet build exited $LASTEXITCODE" }
+
+      # Zero tests is never a pass: exit 8 (filter matched nothing), a missing TRX, zero executed tests, a filter class
+      # absent from the report, or ANY skip fails the leg. The host prep above is what lets the execution test run, so a
+      # skip here means the mechanism did not engage on the one runner that exists to prove it.
+      - name: Run the MXC sandbox test classes
+        shell: pwsh
+        env:
+          RESULTS_DIR: ${{ runner.temp }}/windows-sandbox-results
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $classes = @('MxcSandboxRuntimeWindowsTests', 'MxcAclResidueSweeperWindowsTests', 'ProcessSandboxAppContainerWindowsTests')
+          $trxName = 'windows-sandbox.trx'
+          & 'XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.exe' `
+            --treenode-filter "/*/*/($($classes -join '|'))/*" `
+            --report-trx --report-trx-filename $trxName --results-directory $env:RESULTS_DIR
+          $exitCode = $LASTEXITCODE
+          $failures = @()
+          if ($exitCode -eq 8) { $failures += 'the host exited 8, its filter matched no test' }
+          elseif ($exitCode -ne 0) { $failures += "the host exited $exitCode" }
+          $trxPath = Join-Path $env:RESULTS_DIR $trxName
+          if (-not (Test-Path -LiteralPath $trxPath)) {
+            $failures += "no TRX report at $trxPath"
+          } else {
+            [xml]$trx = Get-Content -LiteralPath $trxPath -Raw
+            $counters = $trx.TestRun.ResultSummary.Counters
+            Write-Host "total=$($counters.total) executed=$($counters.executed) passed=$($counters.passed) failed=$($counters.failed) skipped=$($counters.notExecuted)"
+            if ([int]$counters.executed -eq 0) { $failures += 'zero tests executed' }
+            $classById = @{}
+            foreach ($unitTest in $trx.TestRun.TestDefinitions.UnitTest) { $classById[$unitTest.id] = $unitTest.TestMethod.className }
+            foreach ($class in $classes) {
+              if (-not ($classById.Values | Where-Object { $_ -like "*.$class" })) { $failures += "filter class $class matched no test" }
+            }
+            foreach ($result in $trx.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'NotExecuted' }) {
+              $failures += "$($classById[$result.testId]).$($result.testName) was skipped: $("$($result.Output.DebugTrace)".Trim())"
+            }
+          }
+          if ($failures.Count -gt 0) {
+            $failures | ForEach-Object { Write-Host "::error::$_" }
+            exit 1
+          }
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-sandbox-results
+          path: ${{ runner.temp }}/windows-sandbox-results/**/*.trx
+          if-no-files-found: warn
+          overwrite: true
+
   # The merge gate over every backend-tests leg. It must keep the job id `build-and-test`: that
   # string is the required status check configured on develop's branch protection, and a matrix job
   # reports as `backend-tests (siblings)` and friends, so no leg above can ever satisfy it.
   build-and-test:
-    needs: backend-tests
+    needs: [backend-tests, windows-sandbox]
     # always(), so a failed leg reaches the explicit result check below instead of leaving the
     # required check skipped — a skipped required check never resolves.
     if: always()
@@ -323,6 +441,12 @@ jobs:
         if: needs.backend-tests.result != 'success'
         run: |
           echo "ERROR: backend-tests finished as '${{ needs.backend-tests.result }}', not 'success'." >&2
+          exit 1
+
+      - name: Require the Windows sandbox leg to have passed
+        if: needs.windows-sandbox.result != 'success'
+        run: |
+          echo "ERROR: windows-sandbox finished as '${{ needs.windows-sandbox.result }}', not 'success'." >&2
           exit 1
 
       - name: Checkout

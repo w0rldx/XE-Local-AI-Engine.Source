@@ -17,8 +17,8 @@ internal sealed class SandboxIsolationLaunch : IDisposable
 {
     // The jail subdirectories the chain assumes: HOME inside the sandbox and the jail-backed /tmp. Both live under the
     // jail so everything the workload accumulates is inside the one tree the disk watchdog walks.
-    private const string HomeDirectoryName = "home";
-    private const string TempDirectoryName = ".tmp";
+    private const string HomeDirectoryName = SandboxIsolatedPaths.HomeDirectoryName;
+    private const string TempDirectoryName = SandboxIsolatedPaths.TempDirectoryName;
 
     private const UnixFileMode PrivateDirectoryMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
 

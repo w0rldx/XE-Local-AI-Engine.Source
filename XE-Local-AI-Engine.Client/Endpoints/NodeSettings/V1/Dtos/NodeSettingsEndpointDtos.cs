@@ -733,6 +733,12 @@ public sealed record NodeSettingsResponse
 
     /// <summary>Whether development workflows run. Applies to the next request and dispatcher tick; definitions are seeded on the next restart. Effective value: stored, else the configuration seed.</summary>
     public bool DevWorkflowsEnabled { get; init; }
+
+    /// <summary>
+    ///     Whether Preview sandbox mechanisms (the Windows AppContainer boundary) may serve <c>run_python</c> and sandboxed MCP servers.
+    ///     Applies to the next sandbox created. Effective value: stored, else the configuration seed (off).
+    /// </summary>
+    public bool ExecutionPreviewsEnabled { get; init; }
 }
 
 /// <summary>
@@ -1182,6 +1188,12 @@ public sealed record SaveNodeSettingsRequest
 
     /// <summary>Whether development workflows run. Applies to the next request and dispatcher tick; definitions are seeded on the next restart.</summary>
     public bool? DevWorkflowsEnabled { get; init; }
+
+    /// <summary>
+    ///     Whether Preview sandbox mechanisms (the Windows AppContainer boundary) may serve <c>run_python</c> and sandboxed MCP servers.
+    ///     Applies to the next sandbox created. Security-widening: the UI confirms the off-to-on change before saving it.
+    /// </summary>
+    public bool? ExecutionPreviewsEnabled { get; init; }
 }
 
 /// <summary>

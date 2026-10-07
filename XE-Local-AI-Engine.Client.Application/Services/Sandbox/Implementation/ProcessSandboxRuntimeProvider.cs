@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 
 /// <summary>
@@ -16,11 +17,10 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 ///     copy → run → export → apply lifecycle with no container dependency.
 /// </summary>
 /// <remarks>
-///     Supervised execution, not an OS isolation boundary: a future hardware-isolated (MXC) provider replaces the whole provider, not the
-///     contract. Always enforced: the jail, <see cref="SandboxJailPathGuard" />'s path and symlink guards, a scrubbed child environment, the
-///     per-command timeout, tree-kill, output byte caps and a jail-disk ceiling. Cgroup ceilings, egress denial and filesystem isolation hold
-///     only where the launcher's probe measured them active, which <see cref="Capabilities" /> reads too, so a request is refused, not
-///     downgraded. Section 7 of the security wiki page below; substrate rules: ADR 0004 and ADR 0007.
+///     Supervised execution; an OS boundary only where a measured mechanism adds one (bubblewrap; on Windows the Preview MXC
+///     AppContainer boundary, ADR 0019). Always enforced: the jail, <see cref="SandboxJailPathGuard" />'s guards, a scrubbed environment,
+///     the timeout, tree-kill, output caps and a jail-disk ceiling. Everything else holds only where the probe measured it, which
+///     <see cref="Capabilities" /> reads too, so a request is refused, not downgraded. Security wiki §7; ADR 0004 and ADR 0007.
 /// </remarks>
 /// <seealso href="../../../../docs/wiki/12-security-and-privacy.md" />
 // Serves BOTH per-feature roles — AgentHome/Coder through IAgentSandboxRuntimeProvider, Development Mode through
@@ -34,6 +34,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     // posture: capture is capped, and reading stops once the cap is reached so a runaway command cannot exhaust memory.
     private const int DefaultMaxCapturedOutputBytes = 4 * 1024 * 1024;
 
+    private const string SandboxKilledBeforeStart = "The sandbox was killed before the command started.";
+
     /// <summary>
     ///     The only environment variables a sandboxed child inherits from the worker: system and toolchain names the
     ///     fixed production executables need on Linux and Windows, none of them secret-bearing.
@@ -45,7 +47,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///     the parent. Names absent on the current OS are skipped, and lookup is OS-correct (case-insensitive on
     ///     Windows).
     /// </remarks>
-    private static readonly string[] InheritableEnvironmentAllowlist =
+    internal static readonly string[] InheritableEnvironmentAllowlist =
     [
         // Executable resolution + user/home + temp — needed on both platforms.
         "PATH",
@@ -85,6 +87,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     private readonly ISandboxLauncher _launcher;
     private readonly ILogger<ProcessSandboxRuntimeProvider> _logger;
     private readonly ISandboxMarkerStore _markerStore;
+    private readonly IMxcSandboxRuntime? _mxcRuntime;
+    private readonly IExecutionPreviewPolicy? _previewPolicy;
 
     private readonly long _maxCopyFileBytes;
     private readonly long _maxJailDiskBytes;
@@ -92,19 +96,25 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     private readonly TimeProvider _timeProvider;
     private int _disposed;
 
-    // The logger, launcher and marker store are optional so tests can construct the provider directly; ActivatorUtilities
-    // injects them in production. A null one means real host behaviour, so a direct construction is hardened like production.
+    // Optional so tests can construct the provider directly; DI injects them. A null one means hardened host behaviour: real
+    // launcher and marker store, and previews OFF.
     public ProcessSandboxRuntimeProvider(IOptions<LocalContainerOptions> copyOptions,
         TimeProvider timeProvider,
         ILogger<ProcessSandboxRuntimeProvider>? logger = null,
         ISandboxLauncher? launcher = null,
-        ISandboxMarkerStore? markerStore = null)
+        ISandboxMarkerStore? markerStore = null,
+        IExecutionPreviewPolicy? previewPolicy = null,
+        IMxcSandboxRuntime? mxcRuntime = null)
     {
         ArgumentNullException.ThrowIfNull(copyOptions);
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? NullLogger<ProcessSandboxRuntimeProvider>.Instance;
         _launcher = launcher ?? new SandboxLauncher(new HostSandboxContainmentProbe());
         _markerStore = markerStore ?? new FileSandboxMarkerStore();
+        _previewPolicy = previewPolicy;
+        // The MXC SDK is reached only for a launch the AppContainer boundary serves, which only a Windows probe can produce; elsewhere
+        // there is no runtime and such a descriptor fails closed. Injectable so the MXC path is unit-tested on Linux through a fake.
+        _mxcRuntime = mxcRuntime ?? (OperatingSystem.IsWindows() ? new MxcSandboxRuntime() : null);
 
         // Reuse the existing per-file copy ceiling so the jail's byte-cap-on-re-read matches the container provider's
         // (64 MiB default).
@@ -121,7 +131,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
         // The registry owns the live sandbox set rooted at that container directory; this provider reaches every jail
         // through it rather than keeping a second dictionary.
-        _registry = new SandboxLifecycleRegistry(_jailRoot, _launcher, _timeProvider);
+        _registry = new SandboxLifecycleRegistry(_jailRoot, _launcher, _timeProvider, _previewPolicy);
     }
 
     public void Dispose()
@@ -192,6 +202,15 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                                 | SandboxProviderCapabilities.SupportsHostFilesystemBoundary;
             }
 
+            // The AppContainer boundary serves the same floor only while ELIGIBLE (ADR 0019), read per call as the registry does,
+            // so turning previews off withdraws the advertisement at once and nothing advertised here is refused at create.
+            if (containment.EligibleAppContainerBoundary(_previewPolicy?.PreviewMechanismsEnabled == true) is not null)
+            {
+                capabilities |= SandboxProviderCapabilities.SupportsAppContainerBoundary
+                                | SandboxProviderCapabilities.SupportsFilesystemIsolation
+                                | SandboxProviderCapabilities.SupportsHostFilesystemBoundary;
+            }
+
             return capabilities;
         }
     }
@@ -256,42 +275,32 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // leaves a window in which another worker's startup sweep finds the scope unclaimed and SIGKILLs a command that started.
         var pendingMarkerId = launch.ScopeUnitName is null ? null : PreRegisterProcessMarker(state, launch);
 
-        var process = new Process
-        {
-            StartInfo = startInfo,
-            EnableRaisingEvents = true
-        };
-
-        // Capture stdout/stderr via the event pump with a hard per-stream byte budget: appending stops past the cap so a
+        // Capture stdout/stderr via the line pump with a hard per-stream byte budget: appending stops past the cap so a
         // runaway command cannot exhaust memory, while the pump keeps draining so the child never blocks on a full buffer.
         var standardOutputBuilder = new CappedStringBuilder(DefaultMaxCapturedOutputBytes);
         var standardErrorBuilder = new CappedStringBuilder(DefaultMaxCapturedOutputBytes);
-        process.OutputDataReceived += (_, eventArgs) => standardOutputBuilder.AppendLine(eventArgs.Data);
-        process.ErrorDataReceived += (_, eventArgs) => standardErrorBuilder.AppendLine(eventArgs.Data);
 
+        ISandboxChildProcess process;
         try
         {
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
+            process = await StartChildAsync(startInfo, launch, standardOutputBuilder.AppendLine, standardErrorBuilder.AppendLine, cancellationToken);
         }
-        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+        catch (Exception exception) when (IsLaunchFailure(exception, launch, cancellationToken))
         {
             launch.LaunchResources?.Dispose();
-            process.Dispose();
             if (pendingMarkerId is not null)
             {
                 // Nothing was ever launched, so nothing claims that unit name any more.
                 _markerStore.Delete(pendingMarkerId);
             }
 
-            // The executable could not be launched (not found / not executable). Surface a non-completed result rather
-            // than throwing, so the AgentHome run flow records a failed command the same way a non-zero exit does.
+            // The executable could not be launched (not found / not executable, or MXC refused the spawn). Surface a non-completed result
+            // rather than throwing, so the AgentHome run flow records a failed command the same way a non-zero exit does.
             return new SandboxCommandResult
             {
                 ExecutionId = request.ExecutionId,
                 ExitCode = -1,
-                StandardError = "The sandbox command could not be launched.",
+                StandardError = DescribeLaunchFailure(exception, launch),
                 Completed = false,
                 Duration = _timeProvider.GetUtcNow() - startedAt
             };
@@ -309,10 +318,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // non-throwing Completed=false result, distinct from a caller-token cancel (throws) and a timeout (timed-out result).
         var commandCancelSource = new CancellationTokenSource();
         var inFlight = new InFlightExecution(process, commandCancelSource, launch.ScopeUnitName);
-        if (!state.InFlight.TryAdd(request.ExecutionId, inFlight))
+        var registration = TryRegisterInFlight(state, request.ExecutionId, inFlight);
+        if (registration != InFlightRegistration.Registered)
         {
-            // Another command is already in flight under this execution id; kill the just-started one and reject.
-            SandboxProcessTree.TreeKill(process);
+            // The sandbox was killed while the child started, or another command is in flight under this execution id: kill the
+            // just-started one, which no teardown can reach, and reject.
+            process.Kill();
             await TerminateLaunchAsync(launch, process);
             if (markerId is not null)
             {
@@ -321,6 +332,18 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
             process.Dispose();
             commandCancelSource.Dispose();
+            if (registration == InFlightRegistration.SandboxDead)
+            {
+                return new SandboxCommandResult
+                {
+                    ExecutionId = request.ExecutionId,
+                    ExitCode = -1,
+                    StandardError = SandboxKilledBeforeStart,
+                    Completed = false,
+                    Duration = _timeProvider.GetUtcNow() - startedAt
+                };
+            }
+
             throw new InvalidOperationException($"Execution id '{request.ExecutionId}' is already in flight for this sandbox.");
         }
 
@@ -340,20 +363,33 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
         try
         {
-            if (startInfo.RedirectStandardInput && request.StandardInput is not null)
+            if (request.StandardInput is not null)
             {
-                await process.StandardInput.WriteAsync(request.StandardInput.AsMemory(), linkedSource.Token);
-                process.StandardInput.Close();
+                await process.WriteStandardInputAndCloseAsync(request.StandardInput, linkedSource.Token);
             }
 
-            // WaitForExitAsync also waits for the async output pump to drain, so the captured builders are complete
+            // WaitForExitAsync also waits for the output pump to drain, so the captured builders are complete
             // once it returns. The linked token unblocks the wait on a cancel/timeout.
-            await process.WaitForExitAsync(linkedSource.Token);
+            var exitCode = await process.WaitForExitAsync(linkedSource.Token);
+
+            if (process.TimedOut)
+            {
+                // MXC enforced the same timeout inside its own wait and reaped the tree: the same shape as the engine's timeout below.
+                return new SandboxCommandResult
+                {
+                    ExecutionId = request.ExecutionId,
+                    ExitCode = -1,
+                    StandardOutput = standardOutputBuilder.ToString(),
+                    StandardError = "Command timed out.",
+                    Completed = false,
+                    Duration = _timeProvider.GetUtcNow() - startedAt
+                };
+            }
 
             return new SandboxCommandResult
             {
                 ExecutionId = request.ExecutionId,
-                ExitCode = process.ExitCode,
+                ExitCode = exitCode,
                 StandardOutput = standardOutputBuilder.ToString(),
                 StandardError = standardErrorBuilder.ToString(),
                 StandardOutputTruncated = standardOutputBuilder.IsTruncated,
@@ -366,7 +402,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // The child wrote past the jail disk ceiling: tree-kill and return the same non-throwing incomplete shape as
             // a timeout, with an explanatory StandardError so the AgentHome run flow can tell the user WHY it stopped.
-            SandboxProcessTree.TreeKill(process);
+            process.Kill();
             await TerminateLaunchAsync(launch, process);
             return new SandboxCommandResult
             {
@@ -382,7 +418,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // A best-effort cancel or sandbox kill fired: tree-kill and return a non-throwing Completed=false result, so AgentHome
             // reads a cancelled command, not a caller cancel. Scope and group kills run here: a tree walk stops at the helper.
-            SandboxProcessTree.TreeKill(process);
+            process.Kill();
             await TerminateLaunchAsync(launch, process);
             return new SandboxCommandResult
             {
@@ -397,7 +433,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // Per-command timeout fired while the caller token stayed un-cancelled: kill the tree and return a
             // non-throwing timed-out result (Completed=false / ExitCode=-1), matching the container/fake timeout shape.
-            SandboxProcessTree.TreeKill(process);
+            process.Kill();
             await TerminateLaunchAsync(launch, process);
             return new SandboxCommandResult
             {
@@ -412,7 +448,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // A caller cancel tree-kills and propagates OperationCanceledException so AgentHomeService can disambiguate
             // caller-cancel from timeout.
-            SandboxProcessTree.TreeKill(process);
+            process.Kill();
             await TerminateLaunchAsync(launch, process);
             throw;
         }
@@ -420,7 +456,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // Teardown on EVERY path, success included: a command's exit says nothing about its DESCENDANTS, and a reparented orphan
             // outlives the RUN in a reused sandbox, unseen by the sweep once its marker goes. Ordered BEFORE that delete; all idempotent.
-            SandboxProcessTree.TreeKill(process);
+            process.Kill();
             await TerminateLaunchAsync(launch, process);
 
             _ = state.InFlight.TryRemove(request.ExecutionId, out _);
@@ -488,7 +524,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     }
 
     /// <inheritdoc cref="ISandboxRuntimeProvider.StartInteractiveAsync" />
-    public Task<ISandboxInteractiveProcess> StartInteractiveAsync(SandboxHandle handle,
+    public async Task<ISandboxInteractiveProcess> StartInteractiveAsync(SandboxHandle handle,
         SandboxCommandRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -524,26 +560,23 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // the launch leaves a window in which a second worker's startup sweep finds an unclaimed scope and kills it.
         var pendingMarkerId = launch.ScopeUnitName is null ? null : PreRegisterProcessMarker(state, launch);
 
-        var process = new Process
-        {
-            StartInfo = startInfo,
-            EnableRaisingEvents = true
-        };
-
+        // stderr is always drained, since a child blocks on a full pipe and a stdio MCP server that logs there would deadlock
+        // mid-protocol, and only its bounded tail is kept: it is the one place a server that dies on startup says why. stdout stays raw.
+        var stderrTail = SandboxStderrTail.For(request);
+        ISandboxChildProcess process;
         try
         {
-            process.Start();
+            process = await StartChildAsync(startInfo, launch, onStandardOutputLine: null, stderrTail.Append, cancellationToken);
         }
-        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+        catch (Exception exception) when (IsLaunchFailure(exception, launch, cancellationToken))
         {
             launch.LaunchResources?.Dispose();
-            process.Dispose();
             if (pendingMarkerId is not null)
             {
                 _markerStore.Delete(pendingMarkerId);
             }
 
-            throw new SandboxCapabilityNotSupportedException("The sandbox command could not be launched.", exception);
+            throw new SandboxCapabilityNotSupportedException(DescribeLaunchFailure(exception, launch), exception);
         }
 
         // The chain has been exec'd and the child holds its own copies of every descriptor the argument vector names, so the
@@ -556,9 +589,11 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // (scope cgroup, process group, tree, jail directory), cover this process with no second path.
         var commandCancelSource = new CancellationTokenSource();
         var inFlight = new InFlightExecution(process, commandCancelSource, launch.ScopeUnitName);
-        if (!state.InFlight.TryAdd(request.ExecutionId, inFlight))
+        var registration = TryRegisterInFlight(state, request.ExecutionId, inFlight);
+        if (registration != InFlightRegistration.Registered)
         {
-            SandboxProcessTree.TreeKill(process);
+            process.Kill();
+            await TerminateLaunchAsync(launch, process);
             if (markerId is not null)
             {
                 _markerStore.Delete(markerId);
@@ -566,16 +601,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
             process.Dispose();
             commandCancelSource.Dispose();
-            throw new InvalidOperationException($"Execution id '{request.ExecutionId}' is already in flight for this sandbox.");
+            throw registration == InFlightRegistration.SandboxDead
+                ? new SandboxHandleInvalidException(SandboxKilledBeforeStart)
+                : new InvalidOperationException($"Execution id '{request.ExecutionId}' is already in flight for this sandbox.");
         }
 
-        // stderr is always drained, since a child blocks on a full pipe and a stdio MCP server that logs there would deadlock
-        // mid-protocol, and only its bounded tail is kept: it is the one place a server that dies on startup says why.
-        var stderrTail = SandboxStderrTail.For(request);
-        process.ErrorDataReceived += (_, args) => stderrTail.Append(args.Data);
-        process.BeginErrorReadLine();
-
-        return Task.FromResult<ISandboxInteractiveProcess>(new InteractiveProcess(this, state, request.ExecutionId, process, launch, markerId, commandCancelSource, stderrTail));
+        return new InteractiveProcess(this, state, request.ExecutionId, process, launch, markerId, commandCancelSource, stderrTail);
     }
 
     public async Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)
@@ -682,6 +713,24 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         return Task.CompletedTask;
     }
 
+    /// <summary>Registers a just-started child under the jail's lock: it joins the in-flight set of a live jail, or sees the jail dead.</summary>
+    /// <remarks>
+    ///     A kill that ran while the child was starting (an MXC spawn is awaited) already swept the in-flight set, so registering after it
+    ///     would leave the child where no teardown looks.
+    /// </remarks>
+    private static InFlightRegistration TryRegisterInFlight(JailState state, string executionId, InFlightExecution inFlight)
+    {
+        lock (state.Sync)
+        {
+            if (!state.Alive)
+            {
+                return InFlightRegistration.SandboxDead;
+            }
+
+            return state.InFlight.TryAdd(executionId, inFlight) ? InFlightRegistration.Registered : InFlightRegistration.DuplicateExecutionId;
+        }
+    }
+
     public Task KillAsync(SandboxHandle handle, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(handle);
@@ -690,6 +739,96 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         _registry.RemoveAndTerminate(handle.SandboxId);
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     Starts the child the descriptor names: an MXC ProcessContainer spawn when the AppContainer boundary serves the launch, otherwise
+    ///     the (possibly wrapped) start info exactly as before.
+    /// </summary>
+    /// <remarks>A null <paramref name="onStandardOutputLine" /> leaves stdout raw for an interactive peer; stderr is always pumped.</remarks>
+    private async Task<ISandboxChildProcess> StartChildAsync(ProcessStartInfo startInfo,
+        SandboxLaunchDescriptor launch,
+        Action<string?>? onStandardOutputLine,
+        Action<string?> onStandardErrorLine,
+        CancellationToken cancellationToken)
+    {
+        if (launch.MxcRequest is { } mxcRequest)
+        {
+            if (_mxcRuntime is null)
+            {
+                throw new SandboxIsolationUnavailableException("the MXC runtime is not available in this process");
+            }
+
+            // Journal the grants BEFORE MXC writes them, so a crash before ClearPolicyOnExit runs leaves the startup sweep a list. Only
+            // the Windows sweep reads it, so a fake runtime under test writes nothing. Engine-owned paths only (MxcGrantJournal).
+            if (OperatingSystem.IsWindows())
+            {
+                MxcGrantJournal.Record(MxcGrantJournal.DefaultPath,
+                    [.. mxcRequest.Filesystem?.ReadwritePaths ?? [], .. mxcRequest.Filesystem?.ReadonlyPaths ?? []],
+                    MxcGrantJournal.EngineOwnedRoots,
+                    _logger);
+            }
+
+            var spawned = await _mxcRuntime.SpawnAsync(mxcRequest, cancellationToken);
+            return new MxcSandboxChildProcess(new MxcChildProcess(spawned,
+                onStandardOutputLine is null ? null : line => onStandardOutputLine(line),
+                line => onStandardErrorLine(line),
+                _timeProvider));
+        }
+
+        var process = new Process
+        {
+            StartInfo = startInfo,
+            EnableRaisingEvents = true
+        };
+        if (onStandardOutputLine is not null)
+        {
+            process.OutputDataReceived += (_, eventArgs) => onStandardOutputLine(eventArgs.Data);
+        }
+
+        process.ErrorDataReceived += (_, eventArgs) => onStandardErrorLine(eventArgs.Data);
+        try
+        {
+            process.Start();
+            if (onStandardOutputLine is not null)
+            {
+                process.BeginOutputReadLine();
+            }
+
+            process.BeginErrorReadLine();
+        }
+        catch
+        {
+            process.Dispose();
+            throw;
+        }
+
+        return new ProcessSandboxChildProcess(process);
+    }
+
+    /// <summary>
+    ///     A start failure the command path reports instead of throwing: a plain child that could not be exec'd, or ANY MXC spawn failure
+    ///     (native error, policy guard refusal, missing runtime), except the caller's own cancellation.
+    /// </summary>
+    private static bool IsLaunchFailure(Exception exception, SandboxLaunchDescriptor launch, CancellationToken cancellationToken)
+    {
+        if (exception is Win32Exception or InvalidOperationException)
+        {
+            return true;
+        }
+
+        return launch.MxcRequest is not null && !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested);
+    }
+
+    private string DescribeLaunchFailure(Exception exception, SandboxLaunchDescriptor launch)
+    {
+        if (launch.MxcRequest is null)
+        {
+            return "The sandbox command could not be launched.";
+        }
+
+        _logger.LogError(exception, "The MXC AppContainer boundary refused or failed the sandbox launch; the command was not run.");
+        return $"The sandbox command could not be launched under the AppContainer boundary ({exception.Message}).";
     }
 
     /// <summary>
@@ -722,7 +861,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///     one for a launch that had no scope to claim. Returns the marker id, or <see langword="null" /> when there is
     ///     nothing reapable to record.
     /// </summary>
-    private string? CompleteProcessMarker(JailState state, Process process, SandboxLaunchDescriptor launch, string? pendingMarkerId)
+    private string? CompleteProcessMarker(JailState state, ISandboxChildProcess process, SandboxLaunchDescriptor launch, string? pendingMarkerId)
     {
         var marker = BuildProcessMarker(state, process, launch);
         if (marker is null)
@@ -755,7 +894,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///     reaper signal whatever group that pid belonged to — in the worst case the worker's own — so the absence of
     ///     the mechanism must mean the absence of a pid, not a guess.
     /// </remarks>
-    private SandboxProcessMarker? BuildProcessMarker(JailState state, Process process, SandboxLaunchDescriptor launch)
+    private SandboxProcessMarker? BuildProcessMarker(JailState state, ISandboxChildProcess process, SandboxLaunchDescriptor launch)
     {
         int? processGroupId = null;
         long? leaderStartTicks = null;
@@ -800,14 +939,18 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
     /// <summary>Tears down everything one launch started, in order of decreasing reach.</summary>
     /// <remarks>
-    ///     First the transient scope's CGROUP, when the command ran in one: the only mechanism that is complete for an
-    ///     isolated command, whose processes live in a PID namespace neither a tree walk nor a group signal can
-    ///     enumerate. Then the child's process GROUP, when it is a group leader, which catches a descendant that
-    ///     detached from the tree and is the whole story for a non-isolated command.
-    ///     <see cref="SandboxProcessTree.TreeKill" /> has already run; these are the layers under it, all best-effort.
+    ///     First the scope's CGROUP, the only complete kill for a command in a PID namespace; then the process GROUP of a group
+    ///     leader, which catches a detached descendant. <see cref="ISandboxChildProcess.Kill" /> has already run; these are the
+    ///     best-effort layers under it. An MXC launch has neither: MXC's kill took the contained tree, and no Linux killer may be
+    ///     pointed at a Windows pid.
     /// </remarks>
-    private async Task TerminateLaunchAsync(SandboxLaunchDescriptor launch, Process process)
+    private async Task TerminateLaunchAsync(SandboxLaunchDescriptor launch, ISandboxChildProcess process)
     {
+        if (launch.MxcRequest is not null)
+        {
+            return;
+        }
+
         if (launch.ScopeUnitName is { } unitName
             && SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation) is { } scopeKiller)
         {
@@ -1007,7 +1150,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         private readonly string _executionId;
         private readonly SandboxLaunchDescriptor _launch;
         private readonly string? _markerId;
-        private readonly Process _process;
+        private readonly ISandboxChildProcess _process;
         private static readonly TimeSpan StderrDrainWait = TimeSpan.FromSeconds(2);
 
         private readonly ProcessSandboxRuntimeProvider _provider;
@@ -1018,7 +1161,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         public InteractiveProcess(ProcessSandboxRuntimeProvider provider,
             JailState state,
             string executionId,
-            Process process,
+            ISandboxChildProcess process,
             SandboxLaunchDescriptor launch,
             string? markerId,
             CancellationTokenSource cancelSource,
@@ -1034,25 +1177,18 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             _stderrTail = stderrTail;
         }
 
-        public Stream StandardInput => _process.StandardInput.BaseStream;
+        public Stream StandardInput => _process.StandardInput;
 
-        public Stream StandardOutput => _process.StandardOutput.BaseStream;
+        public Stream StandardOutput => _process.StandardOutput;
 
         public async Task<string?> GetStandardErrorTailAsync()
         {
             if (Volatile.Read(ref _disposed) == 0)
             {
-                // WaitForExitAsync also waits for the async stderr reader to reach end of stream, which is what makes the last
-                // lines land before the snapshot. Bounded: a descendant holding stderr open must not stall the caller's failure.
+                // Waits for exit AND the stderr reader's end of stream, so the last lines land; bounded, and never kills. Still running
+                // or torn down concurrently leaves the tail so far, the best answer there is.
                 using var drain = new CancellationTokenSource(StderrDrainWait, _provider._timeProvider);
-                try
-                {
-                    await _process.WaitForExitAsync(drain.Token);
-                }
-                catch (Exception exception) when (exception is OperationCanceledException or InvalidOperationException)
-                {
-                    // Still running, or torn down concurrently: the tail so far is the best answer there is.
-                }
+                _ = await _process.TryWaitForExitAsync(drain.Token);
             }
 
             return _stderrTail.Snapshot();
@@ -1065,8 +1201,14 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 return;
             }
 
-            SandboxProcessTree.TreeKill(_process);
+            _process.Kill();
             await _provider.TerminateLaunchAsync(_launch, _process);
+            if (_launch.MxcRequest is not null)
+            {
+                // Reap, bounded: MXC clears the run's DACL grants once the workload has exited (ClearPolicyOnExit).
+                using var reap = new CancellationTokenSource(StderrDrainWait, _provider._timeProvider);
+                _ = await _process.TryWaitForExitAsync(reap.Token);
+            }
 
             _ = _state.InFlight.TryRemove(_executionId, out _);
             if (_markerId is not null)
@@ -1204,5 +1346,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
             return value[..lastCharIndex];
         }
+    }
+
+    private enum InFlightRegistration
+    {
+        Registered,
+        SandboxDead,
+        DuplicateExecutionId
     }
 }

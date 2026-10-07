@@ -83,6 +83,8 @@ internal static class AddNodeAgentHomeExtensions
         builder.Services.AddSingleton<ISandboxContainmentProbe, HostSandboxContainmentProbe>();
         builder.Services.AddSingleton<ISandboxLauncher, SandboxLauncher>();
         builder.Services.AddSingleton<ISandboxMarkerStore, FileSandboxMarkerStore>();
+        // Eligibility of Preview launch mechanisms, read per call from the operator's node setting (ADR 0019).
+        builder.Services.AddSingleton<IExecutionPreviewPolicy, NodeSettingsExecutionPreviewPolicy>();
         // Group signalling is a Linux mechanism (setsid + kill(-pgid)); elsewhere no marker is ever written, so the
         // no-op keeps the reaper's logic identical while its /proc and libc paths stay off platforms without them.
         if (OperatingSystem.IsLinux())

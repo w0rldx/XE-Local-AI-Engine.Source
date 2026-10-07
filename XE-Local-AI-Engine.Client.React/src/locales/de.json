@@ -606,6 +606,7 @@
 				"provider": "Provider",
 				"backend": "Backend",
 				"level": "Stufe",
+				"maturity": "Reifegrad",
 				"filesystem": "Dateisystem",
 				"network": "Netzwerk",
 				"limits": "Ressourcenlimits",
@@ -617,7 +618,12 @@
 				"levels": {
 					"isolated": "Isoliert",
 					"confined": "Eingeschränkt",
-					"none": "Keine"
+					"none": "Keine",
+					"previewIsolated": "Isoliert (Vorschau)"
+				},
+				"maturities": {
+					"stable": "Stabil",
+					"preview": "Vorschau"
 				}
 			}
 		},
@@ -2733,6 +2739,10 @@
 					"label": "Entwicklungs-Workflows",
 					"description": "Dauerhafte, graphbasierte Arbeitselemente, deren Läufe einen Neustart überstehen. Benötigt Arbeitssitzungen. Die mitgelieferten Workflow-Definitionen werden beim nächsten Neustart angelegt."
 				},
+				"executionPreviewsEnabled": {
+					"label": "Ausführungs-Vorschauen",
+					"description": "Erlaubt Sandbox-Mechanismen im Vorschau-Status, Python und abgeschottete MCP-Server auszuführen. Unter Windows ist das die AppContainer-Grenze: keine CPU-, Speicher- oder Prozessgrenze, nur das Zeitlimit, und Host-Pfadnamen bleiben sichtbar. Gilt für die nächste Sandbox."
+				},
 				"graphWorkflowsEnabled": {
 					"label": "Graph-Workflows",
 					"description": "Agentengraphen auf einer Arbeitsfläche erstellen und ausführen."
@@ -2856,6 +2866,12 @@
 				"usage": "Nutzung & Limits",
 				"showAdvanced": "Erweiterte Bereiche anzeigen",
 				"hideAdvanced": "Erweiterte Bereiche ausblenden"
+			},
+			"executionPreviewsConfirm": {
+				"title": "Ausführungs-Vorschauen einschalten?",
+				"description": "Sandbox-Mechanismen im Vorschau-Status führen dann Python und abgeschottete MCP-Server aus. Unter Windows ist das die AppContainer-Grenze: Der Code kann Ihr Benutzerprofil und die Daten der Engine nicht lesen, läuft aber ohne CPU-, Speicher- oder Prozessanzahl-Grenze (nur das Zeitlimit stoppt ihn) und kann Host-Pfadnamen sehen. Schalten Sie das nur ein, wenn Sie das akzeptieren.",
+				"confirm": "Einschalten",
+				"cancel": "Abbrechen"
 			}
 		},
 		"cloudSettings": {

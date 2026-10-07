@@ -200,17 +200,25 @@ internal static class DevelopmentContractMapper
         // A floor is served by any backend with the boundary PROPERTY; a preference only by the mechanism the create site asks for.
         var boundaryFloor = requirements.IsolationFloor == SandboxIsolationMode.Filesystem;
         var boundaryRequested = boundaryFloor || requirements.RequestsFilesystemIsolationWhereAdvertised;
-        var boundaryAdvertised = capabilities.HasFlag(boundaryFloor
-            ? SandboxProviderCapabilities.SupportsHostFilesystemBoundary
-            : SandboxProviderCapabilities.SupportsFilesystemIsolation);
-        var filesystem = boundaryRequested && boundaryAdvertised;
-        var network = capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        // A preference is served exactly when the create site asks (SandboxRequirements.RequestedIsolation): never by a Preview mechanism.
+        var filesystem = boundaryFloor
+            ? capabilities.HasFlag(SandboxProviderCapabilities.SupportsHostFilesystemBoundary)
+            : requirements.RequestedIsolation(capabilities) == SandboxIsolationMode.Filesystem;
         var networkRequired = SandboxEgressPolicy.IsRequired(requirements, nodeRequiresEgressDenial);
         var limitsAdvertised = capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits);
         var limits = requirements.RequestsResourceLimits && limitsAdvertised;
+        // The process provider serves the boundary through bwrap where measured, otherwise through the AppContainer boundary it advertised
+        // as eligible; a Preview mechanism is reported as such and never as "Isolated" (ADR 0019).
+        var servedByAppContainer = filesystem
+                                   && string.Equals(provider.ProviderName, ProcessSandboxRuntimeProvider.Name, StringComparison.Ordinal)
+                                   && !containment.SupportsFilesystemIsolation
+                                   && capabilities.HasFlag(SandboxProviderCapabilities.SupportsAppContainerBoundary);
+        // The MXC policy denies egress, ingress and host loopback on every AppContainer launch, so that role's network axis is served too.
+        var network = servedByAppContainer || capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy);
         var enforced = (filesystem ? 1 : 0) + (network ? 1 : 0) + (limits ? 1 : 0);
+        var preview = servedByAppContainer && containment.AppContainerBoundaryMaturity == SandboxMechanismMaturity.Preview;
         var boundaryReason = boundaryRequested
-            ? ToFilesystemIsolationUnavailableReason(provider.ProviderName, containment)
+            ? ToFilesystemIsolationUnavailableReason(provider.ProviderName, containment, capabilities, boundaryFloor)
             : ToNotRequestedReason(requirements,
                 "filesystem boundary",
                 "its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read");
@@ -224,13 +232,16 @@ internal static class DevelopmentContractMapper
         {
             Role = role,
             Provider = provider.ProviderName,
-            Backend = ToIsolationBackend(provider.ProviderName, filesystem),
-            Level = enforced switch
-            {
-                3 => "Isolated",
-                > 0 => "Confined",
-                _ => "None"
-            },
+            Backend = servedByAppContainer ? "appcontainer" : ToIsolationBackend(provider.ProviderName, filesystem),
+            Level = preview
+                ? "PreviewIsolated"
+                : enforced switch
+                {
+                    3 => "Isolated",
+                    > 0 => "Confined",
+                    _ => "None"
+                },
+            Maturity = preview ? nameof(SandboxMechanismMaturity.Preview) : nameof(SandboxMechanismMaturity.Stable),
             FilesystemIsolation = filesystem,
             NetworkIsolation = network,
             NetworkIsolationRequired = networkRequired,
@@ -270,10 +281,26 @@ internal static class DevelopmentContractMapper
 
     // The containment probe measures the HOST bubblewrap chain, which is the process provider's boundary and nobody else's. Attributing its reason to another
     // provider would tell an operator that a container role is unisolated because this host lacks bwrap, which is not why.
-    private static string ToFilesystemIsolationUnavailableReason(string providerName, SandboxContainment containment)
+    private static string ToFilesystemIsolationUnavailableReason(string providerName,
+        SandboxContainment containment,
+        SandboxProviderCapabilities capabilities,
+        bool boundaryFloor)
     {
         if (string.Equals(providerName, ProcessSandboxRuntimeProvider.Name, StringComparison.Ordinal))
         {
+            // An ELIGIBLE Preview boundary withheld from a where-advertised role: it serves floor workloads only (ADR 0019).
+            if (!boundaryFloor && capabilities.HasFlag(SandboxProviderCapabilities.SupportsAppContainerBoundary))
+            {
+                return SandboxContainment.PreviewServesFloorWorkloadsOnlyReason;
+            }
+
+            // A boundary the probe MEASURED but the provider does not advertise is withheld by the operator's setting, not missing from
+            // the host: say so, because the action is a switch, not an install.
+            if (containment.SupportsAppContainerBoundary && !capabilities.HasFlag(SandboxProviderCapabilities.SupportsAppContainerBoundary))
+            {
+                return SandboxContainment.ExecutionPreviewsDisabledReason;
+            }
+
             return containment.FilesystemIsolationUnavailableReason
                    ?? "the supervised process sandbox did not advertise a filesystem boundary on this host";
         }

@@ -164,11 +164,20 @@ public sealed record SandboxIsolationSummaryResponse
     /// <summary>The provider resolved for that role (<c>fake</c>, <c>process</c>, or <c>docker</c>).</summary>
     public required string Provider { get; init; }
 
-    /// <summary>The mechanism the boundary is made of: <c>none</c>, <c>process</c>, <c>bwrap</c>, or <c>docker</c>.</summary>
+    /// <summary>The mechanism the boundary is made of: <c>none</c>, <c>process</c>, <c>bwrap</c>, <c>appcontainer</c> or <c>docker</c>.</summary>
     public required string Backend { get; init; }
 
-    /// <summary>The coarse level derived from the three enforcement axes; <c>DevelopmentContractMapper</c> owns the rule.</summary>
+    /// <summary>
+    ///     <c>Isolated</c>, <c>Confined</c> or <c>None</c> from the three axes, or <c>PreviewIsolated</c> when a Preview mechanism serves
+    ///     the boundary (never <c>Isolated</c>); <c>DevelopmentContractMapper</c> owns the rule.
+    /// </summary>
     public required string Level { get; init; }
+
+    /// <summary>
+    ///     <c>Stable</c>, or <c>Preview</c> when a Preview mechanism (the Windows AppContainer boundary, behind the execution-previews
+    ///     setting; ADR 0019) serves the filesystem boundary.
+    /// </summary>
+    public required string Maturity { get; init; }
 
     /// <summary>
     ///     Whether THIS role's commands run with the host filesystem absent from their mount namespace — the role asks

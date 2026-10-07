@@ -171,12 +171,9 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         {
             AttachKey = attachKey,
             RuntimeProfile = effectiveProfile,
-            // Ask for a real filesystem boundary wherever the backend advertises one, one posture for every run: the request
-            // is capability-gated so it can never fail the run closed, and CreateOrAttach reuses an owner-node sandbox.
-            Isolation = SandboxWorkloads.AgentHome.RequestsFilesystemIsolationWhereAdvertised
-                        && _provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation)
-                ? SandboxIsolationMode.Filesystem
-                : SandboxIsolationMode.None,
+            // A real filesystem boundary wherever a STABLE one is advertised (a Preview one serves floor workloads only, ADR 0019):
+            // capability-gated, so it can never fail the run closed; CreateOrAttach reuses an owner-node sandbox.
+            Isolation = SandboxWorkloads.AgentHome.RequestedIsolation(_provider.Capabilities),
 
             // Default-deny egress wherever the provider can enforce it: everything AgentHome and Coder run in the sandbox
             // is local, so denial costs no capability. Capability-gated, with RequireEgressDenial demanding a refusal.

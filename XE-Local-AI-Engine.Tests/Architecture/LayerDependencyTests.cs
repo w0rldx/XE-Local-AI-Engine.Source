@@ -277,6 +277,7 @@ public sealed class LayerDependencyTests
                 "Microsoft.Identity.Client",
                 "Microsoft.Identity.Client.Extensions.Msal",
                 "Microsoft.IdentityModel.JsonWebTokens",
+                "Microsoft.Mxc.Sdk",
                 "ModelContextProtocol",
                 "NAudio.Wasapi",
                 "PdfPig",

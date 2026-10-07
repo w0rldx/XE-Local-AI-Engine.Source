@@ -191,7 +191,7 @@ and a `Select` on phone width; the active section is driven by the route's `?sec
 (`nodeSettingsSearchSchema` falls an unrecognized value back to the default section rather than failing the route) so
 every section is a bookmarkable, linkable URL.
 
-**General holds the Features card** (`components/NodeSettingsFeaturesCard.tsx`): the nine feature switches, each
+**General holds the Features card** (`components/NodeSettingsFeaturesCard.tsx`): the ten feature switches, each
 showing its effective value. `developmentEnabled` and `schedulerEnabled` are in `restartGatedNodeSettingsFields`; the
 External apps, Compute tools and Development workflows descriptions name the part that waits for a restart (the
 container bridge listener, the seeded Mathematician agent and workflow definitions). `buildNodeSettingsRequest`

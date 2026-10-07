@@ -62,6 +62,30 @@ public sealed record SandboxRequirements
     public bool RequestsFilesystemIsolationWhereAdvertised { get; init; }
 
     /// <summary>
+    ///     The <see cref="SandboxCreateRequest.Isolation" /> this workload asks for against a backend advertising
+    ///     <paramref name="capabilities" />: the ONE rule the create site and the operator-facing summary share.
+    /// </summary>
+    /// <remarks>
+    ///     A floor always asks. A where-advertised preference asks only of a Stable mechanism: while the backend serves the boundary through
+    ///     the Windows AppContainer boundary, a Preview mechanism (<see cref="SandboxProviderCapabilities.SupportsAppContainerBoundary" />,
+    ///     ADR 0019), AgentHome, Coder and work sessions stay on the plain process path and only floor workloads (<c>run_python</c>,
+    ///     Sandboxed MCP) go through it. Promoting the mechanism to Stable is an ADR 0019 amendment that revisits this rule.
+    /// </remarks>
+    public SandboxIsolationMode RequestedIsolation(SandboxProviderCapabilities capabilities)
+    {
+        if (IsolationFloor == SandboxIsolationMode.Filesystem)
+        {
+            return SandboxIsolationMode.Filesystem;
+        }
+
+        return RequestsFilesystemIsolationWhereAdvertised
+               && capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation)
+               && !capabilities.HasFlag(SandboxProviderCapabilities.SupportsAppContainerBoundary)
+            ? SandboxIsolationMode.Filesystem
+            : SandboxIsolationMode.None;
+    }
+
+    /// <summary>
     ///     WHICH set of CPU, memory and process-count ceilings this workload asks for on its create request, or
     ///     <see cref="SandboxCeilingProfile.None" /> for none at all.
     /// </summary>

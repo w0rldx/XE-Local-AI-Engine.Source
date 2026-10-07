@@ -37,6 +37,16 @@ public sealed record SandboxLaunchPolicy
     /// <summary>Host trees the isolated chain binds read-only. Empty under <see cref="SandboxIsolationMode.None" />.</summary>
     public IReadOnlyList<string> ReadOnlyTrees { get; init; } = [];
 
+    /// <summary>
+    ///     The Windows AppContainer boundary that serves <see cref="SandboxIsolationMode.Filesystem" /> for this sandbox, or
+    ///     <see langword="null" /> when the bubblewrap chain serves it or there is no isolation.
+    /// </summary>
+    /// <remarks>
+    ///     Resolved ONCE at create time from the boundary's eligibility (ADR 0019), so the launch path applies the mechanism the sandbox was
+    ///     created under and the handle's <see cref="SandboxHandle.IsolatedPaths" /> stays true for its lifetime.
+    /// </remarks>
+    internal SandboxAppContainerBoundary? AppContainerBoundary { get; init; }
+
     /// <summary>The value the isolated chain pins every numeric-library thread-count variable to.</summary>
     public int ThreadLimit { get; init; } = 1;
 

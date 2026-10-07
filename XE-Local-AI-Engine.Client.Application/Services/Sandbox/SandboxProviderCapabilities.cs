@@ -59,5 +59,17 @@ public enum SandboxProviderCapabilities
     ///     container the floor it genuinely provides. Advertised only on evidence: the process backend where its probe exercised the
     ///     bubblewrap chain, the container backend because every create reads its settings back and fails closed on mismatch.
     /// </remarks>
-    SupportsHostFilesystemBoundary = 1 << 12
+    SupportsHostFilesystemBoundary = 1 << 12,
+
+    /// <summary>
+    ///     Commands run in a Windows AppContainer boundary (ADR 0019): no user profile, node data root, engine install directory or other
+    ///     ungranted path; granted read-only trees plus ONE writable jail; OS trees readable; host path names VISIBLE.
+    /// </summary>
+    /// <remarks>
+    ///     Weaker than the mount namespace (no namespace; the child sees host paths and reads whatever is ACL'd to all application packages),
+    ///     so its own flag. Only while ELIGIBLE (Preview needs execution previews on) it is advertised with
+    ///     <see cref="SupportsFilesystemIsolation" /> and <see cref="SupportsHostFilesystemBoundary" />, satisfying the
+    ///     <see cref="SandboxIsolationMode.Filesystem" /> floor; consumers compose paths from <see cref="SandboxHandle.IsolatedPaths" />.
+    /// </remarks>
+    SupportsAppContainerBoundary = 1 << 13
 }

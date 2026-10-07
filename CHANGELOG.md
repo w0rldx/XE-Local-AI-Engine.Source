@@ -117,6 +117,13 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 - **"Gated" badge on Model Recommendations** — a model whose Hugging Face repository is gated carries a "Gated" badge; its tooltip says downloading needs the license accepted on Hugging Face and an access token in Node Settings, and that without a token the size estimate rests on the file size alone.
 - **Fit hint on the "Tested by the authors" list** — the fit badge has a tooltip: it compares the tested file's size with this machine's free memory (the Model Recommendations page does the detailed sizing), and on a "Won't fit" row it says Download opens the picker with smaller quants.
 - **Nomic Embed Text v1.5 in the curated catalog** — the knowledge base's one-click embedding model (`nomic-ai/nomic-embed-text-v1.5-GGUF`, tier A) is now listed under embedding; catalog version `2026.10.4`.
+- **Windows sandbox boundary (Preview)** — on Windows, Sandboxed stdio MCP servers can run inside an AppContainer through
+  Microsoft's MXC SDK (`Microsoft.Mxc.Sdk` 1.0.0): one writable jail, engine-granted read-only trees, no access to the user
+  profile, node data or engine directory, no network. Off by default; an operator turns it on with the new **execution
+  previews** node setting, behind a confirmation that names what it does not do (no CPU, memory or process ceiling; host
+  path names visible). The capability summary reports such a role as `PreviewIsolated`, never `Isolated`, and a host
+  missing MXC's one-time `wxc-host-prep` step reports the exact command. AgentHome, Coder and work sessions are unchanged,
+  and `run_python` stays Linux-only for now (ADR 0019).
 
 ### Changed
 

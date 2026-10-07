@@ -391,6 +391,24 @@ public sealed class NodeAdminMcpToolsTests
         AssertEx.Equal("safe failure", result.DisplayMessage!);
     }
 
+    /// <summary>
+    ///     The execution-previews switch WIDENS sandboxing, so no agent may reach it: not in the agentic patch, tool arguments or view.
+    ///     Only the Operator REST endpoint writes it (ADR 0019).
+    /// </summary>
+    [Test]
+    public void ExecutionPreviewsSwitch_IsNotWritableOrReadableThroughTheAgenticSurface()
+    {
+        const string Property = nameof(StoredNodeSettings.ExecutionPreviewsEnabled);
+
+        AssertEx.Null(typeof(NodeSettingsAgenticPatch).GetProperty(Property), "the agentic patch must not carry the preview switch");
+        AssertEx.Null(typeof(NodeSettingsAgenticView).GetProperty(Property), "the agentic view must not expose the preview switch");
+        _ = AssertEx.Throws<ArgumentOutOfRangeException>(() => McpAdminWireNames.SettingsArgument(Property));
+
+        var parameters = typeof(NodeAdminMcpTools).GetMethod(nameof(NodeAdminMcpTools.UpdateNodeSettingsAsync))!.GetParameters();
+        AssertEx.False(parameters.Any(static parameter => parameter.Name!.Contains("preview", StringComparison.OrdinalIgnoreCase)),
+            "no node-admin tool argument may name the preview switch");
+    }
+
     [Test]
     public void AgenticSettings_AllSeventeenPropertiesHaveStableSnakeCaseWireNames()
     {

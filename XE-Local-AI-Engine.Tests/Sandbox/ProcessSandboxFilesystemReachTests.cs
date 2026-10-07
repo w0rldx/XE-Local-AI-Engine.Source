@@ -252,7 +252,7 @@ public sealed class ProcessSandboxFilesystemReachTests : IDisposable
             });
 
         AssertEx.True(result.Completed, $"the probe command must run: {result.StandardError}");
-        AssertEx.Contains(result.StandardOutput, SandboxIsolatedPaths.Home, StringComparison.Ordinal,
+        AssertEx.Contains(result.StandardOutput, SandboxIsolatedPaths.Posix.Home, StringComparison.Ordinal,
             "HOME under isolation is a jail subdirectory, so nothing reads the operator's dotfiles");
     }
 

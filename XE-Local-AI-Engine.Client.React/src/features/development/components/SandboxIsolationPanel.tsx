@@ -88,7 +88,7 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 			 * character or two at 390px. The floor is the width the headers and values actually need; the container
 			 * scrolls horizontally below it rather than compressing them.
 			 */}
-			<Table.ScrollContainer minWidth={960}>
+			<Table.ScrollContainer minWidth={1040}>
 				<Table striped={true} highlightOnHover={true} withTableBorder={true}>
 					<Table.Caption>
 						{t("pages.development.isolation.caption", "Isolation posture of each sandbox role on this node.")}
@@ -101,6 +101,7 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 							<Table.Th scope="col" style={nowrapCell}>
 								{t("pages.development.isolation.level", "Level")}
 							</Table.Th>
+							<Table.Th scope="col">{t("pages.development.isolation.maturity", "Maturity")}</Table.Th>
 							<Table.Th scope="col">{t("pages.development.isolation.filesystem", "Filesystem")}</Table.Th>
 							<Table.Th scope="col" style={nowrapCell}>
 								{t("pages.development.isolation.network", "Network")}
@@ -120,6 +121,7 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 										{levelLabel(t, role.level)}
 									</Badge>
 								</Table.Td>
+								<Table.Td data-testid={`sandbox-isolation-maturity-${role.role}`}>{maturityLabel(t, role.maturity)}</Table.Td>
 								<Table.Td data-testid={`sandbox-isolation-filesystem-${role.role}`}>
 									{yesNo(t, role.filesystemIsolation)}
 								</Table.Td>
@@ -156,9 +158,14 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 	);
 }
 
+// PreviewIsolated is a boundary served through a Preview mechanism (ADR 0019): real, but never shown in the Isolated green,
+// because it carries residual risk the operator accepted when enabling execution previews.
 function levelColor(level: string | undefined): string {
 	if (level === "Isolated") {
 		return "green";
+	}
+	if (level === "PreviewIsolated") {
+		return "violet";
 	}
 
 	return level === "Confined" ? "yellow" : "red";
@@ -168,11 +175,20 @@ function levelLabel(t: (key: string, fallback: string) => string, level: string 
 	if (level === "Isolated") {
 		return t("pages.development.isolation.levels.isolated", "Isolated");
 	}
+	if (level === "PreviewIsolated") {
+		return t("pages.development.isolation.levels.previewIsolated", "Isolated (preview)");
+	}
 	if (level === "Confined") {
 		return t("pages.development.isolation.levels.confined", "Confined");
 	}
 
 	return t("pages.development.isolation.levels.none", "None");
+}
+
+function maturityLabel(t: (key: string, fallback: string) => string, maturity: string | undefined): string {
+	return maturity === "Preview"
+		? t("pages.development.isolation.maturities.preview", "Preview")
+		: t("pages.development.isolation.maturities.stable", "Stable");
 }
 
 function yesNo(t: (key: string, fallback: string) => string, value: boolean | undefined): string {
