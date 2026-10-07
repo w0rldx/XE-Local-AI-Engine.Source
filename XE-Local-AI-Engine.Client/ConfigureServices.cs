@@ -18,7 +18,10 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using NSwag;
+using Microsoft.AspNetCore.SignalR;
 using Serilog;
+using Serilog.Events;
+using Serilog.Filters;
 using Serilog.Sinks.SystemConsole.Themes;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Common;
@@ -67,6 +70,10 @@ public static class ConfigureServices
 {
     private const string ConsoleOutputTemplate = "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] {Message:lj}{NewLine}{Exception}";
 
+    // SignalR's dispatcher logs every exception a hub method throws at Error, including the HubException refusals the hubs
+    // send on purpose (a run or instance that is already gone). Only those are dropped; any other exception still logs.
+    private static readonly Func<LogEvent, bool> FromHubDispatcher = Matching.FromSource("Microsoft.AspNetCore.SignalR.Internal.DefaultHubDispatcher");
+
     public static void AddServices(this IHostApplicationBuilder builder, IConfiguration configuration, NodeStartupSettings startupSettings)
     {
         ArgumentNullException.ThrowIfNull(startupSettings);
@@ -84,6 +91,7 @@ public static class ConfigureServices
                       .MinimumLevel.ControlledBy(logLevelSwitch.Level)
                       .ReadFrom.Services(serviceCollection)
                       .Enrich.FromLogContext()
+                      .Filter.ByExcluding(static logEvent => logEvent.Exception is HubException && FromHubDispatcher(logEvent))
                       .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate);
 
                 if (logFileDirectory is not null)

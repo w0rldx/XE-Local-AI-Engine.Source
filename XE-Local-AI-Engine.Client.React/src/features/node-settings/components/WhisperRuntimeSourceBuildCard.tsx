@@ -102,9 +102,12 @@ export function WhisperRuntimeSourceBuildCard() {
 	);
 	// `completed` is also the phase a REMOVE settles on, so the adopted-runtime record is what tells a finished build
 	// apart from a finished removal; without it the card would congratulate the operator on adopting what they just
-	// deleted.
+	// deleted. A record that failed verification since is no adopted runtime either.
 	const succeeded =
-		managed != null && buildStatus?.terminal === true && buildStatus.phase === "completed" && buildStatus.sanitizedError === null;
+		managed?.validity === "active" &&
+		buildStatus?.terminal === true &&
+		buildStatus.phase === "completed" &&
+		buildStatus.sanitizedError === null;
 	const revisionKey = source === "official" ? "enginePinned" : commit.trim().length > 0 ? "explicitCommit" : "defaultBranch";
 	const backendOptions = (["cuda", "cpu"] as const).map((value) => ({
 		value,

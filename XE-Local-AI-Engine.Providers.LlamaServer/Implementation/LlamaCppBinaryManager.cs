@@ -76,9 +76,11 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private readonly Func<OSPlatform, Architecture, GpuVariant, LlamaCppAssetPin?> _pinResolver;
     private readonly SemaphoreSlim _sourceMutationGate = new(initialCount: 1, maxCount: 1);
 
-    /// <summary>Single-flight lock per variant directory for <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" />.</summary>
+    /// <summary>Single-flight lock per variant directory, taken by an ensure and by an install of that directory's tag.</summary>
     /// <remarks>
-    ///     Entries are never removed: one semaphore per (tag, variant) dir is a handful per process. Prune them if tags ever churn.
+    ///     Lock order, outermost first: the caller's LlamaServerRuntimeMutationGate entry or lease, then this lock, then
+    ///     <see cref="_sourceMutationGate" />, then the installed-runtime record lock. Nothing holding the source gate takes this
+    ///     lock (an install that did would deadlock against an ensure's record write). Entries are never removed: a handful per process.
     /// </remarks>
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _acquisitionLocks = new(StringComparer.Ordinal);
 
@@ -207,9 +209,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             resolvedTag,
             stepCount: variant == GpuVariant.Cuda && _os == OSPlatform.Windows ? 2 : 1);
 
-        // Single-flight per variant dir, taken BEFORE the reporter can arm so a cancelled waiter never touches the banner. Lock order:
-        // the caller's LlamaServerRuntimeMutationGate entry/lease → this lock → _sourceMutationGate; nothing holding the latter calls this method.
-        var acquisitionLock = _acquisitionLocks.GetOrAdd(variantDir, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
+        // Single-flight per variant dir, taken BEFORE the reporter can arm so a cancelled waiter never touches the banner. Lock order: see _acquisitionLocks.
+        var acquisitionLock = AcquisitionLockFor(variantDir);
         await acquisitionLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -219,6 +220,11 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             acquisitionLock.Release();
         }
+    }
+
+    private SemaphoreSlim AcquisitionLockFor(string variantDir)
+    {
+        return _acquisitionLocks.GetOrAdd(variantDir, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
     }
 
     /// <summary>The acquisition body of <see cref="EnsureBinaryAsync(GpuVariant, CancellationToken)" />, run under that variant dir's single-flight lock.</summary>
@@ -474,20 +480,37 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     /// <inheritdoc />
     public async Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
     {
-        await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
+        // The tag becomes a path segment of the lock key, so it is checked before the directory is composed.
+        if (!IsValidTag(tag))
+        {
+            throw new LlamaRuntimeException("The requested llama.cpp runtime version is not in a recognized format.");
+        }
+
+        // The same per-directory lock an ensure takes, and in the same order (before _sourceMutationGate), so an install of the tag an ensure resolves
+        // cannot publish into the directory that ensure is downloading into or serving from.
+        var acquisitionLock = AcquisitionLockFor(Path.Combine(_cacheRoot, "llama.cpp", tag, VariantSlug(variant)));
+        await acquisitionLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (_installedRuntimeStore is not null
-                && (await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false))?.SourceBuildPath is { Length: > 0 })
+            await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
+            try
             {
-                throw new LlamaRuntimeException(SourceBuildInstalledMessage);
-            }
+                if (_installedRuntimeStore is not null
+                    && (await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false))?.SourceBuildPath is { Length: > 0 })
+                {
+                    throw new LlamaRuntimeException(SourceBuildInstalledMessage);
+                }
 
-            return await InstallTagCoreAsync(tag, assetName, digestSha256, expectedSize, variant, ct).ConfigureAwait(false);
+                return await InstallTagCoreAsync(tag, assetName, digestSha256, expectedSize, variant, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _sourceMutationGate.Release();
+            }
         }
         finally
         {
-            _sourceMutationGate.Release();
+            acquisitionLock.Release();
         }
     }
 
@@ -510,11 +533,6 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
         // Same refusal as EnsureBinaryAsync, before any download: a (Linux, CUDA) install has no genuine asset, and the caller's asset would be recorded as CUDA.
         var pin = ResolveAcquirablePin(variant);
-
-        if (!IsValidTag(tag))
-        {
-            throw new LlamaRuntimeException("The requested llama.cpp runtime version is not in a recognized format.");
-        }
 
         // The asset name is interpolated into a temp file path and the download URL — it comes from the live GitHub API,
         // so gate it against a strict allow-list (no path/URL metacharacters) before it touches either.

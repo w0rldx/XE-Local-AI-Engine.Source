@@ -392,6 +392,11 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
             throw new BenchmarkValidationException("Benchmark name and task are required.");
         }
 
+        if (draft.Name.Trim().Length > BenchmarkProjectInput.MaxNameLength)
+        {
+            throw new BenchmarkValidationException($"The benchmark name must be at most {BenchmarkProjectInput.MaxNameLength} characters.");
+        }
+
         ValidateContext(draft.ContextTokens, "primary");
         ValidateOutputBudget(draft.MaxOutputTokens, draft.ContextTokens);
         ValidateReasoningBudget(draft.ReasoningBudgetTokens, draft.MaxOutputTokens, draft.ContextTokens);

@@ -536,7 +536,11 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             IsNativeReasoningCapable = facts.IsNativeReasoningCapable,
             ReasoningBudgetEnforceable = facts.ReasoningBudgetEnforceable,
             IsMultimodalCapable = isMultimodalCapable,
-            Capabilities = capabilities
+            Capabilities = capabilities,
+            // Ollama's family is the architecture id too; the size is the converter's own label, never derived.
+            Family = facts.Family,
+            ParameterSize = facts.ParameterSize,
+            QuantizationLevel = string.IsNullOrWhiteSpace(entry.Quant) ? null : GgufDraftModel.StripQuantPrefix(entry.Quant)
         };
     }
 
@@ -565,7 +569,9 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 capabilities.IsReasoningCapable,
                 capabilities.IsNativeReasoningCapable,
                 capabilities.Capabilities,
-                capabilities.ReasoningBudgetEnforceable);
+                capabilities.ReasoningBudgetEnforceable,
+                metadata.Architecture,
+                metadata.SizeLabel);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -700,7 +706,9 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         bool IsReasoningCapable,
         bool IsNativeReasoningCapable,
         IReadOnlyList<string> Capabilities,
-        bool ReasoningBudgetEnforceable = true)
+        bool ReasoningBudgetEnforceable = true,
+        string? Family = null,
+        string? ParameterSize = null)
     {
         // An unreadable header keeps the reasoning-budget flag at its inert TRUE default: the model is also reported
         // non-reasoning here, so nothing reads it, and a false would be a silent instruction to drop the cap.

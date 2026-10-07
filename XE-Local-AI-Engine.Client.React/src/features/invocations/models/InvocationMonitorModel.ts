@@ -121,6 +121,9 @@ export interface InvocationSummaryInput {
 	readonly status: InvocationStatusDto;
 	readonly modelUsed: string | null;
 	readonly durationMs?: number | null;
+	// The current run carries no duration, only its timestamps; a terminal one is timed from these instead.
+	readonly startedAt?: string | null;
+	readonly completedAt?: string | null;
 	readonly streamedChunkCount: number;
 	readonly streamedThinkingChunkCount: number;
 	readonly pendingToolCallCount?: number;
@@ -146,6 +149,19 @@ function toolActivityNote(run: InvocationSummaryInput, t: TFunction): string {
 	return t("pages.invocations.monitor.summary.toolNone", "no tool calls");
 }
 
+// The run's own duration, else the span between its timestamps; null when neither gives a usable number, so the
+// sentence leaves the duration out instead of reading "after —".
+function summaryDurationMs(run: InvocationSummaryInput): number | null {
+	if (run.durationMs !== null && run.durationMs !== undefined && Number.isFinite(run.durationMs) && run.durationMs >= 0) {
+		return run.durationMs;
+	}
+	if (!run.startedAt || !run.completedAt) {
+		return null;
+	}
+	const elapsed = new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime();
+	return Number.isFinite(elapsed) && elapsed >= 0 ? elapsed : null;
+}
+
 /**
  * UX-12: renders one localized, human-readable sentence describing an invocation run (verb from status, duration,
  * model, streamed chunk counts, a tool/approval note, and an error note on failure). Pure i18n interpolation so it is
@@ -153,7 +169,8 @@ function toolActivityNote(run: InvocationSummaryInput, t: TFunction): string {
  */
 export function buildInvocationSummary(run: InvocationSummaryInput, t: TFunction): string {
 	const model = formatInvocationText(run.modelUsed);
-	const duration = formatInvocationDuration(run.durationMs);
+	const durationMs = summaryDurationMs(run);
+	const duration = formatInvocationDuration(durationMs);
 	const chunks = run.streamedChunkCount;
 	const thinking = run.streamedThinkingChunkCount;
 
@@ -168,22 +185,35 @@ export function buildInvocationSummary(run: InvocationSummaryInput, t: TFunction
 				{ model, chunks, thinking, tools: toolActivityNote(run, t) },
 			);
 		case "Completed":
-			return t(
-				"pages.invocations.monitor.summary.completed",
-				"Completed in {{duration}} with {{model}} — {{chunks}} output chunks, {{thinking}} reasoning, {{tools}}.",
-				{ duration, model, chunks, thinking, tools: toolActivityNote(run, t) },
-			);
-		case "Failed":
-			return t("pages.invocations.monitor.summary.failed", "Failed after {{duration}} with {{model}} — {{reason}}.", {
-				duration,
-				model,
-				reason: formatInvocationText(run.error ?? run.failureCategory),
-			});
+			return durationMs === null
+				? t(
+						"pages.invocations.monitor.summary.completedNoDuration",
+						"Completed with {{model}} — {{chunks}} output chunks, {{thinking}} reasoning, {{tools}}.",
+						{ model, chunks, thinking, tools: toolActivityNote(run, t) },
+					)
+				: t(
+						"pages.invocations.monitor.summary.completed",
+						"Completed in {{duration}} with {{model}} — {{chunks}} output chunks, {{thinking}} reasoning, {{tools}}.",
+						{ duration, model, chunks, thinking, tools: toolActivityNote(run, t) },
+					);
+		case "Failed": {
+			// The template ends the sentence itself; a reason that already does would read "details..".
+			const reason = formatInvocationText(run.error ?? run.failureCategory).replace(/\.$/, "");
+			return durationMs === null
+				? t("pages.invocations.monitor.summary.failedNoDuration", "Failed with {{model}} — {{reason}}.", { model, reason })
+				: t("pages.invocations.monitor.summary.failed", "Failed after {{duration}} with {{model}} — {{reason}}.", {
+						duration,
+						model,
+						reason,
+					});
+		}
 		case "Cancelled":
-			return t("pages.invocations.monitor.summary.cancelled", "Cancelled after {{duration}} with {{model}}.", {
-				duration,
-				model,
-			});
+			return durationMs === null
+				? t("pages.invocations.monitor.summary.cancelledNoDuration", "Cancelled with {{model}}.", { model })
+				: t("pages.invocations.monitor.summary.cancelled", "Cancelled after {{duration}} with {{model}}.", {
+						duration,
+						model,
+					});
 		default:
 			return t("pages.invocations.monitor.summary.unknown", "Invocation status is unknown.");
 	}

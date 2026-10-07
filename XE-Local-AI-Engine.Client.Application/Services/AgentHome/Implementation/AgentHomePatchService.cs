@@ -52,8 +52,8 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
 
         // Every git below is scoped to these, never to the repository root: a file written beside the copied folders
         // would otherwise ride changes.patch and the line totals while TryMapEntry dropped it from changed-files.json.
-        var pathspecs = AliasPathspecs(request.ResolvedFolders);
-        if (pathspecs.Length == 0)
+        var aliases = request.ResolvedFolders.Select(static folder => folder.Alias).Distinct(StringComparer.Ordinal).ToList();
+        if (aliases.Count == 0)
         {
             // No copied folder is no reviewable tree — and no baseline commit to diff against either. Never ".".
             return EmptyExport(AgentHomeWrittenFileGap.None);
@@ -69,6 +69,20 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             _logger.LogError("Patch export for run {RunId} refused: the workspace git directory is not the one the baseline created.",
                 request.RunId);
             return FailedExport();
+        }
+
+        var stageableAliases = await ResolveStageableAliasesAsync(handle, request, aliases, commandTimeout, cancellationToken);
+        if (stageableAliases is null)
+        {
+            _logger.LogWarning("Patch export for run {RunId} aborted: git could not list what the empty folders still hold.", request.RunId);
+            return FailedExport();
+        }
+
+        var pathspecs = AliasPathspecs(stageableAliases);
+        if (pathspecs.Length == 0)
+        {
+            // The run removed every folder's directory and none was in the baseline: nothing is left to diff.
+            return EmptyExport(await ReconcileWrittenFilesAsync(handle, request, string.Empty, commandTimeout, cancellationToken));
         }
 
         // Stage the whole working tree first: a working-tree `diff HEAD` never sees an UNTRACKED path, so without this
@@ -558,18 +572,49 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
     /// </summary>
     /// <remarks>
     ///     <c>:(literal)</c> so an alias holding pathspec magic — a leading colon, a glob — matches itself and nothing
-    ///     else, the same form <see cref="ResolvePresenceAsync" /> uses for a written path. Each alias must name a
-    ///     directory that really copied: <c>add -A</c> exits 128 on a pathspec matching neither the index nor the
-    ///     working tree, which would fail the whole export.
+    ///     else, the same form <see cref="ResolvePresenceAsync" /> uses for a written path. Each alias must match the
+    ///     index or the working tree (see <see cref="ResolveStageableAliasesAsync" />): <c>add -A</c> exits 128 on one
+    ///     that matches neither, which would fail the whole export.
     /// </remarks>
-    private static string[] AliasPathspecs(IReadOnlyList<ResolvedSelectedFolder> resolvedFolders)
+    private static string[] AliasPathspecs(IEnumerable<string> aliases)
     {
-        return
-        [
-            .. resolvedFolders.Select(static folder => folder.Alias)
-                              .Distinct(StringComparer.Ordinal)
-                              .Select(static alias => ":(literal)" + alias)
-        ];
+        return [.. aliases.Select(static alias => ":(literal)" + alias)];
+    }
+
+    /// <summary>
+    ///     The aliases <c>add -A</c> can stage, or <see langword="null" /> when git could not answer.
+    /// </summary>
+    /// <remarks>
+    ///     An alias that copied files is in the baseline's index, so it stays even when the run deleted its directory.
+    ///     Git tracks no empty directory, so an alias that copied nothing matches only while its directory or a path the
+    ///     run staged itself is there; only those aliases cost one <c>ls-files</c>, listing just what the run left there.
+    /// </remarks>
+    private async Task<IReadOnlyList<string>?> ResolveStageableAliasesAsync(SandboxHandle handle,
+        AgentHomePatchExportRequest request,
+        IReadOnlyList<string> aliases,
+        TimeSpan commandTimeout,
+        CancellationToken cancellationToken)
+    {
+        var emptyAliases = aliases.Where(alias => request.EmptyAliases.Contains(alias, StringComparer.Ordinal)).ToList();
+        if (emptyAliases.Count == 0)
+        {
+            return aliases;
+        }
+
+        // --directory folds an untracked directory, an empty one too, into one "<alias>/" record.
+        var result = await RunGitAsync(handle,
+            request,
+            $"{request.RunId}-patch-ls-aliases",
+            commandTimeout,
+            ["ls-files", "-z", "--cached", "--others", "--directory", "--exclude-standard", "--", .. AliasPathspecs(emptyAliases)],
+            cancellationToken);
+        if (!IsSuccessful(result))
+        {
+            return null;
+        }
+
+        var present = SplitNul(result.StandardOutput).Select(static path => path.Split('/')[0]).ToHashSet(StringComparer.Ordinal);
+        return [.. aliases.Where(alias => present.Contains(alias) || !emptyAliases.Contains(alias, StringComparer.Ordinal))];
     }
 
     private static bool IsSuccessful(SandboxCommandResult result)

@@ -409,6 +409,7 @@ internal sealed class GgufHeaderReader
             Architecture = architecture,
             QuantType = quantType,
             ParamCount = paramCount,
+            SizeLabel = GetString(values, "general.size_label"),
             BlockCount = blockCount,
             AttentionHeadCount = headCount,
             AttentionHeadCountKV = headCountKv,

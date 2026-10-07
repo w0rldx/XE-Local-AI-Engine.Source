@@ -1497,7 +1497,7 @@ The three timeouts are a ladder; a stalled or slow turn trips them in this order
 
 | Bound | Source | Enforced by | What it bounds |
 |---|---|---|---|
-| `StreamIdleTimeout` | package `TimeoutSettings.StreamIdleTimeoutSeconds` | `StreamIdleWatchdog` | No chunk arrives between two yielded items of ONE streamed segment, while no requested or approved tool call awaits its result (server-side tool execution carries its own bound) |
+| `StreamIdleTimeout` | package `TimeoutSettings.StreamIdleTimeoutSeconds` | `StreamIdleWatchdog` | No chunk arrives between two yielded items of ONE streamed segment, while no requested or approved tool call awaits its result (server-side tool execution carries its own bound) and the provider round has already produced its first output (the prefill wait before it is bounded by `InvocationTimeout`) |
 | `ToolResultTimeout` | package `TimeoutSettings.ToolCallTimeoutSeconds`, else the node-global pending-tool-call age | `ApiToolCallBridge` | The wait for a tool call's RESULT |
 | `InvocationTimeout` | package `TimeoutSettings.InvocationTimeoutSeconds` | `InvocationLifecycleTracker` | The whole turn's wall clock, every segment and approval round-trip end to end |
 

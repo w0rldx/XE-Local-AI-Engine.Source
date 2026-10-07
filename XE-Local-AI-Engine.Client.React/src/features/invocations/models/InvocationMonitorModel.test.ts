@@ -106,6 +106,33 @@ describe("buildInvocationSummary", () => {
 	it("summarizes a cancelled run", () => {
 		expect(buildInvocationSummary(summaryInput({ status: "Cancelled" }), t)).toBe("Cancelled after 4.2 s with gemma3.");
 	});
+
+	// The current run has no durationMs on the wire, and the operator message already ends its own sentence.
+	it("times a failed current run from its timestamps and ends the sentence once", () => {
+		const run = summaryInput({
+			status: "Failed",
+			durationMs: undefined,
+			startedAt: "2026-10-06T10:00:00Z",
+			completedAt: "2026-10-06T10:00:12.500Z",
+			error: "Invocation ended with a failure. See local logs for details.",
+		});
+
+		expect(buildInvocationSummary(run, t)).toBe(
+			"Failed after 12.5 s with gemma3 — Invocation ended with a failure. See local logs for details.",
+		);
+	});
+
+	it("leaves the duration out when a terminal run has no completion time", () => {
+		const base = { durationMs: undefined, startedAt: "2026-10-06T10:00:00Z", completedAt: null };
+
+		expect(buildInvocationSummary(summaryInput({ ...base, status: "Failed", error: "Model load timeout" }), t)).toBe(
+			"Failed with gemma3 — Model load timeout.",
+		);
+		expect(buildInvocationSummary(summaryInput({ ...base, status: "Cancelled" }), t)).toBe("Cancelled with gemma3.");
+		expect(buildInvocationSummary(summaryInput({ ...base, status: "Completed" }), t)).toBe(
+			"Completed with gemma3 — 128 output chunks, 40 reasoning, no tool calls.",
+		);
+	});
 });
 
 function createHistory(invocationId: string, completedAt: string) {

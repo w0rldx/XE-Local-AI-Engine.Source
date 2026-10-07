@@ -89,6 +89,9 @@ internal static class LocalModelsMapper
                        ReasoningBudgetEnforceable = descriptor.ReasoningBudgetEnforceable,
                        IsToolCapable = descriptor.IsToolCapable,
                        IsMultimodalCapable = descriptor.IsMultimodalCapable,
+                       Family = descriptor.Family,
+                       ParameterSize = descriptor.ParameterSize,
+                       QuantizationLevel = descriptor.QuantizationLevel,
                        IsOverridden = false
                    };
                })

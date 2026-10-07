@@ -271,6 +271,8 @@
 			"knowledgeUnavailable": "Wissensdatenbank nicht verfügbar",
 			"attachmentShortened": "Anhang gekürzt",
 			"attachmentShortenedText": "Die angehängte Datei wurde gekürzt, damit sie in das Kontextfenster dieses Modells passt; das Modell wurde darauf hingewiesen, dass sie unvollständig ist.",
+			"attachmentsNotSent": "Anhänge nicht gesendet",
+			"attachmentsNotSentText": "Einige angehängte Dateien wurden nicht an das Modell gesendet: Aus ihnen ließ sich kein Text lesen, oder das Modell kann keine Bilder sehen.",
 			"knowledgeUnavailableText": "Ihre Wissensdatenbank wurde für diese Nachricht nicht verwendet, weil kein Einbettungsmodell installiert ist und Ihre Dokumente daher nicht indiziert werden konnten.",
 			"outputLimitReachedText": "Die Antwort wurde an der Längengrenze beendet, bevor das Modell fertig war.",
 			"toolCallAsTextText": "Das Modell hat einen Tool-Aufruf als Text geschrieben, statt das Tool aufzurufen. Der Aufruf wurde daher nicht ausgeführt, und es gibt keine Antwort.",
@@ -3355,6 +3357,9 @@
 					"completed": "Abgeschlossen in {{duration}} mit {{model}} — {{chunks}} Ausgabe-Chunks, {{thinking}} Reasoning, {{tools}}.",
 					"failed": "Fehlgeschlagen nach {{duration}} mit {{model}} — {{reason}}.",
 					"cancelled": "Abgebrochen nach {{duration}} mit {{model}}.",
+					"completedNoDuration": "Abgeschlossen mit {{model}} — {{chunks}} Ausgabe-Chunks, {{thinking}} Reasoning, {{tools}}.",
+					"failedNoDuration": "Fehlgeschlagen mit {{model}} — {{reason}}.",
+					"cancelledNoDuration": "Abgebrochen mit {{model}}.",
 					"unknown": "Aufrufstatus ist unbekannt.",
 					"toolApproval": "wartet auf Tool-Freigabe",
 					"toolQuestion": "wartet auf eine Antwort auf eine Frage",
@@ -7847,7 +7852,7 @@
 				"vadMissing": "Sprachaktivitätserkennung ist nicht installiert.",
 				"managed": {
 					"active": "Verwalteter Build installiert.",
-					"invalid": "Der verwaltete Build ist ungültig und wird neu gebaut."
+					"invalid": "Der verwaltete Build ist ungültig, daher startet die Laufzeit nicht. Entferne ihn oder baue ihn in den Node-Einstellungen neu."
 				},
 				"cpuSourceBuildHint": "Transkription läuft auf der CPU. Unter Linux mit NVIDIA-GPU lässt sich in den Knoteneinstellungen eine CUDA-Laufzeit aus dem Quellcode bauen; alle anderen Systeme erhalten bereits eine vorgebaute Binärdatei.",
 				"eject": "Auswerfen",

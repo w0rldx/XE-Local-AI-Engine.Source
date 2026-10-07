@@ -29,6 +29,10 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     // it and the Streaming transition. Distinct from the runner's terminals so a queue stop never reads as a timeout.
     private const string PreRunCancelledMessage = "Stopped before the response started (cancelled while queued).";
 
+    // Fixed text so the SPA localizes it by exact match; the file names ride the notice's Detail.
+    private const string AttachmentsNotSentNoticeMessage =
+        "Some attached files were not sent to the model: no text could be read from them, or the model cannot see images.";
+
     // The tools whose presence in an offer means the agent can read files through the AgentHome sandbox. When any is
     // offered AND the conversation has attachments, the sandbox is re-staged with them before the tool loop runs.
     private static readonly HashSet<string> AgentHomeCapableToolNames = new(StringComparer.Ordinal)
@@ -618,8 +622,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         return !turnReachesCloud || await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken);
     }
 
-    // The notices produced before the invocation starts, in wire order: the orchestration-degraded notice, the playbook
-    // and tools withhold notices, then the cloud-egress withhold notices. All ride the runner's turn-notice fan-out.
+    // The pre-run notices, in wire order: orchestration-degraded, playbook and tools withheld, then either the cloud-egress
+    // withhold notices or knowledge-unavailable and attachments-not-sent. All ride the runner's turn-notice fan-out.
     private async Task ReportPreRunNoticesAsync(NodeChatStreamRequest request,
         ChatTurnResolution resolution,
         ChatToolOffer toolOffer,
@@ -655,6 +659,21 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             if (request.UseKnowledgeBase && !await _turnContextBuilder.IsKnowledgeEmbeddingAvailableAsync(cancellationToken))
             {
                 await _eventDispatcher.ReportTurnNoticeAsync(KnowledgeUnavailableNotice.For(requestId));
+            }
+
+            var unsentAttachments = await _turnContextBuilder.ListUnsentAttachmentNamesAsync(request.ConversationId,
+                request.AttachmentFileIds,
+                imagesAccepted: resolution.SupportsVision,
+                cancellationToken);
+            if (unsentAttachments.Count > 0)
+            {
+                await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+                {
+                    InvocationId = requestId,
+                    Kind = TurnNoticeKind.AttachmentsNotSent,
+                    Message = AttachmentsNotSentNoticeMessage,
+                    Detail = string.Join(", ", unsentAttachments)
+                });
             }
 
             return;

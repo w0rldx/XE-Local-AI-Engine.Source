@@ -128,6 +128,39 @@ public sealed class BinaryManagerInstallTagTests
         AssertEx.Equal(source, await store.ReadAsync(CancellationToken.None));
     }
 
+    /// <summary>
+    ///     An install of the tag an ungated ensure resolves (first-run provisioning, the VRAM probe) works in the SAME
+    ///     variant directory. The ensure must wait for the install and then serve its result, not download a second copy
+    ///     and race the publish.
+    /// </summary>
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    public async Task InstallTag_AndEnsureOfTheSameDirectory_DownloadOnceAndTheEnsureServesTheInstall()
+    {
+        using var cache = new TempDir();
+        var archive = BuildExecutableTarGz();
+        var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
+        using var handler = new GatedHandler(archive);
+        using var http = new HttpClient(handler, disposeHandler: false);
+        using var store = new InstalledRuntimeStore(cache.Path);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store);
+
+        var install = manager.InstallTagAsync(LlamaCppReleasePins.PinnedTag, pin.AssetName, Sha256Hex(archive), archive.Length, GpuVariant.Cpu, CancellationToken.None);
+        await handler.Entered.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // An empty cache and no record: the ensure resolves the pinned tag, the directory the install is downloading into.
+        var ensure = manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+        await AssertEx.StaysIncompleteAsync(ensure, "the ensure must wait for the install of its own directory");
+        handler.Release();
+
+        var installed = await install;
+        var served = await ensure;
+
+        AssertEx.Equal(expected: 1, handler.CallCount, "only the install downloads; the ensure is a cache hit on what it published");
+        AssertEx.Equal(installed.ServerExecutablePath, served.ServerExecutablePath);
+    }
+
     [Test]
     [ExcludeOn(OS.Windows)]
     public async Task InstallTag_WhenDigestMatches_AtomicallyInstallsAndWritesState()
@@ -690,6 +723,7 @@ public sealed class BinaryManagerInstallTagTests
         private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly byte[] _content;
+        private int _callCount;
 
         public GatedHandler(byte[] content)
         {
@@ -698,11 +732,14 @@ public sealed class BinaryManagerInstallTagTests
 
         public Task Entered => _entered.Task;
 
+        public int CallCount => Volatile.Read(ref _callCount);
+
         public void Release() =>
             _release.TrySetResult();
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            Interlocked.Increment(ref _callCount);
             _entered.TrySetResult();
             await _release.Task.WaitAsync(cancellationToken);
             return new HttpResponseMessage(HttpStatusCode.OK)

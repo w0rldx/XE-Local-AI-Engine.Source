@@ -18,6 +18,9 @@ internal sealed record GgufHeaderMetadata
 
     public required long? ParamCount { get; init; }
 
+    /// <summary>The converter's size label from <c>general.size_label</c> (<c>7B</c>, <c>568M</c>), or null when absent.</summary>
+    public string? SizeLabel { get; init; }
+
     public required long? BlockCount { get; init; }
 
     public required long? AttentionHeadCount { get; init; }

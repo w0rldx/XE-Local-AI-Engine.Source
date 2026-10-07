@@ -502,8 +502,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             return EmptyPatchExport;
         }
 
-        // A git baseline exists only when something copied, and only those aliases have a directory the export can
-        // name as a pathspec — `git add -A` exits 128 on one that matches neither the index nor the working tree.
+        // A git baseline and an alias directory exist only for a prepared selection; with none there is nothing to diff.
         if (copiedAliases.Count == 0)
         {
             return EmptyPatchExport;
@@ -515,6 +514,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                 RunId = runId,
                 HostRunDirectory = runDirectory,
                 ResolvedFolders = [.. request.Prepared.ResolvedFolders.Where(folder => copiedAliases.Contains(folder.Alias, StringComparer.Ordinal))],
+                EmptyAliases = [.. request.Prepared.FolderSnapshots.Where(static snapshot => snapshot.CopiedFileCount == 0).Select(static snapshot => snapshot.Alias)],
                 WrittenFiles = goal.WrittenFiles,
                 RunLogger = runLogger
             },
@@ -585,7 +585,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     /// </summary>
     private static IEnumerable<string> CopiedWorkspaceAliases(IReadOnlyList<SelectedFolderSnapshot> snapshots)
     {
-        return snapshots.Where(static snapshot => snapshot is { Status: SelectedFolderCopyStatus.Copied, CopiedFileCount: > 0 })
+        return snapshots.Where(static snapshot => snapshot.Status == SelectedFolderCopyStatus.Copied)
                         .Select(static snapshot => snapshot.Alias);
     }
 

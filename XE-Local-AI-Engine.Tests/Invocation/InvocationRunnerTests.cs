@@ -5707,28 +5707,86 @@ public sealed class InvocationRunnerTests
         await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(message => message == "The response stream stalled."), FailureCategory.Timeout);
     }
 
+    /// <summary>
+    ///     A provider that never produces its first output is not cut by the idle bound, since that wait is prefill, but the whole-turn deadline still
+    ///     ends it and names itself.
+    /// </summary>
     [Test]
-    public async Task RunAsync_WhenStreamStallsBeyondIdleTimeout_MapsTimeoutFailure()
+    public async Task RunAsync_WhenTheProviderNeverStartsItsRound_TheTurnDeadlineEndsIt()
     {
+        var clock = new ManualTimeProvider();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        // Retry disabled so the single stalled attempt trips the 1s inter-chunk idle watchdog promptly (with retry on,
-        // the same stall would be retried before finally surfacing as a timeout).
-        var resilience = new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions
-            {
-                CircuitBreakerEnabled = false
-            }),
-            StubNodeRuntimeSettings.Create().WithProviderRetryEnabled(false).Build(),
-            TimeProvider.System,
-            NullLogger<ProviderStreamResilience>.Instance);
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var runner = CreateRunner(CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)),
             eventDispatcher: dispatcher,
-            providerStreamResilience: resilience);
-        var package = RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: 300, toolCallSeconds: 30, streamIdleSeconds: 1).Build();
+            providerStreamResilience: NoRetryResilience(),
+            timeProvider: clock);
+        var package = RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: 300, streamIdleSeconds: 60).Build();
 
-        await RunAsync(runner, package).WaitAsync(TimeSpan.FromSeconds(15));
+        var run = RunAsync(runner, package);
+        await AssertEx.CompletesAsync(started.Task, TestBudgets.Contended, "the provider was never pulled");
+        await AdvanceIdleWindowsUntilCompleteAsync(clock, run);
+        await AssertEx.CompletesAsync(run, TestBudgets.Contended, "the silent first round never hit the turn deadline");
 
-        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), FailureCategory.Timeout);
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(),
+            "Timed out: the response exceeded the node maximum message request timeout (300s).",
+            FailureCategory.Timeout);
+    }
+
+    /// <summary>
+    ///     A round's wait for its first output is prefill, not a stall: a re-prefill after a tool result took 43 s on a fast GPU, so a slower box lost
+    ///     the turn at the 60 s idle bound. A segment's first round is the same wait.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task RunAsync_WhenARoundPrefillsLongerThanTheIdleTimeout_TheTurnCompletes(bool afterToolResult)
+    {
+        var clock = new ManualTimeProvider();
+        var prefillDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var prefillStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(CreateFactory(token => SlowPrefillUpdates(afterToolResult, prefillDone.Task, prefillStarted, token)),
+            eventDispatcher: dispatcher,
+            providerStreamResilience: NoRetryResilience(),
+            timeProvider: clock);
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("slow-tool").WithTimeout(streamIdleSeconds: 60).Build();
+
+        var run = RunAsync(runner, package);
+        await AssertEx.CompletesAsync(prefillStarted.Task, TestBudgets.Contended, "the provider round never started its prefill");
+        for (var window = 0; window < 3; window++)
+        {
+            await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the idle deadline is armed");
+            clock.Advance(TimeSpan.FromSeconds(61));
+        }
+
+        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the deadline re-armed during the prefill");
+        prefillDone.SetResult();
+        await AssertEx.CompletesAsync(run, TestBudgets.Contended, "the turn did not complete once the round streamed");
+
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<FailureCategory>());
+    }
+
+    /// <summary>The negative control: once the round after a tool result has streamed, its silence is a stall again.</summary>
+    [Test]
+    public async Task RunAsync_WhenTheRoundAfterAToolResultStallsAfterItsFirstOutput_TheIdleDeadlineStillFails()
+    {
+        var clock = new ManualTimeProvider();
+        var never = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var textYielded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(CreateFactory(token => ToolRoundThenSilentAfterTextUpdates(never.Task, textYielded, token)),
+            eventDispatcher: dispatcher,
+            providerStreamResilience: NoRetryResilience(),
+            timeProvider: clock);
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("slow-tool").WithTimeout(streamIdleSeconds: 60).Build();
+
+        var run = RunAsync(runner, package);
+        await AssertEx.CompletesAsync(textYielded.Task, TestBudgets.Contended, "the provider never pulled past the second round's text");
+        await AdvanceIdleWindowsUntilCompleteAsync(clock, run);
+        await AssertEx.CompletesAsync(run, TestBudgets.Contended, "the second round's stall never hit the idle deadline");
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(static message => IsStreamIdleMessage(message)), FailureCategory.Timeout);
     }
 
     /// <summary>
@@ -5916,6 +5974,51 @@ public sealed class InvocationRunnerTests
             new FunctionResultContent("call-slow", "ok")
         });
         yield return new AgentResponseUpdate(ChatRole.Assistant, "done");
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> SlowPrefillUpdates(bool afterToolResult,
+        Task prefillDone,
+        TaskCompletionSource prefillStarted,
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken)
+    {
+        if (afterToolResult)
+        {
+            yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+            {
+                new FunctionCallContent("call-prefill", "slow-tool")
+            });
+            yield return new AgentResponseUpdate(ChatRole.Tool, new List<AIContent>
+            {
+                new FunctionResultContent("call-prefill", "ok")
+            });
+        }
+
+        // The round's prefill: nothing streams until the prompt is evaluated.
+        prefillStarted.TrySetResult();
+        await prefillDone.WaitAsync(cancellationToken);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "done");
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolRoundThenSilentAfterTextUpdates(Task never,
+        TaskCompletionSource textYielded,
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken)
+    {
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionCallContent("call-prefill", "slow-tool")
+        });
+        yield return new AgentResponseUpdate(ChatRole.Tool, new List<AIContent>
+        {
+            new FunctionResultContent("call-prefill", "ok")
+        });
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "partial");
+
+        // Runs on the next pull: the second round has streamed, and this is the pull the idle deadline bounds.
+        textYielded.TrySetResult();
+        await never.WaitAsync(cancellationToken);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "unreachable");
     }
 
     private static async IAsyncEnumerable<AgentResponseUpdate> SilentAfterTextUpdates(Task never,

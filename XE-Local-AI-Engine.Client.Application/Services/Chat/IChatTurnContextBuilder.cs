@@ -38,6 +38,17 @@ public interface IChatTurnContextBuilder
     Task<ConversationMessageDto?> BuildImageContextAsync(Guid conversationId, IReadOnlyList<Guid>? attachmentFileIds, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     The names of the requested attachments the builders above skip on this turn, from upload metadata alone: no
+    ///     extracted text, not readable, or an image the model cannot see.
+    /// </summary>
+    /// <param name="imagesAccepted">Whether the effective model takes image parts; false lists every requested image.</param>
+    /// <remarks>The image caps are not counted here. Empty when the send names no file.</remarks>
+    Task<IReadOnlyList<string>> ListUnsentAttachmentNamesAsync(Guid conversationId,
+        IReadOnlyList<Guid>? attachmentFileIds,
+        bool imagesAccepted,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     The top-k fused knowledge-base hits for <paramref name="query" />, composed into ONE fenced untrusted
     ///     context message alongside the provenance of the inlined hits.
     /// </summary>

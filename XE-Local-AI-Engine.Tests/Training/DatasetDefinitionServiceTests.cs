@@ -98,6 +98,29 @@ public sealed class DatasetDefinitionServiceTests
         })));
     }
 
+    [Test]
+    public async Task Definition_ReasoningTeacherInConstrainedMode_IsRejectedWithTheRunnersMessage()
+    {
+        var harness = new Harness(teacherSupportsThinking: true);
+
+        var exception = await AssertEx.ThrowsAsync<TrainingValidationException>(() => harness.Service.CreateAsync(Draft(Body())));
+
+        AssertEx.Equal("'teacher.gguf' is a reasoning model and cannot be used in Constrained mode; use ValidateAfter.", exception.Message);
+    }
+
+    [Test]
+    public async Task Definition_ReasoningTeacherInValidateAfterMode_IsAccepted()
+    {
+        var harness = new Harness(teacherSupportsThinking: true);
+
+        _ = await harness.Service.CreateAsync(Draft(Body() with
+        {
+            TeacherOutputMode = TeacherOutputMode.ValidateAfter
+        }));
+
+        AssertEx.Equal(TeacherOutputMode.ValidateAfter, harness.Saved().TeacherOutputMode);
+    }
+
     private static DatasetDefinitionDraft Draft(DatasetDefinitionBodyV1 body) =>
         new()
         {
@@ -118,7 +141,7 @@ public sealed class DatasetDefinitionServiceTests
     {
         private TrainingDefinitionInput? _captured;
 
-        public Harness()
+        public Harness(bool teacherSupportsThinking = false)
         {
             var offerProvider = Substitute.For<ILocalToolOfferProvider>();
             _ = offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
@@ -140,7 +163,10 @@ public sealed class DatasetDefinitionServiceTests
             _ = store.CreateDefinitionAsync(Arg.Do<TrainingDefinitionInput>(input => _captured = input), Arg.Any<CancellationToken>())
                      .Returns(call => Record(call.Arg<TrainingDefinitionInput>()));
 
-            Service = new DatasetDefinitionService(store, offerProvider, Policy);
+            var capabilities = Substitute.For<IModelCapabilityResolver>();
+            _ = capabilities.ResolveAsync("teacher.gguf", Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(teacherSupportsThinking, true, false));
+
+            Service = new DatasetDefinitionService(store, offerProvider, Policy, capabilities);
         }
 
         public IDatasetDefinitionService Service { get; }

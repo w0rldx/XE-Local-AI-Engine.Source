@@ -138,5 +138,15 @@ public enum TurnNoticeKind
     KnowledgeUnavailable = 13,
 
     /// <summary>The inlined attachment text was shortened to fit the model's launched context window; the model is told too.</summary>
-    AttachmentShortened = 14
+    AttachmentShortened = 14,
+
+    /// <summary>
+    ///     Some attached files did not reach a node-local model: no text was extracted, the file was not readable, or it is
+    ///     an image and the model cannot see images.
+    /// </summary>
+    /// <remarks>
+    ///     Not a privacy withhold (that is <see cref="AttachmentsWithheld" />). <see cref="TurnNoticePayload.Detail" />
+    ///     lists the affected file names.
+    /// </remarks>
+    AttachmentsNotSent = 15
 }

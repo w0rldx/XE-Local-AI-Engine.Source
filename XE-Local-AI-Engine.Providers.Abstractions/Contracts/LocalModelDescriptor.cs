@@ -88,4 +88,13 @@ public sealed record LocalModelDescriptor
     ///     <c>native_reasoning</c>, <c>vision</c>) detected for the model. Empty when no capabilities could be determined.
     /// </summary>
     public IReadOnlyList<string> Capabilities { get; init; } = [];
+
+    /// <summary>The model family (the GGUF architecture id, as Ollama reports it), or null when unknown.</summary>
+    public string? Family { get; init; }
+
+    /// <summary>The parameter size label (<c>7B</c>, <c>568M</c>), or null when the model does not declare one.</summary>
+    public string? ParameterSize { get; init; }
+
+    /// <summary>The quantization label (<c>Q4_K_M</c>), or null when unknown.</summary>
+    public string? QuantizationLevel { get; init; }
 }

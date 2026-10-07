@@ -352,6 +352,54 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    [Arguments("notaquant", null, "huggingFaceDefaultQuant")]
+    [Arguments("Q4_K_M-extra", null, "huggingFaceDefaultQuant")]
+    [Arguments(null, "unsloth/model\u0001-GGUF:Q4_K_M", "defaultModelName")]
+    public async Task SaveNodeSettings_WithAnUnknownQuantOrAMalformedDefaultModel_IsRejected(string? quant, string? modelName, string wireName)
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            HuggingFaceDefaultQuant = quant,
+            DefaultModelName = modelName
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal(wireName, document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>Shape only: a model that is not installed yet is accepted, in both the <c>repo:quant</c> and the <c>ext:</c> form.</summary>
+    [Test]
+    [Arguments("q4_k_m", "unsloth/granite-4.1-3b-GGUF:Q4_K_M")]
+    [Arguments("ud-q4_k_xl", "ext:r8cloud/bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M")]
+    public async Task SaveNodeSettings_WithAKnownQuantInOddCasingAndAWellFormedDefaultModel_IsAccepted(string quant, string modelName)
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            HuggingFaceDefaultQuant = quant,
+            DefaultModelName = modelName
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate).HuggingFaceDefaultQuant == quant && Persisted(mutate).DefaultModelName == modelName),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task SaveNodeSettings_WithAnUnbudgetedDefaultReasoningEffort_IsRejectedUnderTheWireName()
     {
         var nodeSettingsStore = NewSettingsStore();

@@ -191,6 +191,7 @@ describe("ChatNoticeRow", () => {
 		["OutputLimitReached", "Answer cut off", ".tabler-icon-cut"],
 		["KnowledgeUnavailable", "Knowledge base unavailable", ".tabler-icon-book-off"],
 		["AttachmentShortened", "Attachment shortened", ".tabler-icon-file-text"],
+		["AttachmentsNotSent", "Attachments not sent", ".tabler-icon-file-off"],
 	])("renders the %s notice with its own glyph and label", (noticeKind, label, iconClass) => {
 		const { container } = renderWithProviders(
 			<ChatNoticeRow part={noticePart({ noticeKind, text: "a server-owned sentence" })} />,
@@ -198,6 +199,26 @@ describe("ChatNoticeRow", () => {
 
 		expect(screen.getByLabelText(label)).toBeTruthy();
 		expect(container.querySelector(iconClass)).toBeTruthy();
+	});
+
+	it("renders the attachments-not-sent notice with its localized sentence and every unsent file name", () => {
+		// A scanned PDF with no text and an image on a model without vision used to vanish from the turn silently.
+		renderWithProviders(
+			<ChatNoticeRow
+				part={noticePart({
+					noticeKind: "AttachmentsNotSent",
+					text: "Some attached files were not sent to the model: no text could be read from them, or the model cannot see images.",
+					detail: "scan.pdf, photo.png, notes.bin",
+				})}
+			/>,
+		);
+
+		expect(
+			screen.getByText(
+				"Some attached files were not sent to the model: no text could be read from them, or the model cannot see images.",
+			),
+		).toBeTruthy();
+		expect(screen.getByTestId("chat-notice-detail").textContent).toBe("scan.pdf, photo.png, notes.bin");
 	});
 
 	it("renders the notice detail beside the sentence when the server sent one", () => {

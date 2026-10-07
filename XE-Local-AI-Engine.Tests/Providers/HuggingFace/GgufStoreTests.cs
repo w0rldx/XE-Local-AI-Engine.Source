@@ -725,6 +725,37 @@ public sealed class GgufStoreTests
         AssertEx.Equal(entry.SizeBytes, descriptor.SizeBytes);
     }
 
+    /// <summary>
+    ///     The Models page's family, size and quant come from the same single header read: architecture as Ollama's
+    ///     family, the converter's <c>general.size_label</c> as the size, the registry quant as the quant.
+    /// </summary>
+    [Test]
+    public async Task GgufStore_ListInstalled_CarriesFamilySizeLabelAndQuant_FromTheHeaderAndRegistry()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var registry = Infra.Registry(options);
+
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "qwen2")
+                     .WithString("general.size_label", "7B")
+                     .WithUint32("qwen2.context_length", value: 32768)
+                     .Build();
+        var entry = await SeedInstalledModel(dir, registry, "qwen2-Q4_K_M.gguf", header);
+
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) =>
+            throw new InvalidOperationException("Listing installed models must not download."));
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        var store = Infra.Store(download, Infra.DiscoveryWith(), registry, options);
+
+        var descriptor = (await store.ListInstalledModelsAsync(CancellationToken.None)).Single(d => d.ModelName == entry.ModelName);
+
+        AssertEx.Equal("qwen2", descriptor.Family);
+        AssertEx.Equal("7B", descriptor.ParameterSize);
+        AssertEx.Equal("Q4_K_M", descriptor.QuantizationLevel);
+    }
+
     [Test]
     public async Task GgufStore_ListInstalled_GarbageFile_YieldsNullContext_StillLists()
     {

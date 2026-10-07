@@ -60,7 +60,30 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     public async Task<GgufDownloadTicket> StartAsync(GgufModelRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        // One timing line per start, on every exit including a 409: the request blocks on all three phases, and only
+        // a per-phase split tells a cold verification hash from a slow Hugging Face lookup or a lock wait.
+        var timing = new StartPhaseTiming(_timeProvider);
+        try
+        {
+            return await StartCoreAsync(request, timing, ct);
+        }
+        finally
+        {
+            _logger.LogInformation("GGUF download start for {RepoId} ({Quant}) took {TotalMs} ms: resolve {ResolveMs} ms, preflight {PreflightMs} ms, complete-verified {CompleteMs} ms.",
+                request.RepoId,
+                request.Quant ?? "default",
+                (long)_timeProvider.GetElapsedTime(timing.StartedAt).TotalMilliseconds,
+                timing.ResolveMs,
+                timing.PreflightMs,
+                timing.CompleteMs);
+        }
+    }
+
+    private async Task<GgufDownloadTicket> StartCoreAsync(GgufModelRequest request, StartPhaseTiming timing, CancellationToken ct)
+    {
         var source = await _downloadTransaction.ResolveAsync(request, ct);
+        timing.ResolveMs = timing.Lap();
         var intent = ToIntent(source);
         var identity = _identityResolver.Resolve(intent);
         var active = _operations.GetNewest(AcquisitionKind.Download, identity.CanonicalModelName);
@@ -84,6 +107,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         {
             var preflight = scope.ServiceProvider.GetRequiredService<IGgufAcquisitionPreflight>();
             reservation = await preflight.ResolveAndReserveAsync(intent, ct);
+            timing.PreflightMs = timing.Lap();
         }
 
         await using (reservation)
@@ -95,6 +119,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                     totalBytes,
                     reservation.Lease,
                     ct);
+                timing.CompleteMs = timing.Lap();
                 BroadcastStatus(completed, isInitialOrTerminal: true);
                 return new GgufDownloadTicket
                 {
@@ -594,4 +619,34 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             or GgufAcquisitionPhase.Copying
             or GgufAcquisitionPhase.Committing
             or GgufAcquisitionPhase.Running;
+
+    /// <summary>The per-phase milliseconds of one start call; a phase that was never reached stays null.</summary>
+    private sealed class StartPhaseTiming
+    {
+        private readonly TimeProvider _timeProvider;
+        private long _lapStartedAt;
+
+        public StartPhaseTiming(TimeProvider timeProvider)
+        {
+            _timeProvider = timeProvider;
+            StartedAt = timeProvider.GetTimestamp();
+            _lapStartedAt = StartedAt;
+        }
+
+        public long StartedAt { get; }
+
+        public long? ResolveMs { get; set; }
+
+        public long? PreflightMs { get; set; }
+
+        public long? CompleteMs { get; set; }
+
+        public long Lap()
+        {
+            var now = _timeProvider.GetTimestamp();
+            var elapsed = (long)_timeProvider.GetElapsedTime(_lapStartedAt, now).TotalMilliseconds;
+            _lapStartedAt = now;
+            return elapsed;
+        }
+    }
 }

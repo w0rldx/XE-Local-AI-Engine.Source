@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 ///     For each trusted selected folder it walks the real host tree once to plan the copy — applying the sensitive-file exclusions,
 ///     resolving symlinks and reparse points against the canonical root, summing surviving bytes — rejects the preparation if a folder
 ///     exceeds the byte budget, then copies the survivors into <c>/agent-home/workspace/selected/&lt;alias&gt;</c> through the sandbox
-///     provider. Once at least one folder has copied it creates the temporary in-sandbox git baseline patch export diffs against. The
+///     provider. Once at least one folder is prepared it creates the temporary in-sandbox git baseline patch export diffs against. The
 ///     model-facing result carries aliases and counts only, never host paths.
 /// </remarks>
 internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
@@ -85,20 +85,14 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
             // Copy the complete accepted set before creating one baseline. No agent inference can begin between these
             // steps because the caller holds the owner-node execution lease for the full lifecycle.
             var snapshots = new List<SelectedFolderSnapshot>(plans.Count);
-            var anyFileCopied = false;
             requiresCleanup = true;
             foreach (var plan in plans)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var snapshot = await CopyFolderAsync(handle, plan, cancellationToken);
-                snapshots.Add(snapshot);
-                anyFileCopied |= snapshot.CopiedFileCount > 0;
+                snapshots.Add(await CopyFolderAsync(handle, plan, cancellationToken));
             }
 
-            if (anyFileCopied)
-            {
-                await CreateGitBaselineAsync(handle, baselineCommands, cancellationToken);
-            }
+            await CreateGitBaselineAsync(handle, baselineCommands, cancellationToken);
 
             requiresCleanup = false;
             return snapshots;
@@ -137,6 +131,13 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                     DestinationPath = destination
                 },
                 cancellationToken);
+        }
+
+        if (planned.CopyPlan.Files.Count == 0)
+        {
+            // Only a file copy creates directories. An empty folder still needs its alias directory, or the model has
+            // nowhere to write and the export's `add -A` pathspec would match nothing (exit 128).
+            await _provider.ResetDirectoryAsync(handle, sandboxDestinationRoot, cancellationToken);
         }
 
         _logger.LogInformation("Copied selected folder {Alias}: {CopiedFiles} file(s), {CopiedBytes} byte(s); excluded {ExcludedFiles} file(s) and {ExcludedDirs} directory(ies).",

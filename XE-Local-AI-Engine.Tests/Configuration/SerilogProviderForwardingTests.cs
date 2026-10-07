@@ -4,7 +4,10 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using Serilog.Core;
+using Serilog.Events;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -58,6 +61,35 @@ public sealed class SerilogProviderForwardingTests : IDisposable
             + "OpenTelemetry logger provider never sees them and OTLP log export is silently dead.");
     }
 
+    // The dispatcher logs each exception a hub method throws at Error; a deliberate HubException refusal is routine and is
+    // dropped, anything else from the dispatcher and a HubException from any other source still reaches the sinks.
+    [Test]
+    public void AddServices_DropsOnlyHubExceptionsTheSignalRDispatcherLogs()
+    {
+        var sink = new CapturingSink();
+        var builder = CreateBuilder();
+        builder.Logging.ClearProviders();
+        builder.Services.AddSingleton<ILogEventSink>(sink);
+        builder.AddServices(builder.Configuration, NodeStartupSettings.Read(builder.Configuration, builder.Environment));
+
+        using var provider = builder.Services.BuildServiceProvider();
+        var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
+        // The category the framework itself creates for the internal dispatcher, so the filter is checked against the
+        // real source context rather than a copy of the string.
+        var dispatcherType = typeof(Hub).Assembly.GetType("Microsoft.AspNetCore.SignalR.Internal.DefaultHubDispatcher`1", throwOnError: true)!
+                                        .MakeGenericType(typeof(Hub));
+        var dispatcher = loggerFactory.CreateLogger(dispatcherType);
+
+        dispatcher.LogError(new HubException("Work session was not found."), "routine-refusal-probe");
+        dispatcher.LogError(new InvalidOperationException("boom"), "real-hub-failure-probe");
+        loggerFactory.CreateLogger("hub.filter.probe").LogError(new HubException("elsewhere"), "other-source-probe");
+
+        var messages = sink.Messages();
+        AssertEx.False(messages.Contains("routine-refusal-probe"), "A HubException from the hub dispatcher must not reach the sinks.");
+        AssertEx.Contains(messages, "real-hub-failure-probe");
+        AssertEx.Contains(messages, "other-source-probe");
+    }
+
     private WebApplicationBuilder CreateBuilder()
     {
         Directory.CreateDirectory(_rootPath);
@@ -75,6 +107,27 @@ public sealed class SerilogProviderForwardingTests : IDisposable
         });
 
         return builder;
+    }
+
+    private sealed class CapturingSink : ILogEventSink
+    {
+        private readonly List<string> _messages = [];
+
+        public void Emit(LogEvent logEvent)
+        {
+            lock (_messages)
+            {
+                _messages.Add(logEvent.MessageTemplate.Text);
+            }
+        }
+
+        public List<string> Messages()
+        {
+            lock (_messages)
+            {
+                return [.. _messages];
+            }
+        }
     }
 
     private sealed class RecordingLoggerProvider : ILoggerProvider

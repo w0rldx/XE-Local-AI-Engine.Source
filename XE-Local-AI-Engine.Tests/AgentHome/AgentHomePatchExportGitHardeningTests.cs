@@ -118,21 +118,13 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
                 }
             }),
             // …and a real edit, so the export has something to find and the test can prove the diff still works.
-            ("write_file", new()
-            {
-                ["path"] = $"{WorkspaceAlias}/README.md",
-                ["content"] = "# project\nsmall\n"
-            })
+            WriteSmallReadme()
         };
 
         if (attributes.Length > 0)
         {
             // .gitattributes is NOT under .git, so the write guard does not refuse it. That is the point.
-            script.Insert(index: 1, ("write_file", new()
-            {
-                ["path"] = $"{WorkspaceAlias}/.gitattributes",
-                ["content"] = attributes + "\n"
-            }));
+            script.Insert(index: 1, WriteGitAttributes(attributes + "\n"));
         }
 
         var run = await fixture.RunAsync([.. script]);
@@ -158,27 +150,11 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         var payload = PayloadCommand(marker);
 
         using var fixture = CreateFixture();
-        var run = await fixture.RunAsync(("write_file", new()
-            {
-                ["path"] = $"{WorkspaceAlias}/.gitattributes",
-                ["content"] = "* diff=pwn\n"
-            }),
-            ("write_file", new()
-            {
-                ["path"] = $"{WorkspaceAlias}/README.md",
-                ["content"] = "# project\nsmall\n"
-            }),
-            ("run_command", new()
-            {
-                ["executable"] = "/bin/sh",
-                ["arguments"] = new[]
-                {
-                    "-c",
-                    // Copy the real repository aside, point config at the payload, then leave a gitfile behind.
-                    $"cp -r .git ../evil-git && printf '[core]\\n\\trepositoryformatversion = 0\\n[diff \"pwn\"]\\n\\ttextconv = {payload}\\n' > ../evil-git/config"
-                    + " && rm -rf .git && printf 'gitdir: %s\\n' \"$(cd ../evil-git && pwd)\" > .git"
-                }
-            }));
+        var run = await fixture.RunAsync(WriteGitAttributes("* diff=pwn\n"),
+            WriteSmallReadme(),
+            // Copy the real repository aside, point config at the payload, then leave a gitfile behind.
+            RunShell($"cp -r .git ../evil-git && printf '[core]\\n\\trepositoryformatversion = 0\\n[diff \"pwn\"]\\n\\ttextconv = {payload}\\n' > ../evil-git/config"
+                     + " && rm -rf .git && printf 'gitdir: %s\\n' \"$(cd ../evil-git && pwd)\" > .git"));
 
         AssertEx.False(await MarkerExistsAsync(fixture.Provider, marker), "a gitfile pointing at a model-owned git directory must not get the payload run");
 
@@ -220,16 +196,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
             Environment.SetEnvironmentVariable("HOME", home);
 
             using var fixture = CreateFixture();
-            var run = await fixture.RunAsync(("write_file", new()
-                {
-                    ["path"] = $"{WorkspaceAlias}/.gitattributes",
-                    ["content"] = "* diff=pwn\n"
-                }),
-                ("write_file", new()
-                {
-                    ["path"] = $"{WorkspaceAlias}/README.md",
-                    ["content"] = "# project\nsmall\n"
-                }));
+            var run = await fixture.RunAsync(WriteGitAttributes("* diff=pwn\n"), WriteSmallReadme());
 
             AssertEx.False(await MarkerExistsAsync(fixture.Provider, marker), "a driver defined in the GLOBAL git config must not execute during export");
             AssertEx.True(run.Patch.ChangedFileCount > 0, "the guard must not break the diff");
@@ -266,11 +233,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
                     "hello"
                 }
             }),
-            ("write_file", new()
-            {
-                ["path"] = $"{WorkspaceAlias}/README.md",
-                ["content"] = "# project\nsmall\n"
-            }));
+            WriteSmallReadme());
 
         var logged = (await File.ReadAllLinesAsync(Path.Combine(run.LogPath, "commands.jsonl")))
                      .Where(line => !string.IsNullOrWhiteSpace(line))
@@ -328,20 +291,8 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
                 ["path"] = $"{WorkspaceAlias}/docs/notes.md",
                 ["content"] = "# notes\ncreated by the run\n"
             }),
-            ("write_file", new()
-            {
-                ["path"] = $"{WorkspaceAlias}/README.md",
-                ["content"] = "# project\nsmall\n"
-            }),
-            ("run_command", new()
-            {
-                ["executable"] = "/bin/sh",
-                ["arguments"] = new[]
-                {
-                    "-c",
-                    $"rm {WorkspaceAlias}/notes.txt && mv {WorkspaceAlias}/guide.txt {WorkspaceAlias}/manual.txt"
-                }
-            }));
+            WriteSmallReadme(),
+            RunShell($"rm {WorkspaceAlias}/notes.txt && mv {WorkspaceAlias}/guide.txt {WorkspaceAlias}/manual.txt"));
 
         var changed = await ReadChangedFilesAsync(run);
         AssertChange(changed, "docs/notes.md", "added");
@@ -366,15 +317,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         SkipUnlessRealGitAndProcessJail();
 
         using var fixture = CreateFixture();
-        var run = await fixture.RunAsync(("run_command", new()
-        {
-            ["executable"] = "/bin/sh",
-            ["arguments"] = new[]
-            {
-                "-c",
-                $"head -c 4 /dev/zero > {WorkspaceAlias}/data.bin && : > {WorkspaceAlias}/empty.txt"
-            }
-        }));
+        var run = await fixture.RunAsync(RunShell($"head -c 4 /dev/zero > {WorkspaceAlias}/data.bin && : > {WorkspaceAlias}/empty.txt"));
 
         var changed = await ReadChangedFilesAsync(run);
         AssertChange(changed, "data.bin", "added");
@@ -401,15 +344,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         SkipUnlessRealGitAndProcessJail();
 
         using var fixture = CreateFixture();
-        var run = await fixture.RunAsync(("run_command", new()
-            {
-                ["executable"] = "/bin/sh",
-                ["arguments"] = new[]
-                {
-                    "-c",
-                    "printf 'stray\\n' > rootfile.txt"
-                }
-            }),
+        var run = await fixture.RunAsync(RunShell("printf 'stray\\n' > rootfile.txt"),
             ("write_file", new()
             {
                 ["path"] = $"{WorkspaceAlias}/docs/notes.md",
@@ -432,13 +367,12 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
     }
 
     /// <summary>
-    ///     A selection may hold a folder that resolved but copied nothing, and that folder has no directory in the
-    ///     sandbox at all.
+    ///     A selection may hold a folder that resolved but copied nothing; the copy gives it an empty directory.
     /// </summary>
     /// <remarks>
     ///     <c>git add -A</c> exits 128 the moment ONE of its pathspecs matches neither the index nor the working
-    ///     tree, so naming such an alias would fail the export for the whole run and throw away the other folder's
-    ///     real changes. Only real git shows that, which is why this lives here rather than on the scripted seam.
+    ///     tree, so an alias without a directory would fail the export for the whole run and throw away the other
+    ///     folder's real changes. Only real git shows that, which is why this lives here rather than on the scripted seam.
     /// </remarks>
     [Test]
     public async Task Export_WhenASelectedFolderCopiedNothing_StillExportsTheOtherFoldersChanges()
@@ -451,29 +385,131 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
                 ["path"] = $"{WorkspaceAlias}/docs/notes.md",
                 ["content"] = "# notes\n"
             }),
-            ("write_file", new()
-            {
-                ["path"] = $"{WorkspaceAlias}/README.md",
-                ["content"] = "# project\nsmall\n"
-            }));
+            WriteSmallReadme());
 
         AssertEx.False(run.Patch.Failed,
-            "an alias with no directory must never reach a pathspec — git add -A would exit 128 and refuse the whole export");
+            "the empty folder's pathspec matches its empty directory — git add -A must not exit 128 and refuse the whole export");
 
         var changed = await ReadChangedFilesAsync(run);
         AssertChange(changed, "docs/notes.md", "added");
         AssertChange(changed, "README.md", "modified");
-        AssertEx.Equal(expected: 2, changed.Count, "only the folder that copied contributes changes");
+        AssertEx.Equal(expected: 2, changed.Count, "only the folder the run wrote into contributes changes");
         AssertEx.True(changed.TrueForAll(static entry => entry.Alias != EmptyAlias), "the empty folder names no change");
 
-        // commands.jsonl is the argv that really ran, so it is where an alias that leaked into a pathspec would show.
-        var logged = await ReadCommandsAsync(run);
-        AssertEx.True(logged.TrueForAll(static record => record.GetProperty("arguments")
-                                                               .EnumerateArray()
-                                                               .All(static argument => argument.GetString()?.Contains(EmptyAlias, StringComparison.Ordinal) != true)),
-            "no git the node ran names the folder that copied nothing");
-
         await AssertHostFolderUnchangedAsync(fixture);
+    }
+
+    /// <summary>
+    ///     The run removed the empty folder's directory: git tracks no empty directory, so its alias now matches
+    ///     neither the index nor the working tree, and staging it would exit 128 and discard the other folder's work.
+    /// </summary>
+    [Test]
+    public async Task Export_WhenTheRunRemovedAnEmptyFoldersDirectory_StillExportsTheOtherFoldersChanges()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture(emptyAlias: EmptyAlias);
+        var run = await fixture.RunAsync(RunShell($"rmdir {EmptyAlias}"), WriteSmallReadme());
+
+        AssertRemovalRan(run);
+        AssertEx.False(run.Patch.Failed, "an alias that is in neither the index nor the working tree is left out, not staged");
+        var changed = await ReadChangedFilesAsync(run);
+        AssertChange(changed, "README.md", "modified");
+        AssertEx.Equal(expected: 1, changed.Count, "the removed empty folder contributes nothing");
+
+        var stages = (await ReadCommandsAsync(run)).Where(record => record.GetProperty("executionId").GetString() == $"{run.RunId}-patch-stage").ToList();
+        AssertEx.Equal(expected: 1, stages.Count, "the export staged once");
+        AssertEx.False(stages[0].GetProperty("arguments").EnumerateArray().Any(static argument => argument.GetString() == ":(literal)" + EmptyAlias),
+            "the removed empty folder is not a staged pathspec");
+        await AssertHostFolderUnchangedAsync(fixture);
+    }
+
+    /// <summary>
+    ///     The run removed EVERY alias directory, and none was in the baseline: nothing is left to diff, which is a
+    ///     clean zero-change run rather than a failed export.
+    /// </summary>
+    [Test]
+    public async Task Export_WhenTheRunRemovedTheOnlyEmptyFoldersDirectory_ReportsNoChangesWithoutFailing()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture(emptyAlias: EmptyAlias, onlyEmptyFolder: true);
+        var run = await fixture.RunAsync(RunShell($"rmdir {EmptyAlias}"));
+
+        AssertEx.False(run.Patch.Failed, "no alias left to stage is no change, not a failure");
+        AssertEx.Equal(expected: 0, run.Patch.ChangedFileCount);
+        AssertRemovalRan(run);
+    }
+
+    /// <summary>
+    ///     The other side of that rule: a populated folder whose whole directory the run deleted is still in the
+    ///     index, so it stays a pathspec and the export carries every deletion.
+    /// </summary>
+    [Test]
+    public async Task Export_WhenTheRunDeletedAPopulatedFoldersWholeDirectory_ExportsItsDeletions()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture(emptyAlias: EmptyAlias);
+        var run = await fixture.RunAsync(RunShell($"rm -rf {WorkspaceAlias}"));
+
+        AssertRemovalRan(run);
+        AssertEx.False(run.Patch.Failed, "a deleted folder that the baseline indexed is still staged");
+        var changed = await ReadChangedFilesAsync(run);
+        AssertChange(changed, "README.md", "deleted");
+        AssertChange(changed, "notes.txt", "deleted");
+        AssertChange(changed, "guide.txt", "deleted");
+        AssertEx.Equal(expected: 3, run.Patch.ChangedFileCount);
+        await AssertHostFolderUnchangedAsync(fixture);
+    }
+
+    /// <summary>
+    ///     The first-run shape: the ONLY selected folder is empty ("scaffold a project here"). The model must be able
+    ///     to write into it, and the creation must reach the patch.
+    /// </summary>
+    [Test]
+    public async Task Export_WhenTheOnlySelectedFolderIsEmpty_ExportsTheFileTheRunWroteThere()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture(emptyAlias: EmptyAlias, onlyEmptyFolder: true);
+        var run = await fixture.RunAsync(("write_file", new()
+        {
+            ["path"] = $"{EmptyAlias}/main.py",
+            ["content"] = "print('hello')\n"
+        }));
+
+        AssertEx.False(run.Patch.Failed, "an empty folder has a directory and a baseline, so the export runs");
+        var changed = await ReadChangedFilesAsync(run);
+        var entry = AssertEx.NotNull(changed.Find(static candidate => candidate.RelativePath == "main.py"), "changed-files.json lists 'main.py'");
+        AssertEx.Equal("added", entry.ChangeType);
+        AssertEx.Equal(EmptyAlias, entry.Alias);
+        AssertEx.Equal(expected: 1, run.Patch.ChangedFileCount);
+        AssertEx.Contains(await ReadPatchAsync(run), $"+++ b/{EmptyAlias}/main.py");
+    }
+
+    /// <summary>
+    ///     The same empty folder with no write: the export really runs over the empty directory and reports nothing,
+    ///     rather than failing on a pathspec that matches nothing.
+    /// </summary>
+    [Test]
+    public async Task Export_WhenTheOnlySelectedFolderIsEmptyAndNothingWasWritten_ReportsNoChangesWithoutFailing()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture(emptyAlias: EmptyAlias, onlyEmptyFolder: true);
+        var run = await fixture.RunAsync();
+
+        AssertEx.False(run.Patch.Failed, "staging an empty alias directory exits 0");
+        AssertEx.Equal(expected: 0, run.Patch.ChangedFileCount);
+
+        // Graded on the argv that ran: a run that skipped the export would also report zero changes.
+        var stages = (await ReadCommandsAsync(run)).Where(record => record.GetProperty("executionId").GetString() == $"{run.RunId}-patch-stage").ToList();
+        AssertEx.Equal(expected: 1, stages.Count, "the export staged the empty folder");
+        var stage = stages[0];
+        AssertEx.Equal(expected: 0, stage.GetProperty("exitCode").GetInt32());
+        AssertEx.True(stage.GetProperty("arguments").EnumerateArray().Any(static argument => argument.GetString() == ":(literal)" + EmptyAlias),
+            "the empty folder's alias is one of the staged pathspecs");
     }
 
     /// <summary>
@@ -552,11 +588,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
                 ["path"] = $"{WorkspaceAlias}/docs/notes.md",
                 ["content"] = Created
             }),
-            ("write_file", new()
-            {
-                ["path"] = $"{WorkspaceAlias}/README.md",
-                ["content"] = "# project\nsmall\n"
-            }));
+            WriteSmallReadme());
 
         var target = CreateTempDirectory("xe-ah-apply");
         foreach (var seeded in Directory.GetFiles(fixture.HostFolder))
@@ -595,15 +627,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         SkipUnlessRealGitAndProcessJail();
 
         using var fixture = CreateFixture();
-        var run = await fixture.RunAsync(("run_command", new()
-            {
-                ["executable"] = "/bin/sh",
-                ["arguments"] = new[]
-                {
-                    "-c",
-                    $"ln -s /etc/passwd {WorkspaceAlias}/abs-link && ln -s ../../escape.txt {WorkspaceAlias}/rel-link"
-                }
-            }),
+        var run = await fixture.RunAsync(RunShell($"ln -s /etc/passwd {WorkspaceAlias}/abs-link && ln -s ../../escape.txt {WorkspaceAlias}/rel-link"),
             ("write_file", new()
             {
                 ["path"] = $"{WorkspaceAlias}/docs/notes.md",
@@ -670,17 +694,9 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         SkipUnlessRealGitAndProcessJail();
 
         using var fixture = CreateFixture();
-        var run = await fixture.RunAsync(("run_command", new()
-        {
-            ["executable"] = "/bin/sh",
-            ["arguments"] = new[]
-            {
-                "-c",
-                $"mkdir -p {WorkspaceAlias}/vendor && cd {WorkspaceAlias}/vendor && git init -q ."
-                + " && echo inner > file.txt && git add -A"
-                + " && git -c user.email=t@example.invalid -c user.name=t commit -q -m inner"
-            }
-        }));
+        var run = await fixture.RunAsync(RunShell($"mkdir -p {WorkspaceAlias}/vendor && cd {WorkspaceAlias}/vendor && git init -q ."
+                                                  + " && echo inner > file.txt && git add -A"
+                                                  + " && git -c user.email=t@example.invalid -c user.name=t commit -q -m inner"));
 
         AssertEx.True(run.Patch.ChangedFileCount > 0, "the nested repository reaches the export as a change");
 
@@ -716,11 +732,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
                 ["path"] = $"{WorkspaceAlias}/docs/notes.md",
                 ["content"] = "# notes\n"
             }),
-            ("write_file", new()
-            {
-                ["path"] = $"{WorkspaceAlias}/README.md",
-                ["content"] = "# project\nsmall\n"
-            }));
+            WriteSmallReadme());
 
         AssertEx.Equal(expected: 0, run.Patch.WrittenGap.Total, "both writes are in the patch, so nothing is missing from it");
         AssertEx.True((await ReadEventsAsync(run)).TrueForAll(static record => record.GetProperty("eventName").GetString() != "written_not_exported"),
@@ -773,15 +785,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
                 ["path"] = $"{WorkspaceAlias}/notes.txt",
                 ["content"] = "notes rewritten by the run\n"
             }),
-            ("run_command", new()
-            {
-                ["executable"] = "/bin/sh",
-                ["arguments"] = new[]
-                {
-                    "-c",
-                    $"rm {WorkspaceAlias}/scratch.txt"
-                }
-            }),
+            RunShell($"rm {WorkspaceAlias}/scratch.txt"),
             ("write_file", new()
             {
                 ["path"] = $"{WorkspaceAlias}/guide.txt",
@@ -896,6 +900,36 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         }
     }
 
+    /// <summary>The real edit most scripts end with, so the export has something to find.</summary>
+    private static (string, Dictionary<string, object?>) WriteSmallReadme()
+    {
+        return ("write_file", new Dictionary<string, object?>
+        {
+            ["path"] = $"{WorkspaceAlias}/README.md",
+            ["content"] = "# project\nsmall\n"
+        });
+    }
+
+    /// <summary>A <c>write_file</c> step planting the workspace folder's <c>.gitattributes</c>.</summary>
+    private static (string, Dictionary<string, object?>) WriteGitAttributes(string content)
+    {
+        return ("write_file", new Dictionary<string, object?>
+        {
+            ["path"] = $"{WorkspaceAlias}/.gitattributes",
+            ["content"] = content
+        });
+    }
+
+    /// <summary>A <c>run_command</c> step running one <c>/bin/sh -c</c> script in the workspace.</summary>
+    private static (string, Dictionary<string, object?>) RunShell(string script)
+    {
+        return ("run_command", new Dictionary<string, object?>
+        {
+            ["executable"] = "/bin/sh",
+            ["arguments"] = new[] { "-c", script }
+        });
+    }
+
     /// <summary>
     ///     The marker a payload would leave, named as a WORKSPACE-relative path.
     ///     <para>
@@ -936,6 +970,12 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
     ///     filesystem — under isolation the workspace is inside a mount namespace, and the provider's own survey is
     ///     the one way to look that works under both modes.
     /// </summary>
+    private static void AssertRemovalRan(AgentHomeRunResult run)
+    {
+        var command = AssertEx.NotNull(run.GoalOutcome?.Commands.SingleOrDefault(), "the script ran its one removal command");
+        AssertEx.True(command is { Completed: true, ExitCode: 0 }, "the removal command succeeded, so the directory is really gone");
+    }
+
     private static async Task<bool> MarkerExistsAsync(ProcessSandboxRuntimeProvider provider, string markerRelativePath)
     {
         var handle = await provider.ConnectAsync(AttachKey());
@@ -1029,7 +1069,7 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         };
     }
 
-    private ExportFixture CreateFixture(long? maxPatchBytes = null, string? emptyAlias = null)
+    private ExportFixture CreateFixture(long? maxPatchBytes = null, string? emptyAlias = null, bool onlyEmptyFolder = false)
     {
         var clock = TimeProvider.System;
         var provider = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), clock);
@@ -1040,12 +1080,19 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         // Renamed, not modified, by the four-change-kinds run: enough lines that git's similarity detection reports R.
         File.WriteAllText(Path.Combine(hostFolder, "guide.txt"), "one\ntwo\nthree\nfour\nfive\nsix\n");
 
-        var resolver = new StaticSelectedFolderResolver(WorkspaceAlias, hostFolder);
-        if (emptyAlias is { Length: > 0 })
+        StaticSelectedFolderResolver resolver;
+        if (emptyAlias is { Length: > 0 } && onlyEmptyFolder)
         {
-            // A second selection with nothing to copy: the workspace copy makes no directory for it, so it is the
-            // shape whose alias must never reach a git pathspec.
-            resolver.Add(emptyAlias, CreateTempDirectory("xe-ah-empty-src"));
+            resolver = new StaticSelectedFolderResolver(emptyAlias, CreateTempDirectory("xe-ah-empty-src"));
+        }
+        else
+        {
+            resolver = new StaticSelectedFolderResolver(WorkspaceAlias, hostFolder);
+            if (emptyAlias is { Length: > 0 })
+            {
+                // A second selection with nothing to copy: its alias directory exists only because the copy creates it.
+                resolver.Add(emptyAlias, CreateTempDirectory("xe-ah-empty-src"));
+            }
         }
 
         var root = CreateTempDirectory("xe-ah-state");

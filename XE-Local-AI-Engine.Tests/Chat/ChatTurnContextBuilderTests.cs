@@ -102,6 +102,45 @@ public sealed class ChatTurnContextBuilderTests
         AssertEx.Equal(expected: 1, message!.Images!.Count);
     }
 
+    /// <summary>
+    ///     A scanned PDF extracts to no text and its chip still says "Extracted", and an image on a model without vision is skipped by the
+    ///     caller: both used to vanish from the turn with no sign to the user.
+    /// </summary>
+    [Test]
+    public async Task ListUnsentAttachmentNamesAsync_NamesTheFilesNoBuilderSends()
+    {
+        var conversationId = Guid.NewGuid();
+        var store = Substitute.For<IConversationUploadedFileStore>();
+        var withText = File(conversationId, "runbook.md", "text/markdown", ".md", DocumentExtractionStatus.Extracted, extractedChars: 120);
+        var scanned = File(conversationId, "scan.pdf", "application/pdf", ".pdf", DocumentExtractionStatus.Extracted, extractedChars: 0);
+        var failed = File(conversationId, "broken.docx", "application/octet-stream", ".docx", DocumentExtractionStatus.Failed);
+        var photo = File(conversationId, "photo.png", "image/png", ".png", DocumentExtractionStatus.Image);
+        var notRequested = File(conversationId, "other.pdf", "application/pdf", ".pdf", DocumentExtractionStatus.Failed);
+        store.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns([withText, scanned, failed, photo, notRequested]);
+        var builder = CreateBuilder(store);
+
+        var withoutVision = await builder.ListUnsentAttachmentNamesAsync(conversationId, [withText.FileId, scanned.FileId, failed.FileId, photo.FileId], imagesAccepted: false);
+        var withVision = await builder.ListUnsentAttachmentNamesAsync(conversationId, [withText.FileId, scanned.FileId, failed.FileId, photo.FileId], imagesAccepted: true);
+
+        AssertEx.Equal("scan.pdf, broken.docx, photo.png", string.Join(", ", withoutVision));
+        AssertEx.Equal("scan.pdf, broken.docx", string.Join(", ", withVision));
+    }
+
+    [Test]
+    public async Task ListUnsentAttachmentNamesAsync_WhenEveryRequestedFileIsSent_ReturnsNothing()
+    {
+        var conversationId = Guid.NewGuid();
+        var store = Substitute.For<IConversationUploadedFileStore>();
+        var withText = File(conversationId, "runbook.md", "text/markdown", ".md", DocumentExtractionStatus.Extracted, extractedChars: 120);
+        var photo = File(conversationId, "photo.png", "image/png", ".png", DocumentExtractionStatus.Image);
+        store.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns([withText, photo]);
+        var builder = CreateBuilder(store);
+
+        var unsent = await builder.ListUnsentAttachmentNamesAsync(conversationId, [withText.FileId, photo.FileId], imagesAccepted: true);
+
+        AssertEx.Empty(unsent);
+    }
+
     [Test]
     public async Task BuildKnowledgeContextAsync_WhenHitsAreReturned_ComposesTheGroundingAndItsSources()
     {
@@ -245,7 +284,8 @@ public sealed class ChatTurnContextBuilderTests
         string fileName,
         string mimeType,
         string extension,
-        DocumentExtractionStatus status)
+        DocumentExtractionStatus status,
+        int? extractedChars = null)
     {
         return new ConversationUploadedFileInfo
         {
@@ -256,7 +296,7 @@ public sealed class ChatTurnContextBuilderTests
             Extension = extension,
             SizeBytes = 4,
             ExtractionStatus = status,
-            ExtractedChars = null,
+            ExtractedChars = extractedChars,
             CreatedAtUtc = 0
         };
     }

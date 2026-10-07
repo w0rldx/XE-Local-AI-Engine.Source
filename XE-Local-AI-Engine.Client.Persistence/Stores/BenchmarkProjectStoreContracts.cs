@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public sealed record BenchmarkProjectInput
 {
+    /// <summary>The <c>name</c> column's declared length, which SQLite does not enforce, so the service does.</summary>
+    public const int MaxNameLength = 200;
+
     public required Guid Id { get; init; }
 
     public required string Name { get; init; }

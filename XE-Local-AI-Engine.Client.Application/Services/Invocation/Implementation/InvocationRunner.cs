@@ -864,6 +864,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
             repromptPending = false;
             var segmentUpdates = new List<AgentResponseUpdate>();
 
+            // A provider round's wait for its first output is prompt prefill, which streams nothing and grows with the prompt, so the idle bound is suspended
+            // until that output arrives: at the segment's start and after each tool result. The whole-turn deadline still bounds the wait.
+            var awaitingRoundOutput = true;
+
             // The idle watchdog owns the token the provider call binds cancellation to, so an idle expiry actually cancels the send. The first segment also
             // runs through the pre-first-token retry + circuit breaker, which re-invokes this whole factory, so a fresh idle watchdog guards every attempt.
             IAsyncEnumerable<AgentResponseUpdate> ProviderSend(CancellationToken sendToken)
@@ -873,7 +877,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     streamIdleTimeoutMessage,
                     _timeProvider,
                     sendToken,
-                    isSuspended: () => openToolCalls.Any);
+                    isSuspended: () => openToolCalls.Any || awaitingRoundOutput);
             }
 
             var segmentStream = isFirstSegment
@@ -882,6 +886,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             await foreach (var update in segmentStream.WithCancellation(invocationToken))
             {
+                // Any update but a tool result is the round's output; a result re-arms the wait below.
+                awaitingRoundOutput = false;
+
                 if (retainSegmentUpdates)
                 {
                     segmentUpdates.Add(update);
@@ -1035,6 +1042,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                                 // A result starts a new model round, which must produce its own text or call to count as an answer.
                                 finalRoundHasOutput = false;
+                                awaitingRoundOutput = true;
                                 finalRoundContentStart = stream.ResponseBuilder.Length;
                                 finalRoundReasoningStart = stream.ReasoningBuilder.Length;
 

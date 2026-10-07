@@ -34,17 +34,21 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
     private const int MaxTargetSampleCount = 2000;
 
     private readonly IToolApprovalPolicy _approvalPolicy;
+    private readonly IModelCapabilityResolver _capabilityResolver;
     private readonly ILocalToolOfferProvider _offerProvider;
     private readonly ITrainingDatasetStore _store;
 
     public DatasetDefinitionService(ITrainingDatasetStore store,
         ILocalToolOfferProvider offerProvider,
-        IToolApprovalPolicy approvalPolicy)
+        IToolApprovalPolicy approvalPolicy,
+        IModelCapabilityResolver capabilityResolver)
     {
         ArgumentNullException.ThrowIfNull(approvalPolicy);
+        ArgumentNullException.ThrowIfNull(capabilityResolver);
         ArgumentNullException.ThrowIfNull(offerProvider);
         ArgumentNullException.ThrowIfNull(store);
         _approvalPolicy = approvalPolicy;
+        _capabilityResolver = capabilityResolver;
         _offerProvider = offerProvider;
         _store = store;
     }
@@ -114,6 +118,13 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
         }
 
         Validate(draft.Body);
+
+        // The generation run refuses this pairing; refusing it here keeps a definition that can never generate from being saved.
+        if (draft.Body.TeacherOutputMode == TeacherOutputMode.Constrained
+            && (await _capabilityResolver.ResolveAsync(draft.Body.TeacherModelName, cancellationToken)).SupportsThinking)
+        {
+            throw new TrainingValidationException(StructuredAgentRunner.ReasoningTeacherInConstrainedModeMessage(draft.Body.TeacherModelName));
+        }
 
         var snapshot = await SnapshotToolsAsync(draft.Body, cancellationToken);
         var body = draft.Body with

@@ -271,6 +271,8 @@
 			"knowledgeUnavailable": "Knowledge base unavailable",
 			"attachmentShortened": "Attachment shortened",
 			"attachmentShortenedText": "The attached file was shortened to fit this model's context window; the model was told it is incomplete.",
+			"attachmentsNotSent": "Attachments not sent",
+			"attachmentsNotSentText": "Some attached files were not sent to the model: no text could be read from them, or the model cannot see images.",
 			"knowledgeUnavailableText": "Your knowledge base was not used for this message because no embedding model is installed, so your documents could not be indexed.",
 			"outputLimitReachedText": "The answer stopped at the length limit before the model finished.",
 			"toolCallAsTextText": "The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.",
@@ -3355,6 +3357,9 @@
 					"completed": "Completed in {{duration}} with {{model}} — {{chunks}} output chunks, {{thinking}} reasoning, {{tools}}.",
 					"failed": "Failed after {{duration}} with {{model}} — {{reason}}.",
 					"cancelled": "Cancelled after {{duration}} with {{model}}.",
+					"completedNoDuration": "Completed with {{model}} — {{chunks}} output chunks, {{thinking}} reasoning, {{tools}}.",
+					"failedNoDuration": "Failed with {{model}} — {{reason}}.",
+					"cancelledNoDuration": "Cancelled with {{model}}.",
 					"unknown": "Invocation status is unknown.",
 					"toolApproval": "awaiting tool approval",
 					"toolQuestion": "awaiting an answer to a question",
@@ -7847,7 +7852,7 @@
 				"vadMissing": "Voice-activity detection is not installed.",
 				"managed": {
 					"active": "Managed build installed.",
-					"invalid": "The managed build is invalid and will be rebuilt."
+					"invalid": "The managed build is invalid, so the runtime will not start. Remove or rebuild it in Node Settings."
 				},
 				"cpuSourceBuildHint": "Transcribing on the CPU. On Linux with an NVIDIA GPU, a CUDA runtime can be built from source in Node Settings; every other host already gets a prebuilt binary.",
 				"eject": "Eject",

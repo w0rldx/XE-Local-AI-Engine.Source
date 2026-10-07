@@ -68,7 +68,7 @@ public sealed class StartWhisperCppSourceBuildEndpoint : Endpoint<StartWhisperCp
                     return;
                 case WhisperCppSourceBuildStartOutcome.RuntimeBusy:
                     await BlockAsync("runtime-busy",
-                        "Wait for active transcriptions and transcription-runtime processes to finish before starting the build.",
+                        "Wait for active transcriptions and transcription-runtime processes to finish before starting the build, or eject an idle transcription runtime.",
                         result.Activity);
                     return;
                 case WhisperCppSourceBuildStartOutcome.Started:

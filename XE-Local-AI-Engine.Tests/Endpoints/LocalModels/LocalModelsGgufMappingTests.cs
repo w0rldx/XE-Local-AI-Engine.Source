@@ -64,6 +64,38 @@ public sealed class LocalModelsGgufMappingTests
     }
 
     /// <summary>
+    ///     The Models page renders family, parameter size and quant from the list response; a GGUF row showed "—" for
+    ///     all three because the mapper dropped them. An undeclared value stays null, never a guess.
+    /// </summary>
+    [Test]
+    public void ToLlamaCppModelResponses_CarriesFamilyParameterSizeAndQuantFromTheDescriptor()
+    {
+        var response = LocalModelsMapper.ToLlamaCppModelResponses([
+                Gguf("bartowski/Qwen2.5-7B-Instruct-GGUF:Q4_K_M") with
+                {
+                    Family = "qwen2",
+                    ParameterSize = "7B",
+                    QuantizationLevel = "Q4_K_M"
+                },
+                Gguf("nomic-ai/nomic-embed-text-v1.5-GGUF:F16") with
+                {
+                    Family = "nomic-bert",
+                    QuantizationLevel = "F16"
+                }
+            ],
+            selectedModelName: null);
+
+        var declared = response.Single(static model => model.ModelName.StartsWith("bartowski", StringComparison.Ordinal));
+        AssertEx.Equal("qwen2", declared.Family);
+        AssertEx.Equal("7B", declared.ParameterSize);
+        AssertEx.Equal("Q4_K_M", declared.QuantizationLevel);
+
+        var undeclared = response.Single(static model => model.ModelName.StartsWith("nomic", StringComparison.Ordinal));
+        AssertEx.True(undeclared.ParameterSize is null, "a GGUF without a size label reports no parameter size");
+        AssertEx.Equal("nomic-bert", undeclared.Family);
+    }
+
+    /// <summary>
     ///     A descriptor whose template could not be read reports no reasoning at all, and the budget flag keeps its
     ///     inert TRUE default — a header that failed to parse is not evidence that a cap would fail to apply, and a
     ///     false here would read downstream as an instruction to drop one.

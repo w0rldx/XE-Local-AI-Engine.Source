@@ -720,6 +720,53 @@ public sealed class BenchmarkRunFreezeServiceTests
     }
 
     /// <summary>
+    ///     A KLD base of another size (live: a 1.5B base for a 0.5B run) produced a divergence figure reported as ok,
+    ///     because llama-perplexity accepts any base with a compatible vocabulary. The run is refused at freeze.
+    /// </summary>
+    [Test]
+    public async Task Start_WithAKldBaseOfADifferentModel_IsRefusedNamingBothModels()
+    {
+        var harness = new FreezeHarness(primaryModel: "qwen-0.5b.gguf",
+            kldBaseModel: "qwen-1.5b.gguf",
+            primaryFacts: Footprint("qwen2", blocks: 24, width: 896),
+            baseFacts: Footprint("qwen2", blocks: 28, width: 1536));
+
+        var failure = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => harness.StartAsync());
+
+        AssertEx.Contains(failure.Message, "'qwen-1.5b.gguf'", message: "The refusal names the base.");
+        AssertEx.Contains(failure.Message, "'qwen-0.5b.gguf'", message: "And the model it was compared against.");
+        AssertEx.Contains(failure.Message, "28 vs 24 layers");
+        AssertEx.Equal(0, harness.StoreCalls, "Nothing is frozen against a base that cannot be compared.");
+    }
+
+    [Test]
+    public async Task Start_WithAKldBaseOfTheSameModel_IsAccepted()
+    {
+        var harness = new FreezeHarness(primaryModel: "qwen-0.5b-q4.gguf",
+            kldBaseModel: "qwen-0.5b-f16.gguf",
+            primaryFacts: Footprint("qwen2", blocks: 24, width: 896),
+            baseFacts: Footprint("QWEN2", blocks: 24, width: 896));
+
+        _ = await harness.StartAsync();
+
+        AssertEx.Equal(1, harness.StoreCalls);
+    }
+
+    private static GgufModelFootprintFacts Footprint(string architecture, long blocks, long width) =>
+        new()
+        {
+            Quant = "Q4_K_M",
+            FileSizeBytes = 1,
+            ParamCount = null,
+            BlockCount = blocks,
+            AttentionHeadCount = null,
+            AttentionHeadCountKV = null,
+            EmbeddingLength = width,
+            ContextLength = null,
+            Architecture = architecture
+        };
+
+    /// <summary>
     ///     Several frozen plans go in as ONE insert. A caller that must validate two models before queuing either —
     ///     the training comparison hand-off — froze and committed one side at a time, so a second side that then
     ///     failed left the first queued with the caller holding an error and no ids.
@@ -776,12 +823,27 @@ public sealed class BenchmarkRunFreezeServiceTests
             IReadOnlyList<string>? itemPrompts = null,
             string? taskItemSetHash = null,
             IReadOnlyList<int>? probeContextTokens = null,
-            string agentSystemPrompt = "prompt")
+            string agentSystemPrompt = "prompt",
+            string? kldBaseModel = null,
+            GgufModelFootprintFacts? primaryFacts = null,
+            GgufModelFootprintFacts? baseFacts = null)
         {
             _primaryModel = primaryModel;
             AgentId = Guid.NewGuid();
             _project = Project(Guid.NewGuid(), AgentId, judgeModel is not null, judgeModel, maxOutputTokens, invocationTimeoutSeconds,
-                reasoningBudgetTokens, taskItemSetHash);
+                reasoningBudgetTokens, taskItemSetHash) with
+            {
+                FidelityEnabled = kldBaseModel is not null,
+                FidelityKldEnabled = kldBaseModel is not null,
+                FidelityKldBaseModelName = kldBaseModel
+            };
+            var ggufModels = Substitute.For<IGgufModelStore>();
+            ggufModels.ResolveModelFootprintFactsAsync(primaryModel, Arg.Any<CancellationToken>()).Returns(primaryFacts);
+            if (kldBaseModel is not null)
+            {
+                ggufModels.ResolveModelFootprintFactsAsync(kldBaseModel, Arg.Any<CancellationToken>()).Returns(baseFacts);
+            }
+
             TaskItems = probeContextTokens is null
                 ? [.. (itemPrompts ?? ["exact task"]).Select((prompt, index) => Item(_project.Id, index, prompt))]
                 : [.. probeContextTokens.Select((contextTokens, index) => ProbeCase(_project.Id, index, contextTokens))];
@@ -844,6 +906,7 @@ public sealed class BenchmarkRunFreezeServiceTests
                 definitions,
                 Resolver,
                 capabilities,
+                ggufModels,
                 LeaseProvider,
                 Substitute.For<IModelClassificationStore>(),
                 new BenchmarkEligibilityPolicy(),

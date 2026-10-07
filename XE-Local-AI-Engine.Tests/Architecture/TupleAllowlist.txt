@@ -60,7 +60,7 @@ XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatPageE2ETests.cs|2
 XE-Local-AI-Engine.Tests.E2ETests/Tests/DevelopmentWorkflowE2ETests.cs|3
 XE-Local-AI-Engine.Tests.E2ETests/Tests/TrainingLifecycleE2ETests.cs|2
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeGoalExecutorTests.cs|61
-XE-Local-AI-Engine.Tests/AgentHome/AgentHomePatchExportGitHardeningTests.cs|40
+XE-Local-AI-Engine.Tests/AgentHome/AgentHomePatchExportGitHardeningTests.cs|29
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomePatchServiceTests.cs|7
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeRunLoggerTests.cs|2
 XE-Local-AI-Engine.Tests/AgentHome/AgentHomeToolGatewayTests.cs|7

@@ -1873,9 +1873,29 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Contains(capturedContext, message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal));
         AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsWithheld)),
             "a local model must not trigger the attachments-withheld notice");
+        AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsNotSent)),
+            "a turn whose every file reached the model must not report one as unsent");
     }
 
-    private static async Task<(List<ChatStreamEvent> Events, IReadOnlyList<ConversationMessageDto> CapturedContext)> RunAttachmentEgressAsync(string? cloudModel, bool allowCloudModelAccess)
+    [Test]
+    public async Task SendMessageAsync_WhenALocalTurnSendsFilesTheModelNeverGets_NamesThemInOneNotice()
+    {
+        // A second file with no extracted text (a scanned PDF) and an image on a model without vision were both skipped with no sign to the user.
+        var (events, _) = await RunAttachmentEgressAsync(cloudModel: null, allowCloudModelAccess: false, extraFiles:
+        [
+            new ExtraUploadedFile("scan.pdf", DocumentExtractionStatus.Extracted, ExtractedChars: 0),
+            new ExtraUploadedFile("photo.png", DocumentExtractionStatus.Image, ExtractedChars: null)
+        ]);
+
+        var notice = events.Single(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsNotSent));
+        AssertEx.Equal("scan.pdf, photo.png", notice.NoticeDetail);
+        AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsWithheld)),
+            "a local turn's unsent files are not a cloud withhold");
+    }
+
+    private static async Task<(List<ChatStreamEvent> Events, IReadOnlyList<ConversationMessageDto> CapturedContext)> RunAttachmentEgressAsync(string? cloudModel,
+        bool allowCloudModelAccess,
+        IReadOnlyList<ExtraUploadedFile>? extraFiles = null)
     {
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
@@ -1885,7 +1905,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ContextCapturingInvocationRunner(dispatcher);
 
-        IReadOnlyList<ConversationUploadedFileInfo> files =
+        List<ConversationUploadedFileInfo> files =
         [
             new ConversationUploadedFileInfo
             {
@@ -1900,6 +1920,18 @@ public sealed class NodeChatStreamServiceTests
                 CreatedAtUtc = 0
             }
         ];
+        files.AddRange((extraFiles ?? []).Select(extra => new ConversationUploadedFileInfo
+        {
+            FileId = Guid.NewGuid(),
+            ConversationId = conversationId,
+            OriginalFileName = extra.Name,
+            MimeType = "application/octet-stream",
+            Extension = Path.GetExtension(extra.Name),
+            SizeBytes = 128,
+            ExtractionStatus = extra.Status,
+            ExtractedChars = extra.ExtractedChars,
+            CreatedAtUtc = 0
+        }));
         var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
         uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns(files);
         uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, fileId, Arg.Any<CancellationToken>()).Returns("The launch code is alpha-zero.");
@@ -1936,7 +1968,7 @@ public sealed class NodeChatStreamServiceTests
                            MessageId: assistantMessageId,
                            RequestId: requestId,
                            Model: cloudModel,
-                           AttachmentFileIds: [fileId])))
+                           AttachmentFileIds: [.. files.Select(static file => file.FileId)])))
         {
             events.Add(streamEvent);
         }
@@ -2002,7 +2034,8 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(runner.CaptureObserved, "Expected the runner to observe the package.");
         AssertEx.False(runner.CapturedContext.Any(message => message.Content.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal)),
             "Agent mode must not inline attachment text — the agent reads the staged files via its tools.");
-        await uploadedFileStore.DidNotReceive().ListAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        // The unsent-attachment check lists the upload metadata on every allowed turn; the extracted text is never read.
+        await uploadedFileStore.DidNotReceive().ReadExtractedMarkdownAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -4307,6 +4340,9 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IGraphWorkflowStore>(),
             NullLogger<NodeChatStreamService>.Instance);
     }
+
+    /// <summary>An extra uploaded file for the attachment-egress harness: its name, extraction status and extracted size.</summary>
+    private readonly record struct ExtraUploadedFile(string Name, DocumentExtractionStatus Status, int? ExtractedChars);
 
     private sealed class StaticFenceKeyHolder : INodeSqliteKeyHolder
     {

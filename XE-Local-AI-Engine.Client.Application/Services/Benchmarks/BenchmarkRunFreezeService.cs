@@ -68,6 +68,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
     private readonly IAgentDefinitionStore _agentDefinitions;
     private readonly IAgentDefinitionResolver _agentResolver;
     private readonly IGgufModelCapabilityResolver _modelCapabilities;
+    private readonly IGgufModelStore _ggufModels;
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
     private readonly IModelClassificationStore _classifications;
     private readonly IBenchmarkEligibilityPolicy _eligibilityPolicy;
@@ -117,6 +118,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         IAgentDefinitionStore agentDefinitions,
         IAgentDefinitionResolver agentResolver,
         IGgufModelCapabilityResolver modelCapabilities,
+        IGgufModelStore ggufModels,
         IBenchmarkInstalledModelLeaseProvider installedModels,
         IModelClassificationStore classifications,
         IBenchmarkEligibilityPolicy eligibilityPolicy,
@@ -136,6 +138,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         ArgumentNullException.ThrowIfNull(agentDefinitions);
         ArgumentNullException.ThrowIfNull(agentResolver);
         ArgumentNullException.ThrowIfNull(modelCapabilities);
+        ArgumentNullException.ThrowIfNull(ggufModels);
         ArgumentNullException.ThrowIfNull(installedModels);
         ArgumentNullException.ThrowIfNull(classifications);
         ArgumentNullException.ThrowIfNull(eligibilityPolicy);
@@ -152,6 +155,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         _agentDefinitions = agentDefinitions;
         _agentResolver = agentResolver;
         _modelCapabilities = modelCapabilities;
+        _ggufModels = ggufModels;
         _installedModels = installedModels;
         _classifications = classifications;
         _eligibilityPolicy = eligibilityPolicy;
@@ -265,6 +269,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         var trimmedPrimary = primaryModelName.Trim();
         var primary = (await freezeScope.AcquireAsync(trimmedPrimary, AcquireVerifiedAsync, cancellationToken)).Snapshot;
         BenchmarkModelEligibility.Validate(primary, await _classifications.GetByNameAsync(primary.ModelName, cancellationToken), "primary");
+        await EnsureKldBaseMatchesAsync(project, primary.ModelName, cancellationToken);
 
         // The judge is no longer part of the freeze: its runtime is resolved per attempt, against the policy
         // revision that attempt is judged under, so a judge change never re-freezes a run.
@@ -512,6 +517,52 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         {
             _logger.LogWarning(exception, "Benchmark freeze: installed model {ModelName} could not be verified.", modelName);
             throw new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry.", exception);
+        }
+    }
+
+    /// <summary>
+    ///     Refuses a run whose KL-divergence base is a different model: KLD measures a quant against its own model's
+    ///     reference logits, and llama-perplexity accepts any base with a compatible vocabulary.
+    /// </summary>
+    /// <remarks>
+    ///     Only header facts BOTH files carry are compared, so a header that could not be read never refuses a run.
+    /// </remarks>
+    private async Task EnsureKldBaseMatchesAsync(BenchmarkProjectRecord project, string primaryModelName, CancellationToken cancellationToken)
+    {
+        if (project is not { FidelityEnabled: true, FidelityKldEnabled: true, FidelityKldBaseModelName: { Length: > 0 } baseModelName })
+        {
+            return;
+        }
+
+        var primaryFacts = await _ggufModels.ResolveModelFootprintFactsAsync(primaryModelName, cancellationToken);
+        var baseFacts = await _ggufModels.ResolveModelFootprintFactsAsync(baseModelName, cancellationToken);
+        if (primaryFacts is null || baseFacts is null)
+        {
+            return;
+        }
+
+        var differences = new List<string>(3);
+        if (primaryFacts.Architecture is { } primaryArchitecture && baseFacts.Architecture is { } baseArchitecture
+                                                                 && !string.Equals(primaryArchitecture, baseArchitecture, StringComparison.OrdinalIgnoreCase))
+        {
+            differences.Add($"architecture {baseArchitecture} vs {primaryArchitecture}");
+        }
+
+        if (primaryFacts.BlockCount is { } primaryBlocks && baseFacts.BlockCount is { } baseBlocks && primaryBlocks != baseBlocks)
+        {
+            differences.Add($"{baseBlocks} vs {primaryBlocks} layers");
+        }
+
+        if (primaryFacts.EmbeddingLength is { } primaryWidth && baseFacts.EmbeddingLength is { } baseWidth && primaryWidth != baseWidth)
+        {
+            differences.Add($"embedding width {baseWidth} vs {primaryWidth}");
+        }
+
+        if (differences.Count > 0)
+        {
+            throw new BenchmarkValidationException($"The KL-divergence base model '{baseModelName}' is not the same model as '{primaryModelName}' "
+                                                   + $"({string.Join(", ", differences)}). KL divergence compares a quant against its own model; "
+                                                   + "choose a base of the same model in the project's fidelity settings.");
         }
     }
 

@@ -329,6 +329,7 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
             Architecture = own.Architecture ?? complete.Architecture,
             QuantType = own.QuantType,
             ParamCount = own.ParamCount ?? complete.ParamCount,
+            SizeLabel = own.SizeLabel ?? complete.SizeLabel,
             BlockCount = own.BlockCount ?? complete.BlockCount,
             AttentionHeadCount = own.AttentionHeadCount ?? complete.AttentionHeadCount,
             AttentionHeadCountKV = own.AttentionHeadCountKV ?? complete.AttentionHeadCountKV,

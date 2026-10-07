@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 internal sealed class BenchmarkProjectConfiguration : IEntityTypeConfiguration<BenchmarkProject>
 {
@@ -20,7 +21,7 @@ internal sealed class BenchmarkProjectConfiguration : IEntityTypeConfiguration<B
         });
         builder.HasKey(entity => entity.Id);
         builder.Property(entity => entity.Id).HasColumnName("id");
-        builder.Property(entity => entity.Name).HasColumnName("name").HasMaxLength(200).IsRequired();
+        builder.Property(entity => entity.Name).HasColumnName("name").HasMaxLength(BenchmarkProjectInput.MaxNameLength).IsRequired();
         builder.Property(entity => entity.CoreTaskJson).HasColumnName("core_task_json").IsRequired();
         builder.Property(entity => entity.ContextTokens).HasColumnName("context_tokens");
         builder.Property(entity => entity.MaxOutputTokens).HasColumnName("max_output_tokens");

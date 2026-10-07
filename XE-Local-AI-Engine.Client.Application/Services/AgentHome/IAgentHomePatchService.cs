@@ -37,10 +37,16 @@ internal sealed record AgentHomePatchExportRequest
     ///     their alias directories and to map a changed <c>&lt;alias&gt;</c> back to its selected-folder id.
     /// </summary>
     /// <remarks>
-    ///     A folder that resolved but copied no file has no directory in the sandbox, and naming it as a pathspec
-    ///     would fail the export outright; an empty list means there is nothing to diff at all.
+    ///     A folder that copied no file still has its (empty) directory; an empty list means there is nothing to diff
+    ///     at all.
     /// </remarks>
     public required IReadOnlyList<ResolvedSelectedFolder> ResolvedFolders { get; init; }
+
+    /// <summary>
+    ///     The aliases that copied no file, so the baseline indexed nothing under them and only the working tree or a
+    ///     path the run staged itself can still match their pathspec.
+    /// </summary>
+    public IReadOnlyCollection<string> EmptyAliases { get; init; } = [];
 
     /// <summary>
     ///     The workspace-relative paths (<c>&lt;alias&gt;/&lt;rel&gt;</c>) the goal loop recorded writing, reconciled

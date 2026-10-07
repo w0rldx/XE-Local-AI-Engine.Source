@@ -46,7 +46,7 @@ public sealed class RemoveWhisperCppSourceBuildEndpoint : Endpoint<Transcription
             if (result.Outcome == WhisperCppSourceBuildRemoveOutcome.RuntimeBusy)
             {
                 await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.RuntimeBusy(
-                    "Wait for active transcriptions and transcription-runtime processes to finish before removing the managed runtime.",
+                    "Wait for active transcriptions and transcription-runtime processes to finish before removing the managed runtime, or eject an idle transcription runtime.",
                     result.Activity ?? _whisperRuntime.GetActivitySnapshot()));
                 return;
             }

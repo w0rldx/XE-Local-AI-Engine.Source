@@ -334,6 +334,20 @@ describe("WhisperRuntimeSourceBuildCard", () => {
 		await waitFor(() => expect(removed).toHaveBeenCalled());
 	});
 
+	it("does not report an adopted runtime beside a record that failed verification after the build", async () => {
+		server.use(
+			runtimeRoute({
+				managed: managedRuntime({ validity: "invalid", invalidReason: "The managed binary failed its smoke test." }),
+			}),
+			prerequisitesRoute(satisfiedPrerequisites, true),
+			statusRoute({ phase: "completed", terminal: true }),
+		);
+		renderWithProviders(<WhisperRuntimeSourceBuildCard />);
+
+		expect(await screen.findByText("Invalid cuda managed transcription runtime")).toBeTruthy();
+		expect(screen.queryByTestId("whisper-source-build-succeeded")).toBeNull();
+	});
+
 	it("surfaces the node's own refusal when the runtime is busy", async () => {
 		server.use(
 			runtimeRoute({ activity: { residentProcessCount: 1, isBusy: true } }),
@@ -342,7 +356,7 @@ describe("WhisperRuntimeSourceBuildCard", () => {
 			blockedRoute(
 				"transcription/runtime/source-build",
 				"runtime-busy",
-				"Wait for active transcriptions and transcription-runtime processes to finish before starting the build.",
+				"Wait for active transcriptions and transcription-runtime processes to finish before starting the build, or eject an idle transcription runtime.",
 			),
 			jsonRoute("post", "transcription/runtime/eject", { ejected: true }),
 		);

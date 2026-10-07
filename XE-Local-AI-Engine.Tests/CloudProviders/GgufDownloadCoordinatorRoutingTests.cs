@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.CloudProviders;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -16,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 using GgufAcquisitionOperationKind = XE_Local_AI_Engine.Client.Services.Models.GgufAcquisitionOperationKind;
 
@@ -218,6 +220,37 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         AssertEx.Equal(expected: 0, publisher.Events.Count);
     }
 
+    /// <summary>
+    ///     A start call blocks the request for its resolve, preflight and verified-install phases. Each call, a refused
+    ///     one included, logs one line that splits the wait by phase, so a slow 409 or 200 can be attributed.
+    /// </summary>
+    [Test]
+    public async Task Start_LogsOneTimingLinePerCall_EvenWhenItIsRefused()
+    {
+        var canonical = GgufModelName.Format(Repo, Quant);
+        var mapStore = new InMemoryCoordinatedModelProviderMapStore();
+        mapStore.Seed(canonical, "ollama");
+        var logger = new CapturingLogger<GgufDownloadCoordinator>();
+        var coordinator = BuildCoordinator(new ProvisioningDownloadTransaction(),
+            mapStore,
+            GgufAcquisitionDisposition.VerifiedInstalled,
+            logger: logger);
+
+        _ = await AssertEx.ThrowsAsync<GgufAcquisitionConflictException>(() => coordinator.StartAsync(new GgufModelRequest
+            {
+                RepoId = Repo,
+                Quant = Quant
+            },
+            CancellationToken.None));
+
+        var lines = logger.AllText.Split('\n').Where(static line => line.StartsWith("GGUF download start for", StringComparison.Ordinal)).ToList();
+        AssertEx.Equal(expected: 1, lines.Count, logger.AllText);
+        AssertEx.Contains(lines[0], Repo);
+        AssertEx.Contains(lines[0], " ms: resolve ");
+        AssertEx.Contains(lines[0], " ms, preflight ");
+        AssertEx.Contains(lines[0], " ms, complete-verified ");
+    }
+
     [Test]
     public async Task VerifiedInstalled_WhenRoutingVerificationThrows_RestoresCreatedMappingWithoutPublishingStatus()
     {
@@ -366,7 +399,8 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         ICoordinatedModelProviderMapStore mapStore,
         GgufAcquisitionDisposition disposition = GgufAcquisitionDisposition.Available,
         IGgufDownloadEventPublisher? publisher = null,
-        ILocalModelProviderResolver? providerResolver = null)
+        ILocalModelProviderResolver? providerResolver = null,
+        ILogger<GgufDownloadCoordinator>? logger = null)
     {
         var identityResolver = new GgufAcquisitionIdentityResolver(new ModelNameValidator(Options.Create(new SecurityOptions())));
         var identity = identityResolver.Resolve(new GgufAcquisitionIntent
@@ -396,7 +430,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
             scopeFactory,
             new GgufAcquisitionOperationRegistry(TimeProvider.System),
             publisher ?? new NullGgufDownloadEventPublisher(),
-            NullLogger<GgufDownloadCoordinator>.Instance,
+            logger ?? NullLogger<GgufDownloadCoordinator>.Instance,
             TimeProvider.System);
     }
 

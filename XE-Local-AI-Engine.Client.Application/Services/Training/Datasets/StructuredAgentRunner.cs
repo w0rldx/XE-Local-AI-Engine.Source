@@ -73,6 +73,10 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
     private readonly ILoggerFactory _loggerFactory;
     private readonly IServiceProvider _serviceProvider;
 
+    /// <summary>The refusal for a reasoning teacher in Constrained mode, shared with the definition's save-time check.</summary>
+    internal static string ReasoningTeacherInConstrainedModeMessage(string modelName) =>
+        $"'{modelName}' is a reasoning model and cannot be used in Constrained mode; use ValidateAfter.";
+
     public async Task<StructuredAgentResult> RunAsync(IChatClient chatClient,
         StructuredAgentRequest request,
         CancellationToken cancellationToken = default)
@@ -94,7 +98,7 @@ public sealed class StructuredAgentRunner : IStructuredAgentRunner
         {
             // A reasoning model emits its thinking outside the constrained grammar, so constrained decoding cannot hold
             // for the whole completion. ValidateAfter is the supported mode for these teachers (decision #15).
-            throw new TrainingValidationException($"'{request.ModelName}' is a reasoning model and cannot be used in Constrained mode; use ValidateAfter.");
+            throw new TrainingValidationException(ReasoningTeacherInConstrainedModeMessage(request.ModelName));
         }
 
         // No tools are offered to the teacher: it DESCRIBES the call it would make inside the structured record, and the

@@ -57,7 +57,7 @@ public sealed class StartStableDiffusionCppSourceBuildEndpoint : Endpoint<StartS
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.RuntimeBusy:
                     await BlockAsync("runtime-busy",
-                        "Wait for active image jobs and image-runtime processes to finish before starting the build.",
+                        "Wait for active image jobs and image-runtime processes to finish before starting the build, or eject idle image processes.",
                         result.Activity ?? _imageRuntime.GetActivitySnapshot());
                     return;
                 case StableDiffusionCppSourceBuildStartOutcome.Started:

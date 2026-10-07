@@ -133,6 +133,7 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 }));
 
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
+import { toast } from "@/core/ui/notifications/Toast";
 import "@/i18n";
 import { ModelManagement } from "@/features/models/pages/ModelManagement";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
@@ -869,6 +870,54 @@ describe("ModelManagement", () => {
 				body: { repoId: "unsloth/llama-3.1-8b-gguf", fileName: "llama-3.1-8b-UD-Q4_K_XL.gguf", quant: "UD-Q4_K_XL" },
 			}),
 		);
+	});
+
+	// Starting a download of an installed model verifies it first, which can take many seconds: the picker must stay open
+	// with its confirm button busy for that whole wait, and close only once the request has settled.
+	it.each([
+		["succeeds", false],
+		["fails", true],
+	])("keeps the quant picker open and busy until the start request %s", async (_outcome, fails) => {
+		const errorToast = vi.spyOn(toast, "error");
+		let settle: () => void = () => undefined;
+		mutationFns.startGgufDownload.mockImplementation(
+			() =>
+				new Promise((resolve, reject) => {
+					settle = () =>
+						fails
+							? reject(new Error("start failed"))
+							: resolve({ modelName: "unsloth/llama-3.1-8b-gguf", alreadyInFlight: false });
+				}),
+		);
+		queryFns.browseGgufRepositories.mockResolvedValue({ items: [ggufRepo] });
+		queryFns.inspectGgufRepository.mockResolvedValue({
+			repoId: "unsloth/llama-3.1-8b-gguf",
+			files: [{ fileName: "llama-3.1-8b-Q4_K_M.gguf", quant: "Q4_K_M", isDynamic: false, sizeBytes: 5_000_000_000 }],
+		});
+		useGgufBrowseStore.setState({ browseQuery: "llama" });
+
+		renderWithProviders(<ModelManagement />);
+		fireEvent.click(await screen.findByTestId("model-fit-browse-download-unsloth/llama-3.1-8b-gguf"));
+		fireEvent.click(await screen.findByLabelText("Q4_K_M"));
+		fireEvent.click(screen.getByTestId("gguf-download-confirm"));
+
+		await waitFor(() => expect(mutationFns.startGgufDownload).toHaveBeenCalledTimes(1));
+		const confirm = screen.getByTestId("gguf-download-confirm") as HTMLButtonElement;
+		await waitFor(() => expect(confirm.disabled).toBe(true));
+
+		expect(errorToast).not.toHaveBeenCalled();
+
+		settle();
+		await waitFor(() => expect(screen.queryByTestId("gguf-download-confirm")).toBeNull());
+		if (fails) {
+			expect(errorToast).toHaveBeenCalledTimes(1);
+			expect(useGgufBrowseStore.getState().inFlightDownloads).not.toContain("unsloth/llama-3.1-8b-gguf");
+		} else {
+			expect(errorToast).not.toHaveBeenCalled();
+			expect(useGgufBrowseStore.getState().inFlightDownloads).toContain("unsloth/llama-3.1-8b-gguf");
+		}
+
+		errorToast.mockRestore();
 	});
 
 	// The projector choice is the dialog's; what matters on the wire is the body this page actually sends. A repo with no

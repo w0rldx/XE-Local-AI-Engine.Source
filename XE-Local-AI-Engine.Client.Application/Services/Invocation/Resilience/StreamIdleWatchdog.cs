@@ -39,7 +39,7 @@ internal static class StreamIdleWatchdog
     ///     <see cref="OperationCanceledException" /> and is never reported as an idle timeout.
     /// </remarks>
     /// <param name="abandonmentGrace">Overrides <see cref="DefaultAbandonmentGrace" />; null or non-positive uses it.</param>
-    /// <param name="isSuspended">Asked at the deadline: true re-arms a window, the silence being a server-side tool's own.</param>
+    /// <param name="isSuspended">Asked at the deadline: true re-arms a window, the silence being a server-side tool's or a round's prefill.</param>
     public static IAsyncEnumerable<T> WithIdleTimeout<T>(Func<CancellationToken, IAsyncEnumerable<T>> streamFactory,
         TimeSpan idleTimeout,
         string timeoutMessage,
@@ -203,7 +203,7 @@ internal static class StreamIdleWatchdog
                 // as a provider fault; only our own deadline lands here, and an outer cancel takes precedence over a stall.
                 if (!cancellationToken.IsCancellationRequested && deadline.IsSuspended())
                 {
-                    // A server-side tool is executing inside the pull: that silence is the tool's, bounded by the tool.
+                    // A server-side tool or a round's prefill runs inside the pull: that silence is bounded by the caller's own deadline.
                     continue;
                 }
 

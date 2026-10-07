@@ -4,6 +4,7 @@ import {
 	IconBolt,
 	IconBookOff,
 	IconCut,
+	IconFileOff,
 	IconFileText,
 	IconFilter,
 	IconHistory,
@@ -53,6 +54,8 @@ function noticeIcon(noticeKind: string) {
 			return IconBookOff;
 		case "AttachmentShortened":
 			return IconFileText;
+		case "AttachmentsNotSent":
+			return IconFileOff;
 		default:
 			return IconInfoCircle;
 	}
@@ -87,6 +90,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.knowledgeUnavailable";
 		case "AttachmentShortened":
 			return "chat.notices.attachmentShortened";
+		case "AttachmentsNotSent":
+			return "chat.notices.attachmentsNotSent";
 		default:
 			return undefined;
 	}
@@ -94,8 +99,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 
 // Server notice sentences the SPA localizes, keyed by their exact English text (InvocationRunner's
 // StoppedWhileThinkingNoticeMessage, OutputLimitReachedNoticeMessage, ToolCallInReasoningNoticeMessage,
-// ToolCallAsTextNoticeMessage, and KnowledgeUnavailableNotice.Message and AttachmentShortenedNoticeMessage — change both
-// together). Any other text renders verbatim.
+// ToolCallAsTextNoticeMessage, and KnowledgeUnavailableNotice.Message and AttachmentShortenedNoticeMessage, and
+// NodeChatStreamService's AttachmentsNotSentNoticeMessage — change both together). Any other text renders verbatim.
 const localizedNoticeKeys: Readonly<Record<string, string>> = {
 	"The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.":
 		"chat.notices.toolCallAsTextText",
@@ -108,6 +113,8 @@ const localizedNoticeKeys: Readonly<Record<string, string>> = {
 		"chat.notices.knowledgeUnavailableText",
 	"The attached file was shortened to fit this model's context window; the model was told it is incomplete.":
 		"chat.notices.attachmentShortenedText",
+	"Some attached files were not sent to the model: no text could be read from them, or the model cannot see images.":
+		"chat.notices.attachmentsNotSentText",
 };
 
 /**

@@ -46,6 +46,36 @@ public sealed class BenchmarkProjectServiceTests
     }
 
     [Test]
+    public async Task Create_NameLongerThanTheColumn_IsRejected_AndTheLimitItselfIsAccepted()
+    {
+        var context = new ServiceContext();
+
+        // SQLite ignores the column's declared length, so only the service stands between a 201-character name and the table.
+        var exception = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.CreateAsync(new BenchmarkProjectDraft
+            {
+                Id = ProjectId,
+                Name = new string('n', 201),
+                CoreTask = "task",
+                ContextTokens = 4096,
+                AgentDefinitionId = context.AgentId
+            }));
+        AssertEx.Equal("The benchmark name must be at most 200 characters.", exception.Message);
+        _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(),
+            Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
+
+        _ = await context.Service.CreateAsync(new BenchmarkProjectDraft
+        {
+            Id = ProjectId,
+            Name = new string('n', 200),
+            CoreTask = "task",
+            ContextTokens = 4096,
+            AgentDefinitionId = context.AgentId
+        });
+        AssertEx.Equal(expected: 200, AssertEx.NotNull(context.CreatedInput).Name.Length);
+    }
+
+    [Test]
     public async Task Create_RejectsUnsupportedContextAndNonSingleAgentBeforePersistence()
     {
         var context = new ServiceContext(agentKind: AgentDefinitionKind.Orchestrator);
