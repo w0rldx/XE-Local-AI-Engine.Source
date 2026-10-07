@@ -259,6 +259,12 @@ public sealed class BenchmarkFidelityExecutor : IBenchmarkFidelityExecutor
             throw new BenchmarkExecutionException("KL divergence is enabled for this project but no base model is selected.");
         }
 
+        // Before the cache: the base may have changed to another model after this run was frozen, and a cached base file must not bypass that.
+        if (await BenchmarkKldBaseMatch.DescribeMismatchAsync(_ggufModels, snapshot.PrimaryModel.ModelName, baseModelName, token) is { } mismatch)
+        {
+            throw new BenchmarkExecutionException(mismatch);
+        }
+
         var key = BenchmarkKldCacheKey.Create(baseFingerprint, corpus.Sha256, chunks);
         if (_cache.TryResolveExisting(key) is { } existing)
         {

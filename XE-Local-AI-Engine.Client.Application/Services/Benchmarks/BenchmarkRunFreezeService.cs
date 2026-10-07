@@ -520,13 +520,7 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
         }
     }
 
-    /// <summary>
-    ///     Refuses a run whose KL-divergence base is a different model: KLD measures a quant against its own model's
-    ///     reference logits, and llama-perplexity accepts any base with a compatible vocabulary.
-    /// </summary>
-    /// <remarks>
-    ///     Only header facts BOTH files carry are compared, so a header that could not be read never refuses a run.
-    /// </remarks>
+    /// <summary>Refuses a run whose KL-divergence base is a different model (see <see cref="BenchmarkKldBaseMatch" />).</summary>
     private async Task EnsureKldBaseMatchesAsync(BenchmarkProjectRecord project, string primaryModelName, CancellationToken cancellationToken)
     {
         if (project is not { FidelityEnabled: true, FidelityKldEnabled: true, FidelityKldBaseModelName: { Length: > 0 } baseModelName })
@@ -534,35 +528,9 @@ public sealed class BenchmarkRunFreezeService : IBenchmarkRunFreezeService
             return;
         }
 
-        var primaryFacts = await _ggufModels.ResolveModelFootprintFactsAsync(primaryModelName, cancellationToken);
-        var baseFacts = await _ggufModels.ResolveModelFootprintFactsAsync(baseModelName, cancellationToken);
-        if (primaryFacts is null || baseFacts is null)
+        if (await BenchmarkKldBaseMatch.DescribeMismatchAsync(_ggufModels, primaryModelName, baseModelName, cancellationToken) is { } mismatch)
         {
-            return;
-        }
-
-        var differences = new List<string>(3);
-        if (primaryFacts.Architecture is { } primaryArchitecture && baseFacts.Architecture is { } baseArchitecture
-                                                                 && !string.Equals(primaryArchitecture, baseArchitecture, StringComparison.OrdinalIgnoreCase))
-        {
-            differences.Add($"architecture {baseArchitecture} vs {primaryArchitecture}");
-        }
-
-        if (primaryFacts.BlockCount is { } primaryBlocks && baseFacts.BlockCount is { } baseBlocks && primaryBlocks != baseBlocks)
-        {
-            differences.Add($"{baseBlocks} vs {primaryBlocks} layers");
-        }
-
-        if (primaryFacts.EmbeddingLength is { } primaryWidth && baseFacts.EmbeddingLength is { } baseWidth && primaryWidth != baseWidth)
-        {
-            differences.Add($"embedding width {baseWidth} vs {primaryWidth}");
-        }
-
-        if (differences.Count > 0)
-        {
-            throw new BenchmarkValidationException($"The KL-divergence base model '{baseModelName}' is not the same model as '{primaryModelName}' "
-                                                   + $"({string.Join(", ", differences)}). KL divergence compares a quant against its own model; "
-                                                   + "choose a base of the same model in the project's fidelity settings.");
+            throw new BenchmarkValidationException(mismatch);
         }
     }
 

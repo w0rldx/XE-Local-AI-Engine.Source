@@ -93,6 +93,9 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             commandTimeout,
             ["add", "-A", "--", .. pathspecs],
             cancellationToken);
+        var staged = IsSuccessful(stageResult)
+                     || (stageResult.Completed
+                         && await RestageWithoutVanishedAliasesAsync(handle, request, stageableAliases, commandTimeout, cancellationToken));
 
         // Full binary-aware patch, captured from standard output because the SPI carries no shell redirection.
         // --no-textconv/--no-ext-diff are belt and braces on the rewrite above, not the control: a clean filter survives them.
@@ -112,7 +115,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
             ["diff", "--cached", "--no-textconv", "--no-ext-diff", "--name-status", "-z", "--find-renames=50%", "--find-copies=50%", "HEAD", "--", .. pathspecs],
             cancellationToken);
 
-        if (!IsSuccessful(stageResult) || !IsSuccessful(patchResult) || !IsSuccessful(statusResult))
+        if (!staged || !IsSuccessful(patchResult) || !IsSuccessful(statusResult))
         {
             // A non-zero exit or an incomplete command means no patch could be produced: surface that distinctly, so it is
             // not read as a clean zero-change run, and write no artifacts. Real non-zero git exits need a real provider.
@@ -615,6 +618,62 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
 
         var present = SplitNul(result.StandardOutput).Select(static path => path.Split('/')[0]).ToHashSet(StringComparer.Ordinal);
         return [.. aliases.Where(alias => present.Contains(alias) || !emptyAliases.Contains(alias, StringComparer.Ordinal))];
+    }
+
+    /// <summary>
+    ///     After a failed stage, drops the aliases the run removed from both the index and the tree and stages the rest
+    ///     once more. <see langword="false" /> when no alias vanished, a probe failed, or the retry failed too.
+    /// </summary>
+    /// <remarks>
+    ///     <c>git rm -r</c> or <c>git mv</c> of a whole populated folder takes its alias out of the index the baseline
+    ///     filled, and <c>add -A</c> exits 128 on it. Each alias costs one <c>--error-unmatch</c> probe whose exit code
+    ///     alone answers, so a capped stdout cannot hide a live alias. The diff keeps every alias, so the files report
+    ///     as deleted.
+    /// </remarks>
+    private async Task<bool> RestageWithoutVanishedAliasesAsync(SandboxHandle handle,
+        AgentHomePatchExportRequest request,
+        IReadOnlyList<string> aliases,
+        TimeSpan commandTimeout,
+        CancellationToken cancellationToken)
+    {
+        var live = new List<string>();
+        var vanished = new List<string>();
+        foreach (var alias in aliases)
+        {
+            var probe = await RunGitAsync(handle,
+                request,
+                $"{request.RunId}-patch-probe-alias",
+                commandTimeout,
+                ["ls-files", "--error-unmatch", "--cached", "--others", "--directory", "--exclude-standard", "--", .. AliasPathspecs([alias])],
+                cancellationToken);
+            if (!probe.Completed || probe.ExitCode is not (0 or 1))
+            {
+                return false;
+            }
+
+            (probe.ExitCode == 0 ? live : vanished).Add(alias);
+        }
+
+        if (vanished.Count == 0)
+        {
+            return false;
+        }
+
+        _logger.LogInformation("Patch export for run {RunId}: the run removed folder(s) {Aliases} from the index and the tree; their files export as deleted.",
+            request.RunId,
+            string.Join(", ", vanished));
+        if (live.Count == 0)
+        {
+            return true;
+        }
+
+        var retry = await RunGitAsync(handle,
+            request,
+            $"{request.RunId}-patch-stage-retry",
+            commandTimeout,
+            ["add", "-A", "--", .. AliasPathspecs(live)],
+            cancellationToken);
+        return IsSuccessful(retry);
     }
 
     private static bool IsSuccessful(SandboxCommandResult result)

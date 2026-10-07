@@ -208,6 +208,7 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
     public async Task<IReadOnlyList<string>> ListUnsentAttachmentNamesAsync(Guid conversationId,
         IReadOnlyList<Guid>? attachmentFileIds,
         bool imagesAccepted,
+        bool textAccepted,
         CancellationToken cancellationToken = default)
     {
         if (attachmentFileIds is null || attachmentFileIds.Count == 0)
@@ -218,13 +219,13 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
         var requested = attachmentFileIds.ToHashSet();
         var available = await _uploadedFileStore.ListAsync(conversationId, cancellationToken);
 
-        // Mirrors the builders' skips: Extracted with empty text (ExtractedChars is the Markdown length), an image on a
-        // turn without vision, and every status neither builder reads.
+        // Mirrors the builders' skips: Extracted with empty text (ExtractedChars is the Markdown length) or on a turn that
+        // delivers no text, an image on a turn without vision, and every status neither builder reads.
         return available
                .Where(file => requested.Contains(file.FileId)
                               && file.ExtractionStatus switch
                               {
-                                  DocumentExtractionStatus.Extracted => file.ExtractedChars == 0,
+                                  DocumentExtractionStatus.Extracted => !textAccepted || file.ExtractedChars == 0,
                                   DocumentExtractionStatus.Image => !imagesAccepted,
                                   _ => true
                               })

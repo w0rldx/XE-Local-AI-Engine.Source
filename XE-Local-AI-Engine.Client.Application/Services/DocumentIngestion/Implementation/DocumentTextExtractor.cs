@@ -122,7 +122,13 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
                 };
             }
 
+            // A whitespace-only body carries no text, so it reports 0 chars and the unsent-attachment notice names it.
             var markdown = Truncate(serialized);
+            if (string.IsNullOrWhiteSpace(markdown))
+            {
+                markdown = string.Empty;
+            }
+
             return new DocumentExtractionResult
             {
                 Status = DocumentExtractionStatus.Extracted,

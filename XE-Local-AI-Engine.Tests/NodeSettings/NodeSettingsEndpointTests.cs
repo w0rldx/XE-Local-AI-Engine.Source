@@ -375,6 +375,31 @@ public sealed class NodeSettingsEndpointTests
         await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    ///     A default range message names the camelCase wire field the client sent, not FluentValidation's spaced
+    ///     display name ('Max Message Request Timeout Seconds'); the error's name key stays the same wire name.
+    /// </summary>
+    [Test]
+    public async Task SaveNodeSettings_WithAnOutOfRangeValue_NamesTheWireFieldInTheMessage()
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            MaxMessageRequestTimeoutSeconds = StoredNodeSettings.MinMaxMessageRequestTimeoutSeconds - 1
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var error = document.RootElement.GetProperty("errors")[0];
+        AssertEx.Equal("maxMessageRequestTimeoutSeconds", error.GetProperty("name").GetString());
+        AssertEx.Contains(error.GetProperty("reason").GetString(), "'maxMessageRequestTimeoutSeconds' must be between");
+    }
+
     /// <summary>Shape only: a model that is not installed yet is accepted, in both the <c>repo:quant</c> and the <c>ext:</c> form.</summary>
     [Test]
     [Arguments("q4_k_m", "unsloth/granite-4.1-3b-GGUF:Q4_K_M")]

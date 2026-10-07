@@ -477,6 +477,7 @@ internal static class McpAdminWireNames
             NodeSettingsField.WorkSessionsEnabled => "work_sessions_enabled",
             NodeSettingsField.DevWorkflowsEnabled => "dev_workflows_enabled",
             NodeSettingsField.AgentHomeEnabled => "agent_home_enabled",
+            NodeSettingsField.HuggingFaceDefaultQuant => "hugging_face_default_quant",
             _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown node-settings field.")
         };
 

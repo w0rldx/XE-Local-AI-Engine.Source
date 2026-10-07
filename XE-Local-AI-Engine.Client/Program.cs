@@ -49,8 +49,10 @@ namespace XE_Local_AI_Engine.Client
     using System.Diagnostics;
     using System.Diagnostics.CodeAnalysis;
     using System.Security.Cryptography;
+    using System.Text.Json;
     using FastEndpoints;
     using FastEndpoints.Swagger;
+    using FluentValidation;
     using Microsoft.AspNetCore.Diagnostics.HealthChecks;
     using Microsoft.Extensions.Diagnostics.HealthChecks;
     using Scalar.AspNetCore;
@@ -711,6 +713,10 @@ namespace XE_Local_AI_Engine.Client
             app.UseMcpEndpointMethodGuard(new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Mcp.ServerEndpoint}"));
             app.UseAuthentication();
             app.UseAuthorization();
+
+            // A default validator message names the camelCase wire field the client sent, not the spaced C# property name. This is process-wide.
+            // A rule's own name or message still wins, and a rule over no single member keeps the library's default display name.
+            ValidatorOptions.Global.DisplayNameResolver = static (_, member, _) => member is null ? null : JsonNamingPolicy.CamelCase.ConvertName(member.Name);
 
             app.UseFastEndpoints(config =>
             {

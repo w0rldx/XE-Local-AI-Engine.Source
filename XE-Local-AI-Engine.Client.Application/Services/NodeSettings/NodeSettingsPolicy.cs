@@ -25,7 +25,8 @@ public enum NodeSettingsField
     MemoryExtractionModelName,
     WorkSessionsEnabled,
     DevWorkflowsEnabled,
-    AgentHomeEnabled
+    AgentHomeEnabled,
+    HuggingFaceDefaultQuant
 }
 
 /// <summary>A single cross-field violation: the offending field plus the operator-facing message.</summary>

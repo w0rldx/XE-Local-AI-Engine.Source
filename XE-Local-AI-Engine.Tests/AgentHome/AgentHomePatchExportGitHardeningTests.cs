@@ -464,6 +464,33 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
     }
 
     /// <summary>
+    ///     <c>git rm -r</c> takes a populated folder out of the index AND the tree, so its pathspec matches nothing and
+    ///     <c>add -A</c> exits 128. The export must restage without it and still report every file as deleted.
+    /// </summary>
+    [Test]
+    public async Task Export_WhenTheRunRemovedAPopulatedFolderFromTheIndexAndTheTree_ExportsItsDeletions()
+    {
+        SkipUnlessRealGitAndProcessJail();
+
+        using var fixture = CreateFixture(emptyAlias: EmptyAlias);
+        var run = await fixture.RunAsync(RunShell($"git rm -r -q {WorkspaceAlias}"));
+
+        AssertRemovalRan(run);
+        AssertEx.False(run.Patch.Failed, "a folder removed from the index is dropped from the stage, not a reason to refuse the export");
+        var changed = await ReadChangedFilesAsync(run);
+        AssertChange(changed, "README.md", "deleted");
+        AssertChange(changed, "notes.txt", "deleted");
+        AssertChange(changed, "guide.txt", "deleted");
+        AssertEx.Equal(expected: 3, run.Patch.ChangedFileCount);
+
+        var retries = (await ReadCommandsAsync(run)).Where(record => record.GetProperty("executionId").GetString() == $"{run.RunId}-patch-stage-retry").ToList();
+        AssertEx.Equal(expected: 1, retries.Count, "the export restaged once without the removed folder");
+        AssertEx.False(retries[0].GetProperty("arguments").EnumerateArray().Any(static argument => argument.GetString() == ":(literal)" + WorkspaceAlias),
+            "the removed folder is not a restaged pathspec");
+        await AssertHostFolderUnchangedAsync(fixture);
+    }
+
+    /// <summary>
     ///     The first-run shape: the ONLY selected folder is empty ("scaffold a project here"). The model must be able
     ///     to write into it, and the creation must reach the patch.
     /// </summary>

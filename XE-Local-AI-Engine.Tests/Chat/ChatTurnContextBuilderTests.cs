@@ -119,8 +119,8 @@ public sealed class ChatTurnContextBuilderTests
         store.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns([withText, scanned, failed, photo, notRequested]);
         var builder = CreateBuilder(store);
 
-        var withoutVision = await builder.ListUnsentAttachmentNamesAsync(conversationId, [withText.FileId, scanned.FileId, failed.FileId, photo.FileId], imagesAccepted: false);
-        var withVision = await builder.ListUnsentAttachmentNamesAsync(conversationId, [withText.FileId, scanned.FileId, failed.FileId, photo.FileId], imagesAccepted: true);
+        var withoutVision = await builder.ListUnsentAttachmentNamesAsync(conversationId, [withText.FileId, scanned.FileId, failed.FileId, photo.FileId], imagesAccepted: false, textAccepted: true);
+        var withVision = await builder.ListUnsentAttachmentNamesAsync(conversationId, [withText.FileId, scanned.FileId, failed.FileId, photo.FileId], imagesAccepted: true, textAccepted: true);
 
         AssertEx.Equal("scan.pdf, broken.docx, photo.png", string.Join(", ", withoutVision));
         AssertEx.Equal("scan.pdf, broken.docx", string.Join(", ", withVision));
@@ -136,9 +136,25 @@ public sealed class ChatTurnContextBuilderTests
         store.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns([withText, photo]);
         var builder = CreateBuilder(store);
 
-        var unsent = await builder.ListUnsentAttachmentNamesAsync(conversationId, [withText.FileId, photo.FileId], imagesAccepted: true);
+        var unsent = await builder.ListUnsentAttachmentNamesAsync(conversationId, [withText.FileId, photo.FileId], imagesAccepted: true, textAccepted: true);
 
         AssertEx.Empty(unsent);
+    }
+
+    /// <summary>A tool turn without the file tools delivers no attachment text, so even a file with text is unsent.</summary>
+    [Test]
+    public async Task ListUnsentAttachmentNamesAsync_WhenTextIsNotAccepted_NamesEveryExtractedFile()
+    {
+        var conversationId = Guid.NewGuid();
+        var store = Substitute.For<IConversationUploadedFileStore>();
+        var withText = File(conversationId, "runbook.md", "text/markdown", ".md", DocumentExtractionStatus.Extracted, extractedChars: 120);
+        var photo = File(conversationId, "photo.png", "image/png", ".png", DocumentExtractionStatus.Image);
+        store.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns([withText, photo]);
+        var builder = CreateBuilder(store);
+
+        var unsent = await builder.ListUnsentAttachmentNamesAsync(conversationId, [withText.FileId, photo.FileId], imagesAccepted: true, textAccepted: false);
+
+        AssertEx.Equal("runbook.md", string.Join(", ", unsent));
     }
 
     [Test]

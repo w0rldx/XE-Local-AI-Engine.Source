@@ -6,6 +6,8 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Invocation.Orchestration;
 
 using System.Collections.Concurrent;
+using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration.Implementation;
@@ -160,4 +162,60 @@ public sealed class OrchestrationRunSessionTests
         AssertEx.Equal("length", update.FinishReason);
         AssertEx.Equal("key", update.ParticipantKey);
     }
+
+    [Test]
+    public void NextAwaitingOutput_WhenAToolResultArrives_SuspendsTheClock()
+    {
+        // A tool result maps to no update, yet the next round's prefill follows: the clock must not count it.
+        var evt = UpdateEvent(new FunctionResultContent("call-1", "42"));
+
+        AssertEx.True(OrchestrationRunSession.NextAwaitingOutput(evt, current: false));
+    }
+
+    [Test]
+    public void NextAwaitingOutput_WhenOnlyAFunctionCallArrives_SuspendsTheClock()
+    {
+        var evt = UpdateEvent(new FunctionCallContent("call-1", "handoff_to_specialist"));
+
+        AssertEx.True(OrchestrationRunSession.NextAwaitingOutput(evt, current: false));
+    }
+
+    [Test]
+    public void NextAwaitingOutput_WhenATextDeltaArrives_ReArmsTheClock()
+    {
+        var evt = UpdateEvent(new TextContent("the answer"));
+
+        AssertEx.False(OrchestrationRunSession.NextAwaitingOutput(evt, current: true));
+    }
+
+    [Test]
+    public void NextAwaitingOutput_WhenAReasoningDeltaArrives_ReArmsTheClock()
+    {
+        var evt = UpdateEvent(new TextReasoningContent("thinking"));
+
+        AssertEx.False(OrchestrationRunSession.NextAwaitingOutput(evt, current: true));
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public void NextAwaitingOutput_WhenAnUpdateCarriesNothing_KeepsTheCurrentState(bool current)
+    {
+        var evt = new AgentResponseUpdateEvent("executor", new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>()));
+
+        AssertEx.Equal(current, OrchestrationRunSession.NextAwaitingOutput(evt, current));
+    }
+
+    [Test]
+    public void ResolveIdleDeadline_SuspendsWhileAwaitingOutputOrAnApprovalAndArmsTheStallBoundOtherwise()
+    {
+        var idleTimeout = TimeSpan.FromSeconds(120);
+
+        AssertEx.Equal(Timeout.InfiniteTimeSpan, OrchestrationRunSession.ResolveIdleDeadline(awaitingOutput: true, approvalPending: false, idleTimeout));
+        AssertEx.Equal(Timeout.InfiniteTimeSpan, OrchestrationRunSession.ResolveIdleDeadline(awaitingOutput: false, approvalPending: true, idleTimeout));
+        AssertEx.Equal(idleTimeout, OrchestrationRunSession.ResolveIdleDeadline(awaitingOutput: false, approvalPending: false, idleTimeout));
+    }
+
+    private static AgentResponseUpdateEvent UpdateEvent(AIContent content) =>
+        new("executor", new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent> { content }));
 }

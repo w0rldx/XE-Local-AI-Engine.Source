@@ -4,7 +4,6 @@ using System.Globalization;
 using FastEndpoints;
 using FluentValidation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     Boundary validation for <see cref="SaveNodeSettingsRequest" />.
@@ -18,9 +17,6 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 /// </remarks>
 public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSettingsRequest>
 {
-    /// <summary>The widest model-name column the node persists (<c>base_model_name</c>, 256).</summary>
-    private const int MaxModelNameLength = 256;
-
     private static readonly string ReasoningBudgetRangeMessage = string.Create(CultureInfo.InvariantCulture,
         $"A reasoning budget must be from {StoredNodeSettings.MinReasoningBudgetTokens} to {StoredNodeSettings.MaxReasoningBudgetTokens} tokens, or {StoredNodeSettings.TokenSettingUnset} for the default.");
 
@@ -44,14 +40,14 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
 
         // Shape only, never "is it installed": the default is legitimately set before its download, and a blank value clears it to the seed.
         RuleFor(static request => request.DefaultModelName!)
-            .Must(BePlausibleModelName)
+            .Must(StoredNodeSettings.IsPlausibleModelName)
             .When(static request => !string.IsNullOrWhiteSpace(request.DefaultModelName))
-            .WithMessage($"Default model name must be at most {MaxModelNameLength} characters and contain no control characters.");
+            .WithMessage(StoredNodeSettings.ImplausibleDefaultModelNameMessage);
 
         RuleFor(static request => request.HuggingFaceDefaultQuant!)
-            .Must(BeKnownQuant)
+            .Must(StoredNodeSettings.IsKnownQuant)
             .When(static request => !string.IsNullOrWhiteSpace(request.HuggingFaceDefaultQuant))
-            .WithMessage("Unknown Hugging Face default quant. Use a GGUF quant label such as Q4_K_M or UD-Q4_K_XL.");
+            .WithMessage(StoredNodeSettings.UnknownHuggingFaceDefaultQuantMessage);
 
         RuleFor(static request => request.ToolCapableModels!)
             .Must(static models => models.Count > 0 && models.All(static model => !string.IsNullOrWhiteSpace(model)))
@@ -360,19 +356,6 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
     {
         return Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri)
                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
-    }
-
-    private static bool BePlausibleModelName(string value)
-    {
-        var trimmed = value.Trim();
-        return trimmed.Length <= MaxModelNameLength && !trimmed.Any(char.IsControl);
-    }
-
-    // The quant parser IS the repo's quant vocabulary; the whole value must be one token in its canonical spelling, case aside.
-    private static bool BeKnownQuant(string value)
-    {
-        var trimmed = value.Trim();
-        return string.Equals(GgufQuantParser.TryParse(trimmed), trimmed, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsUnsetOrBetween(int? tokens, int min, int max)

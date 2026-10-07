@@ -868,11 +868,13 @@ The factory returns an **`IOrchestrationRunSession`** (`Invocation/Orchestration
 (`.../OrchestrationRunSession.cs`) exposes:
 
 - `WatchAsync` — drains the `StreamingRun`, maps each `WorkflowEvent` to an `OrchestrationUpdate`
-  (streaming update, approval request, terminal, or failure), with a **per-quiescence idle timeout**
-  that is **suspended while a tool-approval is pending** (the consumer may block on a human decision
-  for minutes) and reset after each productive event;
+  (streaming update, approval request, terminal, or failure). The idle timeout is a **stall bound while
+  the provider is producing output**: the source event decides the clock, so it is **suspended** at the
+  start of the watch and after any function call or result (a round's first output and server-side tool
+  runs are bounded by the turn deadline), re-armed on visible text or reasoning, and **suspended while a
+  tool-approval is pending** (the consumer may block on a human decision for minutes);
 - `RespondToApprovalAsync` — resolves a pending `ToolApprovalRequestContent`, sends the
-  `ExternalResponse`, and restarts the idle clock.
+  `ExternalResponse`, and restarts the idle clock unless the run still owes its next output.
 
 #### The idle guard: bounding a non-cooperative provider
 

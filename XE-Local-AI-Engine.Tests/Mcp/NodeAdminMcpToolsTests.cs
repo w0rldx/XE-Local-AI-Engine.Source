@@ -403,6 +403,31 @@ public sealed class NodeAdminMcpToolsTests
         AssertEx.False(mapped.Any(static name => name.Any(char.IsUpper)));
     }
 
+    /// <summary>
+    ///     A refused quant names its own argument. The field-name switch throws on an unmapped field, so every field the
+    ///     validation can name must map, or a refusal would surface as a tool crash instead.
+    /// </summary>
+    [Test]
+    public async Task UpdateNodeSettings_WhenTheQuantIsRefused_NamesTheQuantArgument()
+    {
+        var harness = new Harness();
+        harness.Settings.ApplyAgenticPatchAsync(Arg.Any<NodeSettingsAgenticPatch>(), Arg.Any<CancellationToken>()).Returns(NodeSettingsAdministrationResult.Rejected(new StoredNodeSettings(),
+        [
+            new NodeSettingsValidationError
+            {
+                Field = NodeSettingsField.HuggingFaceDefaultQuant,
+                Message = StoredNodeSettings.UnknownHuggingFaceDefaultQuantMessage
+            }
+        ]));
+
+        var response = await harness.Tools.UpdateNodeSettingsAsync(CancellationToken.None, hugging_face_default_quant: "Q9_BOGUS");
+
+        AssertEx.Equal("invalid_field:hugging_face_default_quant", response.FailureCode!);
+        AssertEx.Equal("hugging_face_default_quant", response.RejectedFields[0]);
+        AssertEx.True(Enum.GetValues<NodeSettingsField>().All(static field => McpAdminWireNames.SettingsField(field).Length > 0),
+            "every node-settings field has a wire name");
+    }
+
     [Test]
     public async Task UpdateNodeSettings_WhenTheSaveConflicts_ReportsAConflictRatherThanAFieldRejection()
     {

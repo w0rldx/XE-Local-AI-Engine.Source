@@ -24,7 +24,3 @@ allowBuilds:
 
 trustPolicyExclude:
   - 'semver@6.3.1'
-
-minimumReleaseAgeExclude:
-  # Security patch for GHSA-68fv-2mgg-jv7q, exempt from the 7-day hold; removable once past it (2026-10-07).
-  - 'source-map-js@1.2.2'

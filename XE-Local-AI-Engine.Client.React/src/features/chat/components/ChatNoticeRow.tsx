@@ -115,6 +115,8 @@ const localizedNoticeKeys: Readonly<Record<string, string>> = {
 		"chat.notices.attachmentShortenedText",
 	"Some attached files were not sent to the model: no text could be read from them, or the model cannot see images.":
 		"chat.notices.attachmentsNotSentText",
+	"Some attached files were not sent to the model: this turn offers tools but not the file tools, so attachment text is left out, or the model cannot see images.":
+		"chat.notices.attachmentsNotSentWithoutFileToolsText",
 };
 
 /**

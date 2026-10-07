@@ -2,8 +2,11 @@
 
 import { MantineProvider } from "@mantine/core";
 import { cleanup, render, screen } from "@testing-library/react";
+import i18next from "i18next";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import de from "@/locales/de.json";
 
 import { ChatNoticeRow } from "@/features/chat/components/ChatNoticeRow";
 import type { ChatNoticePart } from "@/features/chat/models/ChatModels";
@@ -44,8 +47,10 @@ describe("ChatNoticeRow", () => {
 		});
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
 		cleanup();
+		// The i18next instance is shared across this file's tests; undo the German switch.
+		await i18next.changeLanguage("en");
 	});
 
 	it("renders the server-provided notice message verbatim", () => {
@@ -219,6 +224,26 @@ describe("ChatNoticeRow", () => {
 			),
 		).toBeTruthy();
 		expect(screen.getByTestId("chat-notice-detail").textContent).toBe("scan.pdf, photo.png, notes.bin");
+	});
+
+	it("localizes the attachments-not-sent sentence for a turn without the file tools", async () => {
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage("de");
+		renderWithProviders(
+			<ChatNoticeRow
+				part={noticePart({
+					noticeKind: "AttachmentsNotSent",
+					text: "Some attached files were not sent to the model: this turn offers tools but not the file tools, so attachment text is left out, or the model cannot see images.",
+					detail: "report.pdf",
+				})}
+			/>,
+		);
+
+		expect(
+			screen.getByText(
+				"Einige angehängte Dateien wurden nicht an das Modell gesendet: Dieser Zug bietet Werkzeuge, aber nicht die Dateiwerkzeuge an, deshalb bleibt der Anhangstext außen vor, oder das Modell kann keine Bilder sehen.",
+			),
+		).toBeTruthy();
 	});
 
 	it("renders the notice detail beside the sentence when the server sent one", () => {

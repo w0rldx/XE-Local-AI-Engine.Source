@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Client.Services.Containers;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
@@ -759,6 +760,33 @@ public sealed partial record StoredNodeSettings
     public static bool IsValidContainerRuntimeSelection(string? value)
     {
         return ContainerRuntimeSelectionParser.TryParse(value, out _);
+    }
+
+    /// <summary>The widest model-name column the node persists (<c>base_model_name</c>, 256).</summary>
+    public const int MaxModelNameLength = 256;
+
+    public const string ImplausibleDefaultModelNameMessage = "Default model name must be at most 256 characters and contain no control characters.";
+
+    public const string UnknownHuggingFaceDefaultQuantMessage = "Unknown Hugging Face default quant. Use a GGUF quant label such as Q4_K_M or UD-Q4_K_XL.";
+
+    /// <summary>
+    ///     Shape only, never "is it installed": a default is legitimately set before its download. At most
+    ///     <see cref="MaxModelNameLength" /> characters after trimming, and no control characters.
+    /// </summary>
+    public static bool IsPlausibleModelName(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length <= MaxModelNameLength && !trimmed.Any(char.IsControl);
+    }
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="value" /> is one GGUF quant token in its canonical
+    ///     spelling, case aside. The quant parser IS the repo's quant vocabulary.
+    /// </summary>
+    public static bool IsKnownQuant(string value)
+    {
+        var trimmed = value.Trim();
+        return string.Equals(GgufQuantParser.TryParse(trimmed), trimmed, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

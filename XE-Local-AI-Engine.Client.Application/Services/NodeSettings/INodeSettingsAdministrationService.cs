@@ -142,6 +142,17 @@ public static class NodeSettingsAgenticPatchValidation
     {
         ArgumentNullException.ThrowIfNull(patch);
 
+        // Shape only, and only for a supplied non-blank value: blank clears to the seed, as on the REST save.
+        if (!string.IsNullOrWhiteSpace(patch.DefaultModelName) && !StoredNodeSettings.IsPlausibleModelName(patch.DefaultModelName))
+        {
+            return Reject(NodeSettingsField.DefaultModelName, StoredNodeSettings.ImplausibleDefaultModelNameMessage);
+        }
+
+        if (!string.IsNullOrWhiteSpace(patch.HuggingFaceDefaultQuant) && !StoredNodeSettings.IsKnownQuant(patch.HuggingFaceDefaultQuant))
+        {
+            return Reject(NodeSettingsField.HuggingFaceDefaultQuant, StoredNodeSettings.UnknownHuggingFaceDefaultQuantMessage);
+        }
+
         if (patch.ToolCapableModels is { } models
             && (models.Count == 0 || models.Any(static model => string.IsNullOrWhiteSpace(model))))
         {

@@ -31,6 +31,10 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
     // can restart the clock after resuming a paused approval. Null when no watch is in flight.
     private CancellationTokenSource? _idleCts;
 
+    // True while the run owes its next output (a round's prefill or a server-side tool run): the idle clock is then
+    // suspended and the turn deadline bounds the wait. Read and written under _idleClockGate.
+    private bool _awaitingOutput;
+
     public OrchestrationRunSession(StreamingRun run,
         IReadOnlyDictionary<string, OrchestrationParticipant> participantsByAgentId,
         TimeSpan idleTimeout,
@@ -50,12 +54,11 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
         lock (_idleClockGate)
         {
             _idleCts = idleCts;
+            _awaitingOutput = true;
         }
 
         try
         {
-            idleCts.CancelAfter(_idleTimeout);
-
             // The idle CTS is only a COOPERATIVE deadline — a workflow ignoring its token never returns from
             // MoveNextAsync, so neither the timer nor disposal could run. IdleStreamGuard adds the wall-clock bound.
             var guarded = IdleStreamGuard.GuardAsync(watchToken => _run.WatchStreamAsync(watchToken).GetAsyncEnumerator(watchToken),
@@ -69,16 +72,23 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
             {
                 // One source event can normalize to MORE than one update: a streaming update carrying both reasoning and
                 // visible text yields both, in order, reasoning first, so no visible text is dropped.
-                foreach (var update in MapEvent(evt))
+                var updates = MapEvent(evt);
+                lock (_idleClockGate)
                 {
+                    // Set BEFORE yielding, since the consumer may block for minutes on an approval. The SOURCE event
+                    // decides, so a tool call or result that maps to no update still suspends the clock.
+                    _awaitingOutput = NextAwaitingOutput(evt, _awaitingOutput);
+                    idleCts.CancelAfter(ResolveIdleDeadline(_awaitingOutput, !_pendingApprovals.IsEmpty, _idleTimeout));
+                }
+
+                foreach (var update in updates)
+                {
+                    yield return update;
+
                     lock (_idleClockGate)
                     {
-                        // Set BEFORE yielding, since the consumer may block for minutes: suspended while an approval is
-                        // outstanding (RespondToApprovalAsync restarts it), else reset per productive event.
-                        idleCts.CancelAfter(_pendingApprovals.IsEmpty ? _idleTimeout : Timeout.InfiniteTimeSpan);
+                        idleCts.CancelAfter(ResolveIdleDeadline(_awaitingOutput, !_pendingApprovals.IsEmpty, _idleTimeout));
                     }
-
-                    yield return update;
                 }
             }
         }
@@ -103,16 +113,43 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
             request => _run.SendResponseAsync(BuildApprovalResponse(request, approved, reason)),
             SuspendIdleWatchdogForPendingApproval).ConfigureAwait(false);
 
-        // The run resumes (the tool executes a later superstep); restart the idle clock the watch suspended while
-        // this approval was outstanding, unless another approval is still pending.
+        // The run resumes with the approved tool (a later superstep), so it owes its next output again: the clock stays
+        // suspended until that tool's round produces text, and while another approval is still pending.
         lock (_idleClockGate)
         {
-            if (_idleCts is not null && _pendingApprovals.IsEmpty)
-            {
-                _idleCts.CancelAfter(_idleTimeout);
-            }
+            _awaitingOutput = true;
+            _idleCts?.CancelAfter(ResolveIdleDeadline(_awaitingOutput, !_pendingApprovals.IsEmpty, _idleTimeout));
         }
     }
+
+    /// <summary>
+    ///     Whether the run owes its next output after <paramref name="evt" />: a function call or result means a tool run
+    ///     or the next round's prefill follows; visible text or reasoning means the provider is producing.
+    /// </summary>
+    internal static bool NextAwaitingOutput(WorkflowEvent evt, bool current)
+    {
+        if (evt is not AgentResponseUpdateEvent updateEvent)
+        {
+            return current;
+        }
+
+        var contents = updateEvent.Update.Contents;
+        if (contents.Any(static content => content is FunctionCallContent or FunctionResultContent))
+        {
+            return true;
+        }
+
+        var producesOutput = !string.IsNullOrEmpty(updateEvent.Update.Text)
+                             || contents.OfType<TextReasoningContent>().Any(static reasoning => !string.IsNullOrEmpty(reasoning.Text));
+        return !producesOutput && current;
+    }
+
+    /// <summary>
+    ///     The idle deadline to arm: suspended while the run owes its next output or an approval is pending (the turn
+    ///     deadline bounds both), else the stall bound.
+    /// </summary>
+    internal static TimeSpan ResolveIdleDeadline(bool awaitingOutput, bool approvalPending, TimeSpan idleTimeout) =>
+        awaitingOutput || approvalPending ? Timeout.InfiniteTimeSpan : idleTimeout;
 
     /// <summary>
     ///     Claims one pending approval while sending its workflow response. A failed send restores the exact request so

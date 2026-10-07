@@ -85,6 +85,19 @@ public sealed class DocumentTextExtractorTests
     }
 
     [Test]
+    public async Task Extractor_WhenPlaintextIsWhitespaceOnly_ReportsNoExtractedChars()
+    {
+        // A non-zero count made chat inline an empty fence and skip the unsent-attachment notice.
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("  \n\t\n   \n"));
+
+        var result = await CreateExtractor().ExtractAsync(stream, "blank.txt", ".txt", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Extracted, result.Status);
+        AssertEx.Equal(expected: 0, result.ExtractedChars ?? -1);
+        AssertEx.Equal(string.Empty, result.Markdown);
+    }
+
+    [Test]
     public async Task Extractor_WhenUnsupportedExtension_ReturnsUnsupported()
     {
         // A PNG signature — a binary type with no pure-.NET text reader.

@@ -42,10 +42,12 @@ public interface IChatTurnContextBuilder
     ///     extracted text, not readable, or an image the model cannot see.
     /// </summary>
     /// <param name="imagesAccepted">Whether the effective model takes image parts; false lists every requested image.</param>
+    /// <param name="textAccepted">Whether the turn delivers extracted text; false lists every extracted file.</param>
     /// <remarks>The image caps are not counted here. Empty when the send names no file.</remarks>
     Task<IReadOnlyList<string>> ListUnsentAttachmentNamesAsync(Guid conversationId,
         IReadOnlyList<Guid>? attachmentFileIds,
         bool imagesAccepted,
+        bool textAccepted,
         CancellationToken cancellationToken = default);
 
     /// <summary>

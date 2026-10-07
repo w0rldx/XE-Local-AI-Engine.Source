@@ -33,6 +33,9 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     private const string AttachmentsNotSentNoticeMessage =
         "Some attached files were not sent to the model: no text could be read from them, or the model cannot see images.";
 
+    private const string AttachmentsNotSentWithoutFileToolsNoticeMessage =
+        "Some attached files were not sent to the model: this turn offers tools but not the file tools, so attachment text is left out, or the model cannot see images.";
+
     // The tools whose presence in an offer means the agent can read files through the AgentHome sandbox. When any is
     // offered AND the conversation has attachments, the sandbox is re-staged with them before the tool loop runs.
     private static readonly HashSet<string> AgentHomeCapableToolNames = new(StringComparer.Ordinal)
@@ -661,9 +664,13 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                 await _eventDispatcher.ReportTurnNoticeAsync(KnowledgeUnavailableNotice.For(requestId));
             }
 
+            // A tool turn delivers attachment text only through the AgentHome file tools (operator-tool withdrawal never
+            // removes those, so the offer's list decides as the final one would).
+            var textAccepted = !toolOffer.OfferTools || OffersAgentHomeTools(toolOffer.AllowedTools);
             var unsentAttachments = await _turnContextBuilder.ListUnsentAttachmentNamesAsync(request.ConversationId,
                 request.AttachmentFileIds,
                 imagesAccepted: resolution.SupportsVision,
+                textAccepted,
                 cancellationToken);
             if (unsentAttachments.Count > 0)
             {
@@ -671,7 +678,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                 {
                     InvocationId = requestId,
                     Kind = TurnNoticeKind.AttachmentsNotSent,
-                    Message = AttachmentsNotSentNoticeMessage,
+                    Message = textAccepted ? AttachmentsNotSentNoticeMessage : AttachmentsNotSentWithoutFileToolsNoticeMessage,
                     Detail = string.Join(", ", unsentAttachments)
                 });
             }

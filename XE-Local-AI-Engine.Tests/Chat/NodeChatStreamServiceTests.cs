@@ -1893,9 +1893,22 @@ public sealed class NodeChatStreamServiceTests
             "a local turn's unsent files are not a cloud withhold");
     }
 
+    [Test]
+    public async Task SendMessageAsync_WhenATurnOffersToolsButNotTheFileTools_NamesTheAttachmentAsUnsent()
+    {
+        // Such a turn neither inlines the text nor stages the file for the AgentHome tools, so the text silently vanished.
+        var (events, _) = await RunAttachmentEgressAsync(cloudModel: null, allowCloudModelAccess: false, offerToolsWithoutFileTools: true);
+
+        var notice = events.Single(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsNotSent));
+        AssertEx.Equal("spec.txt", notice.NoticeDetail);
+        AssertEx.Equal("Some attached files were not sent to the model: this turn offers tools but not the file tools, so attachment text is left out, or the model cannot see images.",
+            notice.NoticeMessage);
+    }
+
     private static async Task<(List<ChatStreamEvent> Events, IReadOnlyList<ConversationMessageDto> CapturedContext)> RunAttachmentEgressAsync(string? cloudModel,
         bool allowCloudModelAccess,
-        IReadOnlyList<ExtraUploadedFile>? extraFiles = null)
+        IReadOnlyList<ExtraUploadedFile>? extraFiles = null,
+        bool offerToolsWithoutFileTools = false)
     {
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
@@ -1945,10 +1958,13 @@ public sealed class NodeChatStreamServiceTests
             new LocalChatRuntimePackageBuilder(),
             runner,
             dispatcher,
-            Options.Create(new LocalChatAgentOptions()),
-            StubNodeRuntimeSettings.Create().WithAllowCloudModelAccess(allowCloudModelAccess).Build(),
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = offerToolsWithoutFileTools
+            }),
+            StubNodeRuntimeSettings.Create().WithAllowCloudModelAccess(allowCloudModelAccess).WithEnableTools(offerToolsWithoutFileTools).Build(),
             new NodeChatStreamCancellationRegistry(),
-            CreateOfferProvider(),
+            offerToolsWithoutFileTools ? CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}")) : CreateOfferProvider(),
             CreateDefaultAgentProvider(),
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
@@ -1968,6 +1984,7 @@ public sealed class NodeChatStreamServiceTests
                            MessageId: assistantMessageId,
                            RequestId: requestId,
                            Model: cloudModel,
+                           UseLocalTools: offerToolsWithoutFileTools,
                            AttachmentFileIds: [.. files.Select(static file => file.FileId)])))
         {
             events.Add(streamEvent);

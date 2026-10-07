@@ -198,6 +198,29 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
     }
 
     /// <summary>
+    ///     The freeze refuses a base of another model, but the base can change after a run was frozen: the measurement
+    ///     applies the same rule again and fails before it reserves or runs anything.
+    /// </summary>
+    [Test]
+    public async Task Execute_WhenTheKldBaseIsAnotherModel_FailsNamingBothModelsBeforeAnyWork()
+    {
+        var harness = new Harness(_root, kind: "kld");
+        _ = harness.Gguf.ResolveModelFootprintFactsAsync("quant.gguf", Arg.Any<CancellationToken>()).Returns(Footprint(blocks: 64));
+        _ = harness.Gguf.ResolveModelFootprintFactsAsync(Harness.BaseModelName, Arg.Any<CancellationToken>()).Returns(Footprint(blocks: 40));
+        harness.ScriptedOutputs.Enqueue(BasePhaseOutput);
+        harness.ScriptedOutputs.Enqueue(KlDivergenceOutput);
+        string? reason = null;
+        _ = harness.Store.MarkFidelityFailedAsync(harness.RunId, Harness.WorkVersion, Arg.Do<string>(value => reason = value), Arg.Any<CancellationToken>());
+
+        await harness.Executor().ExecuteAsync(harness.Work(), CancellationToken.None);
+
+        AssertEx.Contains(AssertEx.NotNull(reason, "the fidelity is marked failed"), $"'{Harness.BaseModelName}' is not the same model as 'quant.gguf' (40 vs 64 layers)");
+        AssertEx.Equal(expected: 0, harness.CapacityRequests.Count, "nothing is reserved for a measurement that cannot mean anything");
+        AssertEx.Equal(expected: 2, harness.ScriptedOutputs.Count, "llama-perplexity never ran");
+        _ = await harness.Store.DidNotReceiveWithAnyArgs().MarkFidelitySucceededAsync(default!, default);
+    }
+
+    /// <summary>
     ///     The watchdog's linked token produced an OperationCanceledException that the executor recorded as an
     ///     operator cancellation with no reason — a two-hour runaway was indistinguishable from someone pressing
     ///     stop. Classification is derived at mapping time: the caller's token is not cancelled, so it is ours.
@@ -235,6 +258,20 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                                               ====== Token probability statistics ======
                                               Same top p: 91.529 ± 0.780 %
                                               """;
+
+    private static GgufModelFootprintFacts Footprint(long blocks) =>
+        new()
+        {
+            Quant = "Q4_K_M",
+            FileSizeBytes = 1,
+            ParamCount = null,
+            BlockCount = blocks,
+            AttentionHeadCount = null,
+            AttentionHeadCountKV = null,
+            EmbeddingLength = 4096,
+            ContextLength = null,
+            Architecture = "qwen3"
+        };
 
     private static string? ValueAfter(IReadOnlyList<string> arguments, string flag)
     {

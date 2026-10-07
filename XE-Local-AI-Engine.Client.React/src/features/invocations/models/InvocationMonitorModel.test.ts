@@ -73,6 +73,20 @@ describe("buildInvocationSummary", () => {
 		);
 	});
 
+	// A run that fails before any model is served has no model; the sentence drops the clause instead of "with —".
+	it("leaves the model out when the run has none", () => {
+		expect(buildInvocationSummary(summaryInput({ status: "Failed", modelUsed: null, error: "Model load timeout" }), t)).toBe(
+			"Failed after 4.2 s — Model load timeout.",
+		);
+		expect(buildInvocationSummary(summaryInput({ status: "Cancelled", modelUsed: "  ", durationMs: null }), t)).toBe(
+			"Cancelled.",
+		);
+		expect(buildInvocationSummary(summaryInput({ status: "Pending", modelUsed: null }), t)).toBe("Waiting to start.");
+		expect(buildInvocationSummary(summaryInput({ status: "Running", modelUsed: null }), t)).toBe(
+			"Running — 128 output chunks, 40 reasoning so far (no tool calls).",
+		);
+	});
+
 	it("falls back to the failure category when there is no error message", () => {
 		expect(buildInvocationSummary(summaryInput({ status: "Failed", error: null, failureCategory: "Timeout" }), t)).toBe(
 			"Failed after 4.2 s with gemma3 — Timeout.",

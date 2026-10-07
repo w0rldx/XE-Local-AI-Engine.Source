@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
+using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Validators;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Models.Implementation;
@@ -415,6 +417,56 @@ public sealed class NodeSettingsAdministrationServiceTests
         AssertEx.Equal(1, result.ValidationErrors.Count);
         AssertEx.Equal(NodeSettingsField.LlamaMaxLoadedProcesses, result.ValidationErrors[0].Field);
         await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     The MCP admin patch applies the same shape rules as the REST save, with the same message, so an unknown quant
+    ///     is refused instead of stored and the caller is told which field.
+    /// </summary>
+    [Test]
+    [Arguments("Q9_BOGUS", null, NodeSettingsField.HuggingFaceDefaultQuant)]
+    [Arguments("Q4_K_M-extra", null, NodeSettingsField.HuggingFaceDefaultQuant)]
+    [Arguments(null, "unsloth/model\u0001-GGUF:Q4_K_M", NodeSettingsField.DefaultModelName)]
+    public async Task ApplyAgenticPatch_WithAnUnknownQuantOrAMalformedDefaultModel_IsRejectedLikeTheRestSave(string? quant,
+        string? modelName,
+        NodeSettingsField field)
+    {
+        var store = NewSubstituteStore(new StoredNodeSettings());
+        var service = CreateService(store);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            HuggingFaceDefaultQuant = quant,
+            DefaultModelName = modelName
+        });
+
+        AssertEx.False(result.Updated);
+        AssertEx.Equal(1, result.ValidationErrors.Count);
+        AssertEx.Equal(field, result.ValidationErrors[0].Field);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+
+        var rest = await new SaveNodeSettingsRequestValidator().ValidateAsync(new SaveNodeSettingsRequest
+        {
+            HuggingFaceDefaultQuant = quant,
+            DefaultModelName = modelName
+        });
+        AssertEx.Equal(1, rest.Errors.Count, "the REST save refuses the same value");
+        AssertEx.Equal(result.ValidationErrors[0].Message, rest.Errors[0].ErrorMessage, "both paths refuse with one message");
+    }
+
+    [Test]
+    public async Task ApplyAgenticPatch_WithAKnownQuantInOddCasing_IsSaved()
+    {
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings());
+        var service = CreateService(store);
+
+        var result = await service.ApplyAgenticPatchAsync(new NodeSettingsAgenticPatch
+        {
+            HuggingFaceDefaultQuant = "ud-q4_k_xl"
+        });
+
+        AssertEx.True(result.Updated, "a canonical quant token, case aside, is a valid default");
+        AssertEx.Equal("ud-q4_k_xl", store.Current.HuggingFaceDefaultQuant);
     }
 
     [Test]
