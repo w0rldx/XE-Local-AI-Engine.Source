@@ -150,7 +150,21 @@ platform implementation, not this repository.
   request and shows you the result before the model reads it, unless a conversation has
   **Auto-accept web content** on.
 - **Cloud model providers** (Azure AI Foundry, Codex) — off unless you configure them. If you enable
-  one, prompts you send to *that provider* go to *that provider*, exactly as you'd expect.
+  one, prompts you send to *that provider* go to *that provider*, exactly as you'd expect. Beyond your
+  prompts, a cloud model gets nothing from your computer until you allow it. **Node Settings → Privacy →
+  Cloud models** has five switches, all off by default, that apply from the next message or run:
+  - **Let cloud models read local data** — your knowledge base, workspace files, attachments, earlier
+    tool results and learned playbook memory.
+  - **Let cloud models run unattended** — scheduled agents, graph workflow model steps, and integration
+    triggers. Data an outside caller sends with a trigger then goes to the cloud provider too.
+  - **Let cloud models use web tools** — web search, page fetching and HTTP custom tools, and only while
+    Web access is on as well. The usual consent and approval prompts still apply.
+  - **Let cloud models use MCP tools** — the tools of the MCP servers you registered.
+  - **Let cloud models delegate to sub-agents** — handing part of a task to another agent, which then
+    follows its own model's rules.
+
+  No switch lets a cloud model run Python, AgentHome commands or command custom tools on your
+  computer, and none changes Development Mode's own rules.
 - **MCP servers you register.** An MCP server is a **separate program**, usually written by someone
   else, that the app launches. It runs **as you, with your permissions** — the same boundary as
   Development Mode, and with the same consequence: registering one is trusting its author with your

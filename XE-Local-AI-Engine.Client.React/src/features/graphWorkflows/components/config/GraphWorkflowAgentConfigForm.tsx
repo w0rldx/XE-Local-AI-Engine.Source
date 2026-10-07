@@ -6,7 +6,11 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { GraphWorkflowJsonField } from "@/features/graphWorkflows/components/config/GraphWorkflowJsonField";
-import { withCurrentValue } from "@/features/graphWorkflows/components/config/GraphWorkflowSelectOptions";
+import {
+	type GraphWorkflowModelSelectOption,
+	withCloudModelLabels,
+	withCurrentValue,
+} from "@/features/graphWorkflows/components/config/GraphWorkflowSelectOptions";
 import type { GraphWorkflowCanvasNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 
 type AgentNodeData = Extract<GraphWorkflowCanvasNodeData, { kind: "Agent" }>;
@@ -18,10 +22,8 @@ export interface GraphWorkflowAgentOption {
 	readonly requiresTools?: boolean;
 }
 
-export interface GraphWorkflowModelOption {
-	readonly value: string;
-	readonly label: string;
-	readonly isToolCapable?: boolean;
+export interface GraphWorkflowModelOption extends GraphWorkflowModelSelectOption {
+	readonly isToolCapable?: boolean | undefined;
 }
 
 /**
@@ -86,7 +88,11 @@ export function GraphWorkflowAgentConfigForm({
 				<Select
 					label={t("pages.graphWorkflows.config.model", "Model")}
 					placeholder={t("pages.graphWorkflows.config.modelPlaceholder", "The agent's own model")}
-					data={withCurrentValue(modelOptions, node.model)}
+					description={t(
+						"pages.graphWorkflows.config.cloudModelHelp",
+						"Cloud models run only when “Let cloud models run unattended” is on in Node Settings → Privacy & updates.",
+					)}
+					data={withCurrentValue(withCloudModelLabels(modelOptions, t), node.model)}
 					value={node.model}
 					clearable={true}
 					searchable={true}

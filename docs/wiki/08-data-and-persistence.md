@@ -466,6 +466,7 @@ default chat model only when it is node-local; a cloud or `ext:` default falls b
 | Knowledge | the scheduled reindex pair (`KnowledgeBase`) | restart: `Configure<KnowledgeBaseOptions>` |
 | | adaptive reranking, the retrieval latency budget, the agent-tools switch, the playbook analysis, playbook eval and memory extraction models (blank inherits a node-local default model) | next search, offer, turn or run |
 | Privacy | `AllowCloudModelAccess` (`KnowledgeBase`), independent of the external-access preset | next turn, at all six egress readers |
+| | `AllowCloudModelUnattendedRuns`, `AllowCloudModelWebTools`, `AllowCloudModelMcpTools`, `AllowCloudModelSubAgents` (no seed, off), independent of the external-access preset | next run, offer or spawn |
 | Usage | chat and agent-execution-log retention switches and windows, `NodeDbBackupRetainCount`, `BenchmarkKldCacheMaxBytes`, `SchedulerHistoryRetentionDays` | next sweep, backup or trim |
 | Runtime | `ImageMaxLoadedProcesses`, `ImageTextEncoderOnGpu` (`StableDiffusionRuntime`) | restart: the `AddNodeImagesExtensions` host-build factory |
 | Workspaces | the graph-workflow run cap and default node timeout, the work-session step and concurrency caps, the development attempt duration, tool-call and output-token budgets | restart: `Configure<T>` after each section's bind |

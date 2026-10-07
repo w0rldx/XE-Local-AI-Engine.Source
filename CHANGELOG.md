@@ -106,6 +106,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 - **Native desktop shells** — Avalonia Windows and Ubuntu shells (`XE-Local-AI-Engine.Desktop`) that talk to the engine over REST and SignalR, following the SPA's language. ADR 0013.
 - **Conversation state distillation and auto-compaction** — a provenance-aware conversation state, and conversations compacted automatically after a turn with folds sized to the model window.
 - **`web_search` and `web_fetch`** with a review gate against prompt injection and an ask-before-send consent for each web request. ADR 0017.
+- **Per-function cloud-model switches** — Node Settings → Privacy gains a "Cloud models" card. Beside the existing "Let cloud models read local data", four new switches, all off by default and read on the next turn or run, let a cloud model run unattended (scheduled agents, graph Agent, LLM Call and DecisionModel nodes, integration triggers), use web tools (`web_search`, `web_fetch` and HTTP custom tools, all only while Web access is on; consent and approval rules unchanged), use MCP tools, and delegate to sub-agents. Running Python, AgentHome commands and command custom tools stays local-only.
+- **Graph LLM Call and DecisionModel nodes can run on a cloud model** while "Let cloud models run unattended" is on. A provider that ignores the response schema fails the node through the existing parse or label check, never silently.
 - **Managed Python layer** — one shared, `uv`-managed Python acquisition and runner layer for Training and Compute, plus a shared child-process supervision layer. ADR 0016.
 - **Runtime RAM/VRAM widget** — live RAM and VRAM in the top bar, with image and transcription residents listed and draft-only models unloaded sooner.
 - **Vault key custody** — the persisted `node.key` is wrapped under the admin password and a one-time recovery code; a locked node serves only an unlock page. ADR 0018.
@@ -118,6 +120,12 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **MCP tools are no longer offered to cloud models by default.** They used to reach every tool-capable model,
+  cloud-hosted ones included, with no locality check. A cloud (or unresolved) model now gets them only after the
+  operator turns on "Let cloud models use MCP tools" in Node Settings → Privacy. Local models are unaffected.
+- **Cloud-model refusals in unattended runs now name the switch.** A scheduled agent, a graph workflow node or an
+  integration trigger refused because its model is cloud-hosted says that "Let cloud models run unattended" in Node
+  Settings → Privacy allows it. An integration run refused that way still fails `cloud-model-rejected`.
 - **An unattended agent that needs tools no longer runs on a model that cannot call them.** A saved agent that lists
   tools, or is an orchestrator, is now refused before it starts when a scheduled run, a graph workflow Agent node or an
   inbound MCP run that carries tools (an agentic caller, or the seeded Coder) would put it on a model not known to

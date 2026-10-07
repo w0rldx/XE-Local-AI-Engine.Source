@@ -2599,11 +2599,27 @@
 					"label": "Reindex check interval"
 				},
 				"cloudModelAccess": {
-					"title": "Cloud models and local data"
+					"title": "Cloud models"
 				},
 				"allowCloudModelAccess": {
 					"label": "Let cloud models read local data",
 					"description": "Off by default. When on, cloud-hosted models also get the knowledge-base and workspace tools, attachments and playbook memory, which then leave this machine."
+				},
+				"allowCloudModelUnattendedRuns": {
+					"label": "Let cloud models run unattended",
+					"description": "Off by default. When on, scheduled agent runs, graph workflow model nodes and integration triggers may run on a cloud-hosted model. Their prompts, upstream content and trigger payloads then leave this machine."
+				},
+				"allowCloudModelWebTools": {
+					"label": "Let cloud models use web tools",
+					"description": "Off by default. When on, cloud-hosted models get web_search, web_fetch and HTTP custom tools while Web access is enabled. Requests follow the usual web consent and tool approval rules."
+				},
+				"allowCloudModelMcpTools": {
+					"label": "Let cloud models use MCP tools",
+					"description": "Off by default. When on, cloud-hosted models get the tools of connected MCP servers, whose results then leave this machine."
+				},
+				"allowCloudModelSubAgents": {
+					"label": "Let cloud models delegate to sub-agents",
+					"description": "Off by default. When on, a cloud-hosted model may start sub-agents. Each sub-agent keeps its own model's permissions, and the cloud sub-agent cap still applies."
 				},
 				"retention": {
 					"title": "Retention and storage"
@@ -3016,7 +3032,7 @@
 				"localBadge": "Declared local",
 				"cloudBadge": "Declared cloud",
 				"localHint": "Models on this connection are trusted like a local model: workspace and file tools, the knowledge base, custom tools and code execution are all available to them.",
-				"cloudHint": "Cloud gating applies: workspace and knowledge-base access only with the cloud opt-in, and no code execution or custom tools. Development Mode rejects these models entirely.",
+				"cloudHint": "Cloud gating applies: local data, unattended runs, web and HTTP tools, MCP tools and sub-agents each follow a Privacy switch; no code execution and no command custom tools. Development Mode rejects these models entirely.",
 				"nonLocalHostWarning": "This address is not on this machine or this private network, but you have declared it Local. This endpoint will be trusted like a local model: prompts and workspace file contents will be sent to it."
 			},
 			"editor": {
@@ -6946,7 +6962,9 @@
 				},
 				"publishToChat": "Post the result to the chat",
 				"includeAttachments": "Include the chat attachments",
-				"includeAttachmentsDisabled": "Turn on “Accepts attachments” in the workflow settings first."
+				"includeAttachmentsDisabled": "Turn on “Accepts attachments” in the workflow settings first.",
+				"cloudModelHelp": "Cloud models run only when “Let cloud models run unattended” is on in Node Settings → Privacy & updates.",
+				"cloudModelLabel": "{{label}} · {{provider}} (cloud)"
 			},
 			"edge": {
 				"title": "Edge {{key}}",

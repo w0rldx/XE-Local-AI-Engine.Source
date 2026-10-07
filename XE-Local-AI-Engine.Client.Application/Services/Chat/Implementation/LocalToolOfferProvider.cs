@@ -313,7 +313,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // Provider-locality gate: node-local-data tools are withheld from a cloud model unless opted in; the trust checks catch
         // a pinned cloud id on a locally-routed turn. Both node switches are read per offer, so a save applies to the next turn.
         var baseOffer = _runtimeSettings.GetKnowledgeAgentToolsEnabled() ? _builtinAllTools : _builtinAllToolsNoKnowledge;
-        if (!_runtimeSettings.GetAllowCloudModelAccess() && LeavesNode(activeModelId, isCloudModel))
+        var leavesNode = LeavesNode(activeModelId, isCloudModel);
+        if (!_runtimeSettings.GetAllowCloudModelAccess() && leavesNode)
         {
             baseOffer = _builtinAllToolsNoLocalData;
         }
@@ -321,6 +322,13 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         var mcpDescriptors = _mcpToolRegistry.GetDescriptors();
         if (mcpDescriptors.Count == 0)
         {
+            return baseOffer;
+        }
+
+        // An MCP server reaches whatever its host can, so a model outside the trust boundary gets its tools only by opt-in.
+        if (leavesNode && !_runtimeSettings.GetAllowCloudModelMcpTools())
+        {
+            _logger.LogDebug("MCP tools withheld from the offer: the model leaves the node and AllowCloudModelMcpTools is off (Node Settings, Privacy & updates section).");
             return baseOffer;
         }
 
@@ -337,24 +345,31 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         var baseOffer = GetOfferedTools(activeModelId, isCloudModel);
 #pragma warning restore MA0042
 
-        // Custom tools merge ONLY in the tool-capable branch and ONLY for a node-local model: a custom command or fetch
-        // tool reaches local data and the host, so a cloud model never gets one, whatever the knowledge opt-in says.
-        if (!IsToolCapable(activeModelId) || LeavesNode(activeModelId, isCloudModel))
+        // Custom and web tools merge ONLY in the tool-capable branch. A model outside the trust boundary gets the web
+        // tools and HttpFetch custom tools only by opt-in, and a Command custom tool (host execution) never.
+        if (!IsToolCapable(activeModelId))
         {
             return baseOffer;
         }
 
-        // The web tools take the custom-tool gates above (tool-capable, inside the trust boundary) plus their own node
-        // switch. A bound agent still gets them only through its AllowedToolNames intersection.
-        if (await _runtimeSettings.GetWebAccessEnabledAsync(cancellationToken))
-        {
-            baseOffer = [.. baseOffer, .. _webAccessOfferDtos];
-        }
-        else
+        var leavesNode = LeavesNode(activeModelId, isCloudModel);
+        var cloudWebAllowed = !leavesNode || await _runtimeSettings.GetAllowCloudModelWebToolsAsync(cancellationToken);
+        var webAccessEnabled = await _runtimeSettings.GetWebAccessEnabledAsync(cancellationToken);
+
+        // A bound agent still gets the web tools only through its AllowedToolNames intersection.
+        if (!webAccessEnabled)
         {
             // Debug, not Information: this runs on every offer. It is the line that explains an agent whose web tools
             // were "dropped" from its allowed set while the node switch is off.
             _logger.LogDebug("Web tools withheld from the offer: WebAccessEnabled is off (Node Settings, Knowledge section).");
+        }
+        else if (!cloudWebAllowed)
+        {
+            _logger.LogDebug("Web tools withheld from the offer: the model leaves the node and AllowCloudModelWebTools is off (Node Settings, Privacy & updates section).");
+        }
+        else
+        {
+            baseOffer = [.. baseOffer, .. _webAccessOfferDtos];
         }
 
         // The node kill-switch is off by default. It is checked here, before the scope and store read, so the common
@@ -364,7 +379,26 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             return baseOffer;
         }
 
+        // Outside the trust boundary a custom tool is outbound reach, so it takes the web tools' two switches together.
+        if (leavesNode && !(webAccessEnabled && cloudWebAllowed))
+        {
+            _logger.LogDebug("Custom tools withheld from the offer: the model leaves the node and WebAccessEnabled or AllowCloudModelWebTools is off (Node Settings).");
+            return baseOffer;
+        }
+
         var customDescriptors = await GetEnabledCustomDescriptorsAsync(cancellationToken);
+
+        // The descriptor carries no kind, so the category stands in: CustomToolCatalog maps HttpFetch to Network alone.
+        if (leavesNode)
+        {
+            var allCustomCount = customDescriptors.Count;
+            customDescriptors = [.. customDescriptors.Where(static descriptor => descriptor.Category == ToolCategory.Network)];
+            if (customDescriptors.Count < allCustomCount)
+            {
+                _logger.LogDebug("Command custom tools withheld from the offer: a model that leaves the node never gets one.");
+            }
+        }
+
         if (customDescriptors.Count == 0)
         {
             return baseOffer;
@@ -422,18 +456,25 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     }
 
     /// <summary>
-    ///     <c>spawn_subagent</c> for the profile pool, or nothing for a model outside the trust boundary.
+    ///     <c>spawn_subagent</c> for the profile pool, or nothing for a model outside the trust boundary unless allowed.
     /// </summary>
     /// <remarks>
-    ///     Spawning is DELEGATION: the child resolves its own model and tool set, so an ungated spawn offer would let
-    ///     a parent bind a child to a node-local model, have IT read the withheld data and take the result back —
-    ///     a bypass of all three direct gates rather than a capability of its own. It is withheld unconditionally
-    ///     rather than behind <c>AllowCloudModelAccess</c>, which cannot be given informedly about data a child agent
-    ///     fetches on its own initiative.
+    ///     Spawning is DELEGATION: the child resolves its own model and tool set, so a spawn offer lets a parent bind a
+    ///     child to a node-local model, have IT read the withheld data and take the result back — a bypass of all three
+    ///     direct gates. It therefore sits behind its own switch, <c>AllowCloudModelSubAgents</c>, not behind
+    ///     <c>AllowCloudModelAccess</c>, which cannot be given informedly about data a child fetches on its own.
     /// </remarks>
     private IReadOnlyList<AllowedToolDto> SpawnOffer(string? activeModelId, bool isCloudModel)
     {
-        return LeavesNode(activeModelId, isCloudModel) ? [] : [_spawnOfferDto];
+#pragma warning disable MA0045 // The spawn offer is part of the synchronous profile pool, which has no async boundary; the sync twin is the designated per-offer read.
+        if (!LeavesNode(activeModelId, isCloudModel) || _runtimeSettings.GetAllowCloudModelSubAgents())
+#pragma warning restore MA0045
+        {
+            return [_spawnOfferDto];
+        }
+
+        _logger.LogDebug("spawn_subagent withheld from the offer: the model leaves the node and AllowCloudModelSubAgents is off (Node Settings, Privacy & updates section).");
+        return [];
     }
 
     /// <summary>

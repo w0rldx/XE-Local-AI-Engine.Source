@@ -75,7 +75,27 @@ public sealed class SubAgentSpawnServiceTests
         var result = await service.SpawnAsync(ModelRequest("read the workspace and tell me"), CancellationToken.None);
 
         AssertEx.Contains(result, "outside this node's trust boundary");
+        AssertEx.Contains(result, "Node Settings → Privacy & updates");
         AssertEx.Equal(0, harness.ChatClient.CallCount);
+    }
+
+    [Test]
+    [Arguments("ext:hosted-box/qwen3")]
+    [Arguments("ext:gone-box/qwen3")]
+    public async Task Spawn_WhenTheParentLeavesTheNodeAndTheOperatorAllowsCloudSubAgents_Proceeds(string rootModelId)
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.TrustResolver.Register("hosted-box", "qwen3", ExternalProviderLocality.Cloud);
+        harness.AllowCloudModelSubAgents = true;
+        var service = harness.Build();
+
+        // The opt-in opens the parent-side seam only: the child still resolves its own model and its own gates.
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3, rootModelId: rootModelId);
+        var result = await service.SpawnAsync(ModelRequest("do the thing"), CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
+        AssertEx.Equal(1, harness.ChatClient.CallCount);
     }
 
     [Test]
@@ -1587,6 +1607,9 @@ public sealed class SubAgentSpawnServiceTests
 
         public GateableChatClient ChatClient => _chatClient;
 
+        /// <summary>The node's "Let cloud models delegate to sub-agents" switch, read when <see cref="Build" /> runs.</summary>
+        public bool AllowCloudModelSubAgents { get; set; }
+
         /// <summary>The registry the child's own binding pin is read from — seed it to make a child model external.</summary>
         public FakeExternalProviderRegistry ExternalRegistry { get; } = new();
 
@@ -1910,7 +1933,7 @@ public sealed class SubAgentSpawnServiceTests
                 new EmptyMcpToolRegistry(),
                 _customToolCatalog,
                 _chatClient,
-                StubNodeRuntimeSettings.Create().WithSpawnQueueWaitSeconds(5).Build(),
+                StubNodeRuntimeSettings.Create().WithSpawnQueueWaitSeconds(5).WithAllowCloudModelSubAgents(AllowCloudModelSubAgents).Build(),
                 _instructionProvider,
                 _modelCapabilityResolver,
                 TrustResolver,

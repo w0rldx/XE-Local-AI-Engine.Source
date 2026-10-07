@@ -16,15 +16,14 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
-///     Quartz template handler for the <c>run-agent</c> template: it runs a saved node-local agent on a schedule with
-///     a fixed prompt, through the SAME <see cref="IInvocationRunner" /> the local chat send path uses.
+///     Quartz template handler for the <c>run-agent</c> template: it runs a saved agent on a schedule with a fixed
+///     prompt, through the SAME <see cref="IInvocationRunner" /> the local chat send path uses.
 /// </summary>
 /// <remarks>
-///     <b>Node-local only, a security invariant:</b> the EFFECTIVE model, after the agent's pinned
-///     <c>ModelProfile</c>, is classified through <see cref="IModelCapabilityResolver" /> and a cloud or remote one is
-///     rejected UP FRONT, before capacity or any invocation, so unattended work never hands node-local content to a
-///     cloud model. The handler is a singleton the registry captures at construction, scoping per fire, and owns no
-///     scheduler state: no run rows, no notifications. See docs/wiki/06-scheduler.md ("Shipped templates").
+///     <b>Node-local unless allowed:</b> the EFFECTIVE model, after the agent's pinned <c>ModelProfile</c>, is classified
+///     through <see cref="IModelCapabilityResolver" />; a cloud or remote one is rejected UP FRONT, before capacity or any
+///     invocation, unless <c>AllowCloudModelUnattendedRuns</c> is on. The handler is a singleton that scopes per fire and
+///     owns no scheduler state. See docs/wiki/06-scheduler.md ("Shipped templates").
 /// </remarks>
 public sealed class RunSavedAgentHandler : IScheduledJobHandler
 {
@@ -74,7 +73,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
     {
         TemplateId = TemplateIdValue,
         DisplayName = "Run a saved agent",
-        Description = "Runs a saved agent on a schedule with a fixed prompt. Node-local models only.",
+        Description = "Runs a saved agent on a schedule with a fixed prompt. Cloud models only when allowed in Node Settings → Privacy & updates.",
         ParameterSchema = ParameterSchemaJson,
         DefaultParameters = null,
         SupportedScheduleKinds = [ScheduleKind.Cron, ScheduleKind.OneShot, ScheduleKind.SimpleInterval, ScheduleKind.Manual],
@@ -104,6 +103,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         var modelCapabilityResolver = services.GetRequiredService<IModelCapabilityResolver>();
         var localDefaultResolver = services.GetRequiredService<ILocalDefaultChatModelResolver>();
         var nodeSettingsStore = services.GetRequiredService<INodeSettingsStore>();
+        var nodeRuntimeSettings = services.GetRequiredService<INodeRuntimeSettings>();
         var capacityService = services.GetRequiredService<ICapacityService>();
         var packageBuilder = services.GetRequiredService<ILocalChatRuntimePackageBuilder>();
         var invocationRunner = services.GetRequiredService<IInvocationRunner>();
@@ -128,15 +128,17 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             throw new ScheduledJobExecutionException("No local chat model is available to run the scheduled agent. Install a local model or pin one to the agent.");
         }
 
-        // 3. LOCALITY GATE (security invariant): classify the effective model and reject a cloud or remote one UP FRONT, before
-        //    capacity or any invocation, so unattended work stays node-local. Same classification the chat locality gate uses.
+        // 3. LOCALITY GATE: classify the effective model and reject a cloud or remote one UP FRONT, before capacity or any invocation,
+        //    unless the operator lets cloud models run unattended. The offer below is then built with the real cloud flag.
         var capabilities = await modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
         var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
-        if (effectiveModelIsCloud)
+        if (effectiveModelIsCloud && !await nodeRuntimeSettings.GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
         {
-            _logger.LogInformation("Scheduled agent run for definition {AgentDefinitionId} was rejected: its effective model is cloud-hosted and unattended runs are node-local only.",
+            _logger.LogInformation(
+                "Scheduled agent run for definition {AgentDefinitionId} was rejected: its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
                 definition.Id);
-            throw new ScheduledJobExecutionException("Scheduled agent runs are restricted to node-local models. This agent is configured to use a cloud model, so it will not run unattended.");
+            throw new ScheduledJobExecutionException(
+                "Scheduled agent runs are restricted to node-local models. This agent is configured to use a cloud model, so it will not run unattended. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates to allow it.");
         }
 
         // 3b. CAPABILITY GATE: a tool-requiring agent on a model without tool calling would "succeed" having called nothing.

@@ -285,6 +285,10 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
             KnowledgeScheduledReindexEnabled = false,
             KnowledgeAgentToolsEnabled = false,
             AllowCloudModelAccess = false,
+            AllowCloudModelUnattendedRuns = false,
+            AllowCloudModelWebTools = false,
+            AllowCloudModelMcpTools = false,
+            AllowCloudModelSubAgents = false,
             ChatRetentionEnabled = false,
             AgentExecutionLogRetentionEnabled = false
         });
@@ -293,6 +297,10 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         AssertEx.Equal(expected: false, loaded.KnowledgeScheduledReindexEnabled);
         AssertEx.Equal(expected: false, loaded.KnowledgeAgentToolsEnabled);
         AssertEx.Equal(expected: false, loaded.AllowCloudModelAccess);
+        AssertEx.Equal(expected: false, loaded.AllowCloudModelUnattendedRuns);
+        AssertEx.Equal(expected: false, loaded.AllowCloudModelWebTools);
+        AssertEx.Equal(expected: false, loaded.AllowCloudModelMcpTools);
+        AssertEx.Equal(expected: false, loaded.AllowCloudModelSubAgents);
         AssertEx.Equal(expected: false, loaded.ChatRetentionEnabled);
         AssertEx.Equal(expected: false, loaded.AgentExecutionLogRetentionEnabled);
 
@@ -301,6 +309,10 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
 
         AssertEx.Null(old.KnowledgeAgentToolsEnabled);
         AssertEx.Null(old.AllowCloudModelAccess);
+        AssertEx.Null(old.AllowCloudModelUnattendedRuns);
+        AssertEx.Null(old.AllowCloudModelWebTools);
+        AssertEx.Null(old.AllowCloudModelMcpTools);
+        AssertEx.Null(old.AllowCloudModelSubAgents);
         AssertEx.Null(old.ChatRetentionEnabled);
         AssertEx.Null(old.AgentExecutionLogRetentionEnabled);
     }

@@ -562,6 +562,18 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public async Task<bool> GetAllowCloudModelAccessAsync(CancellationToken cancellationToken = default) =>
         (await LoadAsync(cancellationToken)).AllowCloudModelAccess ?? _allowCloudModelAccessSeed;
 
+    public async Task<bool> GetAllowCloudModelUnattendedRunsAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).AllowCloudModelUnattendedRuns ?? StoredNodeSettings.DefaultAllowCloudModelUnattendedRuns;
+
+    public async Task<bool> GetAllowCloudModelWebToolsAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).AllowCloudModelWebTools ?? StoredNodeSettings.DefaultAllowCloudModelWebTools;
+
+    public async Task<bool> GetAllowCloudModelMcpToolsAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).AllowCloudModelMcpTools ?? StoredNodeSettings.DefaultAllowCloudModelMcpTools;
+
+    public async Task<bool> GetAllowCloudModelSubAgentsAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).AllowCloudModelSubAgents ?? StoredNodeSettings.DefaultAllowCloudModelSubAgents;
+
     public async Task<string> GetPlaybookAnalysisModelNameAsync(CancellationToken cancellationToken = default)
     {
         var stored = await LoadAsync(cancellationToken);
@@ -593,6 +605,10 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
             KnowledgeScheduledReindexEnabled = stored.KnowledgeScheduledReindexEnabled ?? _knowledgeScheduledReindexEnabledSeed,
             KnowledgeAgentToolsEnabled = stored.KnowledgeAgentToolsEnabled ?? _knowledgeAgentToolsEnabledSeed,
             AllowCloudModelAccess = stored.AllowCloudModelAccess ?? _allowCloudModelAccessSeed,
+            AllowCloudModelUnattendedRuns = stored.AllowCloudModelUnattendedRuns ?? StoredNodeSettings.DefaultAllowCloudModelUnattendedRuns,
+            AllowCloudModelWebTools = stored.AllowCloudModelWebTools ?? StoredNodeSettings.DefaultAllowCloudModelWebTools,
+            AllowCloudModelMcpTools = stored.AllowCloudModelMcpTools ?? StoredNodeSettings.DefaultAllowCloudModelMcpTools,
+            AllowCloudModelSubAgents = stored.AllowCloudModelSubAgents ?? StoredNodeSettings.DefaultAllowCloudModelSubAgents,
             ChatRetentionEnabled = stored.ChatRetentionEnabled ?? _chatRetentionEnabledSeed,
             AgentExecutionLogRetentionEnabled = stored.AgentExecutionLogRetentionEnabled ?? _agentExecutionLogRetentionEnabledSeed,
             ImageTextEncoderOnGpu = stored.ImageTextEncoderOnGpu ?? _imageTextEncoderOnGpuSeed,
@@ -796,6 +812,18 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public bool GetAllowCloudModelAccess() =>
         LoadStored().AllowCloudModelAccess ?? _allowCloudModelAccessSeed;
+
+    public bool GetAllowCloudModelUnattendedRuns() =>
+        LoadStored().AllowCloudModelUnattendedRuns ?? StoredNodeSettings.DefaultAllowCloudModelUnattendedRuns;
+
+    public bool GetAllowCloudModelWebTools() =>
+        LoadStored().AllowCloudModelWebTools ?? StoredNodeSettings.DefaultAllowCloudModelWebTools;
+
+    public bool GetAllowCloudModelMcpTools() =>
+        LoadStored().AllowCloudModelMcpTools ?? StoredNodeSettings.DefaultAllowCloudModelMcpTools;
+
+    public bool GetAllowCloudModelSubAgents() =>
+        LoadStored().AllowCloudModelSubAgents ?? StoredNodeSettings.DefaultAllowCloudModelSubAgents;
 
     public int GetImageMaxLoadedProcesses() =>
         LoadStored().ImageMaxLoadedProcesses ?? _imageMaxLoadedProcessesSeed;

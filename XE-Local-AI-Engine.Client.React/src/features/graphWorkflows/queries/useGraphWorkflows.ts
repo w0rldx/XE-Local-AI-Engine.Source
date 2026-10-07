@@ -9,7 +9,10 @@
 
 import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { listGraphWorkflowRunEvents } from "@/core/api/generated";
+import {
+	listGraphWorkflowRunEvents,
+	type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse as LocalModelResponse,
+} from "@/core/api/generated";
 import {
 	cancelGraphWorkflowRunMutation,
 	createGraphWorkflowDefinitionMutation,
@@ -33,6 +36,7 @@ import {
 	validateGraphWorkflowDefinitionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
+import { EXTERNAL_PROVIDER, LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
 import { readGraphWorkflowConflict } from "@/features/graphWorkflows/api/GraphWorkflowConflict";
 import type {
 	GraphWorkflowRunEventResponse,
@@ -253,34 +257,65 @@ export function useGraphWorkflowAgentOptions(options: FeedOptions = {}) {
 	});
 }
 
+// The catalog's cloud provider tags (backend `LocalModelProviders`). Duplicated from the chat feature's picker on
+// purpose: a feature never imports another feature, and two string constants do not earn a core module.
+const CODEX_PROVIDER = "CodexOAuth";
+const AZURE_FOUNDRY_PROVIDER = "AzureFoundry";
+
+/**
+ * Where a catalog entry leaves the node, for the picker label; undefined for a node-local model. An external entry
+ * is cloud unless it positively declares `local`, the same fail-closed reading the backend's trust resolver takes.
+ */
+function cloudProviderOf(model: LocalModelResponse): string | undefined {
+	if (model.provider === CODEX_PROVIDER) {
+		return "Codex";
+	}
+	if (model.provider === AZURE_FOUNDRY_PROVIDER) {
+		return "Azure Foundry";
+	}
+	if (model.provider === EXTERNAL_PROVIDER && model.declaredLocality !== "local") {
+		return model.externalConnectionName ?? model.externalConnectionId ?? EXTERNAL_PROVIDER;
+	}
+	return undefined;
+}
+
+function toGraphWorkflowModelOption(model: LocalModelResponse) {
+	const cloudProvider = cloudProviderOf(model);
+	return {
+		value: model.modelName ?? "",
+		label: model.displayLabel ?? model.modelName ?? "",
+		isToolCapable: model.isToolCapable,
+		...(cloudProvider === undefined ? {} : { cloudProvider }),
+	};
+}
+
 /**
  * Chat models on this node, for an Agent node's `model` override. Same filter the chat picker applies (`kind` is
- * `Chat`), because a graph node that names a non-chat model is a run that fails at dispatch.
+ * `Chat`), because a graph node that names a non-chat model is a run that fails at dispatch. Cloud and external
+ * entries are listed too; whether a cloud one may run unattended is the server's call at run start.
  */
 export function useGraphWorkflowModelOptions(options: FeedOptions = {}) {
 	return useQuery({
 		...withResponseValidation(listLocalModelsOptions()),
 		enabled: options.enabled ?? true,
-		select: (data) =>
-			(data.items ?? [])
-				.filter((model) => model.kind === "Chat")
-				.map((model) => ({
-					value: model.modelName ?? "",
-					label: model.displayLabel ?? model.modelName ?? "",
-					isToolCapable: model.isToolCapable,
-				})),
+		select: (data) => (data.items ?? []).filter((model) => model.kind === "Chat").map(toGraphWorkflowModelOption),
 	});
 }
 
-/** Installed, node-managed GGUF chat models are the only runtimes an LLM Call may dispatch through. */
+/**
+ * An LLM Call (and the DecisionModel lane lowered onto it) dispatches through an installed node-managed GGUF chat
+ * model, or through a cloud one. An external endpoint declared `local` is neither, so the run would refuse it.
+ */
 export function useGraphWorkflowLlmModelOptions(options: FeedOptions = {}) {
 	return useQuery({
 		...withResponseValidation(listLocalModelsOptions()),
 		enabled: options.enabled ?? true,
 		select: (data) =>
 			(data.items ?? [])
-				.filter((model) => model.kind === "Chat" && model.provider === "llamacpp")
-				.map((model) => ({ value: model.modelName ?? "", label: model.displayLabel ?? model.modelName ?? "" })),
+				.filter(
+					(model) => model.kind === "Chat" && (model.provider === LLAMACPP_PROVIDER || cloudProviderOf(model) !== undefined),
+				)
+				.map(toGraphWorkflowModelOption),
 	});
 }
 

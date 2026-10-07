@@ -1270,6 +1270,10 @@ describe("knowledge, privacy and usage knobs", () => {
 		"knowledgeRetrievalLatencyBudgetMs",
 		"knowledgeAgentToolsEnabled",
 		"allowCloudModelAccess",
+		"allowCloudModelUnattendedRuns",
+		"allowCloudModelWebTools",
+		"allowCloudModelMcpTools",
+		"allowCloudModelSubAgents",
 		"playbookAnalysisModelName",
 		"playbookEvalModelName",
 		"memoryExtractionModelName",
@@ -1290,6 +1294,10 @@ describe("knowledge, privacy and usage knobs", () => {
 			knowledgeScheduledReindexIntervalMinutes: 60,
 			knowledgeAgentToolsEnabled: true,
 			allowCloudModelAccess: false,
+			allowCloudModelUnattendedRuns: false,
+			allowCloudModelWebTools: false,
+			allowCloudModelMcpTools: false,
+			allowCloudModelSubAgents: false,
 			playbookAnalysisModelName: "",
 			playbookEvalModelName: "",
 			memoryExtractionModelName: "",
@@ -1382,6 +1390,60 @@ describe("knowledge, privacy and usage knobs", () => {
 		expect(isExternalAccessBooleanField("allowCloudModelAccess")).toBe(false);
 		const preset = applyExternalAccessPreset({ ...baseline, allowCloudModelAccess: true }, "offline");
 		expect(preset.allowCloudModelAccess).toBe(true);
+	});
+
+	describe("the four cloud-model permissions", () => {
+		const cloudSwitches = [
+			"allowCloudModelUnattendedRuns",
+			"allowCloudModelWebTools",
+			"allowCloudModelMcpTools",
+			"allowCloudModelSubAgents",
+		] as const;
+
+		it("map a reported true, and an absent value to off", () => {
+			const reported = toNodeSettingsFieldsForm({
+				allowCloudModelUnattendedRuns: true,
+				allowCloudModelWebTools: true,
+				allowCloudModelMcpTools: true,
+				allowCloudModelSubAgents: true,
+			});
+			for (const field of cloudSwitches) {
+				expect(reported[field]).toBe(true);
+				expect(baseline[field]).toBe(false);
+			}
+		});
+
+		it("send only the switches that changed", () => {
+			const { body, errors } = buildNodeSettingsRequest(
+				{ ...baseline, allowCloudModelWebTools: true, allowCloudModelSubAgents: true },
+				baseline,
+				bounds,
+				false,
+			);
+			expect(errors).toEqual({});
+			expect(body).toEqual({ allowCloudModelWebTools: true, allowCloudModelSubAgents: true });
+
+			const stored = toNodeSettingsFieldsForm({ allowCloudModelMcpTools: true });
+			expect(buildNodeSettingsRequest({ ...stored, allowCloudModelMcpTools: false }, stored, bounds, false).body).toEqual({
+				allowCloudModelMcpTools: false,
+			});
+		});
+
+		it("are left alone by every external-access preset, like the read-local-data switch", () => {
+			const allOn = {
+				...baseline,
+				allowCloudModelAccess: true,
+				allowCloudModelUnattendedRuns: true,
+				allowCloudModelWebTools: true,
+				allowCloudModelMcpTools: true,
+				allowCloudModelSubAgents: true,
+			};
+			for (const field of ["allowCloudModelAccess", ...cloudSwitches] as const) {
+				expect(isExternalAccessBooleanField(field)).toBe(false);
+				expect(applyExternalAccessPreset(allOn, "offline")[field]).toBe(true);
+				expect(applyExternalAccessPreset(baseline, "recommended")[field]).toBe(false);
+			}
+		});
 	});
 
 	it("rejects an out-of-range knob with a range error and never sends it", () => {

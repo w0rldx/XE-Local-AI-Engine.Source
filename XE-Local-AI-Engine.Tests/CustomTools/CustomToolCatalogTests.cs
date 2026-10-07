@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
@@ -203,6 +204,25 @@ public sealed class CustomToolCatalogTests
         AssertEx.True(solo.ContainsKey("custom__dup"), "the second record resolves when no earlier record claims the name");
     }
 
+    [Test]
+    public async Task GetDescriptorsAsync_MapsOnlyHttpFetchToTheNetworkCategory()
+    {
+        // LocalToolOfferProvider offers a cloud model only Network-category custom tools as its stand-in for the HttpFetch
+        // kind, so this mapping is a security rule: a Command tool tagged Network would hand host execution to a cloud model.
+        var store = BuildStore([
+            Record("custom__fetch", kind: CustomToolKind.HttpFetch),
+            Record("custom__command", kind: CustomToolKind.Command)
+        ]);
+        var catalog = CreateCatalog(store, new ReadCounter(), Settings(customToolsEnabled: true));
+
+        var descriptors = await catalog.GetDescriptorsAsync(CancellationToken.None);
+
+        var byName = descriptors.ToDictionary(descriptor => descriptor.Name, StringComparer.Ordinal);
+        AssertEx.Equal(ToolCategory.Network, byName["custom__fetch"].Category, "HttpFetch is the one kind a cloud model may be offered");
+        AssertEx.Equal(ToolCategory.WriteExecute, byName["custom__command"].Category, "Command is host execution and must never read as Network");
+        AssertEx.Equal(expected: 1, descriptors.Count(descriptor => descriptor.Category == ToolCategory.Network));
+    }
+
     private static CustomToolCatalog CreateCatalog(ICustomToolStore store,
         ReadCounter storeResolutions,
         INodeRuntimeSettings settings)
@@ -218,7 +238,7 @@ public sealed class CustomToolCatalogTests
 
         return new CustomToolCatalog(services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             settings,
-            [new FakeHttpFetchExecutor()],
+            [new FakeHttpFetchExecutor(), new FakeCommandExecutor()],
             Options.Create(new AgentToolPipelineOptions()),
             NullLogger<CustomToolCatalog>.Instance);
     }
@@ -238,14 +258,15 @@ public sealed class CustomToolCatalogTests
     private static CustomToolRecord Record(string name,
         bool enabled = true,
         bool acknowledged = true,
-        string parametersJson = "[]")
+        string parametersJson = "[]",
+        CustomToolKind kind = CustomToolKind.HttpFetch)
     {
         return new CustomToolRecord
         {
             Id = Guid.NewGuid(),
             Name = name,
             Description = $"Description of {name}",
-            Kind = CustomToolKind.HttpFetch,
+            Kind = kind,
             Mode = CustomToolMode.Fixed,
             ParametersJson = parametersJson,
             ConfigJson = "{}",
@@ -257,8 +278,18 @@ public sealed class CustomToolCatalogTests
         };
     }
 
-    // Resolution silently drops a record whose Kind has no registered executor, so the seeded HttpFetch kind needs one.
-    // It is never invoked: these tests resolve executables, they do not run them.
+    // Resolution silently drops a record whose Kind has no registered executor, so each seeded kind needs one.
+    // Neither is ever invoked: these tests resolve executables and descriptors, they do not run them.
+    private sealed class FakeCommandExecutor : ICustomToolExecutor
+    {
+        public CustomToolKind Kind => CustomToolKind.Command;
+
+        public Task<string> ExecuteAsync(CustomToolRecord tool, string jsonArguments, CancellationToken cancellationToken)
+        {
+            return Task.FromResult("never invoked by these tests");
+        }
+    }
+
     private sealed class FakeHttpFetchExecutor : ICustomToolExecutor
     {
         public CustomToolKind Kind => CustomToolKind.HttpFetch;

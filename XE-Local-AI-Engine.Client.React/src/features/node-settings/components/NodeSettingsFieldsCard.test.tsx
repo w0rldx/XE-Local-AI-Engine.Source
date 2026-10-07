@@ -875,6 +875,23 @@ describe("NodeSettingsFieldsCard — knowledge, privacy and usage knobs", () => 
 		expect(onChange).toHaveBeenCalledWith("allowCloudModelAccess", true);
 		cleanup();
 
+		const cloudPermissions = {
+			"node-settings-allow-cloud-model-unattended-runs": "allowCloudModelUnattendedRuns",
+			"node-settings-allow-cloud-model-web-tools": "allowCloudModelWebTools",
+			"node-settings-allow-cloud-model-mcp-tools": "allowCloudModelMcpTools",
+			"node-settings-allow-cloud-model-sub-agents": "allowCloudModelSubAgents",
+		} as const;
+		const privacy = renderCard({ section: "privacy" });
+		const cloudCard = screen.getByTestId("node-settings-cloud-access-card");
+		expect(within(cloudCard).getByText("Cloud models")).toBeTruthy();
+		for (const [testId, field] of Object.entries(cloudPermissions)) {
+			const toggle = within(cloudCard).getByTestId(testId) as HTMLInputElement;
+			expect(toggle.checked).toBe(false);
+			fireEvent.click(toggle);
+			expect(privacy.onChange).toHaveBeenCalledWith(field, true);
+		}
+		cleanup();
+
 		renderCard({ section: "usage" });
 		expect((screen.getByTestId("node-settings-chat-retention-enabled") as HTMLInputElement).checked).toBe(false);
 		expect((screen.getByTestId("node-settings-agent-log-retention-enabled") as HTMLInputElement).checked).toBe(true);

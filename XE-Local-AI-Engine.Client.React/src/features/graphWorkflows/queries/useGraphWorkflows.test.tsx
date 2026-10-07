@@ -215,7 +215,7 @@ describe("graph workflow read hooks", () => {
 		expect(limit).toBe(`${GRAPH_WORKFLOW_RUN_PAGE_SIZE}`);
 	});
 
-	it("keeps Agent chat options broad and LLM Call options node-managed", async () => {
+	it("keeps Agent chat options broad and LLM Call options node-managed or cloud", async () => {
 		server.use(
 			http.get(localApiPath("models"), () =>
 				HttpResponse.json({
@@ -223,7 +223,23 @@ describe("graph workflow read hooks", () => {
 					items: [
 						localModel({ modelName: "qwen3", displayLabel: "Qwen 3", kind: "Chat", provider: "llamacpp" }),
 						localModel({ modelName: "ollama-chat", kind: "Chat", provider: "ollama", isToolCapable: false }),
-						localModel({ modelName: "external-chat", kind: "Chat", provider: "external" }),
+						localModel({
+							modelName: "ext:lan/llama",
+							kind: "Chat",
+							provider: "external",
+							externalConnectionName: "LAN box",
+							declaredLocality: "local",
+							isToolCapable: false,
+						}),
+						localModel({
+							modelName: "ext:hosted/big",
+							kind: "Chat",
+							provider: "external",
+							externalConnectionName: "Hosted",
+							declaredLocality: "cloud",
+						}),
+						localModel({ modelName: "gpt-5.5", kind: "Chat", provider: "CodexOAuth" }),
+						localModel({ modelName: "my-deploy", displayLabel: "My deploy", kind: "Chat", provider: "AzureFoundry" }),
 						localModel({ modelName: "nomic-embed", kind: "Embedding", detectedKind: "Embedding", provider: "llamacpp" }),
 					],
 				}),
@@ -234,10 +250,24 @@ describe("graph workflow read hooks", () => {
 		const agent = renderHook(() => useGraphWorkflowModelOptions(), { wrapper });
 		const llm = renderHook(() => useGraphWorkflowLlmModelOptions(), { wrapper });
 
-		await waitFor(() => expect(agent.result.current.data).toHaveLength(3));
-		expect(agent.result.current.data?.map((option) => option.value)).toEqual(["qwen3", "ollama-chat", "external-chat"]);
-		expect(agent.result.current.data?.find((option) => option.value === "ollama-chat")?.isToolCapable).toBe(false);
-		expect(llm.result.current.data).toEqual([{ value: "qwen3", label: "Qwen 3" }]);
+		await waitFor(() => expect(agent.result.current.data).toHaveLength(6));
+		expect(agent.result.current.data?.map((option) => option.value)).toEqual([
+			"qwen3",
+			"ollama-chat",
+			"ext:lan/llama",
+			"ext:hosted/big",
+			"gpt-5.5",
+			"my-deploy",
+		]);
+		// A declared-No external model reaches the Agent form, so its tools warning can fire.
+		expect(agent.result.current.data?.find((option) => option.value === "ext:lan/llama")?.isToolCapable).toBe(false);
+		await waitFor(() => expect(llm.result.current.data).toHaveLength(4));
+		expect(llm.result.current.data?.map(({ value, cloudProvider }) => ({ value, cloudProvider }))).toEqual([
+			{ value: "qwen3", cloudProvider: undefined },
+			{ value: "ext:hosted/big", cloudProvider: "Hosted" },
+			{ value: "gpt-5.5", cloudProvider: "Codex" },
+			{ value: "my-deploy", cloudProvider: "Azure Foundry" },
+		]);
 	});
 
 	it("projects the agent definitions to picker options, deriving whether each needs tool calling", async () => {

@@ -5,7 +5,11 @@ import { useTranslation } from "react-i18next";
 import { samplingFieldGroups } from "@/core/runtime/ChatSamplingOptions";
 import { GraphWorkflowInputBindingsField } from "@/features/graphWorkflows/components/config/GraphWorkflowInputBindingsField";
 import { GraphWorkflowJsonField } from "@/features/graphWorkflows/components/config/GraphWorkflowJsonField";
-import { withCurrentValue } from "@/features/graphWorkflows/components/config/GraphWorkflowSelectOptions";
+import {
+	type GraphWorkflowModelSelectOption,
+	withCloudModelLabels,
+	withCurrentValue,
+} from "@/features/graphWorkflows/components/config/GraphWorkflowSelectOptions";
 import type { GraphWorkflowCanvasNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 
 type LlmCallNodeData = Extract<GraphWorkflowCanvasNodeData, { kind: "LlmCall" }>;
@@ -23,7 +27,7 @@ export function GraphWorkflowLlmCallConfigForm({
 	readonly onChange: (patch: Partial<LlmCallNodeData>) => void;
 	readonly errorFor: (field: string) => string | undefined;
 	readonly onTouch: (field: string) => void;
-	readonly modelOptions: readonly { readonly value: string; readonly label: string }[];
+	readonly modelOptions: readonly GraphWorkflowModelSelectOption[];
 	readonly readOnly?: boolean;
 }) {
 	const { t } = useTranslation();
@@ -38,7 +42,11 @@ export function GraphWorkflowLlmCallConfigForm({
 			<Select
 				label={t("pages.graphWorkflows.config.model", "Model")}
 				placeholder={t("pages.graphWorkflows.config.llmModelPlaceholder", "Node default local model")}
-				data={withCurrentValue(modelOptions, node.model)}
+				description={t(
+					"pages.graphWorkflows.config.cloudModelHelp",
+					"Cloud models run only when “Let cloud models run unattended” is on in Node Settings → Privacy & updates.",
+				)}
+				data={withCurrentValue(withCloudModelLabels(modelOptions, t), node.model)}
 				value={node.model}
 				clearable={true}
 				searchable={true}

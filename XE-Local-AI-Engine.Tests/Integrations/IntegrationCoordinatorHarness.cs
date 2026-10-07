@@ -219,7 +219,8 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
         services.AddSingleton<ITokenEstimator>(new HeuristicTokenEstimator(new TokenEstimatorCalibrationStore()));
         services.AddSingleton<IOptions<ConversationCompactionOptions>>(_ => Options.Create(new ConversationCompactionOptions()));
         // The chat keep window is a node setting the coordinator reads from its run scope, so it rides the accessor.
-        services.AddSingleton(StubNodeRuntimeSettings.Create().WithCompactionRecentMessagesVerbatim(ChatKeepVerbatim).Build());
+        RuntimeSettings = StubNodeRuntimeSettings.Create().WithCompactionRecentMessagesVerbatim(ChatKeepVerbatim).Build();
+        services.AddSingleton(RuntimeSettings);
         // The historical tool-result excerpt cap a caller-managed continuation replays under, read from the SAME options
         // the context budgeter measures with so one result truncated twice reads as one result.
         services.AddSingleton<IOptions<ConversationContextBudgetOptions>>(_ => Options.Create(new ConversationContextBudgetOptions()));
@@ -303,6 +304,9 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     public ILocalDefaultChatModelResolver LocalDefault { get; } = Substitute.For<ILocalDefaultChatModelResolver>();
 
     public INodeSettingsStore NodeSettings { get; } = Substitute.For<INodeSettingsStore>();
+
+    /// <summary>The live node switches the run scope reads; every cloud-model switch is off until a test turns one on.</summary>
+    public INodeRuntimeSettings RuntimeSettings { get; }
 
     public ICapacityService Capacity { get; } = Substitute.For<ICapacityService>();
 

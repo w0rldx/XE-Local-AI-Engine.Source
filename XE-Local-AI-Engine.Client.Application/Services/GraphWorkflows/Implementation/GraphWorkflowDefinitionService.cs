@@ -189,11 +189,12 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         return uninstalled.Count == 0 ? warnings : [.. warnings, .. uninstalled];
     }
 
-    /// <summary>One warning per LLM call or decision model node pinned to a model a run of that node would refuse as not installed.</summary>
+    /// <summary>One warning per LLM call or decision model node pinned to a model a run of that node would refuse.</summary>
     /// <remarks>
-    ///     Asked through <see cref="NodeLocalModelGate" />, the predicate the executor refuses those nodes with, so the
-    ///     two cannot disagree. Agent nodes are left out: their run takes any node-local model, an Ollama one included,
-    ///     and refuses a cloud one in its own words. A lookup that faults says nothing, so validation still never throws.
+    ///     Mirrors the executor's admission: a node-local pin is asked through <see cref="NodeLocalModelGate" />, the
+    ///     predicate the run refuses with; a cloud (or unresolved) pin is refused only while unattended cloud runs are
+    ///     off, so the warning names that switch instead. Agent nodes are left out: their run takes any node-local model
+    ///     and refuses a cloud one in its own words. A lookup that faults says nothing, so validation never throws.
     /// </remarks>
     private async Task<IReadOnlyList<GraphWorkflowValidationError>> UninstalledModelWarningsAsync(GraphWorkflowGraph graph, CancellationToken cancellationToken)
     {
@@ -206,15 +207,43 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
                 GraphWorkflowDecisionModelConfig { Model: { } decisionModel } => decisionModel,
                 _ => null
             };
-            if (!string.IsNullOrWhiteSpace(model) && await IsNotInstalledAsync(model, cancellationToken))
+            if (string.IsNullOrWhiteSpace(model))
+            {
+                continue;
+            }
+
+            if (await IsLocalAsync(model, cancellationToken))
+            {
+                if (await IsNotInstalledAsync(model, cancellationToken))
+                {
+                    warnings.Add(new GraphWorkflowValidationError(node.NodeKey,
+                        $"Node '{node.NodeKey}' pins model '{model}', which is not an installed node-managed GGUF chat model, so a run will refuse this node. "
+                        + "Install the model or pin another one."));
+                }
+            }
+            else if (!await _runtimeSettings.GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
             {
                 warnings.Add(new GraphWorkflowValidationError(node.NodeKey,
-                    $"Node '{node.NodeKey}' pins model '{model}', which is not an installed node-managed GGUF chat model, so a run will refuse this node. "
-                    + "Install the model or pin another one."));
+                    $"Node '{node.NodeKey}' pins model '{model}', which is not a node-local model, so a run will refuse this node while "
+                    + "'Let cloud models run unattended' is off in Node Settings → Privacy & updates."));
             }
         }
 
         return warnings;
+    }
+
+    /// <summary>Whether trust resolves <paramref name="model" /> as node-local, answering <see langword="true" /> when the lookup cannot say so the installed check still runs.</summary>
+    private async Task<bool> IsLocalAsync(string model, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _trust.ResolveAsync(model, cancellationToken) == ModelTrustLocality.Local;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Same contract as ServedByLlamaServerAsync: a warning is never worth failing a validation over.
+            return true;
+        }
     }
 
     /// <summary>Whether the runtime would refuse <paramref name="model" /> as not installed, answering <see langword="false" /> when the lookup cannot say.</summary>

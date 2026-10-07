@@ -2599,11 +2599,27 @@
 					"label": "Prüfintervall für die Neuindizierung"
 				},
 				"cloudModelAccess": {
-					"title": "Cloud-Modelle und lokale Daten"
+					"title": "Cloud-Modelle"
 				},
 				"allowCloudModelAccess": {
 					"label": "Cloud-Modellen lokale Daten erlauben",
 					"description": "Standardmäßig aus. Eingeschaltet erhalten auch Cloud-Modelle die Wissens- und Arbeitsbereichswerkzeuge, Anhänge und Playbook-Erinnerungen, die diesen Rechner dann verlassen."
+				},
+				"allowCloudModelUnattendedRuns": {
+					"label": "Cloud-Modelle unbeaufsichtigt ausführen lassen",
+					"description": "Standardmäßig aus. Eingeschaltet dürfen geplante Agentenläufe, Modellknoten in Graph-Workflows und Integrations-Trigger ein Cloud-Modell verwenden. Ihre Prompts, vorgelagerten Inhalte und Trigger-Daten verlassen diesen Rechner dann."
+				},
+				"allowCloudModelWebTools": {
+					"label": "Cloud-Modellen Webwerkzeuge erlauben",
+					"description": "Standardmäßig aus. Eingeschaltet erhalten Cloud-Modelle web_search, web_fetch und HTTP-Werkzeuge, solange der Webzugriff aktiviert ist. Anfragen folgen weiterhin den üblichen Regeln für Web-Zustimmung und Tool-Freigabe."
+				},
+				"allowCloudModelMcpTools": {
+					"label": "Cloud-Modellen MCP-Werkzeuge erlauben",
+					"description": "Standardmäßig aus. Eingeschaltet erhalten Cloud-Modelle die Werkzeuge verbundener MCP-Server, deren Ergebnisse diesen Rechner dann verlassen."
+				},
+				"allowCloudModelSubAgents": {
+					"label": "Cloud-Modellen Sub-Agenten erlauben",
+					"description": "Standardmäßig aus. Eingeschaltet darf ein Cloud-Modell Sub-Agenten starten. Jeder Sub-Agent behält die Berechtigungen seines eigenen Modells, und die Obergrenze für Cloud-Sub-Agenten gilt weiterhin."
 				},
 				"retention": {
 					"title": "Aufbewahrung und Speicher"
@@ -3016,7 +3032,7 @@
 				"localBadge": "Als lokal deklariert",
 				"cloudBadge": "Als Cloud deklariert",
 				"localHint": "Modelle dieser Verbindung werden wie ein lokales Modell behandelt: Workspace- und Datei-Tools, die Wissensdatenbank, eigene Tools und Codeausführung stehen ihnen offen.",
-				"cloudHint": "Es gilt die Cloud-Absicherung: Workspace- und Wissensdatenbank-Zugriff nur mit der Cloud-Freigabe, keine Codeausführung und keine eigenen Tools. Der Entwicklungsmodus lehnt diese Modelle ganz ab.",
+				"cloudHint": "Es gilt die Cloud-Absicherung: lokale Daten, unbeaufsichtigte Läufe, Web- und HTTP-Werkzeuge, MCP-Werkzeuge und Sub-Agenten folgen je einem Datenschutz-Schalter; keine Codeausführung und keine Befehls-Werkzeuge. Der Entwicklungsmodus lehnt diese Modelle ganz ab.",
 				"nonLocalHostWarning": "Diese Adresse liegt weder auf diesem Rechner noch in diesem privaten Netz, du hast sie aber als lokal deklariert. Der Endpunkt wird wie ein lokales Modell behandelt: Prompts und Inhalte von Workspace-Dateien werden an ihn gesendet."
 			},
 			"editor": {
@@ -6946,7 +6962,9 @@
 				},
 				"publishToChat": "Ergebnis im Chat veröffentlichen",
 				"includeAttachments": "Chat-Anhänge einbeziehen",
-				"includeAttachmentsDisabled": "Aktivieren Sie zuerst „Nimmt Anhänge an“ in den Workflow-Einstellungen."
+				"includeAttachmentsDisabled": "Aktivieren Sie zuerst „Nimmt Anhänge an“ in den Workflow-Einstellungen.",
+				"cloudModelHelp": "Cloud-Modelle laufen nur, wenn „Cloud-Modelle unbeaufsichtigt ausführen lassen“ unter Knoteneinstellungen → Datenschutz & Updates eingeschaltet ist.",
+				"cloudModelLabel": "{{label}} · {{provider}} (Cloud)"
 			},
 			"edge": {
 				"title": "Kante {{key}}",

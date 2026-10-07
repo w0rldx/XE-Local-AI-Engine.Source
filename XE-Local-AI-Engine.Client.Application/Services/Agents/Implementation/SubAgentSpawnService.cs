@@ -48,7 +48,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     private const string ReasonInvalidArguments = "Cannot spawn: provide a non-empty task and exactly one of subAgentKey or modelId.";
     private const string ReasonQueueBusy = "Cannot spawn right now: the target model is busy. Try again shortly.";
     private const string ReasonDepthExceeded = "Cannot spawn: a sub-agent may not spawn further sub-agents.";
-    private const string ReasonParentOutsideTrustBoundary = "Cannot spawn: a model outside this node's trust boundary may not delegate to a sub-agent.";
+    private const string ReasonParentOutsideTrustBoundary = "Cannot spawn: a model outside this node's trust boundary may not delegate to a sub-agent unless the operator allows it in Node Settings → Privacy & updates.";
 
     private readonly IAgentDefinitionResolver _agentDefinitionResolver;
     private readonly ICapacityService _capacityService;
@@ -133,8 +133,8 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         }
 
         // Trust guard at the SERVICE seam (an AllowedToolNames list, a pinned definition or a direct caller bypass the offer gate): delegation is egress, so a parent
-        // that may not read node-local data may not obtain it via a child. A null root model is not a remote parent (inbound MCP resolves downstream) and reads Local.
-        if (await _modelTrustResolver.ResolveAsync(context?.RootModelId, ct) != ModelTrustLocality.Local)
+        // that may not read node-local data may not obtain it via a child, unless the operator allows cloud models to delegate. A null root model reads Local.
+        if (await _modelTrustResolver.ResolveAsync(context?.RootModelId, ct) != ModelTrustLocality.Local && !await _runtimeSettings.GetAllowCloudModelSubAgentsAsync(ct))
         {
             return ReasonParentOutsideTrustBoundary;
         }

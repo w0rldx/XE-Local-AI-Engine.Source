@@ -62,6 +62,7 @@ function renderPanel(node: GraphWorkflowCanvasNodeData, handlers: Handlers = {})
 				modelOptions={[
 					{ value: "qwen3-8b", label: "Qwen3 8B", isToolCapable: true },
 					{ value: "tiny", label: "Tiny", isToolCapable: false },
+					{ value: "gpt-5.5", label: "gpt-5.5", isToolCapable: true, cloudProvider: "Codex" },
 				]}
 				graphSettings={handlers.graphSettings}
 			/>
@@ -127,6 +128,17 @@ describe("GraphWorkflowNodeConfigPanel", () => {
 		if (warns) {
 			expect(warning?.textContent).toBe(en.pages.graphWorkflows.config.toolsUnavailableWarning);
 		}
+	});
+
+	it.each([
+		["Agent", "gw-node-config-model"],
+		["LlmCall", "gw-node-config-llm-model"],
+		["DecisionModel", "gw-node-config-decision-model"],
+	] as const)("marks a cloud model and says when it may run on the %s picker", (kind, testId) => {
+		renderPanel({ ...defaultNodeData(kind, "node-1"), model: "gpt-5.5" } as GraphWorkflowCanvasNodeData);
+
+		expect((screen.getByTestId(testId) as HTMLInputElement).value).toBe("gpt-5.5 · Codex (cloud)");
+		expect(screen.getByText(en.pages.graphWorkflows.config.cloudModelHelp)).toBeTruthy();
 	});
 
 	it("reports invalid JSON in responseJsonSchema as a field message instead of throwing", () => {

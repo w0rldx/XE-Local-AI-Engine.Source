@@ -292,22 +292,27 @@ public sealed class LocalToolOfferProviderTests
     public void GetOfferedToolsForProfile_WhenModelIsCloudHosted_WithholdsRunPythonAndSpawn()
     {
         // The run_python gate is NOT the knowledge/coder tools' content-leak rationale: what is withheld is a REMOTE
-        // model's ability to direct code execution on the operator's machine. It is therefore unconditional, not behind
-        // the AllowCloudModelAccess opt-in.
+        // model's ability to direct code execution on the operator's machine. It is therefore unconditional, behind no
+        // cloud switch, which the all-switches-on provider proves.
         //
-        // spawn_subagent is withheld by the same gate, which this test previously asserted the OPPOSITE of. Delegation
-        // reaches every tool the direct gates withhold: the child resolves its own model and its own tool set, so a
-        // cloud parent could bind a child to a node-local model, have it read the workspace or the knowledge base, and
-        // receive the result into its own transcript. An ungated spawn offer is a bypass of all three direct gates
-        // rather than a capability of its own.
+        // spawn_subagent is withheld while AllowCloudModelSubAgents is off. Delegation reaches every tool the direct gates
+        // withhold: the child resolves its own model and tool set, so a cloud parent could bind a child to a node-local
+        // model and receive what it read. That is a bypass of the direct gates, so it needs its own opt-in.
         var provider = CreateProvider("qwen3:8b");
+        var allSwitchesOn = CreateSwitchProvider(static settings => settings.WithAllowCloudModelAccess(true)
+                                                                           .WithAllowCloudModelUnattendedRuns(true)
+                                                                           .WithAllowCloudModelWebTools(true)
+                                                                           .WithAllowCloudModelMcpTools(true)
+                                                                           .WithAllowCloudModelSubAgents(true));
 
         var pool = provider.GetOfferedToolsForProfile("qwen3:8b", isCloudModel: true);
 
+        AssertEx.False(allSwitchesOn.GetOfferedToolsForProfile("qwen3:8b", isCloudModel: true).Any(tool => tool.Name == ComputeToolDefinition.ToolName),
+            "run_python must never be offered to a cloud-hosted model, whatever the cloud switches say");
         AssertEx.False(pool.Any(tool => tool.Name == ComputeToolDefinition.ToolName),
             "run_python must never be offered to a cloud-hosted model");
         AssertEx.False(pool.Any(tool => tool.Name == "spawn_subagent"),
-            "spawn_subagent must never be offered to a cloud-hosted model");
+            "spawn_subagent must not be offered to a cloud-hosted model while the sub-agent switch is off");
     }
 
     [Test]
@@ -322,7 +327,7 @@ public sealed class LocalToolOfferProviderTests
         AssertEx.False(pool.Any(tool => tool.Name == ComputeToolDefinition.ToolName),
             "run_python must never be offered to a cloud-hosted model on the async pool either");
         AssertEx.False(pool.Any(tool => tool.Name == "spawn_subagent"),
-            "spawn_subagent must never be offered to a cloud-hosted model on the async pool either");
+            "spawn_subagent must not be offered to a cloud-hosted model on the async pool while the sub-agent switch is off");
     }
 
     [Test]
@@ -695,7 +700,7 @@ public sealed class LocalToolOfferProviderTests
         var offered = await provider.GetOfferedToolsAsync("qwen3:8b", isCloudModel: true);
 
         AssertEx.False(offered.Any(tool => tool.Name == "custom__weather"),
-            "custom tools are node-local-only and must never be offered to a cloud model");
+            "custom tools are withheld from a cloud model while the cloud web-tools switch is off");
     }
 
     [Test]
@@ -754,7 +759,7 @@ public sealed class LocalToolOfferProviderTests
         var provider = CreateProviderWithWebAccess(webAccessEnabled: true);
 
         AssertEx.False((await provider.GetOfferedToolsAsync("qwen3:8b", isCloudModel: true)).Any(IsWebTool),
-            "a cloud model never gets the web tools, like custom tools");
+            "a cloud model gets no web tools while the cloud web-tools switch is off");
         AssertEx.False((await provider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: true)).Any(IsWebTool));
     }
 
@@ -778,6 +783,133 @@ public sealed class LocalToolOfferProviderTests
         var entry = AssertEx.NotNull(provider.GetKnownTools().SingleOrDefault(tool => tool.Name == toolName));
         AssertEx.Equal("builtin", entry.Source);
         AssertEx.Equal(ToolCategory.Network, entry.Category);
+    }
+
+    private const string McpForecastToolName = "mcp__weather__get_forecast";
+    private const string CustomCommandToolName = "custom__deploy";
+    private const string UnresolvedExternalModel = "ext:gone-box/qwen3";
+
+    /// <summary>The five tool classes the cloud-model switches govern, as one comparable presence string.</summary>
+    private static string GatedClasses(IReadOnlyList<AllowedToolDto> offer) =>
+        string.Join(',',
+            offer.Any(static tool => tool.Name == McpForecastToolName) ? "mcp" : "-",
+            offer.Any(IsWebTool) ? "web" : "-",
+            offer.Any(static tool => tool.Name == "custom__weather") ? "fetch" : "-",
+            offer.Any(static tool => tool.Name == CustomCommandToolName) ? "command" : "-",
+            offer.Any(static tool => tool.Name == SpawnSubAgentToolDefinition.ToolName) ? "spawn" : "-");
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task GetOfferedToolsForProfileAsync_WhenTheModelLeavesTheNodeAndEverySwitchIsOff_WithholdsMcpWebCustomAndSpawn(bool unresolved)
+    {
+        // Unresolved earns no local privileges, so the external id the trust cache cannot place behaves exactly like a cloud flag.
+        var provider = CreateSwitchProvider(static settings => settings);
+        var model = unresolved ? UnresolvedExternalModel : "qwen3:8b";
+
+        var pool = await provider.GetOfferedToolsForProfileAsync(model, isCloudModel: !unresolved);
+
+        AssertEx.Equal("-,-,-,-,-", GatedClasses(pool));
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public void GetOfferedTools_WhenTheModelLeavesTheNode_WithholdsMcpToolsByDefault(bool unresolved)
+    {
+        // The gap this closes: the synchronous whole offer used to append every MCP tool whatever the model's locality.
+        var provider = CreateSwitchProvider(static settings => settings);
+        var model = unresolved ? UnresolvedExternalModel : "qwen3:8b";
+
+        AssertEx.False(provider.GetOfferedTools(model, isCloudModel: !unresolved).Any(static tool => tool.Name == McpForecastToolName),
+            "the whole offer must not hand MCP tools to a model outside the trust boundary by default");
+        AssertEx.Contains(provider.GetOfferedTools("qwen3:8b"), static tool => tool.Name == McpForecastToolName);
+    }
+
+    [Test]
+    public async Task GetOfferedToolsForProfileAsync_WhenTheModelIsLocal_OffersEveryClassWhateverTheCloudSwitchesSay()
+    {
+        var provider = CreateSwitchProvider(static settings => settings);
+
+        var pool = await provider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: false);
+
+        AssertEx.Equal("mcp,web,fetch,command,spawn", GatedClasses(pool));
+    }
+
+    [Test]
+    [Arguments("mcp", false, "mcp,-,-,-,-")]
+    [Arguments("mcp", true, "mcp,-,-,-,-")]
+    [Arguments("web", false, "-,web,fetch,-,-")]
+    [Arguments("web", true, "-,web,fetch,-,-")]
+    [Arguments("spawn", false, "-,-,-,-,spawn")]
+    [Arguments("spawn", true, "-,-,-,-,spawn")]
+    public async Task GetOfferedToolsForProfileAsync_WhenOneCloudSwitchIsOn_OffersExactlyItsClassAndNeverACommandTool(string switchName, bool unresolved, string expected)
+    {
+        var provider = CreateSwitchProvider(settings => switchName switch
+        {
+            "mcp" => settings.WithAllowCloudModelMcpTools(true),
+            "web" => settings.WithAllowCloudModelWebTools(true),
+            _ => settings.WithAllowCloudModelSubAgents(true)
+        });
+        var model = unresolved ? UnresolvedExternalModel : "qwen3:8b";
+
+        var pool = await provider.GetOfferedToolsForProfileAsync(model, isCloudModel: !unresolved);
+
+        AssertEx.Equal(expected, GatedClasses(pool));
+    }
+
+    [Test]
+    public async Task GetOfferedToolsForProfileAsync_WhenEveryCloudSwitchIsOn_StillWithholdsCommandToolsRunPythonAndAgentHome()
+    {
+        // The execution invariants sit behind no switch: a remote model never directs execution on the operator's machine.
+        var provider = CreateSwitchProvider(static settings => settings.WithAllowCloudModelAccess(true)
+                                                                      .WithAllowCloudModelUnattendedRuns(true)
+                                                                      .WithAllowCloudModelWebTools(true)
+                                                                      .WithAllowCloudModelMcpTools(true)
+                                                                      .WithAllowCloudModelSubAgents(true));
+
+        var pool = await provider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: true);
+
+        AssertEx.Equal("mcp,web,fetch,-,spawn", GatedClasses(pool));
+        AssertEx.False(pool.Any(static tool => tool.Name == ComputeToolDefinition.ToolName), "run_python stays withheld with every switch on");
+        AssertEx.False(pool.Any(static tool => tool.Name == AgentHomeToolDefinition.ToolName), "run_in_agent_home stays withheld with every switch on");
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenWebAccessIsOff_TheCloudWebSwitchOpensNothing_NotEvenHttpFetch()
+    {
+        // The cloud switch narrows; it never widens past the node's own WebAccessEnabled switch, and outside the trust
+        // boundary an HttpFetch custom tool is outbound reach too, so it stays withheld with it.
+        var provider = CreateSwitchProvider(static settings => settings.WithWebAccessEnabled(false).WithAllowCloudModelWebTools(true));
+
+        var offer = await provider.GetOfferedToolsAsync("qwen3:8b", isCloudModel: true);
+
+        AssertEx.Equal("-,-,-,-,-", GatedClasses(offer));
+    }
+
+    private static LocalToolOfferProvider CreateSwitchProvider(Func<StubNodeRuntimeSettings, StubNodeRuntimeSettings> configure)
+    {
+        var mcpRegistry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
+        mcpRegistry.ReplaceSnapshot([BuildMcpTool(McpForecastToolName)]);
+        var commandDescriptor = new LocalChatToolDescriptor
+        {
+            Name = CustomCommandToolName,
+            Description = "Runs a deploy command.",
+            ParameterSchema = "{\"type\":\"object\"}",
+            RequiresApproval = true,
+            Category = ToolCategory.WriteExecute
+        };
+        var scopeFactory = new ServiceCollection()
+                           .AddSingleton<ICustomToolCatalog>(new StubCustomToolCatalog([CustomWeatherDescriptor, commandDescriptor]))
+                           .BuildServiceProvider()
+                           .GetRequiredService<IServiceScopeFactory>();
+        var settings = configure(StubNodeRuntimeSettings.Create()
+                                                        .WithToolCapableModels("qwen3:8b", UnresolvedExternalModel)
+                                                        .WithWebAccessEnabled(true)
+                                                        .WithCustomToolsEnabled(true));
+
+        // An empty registration set: "qwen3:8b" classifies Local, and the ext: id resolves to no connection, which is Unresolved.
+        return new LocalToolOfferProvider(new FakeAgentToolRegistry([]), mcpRegistry, settings.Build(), scopeFactory, new FakeModelTrustResolver());
     }
 
     private static bool IsWebTool(AllowedToolDto tool) =>

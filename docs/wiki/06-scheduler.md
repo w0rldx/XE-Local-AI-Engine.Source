@@ -100,8 +100,11 @@ from the same node setting: `RunSavedAgentHandler.ExecuteAsync` passes
 
 Security and runtime invariants:
 
-- **Node-local only.** The handler resolves the effective model after the agent's model pin and rejects
-  a cloud model before capacity admission or invocation.
+- **Node-local unless the Privacy switch allows cloud.** The handler resolves the effective model after the agent's
+  model pin and rejects a cloud (or unresolved) model before capacity admission or invocation, naming the switch,
+  unless **Let cloud models run unattended** (`AllowCloudModelUnattendedRuns`, Node Settings → Privacy) is on. A
+  cloud run admitted that way builds its offer with the real cloud flag, so the other cloud switches still decide
+  which tools it gets ([Security & Privacy](12-security-and-privacy.md)).
 - **Tool-capable when the agent needs tools.** An agent that lists tools, or orchestrates, on a model that cannot call
   them is refused right after the locality gate with one operator-safe sentence naming the agent, the model and the
   remedy, instead of "succeeding" having called nothing ([Agent Mode](04-agent-mode.md), `AgentModelRequirements`).
@@ -335,7 +338,7 @@ It connects to `buildLocalApiUrl("scheduler/hub")` with an `accessTokenFactory` 
 
 - Adding a template = register one more `IScheduledJobHandler` in `AddNodeScheduler`; **`TemplateId` must be globally unique** or the registry throws at startup.
 - Never widen the UI-visible error surface except via `ScheduledJobExecutionException` with proven-safe text.
-- Keep `run-agent` node-local, strip approval-required tools, and keep prompts/output/tool payloads out of scheduler history.
+- Keep `run-agent` node-local unless `AllowCloudModelUnattendedRuns` is on, strip approval-required tools, and keep prompts/output/tool payloads out of scheduler history.
 - Keep dispatch jobs thin — logic belongs in `ISchedulerDispatchExecutor`.
 - Reference `node-sqlite` by *name* in Quartz config; never inline the connection string.
 - Run `ReconcileDurableJobsAsync` once at startup after any change to a dispatch job's type/namespace.

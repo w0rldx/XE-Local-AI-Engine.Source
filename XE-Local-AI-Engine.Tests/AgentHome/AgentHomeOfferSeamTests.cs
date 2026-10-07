@@ -194,11 +194,18 @@ public sealed class AgentHomeOfferSeamTests
 
     private static LocalToolOfferProvider CreateProvider(FakeModelTrustResolver trustResolver, params string[] toolCapableModels)
     {
-        // The REAL registry: its constructor hardcodes GetCurrentTime + Calculate and knows nothing about AgentHome.
-        // run_in_agent_home reaches the offer ONLY through the merge inside LocalToolOfferProvider.
+        // The REAL registry, which knows nothing about AgentHome: run_in_agent_home reaches the offer ONLY through the provider's merge.
+        // Every cloud-model switch is ON, so each withholding test above proves the gate sits behind none of them.
         return new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
-            StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels).Build(),
+            StubNodeRuntimeSettings.Create()
+                                   .WithToolCapableModels(toolCapableModels)
+                                   .WithAllowCloudModelAccess(true)
+                                   .WithAllowCloudModelUnattendedRuns(true)
+                                   .WithAllowCloudModelWebTools(true)
+                                   .WithAllowCloudModelMcpTools(true)
+                                   .WithAllowCloudModelSubAgents(true)
+                                   .Build(),
             NullCustomToolScopeFactory.Instance,
             trustResolver);
     }

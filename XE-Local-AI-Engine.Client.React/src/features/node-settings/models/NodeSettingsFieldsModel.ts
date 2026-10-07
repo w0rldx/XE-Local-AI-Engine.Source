@@ -353,6 +353,10 @@ export interface NodeSettingsFieldsForm {
 	knowledgeScheduledReindexIntervalMinutes: number | string;
 	knowledgeAgentToolsEnabled: boolean;
 	allowCloudModelAccess: boolean;
+	allowCloudModelUnattendedRuns: boolean;
+	allowCloudModelWebTools: boolean;
+	allowCloudModelMcpTools: boolean;
+	allowCloudModelSubAgents: boolean;
 	playbookAnalysisModelName: string;
 	playbookEvalModelName: string;
 	memoryExtractionModelName: string;
@@ -640,6 +644,10 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	knowledgeScheduledReindexIntervalMinutes: 60,
 	knowledgeAgentToolsEnabled: true,
 	allowCloudModelAccess: false,
+	allowCloudModelUnattendedRuns: false,
+	allowCloudModelWebTools: false,
+	allowCloudModelMcpTools: false,
+	allowCloudModelSubAgents: false,
 	playbookAnalysisModelName: "",
 	playbookEvalModelName: "",
 	memoryExtractionModelName: "",
@@ -790,6 +798,11 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 			response.knowledgeScheduledReindexEnabled ?? nodeSettingsFieldDefaults.knowledgeScheduledReindexEnabled,
 		knowledgeAgentToolsEnabled: response.knowledgeAgentToolsEnabled ?? nodeSettingsFieldDefaults.knowledgeAgentToolsEnabled,
 		allowCloudModelAccess: response.allowCloudModelAccess ?? nodeSettingsFieldDefaults.allowCloudModelAccess,
+		allowCloudModelUnattendedRuns:
+			response.allowCloudModelUnattendedRuns ?? nodeSettingsFieldDefaults.allowCloudModelUnattendedRuns,
+		allowCloudModelWebTools: response.allowCloudModelWebTools ?? nodeSettingsFieldDefaults.allowCloudModelWebTools,
+		allowCloudModelMcpTools: response.allowCloudModelMcpTools ?? nodeSettingsFieldDefaults.allowCloudModelMcpTools,
+		allowCloudModelSubAgents: response.allowCloudModelSubAgents ?? nodeSettingsFieldDefaults.allowCloudModelSubAgents,
 		playbookAnalysisModelName: response.playbookAnalysisModelName ?? "",
 		playbookEvalModelName: response.playbookEvalModelName ?? "",
 		memoryExtractionModelName: response.memoryExtractionModelName ?? "",
@@ -1074,7 +1087,7 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 // providerBudget*, contextBudgetRecentTurnKeepCount, compaction*, maxInlinedAttachmentChars, knowledgeChatTopK,
 // providerRetryEnabled / providerMaxRetries and spawn* — each read per turn, job, send or root run; and the knowledge,
 // privacy and usage knobs — knowledgeAdaptiveRerankingEnabled, knowledgeRetrievalLatencyBudgetMs, knowledgeAgentToolsEnabled,
-// allowCloudModelAccess, the three background models, the two retention switches, every retention window,
+// allowCloudModelAccess and the four other cloud-model permissions, the three background models, the two retention switches, every retention window,
 // nodeDbBackupRetainCount and benchmarkKldCacheMaxBytes — each read per search, offer, turn, run, sweep or backup; and the
 // other seven feature switches — FeatureSwitchMiddleware and every per-service check read them per request. Three carry
 // help text instead of a badge: externalAppsEnabled (its container-bridge listener is bound at host build) and
@@ -1403,13 +1416,17 @@ export function buildNodeSettingsRequest(
 		body.providerRetryEnabled = form.providerRetryEnabled;
 	}
 
-	// Knowledge, privacy, usage and image switches: explicit false is meaningful. The cloud opt-in is deliberately NOT one of the
+	// Knowledge, privacy, usage and image switches: explicit false is meaningful. The five cloud opt-ins are deliberately NOT
 	// external-access preset switches, so a hand edit here never clears a pending preset.
 	const roundTwoSwitches = [
 		"knowledgeAdaptiveRerankingEnabled",
 		"knowledgeScheduledReindexEnabled",
 		"knowledgeAgentToolsEnabled",
 		"allowCloudModelAccess",
+		"allowCloudModelUnattendedRuns",
+		"allowCloudModelWebTools",
+		"allowCloudModelMcpTools",
+		"allowCloudModelSubAgents",
 		"chatRetentionEnabled",
 		"agentExecutionLogRetentionEnabled",
 		"imageTextEncoderOnGpu",

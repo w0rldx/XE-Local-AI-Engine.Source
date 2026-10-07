@@ -363,14 +363,15 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             }
 
             // 3. LOCALITY GATE. Classified on the EFFECTIVE model and refused before capacity and before any invocation: a graph workflow run is
-            //    unattended by construction, so node-local prompt and upstream content is never handed to a cloud model.
+            //    unattended by construction, so its content reaches a cloud model only while the operator lets cloud models run unattended.
             var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, cancellationToken);
-            if (capabilities.IsCloud)
+            if (capabilities.IsCloud && !await services.GetRequiredService<INodeRuntimeSettings>().GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
             {
-                _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': its effective model is cloud-hosted and unattended runs are node-local only.",
+                _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
                     runId,
                     node.NodeKey);
-                return Invalid("Graph workflow agent nodes are restricted to node-local models. This node's effective model is a cloud model, so it will not run unattended.");
+                return Invalid(
+                    "This graph workflow agent node's effective model is a cloud model, and a cloud model runs unattended only while 'Let cloud models run unattended' is on in Node Settings → Privacy & updates.");
             }
 
             // The capability gate, for a bound agent only: the default persona lists no tools and requires none.
@@ -383,7 +384,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 return Invalid(toolRefusal);
             }
 
-            var attachments = await AttachmentsAsync(services, runId, node, agentConfig.IncludeAttachments, inputJson, effectiveModel, capabilities.SupportsVision, cancellationToken);
+            var attachments = await AttachmentsAsync(services, runId, node, agentConfig.IncludeAttachments, inputJson, effectiveModel, capabilities, cancellationToken);
             if (attachments.Refusal is { } refusal)
             {
                 return Invalid(refusal);
@@ -411,7 +412,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                                              seedPrompt,
                                              capabilities.SupportsTools,
                                              agentConfig.Model is null,
-                                             activeModelIsCloud: false,
+                                             activeModelIsCloud: capabilities.IsCloud,
                                              cancellationToken);
             if (resolved is null)
             {
@@ -499,23 +500,40 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 return Invalid($"No local chat model is available to run this {callName} node. Install a local chat model or pin one on the node.");
             }
 
-            if (!await NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync(effectiveModel,
-                    services.GetRequiredService<IGgufModelStore>(),
-                    services.GetRequiredService<IModelTrustResolver>(),
-                    services.GetRequiredService<ILocalModelProviderResolver>(),
-                    cancellationToken))
+            // A Local model must be an installed node-managed GGUF chat model; any other locality (Unresolved included) runs on its
+            // own client, and only while the operator lets cloud models run unattended.
+            var locality = await services.GetRequiredService<IModelTrustResolver>().ResolveAsync(effectiveModel, cancellationToken);
+            var isLocal = locality == ModelTrustLocality.Local;
+            if (isLocal)
             {
-                return Invalid($"Graph workflow {callName} nodes require an installed node-managed GGUF chat model; node '{node.NodeKey}' would run '{effectiveModel}', which is not one.");
-            }
+                if (!await NodeLocalModelGate.IsInstalledNodeLocalLlamaModelAsync(effectiveModel,
+                        services.GetRequiredService<IGgufModelStore>(),
+                        services.GetRequiredService<IModelTrustResolver>(),
+                        services.GetRequiredService<ILocalModelProviderResolver>(),
+                        cancellationToken))
+                {
+                    return Invalid($"Graph workflow {callName} nodes on a local model require an installed node-managed GGUF chat model; node '{node.NodeKey}' would run '{effectiveModel}', which is not one.");
+                }
 
-            var classification = await services.GetRequiredService<IModelClassificationStore>().GetByNameAsync(effectiveModel, cancellationToken);
-            if (!LocalGgufModelKindClassifier.IsChatModel(effectiveModel, classification))
+                var classification = await services.GetRequiredService<IModelClassificationStore>().GetByNameAsync(effectiveModel, cancellationToken);
+                if (!LocalGgufModelKindClassifier.IsChatModel(effectiveModel, classification))
+                {
+                    return Invalid($"Graph workflow {callName} nodes require a model classified for chat.");
+                }
+            }
+            else if (!await services.GetRequiredService<INodeRuntimeSettings>().GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
             {
-                return Invalid($"Graph workflow {callName} nodes require a model classified for chat.");
+                _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
+                    runId,
+                    node.NodeKey);
+                return Invalid(
+                    locality == ModelTrustLocality.Cloud
+                        ? $"Node '{node.NodeKey}' would run this {callName} on the cloud model '{effectiveModel}', and a cloud model runs unattended only while 'Let cloud models run unattended' is on in Node Settings → Privacy & updates."
+                        : $"Node '{node.NodeKey}' would run this {callName} on '{effectiveModel}', which is not a node-local model; a model outside the trust boundary runs unattended only while 'Let cloud models run unattended' is on in Node Settings → Privacy & updates.");
             }
 
             var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, cancellationToken);
-            var attachments = await AttachmentsAsync(services, runId, node, config.IncludeAttachments, inputJson, effectiveModel, capabilities.SupportsVision, cancellationToken);
+            var attachments = await AttachmentsAsync(services, runId, node, config.IncludeAttachments, inputJson, effectiveModel, capabilities, cancellationToken);
             if (attachments.Refusal is { } refusal)
             {
                 return Invalid(refusal);
@@ -559,7 +577,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 ResponseJsonSchema = config.ResponseJsonSchema,
                 ReasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable,
                 AllowAutoModelSwap = false,
-                RequireNodeManagedLlama = true
+                // Only a Local model is pinned to the node-managed llama path; a cloud one routes to its own client.
+                RequireNodeManagedLlama = isLocal
             });
             var terminal = await RunInvocationAsync(services.GetRequiredService<IWorkerEventDispatcher>(), _invocationRunner, package, leaseAcquired, cancellationToken);
             return Map(terminal, config.ResponseJsonSchema) with
@@ -714,7 +733,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         {
             var approvalPolicy = services.GetRequiredService<IToolApprovalPolicy>();
             var offer = await services.GetRequiredService<ILocalToolOfferProvider>()
-                                      .GetOfferedToolsAsync(effectiveModel, isCloudModel: false, cancellationToken);
+                                      .GetOfferedToolsAsync(effectiveModel, capabilities.IsCloud, cancellationToken);
             offered.AddRange(offer.Select(tool => tool with
             {
                 RequiresApproval = approvalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
@@ -1029,7 +1048,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         bool includeAttachments,
         string inputJson,
         string effectiveModel,
-        bool supportsVision,
+        ModelCapabilitySnapshot capabilities,
         CancellationToken cancellationToken)
     {
         if (!includeAttachments)
@@ -1041,6 +1060,19 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         if (references.Count == 0)
         {
             return TurnAttachments.None;
+        }
+
+        // Uploaded files are node-local data, which follow the chat's rule: a cloud model reads them only by the operator's opt-in.
+        if (capabilities.IsCloud && !await services.GetRequiredService<INodeRuntimeSettings>().GetAllowCloudModelAccessAsync(cancellationToken))
+        {
+            _logger.LogInformation("Graph workflow run {RunId} node '{NodeKey}' skips {SkippedCount} attachment(s): its model is cloud-hosted and AllowCloudModelAccess is off.",
+                runId,
+                node.NodeKey,
+                references.Count);
+            return new TurnAttachments
+            {
+                Skipped = [.. references.Select(static reference => reference.Name)]
+            };
         }
 
         // Every reference that contributes nothing lands in ONE list, whatever the reason: gone from the conversation, an image
@@ -1064,7 +1096,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                     continue;
                 }
 
-                if (!supportsVision)
+                if (!capabilities.SupportsVision)
                 {
                     return new TurnAttachments
                     {

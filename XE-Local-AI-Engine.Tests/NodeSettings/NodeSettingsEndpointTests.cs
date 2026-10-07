@@ -1256,6 +1256,56 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public async Task CloudPermissionSwitches_UnsavedReadOff_AndSavingTruePersistsAndReadsBack()
+    {
+        var saved = new StoredNodeSettings();
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => saved);
+        nodeSettingsStore.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             saved = call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(saved);
+                             return Task.FromResult(saved);
+                         });
+
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var firstGet = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var firstGetResponse = await client.SendAsync(firstGet);
+        var unsaved = await ReadJsonAsync<NodeSettingsResponse>(firstGetResponse);
+        AssertEx.False(unsaved.AllowCloudModelUnattendedRuns, "An unsaved cloud permission must report off.");
+        AssertEx.False(unsaved.AllowCloudModelWebTools, "An unsaved cloud permission must report off.");
+        AssertEx.False(unsaved.AllowCloudModelMcpTools, "An unsaved cloud permission must report off.");
+        AssertEx.False(unsaved.AllowCloudModelSubAgents, "An unsaved cloud permission must report off.");
+
+        using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            AllowCloudModelUnattendedRuns = true,
+            AllowCloudModelWebTools = true,
+            AllowCloudModelMcpTools = true,
+            AllowCloudModelSubAgents = true
+        });
+        using var putResponse = await client.SendAsync(putRequest);
+        AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+        AssertEx.Equal(expected: true, saved.AllowCloudModelUnattendedRuns);
+        AssertEx.Equal(expected: true, saved.AllowCloudModelWebTools);
+        AssertEx.Equal(expected: true, saved.AllowCloudModelMcpTools);
+        AssertEx.Equal(expected: true, saved.AllowCloudModelSubAgents);
+        AssertEx.Null(saved.AllowCloudModelAccess, "A save that omits the read-local-data switch must leave it unset.");
+
+        using var secondGet = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var secondGetResponse = await client.SendAsync(secondGet);
+        var reread = await ReadJsonAsync<NodeSettingsResponse>(secondGetResponse);
+        AssertEx.True(reread.AllowCloudModelUnattendedRuns);
+        AssertEx.True(reread.AllowCloudModelWebTools);
+        AssertEx.True(reread.AllowCloudModelMcpTools);
+        AssertEx.True(reread.AllowCloudModelSubAgents);
+        AssertEx.False(reread.AllowCloudModelAccess);
+    }
+
+    [Test]
     public async Task UnsavedSwitch_WithASeededTrue_ReadsBackTrue_AndSavingFalsePersistsFalse()
     {
         var saved = new StoredNodeSettings();

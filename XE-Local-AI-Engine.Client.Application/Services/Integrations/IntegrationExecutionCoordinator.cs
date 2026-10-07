@@ -461,8 +461,8 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             return;
         }
 
-        // 3. The effective model, and the locality gate. A cloud model is rejected UP FRONT, before the lease and before the capacity decision, so
-        //    unattended external work never egresses. The capacity decision itself is step 7b2, after the lease.
+        // 3. The effective model, and the locality gate. A cloud model is rejected UP FRONT, before the lease and before the capacity decision, unless
+        //    the operator lets cloud models run unattended. The capacity decision itself is step 7b2, after the lease.
         var nodeSettings = await services.GetRequiredService<INodeSettingsStore>().LoadAsync(runToken);
         var localDefaultModel = await services.GetRequiredService<ILocalDefaultChatModelResolver>()
                                               .ResolveAsync(nodeSettings.DefaultModelName, runToken);
@@ -476,9 +476,12 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
 
         var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, runToken);
         var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
-        if (effectiveModelIsCloud)
+        var runtimeSettings = services.GetRequiredService<INodeRuntimeSettings>();
+        if (effectiveModelIsCloud && !await runtimeSettings.GetAllowCloudModelUnattendedRunsAsync(runToken))
         {
-            await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.CloudModelRejected, "The trigger's effective model is cloud-hosted, and unattended runs are node-local only.");
+            await TerminalizeBeforeRunAsync(context,
+                IntegrationFailureCategories.CloudModelRejected,
+                "The trigger's effective model is cloud-hosted, and unattended runs are node-local only. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates to allow it.");
             return;
         }
 
@@ -495,14 +498,22 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         // 3b. The compaction bound, BEFORE the conversation read so the read sees the folded transcript; every no-op outcome is non-fatal by design. The keep
         //     window and the excerpt cap come from the CHAT options, and the projection counts replayed tool exchanges: ADR 0008 ("Invariants the coordinator enforces").
         var replaysToolHistory = trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged;
+        //     Replayed tool results are node-local data, so a cloud model gets them only while AllowCloudModelAccess is on; the trigger payload and the
+        //     prior outputs still go. The same flag drives the projection below and the context build in step 4, so both see the same transcript.
+        var replayToolCalls = replaysToolHistory && (!effectiveModelIsCloud || await runtimeSettings.GetAllowCloudModelAccessAsync(runToken));
+        if (replaysToolHistory && !replayToolCalls)
+        {
+            _logger.LogInformation("Integration execution {ExecutionId} omits the replayed tool history: its model is cloud-hosted and AllowCloudModelAccess is off.", executionId);
+        }
+
         var toolResultExcerptChars = services.GetRequiredService<IOptions<ConversationContextBudgetOptions>>().Value.HistoricalToolResultExcerptChars;
         await services.GetRequiredService<ConversationStepContextBound>()
                       .ApplyAsync(session.ConversationId,
                           _options.ContextBudgetTokens,
                           effectiveModel,
                           runToken,
-                          await services.GetRequiredService<INodeRuntimeSettings>().GetCompactionRecentMessagesVerbatimAsync(runToken),
-                          replaysToolHistory,
+                          await runtimeSettings.GetCompactionRecentMessagesVerbatimAsync(runToken),
+                          replayToolCalls,
                           toolResultExcerptChars);
 
         // 3c. The turn read. A caller-managed continuation takes the FULL read, not the capped turn read: its persisted tool parts live in the same
@@ -562,7 +573,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             priorOutputs,
             imageContext: null,
             knowledgeContext: null,
-            replaysToolHistory,
+            replayToolCalls,
             toolResultExcerptChars);
 
         // 5. The headless package, and emit_output unioned in AFTER the definition's offer ∩ AllowedToolNames and BEFORE the agent is constructed — the seam

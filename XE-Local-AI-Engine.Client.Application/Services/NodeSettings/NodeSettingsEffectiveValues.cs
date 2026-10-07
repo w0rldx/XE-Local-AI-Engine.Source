@@ -20,6 +20,14 @@ public sealed record NodeSettingsEffectiveValues
 
     public required bool AllowCloudModelAccess { get; init; }
 
+    public required bool AllowCloudModelUnattendedRuns { get; init; }
+
+    public required bool AllowCloudModelWebTools { get; init; }
+
+    public required bool AllowCloudModelMcpTools { get; init; }
+
+    public required bool AllowCloudModelSubAgents { get; init; }
+
     public required bool ChatRetentionEnabled { get; init; }
 
     public required bool AgentExecutionLogRetentionEnabled { get; init; }

@@ -495,6 +495,18 @@ public sealed partial record StoredNodeSettings
     /// <summary>Mirrors <c>KnowledgeBaseOptions.AllowCloudModelAccess</c>: node-local data never reaches a cloud model unless opted in.</summary>
     public const bool DefaultAllowCloudModelAccess = false;
 
+    /// <summary>Unattended runs (scheduler, graph model nodes, integrations) stay node-local unless opted in.</summary>
+    public const bool DefaultAllowCloudModelUnattendedRuns = false;
+
+    /// <summary>Web tools are withheld from a cloud model unless opted in.</summary>
+    public const bool DefaultAllowCloudModelWebTools = false;
+
+    /// <summary>MCP tools are withheld from a cloud model unless opted in.</summary>
+    public const bool DefaultAllowCloudModelMcpTools = false;
+
+    /// <summary>A cloud model may not start sub-agents unless opted in.</summary>
+    public const bool DefaultAllowCloudModelSubAgents = false;
+
     /// <summary>Mirrors <c>ChatRetentionOptions.Enabled</c>: retention deletes chat history, so it is off unless opted in.</summary>
     public const bool DefaultChatRetentionEnabled = false;
 
@@ -1361,6 +1373,30 @@ public sealed partial record StoredNodeSettings
     ///     Seed: <c>KnowledgeBase:AllowCloudModelAccess</c> (off). Read per turn. Not part of the external-access preset.
     /// </summary>
     public bool? AllowCloudModelAccess { get; init; }
+
+    /// <summary>
+    ///     Whether scheduled agent runs, graph workflow model nodes and integration triggers may run on a cloud-hosted model. No seed
+    ///     (off). Read per run. Not part of the external-access preset.
+    /// </summary>
+    public bool? AllowCloudModelUnattendedRuns { get; init; }
+
+    /// <summary>
+    ///     Whether a cloud-hosted model is offered web_search, web_fetch and HTTP custom tools (still under web access and per-request
+    ///     consent). No seed (off). Read per offer. Not part of the external-access preset.
+    /// </summary>
+    public bool? AllowCloudModelWebTools { get; init; }
+
+    /// <summary>
+    ///     Whether a cloud-hosted model is offered the tools of connected MCP servers. No seed (off). Read per offer. Not part of the
+    ///     external-access preset.
+    /// </summary>
+    public bool? AllowCloudModelMcpTools { get; init; }
+
+    /// <summary>
+    ///     Whether a cloud-hosted model may start sub-agents; each child keeps its own model's gates and the cloud-children cap. No seed
+    ///     (off). Read per offer and spawn.
+    /// </summary>
+    public bool? AllowCloudModelSubAgents { get; init; }
 
     /// <summary>
     ///     Model that proposes playbook actions; blank inherits. Seed: <c>PlaybookAnalysis:ModelName</c>, then the default model. Read

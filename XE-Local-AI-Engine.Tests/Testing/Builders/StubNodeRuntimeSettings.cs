@@ -79,6 +79,10 @@ public sealed class StubNodeRuntimeSettings
     private int _knowledgeScheduledReindexIntervalMinutes = StoredNodeSettings.DefaultKnowledgeScheduledReindexIntervalMinutes;
     private bool _knowledgeAgentToolsEnabled = StoredNodeSettings.DefaultKnowledgeAgentToolsEnabled;
     private bool _allowCloudModelAccess = StoredNodeSettings.DefaultAllowCloudModelAccess;
+    private bool _allowCloudModelUnattendedRuns = StoredNodeSettings.DefaultAllowCloudModelUnattendedRuns;
+    private bool _allowCloudModelWebTools = StoredNodeSettings.DefaultAllowCloudModelWebTools;
+    private bool _allowCloudModelMcpTools = StoredNodeSettings.DefaultAllowCloudModelMcpTools;
+    private bool _allowCloudModelSubAgents = StoredNodeSettings.DefaultAllowCloudModelSubAgents;
     private string? _playbookAnalysisModelName;
     private string? _playbookEvalModelName;
     private string? _memoryExtractionModelName;
@@ -510,6 +514,30 @@ public sealed class StubNodeRuntimeSettings
         return this;
     }
 
+    public StubNodeRuntimeSettings WithAllowCloudModelUnattendedRuns(bool value)
+    {
+        _allowCloudModelUnattendedRuns = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAllowCloudModelWebTools(bool value)
+    {
+        _allowCloudModelWebTools = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAllowCloudModelMcpTools(bool value)
+    {
+        _allowCloudModelMcpTools = value;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAllowCloudModelSubAgents(bool value)
+    {
+        _allowCloudModelSubAgents = value;
+        return this;
+    }
+
     public StubNodeRuntimeSettings WithPlaybookAnalysisModelName(string value)
     {
         _playbookAnalysisModelName = value;
@@ -814,6 +842,14 @@ public sealed class StubNodeRuntimeSettings
         settings.GetKnowledgeAgentToolsEnabled().Returns(_knowledgeAgentToolsEnabled);
         settings.GetAllowCloudModelAccessAsync(Arg.Any<CancellationToken>()).Returns(_allowCloudModelAccess);
         settings.GetAllowCloudModelAccess().Returns(_allowCloudModelAccess);
+        settings.GetAllowCloudModelUnattendedRunsAsync(Arg.Any<CancellationToken>()).Returns(_allowCloudModelUnattendedRuns);
+        settings.GetAllowCloudModelUnattendedRuns().Returns(_allowCloudModelUnattendedRuns);
+        settings.GetAllowCloudModelWebToolsAsync(Arg.Any<CancellationToken>()).Returns(_allowCloudModelWebTools);
+        settings.GetAllowCloudModelWebTools().Returns(_allowCloudModelWebTools);
+        settings.GetAllowCloudModelMcpToolsAsync(Arg.Any<CancellationToken>()).Returns(_allowCloudModelMcpTools);
+        settings.GetAllowCloudModelMcpTools().Returns(_allowCloudModelMcpTools);
+        settings.GetAllowCloudModelSubAgentsAsync(Arg.Any<CancellationToken>()).Returns(_allowCloudModelSubAgents);
+        settings.GetAllowCloudModelSubAgents().Returns(_allowCloudModelSubAgents);
         settings.GetPlaybookAnalysisModelNameAsync(Arg.Any<CancellationToken>()).Returns(_playbookAnalysisModelName ?? _defaultModelName);
         settings.GetPlaybookEvalModelNameAsync(Arg.Any<CancellationToken>()).Returns(_playbookEvalModelName ?? _defaultModelName);
         settings.GetMemoryExtractionModelNameAsync(Arg.Any<CancellationToken>()).Returns(_memoryExtractionModelName ?? _defaultModelName);
@@ -869,6 +905,10 @@ public sealed class StubNodeRuntimeSettings
                         KnowledgeScheduledReindexEnabled = stored.KnowledgeScheduledReindexEnabled ?? _knowledgeScheduledReindexEnabled,
                         KnowledgeAgentToolsEnabled = stored.KnowledgeAgentToolsEnabled ?? _knowledgeAgentToolsEnabled,
                         AllowCloudModelAccess = stored.AllowCloudModelAccess ?? _allowCloudModelAccess,
+                        AllowCloudModelUnattendedRuns = stored.AllowCloudModelUnattendedRuns ?? _allowCloudModelUnattendedRuns,
+                        AllowCloudModelWebTools = stored.AllowCloudModelWebTools ?? _allowCloudModelWebTools,
+                        AllowCloudModelMcpTools = stored.AllowCloudModelMcpTools ?? _allowCloudModelMcpTools,
+                        AllowCloudModelSubAgents = stored.AllowCloudModelSubAgents ?? _allowCloudModelSubAgents,
                         ChatRetentionEnabled = stored.ChatRetentionEnabled ?? _chatRetentionEnabled,
                         AgentExecutionLogRetentionEnabled = stored.AgentExecutionLogRetentionEnabled ?? _agentExecutionLogRetentionEnabled,
                         ImageTextEncoderOnGpu = stored.ImageTextEncoderOnGpu ?? _imageTextEncoderOnGpu,

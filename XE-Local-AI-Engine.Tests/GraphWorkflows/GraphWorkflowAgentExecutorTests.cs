@@ -15,10 +15,12 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The agent lane, over the real store, the real package builder and the real one-slot invocation dispatcher. The
@@ -355,11 +357,152 @@ public sealed class GraphWorkflowAgentExecutorTests
 
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
         AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass, "a cloud model is a configuration refusal, and a retry answers the same.");
-        AssertEx.Contains(analyze.Error, "node-local");
+        AssertEx.Contains(analyze.Error, "cloud model");
+        AssertEx.Contains(analyze.Error, "Node Settings → Privacy & updates", message: "the refusal names the switch that would allow it.");
         AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(instructions, StringComparison.Ordinal)),
             "the refusal happens before any invocation exists.");
         AssertEx.Empty(Capacity(harness).ReservationsFor(model), "and before capacity is asked, so there is nothing to leak.");
     }
+
+    /// <summary>
+    ///     The opt-in twin: with unattended cloud runs allowed the node runs on its cloud model, and the resolver is told so,
+    ///     which is what keeps the node-local-data tools and the playbook memory out of the cloud prompt.
+    /// </summary>
+    [Test]
+    public async Task ACloudEffectiveModel_RunsWhenUnattendedCloudRunsAreAllowed_AndTheResolverIsToldItIsCloud()
+    {
+        const string instructions = "cloud-allowed";
+        const string model = "graph-cloud-allowed";
+        await using var harness = CloudAllowedHost();
+        var agentDefinitionId = await SeedAgentAsync(harness, model);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, $$"""
+                                                                              , "agentDefinitionId": "{{agentDefinitionId}}"
+                                                                              """));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status, analyze.Error);
+        AssertEx.Equal(model, harness.Invocations.PackageFor(instructions).ModelProfile);
+        AssertEx.True(Runtimes(harness).CallFor(model).ActiveModelIsCloud, "the offer and the playbook gate must see the real locality, never a hard-coded false.");
+    }
+
+    [Test]
+    public async Task ALlmCall_OnACloudModel_IsRefusedWhileUnattendedCloudRunsAreOff()
+    {
+        const string prompt = "llm-cloud-refused";
+        const string model = "llm-cloud-refused-model";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await StartToTheAgentAsync(harness, LlmGraph($$"""{ "prompt": "{{prompt}}", "model": "{{model}}" }"""));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass);
+        AssertEx.Contains(analyze.Error, "Node Settings → Privacy & updates");
+        AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(prompt, StringComparison.Ordinal)));
+        AssertEx.Empty(Capacity(harness).ReservationsFor(model));
+    }
+
+    [Test]
+    public async Task ALlmCall_OnACloudModel_IsDispatchedOffTheNodeManagedPathWhenAllowed()
+    {
+        const string prompt = "llm-cloud-allowed";
+        const string model = "llm-cloud-allowed-model";
+        await using var harness = CloudAllowedHost();
+
+        // Not an installed GGUF: a cloud model never is, so the GGUF gate must not be what it meets.
+        harness.Services.GetRequiredService<IGgufModelStore>().ExistsAsync(model, Arg.Any<CancellationToken>()).Returns(false);
+        var runId = await StartToTheAgentAsync(harness, LlmGraph($$"""{ "prompt": "{{prompt}}", "model": "{{model}}" }"""));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status, analyze.Error);
+        var package = harness.Invocations.PackageFor(prompt);
+        AssertEx.Equal(model, package.ModelProfile);
+        AssertEx.False(package.RequireNodeManagedLlama, "a cloud model routes to its own client, never to the node-managed llama path.");
+    }
+
+    [Test]
+    public async Task ADecisionModel_OnACloudModel_IsDispatchedOffTheNodeManagedPathWhenAllowed()
+    {
+        // The DecisionModel lane lowers onto the LLM-call path, so it inherits the cloud admission: the node completes,
+        // routes on the scripted label, and its package leaves the node-managed llama requirement off.
+        const string question = "decision-cloud-allowed";
+        const string model = "decision-cloud-allowed-model";
+        await using var harness = CloudAllowedHost();
+        harness.Services.GetRequiredService<IGgufModelStore>().ExistsAsync(model, Arg.Any<CancellationToken>()).Returns(false);
+        harness.Invocations.Script(question, new GraphWorkflowScriptedTurn
+        {
+            Text = """{"choice":"coding"}"""
+        });
+        var runId = await harness.StartRunAsync($$"""
+                                                 {
+                                                   "schemaVersion": 1,
+                                                   "nodes": [
+                                                     { "key": "start", "kind": "Start" },
+                                                     { "key": "classify", "kind": "DecisionModel",
+                                                       "config": { "question": "{{question}}", "labels": ["coding", "other"], "provider": "llm", "model": "{{model}}",
+                                                                   "inputBindings": { "request": "run.input.message" } } },
+                                                     { "key": "coding", "kind": "End", "config": { "outcome": "coding" } },
+                                                     { "key": "other", "kind": "End", "config": { "outcome": "other" } }
+                                                   ],
+                                                   "edges": [
+                                                     { "key": "e1", "from": "start", "to": "classify" },
+                                                     { "key": "e2", "from": "classify", "to": "coding", "label": "coding", "condition": { "path": "output.choice", "op": "eq", "value": "coding" } },
+                                                     { "key": "e3", "from": "classify", "to": "other", "label": "other", "condition": { "path": "output.choice", "op": "ne", "value": "coding" } }
+                                                   ]
+                                                 }
+                                                 """, """{"message":"fix my build"}""");
+
+        await harness.AdvanceUntilAsync(runId,
+            async () => GraphWorkflowStateMachine.IsTerminal((await harness.ReadRunAsync(runId)).Status),
+            "the decision run was expected to finish.");
+
+        var classify = await harness.ReadNodeRunAsync(runId, "classify");
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, classify.Status, classify.Error);
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "coding")).Status);
+        var package = harness.Invocations.PackageFor(question);
+        AssertEx.Equal(model, package.ModelProfile);
+        AssertEx.False(package.RequireNodeManagedLlama, "a cloud decision model routes to its own client, never to the node-managed llama path.");
+        AssertEx.True(package.ResponseJsonSchema is not null, "a decision turn carries its enum schema on the cloud path too.");
+    }
+
+    [Test]
+    public async Task ALlmCall_OnALocalModel_StillNeedsTheInstalledGgufWhenCloudRunsAreAllowed()
+    {
+        const string prompt = "llm-local-uninstalled-allowed";
+        const string model = "missing-local-model.gguf";
+        await using var harness = CloudAllowedHost();
+        harness.Services.GetRequiredService<IGgufModelStore>().ExistsAsync(model, Arg.Any<CancellationToken>()).Returns(false);
+        var runId = await StartToTheAgentAsync(harness, LlmGraph($$"""{ "prompt": "{{prompt}}", "model": "{{model}}" }"""));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass);
+        AssertEx.Contains(analyze.Error, "installed node-managed GGUF");
+        AssertEx.Empty(harness.Invocations.Packages);
+    }
+
+    [Test]
+    public async Task ALlmCall_OnAnOllamaServedLocalModel_IsStillRefusedWhenCloudRunsAreAllowed()
+    {
+        const string prompt = "llm-ollama-allowed";
+        const string model = "qwen3:8b";
+        await using var harness = CloudAllowedHost();
+        harness.Services.GetRequiredService<ILocalModelProviderResolver>()
+               .ResolveProviderNameForModelAsync(model, Arg.Any<CancellationToken>())
+               .Returns("ollama");
+        var runId = await StartToTheAgentAsync(harness, LlmGraph($$"""{ "prompt": "{{prompt}}", "model": "{{model}}" }"""));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass);
+        AssertEx.Contains(analyze.Error, "installed node-managed GGUF");
+        AssertEx.Empty(harness.Invocations.Packages);
+    }
+
+    private static GraphWorkflowHarness CloudAllowedHost() =>
+        GraphWorkflowHarness.PrivateAgentHost(GraphWorkflowAgentHostFixture.WithRuntimeSettings(
+            StubNodeRuntimeSettings.Create().WithAllowCloudModelUnattendedRuns(true).Build()));
 
     /// <summary>A bound agent that lists tools, on a model that cannot call them, is refused before capacity and before any invocation.</summary>
     [Test]

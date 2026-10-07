@@ -69,3 +69,12 @@ Decision item 5 originally reviewed only the result and sent the request unconfi
 query could carry data out (in the path, query string or search terms) before any user decision. The user is now asked before
 the request is sent, and the result review runs after it. Auto mode skips both. Unattended runs, graph Tool nodes (allowlist),
 orchestration, agentic MCP and workflow-owned work sessions are unchanged: they never run the web tools interactively.
+
+## Amendment 2026-10-07: cloud models under an operator switch
+
+Decision item 1's "a model outside the trust boundary never gets them" now reads "a model outside the trust boundary
+gets them only while the operator enables `AllowCloudModelWebTools`" (Node Settings → Privacy, "Let cloud models use
+web tools", off by default). The same switch admits `HttpFetch` custom tools for such a model; `Command` custom tools
+stay withheld. The Web access setting, request consent and result review apply unchanged. Graph Tool nodes and their
+allowlist are unchanged. The operator took this decision on 2026-10-07 as part of the per-function cloud-model
+switches described in `docs/wiki/12-security-and-privacy.md`.

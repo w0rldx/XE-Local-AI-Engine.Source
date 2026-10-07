@@ -827,6 +827,65 @@ public sealed class NodeRuntimeSettingsTests
     }
 
     [Test]
+    public async Task CloudPermissionSwitches_DefaultOff_AndStoredTrueWins()
+    {
+        var storedSettings = new StoredNodeSettings
+        {
+            AllowCloudModelUnattendedRuns = true,
+            AllowCloudModelWebTools = true,
+            AllowCloudModelMcpTools = true,
+            AllowCloudModelSubAgents = true
+        };
+        var unset = CreateSut(new StoredNodeSettings(), new Dictionary<string, string?>(StringComparer.Ordinal));
+        var stored = CreateSut(storedSettings, new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        AssertEx.False(await unset.GetAllowCloudModelUnattendedRunsAsync(), "Unattended work must stay node-local by default.");
+        AssertEx.False(await unset.GetAllowCloudModelWebToolsAsync());
+        AssertEx.False(await unset.GetAllowCloudModelMcpToolsAsync());
+        AssertEx.False(await unset.GetAllowCloudModelSubAgentsAsync());
+
+        AssertEx.True(await stored.GetAllowCloudModelUnattendedRunsAsync());
+        AssertEx.True(await stored.GetAllowCloudModelWebToolsAsync());
+        AssertEx.True(await stored.GetAllowCloudModelMcpToolsAsync());
+        AssertEx.True(await stored.GetAllowCloudModelSubAgentsAsync());
+
+        var effective = stored.ResolveEffectiveValues(storedSettings);
+        AssertEx.True(effective.AllowCloudModelUnattendedRuns);
+        AssertEx.True(effective.AllowCloudModelWebTools);
+        AssertEx.True(effective.AllowCloudModelMcpTools);
+        AssertEx.True(effective.AllowCloudModelSubAgents);
+        var defaults = unset.ResolveEffectiveValues(new StoredNodeSettings());
+        AssertEx.False(defaults.AllowCloudModelUnattendedRuns);
+        AssertEx.False(defaults.AllowCloudModelWebTools);
+        AssertEx.False(defaults.AllowCloudModelMcpTools);
+        AssertEx.False(defaults.AllowCloudModelSubAgents);
+    }
+
+    [Test]
+    public void CloudPermissionTwins_ResolveLikeTheirAsyncGetters()
+    {
+        // The offer and spawn seams are synchronous and read these twins.
+        var unset = CreateSut(new StoredNodeSettings(), new Dictionary<string, string?>(StringComparer.Ordinal));
+        var stored = CreateSut(new StoredNodeSettings
+            {
+                AllowCloudModelUnattendedRuns = true,
+                AllowCloudModelWebTools = true,
+                AllowCloudModelMcpTools = true,
+                AllowCloudModelSubAgents = true
+            },
+            new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        AssertEx.False(unset.GetAllowCloudModelUnattendedRuns());
+        AssertEx.False(unset.GetAllowCloudModelWebTools());
+        AssertEx.False(unset.GetAllowCloudModelMcpTools());
+        AssertEx.False(unset.GetAllowCloudModelSubAgents());
+        AssertEx.True(stored.GetAllowCloudModelUnattendedRuns());
+        AssertEx.True(stored.GetAllowCloudModelWebTools());
+        AssertEx.True(stored.GetAllowCloudModelMcpTools());
+        AssertEx.True(stored.GetAllowCloudModelSubAgents());
+    }
+
+    [Test]
     public async Task BackgroundModels_InheritTheStoredDefaultModel_WhenNothingNamesThem()
     {
         // The gap this closes: the old composition seed read appsettings only, so a default model chosen in Node Settings

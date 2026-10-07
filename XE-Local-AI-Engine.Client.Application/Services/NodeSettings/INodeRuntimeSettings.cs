@@ -249,6 +249,18 @@ public interface INodeRuntimeSettings
     /// </summary>
     Task<bool> GetAllowCloudModelAccessAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Whether unattended runs may use a cloud-hosted model (stored &gt; off); read per run.</summary>
+    Task<bool> GetAllowCloudModelUnattendedRunsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether a cloud-hosted model is offered web and HTTP custom tools (stored &gt; off); read per offer.</summary>
+    Task<bool> GetAllowCloudModelWebToolsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether a cloud-hosted model is offered MCP tools (stored &gt; off); read per offer.</summary>
+    Task<bool> GetAllowCloudModelMcpToolsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether a cloud-hosted model may start sub-agents (stored &gt; off); read per offer and spawn.</summary>
+    Task<bool> GetAllowCloudModelSubAgentsAsync(CancellationToken cancellationToken = default);
+
     /// <summary>
     ///     The playbook analysis model (stored &gt; <c>PlaybookAnalysis:ModelName</c> &gt; <c>Ollama:ChatModel</c> &gt; the default model, inherited only when node-local, else <c>Agent:LocalChat:DefaultModel</c>). Read
     ///     once per run.
@@ -478,6 +490,18 @@ public interface INodeRuntimeSettings
     ///     captured.
     /// </summary>
     bool GetAllowCloudModelAccess();
+
+    /// <summary>Synchronous twin of <see cref="GetAllowCloudModelUnattendedRunsAsync" />; read per call, never captured.</summary>
+    bool GetAllowCloudModelUnattendedRuns();
+
+    /// <summary>Synchronous twin of <see cref="GetAllowCloudModelWebToolsAsync" /> for the synchronous tool-offer seam; never captured.</summary>
+    bool GetAllowCloudModelWebTools();
+
+    /// <summary>Synchronous twin of <see cref="GetAllowCloudModelMcpToolsAsync" /> for the synchronous tool-offer seam; never captured.</summary>
+    bool GetAllowCloudModelMcpTools();
+
+    /// <summary>Synchronous twin of <see cref="GetAllowCloudModelSubAgentsAsync" /> for the synchronous spawn-offer seam; never captured.</summary>
+    bool GetAllowCloudModelSubAgents();
 
     /// <summary>The sd-server processes kept loaded (stored &gt; <c>StableDiffusionRuntime:MaxLoadedProcesses</c> &gt; 1).</summary>
     int GetImageMaxLoadedProcesses();

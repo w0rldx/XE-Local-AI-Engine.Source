@@ -121,11 +121,46 @@ public sealed class RunSavedAgentHandlerTests
         harness.Store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(BuildDefinition(modelProfile: "azure-gpt"));
         harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: true));
 
-        await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None));
 
+        AssertEx.Contains(exception.Message, "Node Settings → Privacy & updates");
         AssertEx.Equal(expected: 0, harness.RunCount);
         // The cloud gate fires before capacity admission and before any resolve.
         await harness.Capacity.DidNotReceive().DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenEffectiveModelIsCloudAndUnattendedCloudRunsAreAllowed_RunsWithTheCloudFlagAndStripsApprovalTools()
+    {
+        using var harness = new Harness();
+        harness.RuntimeSettings.GetAllowCloudModelUnattendedRunsAsync(Arg.Any<CancellationToken>()).Returns(true);
+        harness.Store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(BuildDefinition(modelProfile: "azure-gpt"));
+        harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: true));
+        var autoTool = new AllowedToolDto
+        {
+            Id = Guid.NewGuid(),
+            Name = "get_current_time",
+            Location = ToolLocation.ClientLocal,
+            RequiresApproval = false
+        };
+        var approvalTool = autoTool with
+        {
+            Id = Guid.NewGuid(),
+            Name = "mcp__weather__get_forecast",
+            RequiresApproval = true
+        };
+        harness.Resolver
+               .ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+               .Returns(new ResolvedAgentRuntime("SCAFFOLD+PERSONA", [autoTool, approvalTool], null, null, 7, AgentId, "Cloud Agent", []));
+
+        await harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, harness.RunCount);
+        AssertEx.Equal("azure-gpt", harness.CapturedPackage!.ModelProfile);
+        // The real cloud flag reaches the resolver, which is what withholds the node-local-data tools while that switch is off.
+        await harness.Resolver.Received(1)
+                     .ResolveAsync(AgentId, "azure-gpt", Arg.Any<string?>(), true, true, true, Arg.Any<CancellationToken>());
+        AssertEx.Equal("get_current_time", string.Join(',', harness.CapturedPackage.AllowedTools.Select(static tool => tool.Name)));
     }
 
     [Test]
@@ -513,6 +548,7 @@ public sealed class RunSavedAgentHandlerTests
             services.AddSingleton(Capability);
             services.AddSingleton(LocalDefault);
             services.AddSingleton(NodeSettings);
+            services.AddSingleton(RuntimeSettings);
             services.AddSingleton(Capacity);
             services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
             services.AddSingleton(Runner);
@@ -533,6 +569,9 @@ public sealed class RunSavedAgentHandlerTests
         public ILocalDefaultChatModelResolver LocalDefault { get; } = Substitute.For<ILocalDefaultChatModelResolver>();
 
         public INodeSettingsStore NodeSettings { get; } = Substitute.For<INodeSettingsStore>();
+
+        /// <summary>The live node switches, every cloud-model switch at its default (off) until a test turns one on.</summary>
+        public INodeRuntimeSettings RuntimeSettings { get; } = StubNodeRuntimeSettings.Create().Build();
 
         public ICapacityService Capacity { get; } = Substitute.For<ICapacityService>();
 

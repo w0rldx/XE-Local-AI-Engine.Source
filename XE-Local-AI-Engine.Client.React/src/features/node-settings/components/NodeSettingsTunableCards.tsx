@@ -693,12 +693,12 @@ export function NodeSettingsKnowledgeRetrievalCard({ bounds, ...field }: NodeSet
 	);
 }
 
-// Its own card, deliberately apart from the external-access presets: a preset never changes this switch.
+// Its own card, deliberately apart from the external-access presets: a preset never changes these switches.
 export function NodeSettingsCloudAccessCard({ form, onChange }: NodeSettingsTunableCardProps) {
 	const { t } = useTranslation();
 	return (
 		<TunableCard
-			title={t("pages.nodeSettings.fields.cloudModelAccess.title", "Cloud models and local data")}
+			title={t("pages.nodeSettings.fields.cloudModelAccess.title", "Cloud models")}
 			icon={<IconCloudLock size={20} />}
 			testId="node-settings-cloud-access-card"
 		>
@@ -711,6 +711,46 @@ export function NodeSettingsCloudAccessCard({ form, onChange }: NodeSettingsTuna
 				checked={form.allowCloudModelAccess}
 				onChange={(event) => onChange("allowCloudModelAccess", event.currentTarget.checked)}
 				data-testid="node-settings-allow-cloud-model-access"
+			/>
+			<Switch
+				label={t("pages.nodeSettings.fields.allowCloudModelUnattendedRuns.label", "Let cloud models run unattended")}
+				description={t(
+					"pages.nodeSettings.fields.allowCloudModelUnattendedRuns.description",
+					"Off by default. When on, scheduled agent runs, graph workflow model nodes and integration triggers may run on a cloud-hosted model. Their prompts, upstream content and trigger payloads then leave this machine.",
+				)}
+				checked={form.allowCloudModelUnattendedRuns}
+				onChange={(event) => onChange("allowCloudModelUnattendedRuns", event.currentTarget.checked)}
+				data-testid="node-settings-allow-cloud-model-unattended-runs"
+			/>
+			<Switch
+				label={t("pages.nodeSettings.fields.allowCloudModelWebTools.label", "Let cloud models use web tools")}
+				description={t(
+					"pages.nodeSettings.fields.allowCloudModelWebTools.description",
+					"Off by default. When on, cloud-hosted models get web_search, web_fetch and HTTP custom tools while Web access is enabled. Requests follow the usual web consent and tool approval rules.",
+				)}
+				checked={form.allowCloudModelWebTools}
+				onChange={(event) => onChange("allowCloudModelWebTools", event.currentTarget.checked)}
+				data-testid="node-settings-allow-cloud-model-web-tools"
+			/>
+			<Switch
+				label={t("pages.nodeSettings.fields.allowCloudModelMcpTools.label", "Let cloud models use MCP tools")}
+				description={t(
+					"pages.nodeSettings.fields.allowCloudModelMcpTools.description",
+					"Off by default. When on, cloud-hosted models get the tools of connected MCP servers, whose results then leave this machine.",
+				)}
+				checked={form.allowCloudModelMcpTools}
+				onChange={(event) => onChange("allowCloudModelMcpTools", event.currentTarget.checked)}
+				data-testid="node-settings-allow-cloud-model-mcp-tools"
+			/>
+			<Switch
+				label={t("pages.nodeSettings.fields.allowCloudModelSubAgents.label", "Let cloud models delegate to sub-agents")}
+				description={t(
+					"pages.nodeSettings.fields.allowCloudModelSubAgents.description",
+					"Off by default. When on, a cloud-hosted model may start sub-agents. Each sub-agent keeps its own model's permissions, and the cloud sub-agent cap still applies.",
+				)}
+				checked={form.allowCloudModelSubAgents}
+				onChange={(event) => onChange("allowCloudModelSubAgents", event.currentTarget.checked)}
+				data-testid="node-settings-allow-cloud-model-sub-agents"
 			/>
 		</TunableCard>
 	);

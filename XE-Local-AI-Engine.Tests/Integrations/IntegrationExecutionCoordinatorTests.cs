@@ -95,8 +95,38 @@ public sealed class IntegrationExecutionCoordinatorTests
 
         var row = harness.Row(executionId);
         AssertEx.Equal(IntegrationFailureCategories.CloudModelRejected, row.FailureCategory, "Unattended external work is node-local only.");
+        AssertEx.Contains(row.FailureSummary ?? string.Empty, "Node Settings → Privacy & updates");
         AssertEx.Equal(expected: 0, harness.RunCount, "The locality gate must reject before any invocation.");
         await harness.Dispatcher.DidNotReceive().ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     With unattended cloud runs allowed the run proceeds, and the session's replayed tool results, node-local data,
+    ///     reach the cloud model only while it may read local data. The seed and the history's prose go either way.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Run_WhenTheEffectiveModelIsCloudAndAllowed_ReplaysToolHistoryOnlyWhileCloudModelsMayReadLocalData(bool allowCloudModelAccess)
+    {
+        using var harness = new Harness();
+        harness.RuntimeSettings.GetAllowCloudModelUnattendedRunsAsync(Arg.Any<CancellationToken>()).Returns(true);
+        harness.RuntimeSettings.GetAllowCloudModelAccessAsync(Arg.Any<CancellationToken>()).Returns(allowCloudModelAccess);
+        harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+               .Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: true));
+        harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
+        harness.OfferedTools = [Harness.Tool("list_files", ToolCategory.ReadLocal)];
+        harness.AddHistory("user", "list the files");
+        harness.AddHistory("assistant", "there are two files", [Harness.CompletedToolPart("call-1", "list_files", "{\"path\":\".\"}", "a.txt\nb.txt")]);
+        var executionId = harness.SeedAccepted();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        AssertEx.Equal(IntegrationExecutionStatus.Completed, harness.Row(executionId).Status);
+        var context = (harness.CapturedPackage ?? throw new AssertionException("The runner was never called.")).ConversationContext;
+        var assistant = context.Single(message => message.Role == MessageRole.Assistant);
+        AssertEx.Equal("there are two files", assistant.Content);
+        AssertEx.Equal(allowCloudModelAccess, assistant.ToolExchanges is { Count: > 0 }, "the replayed tool results follow the local-data switch.");
     }
 
     [Test]

@@ -254,7 +254,8 @@ and by the four work-session state tools inside a work-session step (§5.4). `sp
 `run_in_agent_home` are opt-in only (they live in the *profile* pool, not the default offer), and a
 non-tool-capable model gets an **empty** offer before per-name gating. In chat that empty offer is not silent: a turn
 that asked for tools gets one `ToolsWithheld` notice naming the model ([Chat](05-chat.md)). `web_search` and `web_fetch` join the
-*default* offer only while the node's Web access setting is on, never for a model outside the trust boundary; a
+*default* offer only while the node's Web access setting is on, and for a model outside the trust boundary only while
+the `AllowCloudModelWebTools` Privacy switch is also on (MCP tools follow `AllowCloudModelMcpTools` the same way); a
 bound agent gets them only through `AllowedToolNames`. Both are approval-flagged like `ask_user`: the flag is the
 pause the request consent and result review use, so unattended paths strip them, and orchestration participants and agentic MCP scope
 are never offered them ([Security and privacy](12-security-and-privacy.md), ADR 0017). See [Chat](05-chat.md) for how
@@ -301,7 +302,11 @@ This covers how `SelectedFolderResolver.ResolveAsync` accepts a folder GUID or a
 1. **Validation** — non-blank task and exactly one binding.
 2. **Runtime depth guard** — a child runs at `SpawnContext.Current.Depth >= 1` and its tool set already
    omits `spawn_subagent`, so recursion is structurally impossible; a missing context defaults SAFE
-   (rejected).
+   (rejected). Right after it, the **parent trust guard** refuses a root model outside the trust boundary
+   (cloud or `Unresolved`) with `ReasonParentOutsideTrustBoundary` unless the operator turned on **Let cloud
+   models delegate to sub-agents** (`AllowCloudModelSubAgents`, Node Settings → Privacy, read per call). The
+   offer withholds `spawn_subagent` under the same switch; this seam check catches a caller that reached the
+   service around the offer. A child keeps its own model's gates.
 3. **Per-root fan-out lease** — `context.TryEnterFanOut()`; a missing context is rejected
    conservatively.
 4. **Capacity decision** — `ICapacityService.DecideAsync(modelName, ModelRole.Chat, ct)` returns
@@ -613,14 +618,16 @@ The fields of `WorkSessionStepConsumptionDetail` and how to read them are on the
   (`list_files`/`read_file`/`search_text`) and conversation attachments are gated the **same way**: for a
   cloud effective model without the opt-in, the file tools are withheld from the offer, attachments are
   neither staged nor inlined, and the user gets a visible turn notice naming the effective model. The
-  single opt-in `AllowCloudModelAccess` covers knowledge tools, file tools, and attachments. It is a node setting
-  (**Node Settings → Privacy**), read per turn; `KnowledgeBase:AllowCloudModelAccess` only seeds it.
+  opt-in `AllowCloudModelAccess` covers knowledge tools, file tools, and attachments. It is a node setting
+  (**Node Settings → Privacy**), read per turn; `KnowledgeBase:AllowCloudModelAccess` only seeds it. It is one of
+  five **Cloud models** switches there; the others open unattended runs, web tools, MCP tools and sub-agent spawn
+  for a cloud model, and none opens `run_python` or `run_in_agent_home` ([Security & Privacy](12-security-and-privacy.md)).
   Attachment content that does reach a model is fenced as untrusted data with a server-secret-derived
   nonce (client cannot forge the fence). See [Knowledge Base](15-knowledge-base.md) and [Security & Privacy](12-security-and-privacy.md).
 - **Privacy-sensitive ops are node-local only.** Playbook analysis (P3), the eval gate (P4), and memory
   extraction all run on node-local models — never cloud. See [Security & Privacy](12-security-and-privacy.md).
-- **Spawn is bounded.** Depth cap (child omits the tool), per-root fan-out lease, and a cloud-spawn
-  wallet cap are all enforced in `SubAgentSpawnService`.
+- **Spawn is bounded.** Depth cap (child omits the tool), per-root fan-out lease, a cloud-spawn
+  wallet cap, and the parent trust guard (`AllowCloudModelSubAgents`) are all enforced in `SubAgentSpawnService`.
 - **A work session's state block is rebuilt from the database every step, and fenced.** Never source it
   from surviving conversation history, and never emit an agent-authored string outside the
   `UntrustedContentFraming` fence. The session id reaches a state tool only through

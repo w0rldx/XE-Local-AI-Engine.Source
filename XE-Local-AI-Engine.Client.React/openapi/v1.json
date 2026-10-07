@@ -43461,6 +43461,18 @@
           "allowCloudModelAccess": {
             "type": "boolean"
           },
+          "allowCloudModelUnattendedRuns": {
+            "type": "boolean"
+          },
+          "allowCloudModelWebTools": {
+            "type": "boolean"
+          },
+          "allowCloudModelMcpTools": {
+            "type": "boolean"
+          },
+          "allowCloudModelSubAgents": {
+            "type": "boolean"
+          },
           "playbookAnalysisModelName": {
             "type": "string",
             "nullable": true
@@ -44251,6 +44263,22 @@
             "nullable": true
           },
           "allowCloudModelAccess": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "allowCloudModelUnattendedRuns": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "allowCloudModelWebTools": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "allowCloudModelMcpTools": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "allowCloudModelSubAgents": {
             "type": "boolean",
             "nullable": true
           },

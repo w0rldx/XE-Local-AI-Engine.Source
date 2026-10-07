@@ -564,6 +564,18 @@ public sealed record NodeSettingsResponse
     /// <summary>Whether a cloud-hosted model may receive node-local data. Applies to the next turn. Effective value: stored, else the configuration seed.</summary>
     public bool AllowCloudModelAccess { get; init; }
 
+    /// <summary>Whether scheduled runs, graph model nodes and integration triggers may use a cloud-hosted model. Applies to the next run. Effective value: stored, else off.</summary>
+    public bool AllowCloudModelUnattendedRuns { get; init; }
+
+    /// <summary>Whether a cloud-hosted model is offered web and HTTP custom tools. Applies to the next turn. Effective value: stored, else off.</summary>
+    public bool AllowCloudModelWebTools { get; init; }
+
+    /// <summary>Whether a cloud-hosted model is offered MCP tools. Applies to the next turn. Effective value: stored, else off.</summary>
+    public bool AllowCloudModelMcpTools { get; init; }
+
+    /// <summary>Whether a cloud-hosted model may start sub-agents. Applies to the next turn. Effective value: stored, else off.</summary>
+    public bool AllowCloudModelSubAgents { get; init; }
+
     /// <summary>Model that proposes playbook actions; blank or absent inherits the default model. Applies to the next run.</summary>
     public string? PlaybookAnalysisModelName { get; init; }
 
@@ -1062,6 +1074,18 @@ public sealed record SaveNodeSettingsRequest
 
     /// <summary>Whether a cloud-hosted model may receive node-local data. Applies to the next turn.</summary>
     public bool? AllowCloudModelAccess { get; init; }
+
+    /// <summary>Whether scheduled runs, graph model nodes and integration triggers may use a cloud-hosted model. Applies to the next run.</summary>
+    public bool? AllowCloudModelUnattendedRuns { get; init; }
+
+    /// <summary>Whether a cloud-hosted model is offered web and HTTP custom tools. Applies to the next turn.</summary>
+    public bool? AllowCloudModelWebTools { get; init; }
+
+    /// <summary>Whether a cloud-hosted model is offered MCP tools. Applies to the next turn.</summary>
+    public bool? AllowCloudModelMcpTools { get; init; }
+
+    /// <summary>Whether a cloud-hosted model may start sub-agents. Applies to the next turn.</summary>
+    public bool? AllowCloudModelSubAgents { get; init; }
 
     /// <summary>Model that proposes playbook actions; blank or absent inherits the default model. Applies to the next run.</summary>
     public string? PlaybookAnalysisModelName { get; init; }

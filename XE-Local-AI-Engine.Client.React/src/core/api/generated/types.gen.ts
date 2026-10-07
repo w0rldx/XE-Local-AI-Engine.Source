@@ -5033,6 +5033,10 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	maxAllowedKnowledgeScheduledReindexIntervalMinutes?: number;
 	knowledgeAgentToolsEnabled?: boolean;
 	allowCloudModelAccess?: boolean;
+	allowCloudModelUnattendedRuns?: boolean;
+	allowCloudModelWebTools?: boolean;
+	allowCloudModelMcpTools?: boolean;
+	allowCloudModelSubAgents?: boolean;
 	playbookAnalysisModelName?: string | null;
 	playbookEvalModelName?: string | null;
 	memoryExtractionModelName?: string | null;
@@ -5194,6 +5198,10 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	knowledgeScheduledReindexIntervalMinutes?: number | null;
 	knowledgeAgentToolsEnabled?: boolean | null;
 	allowCloudModelAccess?: boolean | null;
+	allowCloudModelUnattendedRuns?: boolean | null;
+	allowCloudModelWebTools?: boolean | null;
+	allowCloudModelMcpTools?: boolean | null;
+	allowCloudModelSubAgents?: boolean | null;
 	playbookAnalysisModelName?: string | null;
 	playbookEvalModelName?: string | null;
 	memoryExtractionModelName?: string | null;

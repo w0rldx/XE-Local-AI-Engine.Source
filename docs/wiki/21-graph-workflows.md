@@ -703,9 +703,13 @@ because a truncated answer is still `Completed` and `length` is the common cause
 path: grammar-constrained output carries no fences, and stripping some would quietly mask a broken grammar. See §8
 for what a response schema costs at the llama.cpp grammar layer.
 
-**An Agent node is node-local only.** If the node's effective model resolves to a cloud model the node run is
-refused `ValidationFailed` before any capacity is reserved: an unattended run must never hand the operator's
-content to a cloud provider. Approval-required tools are likewise stripped from the offer, and the turn runs
+**An Agent node is node-local unless the operator allows cloud.** If the node's effective model resolves to a cloud
+(or unresolved) model the node run is refused `ValidationFailed` before any capacity is reserved, with a reason naming
+the switch, unless **Let cloud models run unattended** (`AllowCloudModelUnattendedRuns`, Node Settings → Privacy) is
+on: by default an unattended run never hands the operator's content to a cloud provider. A cloud run admitted by the
+switch resolves its agent and its offer with the real cloud flag, so the other cloud switches still decide which tools,
+playbook memory and attachments it gets ([Security & Privacy](12-security-and-privacy.md)). Approval-required tools are
+likewise stripped from the offer, and the turn runs
 with `IsUnattended` set — the same posture a scheduled saved-agent run holds. A node bound to an agent that requires
 tools (it lists some, or orchestrates) is refused `ValidationFailed` the same way when its effective model cannot call
 them; the reason is `AgentModelRequirements.ToolRefusal`'s sentence. The editor's Agent form shows a yellow warning when
@@ -727,14 +731,22 @@ The package's explicit `OmitSystemPrompt` flag carries absence through validatio
 `InvocationAgentFactory.BuildSeedMessages`. It defaults to false, so existing chat, Agent and benchmark callers
 retain their non-empty system-prompt requirement and their existing configuration hashes.
 
-The LLM Call package also requires node-managed llama routing for the selected model throughout dispatch.
-The shared runtime bypasses cloud selection for that request and rejects a provider remap before choosing a
-local client, including a cached client. This keeps a settings change between validation and inference from
-sending the call externally, without locking provider settings for the duration of generation.
+The executor first classifies the selected model through `IModelTrustResolver`. For a node-local model the LLM Call
+package requires node-managed llama routing throughout dispatch: the shared runtime bypasses cloud selection for that
+request and rejects a provider remap before choosing a local client, including a cached client. This keeps a settings
+change between validation and inference from sending the call externally, without locking provider settings for the
+duration of generation.
+
+A cloud (or unresolved) model is refused `ValidationFailed` with a reason naming the switch unless **Let cloud models
+run unattended** (`AllowCloudModelUnattendedRuns`, Node Settings → Privacy) is on. With the switch on, the installed-GGUF
+gate is skipped, capacity short-circuits as for any cloud model, and the package is built without the node-managed
+llama requirement, so the shared runtime routes the call to the cloud client. A response schema rides the request's
+response format as on the local path; a provider that ignores it fails the run through the usual parse or label check,
+never silently.
 
 | Config member | Meaning |
 |---|---|
-| `model` | Optional installed node-managed GGUF chat model. When omitted, the local-default resolver chooses one. Cloud, external, Ollama, uninstalled and non-chat models are refused before inference. The chosen model is not automatically swapped. |
+| `model` | Optional chat model. A node-local choice must be an installed node-managed GGUF chat model; Ollama, external models declared local, uninstalled and non-chat models are refused before inference. A cloud model (Codex, Azure Foundry, an external model declared cloud) runs only while `AllowCloudModelUnattendedRuns` is on. When omitted, the local-default resolver chooses one. The chosen model is not automatically swapped. |
 | `systemPrompt` | Optional authored system instructions. Empty means no system-role message; no default assistant prompt is substituted. |
 | `prompt` | Required user instructions for this call. |
 | `inputBindings` | Optional object mapping names to dot paths in the node's input document. Values form a named JSON data block alongside the prompt; there is no placeholder expansion or implicit upstream context. |
@@ -945,7 +957,7 @@ successor reached only through one receives the answer document, not the content
 | `question` | **Required.** What is being decided. |
 | `labels` | **Required.** 2–32 distinct, non-blank strings of at most 64 characters. Flat on purpose: they become a grammar enum, far below the repetition bound. |
 | `provider` | Optional closed vocabulary, `llm` only (and the default). A provider this build cannot run is refused at save. |
-| `model` | Optional, as on `LlmCall`: an installed node-managed GGUF chat model, else the local default. |
+| `model` | Optional, as on `LlmCall`: an installed node-managed GGUF chat model, a cloud model while `AllowCloudModelUnattendedRuns` is on, else the local default. |
 | `inputBindings` | Optional, exactly as on `LlmCall` (§4.2a). |
 
 A classifier node on the invocation lane. The named `IGraphWorkflowDecisionProvider`

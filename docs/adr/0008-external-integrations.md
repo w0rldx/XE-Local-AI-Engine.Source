@@ -475,3 +475,15 @@ current rule.
 | # | Rule | Owner |
 |---|---|---|
 | R6-1 | Caller-managed sessions persist their tool parts through the chat primitive (`NodeChatPartAccumulator`) and replay them as function call/result content on continuation, so a continued turn can tell an action it performed from prose describing one. The `ReadLocal`-only restriction on caller-managed triggers is withdrawn at save, at accept and at run. **Supersedes R4-9(a)**; R4-9(b)'s prior-outputs framing stays, and R2-12 is amended to "no persistence of their OWN". | S6 |
+
+## Amendment 2026-10-07: cloud models under an operator switch
+
+An integration run whose effective model is cloud (or unresolved) was always rejected before the runner, failing
+`cloud-model-rejected`: the run was node-local only. It is now rejected that way only while the operator leaves
+`AllowCloudModelUnattendedRuns` off (Node Settings → Privacy, "Let cloud models run unattended", off by default), and
+the rejection names the switch. With the switch on, the run proceeds on the cloud model, so the trigger's external
+payload and the agent's context reach that provider by the operator's consent. Approval-required tools are still
+offered and refused at call time (`IsUnattended`, R4-5 above; the scheduler and graph paths strip them instead), and the
+other cloud-model switches still decide which tools the run is offered. `cloud-model-rejected` stays
+in the closed vocabulary with the same meaning for the off case. The operator took this decision on 2026-10-07; the
+switch set is described in `docs/wiki/12-security-and-privacy.md`.

@@ -68,7 +68,7 @@ export interface GraphWorkflowNodeConfigPanelProps {
 	readonly tools: readonly GraphWorkflowToolResponse[];
 	readonly agentOptions: readonly GraphWorkflowAgentOption[];
 	readonly modelOptions: readonly GraphWorkflowModelOption[];
-	readonly llmModelOptions?: readonly { readonly value: string; readonly label: string }[];
+	readonly llmModelOptions?: readonly GraphWorkflowModelOption[];
 	/** The graph's `kind` and `chat` block: they decide which chat switches apply and what End publishes by default. */
 	readonly graphSettings?: GraphWorkflowGraphSettings;
 	readonly readOnly?: boolean;

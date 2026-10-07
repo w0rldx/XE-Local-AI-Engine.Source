@@ -171,6 +171,28 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
         AssertEx.Empty(result.Warnings);
     }
 
+    /// <summary>
+    ///     A cloud pin mirrors the executor's admission, not the installed-GGUF gate: while unattended cloud runs are off
+    ///     the warning names the switch; once on, the run would proceed, so validation says nothing.
+    /// </summary>
+    [Test]
+    [Arguments(ModelTrustLocality.Cloud)]
+    [Arguments(ModelTrustLocality.Unresolved)]
+    public async Task ValidateAsync_WhenAnLlmCallPinsACloudModel_WarnsAboutTheSwitchOnlyWhileUnattendedCloudRunsAreOff(ModelTrustLocality locality)
+    {
+        var providers = Substitute.For<ILocalModelProviderResolver>();
+        providers.ResolveProviderNameForModelAsync(CloudRoutedModel, Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult("external"));
+
+        var off = await BuildService(providers, locality: locality).ValidateAsync(LlmCallGraph(CloudRoutedModel));
+        var on = await BuildService(providers, locality: locality, allowCloudUnattendedRuns: true).ValidateAsync(LlmCallGraph(CloudRoutedModel));
+
+        AssertEx.True(off.IsValid, "a cloud pin is a warning, never an error.");
+        var warning = AssertEx.NotNull(off.Warnings.SingleOrDefault(warning => warning.Key == "analyze"), $"one switch warning expected: {string.Join(" | ", off.Warnings)}");
+        AssertEx.Contains(warning.Message, "Let cloud models run unattended", message: "the warning names the switch that would admit the node, not a GGUF to install.");
+        AssertEx.Empty(on.Warnings.Where(warning => warning.Key == "analyze" && !warning.Message.Contains("maxLength", StringComparison.Ordinal)),
+            "with the switch on the run would proceed, so validation must not call the node unrunnable.");
+    }
+
     /// <summary>An unpinned LLM call runs the node default, unknown here, so there is nothing to warn about.</summary>
     [Test]
     public async Task ValidateAsync_WhenAnLlmCallPinsNoModel_DoesNotWarn()
@@ -191,12 +213,15 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
 
     // The registry is empty unless a test says otherwise: an Agent node is never asked about it, so the schema tests
     // above stay single-warning on a node with nothing installed.
-    private static IGraphWorkflowDefinitionService BuildService(ILocalModelProviderResolver providers, IGgufModelStore? ggufModels = null)
+    private static IGraphWorkflowDefinitionService BuildService(ILocalModelProviderResolver providers,
+        IGgufModelStore? ggufModels = null,
+        ModelTrustLocality locality = ModelTrustLocality.Local,
+        bool allowCloudUnattendedRuns = false)
     {
         var trust = Substitute.For<IModelTrustResolver>();
-        trust.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(ModelTrustLocality.Local);
+        trust.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(locality);
         return new GraphWorkflowDefinitionService(Substitute.For<IGraphWorkflowStore>(),
-            Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().Build(),
+            Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().WithAllowCloudModelUnattendedRuns(allowCloudUnattendedRuns).Build(),
             providers,
             ggufModels ?? Substitute.For<IGgufModelStore>(),
             trust,

@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -76,8 +77,10 @@ public sealed class GraphWorkflowAgentHostFixture : IAsyncInitializer, IAsyncDis
                 services.RemoveAll<IGgufModelStore>();
                 services.AddSingleton(ggufModels);
 
+                // Locality off the name, the same marker the capability fake reads, so the two seams never disagree.
                 var trust = Substitute.For<IModelTrustResolver>();
-                trust.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(ModelTrustLocality.Local);
+                trust.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(call => LocalityOf(call.ArgAt<string?>(0)));
+                trust.Classify(Arg.Any<string?>()).Returns(call => LocalityOf(call.ArgAt<string?>(0)));
                 services.RemoveAll<IModelTrustResolver>();
                 services.AddSingleton(trust);
 
@@ -120,6 +123,17 @@ public sealed class GraphWorkflowAgentHostFixture : IAsyncInitializer, IAsyncDis
             // harmless: the node-wide invocation slot stays at one, and that is what the fan-out assertion observes.
             [("GraphWorkflows:MaxConcurrentRuns", "64"), .. configuration]);
 
+    /// <summary>A registration pass that swaps in <paramref name="settings" />, for a private host whose node switches a test chooses.</summary>
+    public static Action<IServiceCollection> WithRuntimeSettings(INodeRuntimeSettings settings) =>
+        services =>
+        {
+            services.RemoveAll<INodeRuntimeSettings>();
+            services.AddSingleton(settings);
+        };
+
+    private static ModelTrustLocality LocalityOf(string? model) =>
+        (model ?? string.Empty).Contains(GraphWorkflowModels.CloudMarker, StringComparison.Ordinal) ? ModelTrustLocality.Cloud : ModelTrustLocality.Local;
+
     public Task InitializeAsync() =>
         Task.CompletedTask;
 
@@ -138,7 +152,7 @@ internal static class GraphWorkflowModels
     /// <summary>The node's local default: node-local, no thinking, no enforceable reasoning budget.</summary>
     public const string LocalDefault = "graph-local-default";
 
-    /// <summary>A name carrying this is cloud-hosted, and an Agent node resolving to it is refused before capacity.</summary>
+    /// <summary>A name carrying this is cloud-hosted, refused before capacity unless the host lets cloud models run unattended.</summary>
     public const string CloudMarker = "cloud";
 
     /// <summary>A name carrying this advertises thinking AND an enforceable reasoning budget.</summary>

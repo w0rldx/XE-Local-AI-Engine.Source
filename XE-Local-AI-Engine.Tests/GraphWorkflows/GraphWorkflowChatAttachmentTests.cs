@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using static GraphWorkflowChatTestSupport;
 
 /// <summary>A chat send's attachments reach an <c>includeAttachments</c> node at attempt time: text inlined, images as parts, gone or unusable files skipped.</summary>
@@ -177,6 +178,38 @@ public sealed class GraphWorkflowChatAttachmentTests
         AssertEx.Null(seed.Images, "an image reference whose file never became an image adds no part.");
         var output = (await harness.ReadNodeRunAsync(runId, "read")).OutputJson;
         AssertEx.Equal("[\"broken.png\",\"failed.md\",\"blank.txt\"]", GraphWorkflowDocuments.Resolve(output, "output.attachmentsSkipped")?.GetRawText());
+    }
+
+    /// <summary>
+    ///     Uploaded files are node-local data: a cloud model that may run unattended still reads them only while the operator
+    ///     lets cloud models read local data, and every withheld file is named in <c>attachmentsSkipped</c>, never dropped silently.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task ACloudModel_ReadsTheAttachmentsOnlyWhileCloudModelsMayReadLocalData(bool allowCloudModelAccess)
+    {
+        var reader = $"attachments-cloud-reader-{allowCloudModelAccess}";
+        var settings = StubNodeRuntimeSettings.Create().WithAllowCloudModelUnattendedRuns(true).WithAllowCloudModelAccess(allowCloudModelAccess).Build();
+        await using var harness = GraphWorkflowHarness.PrivateAgentHost(GraphWorkflowAgentHostFixture.WithRuntimeSettings(settings));
+        var definitionId = await harness.SeedDefinitionAsync(TwoAgentGraph(reader, $"second-after-cloud-{allowCloudModelAccess}", model: "graph-cloud-reader"));
+        var conversationId = await CreateConversationAsync(harness.Services);
+        var fileId = await AddTextAsync(harness, conversationId, "notes.md", "LOCAL-NOTES-BODY");
+
+        var runId = await StartAsync(harness.Factory, definitionId, conversationId, "summarize the notes", fileId);
+        await AdvanceUntilCompletedAsync(harness, runId);
+
+        var output = (await harness.ReadNodeRunAsync(runId, "read")).OutputJson;
+        AssertEx.Equal(allowCloudModelAccess, Prompt(harness, reader).Contains("LOCAL-NOTES-BODY", StringComparison.Ordinal));
+        var skipped = GraphWorkflowDocuments.Resolve(output, "output.attachmentsSkipped")?.GetRawText();
+        if (allowCloudModelAccess)
+        {
+            AssertEx.Null(skipped, "an allowed file is read, not skipped.");
+        }
+        else
+        {
+            AssertEx.Equal("[\"notes.md\"]", skipped, "a withheld file is named, never dropped silently.");
+        }
     }
 
     /// <summary>Start → read (includeAttachments) → other (no flag) → End, in a Chat graph that accepts attachments.</summary>
