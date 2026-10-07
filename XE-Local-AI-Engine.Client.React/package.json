@@ -43,30 +43,30 @@
 		"openapi:check:live": "node scripts/CheckLiveOpenapi.mjs && pnpm run openapi:check"
 	},
 	"dependencies": {
-		"@mantine/charts": "^9.6.2",
-		"@mantine/colors-generator": "^9.6.2",
-		"@mantine/core": "^9.6.2",
-		"@mantine/hooks": "^9.6.2",
-		"@mantine/notifications": "^9.6.2",
+		"@mantine/charts": "^9.6.3",
+		"@mantine/colors-generator": "^9.6.3",
+		"@mantine/core": "^9.6.3",
+		"@mantine/hooks": "^9.6.3",
+		"@mantine/notifications": "^9.6.3",
 		"@microsoft/signalr": "^10.0.11",
 		"@t3-oss/env-core": "^0.13.11",
-		"@tabler/icons-react": "^3.47.0",
-		"@tanstack/react-query": "^5.103.1",
-		"@tanstack/react-router": "^1.170.38",
+		"@tabler/icons-react": "^3.48.0",
+		"@tanstack/react-query": "^5.104.0",
+		"@tanstack/react-router": "^1.170.40",
 		"@tanstack/react-virtual": "^3.14.13",
-		"@xyflow/react": "12.11.6",
+		"@xyflow/react": "12.12.0",
 		"axios": "^1.20.0",
 		"clsx": "^2.1.1",
 		"fflate": "^0.8.3",
-		"framer-motion": "^13.4.0",
+		"framer-motion": "^13.4.6",
 		"i18next": "^26.4.2",
 		"i18next-browser-languagedetector": "^8.2.1",
 		"idb": "^8.0.3",
-		"monaco-editor": "^0.56.0",
+		"monaco-editor": "^0.57.0",
 		"react": "^19.3.0",
 		"react-dom": "^19.3.0",
 		"react-error-boundary": "^6.1.6",
-		"react-i18next": "^17.0.14",
+		"react-i18next": "^17.0.15",
 		"react-joyride": "3.2.0",
 		"react-markdown": "^10.1.0",
 		"react-syntax-highlighter": "^16.1.1",
@@ -115,6 +115,6 @@
 		"vitest": "^5.0.2"
 	},
 	"optionalDependencies": {
-		"@rollup/rollup-linux-x64-gnu": "4.63.4"
+		"@rollup/rollup-linux-x64-gnu": "4.63.5"
 	}
 }
