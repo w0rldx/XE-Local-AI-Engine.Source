@@ -382,7 +382,19 @@ class Client(gsd.NodeClient):
         status = self.request("GET", f"{API}/auth/status")[1]
         if isinstance(status, dict) and status.get("setupRequired"):
             raise PrerequisiteError("the node has no operator yet: complete first-run setup, then re-run")
-        payload = self.request("POST", f"{API}/auth/login", json.dumps({"email": email, "password": password}))[1]
+        # Bypasses the recording override: neither the credentials nor the token belong in http.jsonl.
+        record: dict = {"t": now(), "method": "POST", "path": f"{API}/auth/login"}
+        started = time.monotonic()
+        try:
+            code, payload = super().request(
+                "POST", f"{API}/auth/login", json.dumps({"email": email, "password": password})
+            )
+        except gsd.DriverError as error:
+            record.update(ms=int((time.monotonic() - started) * 1000), error=str(error)[:4000])
+            self.evidence.append("http.jsonl", record)
+            raise
+        record.update(ms=int((time.monotonic() - started) * 1000), status=code, response="(token omitted)")
+        self.evidence.append("http.jsonl", record)
         if not isinstance(payload, dict) or not payload.get("accessToken"):
             raise gsd.DriverError("auth/login returned no accessToken")
         self.token = payload["accessToken"]
@@ -390,7 +402,7 @@ class Client(gsd.NodeClient):
     def request(self, method, path, body=None, content_type="application/json", expect_binary=False, allowed_status=()):
         poll = "/hub?id=" in path and method in ("GET", "DELETE")
         record: dict = {"t": now(), "method": method, "path": path}
-        if body is not None and not poll and not path.endswith("/auth/login"):
+        if body is not None and not poll:
             text = body.decode("utf-8", "replace") if isinstance(body, bytes) else body
             record["request"] = text[:20000]
         started = time.monotonic()
@@ -408,8 +420,6 @@ class Client(gsd.NodeClient):
             raise
         if not poll:
             shown = payload.decode("utf-8", "replace")[:2000] if isinstance(payload, bytes) else payload
-            if path.endswith("/auth/login"):
-                shown = "(token omitted)"
             record.update(ms=int((time.monotonic() - started) * 1000), status=status, response=shown)
             self.evidence.append("http.jsonl", record)
         return status, payload

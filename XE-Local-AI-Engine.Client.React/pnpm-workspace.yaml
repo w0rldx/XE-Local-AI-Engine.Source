@@ -12,6 +12,9 @@ overrides:
   'why-is-node-running@3': '3.2.1'
   # source-map-js (via postcss) GHSA-68fv-2mgg-jv7q covers >=1.0.0 <1.2.2; 1.2.2 is the fixed patch.
   'source-map-js@>=1.0.0 <1.2.2': '1.2.2'
+  # seroval GHSA-p6vx-979v-rg4c covers >=0.12.0 <=1.6.0 (pulled at 1.5.x by solid-js 1.9.15 under the devtools panels); 1.6.8 is the fixed line.
+  'seroval@<1.6.2': '1.6.8'
+  'seroval-plugins@<1.6.2': '1.6.8'
 
 allowBuilds:
   msgpackr-extract: true

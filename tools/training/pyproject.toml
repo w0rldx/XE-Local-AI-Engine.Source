@@ -38,6 +38,14 @@
 #     metadata requires setuptools<82.
 #   * torch 2.11.0+cu128, floor 2.13.0 (GHSA-rrmf-rvhw-rf47): the cu128 index ships no
 #     2.12/2.13, unsloth caps torch<2.13.0, torchvision 0.26.0+cu128 pins torch==2.11.0.
+#   * transformers 5.5.0, no patched release (GHSA-x9r9-c232-4q39, load_custom_generate writes a
+#     remote module before the trust prompt; dismissed 2026-10-07 as not used): the runtime never
+#     calls generate(custom_generate=...).
+#   * datasets 4.3.0, floor 5.0.1 (GHSA-379c-qx7v-6h59, folder-based builders; dismissed
+#     2026-10-07): unsloth caps datasets<4.4.0; train.py only builds an in-memory Dataset.
+#   * fsspec 2025.9.0, floor 2026.6.0 (GHSA-27vj-qcqg-25rc, ReferenceFileSystem SSTI; dismissed
+#     2026-10-07): datasets 4.3.0 caps fsspec<=2025.9.0; nothing here opens a reference://
+#     filesystem. Lifts together with datasets.
 # Exposure is bounded: this runtime is Linux-only, operator-invoked, works on local files,
 # and never calls torch.jit.script. Re-check by bumping unsloth (its and unsloth_zoo's
 # requires_dist on PyPI carry the caps), then
