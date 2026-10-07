@@ -1,0 +1,18 @@
+{
+  "model": "unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M",
+  "modelSource": {
+    "repo": "unsloth/Qwen3.8-27B-GGUF",
+    "file": "Qwen3.8-27B-UD-Q4_K_M.gguf"
+  },
+  "settings": {
+    "externalAccessProfile": "offline",
+    "defaultModelName": "<model>",
+    "maxMessageRequestTimeoutSeconds": 1800
+  },
+  "env": {
+    "XE_LLAMACPP_VARIANT": "cuda"
+  },
+  "modelsDir": ".tmp/lab/models",
+  "stop": "model",
+  "firstTurnPrompt": "Reply with exactly the word OK."
+}

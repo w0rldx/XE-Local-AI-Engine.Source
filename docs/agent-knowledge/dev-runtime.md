@@ -94,13 +94,14 @@ Each gate is middleware ahead of `LocalApiSecurityMiddleware`, so a disabled fea
 
 ### A live round in a worktree starts from a FRESH isolated DB, and a scratch host never touches the user data dir
 
-**Rule:** never copy the main checkout's DB or keys into a worktree (a copied DB shows as `auth/setup` answering
+**Rule:** never copy the OPERATOR's DB or keys into a worktree (it answers `auth/setup` with
 `AlreadyInitialized`): use a fresh DB, `POST auth/setup` a throwaway admin and re-login (tokens expire ~15 min); persist
-`defaultModelName` and `maxMessageRequestTimeoutSeconds=1800`. A throwaway host sets `XDG_DATA_HOME` to a scratch dir that
-MIRRORS `~/.local/share` (symlink each child but `XE-Local-AI-Engine`; an empty one makes Aspire exit 7 with "`--apphost`
-... does not exist"), or a GPU round sources the BYO llama-server override. `agent_execution_logs` rows terminalize
-asynchronously (re-read, never poll once); `dev_workflow_*` run ids are stored UPPER-CASE and SQLite `IN` is case-sensitive.
-**Prevents:** voided rounds and a rewritten user-level `installed-runtime.json`. **Authority:** `scripts/dev-start.sh`.
+`defaultModelName` and `maxMessageRequestTimeoutSeconds=1800`. One sanctioned reuse is a snapshot that
+`scripts/lab-up.sh --snapshot` made itself (throwaway admin, lab-owned `node.key` and `dp-keys`), restored only when its
+migration-set key matches. A throwaway host sets `XDG_DATA_HOME` to a scratch dir that MIRRORS `~/.local/share` (symlink
+each child but `XE-Local-AI-Engine`; an empty one makes Aspire exit 7), or a GPU round sources the BYO llama-server
+override. `agent_execution_logs` rows terminalize asynchronously (re-read); `dev_workflow_*` ids UPPER-CASE.
+**Prevents:** voided rounds and a rewritten user-level `installed-runtime.json`. **Authority:** `scripts/lab-up.sh`.
 
 ### an `XDG_DATA_HOME` override for a scratch host also blinds a per-user tool-version manager
 

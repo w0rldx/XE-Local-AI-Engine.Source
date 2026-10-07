@@ -62,6 +62,8 @@ Never run `aspire stop --all` or `pkill -f <substring>`: both cross worktree bou
 checkouts' instances. Kill by PID. Run one instance per data directory. Details: `scripts/README-dev-stop.md`,
 `docs/agent-knowledge.md` §2.
 
+- Live rounds: `scripts/lab-up.sh` brings a lab node to the model-ready handoff (before any LLM turn), skipping satisfied
+  phases; `scripts/lab-api.sh` makes the logged calls. Wiki 13 "Lab bootstrap for live rounds".
 - Kill-by-PID applies to anything you background, load generators included: collect the PIDs (or `setsid` a
   process group), put the kill in a `trap … EXIT`, and confirm with `ps` before ending the turn.
 - The app origin serves the SPA bundle that was last **built**, not the working tree. After a frontend change,
