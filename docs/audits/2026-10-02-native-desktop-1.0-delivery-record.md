@@ -1,5 +1,7 @@
 # Native desktop 1.0 — delivery and evidence
 
+> Historical snapshot: this page records the native-desktop delivery as merged on develop; it is not maintained. Current behavior: [Hosting & Deployment](../wiki/11-hosting-and-deployment.md) and [ADR 0013](../adr/0013-native-desktop-shell.md).
+
 Status: merged on develop (first desktop commit `c97fb0ee5`, `feat(desktop): deliver native Windows and Ubuntu shells`); final validation and review are recorded below; real Ubuntu GUI acceptance remains waived.
 
 Decision record: [ADR 0013](../adr/0013-native-desktop-shell.md)

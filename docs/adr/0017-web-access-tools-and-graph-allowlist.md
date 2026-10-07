@@ -1,6 +1,6 @@
 # ADR 0017: Web access is two operator-enabled built-in tools, and a graph reaches the web only through an allowlisted fetch
 
-- **Status:** Proposed
+- **Status:** Accepted — by the repository owner (`w0rldx`) on 2026-10-07; the design is implemented on `develop`.
 - **Date:** 2026-09-27
 - **Scope:** The built-in `web_search` and `web_fetch` agent tools: where they are offered, how they reach the network, how their
   output re-enters model context, and the one exception they make to the graph Tool-node admission rule. It changes nothing about

@@ -14,16 +14,21 @@ Framework pins, while the wiki covers architecture.
 
 ## Start here
 
-- **New to the repo?** Read [Architecture Overview](01-architecture-overview.md) then
-  [Project Layout](02-project-layout.md).
-- **Touching inference / models?** [Local Runtime & Providers](03-local-runtime-and-providers.md)
-  and [Model-fit / Advisor](07-model-fit.md).
-- **Touching agents / chat?** [Agent Mode](04-agent-mode.md) and [Chat](05-chat.md).
-- **Touching data?** [Data & Persistence](08-data-and-persistence.md).
-- **Shipping / running it?** [Hosting & Deployment](11-hosting-and-deployment.md).
-- **Reviewing architecture or security without source access?** Use the
-  [Technical/Security Architecture Dossier](../audits/technical-security-architecture/README.md).
-  It is a baseline description with evidence limitations, not an assurance or compliance package.
+- **New to the repo:** [Architecture Overview](01-architecture-overview.md), then [Project Layout](02-project-layout.md).
+- **Inference or models:** [Local Runtime & Providers](03-local-runtime-and-providers.md), [Model-fit / Advisor](07-model-fit.md).
+- **Agents or chat:** [Agent Mode](04-agent-mode.md), [Chat](05-chat.md).
+- **Data:** [Data & Persistence](08-data-and-persistence.md). **Shipping or running it:** [Hosting & Deployment](11-hosting-and-deployment.md).
+- **Reviewing architecture or security without source access:** the
+  [Technical/Security Architecture Dossier](../audits/technical-security-architecture/README.md), a baseline
+  description with evidence limitations, not an assurance or compliance package.
+
+### How to read this wiki
+
+- Each page opens with a short summary (what it covers, who should read it, where to skip to); long pages follow it with a `Contents` list.
+- The largest pages keep their explanation and move lookup material (option tables, flag catalogues, route and mode matrices) to `reference/NN-*.md`; the parent page keeps every heading as a stub that links there, so a citation such as `wiki 03 §2.5` still lands.
+- Code comments and other docs cite sections as `wiki NN §M` and link to heading anchors, so headings are never renamed or renumbered.
+- The `Reviewed:` date on line 3 is the last time the page was checked against the code. Where the page and the code disagree, the code wins.
+- Pages describe how things work. The traps (failures already paid for, and the rule that prevents each) live in the companion [agent-knowledge index](../agent-knowledge.md).
 
 ## Architecture invariants
 
@@ -40,13 +45,11 @@ Framework pins, while the wiki covers architecture.
 
 ### Invariants worth knowing
 
-- **The Open Canvas import runs automatically at startup and stops startup if it fails.** Saved canvases from the
-  removed Open Canvas (Preview) builder are converted into Graph Workflow definitions on the first start of the
-  build that removed it; the encrypted source is staged so an interrupted or failed conversion retries on the next
-  start instead of being lost. Read [§9 of the Graph Workflows page](21-graph-workflows.md#9-the-open-canvas-import)
-  before upgrading a node whose canvases matter.
-- **A doc or comment claiming "no Docker anywhere" predates ADR 0004 and is stale**; one claiming Docker on the
-  inference path is stale the other way. The bullet above is the current rule.
+- **The Open Canvas import runs at startup and stops startup if it fails.** Saved canvases become Graph Workflow
+  definitions; the encrypted source is staged, so a failed conversion retries on the next start. Read
+  [Graph Workflows §9](21-graph-workflows.md#9-the-open-canvas-import) before upgrading a node whose canvases matter.
+- **"No Docker anywhere" is stale (it predates ADR 0004), and so is "Docker on the inference path".** The Docker
+  bullet above is the current rule.
 
 ## Page index
 
@@ -77,6 +80,16 @@ Framework pins, while the wiki covers architecture.
 | 23 | [External Apps](23-external-apps.md) | Curated containerised applications: the catalog document and its fingerprint, the engine-owned container runtime layer beside the sandbox SPI, the container policy and what it verifies on read-back, per-instance storage and the storage-wipe helper container, the lifecycle and the boot reconciler, runtime selection and the daemon identity pin, the `ExternalApps:Enabled` kill switch and what disabling does not do |
 | 24 | [Audio Transcription](24-audio-transcription.md) | Local speech-to-text on whisper.cpp: the supervised `whisper-server` runtime in brief, the encrypted session and segment tables and their AAD layout, the batch upload path (streaming multipart, engine-owned temp slot, container sniffing, engine-side ffmpeg transcode, `Seq` from 1), the session route family, the React feature area, the never-persist-audio rule and its four enforcement points, the options table, and what the live capture slices have not built yet |
 | 25 | [Development Workflows](25-dev-workflows.md) | Templated graphs over a code work item: the database-as-truth tick and its serialized-write invariant, the agent/tool/dev-task lanes and the write declaration, decomposition and the task-package contract, the provenance rule that gates an apply, the cross-node fix loop and its budgets, operator retry reasons and the task statuses that carry none, telemetry and rule-set policy text, artifact promotion, startup recovery, and the options table |
+
+### Reference pages
+
+Lookup material split out of the largest pages. Each is complete on its own and names the parent section it came from.
+
+| Parent | Reference pages |
+| --- | --- |
+| 03 Local Runtime & Providers | [supervisor internals](reference/03-llama-server-supervisor.md) · [launch flags](reference/03-llama-server-launch-flags.md) · [clients](reference/03-llama-server-clients.md) · [runtime binaries & tuning](reference/03-runtime-binaries-and-tuning.md) · [satellite & cloud providers](reference/03-satellite-and-cloud-providers.md) |
+| 04 Agent Mode | [AI.Agent runtime](reference/04-ai-agent-runtime.md) · [application services](reference/04-application-services.md) · [agent skills](reference/04-agent-skills.md) · [work sessions](reference/04-work-sessions.md) |
+| 12 Security & Privacy | [admin API surface](reference/12-admin-api-surface.md) · [sandbox modes & options](reference/12-sandbox-modes-and-options.md) |
 
 ## Conventions in this wiki
 

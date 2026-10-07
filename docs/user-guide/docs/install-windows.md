@@ -19,20 +19,30 @@ requirement while opening that download page. Either way, installing the runtime
 have, run `dotnet --list-runtimes` and look for `Microsoft.AspNetCore.App 10.0.12` or newer.
 → [FAQ: the window flashes and disappears](faq.md#nothing-happens-when-i-run-it--the-window-flashes-and-disappears)
 
+### Also install WebView2
+
+The app's own window is built on the Microsoft Edge **WebView2 Evergreen Runtime**. Install it from
+[Microsoft's WebView2 page](https://developer.microsoft.com/microsoft-edge/webview2/) if your
+computer does not have it yet. The app does not download it for you.
+
+Without it the window cannot open: the app shows an error that says WebView2 is required, with a
+**Download WebView2** button. Until you install it, you can start the app with `--browser` added, for
+example `XE-Local-AI-Engine.exe --browser`, and it opens in your web browser instead.
+
 ---
 
 ## The short version
 
 For people who have done this kind of thing before:
 
-1. Install the x64 ASP.NET Core Runtime 10.0.12+ from Microsoft.
+1. Install the x64 ASP.NET Core Runtime 10.0.12+ and the WebView2 Evergreen Runtime from Microsoft.
 2. Download `XE-Local-AI-Engine-win-Portable.zip` and `CHECKSUMS.sha256` from [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases).
 3. **Right-click the ZIP → Properties → tick "Unblock" → OK.** *(Do this before extracting — it saves
    you the SmartScreen warning.)*
 4. Verify its SHA-256 value, then extract it to a writable local directory, e.g.
    `%LOCALAPPDATA%\Programs\XE-Local-AI-Engine`. **Not** Program Files.
 5. Run **`XE-Local-AI-Engine.exe`** in the top-level folder — *not* the launcher inside `current\`.
-6. A console window opens and your browser opens the app. Leave the console open.
+6. The app opens in its own window.
 
 Everything below is the same thing, explained slowly.
 
@@ -253,19 +263,15 @@ Confirm the download against the release's `CHECKSUMS.sha256` before adding any 
 
 ## Step 5 — What happens next
 
-Two things open:
+**The app opens in its own window.** It shows *"Starting XE…"* for a moment, then the setup screen.
+There is no console window to keep open.
 
-1. **A black console window**, filling up with log messages. **Leave it open** — closing it stops the
-   app. It is not an error; it is the app running.
-2. **Your web browser**, showing the app at a `http://127.0.0.1:...` address. **The port number is
-   chosen automatically and is different on every machine** — yours will not match any example here.
-   Read the real one from the console.
+> **The window shows an error instead?** If it says WebView2 is required, install it (see
+> [Also install WebView2](#also-install-webview2)). For any other startup error, click **Open logs
+> folder** on that screen and see [FAQ & troubleshooting](faq.md).
 
-> **Browser didn't open?** Look in the console window for a line containing `http://127.0.0.1:` and
-> paste **that exact address** — including its port number — into your browser.
-
-**The first launch takes several minutes** and looks like very little is happening. It is downloading
-the AI engine and a small starter model in the background. Watch the console for progress.
+**The first launch takes several minutes.** After you finish setup, the app downloads the AI engine and a
+small starter model in the background, and shows the progress inside the app.
 
 **→ Continue to [First run](first-run.md)** for what to do in the app itself.
 
@@ -273,13 +279,15 @@ the AI engine and a small starter model in the background. Watch the console for
 
 ## Stopping the app
 
-**Close the console window.** That shuts down the app and the AI engine together, cleanly.
+Choose **Quit XE** in the tray menu (the app's icon near the clock). That shuts down the app and the AI
+engine together, cleanly.
 
-Do not just close the browser tab — that only hides the interface; the app keeps running in the
-background.
+The first time you close the window, the app asks what closing should do: **Keep running in the tray**
+or quit. You can tick **Remember my choice**, and change it later under **Desktop settings** in the tray
+menu.
 
-> **Only one copy runs at a time.** If one is already running, a second launch refuses to start and
-> closes with a message in the console. That is the protection working, not a crash.
+> **Only one copy runs at a time.** Starting the app again while it is running brings the existing
+> window back instead of opening a second copy.
 
 ---
 
@@ -287,7 +295,7 @@ background.
 
 There is no uninstaller to run. Removal is two manual deletions:
 
-1. **Stop the app** (close the console window).
+1. **Stop the app** (**Quit XE** in the tray menu).
 2. **Delete the folder** you extracted, e.g. `C:\Apps\XE-Local-AI-Engine`.
 3. **Delete your data folder**, which is stored separately:
 
@@ -307,8 +315,8 @@ There is no uninstaller to run. Removal is two manual deletions:
 
 → [**FAQ & troubleshooting**](faq.md) covers the common failures.
 
-→ Or [open an issue](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose) — include what you clicked and any red text from the
-console window. See [Giving feedback](feedback.md).
+→ Or [open an issue](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose) — include what you clicked and any error message
+you saw. See [Giving feedback](feedback.md).
 
 ---
 

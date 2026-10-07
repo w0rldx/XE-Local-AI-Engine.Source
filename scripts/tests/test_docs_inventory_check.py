@@ -19,6 +19,8 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -96,6 +98,8 @@ Hubs: `AlphaHub`, `BetaHub`.
 
 REACT_CLIENT_MD = """# React Client
 
+## Features
+
 Feature areas: `alpha`, `beta`.
 """
 
@@ -108,7 +112,7 @@ PROJECT_LAYOUT_MD = """# Project Layout
 
 AGENT_KNOWLEDGE_INDEX_MD = (
     "# Agent knowledge\n\n"
-    + "".join(f"## {n}. Section {n}\n\nSee [topic](agent-knowledge/build.md#s{n}).\n\n" for n in range(8))
+    + "".join(f"## {n}. Section {n}\n\nSee [topic](agent-knowledge/build.md#short-rule).\n\n" for n in range(8))
     + "Pending: [proposed](agent-knowledge/proposed.md).\n"
 )
 
@@ -166,7 +170,30 @@ class DocsInventoryCheckTests(unittest.TestCase):
         (topics / "build.md").write_text(BUILD_TOPIC_MD, encoding="utf-8")
         (topics / "proposed.md").write_text(PROPOSED_TOPIC_MD, encoding="utf-8")
 
+        # main() runs check_markdown_links over `git ls-files`, so the miniature repository is a git repository.
+        if shutil.which("git") is None:
+            self.skipTest("git is not on PATH; main() needs it for the markdown-links inventory")
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+
         return root
+
+    def make_docs(self, files: dict[str, str]) -> tuple[Path, list[Path]]:
+        """Write Markdown files into a plain (non-git) directory and return them as an injected inventory."""
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        paths = []
+        for relative, text in files.items():
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            paths.append(path)
+        return root, paths
+
+    def link_problems(self, files: dict[str, str]) -> list[str]:
+        root, paths = self.make_docs(files)
+        return [item.render() for item in MODULE.check_markdown_links(root, paths).missing]
 
     @staticmethod
     def drop(root: Path, relative: str, needle: str) -> None:
@@ -397,6 +424,130 @@ class DocsInventoryCheckTests(unittest.TestCase):
 
         self.assertEqual(["PROPOSED: new rule"], [item.name for item in result.missing])
         self.assertIn("move it to proposed.md", result.missing[0].render())
+
+    def test_markdown_links_resolve_relative_paths_directories_and_anchors(self) -> None:
+        problems = self.link_problems(
+            {
+                "docs/a.md": (
+                    "# A\n\n## Local\n\n[b](b.md#second) [dir](sub/) [self](#local) [img](sub/x.png 'title')\n"
+                    '[spaced](my%20page.md) [root](/docs/b.md) [titled](b.md "Title")\n\n[ref]: b.md#explicit\n'
+                ),
+                "docs/b.md": '# B\n\n## Second\n\n<a id="explicit"></a>\n',
+                "docs/my page.md": "# Spaced\n",
+                "docs/sub/x.png": "",
+            }
+        )
+
+        self.assertEqual([], problems)
+
+    def test_markdown_links_report_a_broken_relative_path(self) -> None:
+        problems = self.link_problems({"docs/a.md": "See [gone](../wiki/gone.md) and [ref].\n\n[ref]: nope.md\n"})
+
+        self.assertEqual(
+            [
+                "BROKEN markdown-links: docs/a.md: broken path: ../wiki/gone.md",
+                "BROKEN markdown-links: docs/a.md: broken path: nope.md",
+            ],
+            problems,
+        )
+
+    def test_markdown_links_report_a_missing_anchor_in_another_file_and_the_same_file(self) -> None:
+        problems = self.link_problems({"a.md": "# A\n\n[x](b.md#nowhere) [y](#also-nowhere)\n", "b.md": "# B\n"})
+
+        self.assertEqual(
+            [
+                "BROKEN markdown-links: a.md: missing anchor: b.md#nowhere",
+                "BROKEN markdown-links: a.md: missing anchor: #also-nowhere",
+            ],
+            problems,
+        )
+
+    def test_github_slugs_for_real_repository_headings(self) -> None:
+        cases = {
+            # docs/user-guide/docs/first-run.md
+            "Step 5 — Get a model that is actually good": "step-5--get-a-model-that-is-actually-good",
+            # docs/user-guide/docs/glossary.md
+            "Quantization (Q4_K_M, Q5_K_M, Q8_0…)": "quantization-q4_k_m-q5_k_m-q8_0",
+            # docs/wiki/12-security-and-privacy.md
+            "7.1 The isolated launch mode (`SandboxIsolationMode.Filesystem`) — opt-in, consumed by `run_python`": (
+                "71-the-isolated-launch-mode-sandboxisolationmodefilesystem--opt-in-consumed-by-run_python"
+            ),
+            # docs/wiki/03-local-runtime-and-providers.md
+            "`Providers.WhisperCpp` — the supervised speech-to-text runtime": (
+                "providerswhispercpp--the-supervised-speech-to-text-runtime"
+            ),
+            "**Bold** _emphasis_ and gen_aitool [link](x.md) `__init__`": "bold-emphasis-and-gen_aitool-link-__init__",
+            "Ümlaut Überschrift": "ümlaut-überschrift",
+        }
+        for heading, slug in cases.items():
+            with self.subTest(heading=heading):
+                self.assertEqual(slug, MODULE.github_slug(heading))
+                problems = self.link_problems(
+                    {
+                        "a.md": f"### {heading}\n\n[x](#{slug}) [y](b.md#{slug})\n",
+                        "b.md": f"## {heading} ##\n",
+                        "x.md": "",
+                    }
+                )
+                self.assertEqual([], problems)
+
+    def test_duplicate_headings_get_numbered_suffixes(self) -> None:
+        anchors = MODULE.markdown_anchors("# Setup\n\n## Setup\n\n## Setup\n\n## Setup-1\n")
+
+        self.assertEqual({"setup", "setup-1", "setup-2", "setup-1-1"}, set(anchors))
+
+    def test_headings_and_links_inside_fenced_blocks_are_ignored(self) -> None:
+        text = "# Real\n\n```bash\n# not-a-heading\n[x](gone.md)\n````\n~~~\n## also-not\n~~~\n"
+        problems = self.link_problems({"a.md": text + "[y](#not-a-heading) [z](#also-not) `[w](gone.md)`\n"})
+
+        self.assertEqual(
+            [
+                "BROKEN markdown-links: a.md: missing anchor: #not-a-heading",
+                "BROKEN markdown-links: a.md: missing anchor: #also-not",
+            ],
+            problems,
+        )
+
+    def test_external_links_are_not_checked(self) -> None:
+        problems = self.link_problems(
+            {"a.md": "[w](https://example.invalid/x.md#y) [h](http://example.invalid) [m](mailto:a@example.invalid)\n"}
+        )
+
+        self.assertEqual([], problems)
+
+    def test_markdown_inventory_skips_vendored_corpus_and_third_party_files(self) -> None:
+        root = self.make_repo()
+        broken = "[x](does-not-exist.md)\n"
+        for relative in (
+            "XE-Local-AI-Engine.Client.Application/Services/Agents/Templates/sources/t.md",
+            "XE-Local-AI-Engine.Tests/Fixtures/LiveCorpus/c.md",
+            "third-party/lib/README.md",
+        ):
+            path = root / relative
+            path.parent.mkdir(parents=True)
+            path.write_text(broken, encoding="utf-8")
+        (root / "docs" / "kept.md").write_text(broken, encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+
+        result = MODULE.check_markdown_links(root)
+
+        # The fixture's own pages are link-clean, so only the one non-excluded broken file is reported.
+        self.assertEqual(["docs/kept.md"], [item.doc.as_posix() for item in result.missing])
+        self.assertNotIn("third-party/lib/README.md", result.inventory)
+
+    def test_an_empty_markdown_inventory_raises(self) -> None:
+        root, _ = self.make_docs({})
+
+        with self.assertRaises(MODULE.InventoryError):
+            MODULE.check_markdown_links(root, [])
+
+    def test_the_script_exits_zero_on_the_real_repository(self) -> None:
+        completed = subprocess.run(
+            [sys.executable, str(MODULE_PATH)], cwd=REPO_ROOT, capture_output=True, text=True, check=False
+        )
+
+        self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+        self.assertIn("8 checks", completed.stdout)
 
     def test_main_is_clean_on_the_real_repository(self) -> None:
         stdout = io.StringIO()

@@ -2,6 +2,30 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** Graph Workflows: operator-authored DAGs of LLM calls, agent turns, tool calls, conditions
+and human pauses, started manually and executed from the database, so a restart loses at most the in-flight work. A
+cycle is refused at save, no agent may edit a definition, and a `Tool` node runs only built-in read-local tools. The
+code spans `Client.Application/Services/GraphWorkflows/`, `Client.Persistence`, the `LocalApiRoutes.GraphWorkflows`
+family with `GraphWorkflowRunHub`, and the React `features/graphWorkflows/` folder.
+
+**Read this if you are** changing the graph contract, a node kind or the dispatcher, or debugging a stuck run or an
+Open Canvas import. **Skip to** [§3](#3-run-lifecycle) for how a run advances; **reference tables** are in
+[§5](#5-api-and-hub) and [§8](#8-limits-and-options); **related pages:** [Dev Workflows](25-dev-workflows.md),
+[Workflow Engines Divergence Register](22-workflow-engines-divergence-register.md).
+
+## Contents
+
+- [1. What it is, and what it is not](#1-what-it-is-and-what-it-is-not)
+- [2. The graph contract](#2-the-graph-contract)
+- [3. Run lifecycle](#3-run-lifecycle)
+- [4. The node kinds](#4-the-node-kinds)
+- [5. API and hub](#5-api-and-hub)
+- [6. Frontend](#6-frontend)
+- [7. Testing](#7-testing)
+- [8. Limits and options](#8-limits-and-options)
+- [9. The Open Canvas import](#9-the-open-canvas-import)
+- [Related pages](#related-pages)
+
 **Graph Workflows** let an operator draw a directed acyclic graph of LLM calls, agent turns, tool calls, conditions and human
 pauses, save it, and start runs of it. The engine executes the run from the database: every node run is a row, every
 change is an append-only event, and the process that advances it holds no authoritative state of its own. Restarting

@@ -59,9 +59,8 @@ command is not found, that is the cause. → [Windows install prerequisites](ins
 
 Once .NET 10 is installed, if it still won't start:
 
-- **Is it already running?** Only one copy can run at a time. A second launch prints *"Another
-  instance ... is already running"* and closes immediately. Check your taskbar for an existing console
-  window. Remember that **closing the browser tab does not stop the app**.
+- **Is it already running?** Only one copy runs at a time. Starting it again brings the existing
+  window back; if the window was hidden, look for the app's icon in the tray near the clock.
 - **Look for a startup log.** Recent builds record why the launcher stopped to
   `%LOCALAPPDATA%\XE-Local-AI-Engine\logs\launcher.log` (and `startup-crash.log`). An empty or missing
   `logs` folder points back at the missing-.NET-10 case above.
@@ -75,30 +74,30 @@ Once .NET 10 is installed, if it still won't start:
 - Try extracting to a simpler path such as `C:\Apps\XE-Local-AI-Engine`.
 
 ### The first-time setup seems stuck — it's been 20 minutes
-First launch downloads the AI engine plus a ~2 GB starter model, so **5–15 minutes is normal**, and
-longer on a slow connection.
+After setup, the app downloads the AI engine plus a ~2 GB starter model, so **5–15 minutes is normal**,
+and longer on a slow connection. The progress is shown inside the app. If the numbers are still
+changing, it's working — leave it alone.
 
-**Check the console window**, not the browser. If lines are still appearing or numbers still changing,
-it's working — leave it alone. The finish line is a line containing **`Now listening on:`**.
+If nothing has moved for **10+ minutes**, check the error shown in the app, your internet connection and
+your free disk space, then retry the download from **Models → Installed**. Please don't delete the data
+folder to fix this: it holds your account and keys. → [First run, Step 3](first-run.md#step-3--install-a-model)
 
-If the *same last line* has been there for **10+ minutes**, it's genuinely stuck:
+If it stalls at the same point twice, **please report it** — that's a real bug. The **Export** on the
+Diagnostics page bundles the logs for you. → [How to report](feedback.md)
 
-1. Close the console window.
-2. Delete `%LOCALAPPDATA%\XE-Local-AI-Engine` (paste that into the File Explorer address bar).
-3. Start the app again.
-
-If it stalls at the same point twice, **please report it** with the last few console lines — that's a
-real bug. If the page still loads, the in-app **Export** on the Diagnostics page bundles the logs for you.
-→ [How to report](feedback.md)
-
-### The console opens but the browser doesn't
-Look in the console for a line containing `http://127.0.0.1:` followed by a number, and paste that
-address into your browser.
+### The app window doesn't open, or shows an error
+- **On Windows, an error that says WebView2 is required:** install the Microsoft Edge WebView2 Evergreen
+  Runtime. → [How](install-windows.md#also-install-webview2)
+- **On Linux, an error that mentions WebKitGTK 4.1:** install your distribution's WebKitGTK 4.1 package.
+- **Either way,** starting the app with `--browser` added opens it in your web browser instead, while you
+  sort out the window.
+- **Any other startup error:** click **Open logs folder** on the error screen and send the newest files
+  with your report. → [Log files](feedback.md#log-files)
 
 ### It says the port is in use / won't connect
 Only run **one copy at a time**. If you're sure none is running:
 
-1. Close all console windows.
+1. Quit the app (**Quit XE** in the tray menu) and close any terminal you started it from.
 2. Delete `desktop-port.txt` from your data folder (paste `%LOCALAPPDATA%\XE-Local-AI-Engine` into
    File Explorer).
 3. Start the app again — it picks a fresh port.
@@ -160,6 +159,7 @@ loopback ports, and Windows may prompt about those the first time you chat or ge
 |---|---|
 | llama.cpp (chat/text) | `18100`–`18199` |
 | stable-diffusion.cpp (images) | `18200`–`18299` |
+| whisper.cpp (transcription) | `18300`–`18399` |
 
 These are **local-only** connections between parts of the app on your own machine — nothing is being
 opened to the internet or your network.
@@ -207,12 +207,16 @@ Most likely you're running on the **CPU** rather than the graphics card.
 > 2. The app **cannot yet reliably warn you** if it does end up on the CPU.
 >
 > So if performance seems far worse than expected, please tell me your GPU — that's a useful report.
+>
+> **On Linux with an AMD or Intel card** the app cannot measure VRAM either, so recommendations are
+> sized from system RAM in the same way. Pick a smaller model if one won't load.
 
 ### How do I tell whether it's using my GPU?
-Check the console window during startup and model loading — it reports the runtime and the devices it
-found. The hardware card in the app also shows the detected GPU vendor.
+Open **Models → Recommendations**. Its hardware card shows the GPU the app detected. It warns you with
+**"Running on CPU despite a detected GPU"** when the engine could not use your card, and tells you when
+only part of a model fits on the GPU.
 
-If the console shows no GPU devices when you have one, that's worth reporting.
+If the app shows no GPU when you have one, that's worth reporting.
 
 ### The starter model gives terrible answers
 It's a 3B model chosen to be small and reliable with tools, not to be the best you can run. **Replace it.** The Model
@@ -226,7 +230,7 @@ It's too big for your VRAM or RAM.
   pushed you over — especially if the same model loaded fine before.
 - Pick a **smaller quantization** of the same model (`Q4_K_M` before `Q8_0`) — usually better than
   dropping to a smaller model. Don't go below Q4 unless you have to.
-- **Eject** models under **Models → Loaded** you're not using (**Models → Loaded**) to free memory.
+- **Eject** models you're not using under **Models → Loaded** to free memory.
 - Don't keep an image model and a large chat model loaded simultaneously.
 - Close other GPU-heavy applications, including games and browsers with many tabs.
 
@@ -268,8 +272,8 @@ install or manage Ollama for you.
 ## Using the app
 
 ### How do I stop it?
-**Close the console window.** That stops the app and the AI engine together, cleanly. Closing the
-browser tab only hides the interface — the app keeps running.
+Choose **Quit XE** in the tray menu, or close the window and choose to quit. That stops the app and the AI
+engine together, cleanly. If you chose **Keep running in the tray**, closing the window only hides it.
 
 ### Can I use it offline?
 Yes, once the engine and a model are downloaded. Internet is only needed for downloading models,
@@ -304,8 +308,13 @@ One folder, separate from the app:
 %LOCALAPPDATA%\XE-Local-AI-Engine
 ```
 
-Paste that into the File Explorer address bar. It holds your account, chats, settings, downloaded
-models and the AI engine — often several GB.
+Paste that into the File Explorer address bar. On Linux it is `~/.local/share/XE-Local-AI-Engine`
+(or `$XDG_DATA_HOME/XE-Local-AI-Engine`). It holds your account, chats, settings, downloaded models and
+the AI engine — often several GB.
+
+### Where are the log files?
+In the `logs` folder inside your data folder. **Open logs folder** in the tray menu, or on the error
+screen when the app cannot start, takes you there. → [Which files to send](feedback.md#log-files)
 
 ### Does anything get sent to the internet?
 No conversations, no documents, no telemetry. The app-managed connections are **Hugging Face**
@@ -322,7 +331,7 @@ If you work with genuinely sensitive documents, use full-disk encryption (BitLoc
 → [Details](privacy-and-data.md)
 
 ### How do I completely reset the app?
-1. **Stop the app** (close the console window).
+1. **Stop the app** (**Quit XE** in the tray menu).
 2. Delete the data folder: paste `%LOCALAPPDATA%\XE-Local-AI-Engine` into File Explorer and delete it.
 3. Start the app again — it sets itself up from scratch.
 
@@ -367,8 +376,8 @@ email (there's no server to send one).
 **"Forgot your password? Use your recovery code"**, enter the recovery code, choose a new password and
 click **"Unlock and set new password"**.
 
-**The command-line way.** First, stop the app — close its console window. The reset won't run while the
-app is still open. The recovery code goes in through the keyboard input (piped in), never as part of the
+**The command-line way.** First, stop the app — **Quit XE** in the tray menu. The reset won't run while
+the app is still open. The recovery code goes in through the keyboard input (piped in), never as part of the
 command itself, so it doesn't show up in the list of running programs.
 
 **On Windows**
@@ -410,6 +419,9 @@ and click **Unlock**. Until you do, the engine waits: scheduled jobs don't run a
 
 Forgot it? Use your recovery code — see [I forgot my password](#i-forgot-my-password).
 
+An **older build** that says `node.key` is corrupt simply cannot read the protected key. Don't delete
+`node.key`. → [Going back to an older version](updating.md#going-back-to-an-older-version)
+
 ### I lost my recovery code
 **If you still know your password, nothing is lost.** Keep using the app, and store the password
 especially carefully: the recovery code is shown only once (at setup, or on the **"Protect this node's
@@ -429,8 +441,8 @@ There's no uninstaller.
 
 **Windows:**
 
-1. **Stop the app first** — close the console window. Deleting files while it's running can corrupt
-   the database.
+1. **Stop the app first** — **Quit XE** in the tray menu. Deleting files while it's running can
+   corrupt the database.
 2. Delete the folder you extracted.
 3. Delete `%LOCALAPPDATA%\XE-Local-AI-Engine`.
 
@@ -444,21 +456,17 @@ Nothing is written to the Windows registry or installed into Program Files.
 ## Updating
 
 ### How do I get new versions?
-Two ways:
-
-- **In-app:** the app checks the public GitHub release feed anonymously and can install an available update itself.
-- **Manually:** download the new platform artifact from Releases: the Windows `Portable.zip` or Linux AppImage. Your
-  data folder is separate, so chats and models carry over.
-
-→ [Updating guide](updating.md)
+The app can update itself, and you can also replace it by hand. Your data folder is separate, so chats
+and models carry over either way. → [Updating guide](updating.md)
 
 ### Why does it want me to sign in to GitHub?
 The official updater does **not** require GitHub sign-in. It reads the public release feed anonymously. If a build
 shows an updater device-login prompt, it is an old or unofficial build; replace it with a verified current release.
 
 ### Can I go back to an older version?
-Yes — download an older release and run it. **But back up your data folder first:** the database
-upgrades automatically to newer versions and isn't guaranteed to work with older builds.
+Yes, but **back up your data folder first:** the database upgrades automatically to newer versions and
+isn't guaranteed to work with older builds.
+→ [Going back to an older version](updating.md#going-back-to-an-older-version)
 
 ---
 
@@ -507,8 +515,8 @@ makes it fast rather than possible.
 
 → [**How to send feedback**](feedback.md), or [open an issue](https://github.com/w0rldx/XE-Local-AI-Engine.Source/issues/new/choose).
 
-Useful to include: what you did, what happened, your Windows version, your CPU/GPU/RAM, and any red
-text from the console window. **"I got confused here" is a valid and valuable bug report.**
+Useful to include: what you did, what happened, your operating system, your CPU/GPU/RAM, and any error
+message you saw. **"I got confused here" is a valid and valuable bug report.**
 
 ---
 

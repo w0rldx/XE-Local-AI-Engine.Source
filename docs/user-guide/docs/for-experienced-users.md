@@ -191,8 +191,9 @@ Everything lives in one directory (`%LOCALAPPDATA%\XE-Local-AI-Engine`), separat
 - **Loopback enforced twice**: every request is checked for a loopback peer, and at startup the app
   inspects its actually-bound addresses and **shuts down with a non-zero exit** if any is routable
   (overridable only by an explicit operator setting).
-- **Development Mode ships enabled but can be disabled.** Set `Development:Enabled=false` to remove
-  its services and surface; when enabled, it only acts on a repository you register. It is **not an
+- **Development Mode ships enabled but can be disabled.** Switch it off in **Node Settings → General →
+  Features** and restart, or set `Development:Enabled=false` (a value saved in the app wins over the
+  configuration key). Either removes its services and surface; when enabled, it only acts on a repository you register. It is **not an
   OS sandbox** — builds and scripts run as your user.
   [Read this before pointing it anywhere](privacy-and-data.md#development-mode-and-its-limits)
 - **Custom tools are host-powerful and default off.** HTTP tools can reach configured network hosts;

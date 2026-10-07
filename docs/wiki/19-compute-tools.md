@@ -2,6 +2,28 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** The compute tools, which let governed agents run short Python scripts with numpy, scipy and
+sympy through the `run_python` tool. Two invariants matter most: execution goes through the process-role sandbox in an
+isolated mount namespace with no network and no host filesystem, and the tool is held out of the default tool offer
+until an operator enables it. It is Linux-only; the code lives in `Client.Application/Services/Compute/`.
+
+**Read this if you are** enabling, changing or security-reviewing `run_python`, or choosing between it and Custom
+Tools. **Skip to** [§3](#3-security-and-gating) for the gates and [§5](#5-how-an-operator-enables-it) for enablement;
+the **file list** is in [§8](#8-files-and-components); **related pages:** [Agent Mode](04-agent-mode.md), [Security &
+Privacy](12-security-and-privacy.md), [Training](18-training.md).
+
+## Contents
+
+- [1. What the tool does — `run_python`](#1-what-the-tool-does--run_python)
+- [2. Execution path — process sandbox, in an isolated mount namespace](#2-execution-path--process-sandbox-in-an-isolated-mount-namespace)
+- [3. Security and gating](#3-security-and-gating)
+- [4. Platform support](#4-platform-support)
+- [5. How an operator enables it](#5-how-an-operator-enables-it)
+- [6. When to use compute tools vs. other approaches](#6-when-to-use-compute-tools-vs-other-approaches)
+- [7. Testing and validation](#7-testing-and-validation)
+- [8. Files and components](#8-files-and-components)
+- [9. Related architecture](#9-related-architecture)
+
 The **compute tools** subsystem allows governed agents to execute short scripts in a **sandboxed, offline interpreter** for numeric and symbolic computation. The first and only v1 tool is `run_python`, which runs arbitrary Python 3 code with numpy, scipy, and sympy available — no network, no host filesystem, no filesystem persistence, no conversation access.
 
 This is distinct from the **Custom Tools** library (`CustomToolCatalog`), which executes operator-authored, node-local commands through an uncontained host-process executor. Compute tools route through the **process-role sandbox** (`ISandboxRuntimeProvider`), the same containment primitive that supervises AgentHome and Coder commands, and they are held out of the default tool offer entirely — profile-opt-in only.

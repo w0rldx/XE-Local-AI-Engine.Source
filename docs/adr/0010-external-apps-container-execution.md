@@ -1,6 +1,6 @@
 # ADR 0010: User-managed application containers from the XE catalog are a separate consumer class with their own runtime layer
 
-- **Status:** Proposed — the repository owner records acceptance with their own name and date at merge, as ADR 0007 did.
+- **Status:** Accepted — by the repository owner (`w0rldx`) on 2026-10-07; the design is implemented on `develop`.
 - **Date:** 2026-09-05
 - **Scope:** How the engine runs curated, user-installed application containers. It changes nothing a sandbox backend
   enforces and does not touch the sandbox SPI.

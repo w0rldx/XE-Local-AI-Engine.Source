@@ -8,7 +8,8 @@
 Source `88bd2353` was recaptured with the schema-2 scheduling harness, managed
 llama.cpp b9692 CUDA build, pinned Nomic embedding model, and pinned BGE
 reranker. The sanitized machine-readable result is
-`baselines/2026-07-26-88bd2353-lane4-no-change.json`.
+`docs/performance/baselines/2026-07-26-88bd2353-lane4-no-change.json`
+(removed on 2026-10-07 as unreferenced evidence; the commit history keeps it).
 
 ## Fixed identities
 

@@ -2,10 +2,38 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** Dev Workflows, the runtime that moves an operator's work item through a graph of agent
+turns, sandbox command passes, coder rounds and human gates. It builds on the database-as-truth runtime model
+described in [Graph Workflows §1](21-graph-workflows.md#1-what-it-is-and-what-it-is-not), and it drives the
+work-session executor and Development Mode's coder chain rather than re-implementing them. No AI-authored change
+reaches a repository from here without the apply gate. The feature ships off behind the `DevWorkflowsEnabled` node
+setting; the code lives in `Client.Application/Services/DevWorkflows/` and `Client.Persistence`.
+
+**Read this if you are** changing the dispatcher, a lane, the retry policy or restart recovery, or debugging a blocked
+run. **Skip to** [§3](#3-the-dispatcher) for how a run advances and [§10](#10-restart-recovery) for recovery;
+**reference tables** are in [§13](#13-limits-and-options); **related pages:** [Workflow Engines Divergence
+Register](22-workflow-engines-divergence-register.md), [API & Hubs](09-api-and-hubs.md).
+
+## Contents
+
+- [1. What it is, and what it is not](#1-what-it-is-and-what-it-is-not)
+- [2. The graph](#2-the-graph)
+- [3. The dispatcher](#3-the-dispatcher)
+- [4. Human decisions](#4-human-decisions)
+- [5. The agent lane](#5-the-agent-lane)
+- [6. The implementation lane](#6-the-implementation-lane)
+- [7. The tool lane](#7-the-tool-lane)
+- [8. The retry policy](#8-the-retry-policy)
+- [9. Decomposition and materialization](#9-decomposition-and-materialization)
+- [10. Restart recovery](#10-restart-recovery)
+- [11. Artifacts](#11-artifacts)
+- [12. Events, telemetry and reads](#12-events-telemetry-and-reads)
+- [13. Limits and options](#13-limits-and-options)
+- [Related pages](#related-pages)
+
 **Dev Workflows** run an operator's work item through a graph of agent turns, sandbox command passes, coder
-rounds and human gates. The engine executes a run from the database: every node run is a row, every change is
-an append-only event, and the process that advances it holds no authoritative state of its own. A restart costs
-at most the work that was in flight.
+rounds and human gates. Like [Graph Workflows](21-graph-workflows.md#1-what-it-is-and-what-it-is-not), the engine
+executes a run from the database, so a restart costs at most the work that was in flight.
 
 The module lives in `Client.Application/Services/DevWorkflows/` (the parser, the state machine, the dispatcher
 and the three lanes), `Client.Persistence` (work items, definitions, rule sets, runs, node runs, events and

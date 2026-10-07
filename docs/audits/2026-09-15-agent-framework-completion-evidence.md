@@ -260,7 +260,8 @@ Then rerun dependency capture and the full validation lane.
 ## Attribution boundary
 
 The dependency graphs and deterministic contract-test timings are framework evidence.
-The native inference artifacts under `docs/performance/baselines/` compare
+The native inference artifacts (formerly under `docs/performance/baselines/`, removed on 2026-10-07; the
+commit history keeps them) compared
 `e67d6697` with later commits that also contain prerequisite-system changes (runtime
 capture, fit/VRAM semantics, telemetry/calibration, and launch-profile identity).
 Those native throughput/TTFT/RSS/VRAM deltas **must not be attributed to the Agent

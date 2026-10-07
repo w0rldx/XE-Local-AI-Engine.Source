@@ -87,7 +87,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         base.OnFrameworkInitializationCompleted();
     }
 
-    // Windows-only by operator decision (docs/roadmaps/native-desktop-1.0.md): Linux tray hiding stays unavailable
+    // Windows-only by operator decision (docs/audits/2026-10-02-native-desktop-1.0-delivery-record.md): Linux tray hiding stays unavailable
     // rather than hiding the window behind a tray host that may offer no way to restore it.
     private bool TrayAvailable => OperatingSystem.IsWindows() && _tray?.NativeMenuExporter is not null;
 

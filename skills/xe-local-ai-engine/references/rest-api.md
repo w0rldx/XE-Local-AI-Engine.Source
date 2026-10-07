@@ -1,6 +1,6 @@
 # REST API boundary
 
-The committed [OpenAPI document](../../../XE-Local-AI-Engine.Client.React/openapi/v1.json) is the
+The committed [OpenAPI document](https://github.com/w0rldx/XE-Local-AI-Engine.Source/blob/develop/XE-Local-AI-Engine.Client.React/openapi/v1.json) is the
 static source of truth for `/api/local/v1` REST endpoints. Read it; do not regenerate it as part of
 an external-agent workflow. A regeneration that does not use desktop launch mode silently omits
 desktop-only endpoints.
@@ -22,4 +22,4 @@ explicitly enumerated inbound MCP tool surface; it does not authorize arbitrary 
 The local API middleware enforces loopback peers and strict `Host`/`Origin` handling. Do not work
 around those controls, expose the listener on a routable address, log credentials, or place them in
 committed examples. For the broader boundary, see the repository's
-[Security & Privacy wiki page](../../../docs/wiki/12-security-and-privacy.md).
+[Security & Privacy wiki page](https://github.com/w0rldx/XE-Local-AI-Engine.Source/blob/develop/docs/wiki/12-security-and-privacy.md).

@@ -2,6 +2,34 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** The offline Knowledge Base: uploaded documents are extracted, chunked on header boundaries,
+embedded with a local model and indexed in SQLite for hybrid retrieval (a lexical FTS5 arm plus an embedding arm),
+with source blobs and display names encrypted at rest. The invariant that matters most is provider locality: the
+knowledge tools, workspace file tools and attachments reach only a node-local effective model unless the
+`AllowCloudModelAccess` node setting is on. The code lives in `Client.Application`, `Client.Persistence` and the React
+`features/knowledge/` folder.
+
+**Read this if you are** changing ingestion, retrieval or the agent knowledge tools, or debugging why a model was not
+offered those tools. **Skip to** [Hybrid retrieval](#hybrid-retrieval) for how a query is answered; **reference
+tables** are in [Where the code lives](#where-the-code-lives) and [Endpoints](#endpoints); **related pages:** [Agent
+Mode](04-agent-mode.md), [Data & Persistence](08-data-and-persistence.md), [Security &
+Privacy](12-security-and-privacy.md).
+
+## Contents
+
+- [Where the code lives](#where-the-code-lives)
+- [Ingestion pipeline](#ingestion-pipeline)
+- [Collections and repository ingestion](#collections-and-repository-ingestion)
+- [Hybrid retrieval](#hybrid-retrieval)
+- [Retrieval evaluation](#retrieval-evaluation)
+- [Recommended embedding and reranker models](#recommended-embedding-and-reranker-models)
+- [Agent tool surface](#agent-tool-surface)
+- [SignalR notifications](#signalr-notifications)
+- [Endpoints](#endpoints)
+- [React feature](#react-feature)
+- [Invariants a maintainer must respect](#invariants-a-maintainer-must-respect)
+- [Related pages](#related-pages)
+
 The Knowledge Base is a **fully offline** document store with hybrid retrieval. An operator uploads documents; the node extracts their text, chunks them on header boundaries, embeds each chunk with a local embedding model, and indexes everything into local SQLite with **selective encryption** — source document blobs and display names are encrypted at rest, while the extracted chunk text and its FTS search index are stored unencrypted locally. Retrieval fuses a **lexical** arm (SQLite FTS5 / BM25) and a **semantic** arm (vector cosine similarity) with Reciprocal Rank Fusion, optionally rescoring with a **local cross-encoder reranker**, and exposes the result to agents as a tool.
 
 **Provider-locality invariant (enforced default).** Ingestion and embedding stay on-device by default (see `KnowledgeBase:EmbeddingProviderName`), and — as of the MED-004 hardening — the read-only knowledge tools (`search_knowledge_base`, `read_document`, `read_surrounding_chunks`) are **offered only to node-local models** (llama.cpp / Ollama). A cloud-hosted model (Codex OAuth, Azure Foundry) is **not** offered these tools, so document text, chunks, and the query are never handed to a third-party provider through a tool call. An operator can waive this by setting **`KnowledgeBase:AllowCloudModelAccess=true`** (default `false`) — an explicit, documented opt-in that acknowledges knowledge-base content may then reach the cloud provider.

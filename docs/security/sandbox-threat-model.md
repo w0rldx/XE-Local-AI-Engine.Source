@@ -4,7 +4,7 @@
 > and states remaining limitations directly. It is not a certification, an audit, or a risk acceptance.
 
 Companion records: [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Docker scope),
-[ADR 0007](../adr/0007-sandbox-execution-substrate-and-backend-selection.md) (substrate selection, Proposed),
+[ADR 0007](../adr/0007-sandbox-execution-substrate-and-backend-selection.md) (substrate selection, Accepted 2026-08-25),
 [ADR 0006](../adr/0006-agentic-trust-mcp-key-scopes-and-auto-approval.md) (inbound MCP authority),
 [wiki 12 — Security & Privacy](../wiki/12-security-and-privacy.md) (the shipped posture in prose),
 [wiki 19 — Compute Tools](../wiki/19-compute-tools.md) (`run_python`).

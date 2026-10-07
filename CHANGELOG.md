@@ -4,76 +4,20 @@ All notable changes to XE-Local-AI-Engine are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-**Tag convention.** Source tags carry a `v` prefix and `vX.Y.Z` marks a validated stable release. Release candidates
-are `vX.Y.Z-rc.N` from `1.0.0` onward; the historical tester-repository line through `0.1.0-rc.5.1` used the older
-two-part `vX.Y.Z-rc.N.M` form, which is not reused. The section headings below use the bare version, matching the tag
-without its `v`.
-
-Automated Development snapshots of `develop` are tagged `dev/<version>` (e.g. `dev/1.0.0-rc.2.dev.20260922.1`). They
-are lightweight tags created by `.github/workflows/dev-build.yml`, are never deleted, and are not release tags — they
-carry no `v` prefix and are not listed in the sections below.
-
-**Repository & release home.** Source, `v<version>` tags, official binaries, and public update feeds live in
-`w0rldx/XE-Local-AI-Engine.Source`. An installed node picks one of three update channels: Stable sees stable tags,
-Preview also sees release candidates, and Development also sees the `dev/` snapshots published on the separate
-`win-dev` / `linux-dev` Velopack feeds. Velopack independently selects the Windows or Linux package channel.
-Historical releases through `0.1.0-rc.5.1` used a separate tester-repository flow, recorded below for provenance only.
+**Tag convention.** Source tags are `vX.Y.Z` for stable releases and `vX.Y.Z-rc.N` for release candidates from `1.0.0`
+on. The historical tester line through `0.1.0-rc.5.1` used `vX.Y.Z-rc.N.M`, which is not reused. Headings use the bare
+version. Daily Development snapshots of `develop` are lightweight `dev/<version>` tags from
+`.github/workflows/dev-build.yml`; they are not release tags and are not listed here. Source, tags, binaries and update
+feeds live in `w0rldx/XE-Local-AI-Engine.Source`; releases through `0.1.0-rc.5.1` went through a separate tester
+repository, recorded under [Historical tester releases](#historical-tester-releases-provenance).
 
 > **This file is hand-maintained.** `cliff.toml` drives git-cliff, which generates `RELEASE_NOTES.md` for the Velopack
 > package body — it does **not** generate this file. Update this file yourself when you cut a release; nothing will do
 > it for you, which is exactly how it fell five releases behind once already.
 
-### What actually shipped
-
-The tester repo is the authoritative record of what reached a tester. Reconciled 2026-07-24 against
-`gh release list --repo w0rldx/XE-Local-AI-Engine.Tester-App` and `git tag -l`:
-
-| Version | Source tag | Tester release (published, UTC) |
-|---|---|---|
-| 0.1.0-rc.1.0 | `v0.1.0-rc.1.0` | 2026-06-26 |
-| 0.1.0-rc.1.1 | `v0.1.0-rc.1.1` | 2026-06-26 |
-| 0.1.0-rc.1.2 | `v0.1.0-rc.1.2` | 2026-06-27 |
-| 0.1.0-rc.2.0 | `v0.1.0-rc.2.0` | 2026-06-29 |
-| 0.1.0-rc.3.0 | `v0.1.0-rc.3.0` | 2026-07-02 |
-| 0.1.0-rc.4.0 | `v0.1.0-rc.4.0` | 2026-07-06 |
-| 0.1.0-rc.4.1 | `v0.1.0-rc.4.1` | 2026-07-07 |
-| 0.1.0-rc.5.0 | `v0.1.0-rc.5.0` | 2026-08-04 |
-| 0.1.0-rc.5.1 | `v0.1.0-rc.5.1` | 2026-08-05 |
-
-**Update 2026-08-05:** `0.1.0-rc.4.2` was never released — the version target moved directly from the burned
-`0.1.0-rc.4.1` to `0.1.0-rc.5.0`. Releases `0.1.0-rc.5.0` and `0.1.0-rc.5.1` completed the historical tester-repository
-line shown in the table.
-
-All nine shipped as GitHub **pre-releases**. All nine local release tags map 1:1 to a tester release. The section dates below are
-the **tester publish dates**, not the tag dates — they differ for
-`0.1.0-rc.1.1`, whose commit was tagged at 00:35 local time on 2026-06-27 but published at 22:41 UTC on 2026-06-26.
-
-The `v0.1.0-rc.4.1` source tag now resolves to version-bump commit `a92a2a09`, so the source and historical tester
-release inventories are fully reconciled. Its section below remains marked as reconstructed because detailed release
-notes were not recorded at publication time. The version string is burned. See
-[`docs/velopack-release-install-guide.md`](docs/velopack-release-install-guide.md) for the historical two-repository
-release model and the gates that replaced it. No local release tag lacks a tester release.
-
-### Public-repository releases
-
-From `1.0.0-rc.1` onward, releases are cut by the CI release workflow and published on
-`w0rldx/XE-Local-AI-Engine.Source` itself. The tester repository plays no part in this line, so the table above stops
-at `0.1.0-rc.5.1` and does not grow. Verified 2026-09-15 against
-`gh release view --repo w0rldx/XE-Local-AI-Engine.Source`:
-
-| Version | Source tag | Source commit | Published (UTC) |
-|---|---|---|---|
-| 1.0.0-rc.1 | `v1.0.0-rc.1` | `ecc18fae` | 2026-08-09 20:06 |
-| 1.0.0-rc.2 | `v1.0.0-rc.2` | `66ade544` | 2026-08-24 07:30 |
-
-Both were published as GitHub **pre-releases** carrying `XE-Local-AI-Engine-win-Portable.zip`,
-`XE-Local-AI-Engine.AppImage`, both Velopack `.nupkg` feeds, and the detached `CHECKSUMS.sha256`,
-`RELEASE-MANIFEST.json` and `RELEASE.spdx.json` evidence.
-
 ## [Unreleased]
 
-Work on `develop` since `v1.0.0-rc.2`: 1,486 commits through 2026-10-02. Nothing in this section is tagged or
-published.
+Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or published.
 
 > The source version identity in `eng/ReleaseVersion.props` still reads `1.0.0-rc.2` — the version that has already
 > shipped. It is bumped when the next release is cut, at which point this section takes that version's heading.
@@ -889,3 +833,63 @@ own llama.cpp binary and GGUF models into the per-user data dir on first launch)
 - Conversation titles are encrypted at rest; pre-existing titles (including operator renames) are re-derived from the
   first user message by a one-time startup backfill. Custom renames from before the migration are not preserved, and
   conversations without a user message keep a `NULL` title.
+
+## Historical tester releases (provenance)
+
+The tester repo is the authoritative record of what reached a tester. Reconciled 2026-07-24 against
+`gh release list --repo w0rldx/XE-Local-AI-Engine.Tester-App` and `git tag -l`:
+
+| Version | Source tag | Tester release (published, UTC) |
+|---|---|---|
+| 0.1.0-rc.1.0 | `v0.1.0-rc.1.0` | 2026-06-26 |
+| 0.1.0-rc.1.1 | `v0.1.0-rc.1.1` | 2026-06-26 |
+| 0.1.0-rc.1.2 | `v0.1.0-rc.1.2` | 2026-06-27 |
+| 0.1.0-rc.2.0 | `v0.1.0-rc.2.0` | 2026-06-29 |
+| 0.1.0-rc.3.0 | `v0.1.0-rc.3.0` | 2026-07-02 |
+| 0.1.0-rc.4.0 | `v0.1.0-rc.4.0` | 2026-07-06 |
+| 0.1.0-rc.4.1 | `v0.1.0-rc.4.1` | 2026-07-07 |
+| 0.1.0-rc.5.0 | `v0.1.0-rc.5.0` | 2026-08-04 |
+| 0.1.0-rc.5.1 | `v0.1.0-rc.5.1` | 2026-08-05 |
+
+**Update 2026-08-05:** `0.1.0-rc.4.2` was never released — the version target moved directly from the burned
+`0.1.0-rc.4.1` to `0.1.0-rc.5.0`. Releases `0.1.0-rc.5.0` and `0.1.0-rc.5.1` completed the historical tester-repository
+line shown in the table.
+
+All nine shipped as GitHub **pre-releases**. All nine local release tags map 1:1 to a tester release. The section dates above are
+the **tester publish dates**, not the tag dates — they differ for
+`0.1.0-rc.1.1`, whose commit was tagged at 00:35 local time on 2026-06-27 but published at 22:41 UTC on 2026-06-26.
+
+The `v0.1.0-rc.4.1` source tag now resolves to version-bump commit `a92a2a09`, so the source and historical tester
+release inventories are fully reconciled. Its section above remains marked as reconstructed because detailed release
+notes were not recorded at publication time. The version string is burned. See
+[`docs/velopack-release-install-guide.md`](docs/velopack-release-install-guide.md) for the historical two-repository
+release model and the gates that replaced it. No local release tag lacks a tester release.
+
+### Public-repository releases
+
+From `1.0.0-rc.1` onward, releases are cut by the CI release workflow and published on
+`w0rldx/XE-Local-AI-Engine.Source` itself. The tester repository plays no part in this line, so the table above stops
+at `0.1.0-rc.5.1` and does not grow. Verified 2026-09-15 against
+`gh release view --repo w0rldx/XE-Local-AI-Engine.Source`:
+
+| Version | Source tag | Source commit | Published (UTC) |
+|---|---|---|---|
+| 1.0.0-rc.1 | `v1.0.0-rc.1` | `ecc18fae` | 2026-08-09 20:06 |
+| 1.0.0-rc.2 | `v1.0.0-rc.2` | `66ade544` | 2026-08-24 07:30 |
+
+Both were published as GitHub **pre-releases** carrying `XE-Local-AI-Engine-win-Portable.zip`,
+`XE-Local-AI-Engine.AppImage`, both Velopack `.nupkg` feeds, and the detached `CHECKSUMS.sha256`,
+`RELEASE-MANIFEST.json` and `RELEASE.spdx.json` evidence.
+
+[Unreleased]: https://github.com/w0rldx/XE-Local-AI-Engine.Source/compare/v1.0.0-rc.2...develop
+[1.0.0-rc.2]: https://github.com/w0rldx/XE-Local-AI-Engine.Source/compare/v1.0.0-rc.1...v1.0.0-rc.2
+[1.0.0-rc.1]: https://github.com/w0rldx/XE-Local-AI-Engine.Source/compare/v0.1.0-rc.5.1...v1.0.0-rc.1
+[0.1.0-rc.5.1]: https://github.com/w0rldx/XE-Local-AI-Engine.Source/compare/v0.1.0-rc.5.0...v0.1.0-rc.5.1
+[0.1.0-rc.5.0]: https://github.com/w0rldx/XE-Local-AI-Engine.Source/compare/v0.1.0-rc.4.1...v0.1.0-rc.5.0
+[0.1.0-rc.4.1]: https://github.com/w0rldx/XE-Local-AI-Engine.Source/compare/v0.1.0-rc.4.0...v0.1.0-rc.4.1
+[0.1.0-rc.4.0]: https://github.com/w0rldx/XE-Local-AI-Engine.Source/compare/v0.1.0-rc.3.0...v0.1.0-rc.4.0
+[0.1.0-rc.3.0]: https://github.com/w0rldx/XE-Local-AI-Engine.Source/compare/v0.1.0-rc.2.0...v0.1.0-rc.3.0
+[0.1.0-rc.2.0]: https://github.com/w0rldx/XE-Local-AI-Engine.Source/compare/v0.1.0-rc.1.2...v0.1.0-rc.2.0
+[0.1.0-rc.1.2]: https://github.com/w0rldx/XE-Local-AI-Engine.Source/compare/v0.1.0-rc.1.1...v0.1.0-rc.1.2
+[0.1.0-rc.1.1]: https://github.com/w0rldx/XE-Local-AI-Engine.Source/compare/v0.1.0-rc.1.0...v0.1.0-rc.1.1
+[0.1.0-rc.1.0]: https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases/tag/v0.1.0-rc.1.0

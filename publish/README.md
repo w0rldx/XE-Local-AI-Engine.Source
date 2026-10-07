@@ -31,13 +31,10 @@ The archive must not contain `coreclr.dll`, `hostfxr.dll`, `hostpolicy.dll`, `Sy
 Library License. The Linux AppImage remains self-contained. Trimming stays **off** for both profiles
 (`PublishTrimmed=false`, reasoning in the `.pubxml` comments): the application is reflection-heavy.
 
-Each release also contains the Velopack feed and full/delta package assets used by the updater, plus:
-
-- `CHECKSUMS.sha256` — SHA-256 checksums generated from the verified remote release bytes.
-- `RELEASE-MANIFEST.json` — the release tag, source commit, asset sizes and SHA-256 values, and signing state.
-- `RELEASE.spdx.json` — a detached SPDX 2.2 release envelope.
-
-The published payload also contains its own SPDX manifest and bundled dependency-license disclosures.
+Each release also contains the Velopack feeds and packages used by the updater and three detached evidence files
+(`CHECKSUMS.sha256`, `RELEASE-MANIFEST.json`, `RELEASE.spdx.json`). The complete asset list, the feed layout and the
+integrity contract are in the [Velopack release guide](../docs/velopack-release-install-guide.md). End-user install
+steps are in the [user guide](../docs/user-guide/README.md).
 
 ## Version and tag contract
 
@@ -81,7 +78,8 @@ The release workflow runs these stages in order:
    anonymously.
 
 Matrix jobs never publish independently. Serialization prevents the two Velopack channels from racing or creating
-separate releases.
+separate releases. The guarantees this gives the published assets are summarized as the integrity contract in the
+[Velopack release guide](../docs/velopack-release-install-guide.md#integrity-contract).
 
 The pinned Microsoft SBOM tool targets .NET 8. Release CI therefore installs a supported .NET 8 runtime alongside
 the repository's .NET 10 SDK. Do not force the tool to roll forward to .NET 10: its component detector can return
@@ -100,7 +98,9 @@ The baked packaging flavour (`-p:UpdateChannel=main|tester|dev`) is internal: it
 follows until its operator picks one (`main` = Stable, `tester` = Preview, `dev` = Development). Velopack's OS
 channel still comes from the package metadata, and no channel ever offers a lower version. Every flavour reads the
 public repository anonymously; users do not need a GitHub account, device login, token, or repository invitation to
-check for updates.
+check for updates. The feed files each channel reads are listed under
+[Feed layout](../docs/velopack-release-install-guide.md#feed-layout); how a user switches channel is in the
+[user guide](../docs/user-guide/docs/updating.md#choose-an-update-channel).
 
 ### Development builds
 
@@ -116,17 +116,10 @@ the workflow prunes all but the newest 30 Development releases and keeps their t
 ## Signing and verification
 
 Release artifacts are currently **unsigned because the project does not yet have a signing certificate**. Certificate
-signing is planned. Until then:
-
-- Windows may show browser reputation warnings and Microsoft Defender SmartScreen's **Unknown publisher** warning.
-- Linux desktop environments or endpoint-security tools may require an explicit trust/execute action for a newly
-  downloaded AppImage.
-- Users should download `CHECKSUMS.sha256` with the platform artifact and verify the SHA-256 value before running it.
-- `RELEASE-MANIFEST.json` binds the published assets to the tag and source commit; `RELEASE.spdx.json` records the
-  detached release inventory.
-
-Publication is fail-closed on the approved, current release-authority and unsigned-risk record. That gate documents
-the accepted interim risk; it does not make unsigned binaries equivalent to signed binaries.
+signing is planned. For maintainers, the consequence is the publish gate: `publish-release` is fail-closed on the
+approved, current release-authority and unsigned-risk record. The signing state recorded in the manifest is described
+under [Signing status](../docs/velopack-release-install-guide.md#signing-status); the warnings users see and how they
+verify a download are in the [user guide](../docs/user-guide/docs/install-windows.md#the-windows-smartscreen-warning).
 
 ## Local publish output
 

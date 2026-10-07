@@ -2,6 +2,23 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** The map of the whole node: one ASP.NET Core process (`XE-Local-AI-Engine.Client`) hosts the React UI, the loopback-only local API and SignalR hubs, the agent loop and the supervisors for the host `llama-server`, `sd-server` and `whisper-server` child processes. Two invariants carry the rest: dependencies flow one way through the layers, and nothing on the inference path runs in a container.
+
+**Read this if you are** adding a project or a cross-layer dependency, working out where a change belongs, or reviewing whether it crosses the machine boundary. **Skip to** [Architecture invariants](#architecture-invariants) for the rules; **reference tables** (where each concern lives, the locked runtime decisions) are in [What the system is](#what-the-system-is) and [Post-re-architecture runtime model](#post-re-architecture-runtime-model-locked-2026-06-17); **related pages:** [02](02-project-layout.md), [03](03-local-runtime-and-providers.md), [12](12-security-and-privacy.md).
+
+## Contents
+
+- [What the system is](#what-the-system-is)
+- [The machine boundary](#the-machine-boundary)
+- [The local surface (browser ↔ node)](#the-local-surface-browser--node)
+- [Development Mode: registered source, managed worktree](#development-mode-registered-source-managed-worktree)
+- [In-process layering & one-way dependency flow](#in-process-layering--one-way-dependency-flow)
+- [Post-re-architecture runtime model (locked 2026-06-17)](#post-re-architecture-runtime-model-locked-2026-06-17)
+- [Architecture invariants](#architecture-invariants)
+- [Startup sequence (host boot order)](#startup-sequence-host-boot-order)
+- [Where to go next](#where-to-go-next)
+- [Related pages](#related-pages)
+
 XE Local AI Engine (product name **XE AI-Engine**) is a self-contained local AI node: a single ASP.NET Core process
 (`XE-Local-AI-Engine.Client`) that hosts the React management UI, serves local APIs and SignalR hubs,
 persists selected sensitive fields in SQLite with per-column AEAD encryption,

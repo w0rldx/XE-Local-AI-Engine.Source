@@ -145,6 +145,10 @@ platform implementation, not this repository.
 
 ### Only if you switch it on
 
+- **Web search and page fetching** — off by default. When you turn it on, searches go to DuckDuckGo, or
+  to your own SearXNG server, and the model can download public web pages. The app asks you before each
+  request and shows you the result before the model reads it, unless a conversation has
+  **Auto-accept web content** on.
 - **Cloud model providers** (Azure AI Foundry, Codex) — off unless you configure them. If you enable
   one, prompts you send to *that provider* go to *that provider*, exactly as you'd expect.
 - **MCP servers you register.** An MCP server is a **separate program**, usually written by someone
@@ -203,10 +207,11 @@ guard. A misconfiguration that would expose it stops the app instead.
 
 ## Development Mode and its limits
 
-> ### Enabled by default, with an operator off switch
+> ### Enabled by default, with an off switch
 >
-> Development Mode ships enabled, and its pages are available on a stock install. An operator can
-> remove the feature's services and surface with `Development:Enabled=false` before launch.
+> Development Mode ships enabled, and its pages are available on a stock install. To remove it, switch
+> off **Development mode** under **Settings → Node Settings → General → Features** and restart the app.
+> An operator can do the same before launch with `Development:Enabled=false`.
 >
 > What it **cannot** do is act on its own. It only touches a Git repository once **you register that
 > repository and start a run**. Registering a repository is the real decision point.

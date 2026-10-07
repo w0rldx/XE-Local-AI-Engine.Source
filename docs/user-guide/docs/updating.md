@@ -24,10 +24,10 @@ selected automatically for the installed operating system; the channel does not 
 
 ## Update inside the app
 
-1. Open the update section in the app.
-2. Check for updates.
-3. Download and apply the offered version.
-4. Allow the app to restart when prompted.
+1. Open the **About** page and find **Updates**.
+2. Click **Check for updates**.
+3. If a version is offered, click **Update now**.
+4. The app shows **Restarting…** and comes back on the new version.
 
 On Windows, Velopack updates the extracted portable application and restarts through the top-level launcher.
 
@@ -40,7 +40,7 @@ your password once (**"Protect this node's data"**) and then shows your one-time
 [Your first run](first-run.md#save-your-recovery-code).
 
 <details>
-<summary><b>The updater says this build is not managed</b></summary>
+<summary><b>The app says automatic updates aren't available in this build</b></summary>
 
 Self-update works only from an official Velopack artifact:
 
@@ -59,10 +59,10 @@ Manual replacement remains available if the in-app updater cannot run.
 
 ### Windows
 
-1. Stop the app by closing its console window.
+1. Stop the app with **Quit XE** in the tray menu.
 2. Download the new `XE-Local-AI-Engine-win-Portable.zip` and `CHECKSUMS.sha256` from the
    [Releases page](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases).
-3. Verify the ZIP's SHA-256 value.
+3. Verify the ZIP's SHA-256 value. → [How](download-from-github.md#step-4--verify-sha-256)
 4. Extract it fully to a new writable local directory.
 5. Run the top-level `XE-Local-AI-Engine.exe` beside the `current` directory.
 
@@ -70,7 +70,7 @@ Do not overwrite files while the old version is running.
 
 ### Linux
 
-1. Stop the app with `Ctrl+C` or by closing its terminal.
+1. Stop the app by closing its window and confirming that you want to quit.
 2. Download the new `.AppImage` and `CHECKSUMS.sha256` from the same release.
 3. Verify the AppImage's SHA-256 value.
 4. Move it to a writable local directory, run `chmod +x`, and start it.
@@ -137,14 +137,15 @@ lost. Restore the complete pre-update backup instead.
 
 ## Signing warnings after an update
 
-Current release artifacts are unsigned because no signing certificate exists yet. Signing is planned. Windows may
-show SmartScreen again for new bytes, and Linux security tools may require you to trust a newly downloaded AppImage.
-Verify the new artifact against `CHECKSUMS.sha256` before running it.
+Release files are not code-signed yet, so Windows may show the SmartScreen warning again for a newly
+downloaded version, and Linux security tools may ask you to trust the new AppImage. Verify the new file
+against `CHECKSUMS.sha256` before running it.
+→ [The SmartScreen warning](install-windows.md#the-windows-smartscreen-warning)
 
 ## Problems with an update
 
 When reporting a regression, include the version that worked, the version that failed, the operating system, and the
-error shown in the console.
+error you saw. The [FAQ](faq.md#updating) covers the common update questions.
 
 See [Giving feedback](feedback.md).
 

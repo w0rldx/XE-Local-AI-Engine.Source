@@ -88,6 +88,8 @@ Three green `backend-tests` runs, each 16 TRX files and 12,128 tests. A: 3486103
 
 A build running beside a `--no-build` test rewrote assemblies while MTP was loading them, producing both phantom failures and phantom green results. The first lock implementation used a conventional `flock <file> <command>` form; MSBuild daemons inherited the open descriptor and kept the lock after the command returned. The current helper marks the descriptor close-on-exec and exit 69 identifies a live holder. Assembly snapshots turn concurrent mutation into exit 75 rather than test evidence.
 
+Why each extra rule exists: a direct `dotnet test` bypasses both the lock and the assembly snapshot; an IDE's background build host ignores the shell lock and can rewrite assemblies under a run with sizes unchanged and only mtimes moving; one outer lock around a whole validator turns its internally locked trees into pass-throughs; a wait loop on `pgrep -f "dotnet (build|test)"` matches its own shell wrapper and waits forever.
+
 ### Test-host memory and temp artifacts
 
 The original full Tests module grew to roughly 3.5 GB. gcroot analysis identified long-lived host graphs from entry-point resolution and recurring rate-limiter/MCP allocations, not a normal fixture-reference leak. `WebApplicationFactory<Program>` was replaced with `TestServerWebAppFactory`; safe suites share a per-class host.
@@ -106,6 +108,8 @@ Two assembly MVIDs in the filename prevent reuse after migrations or identity se
 ### Transcription framework-temp flake (2026-09-13/14)
 
 `TranscriptionUploadStreamingTests.BufferedControlEndpoint_WhileRequestActive_DoesSpillToFrameworkTemp` failed 2 of 4 full local runs of the module through `scripts/run-tests-memory-safe.sh` at `JOBS=10 PAR=1`, costing 33 seconds in each failing run — the class's own 30-second budget expiring plus host overhead. Two causes were addressed in one commit: the fixed `ASPNETCORE_TEMP` directory was made per-process, and the budget moved to `TestBudgets.Contended`. A negative control on 2026-09-14 (the shared path restored, the two spill-producing tests looped against each other in two processes for 14 rounds, plus a full-namespace pass with four concurrent `LocalChat` sessions) stayed green throughout, so the cross-process hazard is established by inspection rather than by reproduction and CPU starvation under `JOBS=10` remains the surviving suspect for the observed failures.
+
+Mechanism behind the per-process path rule: a keyed `[NotInParallel]` binds only its own process's scheduler, while `scripts/run-tests-memory-safe.sh` runs one process per namespace concurrently with a shared `TMPDIR`.
 
 ### Timing-test and build-daemon incidents
 
@@ -222,6 +226,8 @@ In the 2026-09-23 transcription-open-sessions BE-1 and BE-2 runs, a scoped run r
 Architecture namespace" used a class-name pattern and never executed the shrink-only comment-budget guard; only the
 namespace filter ran the guards.
 
+The namespace holds the comment-budget, layering and test-category guards; a scoped run that missed them leaves the Release gate to red first.
+
 ### Verify against the whole module, not just the class you touched
 
 A singleton factory once called `INodeSettingsStore.Load().X` without accepting the test substitute's null result.
@@ -232,6 +238,8 @@ Every host-based test failed at startup while narrow changed-class runs stayed g
 Paid for in static-quality S6b (2026-09-16): a one-test `System.Net.Sockets` red in `XE_Local_AI_Engine.Tests.Hosting`
 kept its stack frame but not the `SocketError` value or the port, because the message line was line 4 of a `head -3`.
 A second gate run recovers nothing.
+
+Mechanism: `run_ns` keeps `grep -E 'failed|error' | grep -viE 'failed: 0' | head -3` of the raw output and deletes the rest, `RESULTS_DIR` is wiped on exit, and TRX exists only under `COVERAGE_DIR`.
 
 ### Re-measure a TRX set with the script, never quote a class or namespace count from a document
 
@@ -287,6 +295,8 @@ in four tests. `ResolveBindUrl_WhenPersistedPortIsTaken_FallsBackToDynamicBind` 
 `ResolveBindUrl_WhenPersistedPortIsFree_RebindsThatPort` and `PersistThenResolve_RoundTripsToTheSameLoopbackUrl` need
 the number free when `DesktopPortStore` probes it and want the retry form. Not converted because they are synchronous.
 
+The engine CLI's exit code 6 is the `DesktopPortStore.IsPortAvailable` branch of `Program`; the CLI never falls back to another port.
+
 ### The full Tests module balloons to ~3.5 GB — it is a framework leak, not a fixture bug
 
 `TestServerWebAppFactory` closed four process-lifetime roots: a per-host MEAI function-descriptor cache key,
@@ -299,6 +309,8 @@ refuses per-context differences in provider-constant options such as `ConfigureW
 loaded machine with `/usr/bin/time` peak RSS: `Endpoints.Benchmarks.V1` at width 1 peaked at 3.3 GB cached, 674 MB
 with `NodeEfInternalServices`; `DevWorkflows.Materialization` at width 1 took 463 s uncached per scope, 55 s now.
 A low `DOTNET_GCHeapHardLimit` is not a valid leak verdict: size-cap tests allocate large payloads.
+
+Why the fixture rules exist: `WebApplicationFactory<Program>`'s `HostingListener` roots every host; the per-host JSON options exist for MEAI's descriptor cache; `AddRateLimiter` creates an undisposed replenishment timer per host, which is why `ConfigureServices` captures plain ints rather than `builder`. `scripts/run-tests-memory-safe.sh` is the runner these measurements came from.
 
 ### A node-settings save path must carry the local-only members over from the stored record
 
@@ -321,6 +333,8 @@ nothing could sweep it safely: 943 files, 790 MB of tmpfs across 20 builds. The 
 `SqliteDatabaseCreator.Create` enables WAL), so the builder runs `PRAGMA wal_checkpoint(TRUNCATE)`, releases the pool,
 closes the last connection, and refuses to publish while a `-wal`/`-shm` sidecar remains, because copying the main file
 while a log holds committed rows loses them.
+
+Templates publish atomically, and the runner prewarms the base tree (`prewarm_template`) before cloning coverage slots.
 
 ### Deleting a dead service can delete a live control's only tests — grep the test file first
 
@@ -376,6 +390,8 @@ deleted setting: the string test parses and never opens a connection, and the ap
 with `Foreign Keys=False` so only the pragma can flip them. SQLite runs the AFTER DELETE row trigger for a row an
 `ON DELETE CASCADE` removed (measured on the migrated schema, pinned by a test), so `knowledge_document_chunks_ad` keeps
 `chunk_fts` aligned on the cascade path.
+
+Why both layers: the Quartz job store resolves its connection by name and bypasses the pragma applier, so only the string's `ForeignKeys = true` reaches it. `training_work_items.target_id` is polymorphic. A cascade deletes chunks before sections, and the FTS AFTER DELETE trigger also fires on cascade, which is why a hand-written delete must not duplicate a declared cascade.
 
 ### The GPU smoke is the only gate that proves the GPU did the work — and its exit codes are a taxonomy, not a scale
 
@@ -450,6 +466,23 @@ Operator ruling 2026-09-05 on explicit review bases.
 ### a path-scoped `git commit -- <paths>` silently skips an UNTRACKED file among those paths
 
 Tester round 3 (2026-09-25) paid two fix-up commits for workstream commits that lacked a new test or source file.
+
+### A relative test-project name in a worktree can resolve to a SIBLING worktree's binary
+
+A relative `dotnet test XE-Local-AI-Engine.Tests` inside a worktree once resolved, through an MSBuild worker node started under a sibling checkout, to that checkout's output and reported zero tests.
+
+### Never classify a cancellation from a `CancellationToken.Register` callback
+
+Registration callbacks race disposal and run in reverse registration order, so a callback that classifies sees an incomplete picture. Registering the flag callback earlier is not a fix: the downstream callbacks do not exist yet at that point.
+
+### Backend-tests provenance moved out of the topic file (2026-10-07)
+
+- `StubNodeRuntimeSettings`: nine switch getters return `true` unless told otherwise. Paid for in `b202ba93b` and `80d064fda` (node-settings tier B).
+- The E2E project builds as `IsTestProject=false` / `OutputType=Library` unless `-p:RunE2ETests=true` is passed.
+- The backend-gate results-directory wipe was paid for in the model-matrix follow-ups round, 2026-10-05.
+- `VelopackInstall.IsManaged()` reads `VelopackLocator.Current`, which is what throws until `VelopackApp.SetLocator` runs.
+- `MigratedDatabaseTemplate` publishes only after `PRAGMA wal_checkpoint(TRUNCATE)`, pool release and close; see the migrated-template section above.
+- `Microsoft.Data.Sqlite` binds a `Guid` as a 16-byte BLOB while EF's SQLite provider stores Guid columns as TEXT.
 
 ## 2. Local runtime evidence
 
@@ -672,6 +705,12 @@ on a 27B Q4 model on a high-end GPU; longer on weaker hardware.
 
 Six hand-written free-disk copies existed before they were folded into the one probe; the root-based ones were invisible
 on a single-volume development machine.
+
+### Kill-by-PID applies to anything you background
+
+Recorded 2026-09-10: a `kill $SPIN` aimed at a load generator never reached its subshells and left 23 spinners
+burning a core each for nine hours. The operative rule (collect PIDs or `setsid` a group, kill in a `trap … EXIT`,
+confirm with `ps`) is in `AGENTS.md` ("Local runtime").
 
 ## 3. Model, inference, retrieval, and training evidence
 
@@ -1048,3 +1087,4 @@ A lazy router `import()` re-split the bundle by about +60 kB, over budget (S1 fr
 
 - **2026-08-25:** split evidence from the mandatory rulebook. No rule should rely on this file alone for current versions or external state.
 - **2026-09-27:** the rulebook became an index plus topic files under `agent-knowledge/`; narrative removed from condensed rules was appended here under the matching area heading, existing headings unchanged.
+- **2026-10-07:** `AGENTS.md` trimmed to one-line rules; the background-process anecdote moved here under §2.

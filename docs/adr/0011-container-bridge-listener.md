@@ -1,6 +1,6 @@
 # ADR 0011: An application container reaches the node's own inference surface through one guarded, non-loopback listener
 
-- **Status:** Proposed — the repository owner records acceptance with their own name and date at merge, as ADR 0010 did.
+- **Status:** Accepted — by the repository owner (`w0rldx`) on 2026-10-07; the design is implemented on `develop`.
 - **Date:** 2026-09-12
 - **Scope:** How a curated application container installed under [ADR 0010](0010-external-apps-container-execution.md)
   calls this node's local model server. It changes nothing about how such an application is installed, hardened,

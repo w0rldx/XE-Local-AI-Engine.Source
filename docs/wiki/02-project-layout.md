@@ -2,6 +2,20 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** The inventory of every .NET project in `XE-Local-AI-Engine.slnx`, the project reference graph and the layering rule that keeps runtime, application and provider code decoupled. The rule that matters most: each `Providers.*` project depends only on `Providers.Abstractions` (plus the few reviewed exceptions listed here), and `Client.Persistence` references only `Providers.Abstractions`.
+
+**Read this if you are** adding a project or a project reference, or an architecture test has failed on a dependency. **Skip to** [The layering rule](#the-layering-rule) for what may reference what; **reference tables** are in [Project inventory](#project-inventory); **related pages:** [01](01-architecture-overview.md), [16](16-code-conventions.md).
+
+## Contents
+
+- [How the solution is organized](#how-the-solution-is-organized)
+- [Project inventory](#project-inventory)
+- [Dependency graph](#dependency-graph)
+- [The layering rule](#the-layering-rule)
+- [Composition root: the AddNode* modules](#composition-root-the-addnode-modules)
+- [Build & package conventions](#build--package-conventions)
+- [Related pages](#related-pages)
+
 This page is the inventory and dependency map of the .NET side of XE Local AI Engine. It lists every `.csproj` registered in `XE-Local-AI-Engine.slnx`, explains each project's role, draws the project reference graph (who references whom), and states the layering rule that keeps the runtime, applications, and providers decoupled. The React client (`XE-Local-AI-Engine.Client.React`) is a separate Vite/pnpm tree wired in by Aspire and is documented on [10-react-client.md](10-react-client.md).
 
 ## How the solution is organized
@@ -36,7 +50,7 @@ Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `Proje
 
 | Project | SDK / kind | Role |
 |---|---|---|
-| `XE-Local-AI-Engine.Desktop` | `Microsoft.NET.Sdk`, `Exe` | Thin Avalonia NativeWebView shell for Windows and Ubuntu. Owns window, activation and optionally engine lifetime; normal application traffic remains REST/SignalR. No engine project references; browser/headless commands bypass the window. See [Native desktop checkpoint](../roadmaps/native-desktop-1.0.md). |
+| `XE-Local-AI-Engine.Desktop` | `Microsoft.NET.Sdk`, `Exe` | Thin Avalonia NativeWebView shell for Windows and Ubuntu. Owns window, activation and optionally engine lifetime; normal application traffic remains REST/SignalR. No engine project references; browser/headless commands bypass the window. See [Native desktop checkpoint](../audits/2026-10-02-native-desktop-1.0-delivery-record.md) (historical record). |
 | `XE-Local-AI-Engine.Client` | `Microsoft.NET.Sdk.Web` | The **Node Web Server**. Hosts the React UI (static files), exposes `/api/local/v1` + local SignalR hubs, and supervises node-owned model-runtime host child processes. The composition root — wires every provider + application service. See [01-architecture-overview.md](01-architecture-overview.md), [09-api-and-hubs.md](09-api-and-hubs.md). |
 | `XE-Local-AI-Engine.Client.Application` | `Microsoft.NET.Sdk` | The **application layer**: decisions/orchestration for chat, agents, scheduler, model fit, inference tuning, knowledge/RAG, images, uploads, benchmarking, training, and development mode. Depends on every provider + persistence + agent + contracts. See [03-local-runtime-and-providers.md](03-local-runtime-and-providers.md), [05-chat.md](05-chat.md), [06-scheduler.md](06-scheduler.md), [07-model-fit.md](07-model-fit.md). |
 | `XE-Local-AI-Engine.Client.Persistence` | `Microsoft.NET.Sdk` | EF Core + SQLite with selected per-column AEAD encryption. Owns the DbContexts, entities, every migration under `Client.Persistence/Migrations/` (that folder is the inventory — count it there; all but `InitialNodeChatSchema` and `AddNodeMessageLifecycleColumns` are timestamped), and the 2 model snapshots (`NodeIdentityDbContextModelSnapshot`, `NodeChatDbContextModelSnapshot`). References ASP.NET Identity EF Core + `Microsoft.EntityFrameworkCore.Sqlite` (design/tools `PrivateAssets`). References `Providers.Abstractions` (its only project reference). See [08-data-and-persistence.md](08-data-and-persistence.md). |

@@ -2,6 +2,27 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** The authoring guide for tests: which test project a new test belongs in, the
+`TestServerWebAppFactory` host fixture, parallelism, and recipes per test kind. The rules that matter most: every test
+is independent and self-validating, and no test sleeps to wait for or rule out an event. Backend tests are TUnit on
+Microsoft.Testing.Platform; the React client uses Vitest.
+
+**Read this if you are** adding or fixing a test, or reviewing one for flakiness or a vacuous pass. **Skip to**
+[§1](#1-which-project-does-it-belong-in) to place a test and [§5](#5-recipes) for the recipes; **related pages:**
+[Testing & Validation](13-testing-and-validation.md), [Code Organization Conventions](16-code-conventions.md).
+
+## Contents
+
+- [1. Which project does it belong in?](#1-which-project-does-it-belong-in)
+- [1a. Test principles](#1a-test-principles)
+- [1b. Test categories](#1b-test-categories)
+- [2. `TestServerWebAppFactory` — the backend host fixture](#2-testserverwebappfactory--the-backend-host-fixture)
+- [3. Parallelism](#3-parallelism)
+- [4. Never wait with `Task.Delay`](#4-never-wait-with-taskdelay)
+- [5. Recipes](#5-recipes)
+- [6. Running what you changed](#6-running-what-you-changed)
+- [Related pages](#related-pages)
+
 [Testing & Validation](13-testing-and-validation.md) is the map of what exists and what counts as validated.
 This page is the **authoring guide**: where a new test goes, which harness seam to use, and the traps that
 make a test flaky, slow, or silently vacuous. Read it before adding a suite.

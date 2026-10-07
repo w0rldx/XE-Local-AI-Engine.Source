@@ -1,6 +1,28 @@
 # Testing & Validation
 
-> Reviewed: 2026-10-02 · Code-grounded.
+> Reviewed: 2026-10-07 · Code-grounded.
+
+**What this page covers.** How XE Local AI Engine is tested and what counts as "validated": the test projects and
+their stack (TUnit on Microsoft.Testing.Platform for .NET, Vitest for the React client), the local gate commands, the
+CI workflows and the coverage gates. Two invariants matter most: a change is judged by the Release-configuration
+backend gate `scripts/run-backend-tests.sh` plus the frontend `pnpm run acceptance`, and a test run that overlapped a
+build is void. The gates live in `scripts/` and `.github/workflows/`.
+
+**Read this if you are** changing a gate script or CI workflow, debugging a red or contaminated test run, or deciding
+what evidence a change or release candidate needs. **Skip to** [Validation commands](#validation-commands) for the
+commands to run; the **CI job list** is in [Continuous integration](#continuous-integration) and the thresholds in
+[Coverage gates](#coverage-gates); **related pages:** [Writing Tests](17-writing-tests.md), [Code Organization
+Conventions](16-code-conventions.md).
+
+## Contents
+
+- [Test topology](#test-topology)
+- [Validation commands](#validation-commands)
+- [Continuous integration](#continuous-integration)
+- [Coverage gates](#coverage-gates)
+- [RC evidence requirements](#rc-evidence-requirements)
+- [Maintainer checklist](#maintainer-checklist)
+- [Related pages](#related-pages)
 
 This page is the contributor map of how XE Local AI Engine is tested and what counts as "validated". For *how to write a new test* — which project it belongs in, the fixture patterns, the parallelism keys, the per-kind recipes — see [Writing Tests](17-writing-tests.md), whose [Test principles](17-writing-tests.md#1a-test-principles) section states the independence, self-validation and mocking rules every suite on this page is held to. It covers the test-project topology (backend integration, AI/agent, persistence + migration, Playwright E2E, plus the FakeOllama and Client.Testing support libraries), validation commands and standalone runners, the tracked GitHub Actions gate design, and the RC evidence bar a maintainer must clear before claiming release/doc work is done. For *what each suite asserts about a subsystem*, follow the per-subsystem links — this page owns the harness, not the features.
 
@@ -156,6 +178,16 @@ themselves — and wraps each sibling in the assembly guard. `NO_BUILD=1` skips 
 batched module (the shape CI's `siblings` leg uses, through this same script), and `COVERAGE_DIR` adds Cobertura +
 TRX per project.
 
+A third lane, `release-contract-tests`, runs
+[`scripts/run-release-contract-tests.sh`](../../scripts/run-release-contract-tests.sh) whenever anything under
+`scripts/`, `publish/` or `.github/workflows/` differs from the merge-base of `HEAD` with `develop` (`origin/develop`
+when there is no local `develop`). Committed, staged, unstaged, deleted and untracked files all count. When that
+comparison cannot be made (no develop ref, a shallow clone without the merge-base, not a git checkout) the lane runs
+and says why; otherwise a `>> Release contract tests: skipped` line says why it did not. On a GitHub Actions runner
+the lane is skipped, because the `release-contracts` job runs the same tests. `XE_GATE_CONTRACT_TESTS=run` or `skip`
+overrides the detection (default `auto`). The lane is independent of `NO_BUILD` and `--siblings-only`, because it
+tests scripts rather than assemblies, and it runs unguarded.
+
 For a memory-constrained development machine, use
 `XE_TEST_PROFILE=low-memory scripts/run-backend-tests.sh`. The same gate runs project lanes serially and
 defaults `JOBS`, `PAR` and `XE_TEST_WIDTH_DEFAULT` to 1. Explicit overrides still win, including per-project
@@ -242,6 +274,10 @@ pnpm run acceptance  # validate + coverage thresholds + tooling tests + producti
 ```
 
 `acceptance` runs static checks once and then tests and `build:bundle` on the same unchanged source tree.
+Its first step, `node:check`
+([`scripts/CheckNodeMajor.mjs`](../../XE-Local-AI-Engine.Client.React/scripts/CheckNodeMajor.mjs)), reads the Node
+major from the `client-react` job of `build-and-test.yml` and fails on any other major, because a green run on another
+major is not CI evidence. `XE_ALLOW_NODE_DRIFT=1` runs anyway, with a warning that the run is not CI evidence.
 Standalone `build` still runs the full lint chain before `build:bundle`; the latter alone is not a gate.
 Use `pnpm run lint` and `pnpm test` for the focused inner loop.
 
@@ -260,6 +296,10 @@ There is no scope runner in this repository. The raw commands above, plus the
 validation path for a fresh clone. A successful pre-merge/pre-packaging pass also needs a live
 desktop-backend OpenAPI comparison (`pnpm openapi:check:live` against a running desktop backend) and
 the frontend coverage gate described below.
+[`scripts/openapi-live-check.sh`](../../scripts/openapi-live-check.sh), which CI's `siblings` leg runs, wraps that
+comparison: it runs an incremental Release build of the host under the build lock, starts the host from that output
+and runs `openapi:check:live`. `OPENAPI_LIVE_SKIP_BUILD=1` skips the build with a warning, and the host then runs
+whatever Release binaries are already there.
 
 ### The four standalone runners
 
@@ -312,11 +352,11 @@ more than a local Release build.
 
 **`build-and-test.yml`** — runs on `pull_request`/`push` to `develop` plus `workflow_dispatch`, and is `workflow_call`-reusable (`release.yml` calls it as its `validate` job so the exact tagged commit re-runs these gates before packaging). **Five jobs**, and every job carries an explicit `timeout-minutes` so a hung step cannot burn the runner budget — note that the reusable-workflow *call* in `release.yml` cannot carry one, which is a GitHub limitation, not an oversight:
 
-- **`python-quality` (ubuntu-latest)** — sets up `uv` with a pinned version and Python 3.13, then runs [`scripts/python-validation.sh`](../../scripts/python-validation.sh) `--scope full --serial`: `uv sync --locked --all-groups` followed by ruff (`format --check` + `check`), pyrefly, pytest with coverage, and bandit over `tools/training` and `scripts/**`. The tooling config is the **root** `pyproject.toml` + its own small `uv.lock` — deliberately *not* `tools/training/pyproject.toml`, which with its lockfile is the shipped training-runtime manifest (see [ADR 0005](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md) and [Training](18-training.md)). Locally: `scripts/python-validation.sh --scope full`, or `--scope changed` to auto-detect from the diff. The same job then runs [`scripts/docs-inventory-check.py`](../../scripts/docs-inventory-check.py), which re-derives five inventories from the code — SignalR hubs, `LocalApiRoutes` route families, React `features/` directories, numbered wiki pages, solution projects — and fails when one of them is missing from the wiki page that claims to enumerate it.
+- **`python-quality` (ubuntu-latest)** — sets up `uv` with a pinned version and Python 3.13, then runs [`scripts/python-validation.sh`](../../scripts/python-validation.sh) `--scope full --serial`: `uv sync --locked --all-groups` followed by ruff (`format --check` + `check`), pyrefly, pytest with coverage, and bandit over `tools/training` and `scripts/**`. The pytest leg includes `scripts/tests/test_docs_inventory_check.py`, and the job then runs `scripts/docs-inventory-check.py`, which fails on an inventory member no wiki page names, an agent-knowledge cap, or a broken relative Markdown link or `#anchor` in any tracked `.md`. The tooling config is the **root** `pyproject.toml` + its own small `uv.lock` — deliberately *not* `tools/training/pyproject.toml`, which with its lockfile is the shipped training-runtime manifest (see [ADR 0005](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md) and [Training](18-training.md)). Locally: `scripts/python-validation.sh --scope full`, or `--scope changed` to auto-detect from the diff. The same job then runs [`scripts/docs-inventory-check.py`](../../scripts/docs-inventory-check.py), which re-derives five inventories from the code — SignalR hubs, `LocalApiRoutes` route families, React `features/` directories, numbered wiki pages, solution projects — and fails when one of them is missing from the wiki page that claims to enumerate it.
 - **`release-contracts` (ubuntu-latest)** — runs [`scripts/run-release-contract-tests.sh`](../../scripts/run-release-contract-tests.sh) plus `scripts/lint-release-scripts.sh --no-behavior --bootstrap`. Contract discovery is **auto-enrolling** across `scripts/tests`, `scripts/compliance/tests`, and `scripts/performance/tests`, matching `*.test.sh`, `*.test.py`, and `test_*.py` — a new script test needs no workflow edit. The Pester leg of `lint-release-scripts.sh` covers `publish/tests` and `scripts/performance/tests`; **zero discovered Pester tests is a failure, not a pass**.
 - **`backend-tests` (ubuntu-latest, five-leg matrix)** — the backend gate, one runner per leg: `siblings` runs every enrolled test project except `XE-Local-AI-Engine.Tests`, and `tests-0`…`tests-3` each run one `TEST_SHARD` quarter of that module through [`scripts/run-tests-memory-safe.sh`](../../scripts/run-tests-memory-safe.sh) at `TEST_GROUPS=16`. Every leg does its own checkout, restore and `build -c Release --no-restore`; the built test output tree is over 1 GB, so it is rebuilt per leg rather than passed between them. The live OpenAPI comparison ([`scripts/openapi-live-check.sh`](../../scripts/openapi-live-check.sh)) runs only on `siblings`. No leg pulls an image or sets `XE_REQUIRE_DOCKER_TESTS`: the real-daemon suites are opt-in and skip here, and their wire-shape half runs daemon-free against the fake Docker server. Every project emits **Cobertura** coverage into its own `--results-directory`, because MTP resolves `--coverage-output` relative to it and a shared directory would let concurrent modules overwrite each other's report. The `siblings` leg runs [`scripts/run-backend-tests.sh`](../../scripts/run-backend-tests.sh) `--siblings-only` — the same script as the local gate, so the enrolment rule, the per-project results directory, the concurrency and the **hollow-gate guard** (a `Passed!`/`Failed!` summary must appear, catching a silent green where zero suites enrolled) are one implementation with two callers rather than two copies that drift. The `--maximum-parallel-tests` cap stays at **2** here, passed as `XE_TEST_WIDTH_DEFAULT`, because TUnit otherwise runs every test in parallel and leaves the concurrency level to the .NET thread pool — its docs state no formula and no ceiling — which is what made concurrent modules time out on shared runners. The script's local defaults are higher because they were measured on a 32-core box; raising CI's is a separate, measured change. `fail-fast: false`, so one red leg does not cancel the evidence from the others. Each leg uploads its reports as **`backend-test-results-<leg>`**.
 - **`build-and-test` (ubuntu-latest)** — the merge gate over every `backend-tests` leg, and the job that must keep this exact id: `build-and-test` is the required status check configured on `develop`'s branch protection, and a matrix job reports as `backend-tests (siblings)`, which can never satisfy it. It downloads every leg's artifact unmerged, then cross-checks before merging — the sibling reports number one per enrolled project minus the batched module (re-derived from the solution, not hard-coded), each shard leg produced one Cobertura report per line of its `units.txt`, and the group indices parsed from every leg's unit names, sorted, equal `0`…`GROUPS-1` exactly. That last check is the one that proves the shards **partition** the module — every group run, and run once. Checking only for duplicates would pass a run that silently *skipped* groups (three legs dividing by four leave four groups unrun), and [`scripts/merge-cobertura.py`](../../scripts/merge-cobertura.py) can see neither failure: it unions by `(filename, line)`, so a gap and an overlap both merge to a perfectly plausible percentage. It then merges the reports without double-counting shared source lines and enforces the floor in [`scripts/backend-coverage-baseline.txt`](../../scripts/backend-coverage-baseline.txt) — currently **90.50**.
-- **`client-react` (ubuntu-latest)** — pnpm + Node 22, the `global.json` SDK, a .NET 8 runtime, and the restored pinned repository tools; then `install --frozen-lockfile`, `openapi:check`, `licenses:check`, **`pnpm run acceptance`** (`validate` → `test:coverage:check` → `test:tooling` → `build:bundle`), and `pnpm audit --prod --audit-level=high` in order. `validate` includes `lint`, `knip`, `signalr:check` and `depcruise`; the combined gate runs those static checks once. `spellCheck` exists as a script but is **not** a gate. A clean local clone must run `dotnet tool restore --tool-manifest dotnet-tools.json` before `licenses:check`.
+- **`client-react` (ubuntu-latest)** — pnpm + Node 22, the `global.json` SDK, a .NET 8 runtime, and the restored pinned repository tools; then `install --frozen-lockfile`, `openapi:check`, `licenses:check`, **`pnpm run acceptance`** (`node:check` → `validate` → `test:coverage:check` → `test:tooling` → `build:bundle`), and `pnpm audit --prod --audit-level=high` in order. `validate` includes `lint`, `knip`, `signalr:check` and `depcruise`; the combined gate runs those static checks once. `spellCheck` exists as a script but is **not** a gate. A clean local clone must run `dotnet tool restore --tool-manifest dotnet-tools.json` before `licenses:check`.
 
 #### Measuring what the daemon-free backend legs cost
 

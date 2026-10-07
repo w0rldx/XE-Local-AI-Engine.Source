@@ -223,6 +223,10 @@ off (stylelint owns CSS). If it fails on a file you did not write, look for giti
 dot-directory) under `src/` before touching source. react-doctor config is `doctor.config.jsonc`. **Authority:**
 `package.json` `lint`; `biome.json`.
 
+### `pnpm run acceptance` refuses a Node major other than CI's
+
+**Rule:** run acceptance on the Node major CI's `client-react` job uses (`node:check` reads it from `.github/workflows/build-and-test.yml`; every job must agree). `package.json` `engines` is only the floor. `XE_ALLOW_NODE_DRIFT=1` runs anyway with a warning; such a run is not CI evidence. **Prevents:** a green local acceptance on a newer major while CI reds on a Node-22-only runtime difference, as develop did on 2026-10-02 (`src/test/JsdomBlobStream.ts`). **Authority:** `scripts/CheckNodeMajor.mjs` (`readCiNodeMajor`, `checkNodeMajor`).
+
 ### Frontend tests: an `await import()` inside `it()` is charged to `testTimeout`
 
 **Rule:** keep `testTimeout` at 20 s; use `vi.resetModules()` plus a dynamic import only when module-init hydration

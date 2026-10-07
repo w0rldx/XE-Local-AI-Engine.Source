@@ -122,6 +122,10 @@ where Debug was green.
 
 **Rule:** `trap 'git checkout -- <file>' EXIT` restores the file to HEAD, not to your working tree: commit real edits to a file before installing a deliberate-break mutation on it. **Prevents:** the safety net discarding the slice's own uncommitted work along with the mutation. **Authority:** `git checkout -- <path>` semantics. [evidence](../agent-knowledge-evidence.md#commit-before-you-trap-guard-a-mutation-on-a-file-you-are-still-editing)
 
+### ReSharper cleanup runs only with the `BuildSafe` profile and never on MSBuild files
+
+**Rule:** run `dotnet jb cleanupcode XE-Local-AI-Engine.slnx --profile="BuildSafe" --exclude="**/*.props;**/*.targets;**/*.csproj"`, then a Release build. `BuildSafe` (in `XE-Local-AI-Engine.slnx.DotSettings`) never reorders members; a new profile must keep "Reorder type members" off. **Prevents:** a reordered static field initializing from a not-yet-initialized sibling (C# runs static initializers in textual order), and the XML formatter wrapping an MSBuild property value in whitespace so a `== 'true'` condition silently flips. A Debug build under-reports the `IDExxxx` rewrites the cleanup makes. **Authority:** `dotnet-tools.json` (`jetbrains.resharper.globaltools`); `XE-Local-AI-Engine.slnx.DotSettings`.
+
 ## Covered elsewhere
 
 - A bare `TODO` in a C# comment fails the build — in **Release** — `AGENTS.md` ("Conventions that bite"); `docs/wiki/16-code-conventions.md` ("Comments and XML documentation")

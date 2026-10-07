@@ -2,6 +2,25 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** How the node stores state: EF Core over SQLite in `XE-Local-AI-Engine.Client.Persistence`, two DbContexts, a forward-only migration history, and per-column AES-256-GCM encryption of privacy-sensitive fields. There is no whole-database encryption, and cloud credentials are not in SQLite at all; they live in a separate DataProtection-encrypted file.
+
+**Read this if you are** adding an entity, column or migration, marking a field as encrypted, or changing how `node-settings.json` is saved. **Skip to** [Encryption](#encryption-how-at-rest-secrecy-actually-works) for the at-rest model; **reference tables** are in [Entity inventory](#entity-inventory) and [Migrations](#migrations-and-schema-milestones-forward-only); **related pages:** [12](12-security-and-privacy.md), [11](11-hosting-and-deployment.md).
+
+## Contents
+
+- [Project shape](#project-shape)
+- [The two DbContexts](#the-two-dbcontexts)
+- [Encryption: how at-rest secrecy actually works](#encryption-how-at-rest-secrecy-actually-works)
+- [Entity inventory](#entity-inventory)
+- [Connection pragmas](#connection-pragmas)
+- [Migrations and schema milestones (forward-only)](#migrations-and-schema-milestones-forward-only)
+- [The persistence test project](#the-persistence-test-project)
+- [Seams & invariants a maintainer must respect](#seams--invariants-a-maintainer-must-respect)
+- [Node-run cost telemetry: fifteen plaintext columns, and why they are not encrypted](#node-run-cost-telemetry-fifteen-plaintext-columns-and-why-they-are-not-encrypted)
+- [node-settings.json: the save protocol](#node-settingsjson-the-save-protocol)
+- [Readiness: what the SQLite probe proves](#readiness-what-the-sqlite-probe-proves)
+- [Related pages](#related-pages)
+
 The node persists chat, agent, scheduler, model-fit and identity state in local **SQLite** through Entity Framework Core, living in the `XE-Local-AI-Engine.Client.Persistence` project. There are **two** DbContexts (`NodeChatDbContext` and `NodeIdentityDbContext`), a forward-only migration history, and a **per-column AES-256-GCM AEAD** scheme that encrypts privacy-sensitive payloads (conversation titles, message content, agent instructions, golden conversations, …) before they hit disk. This page is the maintainer reference for the schema, the encryption seams, and the migration history.
 
 > **Important correction to common assumptions:** there is **no SQLCipher / no full-database `PRAGMA key` encryption** in this codebase. At-rest secrecy is achieved by encrypting **individual columns** (stored as `BLOB`) via the `NodeEncryptionSaveChangesInterceptor` + `NodePayloadProtector`. Likewise, **cloud-provider credentials are NOT stored in SQLite** — they live in a separate ASP.NET Core DataProtection-encrypted file (`cloud-credentials.enc`) owned by `CloudCredentialStore` (see [Security & Privacy](12-security-and-privacy.md)).

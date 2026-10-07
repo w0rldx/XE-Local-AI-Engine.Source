@@ -7,7 +7,7 @@
   may do, and how a self-update is coordinated. It changes nothing about the engine's own API surface, the SPA, the
   supervised inference runtimes, or browser and headless operation.
 - **Authority:** Operator decisions recorded in
-  [Native desktop 1.0](../roadmaps/native-desktop-1.0.md) §"Approved direction" and §"Production completion
+  [Native desktop 1.0](../audits/2026-10-02-native-desktop-1.0-delivery-record.md) (historical record) §"Approved direction" and §"Production completion
   checkpoint — 2026-09-22".
 - **Amends:** nothing.
 

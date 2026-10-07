@@ -20,6 +20,14 @@ index `docs/agent-knowledge.md` must link every topic file under `docs/agent-kno
 byte cap and keep its `## 0.`..`## 7.` anchors (code comments cite them), and every rule entry in a topic
 file must stay short. A previous compaction regrew within a month; the caps make that a CI failure.
 
+The markdown-links check walks every tracked Markdown file (`git ls-files`, minus vendored agent templates,
+`LiveCorpus/` fixtures and `third-party/`) and resolves each relative inline link and reference definition
+against the file's own directory: the target must exist, and a `#fragment` on a Markdown target (or a bare
+same-file `#fragment`) must match a GitHub heading slug in that file or an explicit `id=`/`name=` HTML anchor.
+Slugs follow GitHub: lowercase, inline markers dropped, every character that is not a letter, digit, space,
+hyphen or underscore removed, spaces become hyphens without collapsing, and duplicates get `-1`, `-2`, ...
+Moved or renamed pages are the failure it catches; external URLs are not fetched.
+
 Exit codes: 0 clean, 1 something is missing from a page or over a cap, 2 a check could not run at all.
 """
 
@@ -27,10 +35,12 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import unquote
 
 WIKI_DIR = Path("docs/wiki")
 API_AND_HUBS_PAGE = WIKI_DIR / "09-api-and-hubs.md"
@@ -70,6 +80,22 @@ MARKDOWN_HEADING_RE = re.compile(r"^#{1,6}\s", re.MULTILINE)
 ENTRY_HEADING_RE = re.compile(r"^###\s+(?P<title>.*)$", re.MULTILINE)
 BUILD_OUTPUT_DIRS = frozenset({"bin", "obj"})
 
+# Vendored, generated or corpus Markdown whose links point into trees that are not part of this repository.
+MARKDOWN_LINK_EXCLUDED_PREFIXES = ("XE-Local-AI-Engine.Client.Application/Services/Agents/Templates/",)
+MARKDOWN_LINK_EXCLUDED_SEGMENTS = ("/LiveCorpus/", "third-party/")
+FENCE_RE = re.compile(r"^ {0,3}(?P<fence>`{3,}|~{3,})")
+ATX_HEADING_RE = re.compile(r"^ {0,3}#{1,6}[ \t]+(?P<text>.*?)(?:[ \t]+#+)?[ \t]*$")
+HTML_ANCHOR_RE = re.compile(r"\b(?:id|name)\s*=\s*[\"'](?P<anchor>[^\"']+)[\"']")
+CODE_SPAN_RE = re.compile(r"(`+)(?:.+?)\1")
+INLINE_LINK_RE = re.compile(r"\]\(\s*(?P<target><[^>]*>|[^)\s]+)(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?\s*\)")
+REFERENCE_DEFINITION_RE = re.compile(r"^ {0,3}\[[^\]]+\]:\s*(?P<target><[^>]*>|\S+)")
+SKIPPED_LINK_SCHEMES = ("http://", "https://", "mailto:")
+# Inside a heading: a code span keeps its text, a link keeps its label, HTML tags and `*` markers vanish, and
+# `_` vanishes only as an emphasis marker (not between two letters/digits, as in `gen_aitool`).
+HEADING_MARKUP_RE = re.compile(
+    r"`+(?P<code>[^`]*)`+|!?\[(?P<label>[^\]]*)\]\([^)]*\)|<[^>]+>|\*+|(?<![^\W_])_+|_+(?![^\W_])"
+)
+
 
 class InventoryError(Exception):
     """A check could not be evaluated — a missing file, or an inventory that came back empty."""
@@ -84,10 +110,12 @@ class Missing:
     doc: Path
     # Set for a violation that is not an absence (a size cap, a misplaced heading); replaces the MISSING wording.
     problem: str = ""
+    # The row's prefix when `problem` is set.
+    label: str = "OVER-CAP"
 
     def render(self) -> str:
         if self.problem:
-            return f"OVER-CAP {self.check}: {self.doc.as_posix()}: {self.problem}"
+            return f"{self.label} {self.check}: {self.doc.as_posix()}: {self.problem}"
         return f"MISSING {self.check}: {self.name} — expected in {self.doc.as_posix()}"
 
 
@@ -287,6 +315,101 @@ def check_agent_knowledge_entries(root: Path) -> CheckResult:
     return CheckResult(check=check, doc=AGENT_KNOWLEDGE_DIR, inventory=inventory, missing=tuple(missing))
 
 
+def github_slug(heading: str) -> str:
+    """The anchor GitHub derives from a heading's text, before duplicate suffixes."""
+    text = HEADING_MARKUP_RE.sub(lambda m: m.group("code") or m.group("label") or "", heading).lower()
+    return "".join(c for c in text if c.isalnum() or c in " -_").replace(" ", "-")
+
+
+def markdown_lines_outside_fences(text: str) -> Iterable[str]:
+    fence = ""
+    for line in text.splitlines():
+        match = FENCE_RE.match(line)
+        if fence:
+            if match and match.group("fence")[0] == fence[0] and len(match.group("fence")) >= len(fence):
+                fence = ""
+        elif match:
+            fence = match.group("fence")
+        else:
+            yield line
+
+
+def markdown_anchors(text: str) -> frozenset[str]:
+    """Every fragment a link into this file may use: heading slugs (with -1, -2 suffixes) and HTML ids."""
+    anchors: set[str] = set(HTML_ANCHOR_RE.findall(text))
+    occurrences: dict[str, int] = {}
+    for line in markdown_lines_outside_fences(text):
+        match = ATX_HEADING_RE.match(line)
+        if not match:
+            continue
+        base = slug = github_slug(match.group("text"))
+        while slug in occurrences:
+            occurrences[base] += 1
+            slug = f"{base}-{occurrences[base]}"
+        occurrences[slug] = 0
+        anchors.add(slug)
+    return frozenset(anchors)
+
+
+def markdown_link_targets(text: str) -> Iterable[str]:
+    for line in markdown_lines_outside_fences(text):
+        definition = REFERENCE_DEFINITION_RE.match(line)
+        if definition:
+            yield definition.group("target").strip("<>")
+            continue
+        for match in INLINE_LINK_RE.finditer(CODE_SPAN_RE.sub("", line)):
+            yield match.group("target").strip("<>")
+
+
+def tracked_markdown_files(root: Path) -> list[Path]:
+    try:
+        listed = subprocess.run(
+            ["git", "ls-files", "-z", "--", "*.md"], cwd=root, capture_output=True, check=True, text=True
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise InventoryError(f"markdown-links: git ls-files failed under {root}: {error}") from error
+    return [
+        root / name
+        for name in listed.split("\0")
+        if name
+        and not name.startswith(MARKDOWN_LINK_EXCLUDED_PREFIXES)
+        and not any(segment in f"/{name}" for segment in MARKDOWN_LINK_EXCLUDED_SEGMENTS)
+    ]
+
+
+def check_markdown_links(root: Path, files: Iterable[Path] | None = None) -> CheckResult:
+    """Every relative link in a tracked Markdown file resolves, and every `#fragment` into Markdown exists.
+
+    `files` replaces the `git ls-files` inventory, so the parsing can be tested without a git repository.
+    """
+    check = "markdown-links"
+    sources = sorted(tracked_markdown_files(root) if files is None else files)
+    inventory = require_non_empty(check, "tracked Markdown files", (p.relative_to(root).as_posix() for p in sources))
+    anchor_cache: dict[Path, frozenset[str]] = {}
+
+    def anchors_of(path: Path) -> frozenset[str]:
+        if path not in anchor_cache:
+            anchor_cache[path] = markdown_anchors(path.read_text(encoding="utf-8"))
+        return anchor_cache[path]
+
+    missing: list[Missing] = []
+    for source in sources:
+        doc = source.relative_to(root)
+        for target in markdown_link_targets(source.read_text(encoding="utf-8")):
+            if target.startswith(SKIPPED_LINK_SCHEMES):
+                continue
+            path_part, _, fragment = unquote(target).partition("#")
+            if path_part.startswith("/"):
+                resolved = root / path_part.lstrip("/")
+            else:
+                resolved = (source.parent / path_part) if path_part else source
+            if not resolved.exists():
+                missing.append(Missing(check, target, doc, f"broken path: {target}", "BROKEN"))
+            elif fragment and resolved.is_file() and resolved.suffix == ".md" and fragment not in anchors_of(resolved):
+                missing.append(Missing(check, target, doc, f"missing anchor: {target}", "BROKEN"))
+    return CheckResult(check=check, doc=Path("."), inventory=inventory, missing=tuple(missing))
+
+
 CHECKS: tuple[Callable[[Path], CheckResult], ...] = (
     check_signalr_hubs,
     check_local_api_route_families,
@@ -295,6 +418,7 @@ CHECKS: tuple[Callable[[Path], CheckResult], ...] = (
     check_solution_projects,
     check_agent_knowledge_index,
     check_agent_knowledge_entries,
+    check_markdown_links,
 )
 
 
@@ -307,7 +431,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         prog="docs-inventory-check",
         description=(
             "Fail when docs/wiki/ has fallen behind an inventory the code owns, "
-            "or docs/agent-knowledge outgrows its size caps."
+            "docs/agent-knowledge outgrows its size caps, or a relative Markdown link or anchor is broken."
         ),
     )
     parser.add_argument(

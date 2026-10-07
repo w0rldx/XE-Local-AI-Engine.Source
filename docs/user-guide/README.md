@@ -214,11 +214,12 @@ Everything below runs **on your own machine** unless you deliberately connect an
 <summary><b>Experimental</b> — rough edges expected</summary>
 
 - **Development Mode** — an agent works on a real Git repository of yours in an isolated copy, with a
-  reviewed approval step before anything is written back. It ships enabled, but operators can disable
-  the entire feature with `Development:Enabled=false`; otherwise it acts only after you register a repository.
+  reviewed approval step before anything is written back. It ships enabled; you can switch it off under
+  **Node Settings → General → Features**, and it acts only after you register a repository.
   **Read the [security boundary](docs/privacy-and-data.md#development-mode-and-its-limits) before you
   register one. Never point it at code you do not trust.**
-- **Image generation** — generate images locally. Grouped as a preview feature in the app.
+- **Image generation** — generate images locally, or edit one you generated or uploaded. Grouped as a
+  preview feature in the app.
 - **Fine-tuning (Training)** — build a training set with a local model, fine-tune a model on it, then
   score the result against the original on held-back samples. **Linux with an NVIDIA graphics card
   only**, and a run takes the whole GPU while it works.

@@ -2,6 +2,25 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** The in-process Quartz.NET scheduler in the Node Web Server: operators define recurring, one-shot or manual jobs from registered templates, a thin dispatch job fires them, every fire becomes a run-history row, and lifecycle events reach the React UI over a SignalR hub. Code lives in `Client.Application/Services/Scheduler`, the host hub wiring and `src/features/scheduler`.
+
+**Read this if you are** adding a job template, debugging a job that does not fire or cannot be cancelled, or changing run history. **Skip to** [Maintainer checklist](#maintainer-checklist) before adding a template; **reference tables** are in [Where it lives](#where-it-lives) and [REST surface](#rest-surface); **related pages:** [07](07-model-fit.md), [09](09-api-and-hubs.md), [10](10-react-client.md).
+
+## Contents
+
+- [Where it lives](#where-it-lives)
+- [Architecture at a glance](#architecture-at-a-glance)
+- [Templates, handlers, and the registry](#templates-handlers-and-the-registry)
+- [The execution path](#the-execution-path)
+- [Run history & retention](#run-history--retention)
+- [Cancellation & auto-interrupt](#cancellation--auto-interrupt)
+- [DI registration & two key gotchas](#di-registration--two-key-gotchas)
+- [SignalR hub (live run updates)](#signalr-hub-live-run-updates)
+- [REST surface](#rest-surface)
+- [React scheduler feature](#react-scheduler-feature)
+- [Maintainer checklist](#maintainer-checklist)
+- [Related pages](#related-pages)
+
 The node runs a **Quartz.NET-backed job scheduler** entirely in-process inside the Node Web Server (`XE-Local-AI-Engine.Client`). It lets an operator define recurring/one-shot/manual jobs from a registered set of *templates*, fires them through a thin dispatch job, records every fire as a run-history row, supports best-effort cancellation (operator interrupt + auto-interrupt timeout), and pushes live lifecycle events to the React management UI over a SignalR hub. The data layer is node-local SQLite with selected sensitive fields protected by per-column AEAD. Two templates ship today: the model-fit recommendation refresh and unattended execution of a saved node-local agent.
 
 This page covers the C# scheduler subsystem (`XE-Local-AI-Engine.Client.Application/Services/Scheduler/*` + the Client host wiring), the SignalR hub (`XE-Local-AI-Engine.Client/Hubs/*`), and the React scheduler feature (`XE-Local-AI-Engine.Client.React/src/features/scheduler/*`).

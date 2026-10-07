@@ -2,6 +2,35 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** QLoRA fine-tuning on the node: a teacher model generates a dataset, a run trains an adapter
+on a Hugging Face base checkpoint, and the result is exported to GGUF, smoke-loaded, evaluated and promoted. Two
+decisions shape it (ADR 0005): all training semantics live in Python under `tools/training/` in a uv-managed venv, and
+a run holds the node exclusively through `IGpuWorkGate`. The C# side lives in `Providers.Training` and
+`Client.Application/Services/Training/`.
+
+**Read this if you are** changing the training pipeline, the Python runtime or its pins, or debugging a run that will
+not start or finish. **Skip to** [§1](#1-the-python-runtime-uv-pinned-machine-global) for the runtime and
+[§4](#4-training-runs) for runs; **reference tables** are in [Where the code lives](#where-the-code-lives) and
+[§7](#7-endpoints-hubs-and-background-services); **related pages:** [Benchmarks](20-benchmarks.md), [Compute
+Tools](19-compute-tools.md), [Model Fit](07-model-fit.md).
+
+## Contents
+
+- [Where the code lives](#where-the-code-lives)
+- [Architecture at a glance](#architecture-at-a-glance)
+- [1. The Python runtime (uv, pinned, machine-global)](#1-the-python-runtime-uv-pinned-machine-global)
+- [2. Dataset generation](#2-dataset-generation)
+- [3. Base checkpoints and the license gate](#3-base-checkpoints-and-the-license-gate)
+- [4. Training runs](#4-training-runs)
+- [5. Export, smoke and promotion](#5-export-smoke-and-promotion)
+- [6. Evaluation and comparison](#6-evaluation-and-comparison)
+- [7. Endpoints, hubs and background services](#7-endpoints-hubs-and-background-services)
+- [8. Persistence](#8-persistence)
+- [9. React feature](#9-react-feature)
+- [10. Tests and validation](#10-tests-and-validation)
+- [Constraints and traps a maintainer must respect](#constraints-and-traps-a-maintainer-must-respect)
+- [Related pages](#related-pages)
+
 The Training group lets an operator turn the node's own tool-calling behaviour into a **fine-tuned local model**, entirely on the host: a teacher model generates a supervised dataset, a QLoRA run trains an adapter against a downloaded Hugging Face base checkpoint, and the result is exported to GGUF, smoke-loaded, evaluated from staging, compared against its installed base, quality-decided, and only then explicitly promoted into the local model registry. Nothing leaves the node except the two explicit downloads (the Python wheel closure and the base checkpoint).
 
 Two decisions shape everything on this page, both recorded in [ADR 0005](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md):

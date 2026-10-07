@@ -1,0 +1,150 @@
+# Satellite and Cloud Providers
+
+> Reference page for [Local Runtime & Providers](../03-local-runtime-and-providers.md) §3 and §6 · Reviewed: 2026-10-02 · Code-grounded.
+
+It lists the whisper.cpp runtime, the external OpenAI-compatible connections, the model catalog sources, and the Azure Foundry and Entra ID details.
+
+## `Providers.WhisperCpp` — the supervised speech-to-text runtime
+
+`WhisperServerProcessSupervisor` owns the node's single resident `whisper-server` child process. Deliberately ONE daemon,
+unlike the image runtime's per-model dictionary: a node has one selected transcription model, and the server serializes
+every request on a single mutex, so a second daemon could never serve anyone faster. Readiness is a port accept followed
+by the server's health route — never a line on stdout, which is fully buffered off a TTY and has been observed absent
+while the port was already live. A 503 there means "loading a model" and keeps the poll going, which is also what covers
+an in-place model switch.
+
+Three things are worth knowing before changing it:
+
+- **No flag, route or JSON shape escapes the project.** The engine sees `IWhisperTranscriber` (a seekable audio stream
+  plus options in, timed segments plus a detected language out) and `IWhisperServerSupervisor`. `WhisperServerArgumentBuilder`
+  is the only place flag names live, and the daemon is deliberately never launched with its audio-conversion flag: that
+  would write every request's bytes to disk, including live audio, which the feature's privacy contract forbids.
+  Transcoding containers the daemon cannot decode is an engine-side job, reported as `supportsTranscode` on the status.
+- **A transcription lease is model- AND generation-bound.** Ensure-then-lease is two steps and the daemon is mutable, so
+  another caller can switch its model in between; the generation moves on every spawn and every successful switch, which
+  is what makes the pair unambiguous. Holding a lease is also what makes an eject, a source build or a source-build
+  remove answer `409 runtime-busy` rather than racing an in-flight request.
+- **GPU loads serialize through the shared admission gate** for both a spawn and an in-place switch — an in-place load
+  initialises GPU weights exactly as a spawn does — and a CPU backend bypasses it entirely.
+
+`WhisperModelCatalog` is a static table of seven Whisper weights plus the pinned Silero VAD file, with real byte sizes
+and real digests; `WhisperModelRecommendation` picks a row from a `HardwareProfile` with 25 % headroom and caps a CPU
+backend at the Small tier. Upstream ships prebuilt binaries only on its nightly `b<n>` tags and publishes no Linux CUDA
+asset, so Linux NVIDIA resolves the CPU tarball and the CUDA lane is a managed source build or the
+`XE_WHISPERCPP_SERVER_PATH` override. The whole surface is gated by `Transcription:Enabled` and every route is
+Operator-gated.
+
+## `Providers.OpenAICompat` — operator-registered external endpoints
+
+Four invariants are load-bearing, and each has a test:
+
+- **Reasoning is never replayed.** A model's reasoning output is surfaced (MEAI's OpenAI adapter lifts `reasoning_content` into `TextReasoningContent`; the provider's thin rewriter adds only the newer vLLM `reasoning` field and an inline `<think>` fallback), but it is **not sent back to the server on a later turn**. Chat Completions drops historical `TextReasoningContent` by design — identical to the llama.cpp path today, and unlike Codex, which replays encrypted reasoning because the Responses API requires it. A server that needs its own reasoning replayed to stay coherent across turns is out of scope for v1. Pinned by a two-turn wire test asserting the replayed request body carries none.
+- **A key belongs to ONE origin.** The registry hands the transport an endpoint and its credential as one atomic `ExternalProviderTransportBinding` read from a single snapshot generation, so no arrangement of concurrent edits can present one connection's key at another's address. Changing a stored connection's base-URL ORIGIN requires the key to be re-entered or explicitly cleared, and the probe's stored-key fallback applies only when the probed origin equals the stored one. Without both, an operator-API caller who cannot read the encrypted key could repoint the endpoint at a listener they control and have the node send the secret to it.
+- **Every invocation's binding is pinned.** Tool authorization happens once, before the first send, from the connection's declared locality; a tool loop then sends many times. `ExternalProviderBindingPinScope` (an `AsyncLocal`) records the generation, locality and FULL normalized base address — path included, because two OpenAI-compatible services routinely sit behind one origin — each invocation was authorized against, keyed by the canonical model id so a case variant out of the NOCASE provider map still finds its pin. `ExternalOpenAiChatClient` re-checks them on every send: a mid-invocation Local→Cloud flip, host move or base-path move throws `ExternalProviderBindingChangedException` instead of quietly redirecting already-authorized local tool results to the new endpoint. Every path that runs a model pins it — the turn in `InvocationRunner` beside the spawn context, each orchestration participant, and a spawned sub-agent's own child binding — and pins stack, so a child's never evicts its parent's. `ExternalProviderInvocationPin` only RESOLVES the pins: the scope is opened synchronously by the caller, because an `AsyncLocal` written inside an `async` method is invisible to that method's caller and a helper that seeded it there pinned nothing at all.
+- **Delegation follows the same trust gate as `run_python`.** A declared-cloud or unresolved external model is offered neither `run_python` nor `spawn_subagent`, and `SubAgentSpawnService` refuses a spawn whose parent sits outside the trust boundary. A child resolves its own model and its own tool set, so an ungated spawn offer is a bypass of the workspace, knowledge-base and custom-tool gates rather than a capability of its own.
+
+## External connections: the store, the registry cache, and the reconciler
+
+Three stores back one saved connection, with no shared transaction between them: the data-protected `external-providers.enc` file, one `ext:`-prefixed provider-map row per registered model, and the node's tool-capable allow-list. The encrypted file is the single source of truth and commits FIRST; `IExternalProviderReconciler` is an idempotent pass that repairs whatever the other two are missing or still carrying, the way the model-deletion coordinator's journal compensates its own partial failures. It runs at startup and again after every committed save or delete, so a crash between two of the three writes self-heals on the next boot rather than leaving an `ext:` id that routes nowhere or a deleted model still sitting in the allow-list.
+
+**The store.** `ExternalProviderStore` is modelled on `CloudCredentialStore` — same protector-per-purpose, same "decryption failed ⇒ quarantine and report empty" posture, same create-at-0600 write — because both files hold API keys, and a second, subtly different secret-file discipline is how one of them ends up world-readable. A decryption failure means the key ring rotated out from under the file (a node re-key, a restored profile): the payload can never be recovered, and leaving it in place would make every subsequent save fail its read-modify-write, so it is quarantined. Quarantined means GONE, which is why that path reports `Missing` rather than `Unreadable`. An `IOException` is the opposite case — the file is probably fine and a concurrent reader or AV scanner is holding it — so it reports `Unreadable` and a writer refuses rather than reconciling the operator's configuration away on the strength of a locked handle.
+
+The write surface is per-connection rather than "save the whole config": a whole-config write from a UI that rendered a stale list would silently delete a connection added in another tab, and it would force every caller to carry every other connection's API key just to edit one display name. Both writers are compare-and-swap on `StoredExternalProviderConfig.Revision` — a caller passing `null` asserts "I do not care what is there" and wins unconditionally, while a caller passing the revision it read is rejected as `Superseded` when the file moved underneath it.
+
+`ExternalProviderLoadResult` has four states, not "a config, possibly empty", because the three empty-looking outcomes call for opposite behaviour: a fresh node, a node that cannot see its own configuration, and a node downgraded past a payload it must not interpret. Only an authoritative read may drive a pass that deletes.
+
+Base URLs and connection slugs are normalized in the store and nowhere else. The outbound guard pins every request to the stored value, so a descriptor carrying an un-normalized address would widen the guard to whatever the operator typed; the slug is canonicalized once at write time, which is what keeps the case-INSENSITIVE provider map and the ORDINAL tool-capable allow-list agreeing about one model.
+
+**HTTPS by default.** A new or edited connection whose base URL is plain `http` on a host that is not loopback (`localhost`, `127.0.0.0/8`, `::1`) is refused at save unless the operator sets the connection's `AllowInsecureHttp` opt-in; the rule is `ExternalProviderTransportPolicy.IsInsecureRemote`, applied in `ExternalProviderStore.Validate`. Private LAN, link-local and `.local` addresses are deliberately NOT exempt: a hostname's private-ness needs DNS, which is rebindable and checked at save rather than at send, and a LAN or VPN segment is exactly where a plaintext Bearer key is sniffable. The rule lives on the save path, never in `OpenAICompatibleBaseAddress`, because that normalizer also runs on every send: a connection saved over http before the rule keeps working, and the connection response carries a server-computed `insecureTransport` flag so the settings list can badge it until its next save opts in or moves to https.
+
+**Tri-state capabilities (store schema 2).** Each registered model answers tools, vision, reasoning and reasoning effort as Yes, No or Unknown: `bool?` on `StoredExternalProviderModel` and on the save and response DTOs, with `null` meaning Unknown and the JSON names unchanged. The tri-state ends at `ExternalProviderStore.ToDescriptor`, which maps `== true`, so `ExternalProviderModelDescriptor` and every consumer past the registry (the capability resolver, the reconciler's tool-capable allow-list, the model list) still read a plain `bool` and Unknown fails closed exactly like No. The save validator keeps its two rules on the tri-state: an effort answer of Yes needs reasoning Yes, and a default effort needs effort Yes. Schema 1 stored an unchecked box as `false`, which never meant "unsupported", so `LoadUnlockedAsync` lifts a schema-1 file in memory (`false` → Unknown, `true` stays) and the next save writes it back as schema 2. A build that only knows schema 1 meets a schema-2 file in the existing `UnsupportedSchema` posture: connections hidden, file untouched, writes refused. So an older build cannot read a file saved by this version: its external models disappear, fail closed, and writes are refused. There is no capability `Source` field yet; the only source today is the operator's declaration, and the runtime cannot tell Unknown from No until probe v2 adds one. A save (`PUT`) body that omits a capability field now stores Unknown, which fails closed like No; only the editor shows the difference.
+
+**The registry cache.** `ExternalProviderRegistry` is a cached projection of the store onto the key-free read model. It is cached because the chat path resolves a model's connection on every cold client, every capability resolution and every policy check, and each miss would be a file read plus a data-protection unprotect. It is INVALIDATED rather than time-bounded, because the registry contract requires a save to take effect without a restart and a TTL would leave a window in which the node still sends to a base URL the operator has already changed. Invalidation happens AFTER the file commits, never before: invalidating first would let a concurrent read re-cache the OLD file and then never see the new one.
+
+The snapshot LOAD is deliberately unsynchronized. A concurrent burst right after an invalidation can read the file more than once, and that is the cheaper failure: the work is one read of a small local file plus a decrypt, and holding a lock across it would serialize every cold chat client behind disk I/O. The PUBLICATION is not unsynchronized — each load stamps the epoch it observed BEFORE reading and publishes only if the epoch has not moved since, so a load that overlapped an `Invalidate` is discarded instead of overwriting the newer configuration with the one the operator just replaced. That race is not theoretical on this path: a save invalidates while in-flight sends are resolving.
+
+The snapshot is also what makes `TryClassifyCached` possible. Three policy sites that must classify an external id — the tool offer's synchronous gate, its `run_python` gate, and `RuntimeChatClient`'s egress backstop — have no async boundary to await on, and blocking a chat send on a file read is not an option. They read the snapshot or fail closed, and `ExternalProviderStartupReconciler` primes it at boot so the fail-closed window is only the interval before the node has finished booting. A failure in that startup pass is logged, NOT rethrown, unlike the installed-model deletion recovery: external connections are an optional feature, and refusing to start the whole node because one encrypted file could not be read would take chat, local models and every other surface down with it, while the fail-closed trust resolver already makes the degraded state safe.
+
+**The reconciler's two comparison rules.** `ExternalProviderReconciler` only ever touches `ext:`-scheme keys, which is what makes the pass safe to run unconditionally at startup: a GGUF's map row, an Ollama backfill row, and an operator's hand-curated allow-list entry for a local model are all invisible to it. Two comparison rules are load-bearing and deliberately different, and each is applied CONSISTENTLY on both halves of its own diff:
+
+- The **provider map is case-INSENSITIVE**, so both "is this model already covered by a row?" and "is this row an orphan?" compare case-insensitively. One row legitimately serves every case variant of a model id, and mixing the two rules is what let `ext:conn/Foo` be skipped as already-covered and then deleted as an orphan of `ext:conn/foo`, taking the shared SQLite row — and both models' routing — with it.
+- The **tool-capable allow-list is matched ORDINALLY**, because `LocalToolOfferProvider.IsToolCapable` compares ordinally and an entry differing only in case is not capable. The registry index is ordinal for the same reason: those are identities, not row keys, and the wire ids they carry are genuinely case-sensitive.
+
+Both sides are fed the ONE canonical spelling the store minted, which is what lets the two rules coexist without a model being routable but not tool-capable. Both halves of every diff are derived from the single configuration this pass authoritatively loaded, through `ExternalProviderConfigProjection.Project`, and never from a second registry read: the registry re-reads the store through `LoadAsync`, which collapses an `Unreadable` or unsupported-schema file to an EMPTY configuration, and an empty registration set is a mandate to erase the operator's whole external setup. A store that turned unreadable between two reads would have done exactly that, and reported success.
+
+The node-default cleanup inside the pass reads the settings cache first only to skip the write on the common no-drift pass — this runs on every boot and every save, and a needless save churns the cache and the file. The authoritative decision is re-made inside a coordinated update under the lock, so a stale pre-check can cost a redundant write but never a wrong one. That coordination matters because node-settings is written WHOLE: a read-compute-save-back shape silently reverted an operator's unrelated edit that landed in the window.
+
+**Save ordering.** `ExternalProviderAdministrationService` commits the encrypted file, then drops BOTH caches, and only then runs reconciliation. Cache invalidation deliberately does not depend on the repair: reconciliation is fallible and can be slow (a lease timeout, a locked settings file, a cancelled request), and a revoked or rotated credential that keeps working because a repair step failed or stalled is the worst outcome available here. Ordering the invalidation first is strictly stronger than clearing in a `finally`, because it survives a failure AND a hang. The caches are cleared on EVERY committed change, not only when reconciliation repaired something: an API-key or base-URL edit changes neither the map nor the allow-list, so reconciliation correctly reports no drift — and yet the router is still holding a client built against the previous key. A repaired map row that neither the resolver's short-TTL memo nor the router's per-`(provider, model)` client cache sees is a repair that has not taken effect until both expire.
+
+## The connect-time probe
+
+Four properties are load-bearing and each has a test:
+
+- The address is normalized by `OpenAICompatibleBaseAddress`, the SAME normalizer the save path and the outbound chat guard use, so a probe can never validate an address the transport would then spell differently. A stored value is re-normalized rather than trusted blindly — it is a fixed point of the normalizer, so this is free for a well-formed store and catches a hand-edited file.
+- Redirects are refused rather than followed, because a `302` would move the probe to a host the operator never reviewed and report IT as reachable.
+- The HTTPS rule above applies before anything is sent: a plain-http, non-loopback address without the request's `allowInsecureHttp` opt-in is refused as an invalid base URL, so "Test connection" cannot send the key over a channel the save would refuse.
+- The API key never leaves the probe class: it goes into one `Authorization` header and appears in no result, message or log. A transport failure's exception text is dropped from the RESULT — it embeds the address and can embed header material — and kept only in the node's own log, where the operator can see it.
+
+The verdict is deliberately generous. `GET /v1/models` is near-universal but not required — a gateway serving only `POST /v1/chat/completions` is a perfectly usable connection — so a 404 from a gateway with no model listing, a 401 from one that wants a different key, and an unparseable body are all "answered, no listing", never a failure that blocks the save. Only a transport-level failure means the endpoint could not be reached at all. The whole probe is capped at ten seconds, deliberately independent of the connection's own generation timeout: this backs a "Test connection" button an operator is watching, and an endpoint that has not answered a model listing in ten seconds is not one a chat turn would survive either.
+
+## The model catalog's five sources
+
+`ListLocalModelsEndpoint` maps them through `LocalModelsMapper` in one fixed order — Ollama, GGUF, cloud, external — and each entry carries four nullable identity fields beyond its `provider` tag:
+
+| Field | Populated for | Why the tag alone is not enough |
+|---|---|---|
+| `displayLabel` | external models, Azure deployments | The operator's friendly name. Azure stored one all along and the list DTO had nowhere to put it, so it was dropped before the picker. |
+| `externalConnectionId` | external models | Every external model shares one `provider: "external"` tag (the provider is a multiplexer), so this is what sections the picker per connection. |
+| `externalConnectionName` | external models | The section heading and the "Sent to {connection}" egress cue. |
+| `declaredLocality` | external models | `local` \| `cloud`, the operator's DECLARATION — never inferred from the base URL. It decides whether the entry is badged and grouped as local or as cloud. |
+
+`GetLocalModelDetailsEndpoint` repeats the same four on its external branch, because a details view reached by deep link has no list entry to read them from. External models never appear in the running/loaded-models view: "running" means resident in this node's memory, and the node owns no process for them.
+
+> **Not a runtime provider:** voice/text-to-speech. The backend exposes only the `VoiceFeatureEnabled` node setting; the React client speaks through the browser/operating-system Web Speech implementation. The repository ships no voice model, download path, worker, cache, model port, or node inference process. Voice availability and local-versus-network behavior belong to the platform speech service and are outside repository control. See [10-react-client.md](../10-react-client.md) for the client runtime.
+
+## Entra ID sign-in and the token cache
+
+`EntraCachePersistenceFailure.IsPersistenceUnavailable` exists because Azure.Identity's `DeviceCodeCredential` / `InteractiveBrowserCredential` do not reliably report an unavailable OS-native token cache as their own `CredentialUnavailableException`. On a Linux box with no `org.freedesktop.secrets` provider (WSL2 without gnome-keyring/kwallet) it arrives instead as `AuthenticationFailedException` wrapping `MsalCachePersistenceException` several levels deep. The regression that proved it: `POST cloud-settings/entra/device-code/start` returned an unhandled 500 because the existing fallback only caught `CredentialUnavailableException`.
+
+Every no-persistence-retry fallback therefore checks BOTH that method AND `CredentialUnavailableException`, always as a type check on the `InnerException` chain and never as a message match — a string match would be fragile across locales and MSAL versions. The three fallbacks are `EntraDeviceCodeSignInCoordinator`, `AzureFoundryChatClientFactory` and `EntraAuthCodeConfidentialClientFactory`. The retry always rebuilds the credential with persistence disabled (in-memory only, logged once) and never writes the cache unencrypted to disk.
+
+## Azure Foundry: the two wire surfaces
+
+| | Azure deployments (`ApiSurface.AzureDeployments`) | OpenAI-compatible v1 (`ApiSurface.OpenAiV1`) |
+|---|---|---|
+| Wire shape | `{endpoint}/openai/deployments/{deployment}/…` | `{endpoint}/openai/v1/chat/completions`, deployment in the body's `model` |
+| SDK client | `Azure.AI.OpenAI.AzureOpenAIClient` | plain `OpenAIClient` |
+| Where the auth policy goes | registered at `PipelinePosition.PerCall` | passed as the `OpenAIClient(AuthenticationPolicy, OpenAIClientOptions)` ctor argument |
+
+`EntraBearerTokenPipelinePolicy` derives from `AuthenticationPolicy`, not merely `PipelinePolicy`, so it can fill either role. On the v1 surface a `PipelinePosition.PerCall` registration is **silently overwritten**: that ctor puts the supplied policy in `ClientPipeline`'s FIXED per-try slot, which the SDK's internal pipeline-assembly code places AFTER every PerCall policy — including a PerCall-registered instance of the same class. A PerCall registration there is replaced by the SDK's own placeholder-credential auth policy before the request leaves the process, which is how `AzureFoundryChatClientFactory.PlaceholderApiKey` once reached a live gateway and was rejected with "JWT must have three segments". `BuildOpenAiV1KeyCredentialClient` and `BuildOpenAiV1EntraClient` are the two v1 call sites, and both pass their policy as the ctor argument.
+
+On the Azure deployments surface, `EntraBearerTokenPipelinePolicy` sits at `PipelinePosition.PerCall` so a transient 401 retry re-fetches rather than replaying a stale token. It composes with `CustomHeaderPipelinePolicy`: both may be registered at `PipelinePosition.PerCall` on the same client, and each sets only its own header name — `Authorization` is reserved and skipped by the custom-header policy, so the two never race for one header.
+
+`CreateOpenAiV1ClientForTesting` is the regression seam for this: it assembles the same v1 construction path with an injected transport, so a pipeline-EXECUTION test can assert on the real outbound headers and URI. The bug class above was invisible to construction-only tests.
+
+## Azure Foundry error translation
+
+`AzureFoundryErrorTranslatingChatClient` maps three transport exception families onto `AzureFoundryProviderErrorKind`:
+
+| Incoming | Condition | Kind |
+|---|---|---|
+| `RequestFailedException` | HTTP 400 with error code `content_filter` | content filter |
+| `ClientResultException` (v1 surface) | HTTP 400 with body `error.code` = `content_filter` | content filter |
+| either | HTTP 401 / 403 | `AuthFailed` |
+| either | anything else | `Transport`, with any JSON `error.message` from the body appended to the generic HTTP-status message, so a gateway policy failure surfaces its own detail instead of a bare status code |
+| `AuthenticationFailedException` | an Entra ID token request rejected by Azure AD | `AuthFailed` |
+
+The Entra path needs its own translation because the token request is raised lazily, per call, by `EntraBearerTokenPipelinePolicy` and throws a different exception type than the Azure OpenAI transport does. The AADSTS reason usually lives on an *inner* exception (MSAL's `MsalServiceException`), not on the outer `AuthenticationFailedException.Message`, so `SanitizeAuthenticationFailureMessage` walks the `InnerException` chain, keeps the outermost exception's first line for credential-type context, and appends the first line anywhere in the chain containing `AADSTS` — falling back to just the first line when no AADSTS line exists anywhere, as in a local or offline failure. Everything else, stack traces and MSAL correlation ids included, is dropped before the length cap.
+
+## The active cloud selection
+
+When `requestedModelId` is null or blank — an agent or flow participant with no pinned model — the node-default path runs instead: Codex when a session is present, else Azure when `StoredNodeSettings.DefaultModelName` matches one of the stored connection's deployment names. A Codex session counts as *usable* when it is non-expired (skew-adjusted) or carries a refresh token the auth handler can rotate; an expired session with no refresh token still selects Codex — never silent-local — but the cloud factory surfaces a typed re-auth error rather than building a doomed client.
+
+A bare deployment name wins routing over any local model of the same name, so the Azure save refuses a name that would shadow another provider's id: one carrying the `ext:` scheme or equal to a Codex catalog id (`CloudSettingsPolicy.ValidateDeploymentNames`), or one naming an installed GGUF (`SaveCloudSettingsEndpoint`, through `IGgufModelStore.ExistsAsync`). Ids are not namespaced: a prefix would have to be threaded through every persisted model reference. The ceiling is known: an Ollama tag, or a GGUF installed after the deployment was saved, can still collide, and Azure still wins; a reserved `azure:`/`codex:` prefix is the upgrade path once a second code-defined cloud provider makes collisions likely.
+
+Two caches keep re-resolution cheap even though the requested model id can differ from send to send:
+
+- A short-TTL **store snapshot** (Codex session + Azure config + node settings, read together) keeps the encrypted token-store, credential-store and node-settings reads off every send. A sign-in or sign-out invalidates it immediately through `InvalidateSelectionCache`. Computing the per-request selection from the snapshot performs no further I/O, so a differently-modeled request on an otherwise cache-hot send is still free.
+- A **client cache** keyed on a stable *selection identity* — the provider plus the resolved model, `azure:gpt-4o` or `codex:gpt-5.4` — so alternating sends across a small set of models (an Azure deployment for the main assistant, a Codex model for a sub-agent) reuse each model's client instead of rebuilding on every alternation. Within an identity a fingerprint, which also folds in the volatile fields (token expiry, Entra settings), decides whether that identity's cached client is still valid. Keying on the identity rather than the raw fingerprint keeps the cache bounded: an hourly Codex token refresh replaces that identity's one entry instead of accumulating a new one forever.
+
+Swapped-out clients are **not** disposed. The singleton chat client is called by parallel requests and one may be mid-stream on the previously cached wrapper when the selection flips. The cloud wrappers own nothing real — the `HttpClient`/handler chain is owned and disposal-protected by the singleton `ICodexOAuthChatClientFactory` or Azure factory — so a swapped-out wrapper is a thin MEAI adapter the GC reclaims safely. Eagerly disposing one on swap would tear down a client another request is still streaming on (`ObjectDisposedException`, corrupted SSE), so disposal happens only at container shutdown. Swaps are rare (sign-in, sign-out, hourly refresh, a model switch), so the transient extra wrapper is negligible.

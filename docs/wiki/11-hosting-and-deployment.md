@@ -2,6 +2,23 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** How the node process is hosted and shipped: the dev-only Aspire AppHost, `ServiceDefaults`, the host pipeline in `Program.cs`, the configuration layers, the packaged desktop, browser, headless and MCP-only modes, publish profiles, installers and release channels. Aspire never ships; packaged builds serve plain HTTP on loopback from a per-user data directory.
+
+**Read this if you are** changing startup order or a hosted service, adding a configuration key, or touching packaging, installers or update channels. **Skip to** [§3](#3-the-node-host-pipeline-programcs) for the boot pipeline; **reference tables** are in [§4](#4-configuration-layering) and [§6](#6-publish-profiles-launchers--rc-packaging); **related pages:** [01](01-architecture-overview.md), [13](13-testing-and-validation.md), [12](12-security-and-privacy.md).
+
+## Contents
+
+- [1. Aspire AppHost (dev/integration)](#1-aspire-apphost-devintegration)
+- [2. ServiceDefaults](#2-servicedefaults)
+- [3. The node host pipeline (Program.cs)](#3-the-node-host-pipeline-programcs)
+- [4. Configuration layering](#4-configuration-layering)
+- [5. Packaged local modes: native desktop, browser and headless](#5-packaged-local-modes-native-desktop-browser-and-headless)
+- [6. Publish profiles, launchers & RC packaging](#6-publish-profiles-launchers--rc-packaging)
+- [7. Installers & uninstaller](#7-installers--uninstaller)
+- [8. Release channels and CI status](#8-release-channels-and-ci-status)
+- [Isolated managed-runtime storage](#isolated-managed-runtime-storage)
+- [Related pages](#related-pages)
+
 This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, packaged **desktop mode** (`XE_LAUNCH_MODE=desktop`), the asymmetric Windows/Linux publish profiles, the Windows C# launcher, and the legacy/manual cleanup scripts.
 
 The engine supports these hosting paths; packaged launches additionally select a native window, browser or headless operation:
@@ -281,8 +298,8 @@ change the ordinary browser or Windows document policy (`NativeDesktopDocumentPo
 
 For compositor-specific flicker, `WEBKIT_DISABLE_COMPOSITING_MODE=1` is an opt-in workaround,
 not a production default. Real Ubuntu LTS X11/Wayland acceptance was waived for this delivery;
-WSLg prototype checks are not equivalent. Current evidence and remaining acceptance checks
-are tracked in [Native desktop checkpoint](../roadmaps/native-desktop-1.0.md).
+WSLg prototype checks are not equivalent. The delivery evidence and the acceptance checks left open
+are recorded in [Native desktop checkpoint](../audits/2026-10-02-native-desktop-1.0-delivery-record.md) (historical record).
 
 ### Underlying engine bootstrap
 

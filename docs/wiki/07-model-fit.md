@@ -2,6 +2,29 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** Model-fit is the hardware-aware GGUF recommendation advisor: it profiles RAM, VRAM and GPU, estimates each candidate's memory footprint with a pure formula, ranks what fits from the curated catalog and live Hugging Face discovery, and caches the result. The React page only reads that cache; the seeded Quartz `model-recommendation-check` job is the one way to rerun the advisor. Code lives in `Client.Application/Services/ModelFit`.
+
+**Read this if you are** changing recommendations, the catalog, the memory estimator or GGUF downloads, or explaining why a model shows as not runnable. **Skip to** [The two paths](#the-two-paths-cache-read-vs-scheduler-refresh) for how a refresh happens; **reference tables** are in [Where the code lives](#where-the-code-lives) and [Endpoints](#endpoints); **related pages:** [03](03-local-runtime-and-providers.md), [06](06-scheduler.md).
+
+## Contents
+
+- [Where the code lives](#where-the-code-lives)
+- [The two paths: cache-read vs. scheduler refresh](#the-two-paths-cache-read-vs-scheduler-refresh)
+- [The memory-fit estimator (pure core)](#the-memory-fit-estimator-pure-core)
+- [The quant ladder & quality tiers](#the-quant-ladder--quality-tiers)
+- [GGUF variant recommender (the quant picker)](#gguf-variant-recommender-the-quant-picker)
+- [Inference Optimizer (operator surface)](#inference-optimizer-operator-surface)
+- [The hardware profiler](#the-hardware-profiler)
+- [The curated catalog lane (primary recommendation source)](#the-curated-catalog-lane-primary-recommendation-source)
+- [The refresh service (the advisor)](#the-refresh-service-the-advisor)
+- [The query service (cache-read)](#the-query-service-cache-read)
+- [GGUF download coordinator](#gguf-download-coordinator)
+- [Quartz wiring](#quartz-wiring)
+- [Endpoints](#endpoints)
+- [React feature](#react-feature)
+- [Invariants a maintainer must respect](#invariants-a-maintainer-must-respect)
+- [Related pages](#related-pages)
+
 Model-fit is the node's **hardware-aware GGUF recommendation advisor**: given the operator's use-case, it profiles the local hardware (RAM / VRAM / GPU vendor), estimates each candidate model's memory footprint with a pure I/O-free formula, ranks the ones that fit, and caches the ranked snapshot. Candidates come from **two lanes** — a curated, bundled model catalog (the primary source of the `recommended`/`canRun` sections) and live Hugging Face discovery (demoted to a secondary `explore` section). The React page is **cache-first** — it reads the last cached snapshot and never runs the advisor inline; the only way to (re)run the advisor is to fire the seeded Quartz `model-recommendation-check` job. This page covers the hardware profiler, the memory-fit estimator, the curated catalog lane, the refresh service, the cache-read query service, the GGUF download coordinator, the Quartz wiring, the local endpoints, and the React feature.
 
 > **Discrepancy vs. older notes (CODE WINS).** Earlier docs/plans describe a "digest-pinned approved utility image" run in a container to **benchmark** models. That concept **no longer exists** — it was removed in the [runtime re-architecture](03-local-runtime-and-providers.md), which took Docker off the model path entirely, and the orphaned `approved_utility_images` table was dropped by migration. ([ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) later permitted Docker for **Development Mode execution only**; it does not reopen a container path here.) The advisor now runs hardware-aware GGUF recommendation **in-process** against the [host llama.cpp runtime](03-local-runtime-and-providers.md). The **advisor refresh** still has no benchmark mode: it rejects anything but `Recommend` with *"Benchmark refresh is not yet enabled."* (`ModelFitRefreshService.RefreshAsync` — grep the message rather than a line number; it has already drifted once), and the handler's parameter schema dropped the `approved-image` and `provider-name` fields (`ModelRecommendationCheckHandler.cs`). A *separate* real benchmark now exists — the [Inference Optimizer](#inference-optimizer-operator-surface) replays a candidate profile under a metrics-enabled `llama-server` against a golden transcript — but it tunes **launch arguments for an already-chosen model**, not the advisor's model ranking. The two are distinct: the recommendation advisor stays estimator-only and **never** spawns a process.

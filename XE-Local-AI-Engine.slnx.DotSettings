@@ -8,8 +8,8 @@
 		initialization order (initializers run in textual order) — see CodexModelCatalog, where the
 		default "Full Cleanup" once moved a derived HashSet above the array it was built from, producing
 		a null-argument type-init failure. Run cleanup with this
-		profile (profile "BuildSafe", excluding props/targets/csproj). The exact command line lives in
-		tools/code-cleanup.md and is kept OUT of this comment on purpose: a literal double-dash flag is
+		profile (profile "BuildSafe", excluding props/targets/csproj). The exact command line lives in the
+		"ReSharper cleanup" entry of docs/agent-knowledge/build-and-analyzers.md and is kept OUT of this comment on purpose: a literal double-dash flag is
 		illegal inside an XML comment and silently corrupts the whole settings file (jb then reports the
 		profile as missing).
 		To extend it (e.g. add named-argument insertion), duplicate it in Rider's Code Cleanup options,

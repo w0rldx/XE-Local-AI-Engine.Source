@@ -10,8 +10,11 @@
 > under a different one — the capture tool enforces exactly that.
 
 This summary records the evidence produced for the local-inference performance
-plan. It does not broaden the claims made by the machine-readable artifacts in
-`docs/performance/baselines/`.
+plan. It does not broaden the claims made by the machine-readable artifacts that
+were tracked in `docs/performance/baselines/`.
+
+> The baseline JSON files and the `golden-v1.json` corpus named below were removed on 2026-10-07 as
+> unreferenced evidence; the commit history keeps them. Paths below are kept as plain text for provenance.
 
 ## Captured configuration
 
@@ -74,7 +77,7 @@ claim. The first Lane 4 capture was invalidated during review and replaced by a
 schema-2 recapture with canonical baseline comparison, actual role preflights,
 explicit context readback, and fail-closed process-memory evidence. The corrected
 grid produced zero qualifying cells, so no production tuning ships. See
-`2026-07-26-lane4-no-change.md`.
+[Lane 4 no-change decision](2026-07-26-lane4-no-change.md).
 
 ## Fit/replay and VRAM semantics
 

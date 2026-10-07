@@ -2,6 +2,20 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** The Node Web Server transport layer: the FastEndpoints HTTP API under `/api/local/v1`, the SignalR hubs, the cross-cutting middleware (security, exception handling, health, auth) and the OpenAPI document that generates every React REST client through hey-api. Every route is loopback-only, and a backend contract change is not finished until the generated client is regenerated and committed.
+
+**Read this if you are** adding or changing an endpoint or hub, chasing an RFC 7807 error body, or the React client and backend disagree on a contract. **Skip to** [§5](#5-openapi--hey-api-the-single-source-of-truth-for-react-rest) for the regeneration step; **reference tables** (endpoint inventory, hub list and event names) are in [§1](#1-the-inbound-http-api-fastendpoints) and [§2](#2-signalr-hubs-inbound-browser--node); **related pages:** [10](10-react-client.md), [12](12-security-and-privacy.md).
+
+## Contents
+
+- [Big picture](#big-picture)
+- [1. The inbound HTTP API (FastEndpoints)](#1-the-inbound-http-api-fastendpoints)
+- [2. SignalR hubs (inbound, browser ↔ node)](#2-signalr-hubs-inbound-browser--node)
+- [3. Outbound traffic](#3-outbound-traffic)
+- [4. Cross-cutting transport concerns](#4-cross-cutting-transport-concerns)
+- [5. OpenAPI → hey-api: the single source of truth for React REST](#5-openapi--hey-api-the-single-source-of-truth-for-react-rest)
+- [Related pages](#related-pages)
+
 This page documents the **Node Web Server transport layer**: the HTTP API exposed under `/api/local/v1` (FastEndpoints), the unconditional SignalR push/stream hubs plus the conditional Development hub, the cross-cutting transport concerns (security middleware, exception handling, health checks, auth), and how the backend's OpenAPI document becomes the single source of truth for every React REST client via hey-api.
 
 If you are adding or changing an endpoint or hub, this is the page that tells you *where the route lives, how it is secured, and what regen step you must run for the React client to see it*.

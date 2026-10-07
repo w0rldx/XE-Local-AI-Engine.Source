@@ -2,6 +2,15 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** A register of the differences between the two workflow engines, Dev Workflows and Graph
+Workflows, which were copy-adapted and share no code. Every fix to one engine is a decision about the other, and the
+register records which divergences are intentional; convergence itself is deferred.
+
+**Read this if you are** fixing or changing either workflow engine, or about to conclude that one is missing
+something. **Skip to** [§1](#1-comparison-table) for the comparison and
+[§3](#3-unintentional-gaps-candidates-for-convergence) for the open gaps; **related pages:** [Graph
+Workflows](21-graph-workflows.md), [Dev Workflows](25-dev-workflows.md).
+
 Two workflow engines live in this codebase: [Dev Workflows](../../XE-Local-AI-Engine.Client.Application/Services/DevWorkflows)
 (`Services/DevWorkflows/`, Dev Mode's graph runtime) and [Graph Workflows](21-graph-workflows.md)
 (`Services/GraphWorkflows/`, the general-purpose operator-authored DAG feature). Graph Workflows was

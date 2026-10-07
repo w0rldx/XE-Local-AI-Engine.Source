@@ -1,6 +1,30 @@
 # Chat Subsystem
 
-> Reviewed: 2026-10-02 · Code-grounded.
+> Reviewed: 2026-10-07 · Code-grounded.
+
+**What this page covers.** The chat subsystem: the React feature `src/features/chat` streams turns over a SignalR hub into `Client.Application/Services/Chat`, which resolves a model and agent per turn, runs the agent loop through one re-selecting `IChatClient` (`RuntimeChatClient`) and persists every turn to SQLite. Titles and message content are encrypted per column, and `RuntimeChatClient` routes each call to a cloud or local model.
+
+**Read this if you are** changing the send pipeline, streaming events, compaction, attachments or sampling, or debugging a turn that stalls or times out. **Skip to** [End-to-end turn flow](#end-to-end-turn-flow) for the path of one turn; **reference tables** are in [Scope at a glance](#scope-at-a-glance); **related pages:** [04](04-agent-mode.md), [09](09-api-and-hubs.md), [10](10-react-client.md).
+
+## Contents
+
+- [Scope at a glance](#scope-at-a-glance)
+- [End-to-end turn flow](#end-to-end-turn-flow)
+- [Model resolution (the per-turn RuntimeChatClient seam)](#model-resolution-the-per-turn-runtimechatclient-seam)
+- [Per-message agent attribution](#per-message-agent-attribution)
+- [Ordered parts: reasoning ↔ tool ↔ answer](#ordered-parts-reasoning--tool--answer)
+- [MCP & local tools offered during a chat run](#mcp--local-tools-offered-during-a-chat-run)
+- [Plain-chat knowledge-base grounding](#plain-chat-knowledge-base-grounding)
+- [File attachments](#file-attachments)
+- [Voice / text-to-speech output](#voice--text-to-speech-output)
+- [Per-send advanced sampling](#per-send-advanced-sampling)
+- [Reasoning effort + cloud clamp](#reasoning-effort--cloud-clamp)
+- [Conversation compaction (non-destructive)](#conversation-compaction-non-destructive)
+- [Chat workflow mode](#chat-workflow-mode)
+- [Persistence](#persistence)
+- [React chat feature (src/features/chat)](#react-chat-feature-srcfeatureschat)
+- [Seams & invariants a maintainer must respect](#seams--invariants-a-maintainer-must-respect)
+- [Related pages](#related-pages)
 
 The chat subsystem is the node's interactive conversation surface: a React feature (`src/features/chat`) that streams turns over a local SignalR hub into a backend pipeline (`Client.Application/Services/Chat`) which resolves a model + agent per turn, runs the Microsoft Agent Framework loop through a single re-selecting `IChatClient`, and persists every turn to SQLite with titles and content protected by per-column AEAD. This page traces a turn end-to-end: model resolution (including the "local default → installed GGUF chat model" rule), the streaming/persistence pump, ordered reasoning↔tool↔answer parts, opt-in knowledge-base grounding and source attribution, per-send sampling, per-message agent attribution, reasoning-effort clamping for cloud models, file attachments (encrypted upload → pure-.NET extraction → plain-chat inlining or agent-mode sandbox staging), browser-side voice / text-to-speech output, the client stream watchdog + provider self-heal, and the at-rest encryption of titles and content. Provider plumbing lives in [Local runtime & providers](03-local-runtime-and-providers.md); agent resolution in [Agent Mode](04-agent-mode.md); persistence/migrations in [Data & persistence](08-data-and-persistence.md); hubs/endpoints in [API & hubs](09-api-and-hubs.md).
 
@@ -796,7 +820,7 @@ hub's node invalidation. The normal stream path is untouched when no workflow is
 
 `guardNodeChatStream` (`features/chat/api/NodeChatStreamGuard.ts`) wraps the stream with two guarantees: events are re-ordered by ascending `sequence` (out-of-order arrivals buffered until the gap fills), and a watchdog fails a silent stream. The timeouts are deliberately **large** because a 20B+ model can take well over the old 30 s to emit the first token during cold prompt processing and reasoning models pause silently mid-answer: `defaultFirstChunkTimeoutMs = 120_000` (no-first-chunk, raised from 30 s) and `defaultInterChunkTimeoutMs = 180_000` (inter-chunk-stall, raised from 60 s). The categorized `StreamWatchdogError` (`no-first-chunk` / `inter-chunk-stall`) surfaces in the UI failure label under its own reason code, `ClientWatchdog` (`clientWatchdogFailureCategory`), with a translated sentence (`streamWatchdogNotice`) so a give-up by the *browser* never reads like a node-side timeout.
 
-Those constants are **floors, not the deadline**. The node itself already bounds silence (`StreamIdleTimeoutSeconds` = 60 s during a provider send, `ToolResultTimeout` on a hub tool round-trip, and the operator's "Maximum message request timeout" over the whole turn), so the client's only remaining job is a *dead transport*. The backend therefore stamps the turn's effective ceiling on the `assistant-queued` and `assistant-streaming` events (`ChatStreamEvent.InvocationTimeoutSeconds`, a SignalR-only field with no OpenAPI equivalent), and the guard raises every deadline to `max(its constant, ceiling + 30 s grace)`. Without that the 180 s inter-chunk constant pre-empted several waits the node deliberately allows and reported them as an unattributable client "timeout": the collision-queue wait behind another invocation, a park on a tool approval / `ask_user` question (bounded server-side by `MaxPendingToolCallAge`, not by 180 s), and the pre-first-token window of a provider that emits no `assistant-phase` events (cloud/Ollama — the extended `coldLoadInterEventTimeoutMs = 660_000` only applies while a llama.cpp `preparing_runtime`/`loading_model` phase is in effect). A stream that carries no ceiling (a resume re-attach) keeps the bare constants.
+Those constants are **floors, not the deadline**. The node itself already bounds silence (`StreamIdleTimeoutSeconds`, default 60 s, between chunks once a provider round has produced its first output — `StreamIdleWatchdog` is suspended while a round waits for that first output or a server-side tool runs, so prefill is bounded by the invocation timeout instead; `ToolResultTimeout` on a hub tool round-trip, and the operator's "Maximum message request timeout" over the whole turn), so the client's only remaining job is a *dead transport*. The backend therefore stamps the turn's effective ceiling on the `assistant-queued` and `assistant-streaming` events (`ChatStreamEvent.InvocationTimeoutSeconds`, a SignalR-only field with no OpenAPI equivalent), and the guard raises every deadline to `max(its constant, ceiling + 30 s grace)`. Without that the 180 s inter-chunk constant pre-empted several waits the node deliberately allows and reported them as an unattributable client "timeout": the collision-queue wait behind another invocation, a park on a tool approval / `ask_user` question (bounded server-side by `MaxPendingToolCallAge`, not by 180 s), and the pre-first-token window of a provider that emits no `assistant-phase` events (cloud/Ollama — the extended `coldLoadInterEventTimeoutMs = 660_000` only applies while a llama.cpp `preparing_runtime`/`loading_model` phase is in effect). A stream that carries no ceiling (a resume re-attach) keeps the bare constants.
 
 Server-side, every cancellation cause now persists its **own** sentence instead of the shared "Invocation timed out or was cancelled" (`InvocationRunner.DescribeCancellation`): the invocation watchdog names the node maximum message request timeout and its seconds, a user stop says so, and the detached-run reaper names the disconnect grace. `FailureCategory` cannot carry that distinction — it collapses the invocation watchdog, the stream-idle watchdog and an HTTP timeout into one `Timeout` value, and adding a value would drift the generated OpenAPI/zod client — so the message is the breadcrumb channel (the same treatment `StreamIdleTimeoutException` already gets). A tool-result timeout is likewise split out of the generic "Worker tool execution failed.".
 

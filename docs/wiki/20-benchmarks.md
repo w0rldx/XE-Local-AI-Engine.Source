@@ -2,6 +2,32 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** The benchmark module: a project asks a frozen suite of questions of many local models, a
+launch fans out over them, and the ranked unit is a cell (a combination of model settings), not a single run. Four
+rules govern it: ranking is quality-only, a number is shown only while it is comparable, a partial measurement is
+unranked rather than scored low, and identity is stamped at freeze. The code lives in
+`Client.Application/Services/Benchmarks/` and the React `features/benchmarks/` folder.
+
+**Read this if you are** changing scoring, ranking, freeze or the run queue, or debugging why a cell is unranked or a
+number is withheld. **Skip to** [§4](#4-ranking--the-cell-is-the-unit) for ranking and [§5](#5-scoring) for scoring;
+**paths** are in [§12](#12-where-things-live); **related pages:** [Training](18-training.md),
+[Scheduler](06-scheduler.md), [Model Fit](07-model-fit.md).
+
+## Contents
+
+- [1. The model — project, item, cell, run](#1-the-model--project-item-cell-run)
+- [2. Task items — the questions a project asks](#2-task-items--the-questions-a-project-asks)
+- [3. Freeze — what a launch produces](#3-freeze--what-a-launch-produces)
+- [4. Ranking — the cell is the unit](#4-ranking--the-cell-is-the-unit)
+- [5. Scoring](#5-scoring)
+- [6. Quant fidelity — perplexity and KL divergence (display only)](#6-quant-fidelity--perplexity-and-kl-divergence-display-only)
+- [7. Lifecycle — the work queue, stop reasons, recovery](#7-lifecycle--the-work-queue-stop-reasons-recovery)
+- [8. Scheduling and hand-off](#8-scheduling-and-hand-off)
+- [9. Export](#9-export)
+- [10. The frontend](#10-the-frontend)
+- [11. Traps](#11-traps)
+- [12. Where things live](#12-where-things-live)
+
 The **benchmark** module measures a frozen suite of questions against many local models and ranks the results. Quant fidelity, server-side verifiers and pairwise judging make the scores discriminating; task suites make the module a real harness: a project asks **N questions**, a launch fans out over them, the unit that ranks is a **combination of model settings** rather than a single run, and the difference between two combinations comes with an interval.
 
 Four rules govern everything below and are worth stating before the mechanics:

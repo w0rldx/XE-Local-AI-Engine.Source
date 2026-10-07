@@ -9,6 +9,23 @@
 > each rule names the slice that carries it. **Existing code that still shows the old shape is migration debt,
 > not a pattern to copy** — and equally, it is not to be "repaired" back to the old shape.
 
+**What this page covers.** Where a new type or file goes and which house patterns to follow, in the .NET backend and
+the React client: one FastEndpoints endpoint per file, the `V1/{Dtos,Mappers,Validators}/` folding, `*Store`-only data
+access, feature folders and the hey-api client. Rules already enforced by analyzers or linters are left out on
+purpose; what is here can drift while the build stays green. Existing code in the old shape is migration debt, not a
+pattern to copy.
+
+**Read this if you are** adding a type, endpoint, store, component or feature folder, or reviewing a change for
+convention drift. **Skip to** [Backend (.NET)](#backend-net) or
+[Frontend](#frontend-react--xe-local-ai-engineclientreact); **related pages:** [Project Layout](02-project-layout.md),
+[Writing Tests](17-writing-tests.md).
+
+## Contents
+
+- [Backend (.NET)](#backend-net)
+- [Frontend (React / `XE-Local-AI-Engine.Client.React`)](#frontend-react--xe-local-ai-engineclientreact)
+- [See also](#see-also)
+
 This page states **where a new type or file goes and which house patterns to follow** — the conventions
 that [02-project-layout.md](02-project-layout.md) (the *project* inventory and layering map) does not
 cover. Every rule below was verified against the actual code on the baseline commit; each carries an

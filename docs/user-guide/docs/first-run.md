@@ -165,6 +165,10 @@ Look for the **★ Recommended** pick and download it. Larger models are more ca
 more memory; the advisor already accounts for that, so **trusting its recommendation is the right move**
 if you're unsure.
 
+A **Tested** badge means the authors ran that model through their own live checks. A **Gated** badge
+means Hugging Face asks you to accept the model's license first, and the download needs a Hugging Face
+access token in Node Settings.
+
 <details>
 <summary><b>What the numbers mean</b> (optional reading)</summary>
 
@@ -182,6 +186,9 @@ All of these are explained properly in the [Glossary](glossary.md).
 On the **Models → Installed** page there's a Hugging Face browse panel — search that public library of
 models from inside the app. Each download option is labelled with its size and whether it fits your
 hardware.
+
+Before you type anything, the panel lists the models **Tested by the authors**, with the tested file's
+size and whether it fits your machine. Those are a safe place to start.
 
 <p align="center">
   <img src="../media/screenshots/model-download-quants@2x.png" alt="Quantization options with hardware fit" width="800">
@@ -216,7 +223,8 @@ click the item.
 > **Development Mode** lets an agent edit a real code repository of yours. It is powerful and
 > **genuinely risky**.
 >
-> It ships enabled, but an operator can turn the whole feature off with
+> It ships enabled. To turn the whole feature off, switch off **Development mode** under **Settings →
+> Node Settings → General → Features** and restart the app. Operators can also set
 > `Development:Enabled=false`. When enabled, it only touches a repository once *you register one and
 > start a run*. Please read
 > [its security boundary](privacy-and-data.md#development-mode-and-its-limits) **before you register a
@@ -226,8 +234,8 @@ click the item.
 
 ## Stopping and starting again
 
-- **To stop:** close the **console window** (not just the browser tab).
-- **To start again:** run `XE-Local-AI-Engine.exe` from the same folder.
+- **To stop:** choose **Quit XE** in the tray menu, or close the app window and choose to quit.
+- **To start again:** run `XE-Local-AI-Engine.exe` from the same folder, or the AppImage on Linux.
 
 Your models, chats and settings are all still there — they live in a separate data folder, not in the
 app folder.

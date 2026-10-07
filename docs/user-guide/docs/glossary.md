@@ -76,8 +76,11 @@ published one, your copy is identical — nothing was corrupted or altered in tr
 → [How to check](download-from-github.md#step-4--verify-sha-256)
 
 ### Console window
-The black window full of scrolling text that opens alongside the app. It is **not** an error — it's the
-app reporting what it's doing, and it's where problems show up. **Closing it stops the app.**
+A black window full of scrolling text. The app normally opens **without** one. Starting it from a
+terminal with `--debug` keeps a console that shows the engine's log as it runs; `--browser` opens the app
+in your web browser instead of its own window and also keeps the console. Either way, **closing that
+console stops the app**.
+The app's log files are always in its `logs` folder → [Log files](feedback.md#log-files).
 
 ### PowerShell
 A Windows command tool. A few optional steps here use it.

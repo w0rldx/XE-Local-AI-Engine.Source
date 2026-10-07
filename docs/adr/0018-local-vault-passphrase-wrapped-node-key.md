@@ -1,6 +1,6 @@
 # ADR 0018: The persisted node key is a random master key wrapped by the admin password and a recovery code, and a locked node serves only an unlock page
 
-- **Status:** Proposed — operator decisions recorded 2026-10-01; this ADR is not Accepted until the operator reviews the branch.
+- **Status:** Accepted — by the repository owner (`w0rldx`) on 2026-10-07; the design is implemented on `develop`.
 - **Date:** 2026-10-01
 - **Scope:** How the packaged desktop and standalone local modes keep the root secret of the node (the SQLite column
   key, the JWT signing key and the non-Windows Data Protection key-ring KEK) at rest: the on-disk format of

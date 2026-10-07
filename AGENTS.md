@@ -2,7 +2,7 @@
 
 XE Local AI Engine: a single ASP.NET Core node process (`XE-Local-AI-Engine.Client`) that serves a React SPA,
 loopback-only `/api/local/v1` endpoints and SignalR hubs, persists to SQLite with per-column encryption, and
-supervises `llama-server` / `sd-server` child processes for local inference. .NET 10 + Aspire, React 19 +
+supervises `llama-server` / `sd-server` / `whisper-server` child processes for local inference. .NET 10 + Aspire, React 19 +
 Vite + pnpm, Python (uv) for training tooling.
 
 This file is instructions, not documentation. Before a non-trivial change, read the index
@@ -38,34 +38,17 @@ same failure. For architecture, start at `docs/wiki/Home.md` and read the pages 
 
 ## Repository map
 
-Solution: `XE-Local-AI-Engine.slnx`. Full layout and dependency rules: `docs/wiki/02-project-layout.md`.
+Solution `XE-Local-AI-Engine.slnx`. Every project, the workflows and the reviewed provider dependency exceptions:
+`docs/wiki/02-project-layout.md`.
 
-- `XE-Local-AI-Engine.Client` — host: FastEndpoints, SignalR hubs, composition root, serves the SPA.
-- `XE-Local-AI-Engine.Client.Application` — services (chat, agents, scheduler, model-fit, dev mode, training, benchmarks).
-- `XE-Local-AI-Engine.Client.Persistence` — EF Core + SQLite, encrypted columns; references only `Providers.Abstractions`.
-- `XE-Local-AI-Engine.AI.Agent` / `AI.Contracts` — Microsoft Agent Framework wiring / shared DTOs.
-- `XE-Local-AI-Engine.Providers.*` — runtimes and model sources; each depends only on `Providers.Abstractions`
-  (reviewed exceptions: `LlamaServer` and `OpenAICompat` also use the leaf `Providers.OpenAICompatible.Core`;
-  `Training` also uses `Providers.Python`; `LlamaServer`, `StableDiffusionCpp`, `WhisperCpp` and `Python` also use
-  `Providers.ProcessSupervision`, which references only `Providers.Abstractions`; `Python` references just those two).
-- Other provider projects: `Providers.Capabilities`, `CodexOAuth`, `HuggingFace`, `Ollama` and the leaf
-  `OpenAICompatible.Core`; `Client` and `Client.Application` reference `Providers.Ollama` directly.
-- `XE-Local-AI-Engine.Providers.Python` — shared managed-Python layer: pinned uv acquisition, uv environment
-  allowlist, scrubbed tree-killed runner (ADR 0016). No feature semantics.
-- `XE-Local-AI-Engine.Providers.ProcessSupervision` — shared child-process containment: Linux process-group, Windows
-  Job Object and plain handles, stderr tail, stale-process reaper. No feature semantics.
-- `XE-Local-AI-Engine.AppHost` / `ServiceDefaults` — dev-only Aspire orchestration and telemetry defaults.
-- `XE-Local-AI-Engine.WindowsLauncher` — Velopack entry point; starts the published host as a child process, no project refs.
-- `XE-Local-AI-Engine.Desktop` — Avalonia NativeWebView shell: window, activation, optionally engine lifetime; talks to
-  the engine over REST/SignalR only, no engine project refs.
-- `XE-Local-AI-Engine.Client.React` — the SPA. Has its own `AGENTS.md` for frontend-only rules.
-- `XE-Local-AI-Engine.Tests`, `AI.Agent.Tests`, `Client.Persistence.Tests` — TUnit; `Tests.E2ETests` — Playwright, opt-in.
-- `Client.Testing` — shared host fixtures; `Testing.FakeOllama` — in-memory fake model server used by tests;
-  `Testing.FakeDocker` — in-memory fake Docker Engine API so the container tests need no daemon.
-- `.github/workflows/` — besides `build-and-test.yml` and `release.yml`: `dev-build.yml` (daily Development snapshots), `e2e.yml`, `package-velopack.yml`,
-  `windows-tests.yml` (advisory Windows test job, not a release gate).
-- `scripts/` — dev lifecycle, validation gates, smoke runners. `publish/` — packaging. `tools/training/` — the
-  shipped Python training runtime (own `pyproject.toml`; never `uv sync` inside it).
+- `XE-Local-AI-Engine.Client` (host: FastEndpoints, SignalR hubs, serves the SPA) → `Client.Application` (services) →
+  `Client.Persistence` (EF Core + SQLite, encrypted columns). `Providers.*` depend only on `Providers.Abstractions`,
+  apart from the shared layers wiki 02 lists.
+- `XE-Local-AI-Engine.Client.React` — the SPA, with its own `AGENTS.md` for frontend-only rules.
+- `XE-Local-AI-Engine.Tests`, `AI.Agent.Tests`, `Client.Persistence.Tests` — TUnit; `Tests.E2ETests` — Playwright,
+  opt-in.
+- `scripts/` — dev lifecycle and gates; `publish/` — packaging; `tools/training/` — the shipped Python training
+  runtime (own `pyproject.toml`; never `uv sync` inside it).
 
 ## Local runtime
 
@@ -80,8 +63,7 @@ checkouts' instances. Kill by PID. Run one instance per data directory. Details:
 `docs/agent-knowledge.md` §2.
 
 - Kill-by-PID applies to anything you background, load generators included: collect the PIDs (or `setsid` a
-  process group), put the kill in a `trap … EXIT`, and confirm with `ps` before ending the turn. A `kill $SPIN`
-  that never reached its subshells left 23 spinners burning a core each for nine hours.
+  process group), put the kill in a `trap … EXIT`, and confirm with `ps` before ending the turn.
 - The app origin serves the SPA bundle that was last **built**, not the working tree. After a frontend change,
   validate UI on the `client-react` Vite origin (`scripts/dev-status.sh --json` lists both) or run `pnpm run build`
   before `dev-start`, and record which origin the evidence came from.
@@ -91,103 +73,76 @@ checkouts' instances. Kill by PID. Run one instance per data directory. Details:
 
 ## Validation
 
-A change is done when these pass. **`--configuration Release` is load-bearing**: Debug skips the analyzers
-(Meziantou, BannedApiAnalyzers, `IDExxxx`, the no-bare-`TODO` rule). Iterate in Debug, finish in Release;
-`XE_FULL_ANALYSIS=1` forces the analyzers in Debug. A ~1 s incremental build that compiled nothing proves
-nothing; use `--no-incremental` when the evidence matters. The sharper form: a deliberate-break proof is void
-unless the Release build reported `0 Error(s)` — a build the analyzers failed runs the **previous** binary and
-reports the old green. Keep break scaffolding analyzer-clean and restore it through a shell trap.
+A change is done when these pass. Why each rule exists: `docs/wiki/13-testing-and-validation.md` and
+`docs/agent-knowledge.md` §1.
 
-Before a gate chain: `dotnet build-server shutdown`, then export `MSBUILDDISABLENODEREUSE=1` and
-`NUGET_PACKAGES=$HOME/.nuget/packages` for every `dotnet build`/`dotnet test` in the chain (the gate script below
-does both itself) — stale MSBuild worker nodes carry a deleted `NUGET_PACKAGES` across worktrees (NU5037 / CS0006
-on a branch that is fine).
-Never queue a gate on a worktree a writer is still editing; the result is void and no guard catches source edits.
-
-Backend (repo root):
+- **`--configuration Release` is load-bearing**: Debug skips the analyzers (Meziantou, BannedApiAnalyzers, `IDExxxx`,
+  the no-bare-`TODO` rule). Iterate in Debug, finish in Release; `XE_FULL_ANALYSIS=1` forces them in Debug.
+- Use `--no-incremental` when the evidence matters. A deliberate-break proof is void unless the Release build
+  reported `0 Error(s)`; keep break scaffolding analyzer-clean and restore it through a shell trap.
+- Before a gate chain: `dotnet build-server shutdown`, then export `MSBUILDDISABLENODEREUSE=1` and
+  `NUGET_PACKAGES=$HOME/.nuget/packages` for every `dotnet build`/`dotnet test` (the gate does both itself).
+- Never queue a gate on a worktree a writer is still editing; no guard catches source edits.
 
 ```bash
 dotnet tool restore --tool-manifest dotnet-tools.json
-scripts/run-backend-tests.sh
+scripts/run-backend-tests.sh   # THE backend gate: one Release build, then every enrolled test project
 ```
 
-- That one script IS the backend gate: one Release build, then `XE-Local-AI-Engine.Tests` through
-  `scripts/run-tests-memory-safe.sh` **and** every other test project enrolled from the solution, concurrently,
-  each sibling pinned to a measured `--maximum-parallel-tests` (`XE_TEST_WIDTH_DEFAULT`,
-  `XE_TEST_WIDTH_<Project>`). `NO_BUILD=1` skips the build, `--siblings-only` skips the batched module,
-  `COVERAGE_DIR` adds Cobertura + TRX per project. CI's `siblings` leg calls the same script.
-- On a memory-constrained development machine, use `XE_TEST_PROFILE=low-memory scripts/run-backend-tests.sh`.
-  It runs project lanes serially and defaults `JOBS`, `PAR` and `XE_TEST_WIDTH_DEFAULT` to 1. Explicit width
-  overrides still win; all enrolled tests, the Release build, locks and guards remain required.
-- Never overlap a build with a `--no-build` test run. The script takes the build lock once for the whole gate and
-  runs each sibling under the assembly guard. The lock serializes cooperating shells (exit **69** = lock
-  not acquired, nothing ran); the guard detects an uncooperative build (exit **75** = CONTAMINATED, result void,
-  re-run; it is not a red). Check `scripts/build-lock-status.sh` (or `--json`) before queueing a gate: it shows the
-  holder, age, progress and any waiters. The gate sizes `JOBS` from free RAM and prints the result as a
-  `>> Sizing:` line; `XE_TEST_PROFILE=low-memory` is an explicit serial override and should not be used on a box
-  with free RAM.
-- Cancel it by signalling its **process group** (`kill -TERM -- -<pgid>`), not its PID: `with-build-lock.sh` runs
-  its command in the foreground with no traps, so a PID-only signal kills the wrapper and orphans the lanes. Ctrl-C
-  in a terminal already does the right thing.
-- **With `COVERAGE_DIR` the siblings run UNGUARDED**: coverage instruments statically, rewriting each project's own
-  assemblies, which the guard cannot tell from a foreign build. A sibling coverage run therefore detects no
-  unwrapped concurrent build — the lock still covers cooperating shells, and the batched module keeps its own guard.
-- Scope with `--treenode-filter '/*/*/(ClassA|ClassB)/*'`, never `--filter`. `--list-tests` is authoritative.
-  A no-match filter exits 8. Zero tests is never a pass.
-- Verify the whole changed test project before hand-off, not only the class you touched.
-- `scripts/run-tests-memory-safe.sh` stays the standalone run of `XE-Local-AI-Engine.Tests` only (that module's
-  lane inside the gate); it locks and guards itself. Do not wrap it in the guard; if you must, pass `NO_BUILD=1`
-  or every run reports exit 75. Run it alone only to iterate — the gate above is what a change is judged on.
+- `NO_BUILD=1` skips the build, `--siblings-only` the batched `XE-Local-AI-Engine.Tests`; `COVERAGE_DIR` adds
+  Cobertura + TRX; `XE_TEST_WIDTH_DEFAULT`/`XE_TEST_WIDTH_<Project>` set `--maximum-parallel-tests`. CI's `siblings`
+  leg calls the same script. It also runs `scripts/run-release-contract-tests.sh` when `scripts/`, `publish/` or
+  `.github/workflows/` differ from the merge-base with `develop` (`XE_GATE_CONTRACT_TESTS=run|skip` overrides).
+- It sizes `JOBS` from free RAM (`>> Sizing:` line). `XE_TEST_PROFILE=low-memory` (lanes serial; `JOBS`, `PAR`,
+  `XE_TEST_WIDTH_DEFAULT` = 1) is only for a memory-constrained machine.
+- Never overlap a build with a `--no-build` test run. Exit **69** = lock not acquired, nothing ran; **75** =
+  CONTAMINATED, void, re-run (not a red). Check `scripts/build-lock-status.sh` (`--json`) before queueing.
+- Cancel by **process group** (`kill -TERM -- -<pgid>`), not PID. **With `COVERAGE_DIR` the siblings run UNGUARDED.**
+- Scope with `--treenode-filter '/*/*/(ClassA|ClassB)/*'`, never `--filter`; `--list-tests` is authoritative; a
+  no-match filter exits 8. Zero tests is never a pass. Verify the whole changed test project before hand-off.
+- `scripts/run-tests-memory-safe.sh` runs only `XE-Local-AI-Engine.Tests` (locked, guarded) for iterating; never wrap
+  it in the guard without `NO_BUILD=1` (every run reports 75).
 
-Frontend (`XE-Local-AI-Engine.Client.React/`):
+Frontend, from `XE-Local-AI-Engine.Client.React/`:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm run acceptance         # validate + coverage thresholds + tooling tests + production bundle
+pnpm run acceptance   # Node-major check, validate, coverage thresholds, tooling tests, production bundle
 ```
 
-`acceptance` runs the static checks once, then tests and `build:bundle` on the same unchanged source tree.
-Standalone `pnpm run build` still runs the full lint chain before bundling. `build:bundle` alone is not a gate.
-`pnpm run lint` is the typecheck; the E2E fixture's `build:e2e` is a bare `vite build`, so a green E2E run does
-not prove types. After any backend contract change run `pnpm run openapi:check` (regenerates the hey-api client,
-fails on drift) and commit the output. `pnpm run licenses:check` after a dependency change.
+- `acceptance` first runs `scripts/CheckNodeMajor.mjs`: a Node major other than CI's (22) fails;
+  `XE_ALLOW_NODE_DRIFT=1` continues with a not-CI-evidence warning. Standalone `pnpm run build` still runs the full
+  lint chain; `build:bundle` alone is not a gate.
+- `pnpm run lint` is the typecheck; E2E's `build:e2e` is a bare `vite build`, so green E2E does not prove types.
+- After a backend contract change: `pnpm run openapi:check` (regenerates the hey-api client, fails on drift), commit
+  the output. `scripts/openapi-live-check.sh` builds Release first unless `OPENAPI_LIVE_SKIP_BUILD=1`.
+  `pnpm run licenses:check` after a dependency change.
 
-Python (`tools/training`, `scripts/**`): `scripts/python-validation.sh --scope changed` (or `full`). Needs `uv`.
+Other gates:
 
-Docs inventory: after adding a SignalR hub, `LocalApiRoutes` family, React `features/` dir, wiki page or
-project, run `python3 scripts/docs-inventory-check.py` and name it in the wiki page that enumerates it.
-
-Release scripts (`publish/**`, `scripts/release/**`): `scripts/lint-release-scripts.sh` (shellcheck ≥ 0.10,
-PSScriptAnalyzer, Pester; a missing tool fails, never skips).
-
-CI runs `.github/workflows/build-and-test.yml` on PRs and pushes to `develop` (five jobs: `python-quality`,
-`release-contracts`, `backend-tests`, `build-and-test`, `client-react`); `release.yml` re-runs it before packaging.
-`backend-tests` is a five-leg matrix — the sibling projects on one runner, four `TEST_SHARD` quarters of
-`XE-Local-AI-Engine.Tests` on four more — and `build-and-test` cross-checks and merges their coverage under the job
-name branch protection requires. Within a leg, projects run concurrently, each with its own `--results-directory`
-(MTP resolves `--coverage-output` relative to it, so shared directories overwrite each other's Cobertura report);
-the commands above are the local gate. Shape and rationale: `docs/wiki/13-testing-and-validation.md`, `docs/agent-knowledge.md` §1.
-`windows-tests.yml` runs on the same triggers on `windows-latest` and is advisory (not required, nothing `needs` it,
-not called by `release.yml` or `dev-build.yml`): it runs the Windows-only test classes of `XE-Local-AI-Engine.Tests`
-and all of `XE-Local-AI-Engine.Client.Persistence.Tests` through their native test hosts.
+- Python (`tools/training`, `scripts/**`): `scripts/python-validation.sh --scope changed` (or `full`). Needs `uv`.
+- After adding a SignalR hub, `LocalApiRoutes` family, React `features/` dir, wiki page or project: run
+  `python3 scripts/docs-inventory-check.py` and name it in the wiki page that enumerates it. The same gate fails on a
+  broken relative Markdown link or `#anchor` in any tracked `.md`.
+- `publish/**`, `scripts/release/**`: `scripts/lint-release-scripts.sh` (shellcheck ≥ 0.10, PSScriptAnalyzer, Pester;
+  a missing tool fails, never skips).
+- CI: `.github/workflows/build-and-test.yml` (`python-quality`, `release-contracts`, five-leg `backend-tests`,
+  `build-and-test` = the required check, `client-react`); `windows-tests.yml` is advisory.
 
 Opt-in live runners (nothing invokes them; ask before running, run before a tester RC):
 
-- `scripts/run-e2e-local.sh` — Playwright; sets the mandatory `-p:RunE2ETests=true` and refuses a zero-test pass.
-- `scripts/run-gpu-smoke-local.sh` — the only gate proving the GPU did the work; exit 5 = infra abort, 1 = product failed.
-- `scripts/run-tool-grammar-smoke-local.sh` — after changing any tool schema or the llama.cpp pin; its failing
-  negative control is the evidence, a run without it proved nothing.
-- `scripts/run-retrieval-eval-local.sh` — the real-model retrieval eval (embedder + rerankers on llama-server,
-  JSON + Markdown report); a run without a completed JSON is 1, so is any INVALID measured config or failed negative
-  control. Exit 5 = a server never came up.
-- `scripts/run-docker-smoke-local.sh` — the four real-daemon container suites, which run ONLY under
-  `XE_REQUIRE_DOCKER_TESTS=1` and skip everywhere else. CI proves the Engine API wire shape without a daemon
-  against `Testing.FakeDocker`; this proves what only a daemon can. Exit 5 = no usable daemon, 1 = product failed.
-- `scripts/run-model-matrix-local.sh` — pinned-model scenario checks (thinking, output limits, tools, background
-  jobs, 4k window, MoE placement) via a live node; `--tier fast|extended|rc`, `--download`; exit 1 = a hard check
-  failed, 2 = model missing/hash mismatch/node not set up, 5 = infra abort. It is slow: run it once, as the last
-  validation step, and only when the change touches inference, thinking, tool offering, window budgeting or model
-  fit; never while iterating.
+- `scripts/run-e2e-local.sh` — Playwright; sets the mandatory `-p:RunE2ETests=true`, refuses a zero-test pass.
+- `scripts/run-gpu-smoke-local.sh` — the only gate proving the GPU did the work. Exit 5 = infra abort, 1 = product
+  failed.
+- `scripts/run-tool-grammar-smoke-local.sh` — after a tool-schema or llama.cpp-pin change; without its failing
+  negative control the run proved nothing.
+- `scripts/run-retrieval-eval-local.sh` — real-model retrieval eval. Exit 1 = no completed JSON, an INVALID config or
+  a failed negative control; 5 = a server never came up.
+- `scripts/run-docker-smoke-local.sh` — real-daemon container suites (`XE_REQUIRE_DOCKER_TESTS=1`). Exit 5 = no usable
+  daemon, 1 = product failed.
+- `scripts/run-model-matrix-local.sh` — pinned-model checks on a live node (`--tier fast|extended|rc`, `--download`).
+  Exit 1 = a hard check failed, 2 = model missing/hash mismatch/node not set up, 5 = infra abort. Slow: run it once,
+  last, only for inference, thinking, tool offering, window budgeting or model-fit changes; never while iterating.
 
 ## Conventions that bite
 

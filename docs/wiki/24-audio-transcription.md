@@ -2,6 +2,38 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** Local audio transcription with whisper.cpp, supervised as a `whisper-server` child process
+like `llama-server` and `sd-server`. A transcription session is an encrypted row with its segments; the audio itself
+is never persisted beyond one engine-owned temporary file per transcription. The code lives in `Providers.WhisperCpp`,
+`Client.Application/Services/Transcription/` and the React `features/transcription/` folder.
+
+**Read this if you are** changing batch or live transcription, browser or Windows capture, or the whisper runtime, or
+debugging a session. **Skip to** [Live sessions](#live-sessions); **reference tables** are in [Endpoints](#endpoints),
+[Options and settings](#options-and-settings) and [The pinned whisper.cpp prebuilt release
+table](#the-pinned-whispercpp-prebuilt-release-table); **related pages:** [Local Runtime &
+Providers](03-local-runtime-and-providers.md), [API & Hubs](09-api-and-hubs.md).
+
+## Contents
+
+- [Where the code lives](#where-the-code-lives)
+- [The runtime, in brief](#the-runtime-in-brief)
+- [Sessions and transcripts](#sessions-and-transcripts)
+- [The batch upload path](#the-batch-upload-path)
+- [Audio is never persisted](#audio-is-never-persisted)
+- [Endpoints](#endpoints)
+- [Live sessions](#live-sessions)
+- [Browser capture and the live UI](#browser-capture-and-the-live-ui)
+- [Windows per-application capture](#windows-per-application-capture)
+- [React feature](#react-feature)
+- [Options and settings](#options-and-settings)
+- [What is not here yet](#what-is-not-here-yet)
+- [whisper-server flags that are deliberately never emitted](#whisper-server-flags-that-are-deliberately-never-emitted)
+- [Adopting a managed source build](#adopting-a-managed-source-build)
+- [The pinned whisper.cpp prebuilt release table](#the-pinned-whispercpp-prebuilt-release-table)
+- [The bring-your-own whisper-server override](#the-bring-your-own-whisper-server-override)
+- [The whisper-server HTTP client: no pipeline, no timeout](#the-whisper-server-http-client-no-pipeline-no-timeout)
+- [Related pages](#related-pages)
+
 The node transcribes audio **locally** with [whisper.cpp](https://github.com/ggml-org/whisper.cpp), supervised as a
 `whisper-server` child process exactly the way `llama-server` and `sd-server` are. A **transcription session** is a
 persisted, encrypted row; its transcript is a list of segments beneath it. The audio itself is **never persisted** —

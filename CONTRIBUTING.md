@@ -6,6 +6,7 @@ Thanks for your interest in XE Local AI Engine. This is an early-stage, Apache-2
 
 - For anything non-trivial, open an issue first to discuss the approach.
 - **Security issues:** do not open a public issue — see [SECURITY.md](SECURITY.md).
+- This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
 - Read [`AGENTS.md`](AGENTS.md) for the repo's conventions and the authoritative validation commands, and [`docs/agent-knowledge.md`](docs/agent-knowledge.md) for the hard-won invariants (build/analyzer rules, runtime traps) that reading the code won't tell you.
 - **Adding a language?** See [`docs/translating.md`](docs/translating.md) — translating the UI is data plus three small wiring edits, no code changes.
 
@@ -13,7 +14,8 @@ Thanks for your interest in XE Local AI Engine. This is an early-stage, Apache-2
 
 - .NET SDK per [`global.json`](global.json).
 - .NET 8 runtime for the pinned SBOM and dependency-license tools.
-- Node compatible with the React [`package.json`](XE-Local-AI-Engine.Client.React/package.json) and pnpm through
+- Node 22, the major CI uses; `pnpm run acceptance` enforces it, and the React
+  [`package.json`](XE-Local-AI-Engine.Client.React/package.json) `engines` field is only the floor. pnpm through
   Corepack or a local install.
 - Python 3 for repository validation and lifecycle scripts.
 - The Aspire CLI for AppHost development and integration checks.
@@ -21,30 +23,18 @@ Thanks for your interest in XE Local AI Engine. This is an early-stage, Apache-2
 
 ## Validating your change
 
-These are the real gates — a change isn't done until they pass. **The `--configuration Release` is load-bearing:** analyzers (including the "no bare `TODO`" rule) only run in Release.
+A change is done when these pass. [`AGENTS.md` §Validation](AGENTS.md#validation) is authoritative; it explains the
+exit codes, the low-memory profile and the coverage caveats. `--configuration Release` is load-bearing: the analyzers,
+including the "no bare `TODO`" rule, only run in Release.
 
-Backend:
+Backend, from the repository root:
 
 ```bash
 dotnet tool restore --tool-manifest dotnet-tools.json
 scripts/run-backend-tests.sh
 ```
 
-That one script is the whole backend gate: it builds the solution in Release, then runs every test project
-enrolled from `XE-Local-AI-Engine.slnx` concurrently — `XE-Local-AI-Engine.Tests` through
-`scripts/run-tests-memory-safe.sh`, the rest as `dotnet test` at a pinned width — under one build lock, with the
-assembly guard on each sibling. CI's `siblings` leg calls the same script. It is restated from
-[`AGENTS.md`](AGENTS.md#validation), which is authoritative for it. Exit `69` means the build lock was not
-acquired and nothing ran. Exit `75` means the result was contaminated and is void; rerun it. Setting `COVERAGE_DIR`
-runs the siblings **unguarded** — coverage rewrites their assemblies in place, so the guard would call every such run
-contaminated — which means a sibling coverage run cannot detect an unwrapped concurrent build.
-
-For a memory-constrained development machine, run `XE_TEST_PROFILE=low-memory scripts/run-backend-tests.sh`.
-This serializes project lanes and defaults batch concurrency and test widths to one, while preserving explicit
-overrides and running the same tests and checks. It trades elapsed time for lower concurrent memory demand.
-
-Frontend CI gates (run `dotnet tool restore --tool-manifest dotnet-tools.json` once from the repository root, then run
-these commands from `XE-Local-AI-Engine.Client.React/`):
+Frontend, from `XE-Local-AI-Engine.Client.React/` after the tool restore above:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -54,26 +44,17 @@ pnpm run acceptance
 pnpm audit --prod --audit-level=high
 ```
 
-`acceptance` runs `validate`, the coverage gate, tooling tests and the production bundle in order, with static
-checks once. Standalone `build` still runs the lint chain before bundling; `build:bundle` alone is not a gate.
-`pnpm run lint` is the frontend typecheck. `openapi:check` validates the generated client against the committed spec;
-after a backend contract change, follow the live-spec regeneration rules in [`AGENTS.md`](AGENTS.md#validation) before
-trusting that drift check.
+`pnpm run acceptance` first checks that you run the same Node major as CI (Node 22) and stops otherwise;
+`XE_ALLOW_NODE_DRIFT=1` continues with a warning that the run is not CI evidence. On frontend dependency-update
+branches, also run `pnpm run dependencies:refresh`.
 
-For frontend dependency-update branches, run `pnpm run dependencies:refresh` from
-`XE-Local-AI-Engine.Client.React/`. It performs the frozen install first, then collects OpenAPI, generated-license,
-validation, and production-build results and reports regenerated tracked files that belong in the same change. A
-failed frozen install skips every generator so stale `node_modules` content cannot produce commit advice. Any
-curated license override still requires human verification of its exact evidence, upstream source/tag, and SHA-256.
-
-Release-script changes must also pass:
+Release-script changes:
 
 ```bash
 scripts/lint-release-scripts.sh
 ```
 
-That default run includes the Pester suite and fails if required linters are missing. End-to-end tests remain opt-in and
-ask-gated: `scripts/run-e2e-local.sh`.
+End-to-end tests are opt-in and ask-gated: `scripts/run-e2e-local.sh`.
 
 ## Pull requests
 

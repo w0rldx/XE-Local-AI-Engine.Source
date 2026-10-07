@@ -15,13 +15,18 @@ pnpm run acceptance          # validate + coverage thresholds + tooling tests + 
 pnpm audit --prod --audit-level=high
 ```
 
+- `acceptance` first runs `node:check` (`scripts/CheckNodeMajor.mjs`): it fails on a Node major other than CI's
+  `client-react` job (22); `engines` in `package.json` is only the floor. `XE_ALLOW_NODE_DRIFT=1` continues with a
+  warning that the run is not CI evidence.
 - `pnpm run build` remains a checked standalone build (lint + production bundle). The acceptance gate runs lint
   once through `validate`; `build:bundle` is its already-validated bundling step, including licenses and size checks.
 - Use `pnpm run validate`, `pnpm run test:coverage:check` and `pnpm run test:tooling` independently while iterating.
 - `pnpm run lint` is the typecheck (`tsc --noEmit` + Biome + Stylelint + the `currentTarget` guard).
 - After a backend contract change: `pnpm run openapi:check` regenerates the hey-api client and fails on drift.
   Commit the regenerated `openapi/` and `src/core/api/generated/`; never hand-edit them. Against a running
-  desktop backend: `OPENAPI_SPEC_URL=<spec-url> pnpm run openapi:check:live`.
+  desktop backend: `OPENAPI_SPEC_URL=<spec-url> pnpm run openapi:check:live`; the repo-root
+  `scripts/openapi-live-check.sh` starts an isolated host itself and builds it in Release first unless
+  `OPENAPI_LIVE_SKIP_BUILD=1`.
 - After a dependency change: `pnpm run licenses:check`; on dependency-update branches `pnpm run dependencies:refresh`.
 - Knip and dependency-cruiser are no-growth baselines. Fix the code, do not widen the baseline without saying so.
 - `pnpm run doctor` (react-doctor) and `pnpm run spellCheck` are advisory, not gates.

@@ -6,12 +6,12 @@ Everything here runs **on your own computer** unless you deliberately connect an
 
 > **Want to try it?** → [**Download and install it**](download-from-github.md) *(about 10 minutes)*
 
-**Jump to:** [Chat](#chat) · [Finding & choosing models](#finding-and-choosing-models) ·
+**Jump to:** [Chat](#chat) · [Web search](#let-it-search-the-web) · [Finding & choosing models](#finding-and-choosing-models) ·
 [Managing models](#managing-models) · [Your documents](#your-own-documents) ·
 [Agents](#agents) · [Custom tools](#custom-tools) · [Automation](#automation) · [Workflows](#workflows) ·
 [Voice](#voice) · [Audio transcription](#audio-transcription) · [Images](#image-generation) ·
 [Development Mode](#development-mode) · [Benchmarks](#benchmarks) · [Fine-tuning](#fine-tuning-training) ·
-[Advanced](#advanced)
+[Advanced](#advanced) · [Turning features on or off](#turn-features-on-or-off)
 
 ---
 
@@ -42,6 +42,16 @@ This needs a small companion file (a "vision projector") that ships alongside so
 downloads it automatically when you download a model from Hugging Face that has one. A model you
 [imported yourself](#import-a-gguf-you-already-have) doesn't get one, so imported models are text-only.
 
+### Let it search the web
+
+A model can search the web and read public web pages for you. Searches go to DuckDuckGo, or to your own
+SearXNG server if you enter its address. This is **off by default**: turn on **Allow web search and page
+fetching** under **Settings → Node Settings → Knowledge & web**.
+
+Once it's on, the app asks you before each request is sent, and shows you what came back before the model
+reads it. A conversation can opt out of those checks with **Auto-accept web content** in the chat. Only do
+that if you accept the risk: web pages can contain hidden instructions written to mislead the model.
+
 ---
 
 ## Finding and choosing models
@@ -67,11 +77,20 @@ on generic advice.
 Models are ranked by whether they genuinely run well on *your* hardware, with a **★ Recommended** pick.
 If you're unsure what to choose, taking the recommendation is the right move.
 
+A few small badges help as well. **Tested** marks a model the authors ran through their own live checks.
+**Gated** marks a Hugging Face repository that asks you to accept its license first; downloading it needs
+a Hugging Face access token in Node Settings. If the app could not reach some models' pages in time, it
+names them above the list instead of quietly leaving them out, and refreshing may bring them back.
+
 ### Search Hugging Face without leaving the app
 
 ![Browsing Hugging Face models](../media/screenshots/model-browse@2x.png)
 
 Hugging Face is a large public library of AI models. You can search and download from it directly here.
+
+Before you search, the panel shows **Tested by the authors**: the models that passed the authors' live
+checks, each with the file that was tested, its size, and whether it fits your machine. Picking one opens
+the same download choices as a search result.
 
 **[▶ Watch discovery and download](../media/clips/model-discovery.mp4)** *(short clip — opens on GitHub)*
 
@@ -237,7 +256,8 @@ the tour.)*
 Both the diagram and everything a run produces are **encrypted at rest**, like your chats.
 
 > **Workflow Runs** is a separate, developer-facing module for driving work items through review
-> stages. It is **off in the shipped configuration** and only appears if an operator turns it on.
+> stages. It is **off by default**. To use it, turn on **Development workflows** (and **Work sessions**,
+> which it needs) in [the Features card](#turn-features-on-or-off).
 
 ---
 
@@ -308,6 +328,13 @@ sent anywhere: the audio, the model and the transcription all stay on this compu
 Generate images on your own machine. Jobs are queued and cancellable, one model is loaded at a time
 (image models are memory-hungry), and unused models are unloaded automatically.
 
+### Edit an image
+
+You can also change an existing picture instead of starting from nothing. Click **Edit** on an image you
+generated, or use **Upload image to edit** to start from your own PNG or JPEG. **Variation** redraws the
+picture, and its **Strength** slider sets how much changes. With the Qwen-Image model, **Instruction edit**
+lets you describe the change in words. Uploaded pictures are encrypted at rest like generated ones.
+
 **Generated images are encrypted at rest.**
 
 Still rough around the edges — feedback especially welcome here.
@@ -328,6 +355,9 @@ reviewed, hash-checked apply step.
 your file and network access. The protections are application-level.
 
 > **Never point it at code you don't trust.**
+
+Don't want it at all? Turn off **Development mode** in [the Features card](#turn-features-on-or-off).
+This one takes effect after the app restarts.
 
 ---
 
@@ -383,6 +413,17 @@ driver before it starts.
 ---
 
 ## Advanced
+
+### Turn features on or off
+
+**Settings → Node Settings → General → Features** has a switch for each of nine larger features:
+Development mode, Work sessions, Development workflows, Graph workflows, AgentHome workspaces, Compute
+tools, External apps, Audio transcription and the Scheduler. A feature you switch off disappears from the
+navigation. Most switches apply as soon as you save. **Development mode** and the **Scheduler** need a
+restart, and a few switches say in their description which part waits for one.
+
+> **For operators:** the same switches exist as configuration keys, such as `Development:Enabled` or
+> `Compute:Enabled`. A value saved in the app takes precedence.
 
 ### Usage accounting
 

@@ -2,6 +2,25 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** The operator console in `XE-Local-AI-Engine.Client.React`: a Vite, React 19 and Mantine SPA served same-origin by the Node Web Server. Server state goes through TanStack Query over the generated hey-api SDK, Zustand holds UI state only, SignalR drives the live surfaces, and forms are controlled Mantine inputs validated by hand-written Zod schemas.
+
+**Read this if you are** adding a feature directory, a query or mutation, a form, a shared UI component or a translated string. **Skip to** [Directory layout](#directory-layout) to find where code goes; **reference tables** are in [Stack at a glance](#stack-at-a-glance); **related pages:** [09](09-api-and-hubs.md), [05](05-chat.md).
+
+## Contents
+
+- [Stack at a glance](#stack-at-a-glance)
+- [Entry point & provider stack](#entry-point--provider-stack)
+- [Directory layout](#directory-layout)
+- [State strategy](#state-strategy)
+- [Transport: the generated hey-api client layer](#transport-the-generated-hey-api-client-layer)
+- [Work Sessions: the chat-embed seam](#work-sessions-the-chat-embed-seam)
+- [Forms (Zod, controlled inputs)](#forms-zod-controlled-inputs)
+- [Shared UI library (core/ui)](#shared-ui-library-coreui)
+- [i18n](#i18n)
+- [How the SPA is served (C0re static-files pattern)](#how-the-spa-is-served-c0re-static-files-pattern)
+- [Cross-cutting concerns a contributor must know](#cross-cutting-concerns-a-contributor-must-know)
+- [Related pages](#related-pages)
+
 The React management UI lives in `XE-Local-AI-Engine.Client.React` and is the operator console for a single node: chat, agent mode, model management/advisor, scheduler, MCP, skills, settings, and dashboards. It is a Vite + React 19 + Mantine SPA, served same-origin from the Node Web Server's `wwwroot`. All server state flows through TanStack Query over a **generated hey-api SDK** that is the single source of truth for REST; SignalR drives the streaming/live surfaces. This page maps the directory layout, the state strategy, the transport plumbing, the shared UI primitives, i18n, and how the bundle is hosted.
 
 > Two things contributors expect to find and will not: `useShallow` is used nowhere in the source, and there is **no schema-bound form library**. Forms are controlled Mantine inputs validated by hand-authored Zod schemas through `safeParse`.

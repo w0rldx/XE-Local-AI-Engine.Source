@@ -1,12 +1,28 @@
 # Security & Privacy Model
 
-> Reviewed: 2026-10-02 · Code-grounded.
+> Reviewed: 2026-10-07 · Code-grounded.
+
+**What this page covers.** The node's cross-cutting security and privacy controls and the invariants contributors must keep: no control-plane egress, no secret returned to the browser or deliberately logged, a loopback-only authenticated admin API, selected fields encrypted at rest, privacy-sensitive AI runs kept node-local, and tool execution inside a process jail. That jail is supervised execution, not an OS isolation boundary. This page is code-and-test evidence, not a compliance claim.
+
+**Read this if you are** touching egress, secrets, authentication, the Host/Origin checks or the sandbox, or reviewing a change for security impact. **Skip to** [Invariant checklist](#invariant-checklist-for-reviewers) for the review list; **reference detail** is in [Admin API surface](reference/12-admin-api-surface.md) (§3 mechanisms: the Host/Origin gate, sessions and authorization, the MCP and model-proxy keys, the container bridge, Codex OAuth) and [Sandbox modes and options](reference/12-sandbox-modes-and-options.md) (§7: the isolated launch mode, MCP trust tiers, the External Apps container policy, the seccomp profile, the Development Mode controls, backend selection and the host patch-apply guards); **related pages:** [08](08-data-and-persistence.md), [09](09-api-and-hubs.md), [04](04-agent-mode.md).
+
+## Contents
+
+- [1. Egress invariant: the node has no control-plane channel](#1-egress-invariant-the-node-has-no-control-plane-channel)
+- [2. Secret-handling invariant — not returned to the browser or deliberately logged](#2-secret-handling-invariant--not-returned-to-the-browser-or-deliberately-logged)
+- [3. Local admin API: loopback-only, Host/Origin-strict, authenticated, fail-closed](#3-local-admin-api-loopback-only-hostorigin-strict-authenticated-fail-closed)
+- [4. Exception handling: no internal detail leakage](#4-exception-handling-no-internal-detail-leakage)
+- [5. Encryption at rest](#5-encryption-at-rest)
+- [6. Privacy-sensitive AI runs node-local only](#6-privacy-sensitive-ai-runs-node-local-only)
+- [7. Sandbox / process-jail for tool execution](#7-sandbox--process-jail-for-tool-execution)
+- [8. Compile-time guardrails (BannedSymbols.txt)](#8-compile-time-guardrails-bannedsymbolstxt)
+- [Invariant checklist (for reviewers)](#invariant-checklist-for-reviewers)
+- [Related pages](#related-pages)
 
 This page documents the cross-cutting security and privacy controls implemented in the XE Local AI
 Engine node and the invariants contributors are expected to preserve. It is code-and-test evidence
 for the stated baseline, not proof of operating effectiveness, deployment configuration, compliance,
-certification, or formal risk acceptance. The supported design routes platform traffic through the
-keeps secret-bearing values behind node-local stores and redaction seams,
+certification, or formal risk acceptance. The supported design keeps secret-bearing values behind node-local stores and redaction seams,
 serves management/admin APIs on loopback, encrypts selected sensitive fields at rest, routes designated
 privacy-sensitive AI work to node-local models, and confines application-mediated tool file access.
 
@@ -66,7 +82,7 @@ If none of those sources provides a value, startup *fails fast* with a helpful m
 >
 > **Rotating the secret destroys data.** The secret is the root of the SQLite column key, the JWT signing key and the non-Windows Data Protection KEK. A checkout that already holds dev data written under a different secret fails on the first protected read with `AuthenticationTagMismatchException` — `dev_ensure_node_operator_secret` warns and names the directories to delete when it mints a key next to pre-existing data.
 
-**Packaged local modes: the `node.key` vault ([ADR 0018](../adr/0018-local-vault-passphrase-wrapped-node-key.md), Proposed).** When none of the three sources above supplies a secret, `DesktopBootstrap` takes custody of a persisted `node.key` in the data directory. That file is a v2 JSON vault (`{"magic":"xe-vault","v":2,…}`, codec `VaultFileCodec` in `Client.Application/Services/Vault`) and **never contains the raw secret**: the secret is a random master key wrapped twice with AES-256-GCM, once under a KEK from PBKDF2-SHA512 over the admin password (iteration count and salt stored in the file) and once under an HKDF-SHA256 KEK from a one-time recovery code (25 CSPRNG bytes shown as 8 groups of 5 base32 characters, never stored). The three derivations below are unchanged and still root in the master key's bytes, so migrating a legacy key re-encrypts nothing.
+**Packaged local modes: the `node.key` vault ([ADR 0018](../adr/0018-local-vault-passphrase-wrapped-node-key.md), Accepted).** When none of the three sources above supplies a secret, `DesktopBootstrap` takes custody of a persisted `node.key` in the data directory. That file is a v2 JSON vault (`{"magic":"xe-vault","v":2,…}`, codec `VaultFileCodec` in `Client.Application/Services/Vault`) and **never contains the raw secret**: the secret is a random master key wrapped twice with AES-256-GCM, once under a KEK from PBKDF2-SHA512 over the admin password (iteration count and salt stored in the file) and once under an HKDF-SHA256 KEK from a one-time recovery code (25 CSPRNG bytes shown as 8 groups of 5 base32 characters, never stored). The three derivations below are unchanged and still root in the master key's bytes, so migrating a legacy key re-encrypts nothing.
 
 - **States** (`auth/status` field `vault`): `pending` (no vault file yet, or a legacy raw/DPAPI key: the host runs unlocked and the SPA forces first-run setup or the "confirm your password" step that wraps the legacy key), `locked` (v2 file, secret not unwrapped) and `unlocked` (v2 file unwrapped, or an operator-supplied secret, which leaves the vault untouched).
 - **Locked means the whole host waits.** A v2 file starts a pre-host (`Hosting/Vault/VaultUnlockHost`) on the real origin that serves the SPA, `/health/ready`, `auth/status` and the two anonymous loopback-only unlock routes; every other `/api/local/v1` route answers 503. The scheduler, inbound MCP, integration API, retention and recovery services do not exist until the real host is built with the unwrapped secret as an in-memory configuration value. Unlock attempts share one fixed-window limiter (5 per 5 minutes) and a failure never answers in under 250 ms.
@@ -150,25 +166,7 @@ supported reverse-proxy/headless deployment mode.
 
 ### 3.1 Loopback peer + Host + Origin middleware (`LocalApiSecurityMiddleware`)
 
-`LocalApiSecurityMiddleware` (`XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiSecurityMiddleware.cs`, registered in `Program.cs` via `app.UseMiddleware<LocalApiSecurityMiddleware>()`) rejects any `/api/local/v1` request whose transport peer is non-loopback **or** whose `Host`/`Origin` is not loopback, returning **403** before routing:
-
-```csharp
-// LocalApiSecurityMiddleware.InvokeAsync()
-if (IsLocalApiRequest(context.Request.Path)
-    && (!IsLoopbackPeer(context.Connection.RemoteIpAddress)
-        || !IsAllowedHost(context.Request.Host.Host)
-        || !IsAllowedOrigin(context.Request)))
-{
-    context.Response.StatusCode = StatusCodes.Status403Forbidden;
-    return;
-}
-```
-
-- **Loopback peer check** is the authoritative transport-level gate: `context.Connection.RemoteIpAddress` is the address of the socket peer — the machine that opened the TCP connection to Kestrel — so a routable caller is rejected even if it forges a loopback `Host`/`Origin`. A **null** peer address means the request never traversed the network stack (the in-process/in-memory test host and in-process health probes present no peer) and is treated as loopback-equivalent; only a concrete non-loopback address is rejected (the `IsLoopbackPeer` branch in `LocalApiSecurityMiddleware.cs`).
-- **Allowed hosts** are exactly `localhost`, `127.0.0.1`, `::1` (case-insensitive; IPv6 brackets normalized off).
-- **Origin check** is fail-closed: an absent `Origin` is permitted (same-origin navigation), but any *present* `Origin` must parse, be a loopback host, and match the request's scheme + host + port exactly. A non-loopback or mismatched origin is rejected.
-- Ordering matters: the middleware runs *before* `UseRouting`/`UseAuthentication`/`UseAuthorization` in `Program.cs`, so a non-local caller is rejected before it can reach an endpoint at all.
-- Because it runs before authorization and does not care whether a route is anonymous, **every** operation under `/api/local/v1/` can genuinely return this 403 — the four anonymous auth routes (login, setup, status, refresh) included — which is why the OpenAPI document declares a `403` on all of them and `OpenApiDocumentTests` pins that.
+`LocalApiSecurityMiddleware` answers **403** before routing to any `/api/local/v1` request whose socket peer is non-loopback or whose `Host`/`Origin` is not loopback, the anonymous auth routes included, and its Origin check is fail-closed. See [the reference page](reference/12-admin-api-surface.md#31-loopback-peer--host--origin-middleware-localapisecuritymiddleware) for the check, the allowed hosts, the null-peer rule and the middleware order.
 
 > **Reverse proxies / headless deployment are unsupported.** The peer check reads the socket peer, and no forwarded-headers middleware is registered, so `X-Forwarded-For` is never honoured. A reverse proxy on the **same host** would appear as a loopback peer on every forwarded request and defeat the peer gate — this is by design: the app is single-user, same-machine only. Putting `/api/local/v1` behind a proxy or exposing it beyond the local machine is out of scope and not a supported configuration.
 
@@ -179,10 +177,7 @@ if (IsLocalApiRequest(context.Request.Path)
 **alone**, so an MCP endpoint mounted at a bare `/mcp` would be reachable without any of §3.1's peer,
 Host or Origin checks, leaving the bearer key as the only control. Keep it inside the prefix.
 
-Measured 2026-08-03 on WSL2 (NAT networking, `localhostForwarding=true`): a client on the **Windows**
-host connecting to a node inside WSL presents peer `127.0.0.1` and Host `127.0.0.1`/`localhost`, so
-all three checks pass unchanged and no relaxation is needed for that topology. Not re-verified under
-WSL mirrored networking.
+See [the reference page](reference/12-admin-api-surface.md#31a-the-inbound-mcp-endpoint-sits-inside-the-gate--deliberately) for the WSL2 topology measurement.
 
 #### Tool invocation writes no approval-audit row
 
@@ -202,122 +197,11 @@ impersonate another: an operator JWT does not open the MCP endpoint or the proxy
 neither key opens the key-management endpoints (or anything else). Both directions are asserted for
 MCP in `XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs`.
 
-The browser's session is a short-lived access token held **in memory only** plus an HttpOnly, Secure,
-SameSite=Strict refresh cookie, so every document load calls `auth/refresh`. **Sessions are independent**: each
-sign-in starts its own refresh-token chain and revokes nothing, so signing in on a second browser or client never
-signs the first one out. `NodeAuthService.RefreshAsync` rotates the presented token single-use — that token alone is
-revoked and linked to its successor inside one serializable transaction; other sessions are untouched. Logout
-(`RevokeRefreshTokensAsync`), `ChangePasswordAsync` and `ResetAdminPasswordAsync` still revoke **every** session of
-the user. A failed refresh (missing, expired or revoked cookie) answers a bodyless 401 and clears the cookie.
-
-Rotation carries a **10-second reuse grace for rotation alone**: a token that rotation replaced still buys a
-pair until the window closes, because a reload racing its own in-flight refresh (or a second tab sharing the cookie)
-otherwise loses, and the loser's 401 clears the cookie and signs a blameless operator out. The grace never re-opens a
-session an operator closed. The discriminator is the successor link (`replaced_by_token_id`), which only rotation
-writes: the grace follows it to the chain's head and requires that head to be live and unexpired. The revoke-all
-paths write no link and revoke the head, so a logged-out cookie never qualifies — and because the link is per
-chain, another session's live token can never vouch for it. Presenting a rotated token again does **not** re-stamp
-or re-link it, so the window is measured from the original rotation and cannot be walked forward. Expiry is checked
-first and is never graced. `XE-Local-AI-Engine.Tests/Auth/NodeAuthRefreshRotationGraceTests.cs` walks each revoke
-path and the concurrent-session cases.
-
-The grace pair is a **sibling** of the chain's head, not its replacement, because only the token hash is stored and
-the winner's token cannot be handed back: the winner's token stays live, so whichever `Set-Cookie` a browser keeps
-when the two responses arrive out of order still works, and a third presenter inside the window is served too. The
-cost is one extra live token per graced race, which ends at expiry or logout, and a copy of the cookie captured
-inside the window can mint pairs until it closes (bounded by the auth endpoints' rate limit). Each such pair is an
-independent session with the full refresh lifetime, so a cookie stolen inside the window is no longer revealed by
-the other client being signed out: only logout, a password change or a reset ends it.
-
-Authorization is **deny-by-default, in two layers**. At the FastEndpoints layer a global configurator applies
-the `NodeOperator` policy to every discovered endpoint whether or not that endpoint's own `Configure()` asked
-for it, so a forgotten `Policies()` call cannot ship an anonymous route; an endpoint that deliberately opted
-out with `AllowAnonymous()` still wins, and the four pre-authentication endpoints under `Endpoints/Auth/V1/` (status, setup, login, refresh)
-(`auth/status`, `auth/setup`, `auth/login`, `auth/refresh`) are the entire anonymous set. Behind it,
-`AuthorizationOptions.FallbackPolicy` requires JWT bearer and an authenticated user for every routed surface
-carrying no authorization metadata of its own, and it is evaluated even when routing matches no endpoint at
-all, so a path this node does not serve answers an anonymous caller **401** rather than disclosing a 404 or
-a 405. The surfaces that must stay reachable without a token say so explicitly: both health probes and the SPA
-fallback that serves the login page. The dev-only OpenAPI document cannot, because it is raw middleware with no
-endpoint to attach `AllowAnonymous` to, and is instead served ahead of `UseAuthentication()`.
-
-`EndpointAuthorizationPolicyTests` locks both layers in, reading the effective route metadata rather than
-FastEndpoints' own bookkeeping: every endpoint resolves to `NodeOperator` or appears in the pre-authentication
-allowlist, every SignalR hub route requires `NodeOperator`, and the hand-mapped minimal APIs and the inbound
-MCP route carry their named policies. Its teeth are a permanent canary endpoint,
-`GET diagnostics/configurator-canary-probe`, which calls neither `Policies()` nor `AllowAnonymous()` and is
-therefore protected by the global configurator alone. Deleting that one line fails the test by name, while
-every endpoint carrying its own redundant `Policies()` call would notice nothing. The canary answers 204 to an
-operator and 401 to anyone else, and is excluded from the OpenAPI document. The residual is that
-`FallbackPolicy` asks only for a valid JWT, not the `Admin` role `NodeOperator` requires: it is defense in
-depth behind the first layer, not an equal substitute, which is why the canary rather than the fallback is
-what the guard watches.
-
-The MCP credential is a single 256-bit `xemcp_`-prefixed secret stored as a **one-way SHA-256 digest**
-in the node database. The plaintext is returned exactly once — in the response to the generate call —
-and is unrecoverable afterwards: `GET` returns only the prefix and timestamps, and the response type
-has no key field at all, so the guarantee is enforced by the contract rather than by convention. A
-lost key therefore cannot be recovered; the remedy is to regenerate and reconfigure every client.
-A plain digest rather than a password KDF is deliberate: the input is 256 bits of CSPRNG output, so
-PBKDF2/Argon2 would buy no guessing resistance and would tax every authenticated request, and no salt
-is needed for a single high-entropy secret. The digest is *additionally* encrypted at rest, now for
-**integrity rather than confidentiality** — hashing already defends a database read, but a bare hash
-column would let anyone who can write the database file substitute a digest whose preimage they know
-and take over an agent-execution surface; the AAD-bound AEAD (`mcp_api_key_hash`) is what makes that
-substitution fail. (`node-settings.json` was rejected as a home because it is plaintext and carries no
-restrictive ACL on Windows.) Generating replaces the previous key with no window in which both
-authenticate, comparison hashes the presented value and runs
-`CryptographicOperations.FixedTimeEquals` over the **digest bytes** (a short-circuiting compare is a
-byte-at-a-time oracle over loopback), and a node with no key generated authenticates nobody. Spec revision 2026-07-28 makes authorization **OPTIONAL** for MCP
-implementations, so this node implements no OAuth profile and advertises no Protected Resource
-Metadata — see the [connect runbook](../runbooks/connect-an-mcp-client-runbook.md).
-
-The singleton row also carries exactly one scope. `delegate` is the default and exposes the eight
-shared `NodeAgentMcpTools`; `agentic` exposes those eight plus the admin tools of `NodeAdminMcpTools`,
-enumerated in the drift-tested
-[`references/mcp-tools.md`](../../skills/xe-local-ai-engine/references/mcp-tools.md). Minting
-either scope rotates the row atomically. Authentication places `xe:mcp_scope` and a bounded key
-prefix in claims; SDK authorization filters remove unauthorized tools from discovery and reject
-direct calls. Agentic is operator-equivalent only for that enumerated MCP tool surface: it grants
-no Operator role/JWT, REST access, routable listener, or general policy bypass.
-
-For saved-agent execution, authority is explicit rather than ambient and is fingerprinted/persisted
-with durable requests. A run admitted before rotation deliberately retains its captured authority
-across disconnect, restart, and rotation. Agentic root execution may unwrap approval-required tools
-from the saved agent's complete allowed set, but a strict recorder persists a metadata-only
-`ApprovalDecision` with source `mcp-agentic:<bounded-prefix>` before the inner function runs. Audit
-failure blocks invocation. Arguments, prompts, message content, tokens, passwords, full keys, and
-host paths are never recorded. Spawned children retain ordinary curation and do not inherit agentic
-elevation. [ADR 0006](../adr/0006-agentic-trust-mcp-key-scopes-and-auto-approval.md) records the
-decision.
+Authorization is deny-by-default in two layers: a global FastEndpoints configurator applies `NodeOperator` to every endpoint that did not opt out with `AllowAnonymous()`, the four pre-authentication `auth/*` routes are the entire anonymous set, and `AuthorizationOptions.FallbackPolicy` requires a JWT on every other routed surface. The MCP key is a 256-bit secret stored as a one-way SHA-256 digest, returned once, and a node with no key generated authenticates nobody. See [the reference page](reference/12-admin-api-surface.md#32-authentication--authorization) for browser sessions and the 10-second refresh reuse grace with its residual, the canary test, the MCP key's storage and scopes, and agentic-scope audit.
 
 #### 3.2.1 The inbound model-proxy bearer key
 
-The node exposes an **OpenAI-compatible passthrough** (`proxy/v1/{chat/completions,embeddings,models}`)
-so an external tool — LiteLLM, Continue, a Hermes-style agent — can point its `base_url` at this node
-and use the locally loaded model. The credential is a single operator-generated bearer key, deliberately
-chosen because a static `Authorization: Bearer …` header *is* the OpenAI wire convention and is what
-those clients already speak.
-
-Its handling mirrors the MCP key rather than inventing a second posture
-(`LocalModelProxyApiKeyService`, `LocalModelProxyApiKeyAuthenticationHandler`):
-
-- **One key, 256 bits of CSPRNG output**, Base64Url-encoded behind an `xeprx_` scheme prefix so it
-  survives a shell argument, a JSON config file and an HTTP header untouched.
-- **Stored as a one-way SHA-256 digest**, and that digest is *additionally* AEAD-encrypted at rest under
-  its own AAD column (`local_model_proxy_api_key_hash`) — for **integrity, not confidentiality**: a bare
-  hash column would let anyone who can write the database file substitute a digest whose preimage they
-  chose and take over the proxy surface. A plain digest rather than a password KDF is the same
-  deliberate call made for MCP: 256 bits of entropy has no guess space to slow down.
-- **The plaintext is returned exactly once**, from `POST proxy/key`. `GET proxy/key` returns only the
-  display prefix, timestamps and last-used marker; the response type has no key field at all.
-  Generating replaces the previous key with no window in which both authenticate, and `DELETE` revokes.
-- **A node with no key generated authenticates nobody** — an ungenerated credential fails closed rather
-  than reading as "no authentication required".
-- Comparison hashes the presented value and runs `CryptographicOperations.FixedTimeEquals` over the
-  **digest bytes**, because a short-circuiting compare is a byte-at-a-time oracle over loopback.
-- The three passthrough routes carry their own fixed-window rate-limit policy
-  (`NodeAuthRateLimits.LocalModelProxyPolicy`).
+The OpenAI-compatible passthrough (`proxy/v1/{chat/completions,embeddings,models}`) authenticates with one operator-generated `xeprx_` bearer key handled the same way as the MCP key. See [the reference page](reference/12-admin-api-surface.md#321-the-inbound-model-proxy-bearer-key) for its storage, rotation, comparison and rate limit.
 
 **The bearer key is not the only gate, and that is load-bearing.** The passthrough is hand-mapped
 *inside* the `/api/local/v1` prefix precisely so `LocalApiSecurityMiddleware`'s loopback-peer + Host +
@@ -354,68 +238,7 @@ middleware together keep the admin surface off the network.
 
 ### 3.5 The container bridge — the one deliberately non-loopback listener (`ContainerBridgePipeline`)
 
-Everything in §3.1–§3.4 describes a node that listens on loopback and nothing else. There is exactly one exception,
-and it is an exception by design rather than by oversight: an application container installed under
-[ADR 0010](../adr/0010-external-apps-container-execution.md) has its own network namespace and cannot reach the
-host's loopback at all, so the engine's whole surface — including the local model server — is unreachable from the
-containers it hosts. [ADR 0011](../adr/0011-container-bridge-listener.md) records the decision; this is what it
-means for the security posture.
-
-- **It is one listener, on one address, serving three routes.** `ContainerBridgeEndpointResolver` picks a
-  LAN-facing IPv4 address (or takes `ContainerBridge:BindAddress`, which refuses a wildcard), and
-  `ContainerBridgePipeline.Map` branches that listener out **first** in the pipeline, matching the connection's
-  whole local end (address and port) so a node whose own listener shares the bridge's port cannot have its traffic
-  claimed by the branch. Nothing else the host
-  serves — the SPA, `/api/local/v1`, the hubs, the MCP endpoint, the health checks — is reachable on it, and
-  nothing mapped inside it is reachable on the loopback listener. The branch predicate is the socket's local port,
-  which is the one fact a caller cannot forge. A node whose configured bridge port is already one of its own bind
-  URLs, or whose bridge address and port are already held by another node on the machine, opens no bridge and boots
-  with its loopback listener alone.
-- **Two independent controls run before any route.** `ContainerBridgePeerGuardMiddleware` refuses, with 403, a peer
-  that is not one of this computer's own addresses — the compensating control for the loopback-peer check that
-  cannot apply here, since accepting a non-loopback peer is the bridge's entire purpose. Then
-  `ContainerBridgeTokenMiddleware` requires the per-instance bearer token on **every** route: the peer guard admits
-  any container on an engine-owned network, so the token is what stops one application using another's bridge.
-  Every refusal is byte-identical, so a caller cannot learn which instance ids exist.
-- **`llama-server` still binds `127.0.0.1`.** The bridge forwards to it through the same
-  `LocalModelProxyForwarder` the loopback model proxy uses. No model server is published.
-- **The guard in §3.4 still fails closed.** It is handed the bridge's own listener URL as an expected non-loopback
-  bind and subtracts exactly that; any *other* routable bind still stops the process. This is deliberately not
-  `Security:AllowNonLoopbackBind`, which would silence the guard for `/api/local/v1` going routable too.
-- **`AllowedHosts` is widened with the bridge's host names**, because `HostFilteringMiddleware` is installed by an
-  `IStartupFilter` and runs ahead of every middleware the composition root registers — without it a container's
-  `Host: <lan-address>:18790` is answered 400 before the bridge branch exists. Host filtering is per host, not per
-  endpoint, so this reaches the loopback listener too; it costs nothing, because `LocalApiSecurityMiddleware`
-  checks Host and Origin against its **own** list and rejects a non-loopback peer outright, and neither check reads
-  this setting. The maintainer rule below is about that own list, not about this one.
-- **It is off unless External Apps is on.** `ContainerBridge:Enabled` is `false` in code and `true` in the shipped
-  `appsettings.json`, and the listener opens only when both flags are true.
-- **IPv4 only, and only an address this host owns.** An IPv6 `BindAddress` is rejected rather than used, and a host
-  with no IPv4 address opens no bridge; the container networks the engine creates are IPv4. A configured address no
-  interface carries is rejected as well, so a typo costs the node its bridge and not its boot — Kestrel fails the
-  whole host on a bind it cannot satisfy.
-- **Only a rootless Linux daemon is validated.** Rootless Docker source-translates a container's traffic, so it
-  reaches the bridge from one of the host's own addresses and the peer guard admits it. A **rootful** daemon does
-  not: traffic to a local address never passes POSTROUTING, so it is never masqueraded and arrives with the
-  container's own address, which the guard refuses with 403. The bridge is therefore expected to be dark there. It
-  fails closed — this is a feature that does not work, not a hole — and the peer guard's warning names the
-  hypothesis when the refused peer is private or link-local. ADR 0011 records the remedy: admit the subnets of
-  networks the engine created, still behind the per-instance token.
-- **It is not rate-limited.** `UseRateLimiter` sits below the branch, so bridge traffic bypasses it. Accepted for
-  V1 — the token is mandatory and per-instance, and the forwarder's inference lease and idle watchdog bound each
-  request — with the observable failure mode recorded in ADR 0011: a container thrashing model loads.
-
----
-
-**The bridge token's shape is a credential plus a lookup key.** `ContainerBridgeToken` mints
-`<instance id, "N" format>.<base64url of 32 CSPRNG bytes>`. The instance id travels **in the clear, in front**, so
-verification is a keyed row read rather than a scan of every installed application's secret. That is not a weakening:
-the id is not the credential, the 256 bits behind the separator are, and a scan would compare the presented secret
-against rows it was never meant for. Base64url — no padding, no `+`, `/` or `=` — so the token survives an environment
-variable, a container's own config file and an HTTP header untouched, and all three are on the path to the application.
-`ContainerBridge:BindAddress` refusing a wildcard is the bridge's own half of the §3.4 startup bind guard: the guard
-treats a wildcard bind as non-loopback and shuts the node down, so a bridge that accepted one would either be killed at
-startup or, worse, expand to an address the operator never chose.
+The container bridge is the one deliberately non-loopback listener ([ADR 0011](../adr/0011-container-bridge-listener.md)). It serves three routes on one LAN-facing IPv4 address, refuses a peer that is not one of this computer's own addresses, requires the per-instance bearer token on every route, and is off unless External Apps is on. `llama-server` still binds `127.0.0.1`, and the §3.4 guard still stops any other routable bind. The bridge is not rate-limited, and only a rootless Linux daemon is validated: under a rootful daemon it fails closed. See [the reference page](reference/12-admin-api-surface.md#35-the-container-bridge--the-one-deliberately-non-loopback-listener-containerbridgepipeline) for the full posture and the bridge token's shape.
 
 **Maintainer rules:**
 - Mount any new local-admin route under `/api/local/v1` so the middleware covers it; routes outside that prefix are *not* loopback-gated by this middleware. The container bridge (§3.5) is the one reviewed exception, and it carries its own peer guard and token gate in place of this middleware.
@@ -438,58 +261,7 @@ single line before it is ever logged, and the callback page never renders it reg
 
 ### 3.7 Codex OAuth: token storage, refresh and redaction
 
-`CodexTokenStore` mirrors `CloudCredentialStore` — DataProtection at rest, user-only file permissions through
-`SecureFilePermissions` — but uses a **dedicated protector purpose** and a **separate `.enc` file**, so it cannot
-collide with the API-key-shaped cloud credential store. It never logs token values.
-
-`CodexAuthHandler` is the `DelegatingHandler` that owns auth on the SSE Responses path, and it does three things in
-order:
-
-1. **Strips** any `Authorization` the OpenAI SDK added from its dummy `"unused"` key, so that value never reaches the
-   wire.
-2. **Injects** the Codex header contract for the SSE path: the real bearer `Authorization`, `chatgpt-account-id`,
-   `originator` and `User-Agent` — and *not* the WebSocket-only `OpenAI-Beta`.
-3. On a **401**, performs a **single-flight refresh** — one gate, with concurrent 401s awaiting the same refresh under
-   a double-checked expiry — and retries the request exactly once. A sent `HttpRequestMessage` cannot be reused, so the
-   retry goes out on a fresh clone whose content is buffered to be re-readable.
-
-It never logs token values, authorization headers or the dummy key. `CodexHeaders` is the single source of truth for
-that contract and the wire-contract test binds to its constants. The account-id header is `chatgpt-account-id` (as the
-Codex CLI sends it) and **not** `openai-`-prefixed, because the prefix may break account-scoped auth; this was verified
-against the Codex CLI source path `codex-rs/core/src/client.rs`, where the v0 SSE Responses path sends the always-on
-auth headers plus the minimal HTTP/SSE subset. The WebSocket-only `OpenAI-Beta: responses_websockets` header is
-intentionally neither defined nor sent.
-
-**Diagnostic error bodies are logged, under four constraints.** On a non-success response the handler logs the server's
-error body so the node host log shows why the call was rejected. The body is buffered with `LoadIntoBufferAsync` first,
-so reading it does not consume the content for the OpenAI SDK — only a bounded prefix is read from the buffered,
-seekable stream and the stream is rewound, leaving the SDK to surface the same error to the caller. It is gated to
-**failure statuses only**: a success response carries the live SSE stream and must not be read there. At most
-`MaxLoggedBodyBytes` are logged, with the total body length reported separately, and the excerpt is stripped of control
-characters so a server-controlled body cannot forge log lines. Only the body excerpt and the status are logged; request
-headers are never touched, and the server's error JSON never echoes the bearer token or account id.
-
-On top of that the excerpt is **redacted** before it reaches the log: user emails, JWT-shaped material, and any long
-high-entropy token-like run — 20 or more characters from the base64/hex alphabet carrying **both** a letter and a
-digit, so readable identifiers such as `invalid_request_error` survive intact. A pathological body that stalls a
-pattern is dropped wholesale rather than logged unredacted.
-
-**The JWT payload is base64url-decoded without verifying the signature.** That is intentional and safe here: the access
-token arrives over TLS directly from the OpenAI token endpoint, and the decoded claims — `chatgpt_account_id` and
-`exp` — are used **only** as advisory metadata, the account id becoming a request header and the expiry driving
-proactive refresh. Neither is ever an authorization input or a trust decision on this node. **Do not repurpose these
-claims for access control without first verifying the signature against OpenAI's JWKS.** When a token carries no usable
-`exp` claim, the store falls back to a conservative 50-minute expiry.
-
-`CodexLoginCoordinator` owns the pending-login lifecycle so the Operator endpoints can start a loopback PKCE login,
-return the authorize URL immediately, and poll status until it completes. A second `Start` **supersedes** any in-flight
-login: the prior attempt is cancelled and its loopback listener freed, so the new login can re-bind the callback port.
-It takes the auth service as a `Lazy<T>` so the auth `HttpClient` is built on first `Start` rather than when the
-singleton is constructed, which keeps endpoint instantiation at host startup from eagerly materializing it. It never
-logs token material. The authorize request carries `originator`, `id_token_add_organizations` and
-`codex_cli_simplified_flow` — verified against the working opencode reference client — to identify the client family,
-ask the issuer to embed the org/account id in the `id_token` so the subscription path can resolve
-`chatgpt-account-id`, and opt into the simplified Codex CLI flow.
+`CodexTokenStore` keeps Codex tokens under a dedicated protector purpose in a separate `.enc` file. `CodexAuthHandler` strips the SDK's dummy key, injects the Codex header contract and refreshes single-flight on a 401. Token values, authorization headers and the dummy key are never logged, and a logged error body is bounded and redacted. The JWT payload is decoded without verifying the signature and used only as advisory metadata. **Do not repurpose these claims for access control without first verifying the signature against OpenAI's JWKS.** See [the reference page](reference/12-admin-api-surface.md#37-codex-oauth-token-storage-refresh-and-redaction) for the header contract, the refresh, the error-body logging rules and the login coordinator.
 
 ---
 
@@ -712,7 +484,7 @@ change to that payload yields a different one.
 
 Any node-side tool or shell execution runs inside a process jail, not against the host filesystem directly. The live provider is `ProcessSandboxRuntimeProvider` (`Services/Sandbox/Implementation/ProcessSandboxRuntimeProvider.cs`, implementing `ISandboxRuntimeProvider`; selected via `SandboxProviderSelector`). The old Docker/container sandbox runtime was removed in the 2026-06-17 runtime re-architecture — there is **no** container inference path, and this process-jail is the execution boundary for AgentHome and Coder. (Discrepancy note vs. older docs: `LocalContainerSandboxProvider` and the HostAgent layer no longer exist as live code.)
 
-> **One scoped exception, and it does not move this boundary.** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted 2026-07-29) permits Docker for **Development Mode build/test/lint execution only**, as a stopgap ahead of MXC. Provider selection is **per feature**: Development Mode gets the container provider; **AgentHome (4 injection sites) and Coder (1) stay on `ProcessSandboxRuntimeProvider`** and keep exactly the posture described below. The split is enforced by each feature's declared requirements rather than by configuration — each feature resolves a role marker (`IAgentSandboxRuntimeProvider` / `IDevelopmentSandboxRuntimeProvider`) whose declaration names a host toolchain that no container backend supplies, so it cannot be wired into the other two even by mistake (ADR 0007; see [Backend selection](#backend-selection-a-feature-declares-what-it-needs-and-never-names-a-backend) for what replaced the compile-time form of this guarantee, and what that trade costs). Two things follow for a security reader. First, hardening the process provider is *not* superseded by the container work — those two features remain on it. Second, on Linux **access to the Docker socket is root-equivalent**; the ADR records this rather than mitigating it, and the product neither requires nor provides rootless Docker. The container provider has **shipped as an opt-in Development Mode provider** and is **not the default** — `DockerSandboxRuntimeProvider` (`Name = "docker"`) is registered by `AddNodeContainerSandboxExtensions` and selected by `Development:Sandbox:Provider=docker`. The shipped `appsettings.json` sets no `Development:Sandbox` key at all, so `SandboxProviderSelector.ResolveDevelopment` falls back to the AgentHome provider (`AgentHome:Sandbox:Provider`, shipped as `process`). **The section below therefore describes the default posture, not the whole story** — on a node configured with `docker`, Development Mode runs under the container boundary instead. See [Development Mode container implementation status](../roadmaps/development-mode-container-status.md) for what is and is not implemented; it is the canonical status page, and this page does not restate it.
+> **One scoped exception, and it does not move this boundary.** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) permits an opt-in Docker provider for Development Mode execution only (scope and shipping state: [Architecture Overview](01-architecture-overview.md#what-the-system-is)); AgentHome and Coder stay on `ProcessSandboxRuntimeProvider`, so hardening it is *not* superseded by the container work. The split is enforced by each feature's declared requirements rather than by configuration: each feature resolves its own role marker (`IAgentSandboxRuntimeProvider` / `IDevelopmentSandboxRuntimeProvider`), and the AgentHome and Coder declaration names a host toolchain that no container backend supplies, so they cannot be wired to the container provider even by mistake (ADR 0007; see [Backend selection](#backend-selection-a-feature-declares-what-it-needs-and-never-names-a-backend)). On Linux, **access to the Docker socket is root-equivalent**; the ADR records this rather than mitigating it. The shipped config sets no `Development:Sandbox` key, so `SandboxProviderSelector.ResolveDevelopment` falls back to the AgentHome provider and **the section below describes the default posture**; a node set to `Development:Sandbox:Provider=docker` runs Development Mode under the container boundary instead.
 
 **What this boundary is — and is not.** It is **supervised execution**, not an OS isolation boundary. What it enforces: a working-directory jail with path-confinement and symlink-escape guards; a **scrubbed child environment** (the worker's secret-bearing environment — cloud API keys, OAuth tokens, the node SQLite key — is **not** inherited; only a fixed system/toolchain allow-list is forwarded, plus the caller's explicit variables); a per-command timeout; tree-kill teardown; and captured-output byte caps. It is **not** a hardware or kernel isolation boundary, and — read these two before relying on the list above — it is **not** a limit on WHICH executable runs, and under the isolation mode AgentHome uses (`SandboxIsolationMode.None`, its declared `IsolationFloor`) it is **not a filesystem boundary for the child at all**. The non-isolated chain is `setsid` → `systemd-run --scope --user` → `unshare --user --net` → the executable (`SandboxLaunchPlan.Create`): a process group, cgroup ceilings and an empty network namespace, and **no mount namespace**. The only filesystem-shaped control is `ProcessStartInfo.WorkingDirectory`. A model-chosen command therefore reads and writes any path the engine's own user can — including the operator's ORIGINAL registered folder, which the workspace copy protects only by convention. **AgentHome therefore runs its sandbox under `SandboxIsolationMode.Filesystem` wherever the provider advertises it, and offers `run_command` only when the handle reports that boundary was delivered** — on a host that cannot isolate (including every Windows host today) the action is withheld and the model is told why, while the read and write tools stay because they are confined by the node's own path guard rather than by the jail. Measured, not inferred: `ProcessSandboxFilesystemReachTests` writes and reads a marker outside the jail and asserts that it lands, and its sibling shows the SAME provider confining the child once `SandboxIsolationMode.Filesystem` is requested — which AgentHome does request wherever the provider advertises it (`SandboxWorkloads.AgentHome.RequestsFilesystemIsolationWhereAdvertised`), so the Development capability page reports the role's real posture. On Windows none of the three wrappers exists at all, so the child is a plain process with the host's network and no ceilings either. AgentHome's goal loop runs a **model-authored command line** (`run_command`, gated on the `run_commands` action of an approval-gated call), so the executable and its arguments are the model's; only the working directory, the environment, the timeout, the output caps and the teardown are the node's. Development Mode is the contrast: it resolves a command **id** against a closed per-repository catalogue, so the model never names a binary there. Risky execution is approval-gated upstream, but no formal acceptance of the residual host-user execution risk is established by this repository documentation. **One consequence is worth naming separately:** because the engine itself runs git over that same workspace afterwards (AgentHome's patch export, Development Mode's evidence export), a model that can write there can leave behind configuration that makes the ENGINE's git run a program — later, unprompted, and outside the approved call. That is closed by making every configuration those git invocations read node-owned immediately beforehand (`AgentHomeGitHardening`, `DevelopmentWorkspaceGitConfig`), not by the jail.
 
@@ -747,96 +519,20 @@ Guards a contributor must not weaken:
 
 ### 7.1 The isolated launch mode (`SandboxIsolationMode.Filesystem`) — opt-in, consumed by `run_python`
 
-Everything above describes the **default** posture: a supervised child in a working-directory jail that can still *read* everything the engine's own user can read. A second, opt-in posture now exists behind the same provider — `SandboxCreateRequest.Isolation = SandboxIsolationMode.Filesystem` — in which the host filesystem is **not present in the command's mount namespace at all**.
-
-**Status: built, probed, and consumed by two callers — `run_python` and a `Sandboxed` stdio MCP server (see [§7.2](#72-outbound-mcp-servers-run-under-a-declared-trust-tier)).** `ComputeToolGateway` names `SandboxIsolationMode.Filesystem` on every invocation and **refuses the call** on a node whose provider does not advertise `SupportsFilesystemIsolation` (see [Compute Tools §2.1](19-compute-tools.md#21-execution-flow)). `SandboxedMcpStdioTransport` does the same for an MCP server and refuses the connection the same way. AgentHome, Coder and Development Mode create sandboxes without naming an isolation mode and therefore still run the byte-identical chain they always did (asserted by `SandboxFilesystemIsolationContractTests`); filesystem isolation is not part of their current boundary. Nothing on this page's default posture has moved.
-
-**What the isolated chain is.** `setsid` → a named transient `systemd-run --user --scope` → `bwrap`, rendered by `SandboxIsolatedChain` (`Services/Sandbox/Implementation/Launch/Isolation/`). Inside it the workload sees: a read-only bind of `/usr` plus whatever legacy roots (`/bin`, `/lib64`, …) this host's layout needs to make an ELF interpreter resolve; an invented four-file `/etc` (`passwd`, `group`, `nsswitch.conf`, `hosts`) generated byte for byte into **sealed `memfd`s** rather than bound from the host, so the machine's real account database is never exposed; `/dev` and `/proc`, both remounted read-only; empty `/home`, `/run`, `/var`; any explicitly named read-only trees at their own canonical paths; and exactly one writable directory, `/work`, which is the engine's jail. `/tmp` is the jail's own subdirectory, so everything the workload writes stays inside the one tree the disk watchdog walks. The environment is `--clearenv` plus a fixed allow-list. PID, IPC, UTS and network namespaces are unshared; `--disable-userns --assert-userns-disabled` closes the nested-user-namespace route back out.
-
-**Bind sources are file descriptors, never pathnames.** Every bind is `--bind-fd` / `--ro-bind-fd` against a descriptor the engine opened itself with `openat2(RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS)`, having checked the ownership of each component *as the descriptor it just opened*. A pathname handed to `bwrap` would be re-resolved in another process at a later moment, and anything able to rename a component in between would redirect the mount; a descriptor names the inode that was already validated. There is **no pathname fallback**: a host where the descriptor chain cannot be established reports the capability as absent. The descriptors survive all three execs because they are not close-on-exec — measured on this host, which is why no `posix_spawn` shim is needed.
-
-**Helper binaries are resolved without consulting `PATH`.** `TrustedBinaryResolver` searches only `/usr/bin`, `/bin`, `/usr/local/bin` and requires every path component, symlink targets included, to be root-owned and not group- or world-writable. The other resolver in this layer prefers `PATH` because for the resource-limit chain that is an availability question; here it is a trust question, and a workload that could plant a `bwrap` earlier on `PATH` would be choosing the program that builds its own jail.
-
-**The capability is measured, not assumed.** `HostSandboxContainmentProbe` runs the **production chain** once against a throwaway 0700 jail and checks fifteen controls before advertising `SupportsFilesystemIsolation`: canaries under the user's home and beside the jail are invisible inside while still existing outside; the workload is pid 2 and a host pid is absent from its `/proc`; `/work` and `/tmp` are writable; `/dev` answers `EROFS` and `/proc` refuses creation while `/dev/null`, `/dev/urandom` and `/proc` reads still work; `/run` is empty and neither the user-bus nor a docker socket path exists; and a loopback connect to a **live host listener** fails inside while succeeding outside. That probe is caught **separately** from the resource-limit and network probes, so its failure withdraws only this capability. `CreateOrAttachAsync` rejects the request fail-closed (`SandboxCapabilityNotSupportedException`, carrying the measured reason) on a host that cannot deliver it, and a launch-time failure returns a non-completed result **without running the command** rather than quietly running it on the host filesystem.
-
-**Termination is the scope's cgroup, not the process tree.** The workload's processes live in a PID namespace the engine cannot see, and the pid it holds belongs to `setsid`. The kill authority is therefore `systemctl --user kill --kill-whom=cgroup --signal=SIGKILL --wait <unit>` against the transient scope named at launch (`xe-<role>-<32 hex>.scope`), with the process-group kill kept as a fallback. It is applied at timeout, cancel (which previously had no group kill at all), sandbox kill, disposal, the disk ceiling, and caller cancellation; the unit name is recorded in the orphan marker so the next start can reap it, and a startup sweep kills engine-owned scopes no live worker still claims. That marker is written **before** the launch that creates the scope — `systemd-run` creates it as its first act, so a marker written afterwards would leave a window in which a second worker's sweep saw a live command's scope unclaimed and killed it — and the sweep additionally skips any unreferenced scope that has been active for less than 30 seconds, or whose age the user manager did not report. `RuntimeMaxSec` bounds a scope whose engine was hard-killed. A live test covers the case that motivates all of it: a **detached grandchild** started with its own `setsid`, which a tree-kill and a `kill(-pgid)` both miss.
+`SandboxIsolationMode.Filesystem` is an opt-in posture in which the host filesystem is not present in the command's mount namespace. `run_python` and a `Sandboxed` stdio MCP server request it and refuse to run where the provider does not advertise `SupportsFilesystemIsolation`; AgentHome requests it wherever the provider advertises it (see above). See [the reference page](reference/12-sandbox-modes-and-options.md#71-the-isolated-launch-mode-sandboxisolationmodefilesystem--opt-in-consumed-by-run_python) for the chain, the descriptor-based binds, the startup probe, cgroup termination and `run_python`'s bind set.
 
 **What it is not.** It is a namespace boundary, not a kernel-hardened one — no seccomp filter, no LSM profile, no user-namespace-free design; a kernel LPE is out of scope for it exactly as it is for the default posture, and strong isolation remains MXC's job behind this same seam. There is no read-only *mount* capability (`SupportsReadOnlyMounts` stays off; `ReadOnlyTrees` is the isolated-mode surface, and a tree under a mount point the chain owns — `/usr`, `/dev`, `/proc`, `/work`, `/tmp`, the legacy roots — is **rejected** rather than mounted and silently shadowed). Isolation and a trusted host workspace are refused together: an isolated jail is tightened to 0700 and unreachable at its host path, which is the opposite of what a preserved checkout is for. And the jail-disk watchdog underneath it is unchanged — a best-effort visible-file occupancy check sampled every two seconds, which an unlink-then-write loop bypasses entirely. It is not a quota, and nothing here should be read as one; the current provider has neither a project quota nor a size-bounded mount.
-
-**What `run_python` binds, and why it is two trees rather than one.** The compute tool names its own `ReadOnlyTrees`: the provisioned venv (`<runtime-cache>/compute-runtime/venv/.venv`) and the uv-managed CPython root it links into, which is the machine-global toolchain store's `<runtime-cache>/python/pythons` shared with Training (ADR 0016) — so the jail sees every managed interpreter installed there, read-only. Not the compute root or the store above them — those also hold the uv cache, the digest-pinned uv binary and the lockfile state marker, and naming a parent would have handed all of it to a model-authored script for free. Not the single installed CPython version either: uv addresses the install through a version-alias symlink beside it (`cpython-3.13-…` → `cpython-3.13.15-…`) which the venv's own `bin/python` points at, so binding only the versioned directory leaves that alias resolving to nothing inside. Both are bound **at their own canonical paths**, which is what lets the venv's compiled-in absolute paths keep working, and both are read-only: a script's `os.chmod` on `site-packages` or on the interpreter now answers `EROFS` regardless of who owns the inode. The venv's cleared write bits are still applied, demoted to what they always were — defence in depth for what happens *outside* the namespace.
 
 The same no-follow / byte-recheck philosophy appears in AgentHome host-path safety (`Services/Workspace/Implementation/HostPathSafety.cs`: `TryResolveReparseWithinRoot`, `IsReparsePoint`, `IsPathWithinRoot`) and `HostGitRunner`. Reuse these utilities rather than re-implementing path validation.
 
 ### 7.2 Outbound MCP servers run under a declared trust tier
 
-An outbound stdio MCP server is a third-party executable the operator installed. Legacy registrations ran as plain
-engine child processes with only an environment scrub between them and the machine. Each registration now carries a
-**trust tier** (`McpTrustTier`), and the tier decides where its process runs. The full rationale, including why
-there is no `Remote` tier and why existing rows migrated the way they did, is
-[docs/security/mcp-trust-tiers.md](../security/mcp-trust-tiers.md); what a security reader needs from this page is:
-
-- **`Sandboxed` is the default, including for every registration that already existed.** The server is launched inside
-  the substrate under `SandboxWorkloads.McpStdio` — the §7.1 chain, so no host filesystem, an empty network namespace,
-  a disposable jail as the working directory, and only the configured environment variables. Its own package tree (the
-  resolved command's directory, and the configured working directory when there is one) is bound **read-only**; the
-  jail is the only writable surface it has.
-- **Neither bound tree may cover a sensitive host root.** A tree that equals or contains the home directory, a
-  credential store under it (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.config`, `~/.docker`, `~/.kube`), the
-  node data directory, the engine's install directory, `/root`, `/etc`, `/var` or `/` is **refused**; the server log
-  names the path and the tier, the MCP panel shows a fixed, path-free remedy. Subtrees of those roots stay bindable (a
-  command directory under `~/.nvm/…/bin`, say), but binding the directory is not enough for most package-manager
-  installs: the target of a symlinked command and the interpreter a script names are not bound, and the jail's
-  `PATH` is `/usr/bin:/bin` or the registration's own `PATH` (which replaces it, never extends it). **Sandboxed is
-  for self-contained servers; npm/npx/uv/uvx/mise/nvm/venv-installed servers generally need `PrivilegedHost`.**
-  Comparison happens on resolved paths at one gate both trees pass through, and the list is code-owned.
-- **It fails closed, and it is visible before it fails.** A host whose backend does not advertise
-  `SupportsFilesystemIsolation` — Windows, or a Linux host without bubblewrap — refuses the connection
-  before a process exists, with a fixed, path-free message naming the remedy (install bubblewrap or move the server
-  to `PrivilegedHost`); the exception with its detail stays in the server log. The Development status isolation panel carries an `mcp-stdio` row that says the same thing ahead of any
-  connection attempt. Every failed connection also carries a failure reason (`SandboxUnavailable`, `SandboxRefused`,
-  `ServerNotFound`, `ServerStartupFailed`, `ServerExited`, `SessionLost`, `AuthenticationRequired`, `Authentication`,
-  `Forbidden`, `Tls`, `Timeout`, …) that the MCP panel words, so a missing command never reads like a sandbox refusal
-  and a missing credential never reads like a wrong one; see `docs/security/mcp-trust-tiers.md` and §2.2 for which
-  reasons show a scrubbed `stderr` tail.
-- **`PrivilegedHost` is the old host launch, kept deliberately.** It is a per-server operator grant, never a fallback
-  and never inferred, and its tools are offered as `ToolCategory.WriteExecute` rather than `Network` — because a
-  server this node launched unconfined can write files and run commands here, and the class an operator sees and the
-  node policy tightens on should say the stronger of the two.
-- **`BuiltInTrusted` is engine-owned and unreachable from the API.** The CRUD surface rejects it and a schema check
-  constraint bounds the column.
-- **The stored environment does not come back out.** `EnvJson` was already AEAD-encrypted at rest; the response now
-  returns the variable NAMES with a fixed mask in place of every value, and an update that sends the mask back keeps
-  the stored secret (`McpEnvironmentMask`).
-- **An HTTP server's credential is a header, encrypted like the environment.** `HeadersJson` is AEAD-encrypted at rest
-  by both encryption interceptors with AAD column name `headers`, sent as the transport's `AdditionalHeaders`, and
-  returned as header NAMES with the same mask. The URL is masked on the way out too: userinfo and every query value
-  become `***` (`McpUrlMask`), and sending the masked URL back keeps the stored one. A URL that carries userinfo is
-  rejected (400), as are environment variables on an HTTP registration (the transport launches nothing, so they were
-  stored and never sent) and headers on a stdio one. A legacy `?token=` URL stays **cleartext at rest**; moving the
-  token into a header is a manual step.
-
-Unchanged: HTTP MCP registrations stay exact-match loopback (`McpOptions.HttpLoopbackHosts`, re-validated at connect
-time), the tier is inert for them, and every MCP tool of every tier remains approval-required, pre-wrapped in
-`ApprovalRequiredAIFunction`, and ineligible for a remembered session approval.
+Every outbound stdio MCP server carries a trust tier. `Sandboxed` is the default, including for every existing registration, and runs under the §7.1 chain; a host that cannot serve it refuses the connection rather than degrading. `PrivilegedHost` is the old host launch, kept only as a per-server operator grant, and `BuiltInTrusted` is unreachable from the API. Every MCP tool of every tier stays approval-required. See [the reference page](reference/12-sandbox-modes-and-options.md#72-outbound-mcp-servers-run-under-a-declared-trust-tier) for bound-tree rules, failure reasons and secret masking. The rationale is [docs/security/mcp-trust-tiers.md](../security/mcp-trust-tiers.md).
 
 ### 7.3 External Apps run under an engine-owned container policy
 
-**External Apps** installs curated, containerised applications from an XE-authored catalog
-([ADR 0010](../adr/0010-external-apps-container-execution.md), [External Apps](23-external-apps.md)). It is the
-**second** consumer class of the Docker socket after §7.1's sandbox, and it does not widen that grant — the socket is
-root-equivalent either way, which is the whole subject of the ADR. The sandbox SPI is untouched: an application that
-publishes a port and writes to a data directory violates `DockerSandboxHardening`'s contract by construction, so
-External Apps stands beside that contract with its own rather than loosening it.
+One engine-owned policy builds every External Apps container and is re-verified against the daemon's read-back before and after start: `cap_drop ALL`, `no-new-privileges`, the seccomp profile, loopback-only publishing, a digest-pinned image and the declared mount set. See [the reference page](reference/12-sandbox-modes-and-options.md#73-external-apps-run-under-an-engine-owned-container-policy) for the full policy, the storage helper, secret masking, ownership labels and catalog trust. What it deliberately does not enforce:
 
-What a security reader needs from this page:
-
-- **One policy builds every container, and the daemon's read-back is verified against it.**
-  `ApplicationContainerPolicy.BuildSpecification` sets `cap_drop ALL`, `no-new-privileges:true`, the repo's seccomp
-  profile, the instance's own private network, an explicit mount set, `unless-stopped`, the manifest's `pidsLimit`
-  and a digest-pinned image. `FindViolations` re-reads the daemon's own view **before and after start**; a
-  disagreement is a `PolicyViolation` failure that stops the instance, not a warning.
-- **Publishing is loopback-only.** A published port binds ordinal `127.0.0.1` — `::1` is refused — and only ports
-  the manifest declares. This is checked in the specification and again on read-back.
 - **Containers may run as in-container root, deliberately.** No `--user` is passed: the curated images drop
   privileges through their own entrypoints, and forcing a uid breaks that and a port-80 bind. The boundary is the
   container, the dropped capabilities, seccomp, `no-new-privileges` and the loopback network — **not** the uid.
@@ -845,35 +541,6 @@ What a security reader needs from this page:
   `permissions.localNetwork` is a **disclosure** on the install panel, not a control. Nothing denies either. Read the
   panel as what the application may do, never as an enforced boundary. There is likewise **no memory and no CPU
   ceiling**: the manifest's memory figures gate admission only.
-- **The one container that keeps Docker's default capability set is engine-owned and short-lived.** Reset and
-  uninstall delete an instance's volume contents from a digest-pinned helper container with a read-only root
-  filesystem, no network, no environment, a 64-process limit and exactly one bind mount — that instance's volumes
-  directory. It keeps the default capabilities because `CAP_DAC_OVERRIDE` is what lets in-container root unlink the
-  `0700` directories an application's own non-root user left behind; under a rootless daemon those belong to a host
-  uid inside the operator's subuid range that the engine cannot even traverse. With that helper, **uninstall really
-  does delete everything the application stored**, on rootless and rootful daemons alike — verified live against
-  exactly such a subuid-owned subtree. The engine removes the emptied tree host-side and counts what is left rather
-  than trusting an exit code.
-- **Secrets stay in one encrypted column and are never rendered.** A manifest `secret` variable is the user's own
-  credential: values live in `external_app_instance_variables_json`, AEAD-encrypted and AAD-bound to the row's id,
-  masked on the way out and preserved when the mask comes back in. `ApplicationManifest` suppresses its record
-  `PrintMembers`, so a structured log of a snapshot cannot print the catalog or a variable default, and
-  `FailureSummary` is content-free by contract — category prose, a service name, the resource gate's two figures,
-  never a variable value and never a daemon message. Container **logs are unmasked by design**: the text is the
-  application's own output, not an engine-owned value.
-- **A daemon endpoint is redacted before it is logged, pinned, or returned.** `DockerDaemonEndpoint.Display` drops
-  user information, the query and the fragment whole — an operator-set `DOCKER_HOST` is somewhere a token fits, and
-  the paths that refuse such an endpoint would otherwise disclose it in the course of declining to use it. A pin
-  written before that existed is redacted on the way back off disk, and an endpoint that carries any of the three is
-  refused by name, never by quoting it.
-- **Ownership is by label, and foreign containers are reported, never removed.** Container names repeat across two
-  XE installations pointed at one daemon, so every container and network carries an owner label, a per-installation
-  install id, an instance label and a service label. Owner-labelled containers under a *different* install id are
-  counted as `foreignInstallContainers` and left alone.
-- **Catalog trust is curation plus HTTPS plus digests. There is no signing in V1.** A configured refresh URL must be
-  `https://`, with plain HTTP accepted only for `127.0.0.1`, `::1` and `localhost`; redirects are not followed, and a
-  document that fails any validator rule is rejected whole.
-- **A secret variable's value is masked on the way out, and that is what makes the at-rest AEAD mean anything.** Stored variables hold an application's admin password and API keys, AEAD-encrypted at rest in `ExternalAppInstance.VariablesJson`. There is no editing reason to read one back — the settings form needs the variable *definitions*, never the values — so every secret value leaves the node as the single `ExternalAppVariableMask.Value` sentinel, and a configure or update that sends the sentinel back means "keep what is stored". Without the mask, anything holding a session could read the plaintext and the encryption would protect only the disk. It is one symbol shared by both sides on purpose: a mask the write side did not recognise would silently store the placeholder as the password.
 - **The kill switch is a surface switch, not a stop button.** `ExternalApps:Enabled=false` 404s every route and the
   hub negotiate at the request-path middleware, ahead of the security middleware, so the switch cannot be probed by
   status code. It does not stop running containers and does not hide the navigation group, which is compile-time.
@@ -881,32 +548,7 @@ What a security reader needs from this page:
 
 ### 7.4 The seccomp profile every sandbox container carries
 
-`DockerSeccompProfile` ships Docker's own default seccomp profile as an embedded resource and passes it explicitly
-on every container create. Three things about that are worth having written down, because each answers an obvious
-"why not do it the simpler way".
-
-**Provenance, in full.** The bytes in `seccomp-default.json` are copied verbatim from
-`https://github.com/moby/profiles/blob/seccomp/v0.2.3/seccomp/default.json` — tag `seccomp/v0.2.3`, commit
-`836ae4d37ef2ec995c77c99fc55f5b5f3af3a897`, SHA-256
-`536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74`, fetched 2026-08-25. That module is what the
-daemon itself vendors: `moby/moby`'s `vendor/modules.txt` pins `github.com/moby/profiles/seccomp v0.2.3`. So the
-profile shipped here is the daemon's builtin, not a hand-written approximation.
-
-**Why this cites `moby/profiles` and not `moby/moby`.** The profile moved out of `moby/moby`'s
-`profiles/seccomp/default.json` after v28.0.x, and that path 404s on current tags. The split-out repository is the
-live source; citing the daemon repository would give a reader a dead link and no way to re-verify the SHA-256.
-
-**Why ship a copy at all, when the daemon applies this by default.** Because "by default" is not verifiable. A
-container created with no `seccomp=` option reads back with `SecurityOpt: null` (measured against a current Docker
-Engine), which is the *same* read-back as a daemon started with seccomp disabled entirely. Asking for the profile
-explicitly is the only way the fail-closed read-back in `DockerSandboxHardening.VerifySecurityOptions` can tell a
-confined container from an unconfined one.
-
-**Why it is an embedded resource and not a file on disk.** The Engine API takes profile **content**, not a path.
-The `docker` CLI reads the file named by `--security-opt seccomp=<path>` and sends its JSON; the daemon never opens
-a host path on the client's behalf. Measured against a current Docker Engine, a container created with
-`--security-opt seccomp=/tmp/default.json` inspects back as `seccomp={"defaultAction":…}` — the compacted JSON —
-and never as the path. There is therefore nothing to materialize in the node data directory for the daemon to read.
+`DockerSeccompProfile` passes Docker's own default profile explicitly on every container create, because a container created without one reads back exactly like one with seccomp disabled, so only an explicit profile lets the fail-closed read-back tell them apart. See [the reference page](reference/12-sandbox-modes-and-options.md#74-the-seccomp-profile-every-sandbox-container-carries) for its provenance and why it is embedded.
 
 ### Development Mode source and execution boundary
 
@@ -957,70 +599,7 @@ guarantee it advertises.
 
 #### Development Mode egress: two sandboxes, one of them denied
 
-Before network denial was implemented, `DevelopmentWorkspaceProvider` created one sandbox with
-`NetworkPolicy = Unrestricted`. That was the one live High-risk gap in this feature: a malicious package's
-restore hook, an MSBuild target, or a test could read the whole clone and POST it out. It is now closed on the
-axis the engine controls, in three parts, and the honest statement of what remains open matters as much as what
-does not.
-
-**One sandbox cannot have network for one command and not the next.** `SandboxNetworkPolicy` lives on
-`SandboxCreateRequest` and is fixed at create; `SandboxCommandRequest` has no network field. So the design is
-two sandboxes, not one sandbox with two postures.
-
-1. **A warm restore, from the base commit, with egress.** Before the agent-facing sandbox exists, `PrepareAsync`
-   creates a second short-lived sandbox (`RuntimeProfile = "development-warm"`, its own `SandboxAttachKey`, the
-   same mount set) and runs exactly one command: the frozen profile's `dotnet_restore`. Then it kills it. The
-   per-task `NUGET_PACKAGES` / `DOTNET_CLI_HOME` roots and the generated `obj/` trees outlive it, which is what
-   lets the later `--no-restore` build and `--no-build` test work with no network at all. Running
-   repository-authored MSBuild with egress is sound **here and only here**: at warm time the tree *is* the base
-   commit — the operator's own repository, already trusted to the degree the whole feature trusts it — and the
-   agent has written nothing. The gate is therefore not "is this code safe" but "is this tree provably still the
-   base commit": a warm runs only from a worktree whose **tracked** files are clean
-   (`git status --porcelain --untracked-files=no`), once per `BaseCommit`, with the result recorded in
-   `workspace.json` — which lives in `RuntimePath` and is **never mounted**, so it cannot be read or forged from
-   inside any sandbox. A profile with no restore command (`generic-git`) skips warming entirely.
-
-2. **A dependency-manifest change fails validation.** `DevelopmentDependencyManifestPolicy` runs *before* the
-   command loop and fails the gate with `dependency_manifest_changed` for any change to `**/*.csproj`,
-   `**/Directory.Packages.props`, `**/Directory.Build.props`, `**/Directory.Build.targets`,
-   `**/packages.lock.json`, `**/NuGet.config`, the npm/yarn/pnpm lockfiles, `**/Cargo.toml`, `**/Cargo.lock`,
-   `**/requirements*.txt`, `**/pyproject.toml`, `**/uv.lock` or `**/poetry.lock`. Added counts as much as
-   modified — a new `Directory.Packages.props` changes resolution for the whole tree. This is a **verdict, not a
-   `DevelopmentWorkspaceSecurityException`**: the task moves to `ChangesRequested` carrying the reason, because
-   "delete the failing test" is an attack and "add a package" is a legitimate task this version cannot serve.
-   The set is code-owned and versioned with `DevelopmentCommandProfileCatalog.CurrentVersion`; a packaging system
-   missing from it is a hole, not a gap in coverage. `Directory.Build.props` and `Directory.Build.targets` are build
-   configuration rather than dependency manifests, but either can carry a `PackageReference`, so both are in the set
-   — a different control from `EnsureBuildConfigurationBarrier`, which bounds MSBuild's upward search to
-   configuration from *above* the workspace.
-
-   That `ChangesRequested` hop is written by `DevelopmentStore.FinalizeValidationAsync` as a
-   **`ValidationFinalized`** event, not a `TaskTransitioned` one — it is a status-changing event all the same, and
-   an audit built from `TaskTransitioned` rows alone will not show it (wiki [08](08-data-and-persistence.md)).
-   The hop also **spends a round**: `MaxReviewRounds` is the budget of attempts to get *through* the gates, so a
-   failed deterministic gate costs one exactly as a reviewer rejection does, and a task that exhausts it is stood
-   down at `Blocked` rather than reworked again.
-
-   **A task's round budget is immutable except that an operator's Retry widens it by one.** That is the single
-   edge out of `Blocked`, and `DevelopmentStore.TransitionTaskAsync` refuses it to any command that does not also
-   widen the cap, so a task cannot be let out of `Blocked` into a round it has no budget to finish. Only
-   `DevWorkflowDevTaskExecutor.CarryOperatorRetryAsync` sets it, once per node-run attempt under the retry's own
-   operation id, and only for a task whose block IS the round cap — a task blocked on anything a round cannot fix
-   is left where it is. Before this, a Retry on a workflow node blocked at the cap re-dispatched the node, which
-   re-read a task still at its cap and stood itself down about two seconds later, spending one of the node's own
-   attempts each time and never starting a coder round, so the reason typed into the retry box could not reach a
-   model.
-
-   **Known ceilings of the rework surface**, recorded so they are not re-discovered as bugs:
-   an operator instruction on a task **no workflow ever drove** has no `WorkflowPolicyApplied` row to bound it and
-   therefore governs every later round of that task; a **reviewer's** request for changes never reaches the task's
-   `blocked_reason` column (only a gate failure or a workflow/operator transition writes it), so the overview card
-   can be empty on a reviewer-driven rework; and `blocked_reason` is one last-write-wins column, so it shows the
-   most recent request only — the durable event timeline is the full history, by design.
-
-3. **The agent-facing sandbox asks for `SandboxNetworkPolicy.None`.** Capability-gated exactly as AgentHome's
-   request is (`DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy`): `None` where the backend
-   advertises `SupportsNetworkPolicy`, `Unrestricted` where it does not.
+Development Mode prepares two sandboxes: a warm restore with egress that runs once, from a clean base commit, and an agent-facing sandbox that requests `SandboxNetworkPolicy.None` wherever the backend advertises it. A dependency-manifest change fails validation. See [the reference page](reference/12-sandbox-modes-and-options.md#development-mode-egress-two-sandboxes-one-of-them-denied) for the warm-restore gate, the manifest set and the round budget.
 
 > **The Option-B caveat, stated plainly.** A backend fails a confinement request it cannot honour *closed*. An
 > unconditional `None` would therefore not harden Development Mode on Windows — or on any Linux host whose
@@ -1030,231 +609,53 @@ two sandboxes, not one sandbox with two postures.
 > Development status surface reports the posture the provider actually **served**, not the one that was
 > requested. Mandatory denial on every node is not part of the current cross-platform contract.
 
-Two things this does *not* close, on any backend. A private feed named by the repository's own `NuGet.config` is
-reached by the **warm** restore, which is correct behaviour and will read as "restore worked, build failed" if
-that feed is unreachable later. And a repository whose restore is not idempotent — a hook that writes into
-`obj/` differently under `--no-restore` — can warm green and build red; the synthetic fixture cannot show this.
-
 #### Committed credentials in the clone
 
-`CreateStandaloneWorkspaceAsync` runs `git clone`, so only **tracked** content reaches the workspace: an
-untracked `.env` in the operator's repository does not ride along. The real exposure is a **committed**
-credential, which is common enough to matter, and every prepare now answers for it in two parts.
-
-Detection is unconditional. The engine asks `git ls-files` and tests every path segment against
-`ISensitiveFileExclusionService.IsSecret` — the same predicate the workspace read tools and AgentHome's copy
-filter use. The set is recorded in `workspace.json` and emitted as an operator-visible `DevelopmentEvent`
-(`WorkspaceSecretsDetected`, idempotent per attempt). It never blocks the attempt.
-
-Neutralization is capability-gated. Where the backend advertises `SupportsReadOnlyMounts`, each detected path is
-shadowed by an **engine-generated empty read-only file mount** at that path — the mechanism `.git/config`
-already uses, with `SandboxMount.TargetIsWorkspaceRelative` set because the mount *source* has to live outside
-the workspace. The file on disk is never touched: deleting or emptying it would make the tree dirty against its
-base commit, so `ValidatePreservedWorktreeAsync` and the `SubjectHash` would see a deletion and an apply would
-delete the operator's real file. The set is capped at 32, above which the prepare fails closed rather than
-shadowing some — a partial shadow reads as a control and is not one.
+Every prepare detects committed credentials with `ISensitiveFileExclusionService.IsSecret` and records them; only a backend with read-only mounts also shadows them. See [the reference page](reference/12-sandbox-modes-and-options.md#committed-credentials-in-the-clone) for detection, shadowing and the container-backed decision record.
 
 > **On the process backend — today's default — only detection applies.** It has no mount layer, so nothing is
 > shadowed and the recorded event is the whole control: the engine can see the committed credential but cannot
 > stop the repository's own build or tests from reading it. Do not read this section as parity between the two
 > backends.
 
-Accepted trade: `SecretEntryNames` includes `.env.*`, which matches `.env.example`. Shadowing it is harmless in
-most repositories and confusing in a few; it is the same trade AgentHome's copy filter already makes. And a
-committed test certificate a build legitimately needs will turn a green repository red — the recorded event is
-what makes that diagnosable in one look.
+For the opt-in container-backed provider ([ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)):
 
-**Container-backed Development Mode execution has shipped, opt-in and off by default.**
-[ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted 2026-07-29) approves a
-Docker-backed provider behind the same `ISandboxRuntimeProvider` seam for Development Mode build/test/lint
-execution — as a **stopgap ahead of MXC**, which stays the long-term hard-isolation seam. That provider now
-exists and is selectable, but nothing selects it for you: the paragraphs above describe what executes on a
-**default-configured** node, and remain accurate there. Set `Development:Sandbox:Provider=docker` and Development
-Mode moves to the container boundary instead. **[Development Mode container implementation status](../roadmaps/development-mode-container-status.md)
-is the canonical, maintained record of what is implemented** — read it rather than inferring shipping state from
-this page. What the decision fixes, and what a reviewer should hold it to:
-
-- **A running daemon is a hard requirement for the feature, with no unisolated fallback.** No daemon means no
-  Development Mode — it must fail with an actionable message rather than silently degrading to the process
-  provider, so an operator can tell from the outside which posture ran.
-- **Repository-supplied container configuration is rejected wholesale.** Engine-generated canonical mounts only;
-  no socket or named-pipe mounts, no devices, no `--privileged`, no added capabilities, no host PID/network/IPC
-  namespaces; operator-approved digest-pinned images only; no repository Dockerfile builds; no `${localEnv:*}`.
-  A `devcontainer.json` in a repository the agent can write is untrusted input, and a Docker-socket mount is full
-  host compromise.
 - **On Linux, Docker-socket access is root-equivalent.** The ADR documents this rather than mitigating it. Rootless
   Docker is the operator's option; the product neither depends on it nor claims it. Do not describe the container
   provider as removing host-user risk.
 - **A pinned image digest pins bytes, not hermeticity.** Mounts, runtime state, host kernel, platform, dependency
   resolution and network inputs all stay variable. Do not describe digest pinning as reproducibility.
-- **The scope is narrow by construction, and widening it is a new operator decision**, not an implementation
-  detail.
 
 #### The managed workspace's Git configuration is engine-owned
 
-The engine runs `git reset` and `git add -A` **on the host** against the managed worktree, so anything a repository's
-own `.git/config` can make Git execute runs on the machine running the engine — `core.fsmonitor` on any index
-refresh, and a `filter.<driver>.clean` selected by an in-tree `.gitattributes` on `git add`. The standalone clone
-made `<workspace>/.git/config` a real, agent-writable file inside the jail, on the process provider Development runs
-on by default.
-
-`-c` pins are not enough. They close `core.fsmonitor` and outrank every include chain, but they cannot close
-`filter.*.clean`: driver names are arbitrary, so there is no finite set of keys to pin, and Git has no flag that
-disables attribute processing. `DevelopmentWorkspaceGitConfig.RestoreMinimalAsync` therefore **rewrites** the file to
-a minimal one immediately before the first host-side Git command. A filter driver has to be *defined in config* to
-run, and an in-tree `.gitattributes` naming an undefined driver is a no-op, so removing every definition closes
-`filter.*.clean`, `core.fsmonitor` and any future exec-bearing key at once without enumerating key names. That is the
-same property the read-only `.git/config` bind mount gets on the container side, and it is provider-independent.
-
-Minimal is not empty. A clone of a repository using a newer format carries `extensions.*` keys Git *refuses to
-operate without*, selected by `core.repositoryformatversion`, and `core.filemode` and `core.bare` describe the
-repository, where a wrong value changes what a diff says. Everything else in `core` is dropped, which makes
-`PreservedCoreKeys` an allow-list: a key nobody has thought of yet is dropped by default rather than surviving until
-someone remembers to name it. Two things are deliberately **not** preserved — `origin`, because the clone drops it on
-purpose and restoring it would undo the standalone clone's isolation, and `extensions.worktreeConfig`, because it
-makes Git read a second config file (`.git/config.worktree`) the rewrite does not cover; that file is removed
-alongside rather than sanitised, a standalone clone having no linked worktrees to need it.
-
-There is no meaningful TOCTOU window: evidence export runs after the attempt has finished with no agent command in
-flight, and workspace preparation runs before any command has started. Both files are deleted rather than overwritten
-in place, because a command can replace one with a symbolic link and an ordinary write would then follow it out of
-the workspace.
+The engine rewrites the managed workspace's `.git/config` to a minimal allow-listed one immediately before its first host-side Git command, because a repository-defined filter driver or `core.fsmonitor` would otherwise run on the host. See [the reference page](reference/12-sandbox-modes-and-options.md#the-managed-workspaces-git-configuration-is-engine-owned).
 
 ##### The whitespace policy is derived from the index
 
-Every .NET validation profile begins with `git diff --check HEAD -- .`. Git's default rules count the CR of a CRLF
-pair as trailing whitespace, so a repository that legitimately stores CRLF blobs — the norm for a Windows-native
-project — reports `trailing whitespace` on every changed line and exits 2, failing the gate at command one on a
-perfectly correct change. Reproduced on a current Git release: a three-line CRLF file plus one added line exits 2
-under the default rules and 0 under `cr-at-eol`.
-
-Setting `core.whitespace=cr-at-eol` is not the answer, because it is repository-wide and the answer is not. On an LF
-repository where a change introduces one CRLF line — the genuine defect the check exists to catch — `cr-at-eol`
-silences it too; deleting the whitespace command and setting the option globally are the same mistake in two
-spellings. Whole-repository classification is not enough either, because mixed repositories are the common case
-rather than the exotic one: this engine's own repository stores 4243 files as LF and exactly one as CRLF.
-
-`DevelopmentWorkspaceWhitespacePolicy` therefore grants Git's per-path `whitespace` attribute to the paths whose
-**index** content is CRLF and to nothing else; every other path keeps the full default rule set, CR included. The
-index is the right signal because `core.autocrlf=true`, which Git for Windows' system config commonly sets, leaves
-the worktree CRLF while the blob is LF, and `diff --check` compares against the blob — sampling the worktree would
-hand `cr-at-eol` to an ordinary LF repository on every Windows box.
-
-It is written to `.git/info/attributes` rather than into the profile's argument vector, because the profile is
-snapshotted and re-derived from the code-owned catalog, so a per-repository argument would need a catalog version
-bump that invalidates every stored profile. `$GIT_DIR/info/attributes` outranks an in-tree `.gitattributes`, so a
-hostile repository can neither revoke the policy nor grant itself one: the file is engine-written and rewritten from
-the index on every preparation. Above `MaxExplicitPaths` (2048) CRLF paths it names `*` instead of every path,
-because Git walks the pattern list for every lookup, so an exhaustive list on a large all-CRLF repository is
-quadratic work on every diff — and a repository with that many CRLF blobs is a CRLF repository.
-
-**The repository's own config is not the source, and could not be.** The managed workspace is a standalone clone, and
-`git clone` copies no `core.*` from the source repository — verified: a source carrying `core.whitespace=cr-at-eol`
-and `core.autocrlf=input` produces a clone whose config carries neither. The minimal-config allow-list is not what
-removes them; they were never there. The workspace is also deliberately more deterministic than the operator's
-checkout, because commands run with `HOME` pointed at a per-task runtime directory and see no user `~/.gitconfig`.
-Do not "fix" the difference by adding `whitespace` or `autocrlf` to `PreservedCoreKeys`: there is nothing to
-preserve, and a key an agent-writable file supplies is exactly what that allow-list exists to refuse.
+The whitespace exemption is granted per path, only to paths whose index content is CRLF, through an engine-written `.git/info/attributes` a repository cannot override. See [the reference page](reference/12-sandbox-modes-and-options.md#the-whitespace-policy-is-derived-from-the-index).
 
 #### The per-task CLI environment, and the PATH it must not leak into
 
-Every sandboxed Development command runs with `HOME`, `TMPDIR`, `NUGET_PACKAGES` and `DOTNET_CLI_HOME` pointed at
-per-task runtime directories, expressed in the sandbox's own path namespace. Two of the variables beside them are
-there to stop that per-task state escaping the task, and both were paid for.
-
-**`MSBUILDDISABLENODEREUSE=1`.** MSBuild's reusable worker nodes (`MSBuild.dll /nodemode:1`) survive the `dotnet`
-process that started them and keep the per-task `NUGET_PACKAGES` path in their environment. On the process provider
-they are ordinary host processes, so a *later* restore anywhere on the same host can attach to one and write the
-by-then-deleted packages path into `obj/*.dgspec.json`. Measured twice, as `NU5037` and then as `CS0006`, both
-naming a temporary directory no command had asked for. One task per node, no reuse.
-
-**`DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=0`.** Without it, the .NET CLI's first-run experience appends
-`$DOTNET_CLI_HOME/.dotnet/tools` to the **persisted** per-user PATH — on Windows, the `HKCU\Environment` registry
-value. `DOTNET_CLI_HOME` is a fresh per-task directory, so every task leaks one more entry that outlives the
-directory it names. Measured on Windows 11: **153 dead entries, 28,387 characters**, and the count still climbing
-within a single session. The damage is not untidiness — `cmd.exe` silently receives an **empty** `%PATH%` once the
-variable grows past its limit, so every bare-name command run through it fails. That broke three sandbox tests
-whose fixture is `cmd /c ping -n 31`: `ping` could not resolve, the command exited instantly, and
-cancel/timeout/tree-kill had nothing left to kill. Stripping the dead entries took PATH to 847 characters and the
-same tests went green with no code change.
+Every sandboxed Development command runs with per-task `HOME`, `TMPDIR`, `NUGET_PACKAGES` and `DOTNET_CLI_HOME`, plus `MSBUILDDISABLENODEREUSE=1` and `DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=0` so per-task state cannot escape the task. See [the reference page](reference/12-sandbox-modes-and-options.md#the-per-task-cli-environment-and-the-path-it-must-not-leak-into) for the measured failures behind each.
 
 > **`DOTNET_SKIP_FIRST_TIME_EXPERIENCE` is not an alternative** — it is a no-op in .NET 10. This is the obvious fix
 > a reader will reach for; it does nothing.
 
 #### The test-write policy's protected-path set
 
-`DevelopmentCommandProfileCatalog.DefaultProtectedPaths` names the paths an agent may create but may not modify,
-delete or rename once they existed at the attempt's base commit. The set is grounded in the measured layout of this
-repository, `XE-Framework` and the synthetic fixture rather than assumed, and each part of it answers for itself.
-
-- **The filename rules carry most of the weight.** `*Tests.cs` matches 543 files across both real repositories with
-  zero false positives.
-- **The directory rules exist only to close the shared-helper hole.** Without them an agent can gut `AssertEx.cs` so
-  that every assertion silently passes — a shorter path to green than deleting a test, and exactly the move the
-  policy exists to stop.
-- **The directory rules are scoped to `*.cs` on purpose.** Freezing whole test directories would freeze the test
-  `.csproj` files too, so an agent could never add a package reference to an existing test project, which blocks the
-  "implement a feature and its tests" case the policy explicitly permits.
-- **`**/*.Tests/**` is never used alone**, because alone it is a trap: no directory in `XE-Framework` ends in
-  `.Tests` (its projects are `XeFramework.Tests.UnitTests` and siblings), and it misses this repository's own
-  `XE-Local-AI-Engine.Tests.E2ETests`. On its own it protects zero tests here.
-- **Two patterns are deliberately left out, each for a measured reason.** `*Spec.cs` has three false positives
-  across the two repositories (`OrchestrationSpec.cs`, `LlamaServerLaunchSpec.cs`, `ImageServerLaunchSpec.cs`) and
-  zero true positives; `*Test.cs` singular matches nothing in either repository.
-
-The set is code-owned and versioned with `DevelopmentCommandProfileCatalog.CurrentVersion`, so widening or narrowing
-it is a source change plus a version bump, never configuration.
+`DevelopmentCommandProfileCatalog.DefaultProtectedPaths` names the paths an agent may create but not modify, delete or rename; the set is code-owned and versioned, never configuration. See [the reference page](reference/12-sandbox-modes-and-options.md#the-test-write-policys-protected-path-set) for each pattern and why two were left out.
 
 #### The workspace surveys are managed code
 
-`WorkspaceFileScanner` implements `list_files` and `search_text` in managed code rather than shelling out to `find` and
-`grep`, and that decision preserves every security property the shell-out had — strengthening one.
+`WorkspaceFileScanner` implements `list_files` and `search_text` in managed code, never follows or emits a symbolic link, and applies one suppression predicate at both the prune and the emit step. See [the reference page](reference/12-sandbox-modes-and-options.md#the-workspace-surveys-are-managed-code).
 
-- **Path confinement is unchanged.** It still happens in the caller's own path guard, before anything reaches the
-  scanner.
-- **Symbolic links are never followed and never emitted**, exactly as `find -P … -type f` and `grep -r` behaved, and
-  the scanner additionally refuses a scan root that is itself reached through a link. That refusal is the strengthening.
-- **One suppression predicate, applied twice.** The caller supplies a single `isSuppressed` delegate
-  (`DevelopmentWorkspaceTools.IsSuppressedFromOutput` in production) and the scanner applies it at *both* the prune step
-  and the emit step, so the generator and the filter cannot drift apart.
 - **That predicate must gate reads on `ISensitiveFileExclusionService.IsSecret`**, never on the broader `IsExcluded`
   copy filter. Conflating them refuses `obj/`, which an agent legitimately reads after a failed build, while protecting
   nothing — build output is not a credential.
 
 ### Backend selection: a feature declares what it needs, and never names a backend
 
-[ADR 0007](../adr/0007-sandbox-execution-substrate-and-backend-selection.md) (Accepted 2026-08-25) changes **who
-decides which of the boundaries above runs**, and changes none of them. Each workload states its requirements as an
-engine-owned constant in `SandboxWorkloads` — a **toolchain source** (the host's, or a named engine-approved image),
-an **isolation floor**, a **network floor**, a **persistence** need and a disk ceiling — and `SandboxProviderSelector`
-resolves the **minimal-satisfying** registered backend: among those that honour every declared axis, the one with the
-smallest additional privilege footprint wins (`fake` < `process` < `docker`, the last because a live daemon whose
-socket is root-equivalent on Linux is additional privilege even where the container is the stronger boundary). When
-none can honour the declaration the call throws `SandboxCapabilityNotSupportedException` naming the unmet axis. There
-is no fallback and no downgrade.
-
-The **isolation floor is a property, not a mechanism**: at its `Filesystem` value it asks that the host filesystem be
-absent from the sandbox's view, and it is satisfied by any backend advertising `SupportsHostFilesystemBoundary` — the
-bubblewrap chain (probe-exercised) and a hardened container (read-only rootfs, engine-generated mounts, no host
-namespaces, all read back and fail-closed on mismatch) both qualify. That is deliberately **not** the same flag as
-`SupportsFilesystemIsolation`, which means the narrower "serves `SandboxIsolationMode.Filesystem`" — a specific
-create-request contract of named read-only host trees, a synthetic `/etc` and a jail-backed `/tmp`. The container
-provider has the property and implements none of that contract, and still refuses the mode on a create request; a
-single flag asked to mean both would either lie to `run_python` or deny a container an isolation level it genuinely
-has. The isolation panel on the Development page reports the **property**, and reports it as SERVED — the role's declared
-floor intersected with what the backend advertises. So a container-served role reads as having the boundary only when
-its declaration asks for one, and Development Mode's does not: on this repository's shipped declarations `run_python`
-is the single role whose Filesystem column can read Yes. A panel that read the capability alone claimed a boundary for
-Development Mode on any Linux host with a working bubblewrap chain, which was false in the unsafe direction;
-`DevelopmentContractMapper.ToIsolationSummary` owns the intersection rule and the two different "no boundary" reasons
-(not requested by the role, versus requested and unavailable with the measured probe reason). The Resource-limits
-column follows the same rule for the same reason: `SandboxCreateRequest.ResourceLimits` is a preference a backend may
-drop, `SandboxLifecycleRegistry.BuildLaunchPolicy` applies a scope ceiling only when the request carries one, and
-`SandboxRequirements.Ceilings` is where each workload states WHICH profile it asks for —
-`SandboxCeilingProfile.ComputeTool` for `run_python`'s tight script-sized numbers, `HostToolchain` for every role that
-runs a real compiler. `SandboxSubstrateSelectionArchitectureTests` asserts every declaration names a profile, that
-exactly one is on the compute profile, and that `SandboxResourceCeilings.Resolve` hands each declaration exactly that
-profile's numbers; each create site's own test asserts its request agrees with its constant.
+Each workload declares its requirements in `SandboxWorkloads` and `SandboxProviderSelector` resolves the minimal-satisfying backend, or throws `SandboxCapabilityNotSupportedException` naming the unmet axis, with no fallback and no downgrade ([ADR 0007](../adr/0007-sandbox-execution-substrate-and-backend-selection.md)). See [the reference page](reference/12-sandbox-modes-and-options.md#backend-selection-a-feature-declares-what-it-needs-and-never-names-a-backend) for the isolation floor, the isolation panel's served-posture rule, the ceiling profiles and the operator keys.
 
 Two consequences a security reader should hold on to.
 
@@ -1271,41 +672,14 @@ Two consequences a security reader should hold on to.
   resolution at **Information** — declaration, candidates considered, winner, and rejected candidates with reasons —
   and that log line is now the answer to "which boundary is this node actually running".
 
-> **Operator keys changed meaning.** `AgentHome:Sandbox:Provider` and `Development:Sandbox:Provider` used to *name*
-> the provider. They now **constrain the candidate set**, and the workload's declaration decides whether the named
-> backend may serve it at all. On every node that ships today the outcome is identical. Where it differs it is loud,
-> never quiet: a key naming a backend that cannot honour the declaration **fails closed at startup with the unmet axis
-> named**, because silently reinterpreting a set key is how a hardened node becomes an unhardened one. One extra rule
-> applies to Development Mode only — naming `docker` is *also* read as declaring an image-backed toolchain need (which
-> is what that key always meant), and setting `Development:ContainerSandbox:Image` declares the same need without the
-> key. The unset-Development-key fallback to the AgentHome key still applies, but only while no image toolchain is
-> declared.
-
 ### Chat attachments are staged *into* the jail, not read from the host
 
 When a chat agent-mode turn needs to read a conversation's uploaded files, `IConversationSandboxStager` (`Services/AgentHome/IConversationSandboxStager.cs`) re-stages the **existing** node sandbox so it holds **only** that conversation's extracted attachments under the workspace `attachments/` alias (the sandbox is recreated first, so it never carries another conversation's residue). The agent then reaches them with the same jailed `list_files`/`read_file`/`search_text` tools — meaning every read still passes through the §7 path-confinement, symlink-escape, and `O_NOFOLLOW`/byte-cap guards above; staging adds no host-filesystem read path that bypasses the jail. Attachments may contain secrets or confidential content: their stored bytes are encrypted at rest by `UploadedFileBlobProtector` (§5), but extracted content exists as plaintext while decrypted and staged for use, and no secret scan occurs before staging. `MemoryProposalSecretScanner` applies only to a later memory proposal before that proposal is persisted. Don't add a staging path that writes outside the workspace root or skips the recreate-before-stage step.
 
 ### Landing a patch on the host is the operator's act, never the model's
 
-The one AgentHome path that writes **outside** the jail is `INodePatchApplyService`, which applies a run's exported
-`changes.patch` onto the real selected folders. Its guards, and where each is proved:
+The one AgentHome path that writes **outside** the jail is `INodePatchApplyService`, which applies a run's exported `changes.patch` onto the real selected folders. It is reachable only from `NodeOperator`-gated endpoints, binds the apply to the previewed patch hash, and refuses traversal, `.git` writes, gitlinks and symlinks by name. See [the reference page](reference/12-sandbox-modes-and-options.md#landing-a-patch-on-the-host-is-the-operators-act-never-the-models) for every guard and where it is proved.
 
-| Guard | What it stops | Where |
-|---|---|---|
-| Operator-only reach | A model asking for host mutation. The endpoint pair is `NodeOperator`-gated on a loopback-bound process, and no `[McpServerTool]` or `IClientLocalToolHandler` names the service | `Endpoints/AgentHome/V1/*`; pinned by `HostPatchApplyReachArchitectureTests` |
-| Preview→apply hash binding | A `changes.patch` replaced between the review and the approval. The apply must echo the preview's SHA-256, and the bytes are read ONCE — the bytes hashed are the bytes validated and handed to git | `NodePatchApplyService.BuildPlanAsync` |
-| Body-path within-root + symlink/reparse walk | A target that escapes the selected folder, with or without git's help. Authoritative and independent of git, derived from the patch BODY lines rather than the `diff --git` header | `NodePatchApplyService.BuildAliasPlanAsync` |
-| `..` segment refusal | Traversal in any path position, including a mode-only block's header path | `NodePatchApplyService.ContainsTraversal` |
-| `.git` segment refusal | A write into the target checkout's own repository — hooks, and the config that DEFINES the `filter`/`textconv` programs git runs. Segment equality and case-insensitive, so `.gitattributes` and `.gitignore` stay ordinary files | `NodePatchApplyService.ContainsGitDirectory` |
-| Hardened git environment | A `filter.<driver>.clean` or `diff.<name>.textconv` defined in the host's global or system configuration and selected by the target's in-tree `.gitattributes`. The `-c` pins cannot close that class (driver names are arbitrary); removing the files from git's search does | `HostGitRunner` carrying `AgentHomeGitHardening.Environment` |
-| Binary reject-by-default, size bound, command timeout | An unreviewable or unbounded apply | `AgentHomeOptions.AllowBinaryPatchApply`, `GetAgentHomeMaxPatchBytesAsync`, `GetAgentHomePatchApplyTimeoutSecondsAsync` |
-| Quoted-path decode, gitlink and symlink refusal | A block this parser does not understand being guessed at. A C-quoted path is decoded by `GitQuotedPath` — no more permissively than git's own `unquote_c_style`, because git answers a literal it cannot read by taking the raw text as the name — BEFORE the traversal, git-directory, alias and containment guards run, so a `..` or `.git` behind an octal escape faces exactly the checks its plain spelling would; a name holding a control, format or other text-reordering character (quoted or raw, since `core.quotePath=false` leaves a bidi or zero-width character unquoted), a character this host cannot put in a file name, or on Windows a reserved device name or a trailing dot or space, is refused by name. An unquoted `---`/`+++` name ends at its first TAB, as it does for git. A `160000` block is a submodule pointer `git apply` answers with an empty directory; a `120000` block carries a link TARGET as its content, so applying it would create a real link on the operator's folder pointing at an absolute system path or out through `../` — the within-root guard validates the link's own path, never where it points. All three are refused by name instead of failing closed under some other rule's message. Every mode arm is matched as a whole LINE (creation, deletion, either direction of a mode pair, and the same-mode `index … <mode>` header), so a file whose CONTENT is the text of a mode line still applies | `NodePatchApplyService.ParseBlock`, `DeclaresMode` |
-| The child dies with the request | A cancelled apply's `git` outliving the gate its caller released on the way out. Any cancellation kills the process tree, and the call does not return until the child is confirmed gone | `HostGitRunner.RunAsync` |
-| Sub-patch written user-only, deleted on every path | A copy of the operator's source sitting world-readable in the system temp directory. The mode rides on the create, so there is no window at the process umask | `NodePatchApplyService.WriteSubPatchAsync` |
-| Node-wide apply serialization | Two applies interleaving writes into a tree the other's `--check` already cleared. `git apply` is not transactional across files | the static gate in `NodePatchApplyService.ApplyApprovedAsync` |
-| Host-path redaction | A rejection string or log line naming a host directory. Every path that crosses the wire is `<alias>/<relative>` | `NodePatchApplyService.Redact` (§2.2), the run log, and the endpoint DTOs |
-| Named refusals stay folder-relative | A refusal echoing a model-authored path back verbatim. A refused entry is named only through the split the `Files` list already passes (alias + relative, `<alias>/<relative>`); a C-quoted path is named through the same decoder the guards use and stays unnamed only when that decoder refuses it, and a control character in a name is refused and shown as a `\u{XXXX}` escape rather than carried raw into the dialog, the 409's error name or `patch_apply_rejected` | `NodePatchApplyService.TryDescribeTarget`, `Describe`, `SafeDisplayPath` |
-| Dirty-target read cannot write, cannot refuse | A preview mutating the operator's repository, or a local edit silently blocking an apply. `status` refreshes and rewrites the index unless told otherwise, so it runs under `--no-optional-locks`, pathspec-scoped to the patch's own targets, and its result is advisory: outside `CanApply`, outside the hash binding, and never run at apply time. A failure reports "unknown" rather than "clean" | `NodePatchApplyService.ReadDirtyTargetsAsync` (`NodePatchApplyService.DirtyTargets.cs`) |
 
 ---
 
@@ -1356,3 +730,8 @@ The file documents its own scope: it is the "safe set" — APIs with zero curren
 - [External Apps](23-external-apps.md) — §7.3 in full: the container policy, the storage helper, and what V1 does not enforce
 - [Testing & Validation](13-testing-and-validation.md) — persistence-encryption & loopback tests
 - [Technical/Security Architecture Dossier](../audits/technical-security-architecture/README.md) — baseline auditor narrative, evidence states, and residual-risk limitations
+
+### Reference pages
+
+- [Admin API surface](reference/12-admin-api-surface.md) — §3 mechanisms: Host/Origin gate, sessions and authorization, MCP and model-proxy keys, container bridge, Codex OAuth
+- [Sandbox modes and options](reference/12-sandbox-modes-and-options.md) — §7 detail: isolated launch mode, MCP trust tiers, External Apps container policy, seccomp profile, Development Mode controls, backend selection, patch-apply guards

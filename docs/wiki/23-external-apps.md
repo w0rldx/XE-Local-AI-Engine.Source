@@ -2,6 +2,31 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** External Apps: the engine installs and runs curated containerised applications from
+digest-pinned images, with a private network per instance, loopback-only ports and engine-owned data directories, and
+reconciles what it stored against the Docker daemon. The shipped catalog is empty today. It is a separate consumer
+from Development Mode's container sandbox (ADR 0010); the code lives in `Client.Application/Services/Containers/` and
+`Services/ExternalApps/`, and the React `features/externalApps/` folder.
+
+**Read this if you are** changing the manifest, the container policy or the install and restore lifecycle, or
+authoring a catalog entry. **Skip to** [§5](#5-security-posture) for the security posture and
+[§6](#6-lifecycle-and-restore-semantics) for lifecycle; the **manifest** is in [§4](#4-the-manifest); **related
+pages:** [API & Hubs](09-api-and-hubs.md), [Security & Privacy](12-security-and-privacy.md).
+
+## Contents
+
+- [1. What it is, and what it is not](#1-what-it-is-and-what-it-is-not)
+- [2. The user model](#2-the-user-model)
+- [3. Architecture](#3-architecture)
+- [4. The manifest](#4-the-manifest)
+- [5. Security posture](#5-security-posture)
+- [6. Lifecycle and restore semantics](#6-lifecycle-and-restore-semantics)
+- [7. Runtime selection](#7-runtime-selection)
+- [8. Diagnostics](#8-diagnostics)
+- [9. Storage, and the helper container](#9-storage-and-the-helper-container)
+- [10. Catalog authoring](#10-catalog-authoring)
+- [Related pages](#related-pages)
+
 **External Apps** installs and runs a small set of curated, containerised applications on the node, so a user gets a
 working application on their own machine without assembling a Compose file, a registry login and a reverse proxy by
 hand. **The shipped catalog is empty**: it ships `{"applications": []}` until the XE-owned catalog repository exists,

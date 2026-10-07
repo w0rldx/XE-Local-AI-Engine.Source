@@ -12,6 +12,7 @@ no Linux ZIP, DEB, RPM, or system installer.
 | **Disk** | At least 5 GB; larger models need much more |
 | **GPU** | Optional; CPU works, but a supported GPU is faster |
 | **Internet** | Required for the initial runtime/model downloads and update checks |
+| **App window** | WebKitGTK 4.1 (`libwebkit2gtk-4.1`); without it, start the app with `--browser` |
 
 The application bundles .NET. You do not need to install a .NET runtime.
 
@@ -57,12 +58,10 @@ chmod +x ./XE-Local-AI-Engine*.AppImage
 
 The AppImage is the application. Do not unzip or extract it.
 
-Two things happen:
-
-1. The terminal shows application logs. Leave it open; closing it stops the application.
-2. Your browser opens on a loopback address such as `http://127.0.0.1:<port>/`.
-
-If the browser does not open, copy the exact `http://127.0.0.1:` address printed in the terminal.
+The app opens in its own window. If the window reports that WebKitGTK 4.1 is missing, install your
+distribution's WebKitGTK 4.1 package, or run the AppImage with `--browser` to use your web browser
+instead. Camera and screen capture, used by live transcription of a shared screen, also need `--browser`;
+the app window offers the microphone only.
 
 ## Unsigned-build warnings
 
@@ -91,7 +90,9 @@ See [Updating](updating.md) for release-track and rollback details.
 
 ## Stopping the app
 
-Close the terminal or press `Ctrl+C`. Closing only the browser tab does not stop the local server.
+Close the app window and confirm that you want to quit. Linux has no tray mode yet, so closing the window
+never leaves the app running hidden. If you started it with `--browser`, closing the browser tab does not
+stop it: press `Ctrl+C` in the terminal you started it from.
 
 Run one application instance at a time against a user-data directory.
 

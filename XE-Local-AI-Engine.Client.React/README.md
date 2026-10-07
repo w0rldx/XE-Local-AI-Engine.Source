@@ -37,7 +37,9 @@ Before committing, run:
 pnpm run acceptance
 ```
 
-It runs `validate`, the coverage gate, the tooling tests and `build:bundle` in order, with the static checks once.
+It first checks that Node runs the same major as CI (Node 22; `engines` in `package.json` is only the floor) and
+stops otherwise; `XE_ALLOW_NODE_DRIFT=1` continues with a warning that the run is not CI evidence. It then runs
+`validate`, the coverage gate, the tooling tests and `build:bundle` in order, with the static checks once.
 While iterating, run `pnpm run validate`, `pnpm test` and `pnpm run test:tooling` on their own.
 
 ## Dependency update validation
@@ -82,7 +84,8 @@ NODE_EXTRA_CA_CERTS="$HOME/.aspnet/https/xe-local-ai-engine-dev-cert.pem" \
 With no password option, `dotnet dev-certs` writes only the public PEM certificate at that path. Do not add
 `--no-password` or otherwise export an unencrypted private key. `NODE_EXTRA_CA_CERTS` is read only when Node starts;
 point it at the trusted public PEM and do not disable TLS verification. The repository's desktop live contract script
-uses an isolated random loopback HTTP endpoint and does not require this certificate setup.
+(`scripts/openapi-live-check.sh`) uses an isolated random loopback HTTP endpoint and does not require this certificate
+setup. It builds the host in Release first unless `OPENAPI_LIVE_SKIP_BUILD=1`.
 
 To regenerate from the committed snapshot only and check for drift:
 

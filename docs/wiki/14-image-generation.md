@@ -2,6 +2,47 @@
 
 > Reviewed: 2026-10-02 · Code-grounded.
 
+**What this page covers.** Local image generation with stable-diffusion.cpp: the app supervises one resident
+`sd-server` per model on a loopback port range, serializes generation to one job at a time through
+`ImageJobCoordinator`, and stores every image encrypted at rest before the job is marked succeeded. The same daemon
+also edits existing gallery images and uploaded photos, through img2img and the Qwen-Image reference-edit path. The
+code lives in `Providers.StableDiffusionCpp`, `Client.Application/Services/Images/` and the React `features/images/`
+folder.
+
+**Read this if you are** changing the image runtime, the job coordinator or the edit path, adding a model family, or
+debugging a failed or stuck image job. **Skip to** [Editing images](#editing-images-img2img-reference) for img2img,
+reference edits and uploads; **reference tables** are in [Where the code lives](#where-the-code-lives), [The pinned
+prebuilt release table](#the-pinned-prebuilt-release-table) and [Endpoints](#endpoints); **related pages:** [Local
+Runtime & Providers](03-local-runtime-and-providers.md), [Model Fit](07-model-fit.md).
+
+## Contents
+
+- [Where the code lives](#where-the-code-lives)
+- [Architecture at a glance](#architecture-at-a-glance)
+- [The job coordinator (serialized, singleton)](#the-job-coordinator-serialized-singleton)
+- [Editing images (img2img, reference)](#editing-images-img2img-reference)
+- [The runtime (stable-diffusion.cpp)](#the-runtime-stable-diffusioncpp)
+- [The process supervisor](#the-process-supervisor)
+- [sd-server flags never emitted](#sd-server-flags-never-emitted)
+- [The curated Qwen-Image 2.1 set](#the-curated-qwen-image-21-set)
+- [Diffusers-layout files are refused as the diffusion part](#diffusers-layout-files-are-refused-as-the-diffusion-part)
+- [The rate token is the anchor, not the fraction](#the-rate-token-is-the-anchor-not-the-fraction)
+- [Framing sd-server's progress bar](#framing-sd-servers-progress-bar)
+- [sd-server's stdout is the progress channel](#sd-servers-stdout-is-the-progress-channel)
+- [Attributing stdout progress to the right generation](#attributing-stdout-progress-to-the-right-generation)
+- [The pinned prebuilt release table](#the-pinned-prebuilt-release-table)
+- [The bring-your-own sd-server override](#the-bring-your-own-sd-server-override)
+- [The runtime HTTP client and its retry contract](#the-runtime-http-client-and-its-retry-contract)
+- [Daemon leases and the teardown races](#daemon-leases-and-the-teardown-races)
+- [Binary provisioning and managed source builds](#binary-provisioning-and-managed-source-builds)
+- [Endpoints](#endpoints)
+- [Restart and recovery](#restart-and-recovery)
+- [Model fit for a diffusion set](#model-fit-for-a-diffusion-set)
+- [Deleting a job](#deleting-a-job)
+- [React feature](#react-feature)
+- [Invariants a maintainer must respect](#invariants-a-maintainer-must-respect)
+- [Related pages](#related-pages)
+
 The node generates images **locally** with [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp). It mirrors the llama.cpp text runtime: the app resolves either a pinned prebuilt or a managed source-built `sd-server`, supervises **one resident daemon per model** on a private loopback port range, and drives generation through a coordinator that serializes work to one job at a time and persists every produced image **encrypted-at-rest**. Nothing about a prompt, an image, or the daemon's HTTP shape ever leaves the node. The feature **ships enabled by default** — there is no off switch in `StableDiffusionRuntimeOptions`; the runtime is always wired.
 
 ## Where the code lives

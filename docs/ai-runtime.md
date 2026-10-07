@@ -11,7 +11,7 @@ This page explains the local AI/ML integration seams that future maintainers sho
 
 ## Semantic documentation anchors
 
-For comment cleanup and AI-agent retrieval, use stable runtime terms instead of historical implementation labels. The backend-wide source map is in [Backend commentary map](backend-commentary-map.md). AI-runtime comments should prefer these anchors:
+For comment cleanup and AI-agent retrieval, use stable runtime terms instead of historical implementation labels. AI-runtime comments should prefer these anchors:
 
 - agent definition resolution;
 - orchestration topology, handoffs, checkpoints, and tool approval;

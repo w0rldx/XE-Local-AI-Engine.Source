@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///     and attaches to the live sandbox through <see cref="ISandboxRuntimeProvider.ConnectAsync" />, holding or ambiently borrowing the shared
 ///     owner-node execution lease; an unrelated read fails at once with a path-free busy response. Every model path is confined through
 ///     <see cref="WorkspacePathGuard" /> first, and all three reads are then PROVIDER operations, so the jail's own confinement applies to
-///     each; no write, copy-out, patch or caller-supplied-executable path exists. See <c>docs/wiki/04-agent-mode.md</c> ("2.5 The coder reader").
+///     each; no write, copy-out, patch or caller-supplied-executable path exists. See <c>docs/wiki/04-agent-mode.md</c> ("2.6 The coder reader").
 /// </remarks>
 internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 {
