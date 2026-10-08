@@ -2312,9 +2312,21 @@ public sealed class NodeChatStreamServiceTests
                      .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>(providerReportsWithheld
                          ?
                          [
-                             new CloudWithheldTool { Name = "spawn_subagent", Switch = CloudToolSwitch.SubAgents },
-                             new CloudWithheldTool { Name = "web_fetch", Switch = CloudToolSwitch.WebTools },
-                             new CloudWithheldTool { Name = "mcp__weather__get_forecast", Switch = CloudToolSwitch.McpTools }
+                             new CloudWithheldTool
+                             {
+                                 Name = "spawn_subagent",
+                                 Switch = CloudToolSwitch.SubAgents
+                             },
+                             new CloudWithheldTool
+                             {
+                                 Name = "web_fetch",
+                                 Switch = CloudToolSwitch.WebTools
+                             },
+                             new CloudWithheldTool
+                             {
+                                 Name = "mcp__weather__get_forecast",
+                                 Switch = CloudToolSwitch.McpTools
+                             }
                          ]
                          : []));
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
@@ -3067,9 +3079,23 @@ public sealed class NodeChatStreamServiceTests
                 AgentDefinitionVersion = 4,
                 AnyParticipantIsCloud = true,
                 FirstCloudParticipantModel = "azure-specialist-deploy",
-                CloudWithheldTools = [new CloudWithheldTool { Name = "mcp__weather__get_forecast", Switch = CloudToolSwitch.McpTools }]
+                CloudWithheldTools =
+                [
+                    new CloudWithheldTool
+                    {
+                        Name = "mcp__weather__get_forecast",
+                        Switch = CloudToolSwitch.McpTools
+                    }
+                ]
             }),
-            resolvedCloudWithheldTools: [new CloudWithheldTool { Name = "spawn_subagent", Switch = CloudToolSwitch.SubAgents }]);
+            resolvedCloudWithheldTools:
+            [
+                new CloudWithheldTool
+                {
+                    Name = "spawn_subagent",
+                    Switch = CloudToolSwitch.SubAgents
+                }
+            ]);
 
         // One entry per notice, so this pins both "exactly one" and its Detail.
         var noticeDetails = events.Where(static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
@@ -4455,7 +4481,11 @@ public sealed class NodeChatStreamServiceTests
         var estimateInputs = await estimateService.ResolveAsync(model, agentId, useLocalTools: true, CancellationToken.None);
         var estimatePrompt = estimateInputs.SystemPrompt;
         var estimateOffer = estimateInputs.Offer;
-        var estimate = AssertEx.NotNull(await estimateService.EstimateAsync(new ChatContextEstimateRequest { ModelName = model, AgentId = agentId }, CancellationToken.None));
+        var estimate = AssertEx.NotNull(await estimateService.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = model,
+            AgentId = agentId
+        }, CancellationToken.None));
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         var sentPrompt = AssertEx.NotNull(runner.LastSystemPrompt);

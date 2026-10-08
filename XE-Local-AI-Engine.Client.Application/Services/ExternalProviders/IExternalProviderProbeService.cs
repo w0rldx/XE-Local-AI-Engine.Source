@@ -31,7 +31,8 @@ public interface IExternalProviderProbeService
 /// <param name="ApiKey">An explicitly supplied key. Takes precedence over the stored one; blank means "use the stored key, if any".</param>
 /// <param name="AllowInsecureHttp">The editor's opt-in to a plain-http, non-loopback address; without it such an address is refused before any request.</param>
 /// <param name="Headers">The draft header rows; <see langword="null" /> uses the stored connection's headers and an empty list sends none. Stored values travel only on the stored origin, like the key.</param>
-public readonly record struct ExternalProviderProbeQuery(string? ConnectionId,
+public readonly record struct ExternalProviderProbeQuery(
+    string? ConnectionId,
     string? BaseUrl,
     string? ApiKey,
     bool AllowInsecureHttp = false,

@@ -280,7 +280,10 @@ public sealed class OrchestrationResolverTests
         var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["mcp__weather__get_forecast"]);
         var specialist = CreateDefinition("Specialist", modelProfile: CloudParticipantModel,
             allowedTools: ["mcp__weather__get_forecast", WebFetchToolDefinition.ToolName, "spawn_subagent"]);
-        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]) with { AllowedToolNames = ["mcp__files__read"] };
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]) with
+        {
+            AllowedToolNames = ["mcp__files__read"]
+        };
 
         var store = Substitute.For<IAgentDefinitionStore>();
         var playbookStore = Substitute.For<IPlaybookActionStore>();
@@ -292,10 +295,26 @@ public sealed class OrchestrationResolverTests
                      .Returns(callInfo => Task.FromResult<IReadOnlyList<CloudWithheldTool>>(callInfo.ArgAt<bool>(1)
                          ?
                          [
-                             new CloudWithheldTool { Name = "mcp__weather__get_forecast", Switch = CloudToolSwitch.McpTools },
-                             new CloudWithheldTool { Name = "mcp__files__read", Switch = CloudToolSwitch.McpTools },
-                             new CloudWithheldTool { Name = WebFetchToolDefinition.ToolName, Switch = CloudToolSwitch.WebTools },
-                             new CloudWithheldTool { Name = "spawn_subagent", Switch = CloudToolSwitch.SubAgents }
+                             new CloudWithheldTool
+                             {
+                                 Name = "mcp__weather__get_forecast",
+                                 Switch = CloudToolSwitch.McpTools
+                             },
+                             new CloudWithheldTool
+                             {
+                                 Name = "mcp__files__read",
+                                 Switch = CloudToolSwitch.McpTools
+                             },
+                             new CloudWithheldTool
+                             {
+                                 Name = WebFetchToolDefinition.ToolName,
+                                 Switch = CloudToolSwitch.WebTools
+                             },
+                             new CloudWithheldTool
+                             {
+                                 Name = "spawn_subagent",
+                                 Switch = CloudToolSwitch.SubAgents
+                             }
                          ]
                          : []));
         var capabilityResolver = Substitute.For<IModelCapabilityResolver>();

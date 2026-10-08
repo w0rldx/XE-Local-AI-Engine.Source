@@ -86,7 +86,8 @@ internal sealed class McpClientFactory : IMcpClientFactory
     {
         return record.TrustTier switch
         {
-            McpTrustTier.Sandboxed => new SandboxedMcpStdioTransport(record, _sandboxProvider, _identityProvider, _nodeDataDirectory, _ceilingDefaults, _nodeOptions, _runtimeSettings, _loggerFactory, sessionKey),
+            McpTrustTier.Sandboxed => new SandboxedMcpStdioTransport(record, _sandboxProvider, _identityProvider, _nodeDataDirectory, _ceilingDefaults, _nodeOptions, _runtimeSettings, _loggerFactory,
+                sessionKey),
             McpTrustTier.PrivilegedHost => new StdioClientTransport(BuildStdioTransportOptions(record), _loggerFactory),
             // BuiltInTrusted names an engine-owned transport and there is no engine-owned STDIO one: a row carrying it passed both
             // the CRUD refusal and the schema check, so serving it as either other tier would pick a privilege level on its behalf.

@@ -121,8 +121,7 @@ internal static class InvocationFailureClassifier
                 new FailureClassification(FailureCategory.Unexpected, invalidOperationException.Message),
             // The Azure translator already sanitized its auth text (mode-aware). Other Azure kinds keep their old landing, so the
             // ClientResultException arms below skip any chain that holds an AzureFoundryProviderException.
-            _ when FindInChain<AzureFoundryProviderException>(exception) is
-                { Kind: AzureFoundryProviderErrorKind.AuthFailed or AzureFoundryProviderErrorKind.AuthRequired } azureAuth =>
+            _ when FindInChain<AzureFoundryProviderException>(exception) is { Kind: AzureFoundryProviderErrorKind.AuthFailed or AzureFoundryProviderErrorKind.AuthRequired } azureAuth =>
                 new FailureClassification(FailureCategory.ProviderAuthFailed, azureAuth.Message),
             // An OpenAI-compatible provider or gateway rejecting a call by status. 400 and 5xx fall through to the grammar, capability and model-load
             // arms, which read a wrapper's text; the 5xx arm follows them. The body and URL are never surfaced.

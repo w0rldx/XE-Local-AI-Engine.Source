@@ -18,7 +18,7 @@ public sealed class CustomRequestHeadersHandlerTests
         var recorder = new OpenAiWireRecorder();
         using var client = CreateClient(recorder, [new("X-Alpha", "one"), new("X-Beta", "two")]);
 
-        using var response =await client.GetAsync(new Uri("http://127.0.0.1:1/v1/models"));
+        using var response = await client.GetAsync(new Uri("http://127.0.0.1:1/v1/models"));
 
         AssertEx.Equal("one", recorder.LastRequest.Headers.GetValueOrDefault("X-Alpha"));
         AssertEx.Equal("two", recorder.LastRequest.Headers.GetValueOrDefault("X-Beta"));
@@ -32,7 +32,7 @@ public sealed class CustomRequestHeadersHandlerTests
         using var request = new HttpRequestMessage(HttpMethod.Get, new Uri("http://127.0.0.1:1/v1/models"));
         request.Headers.Add("X-Alpha", "caller");
 
-        using var response =await client.SendAsync(request);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal("configured", recorder.LastRequest.Headers.GetValueOrDefault("X-Alpha"));
     }
@@ -50,7 +50,7 @@ public sealed class CustomRequestHeadersHandlerTests
         using var request = new HttpRequestMessage(HttpMethod.Get, new Uri("http://127.0.0.1:1/v1/models"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "real");
 
-        using var response =await client.SendAsync(request);
+        using var response = await client.SendAsync(request);
 
         AssertEx.Equal("Bearer real", recorder.LastRequest.Authorization);
         AssertEx.False(recorder.LastRequest.Headers.Values.Any(static value => value.Contains("attacker", StringComparison.Ordinal)));

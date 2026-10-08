@@ -559,6 +559,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             {
                 reason = McpConnectionFailureReason.SandboxRefusedByProfile;
             }
+
             _logger.LogWarning(ex, "MCP server {ServerId} could not be started under its trust tier ({Reason}); it will contribute no tools.", record.Id, reason);
             return ConnectResult.Failed(SafeMessage(reason), reason);
         }

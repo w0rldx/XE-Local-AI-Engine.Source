@@ -229,7 +229,7 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
             var skipped = file.ExtractionStatus switch
             {
                 DocumentExtractionStatus.Extracted => !textAccepted || file.ExtractedChars == 0
-                                                      || string.IsNullOrWhiteSpace(await _uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, file.FileId, cancellationToken)),
+                                                                    || string.IsNullOrWhiteSpace(await _uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, file.FileId, cancellationToken)),
                 DocumentExtractionStatus.Image => !imagesAccepted,
                 _ => true
             };

@@ -334,8 +334,8 @@ internal static class DesktopBootstrap
         if (database.Exists && database.Length > 0)
         {
             throw new NodeKeyCustodyException($"The database '{databasePath}' exists but its key file '{keyPath}' is missing. Restore the original "
-                                                + $"{KeyFileName} next to it, or move {DatabaseFileName} aside to start with a new empty database; a new key "
-                                                + "is not generated automatically because it could not read the existing data.");
+                                              + $"{KeyFileName} next to it, or move {DatabaseFileName} aside to start with a new empty database; a new key "
+                                              + "is not generated automatically because it could not read the existing data.");
         }
 
         return GenerateAndPersistSecret(keyPath);

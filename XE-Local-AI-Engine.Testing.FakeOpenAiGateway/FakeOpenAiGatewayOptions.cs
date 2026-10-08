@@ -12,7 +12,11 @@ public sealed record FakeOpenAiGatewayOptions
     /// <summary>The models <c>GET models</c> lists; a chat request naming any other model answers 404.</summary>
     public IReadOnlyList<FakeOpenAiGatewayModel> Models { get; init; } =
     [
-        new FakeOpenAiGatewayModel { Id = "gateway-demo-model", ContextLength = 32768 }
+        new FakeOpenAiGatewayModel
+        {
+            Id = "gateway-demo-model",
+            ContextLength = 32768
+        }
     ];
 
     /// <summary>The assistant reply when no script is queued.</summary>

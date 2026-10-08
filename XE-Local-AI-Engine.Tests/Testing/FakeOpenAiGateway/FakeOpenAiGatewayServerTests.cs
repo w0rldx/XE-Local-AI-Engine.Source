@@ -35,11 +35,21 @@ public sealed class FakeOpenAiGatewayServerTests
         {
             Models =
             [
-                new FakeOpenAiGatewayModel { Id = "alpha", ContextLength = 8192 },
                 new FakeOpenAiGatewayModel
                 {
-                    Id = "beta", ContextLength = 131072, MaxOutputTokens = 16384, OwnedBy = "demo",
-                    Metadata = new Dictionary<string, string> { ["family"] = "demo" }
+                    Id = "alpha",
+                    ContextLength = 8192
+                },
+                new FakeOpenAiGatewayModel
+                {
+                    Id = "beta",
+                    ContextLength = 131072,
+                    MaxOutputTokens = 16384,
+                    OwnedBy = "demo",
+                    Metadata = new Dictionary<string, string>
+                    {
+                        ["family"] = "demo"
+                    }
                 }
             ]
         });
@@ -68,7 +78,10 @@ public sealed class FakeOpenAiGatewayServerTests
     [Arguments("wrong-token")]
     public async Task Request_WithoutTheRequiredBearer_Answers401InOpenAiShape(string? bearer)
     {
-        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions { RequiredBearerToken = Token });
+        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            RequiredBearerToken = Token
+        });
         using var client = Client(gateway, bearer);
 
         using var response = await client.GetAsync(new Uri("models", UriKind.Relative));
@@ -129,7 +142,10 @@ public sealed class FakeOpenAiGatewayServerTests
     [Test]
     public async Task NonStreamCompletion_ReturnsAChatCompletionWithUsage()
     {
-        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions { DefaultCompletionText = "one two three" });
+        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            DefaultCompletionText = "one two three"
+        });
         using var client = Client(gateway);
 
         using var response = await PostChatAsync(client, stream: false);
@@ -151,7 +167,10 @@ public sealed class FakeOpenAiGatewayServerTests
     [Test]
     public async Task StreamCompletion_FramesChunksThenAUsageOnlyChunkThenDone()
     {
-        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions { DefaultCompletionText = "one two three" });
+        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            DefaultCompletionText = "one two three"
+        });
         using var client = Client(gateway);
 
         using var response = await PostChatAsync(client, stream: true);
@@ -168,8 +187,8 @@ public sealed class FakeOpenAiGatewayServerTests
         AssertEx.Equal("stop", chunks[^2].GetProperty("choices")[0].GetProperty("finish_reason").GetString());
 
         var text = string.Concat(chunks[..^1].Select(chunk => chunk.GetProperty("choices")[0].GetProperty("delta"))
-                                            .Where(delta => delta.TryGetProperty("content", out _))
-                                            .Select(delta => delta.GetProperty("content").GetString()));
+                                             .Where(delta => delta.TryGetProperty("content", out _))
+                                             .Select(delta => delta.GetProperty("content").GetString()));
         AssertEx.Equal("one two three", text);
     }
 
@@ -177,7 +196,14 @@ public sealed class FakeOpenAiGatewayServerTests
     public async Task ToolCallScript_NonStream_EmitsToolCalls()
     {
         await using var gateway = await FakeOpenAiGatewayServer.StartAsync();
-        gateway.State.SetScript(new FakeOpenAiGatewayScript { ToolCall = new FakeOpenAiGatewayToolCall { Name = "calculator", Arguments = """{"expression":"12*9"}""" } });
+        gateway.State.SetScript(new FakeOpenAiGatewayScript
+        {
+            ToolCall = new FakeOpenAiGatewayToolCall
+            {
+                Name = "calculator",
+                Arguments = """{"expression":"12*9"}"""
+            }
+        });
         using var client = Client(gateway);
 
         using var response = await PostChatAsync(client, stream: false);
@@ -195,7 +221,14 @@ public sealed class FakeOpenAiGatewayServerTests
     public async Task ToolCallScript_Stream_EmitsToolCallDeltasThatAccumulateToTheArguments()
     {
         await using var gateway = await FakeOpenAiGatewayServer.StartAsync();
-        gateway.State.SetScript(new FakeOpenAiGatewayScript { ToolCall = new FakeOpenAiGatewayToolCall { Name = "calculator", Arguments = """{"expression":"12*9"}""" } });
+        gateway.State.SetScript(new FakeOpenAiGatewayScript
+        {
+            ToolCall = new FakeOpenAiGatewayToolCall
+            {
+                Name = "calculator",
+                Arguments = """{"expression":"12*9"}"""
+            }
+        });
         using var client = Client(gateway);
 
         using var response = await PostChatAsync(client, stream: true);
@@ -218,7 +251,10 @@ public sealed class FakeOpenAiGatewayServerTests
     [Test]
     public async Task Script_AnswersOnlyTheNextCountRequests()
     {
-        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions { DefaultCompletionText = "default" });
+        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            DefaultCompletionText = "default"
+        });
         using var client = Client(gateway);
         using var scripted = await PostJsonAsync(client, new Uri(gateway.BaseAddress, "/test/script"), """{"completionText":"scripted","count":2}""");
         AssertEx.Equal(HttpStatusCode.NoContent, scripted.StatusCode);
@@ -396,7 +432,10 @@ public sealed class FakeOpenAiGatewayServerTests
     [Test]
     public async Task ControlEndpoints_WithAToken_RejectACallerWithoutIt()
     {
-        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions { ControlEndpointToken = "control-demo" });
+        await using var gateway = await FakeOpenAiGatewayServer.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            ControlEndpointToken = "control-demo"
+        });
         using var client = Client(gateway);
         var requests = new Uri(gateway.BaseAddress, "/test/requests");
 
@@ -418,7 +457,10 @@ public sealed class FakeOpenAiGatewayServerTests
         return new FakeOpenAiGatewayOptions
         {
             RequiredBearerToken = Token,
-            RequiredHeaders = new Dictionary<string, string> { [TenantHeader] = TenantValue }
+            RequiredHeaders = new Dictionary<string, string>
+            {
+                [TenantHeader] = TenantValue
+            }
         };
     }
 
@@ -431,7 +473,10 @@ public sealed class FakeOpenAiGatewayServerTests
 
     private static HttpClient Client(FakeOpenAiGatewayServer gateway, string? bearer = null)
     {
-        var client = new HttpClient { BaseAddress = gateway.BaseAddress };
+        var client = new HttpClient
+        {
+            BaseAddress = gateway.BaseAddress
+        };
         if (bearer is not null)
         {
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bearer);

@@ -485,7 +485,8 @@ public sealed class NodeDbRestoreStagingTests : IDisposable
             await using (var command = connection.CreateCommand())
             {
                 // The seed table is written before WAL mode, so the main file is a real database whose header says WAL.
-                command.CommandText = "CREATE TABLE seed (x INTEGER); PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE probe (value TEXT NOT NULL); INSERT INTO probe VALUES ($value);";
+                command.CommandText =
+                    "CREATE TABLE seed (x INTEGER); PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE probe (value TEXT NOT NULL); INSERT INTO probe VALUES ($value);";
                 command.Parameters.AddWithValue("$value", value);
                 await command.ExecuteNonQueryAsync();
             }

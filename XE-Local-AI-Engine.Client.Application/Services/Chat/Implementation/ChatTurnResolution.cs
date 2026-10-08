@@ -117,8 +117,11 @@ internal sealed class ChatTurnResolution
 
         var withheld = Resolved is { } resolved
             ? resolved.CloudWithheldTools ?? []
-            : [.. (await localToolOfferProvider.GetCloudWithheldToolsAsync(ActiveModel, EffectiveModelIsCloud, cancellationToken))
-                  .Where(static tool => tool.Switch != CloudToolSwitch.SubAgents)];
+            :
+            [
+                .. (await localToolOfferProvider.GetCloudWithheldToolsAsync(ActiveModel, EffectiveModelIsCloud, cancellationToken))
+                .Where(static tool => tool.Switch != CloudToolSwitch.SubAgents)
+            ];
         return CloudToolsWithheldNotice(invocationId,
             withheld,
             "Some tools were not offered to the cloud model handling this message because their cloud-model switches are off. Turn them on under Node Settings, Privacy & updates, to let a cloud model use them.");

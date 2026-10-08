@@ -213,9 +213,21 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
                 ConversationTokens = snapshot.ConversationTokens,
                 TotalTokens = snapshot.EstimatedInputTokens
             },
-            Tools = [.. snapshot.Tools.Take(NodeChatContextWindowDto.MaxToolEntries).Select(static tool => new NodeChatContextWindowTool { Name = tool.Name, Tokens = tool.Tokens })],
+            Tools =
+            [
+                .. snapshot.Tools.Take(NodeChatContextWindowDto.MaxToolEntries).Select(static tool => new NodeChatContextWindowTool
+                {
+                    Name = tool.Name,
+                    Tokens = tool.Tokens
+                })
+            ],
             ToolsWithheldCount = snapshot.ToolsWithheldCount,
-            Trimmed = new NodeChatContextWindowTrim { MessagesDropped = snapshot.MessagesDropped, ToolResultsTruncated = snapshot.ToolResultsTruncated, ReasoningStripped = snapshot.ReasoningStripped }
+            Trimmed = new NodeChatContextWindowTrim
+            {
+                MessagesDropped = snapshot.MessagesDropped,
+                ToolResultsTruncated = snapshot.ToolResultsTruncated,
+                ReasoningStripped = snapshot.ReasoningStripped
+            }
         };
     }
 

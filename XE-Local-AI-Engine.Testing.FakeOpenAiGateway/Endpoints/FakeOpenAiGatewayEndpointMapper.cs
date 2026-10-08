@@ -161,8 +161,15 @@ internal static class FakeOpenAiGatewayEndpointMapper
                 // An abort would reset the socket and drop the chunks unread, so close the connection after them instead.
                 context.Response.Headers.Connection = "close";
                 StartEventStream(context);
-                await WriteEventAsync(context, ChatCompletionsEndpoint.Chunk(model, new JsonObject { ["role"] = "assistant", ["content"] = "partial" }, finishReason: null).ToJsonString());
-                await WriteEventAsync(context, ChatCompletionsEndpoint.Chunk(model, new JsonObject { ["content"] = " stream" }, finishReason: null).ToJsonString());
+                await WriteEventAsync(context, ChatCompletionsEndpoint.Chunk(model, new JsonObject
+                {
+                    ["role"] = "assistant",
+                    ["content"] = "partial"
+                }, finishReason: null).ToJsonString());
+                await WriteEventAsync(context, ChatCompletionsEndpoint.Chunk(model, new JsonObject
+                {
+                    ["content"] = " stream"
+                }, finishReason: null).ToJsonString());
                 break;
             case FakeOpenAiGatewayFailure.MalformedJson:
                 context.Response.ContentType = "application/json";

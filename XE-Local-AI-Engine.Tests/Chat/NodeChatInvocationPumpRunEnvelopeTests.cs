@@ -616,7 +616,19 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
                 CompactionTokens = 80,
                 ConversationTokens = 90,
                 EstimatedInputTokens = 800,
-                Tools = [new ProviderRoundToolTokens { Name = "get_time", Tokens = 50 }, new ProviderRoundToolTokens { Name = "mcp__docs__search", Tokens = 100 }],
+                Tools =
+                [
+                    new ProviderRoundToolTokens
+                    {
+                        Name = "get_time",
+                        Tokens = 50
+                    },
+                    new ProviderRoundToolTokens
+                    {
+                        Name = "mcp__docs__search",
+                        Tokens = 100
+                    }
+                ],
                 ToolsWithheldCount = 3,
                 MessagesDropped = 1,
                 ToolResultsTruncated = 2,
@@ -627,7 +639,12 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
             }
         };
 
-        _ = await pump.TerminalizeAsync(new NodeChatMessageCorrelation { ConversationId = state.ConversationId, MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() },
+        _ = await pump.TerminalizeAsync(new NodeChatMessageCorrelation
+            {
+                ConversationId = state.ConversationId,
+                MessageId = Guid.NewGuid(),
+                RequestId = Guid.NewGuid()
+            },
             state,
             "requested-model");
 
@@ -654,9 +671,18 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         AssertEx.Equal(expected: 90, estimate.ConversationTokens);
         AssertEx.Equal(expected: 800, estimate.TotalTokens);
         AssertEx.Equal(expected: 2, window.Tools.Count);
-        AssertEx.Equal(new NodeChatContextWindowTool { Name = "mcp__docs__search", Tokens = 100 }, window.Tools[1]);
+        AssertEx.Equal(new NodeChatContextWindowTool
+        {
+            Name = "mcp__docs__search",
+            Tokens = 100
+        }, window.Tools[1]);
         AssertEx.Equal(expected: 3, window.ToolsWithheldCount);
-        AssertEx.Equal(new NodeChatContextWindowTrim { MessagesDropped = 1, ToolResultsTruncated = 2, ReasoningStripped = 4 }, window.Trimmed);
+        AssertEx.Equal(new NodeChatContextWindowTrim
+        {
+            MessagesDropped = 1,
+            ToolResultsTruncated = 2,
+            ReasoningStripped = 4
+        }, window.Trimmed);
     }
 
     [Test]
@@ -672,7 +698,12 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
             InputTokens = 900
         };
 
-        _ = await pump.TerminalizeAsync(new NodeChatMessageCorrelation { ConversationId = state.ConversationId, MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() },
+        _ = await pump.TerminalizeAsync(new NodeChatMessageCorrelation
+            {
+                ConversationId = state.ConversationId,
+                MessageId = Guid.NewGuid(),
+                RequestId = Guid.NewGuid()
+            },
             state,
             "requested-model");
 

@@ -55,7 +55,8 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         var snapshot = Snapshot(identity);
 
         using var sandbox = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(),
+            StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository, identity));
 
         // The profile carries a DIFFERENT ImportDigest from what the worktree contains, to pin that the tamper check

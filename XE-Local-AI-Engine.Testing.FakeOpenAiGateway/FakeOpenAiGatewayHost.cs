@@ -43,10 +43,18 @@ internal static class FakeOpenAiGatewayHost
             }
         }
 
-        var options = new FakeOpenAiGatewayOptions { RequiredBearerToken = token, RequiredHeaders = headers, Port = port };
+        var options = new FakeOpenAiGatewayOptions
+        {
+            RequiredBearerToken = token,
+            RequiredHeaders = headers,
+            Port = port
+        };
         if (models.Count > 0)
         {
-            options = options with { Models = models };
+            options = options with
+            {
+                Models = models
+            };
         }
 
         using var stop = new CancellationTokenSource();

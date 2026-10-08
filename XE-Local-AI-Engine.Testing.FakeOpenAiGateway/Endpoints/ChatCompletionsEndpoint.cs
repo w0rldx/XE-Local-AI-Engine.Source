@@ -69,13 +69,21 @@ internal static class ChatCompletionsEndpoint
             ["object"] = "chat.completion.chunk",
             ["created"] = 0,
             ["model"] = model,
-            ["choices"] = new JsonArray(new JsonObject { ["index"] = 0, ["delta"] = delta, ["finish_reason"] = finishReason })
+            ["choices"] = new JsonArray(new JsonObject
+            {
+                ["index"] = 0,
+                ["delta"] = delta,
+                ["finish_reason"] = finishReason
+            })
         };
     }
 
     private static JsonObject Completion(string? model, FakeOpenAiGatewayState state, FakeOpenAiGatewayScript? script, JsonObject usage)
     {
-        var message = new JsonObject { ["role"] = "assistant" };
+        var message = new JsonObject
+        {
+            ["role"] = "assistant"
+        };
         string finishReason;
         if (script?.ToolCall is { } toolCall)
         {
@@ -84,7 +92,11 @@ internal static class ChatCompletionsEndpoint
             {
                 ["id"] = ToolCallId,
                 ["type"] = "function",
-                ["function"] = new JsonObject { ["name"] = toolCall.Name, ["arguments"] = toolCall.Arguments }
+                ["function"] = new JsonObject
+                {
+                    ["name"] = toolCall.Name,
+                    ["arguments"] = toolCall.Arguments
+                }
             });
             finishReason = "tool_calls";
         }
@@ -100,7 +112,12 @@ internal static class ChatCompletionsEndpoint
             ["object"] = "chat.completion",
             ["created"] = 0,
             ["model"] = model,
-            ["choices"] = new JsonArray(new JsonObject { ["index"] = 0, ["message"] = message, ["finish_reason"] = finishReason }),
+            ["choices"] = new JsonArray(new JsonObject
+            {
+                ["index"] = 0,
+                ["message"] = message,
+                ["finish_reason"] = finishReason
+            }),
             ["usage"] = usage
         };
     }
@@ -108,7 +125,11 @@ internal static class ChatCompletionsEndpoint
     private static async Task StreamAsync(HttpContext context, string? model, FakeOpenAiGatewayState state, FakeOpenAiGatewayScript? script, JsonObject usage)
     {
         FakeOpenAiGatewayEndpointMapper.StartEventStream(context);
-        await WriteChunkAsync(context, Chunk(model, new JsonObject { ["role"] = "assistant", ["content"] = string.Empty }, finishReason: null));
+        await WriteChunkAsync(context, Chunk(model, new JsonObject
+        {
+            ["role"] = "assistant",
+            ["content"] = string.Empty
+        }, finishReason: null));
 
         string finishReason;
         if (script?.ToolCall is { } toolCall)
@@ -120,7 +141,11 @@ internal static class ChatCompletionsEndpoint
                 ["index"] = 0,
                 ["id"] = ToolCallId,
                 ["type"] = "function",
-                ["function"] = new JsonObject { ["name"] = toolCall.Name, ["arguments"] = string.Empty }
+                ["function"] = new JsonObject
+                {
+                    ["name"] = toolCall.Name,
+                    ["arguments"] = string.Empty
+                }
             }), finishReason: null));
             await WriteChunkAsync(context, Chunk(model, ToolCallDelta(ArgumentsDelta(toolCall.Arguments[..half])), finishReason: null));
             await WriteChunkAsync(context, Chunk(model, ToolCallDelta(ArgumentsDelta(toolCall.Arguments[half..])), finishReason: null));
@@ -130,7 +155,10 @@ internal static class ChatCompletionsEndpoint
         {
             foreach (var token in SplitTokens(Text(state, script)))
             {
-                await WriteChunkAsync(context, Chunk(model, new JsonObject { ["content"] = token }, finishReason: null));
+                await WriteChunkAsync(context, Chunk(model, new JsonObject
+                {
+                    ["content"] = token
+                }, finishReason: null));
             }
 
             finishReason = "stop";
@@ -152,12 +180,22 @@ internal static class ChatCompletionsEndpoint
 
     private static JsonObject ToolCallDelta(JsonObject toolCall)
     {
-        return new JsonObject { ["tool_calls"] = new JsonArray(toolCall) };
+        return new JsonObject
+        {
+            ["tool_calls"] = new JsonArray(toolCall)
+        };
     }
 
     private static JsonObject ArgumentsDelta(string arguments)
     {
-        return new JsonObject { ["index"] = 0, ["function"] = new JsonObject { ["arguments"] = arguments } };
+        return new JsonObject
+        {
+            ["index"] = 0,
+            ["function"] = new JsonObject
+            {
+                ["arguments"] = arguments
+            }
+        };
     }
 
     private static JsonObject Usage(int promptTokens, int completionTokens)

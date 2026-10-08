@@ -100,7 +100,7 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
         var carriedStoredHeaders = ExternalProviderStore.IsSameOrigin(stored?.BaseUrl, baseAddress.AbsoluteUri) ? stored?.Headers ?? [] : [];
         var headers = query.Headers is null
             ? carriedStoredHeaders
-            : ExternalProviderStore.MergeHeaders(ExternalProviderStore.NormalizeHeaders(query.Headers),stored, baseAddress.AbsoluteUri, isSave: false);
+            : ExternalProviderStore.MergeHeaders(ExternalProviderStore.NormalizeHeaders(query.Headers), stored, baseAddress.AbsoluteUri, isSave: false);
 
         return await SendProbeAsync(baseAddress,
             apiKey,

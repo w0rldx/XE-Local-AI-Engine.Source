@@ -778,11 +778,35 @@ public sealed class ExternalProviderStoreTests : IDisposable
         const string https = "https://gateway.example.com/v1";
         foreach (var reserved in new[]
                  {
-                     "Authorization", "authorization", "AUTHORIZATION", "aUtHoRiZaTiOn", " Authorization ", "api-key", "API-KEY", "Api-Key", "host", "HOST",
-                     "cookie", "COOKIE", "proxy-authorization", "Proxy-Authorization", "content-type", "Content-Length", "CONTENT-ENCODING", "transfer-encoding",
-                     "Connection", "expect",
+                     "Authorization",
+                     "authorization",
+                     "AUTHORIZATION",
+                     "aUtHoRiZaTiOn",
+                     " Authorization ",
+                     "api-key",
+                     "API-KEY",
+                     "Api-Key",
+                     "host",
+                     "HOST",
+                     "cookie",
+                     "COOKIE",
+                     "proxy-authorization",
+                     "Proxy-Authorization",
+                     "content-type",
+                     "Content-Length",
+                     "CONTENT-ENCODING",
+                     "transfer-encoding",
+                     "Connection",
+                     "expect",
                      // Content headers .NET refuses on a request; accepted, they threw on every send of the connection.
-                     "Allow", "content-disposition", "Content-Language", "CONTENT-LOCATION", "Content-MD5", "content-range", "Expires", "last-modified"
+                     "Allow",
+                     "content-disposition",
+                     "Content-Language",
+                     "CONTENT-LOCATION",
+                     "Content-MD5",
+                     "content-range",
+                     "Expires",
+                     "last-modified"
                  })
         {
             yield return () => new HeaderBypassCase($"reserved name '{reserved}'", https, [Header(reserved, SecretMarker)], "is reserved");

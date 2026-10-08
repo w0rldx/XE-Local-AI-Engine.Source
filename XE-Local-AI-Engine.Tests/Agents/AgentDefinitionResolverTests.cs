@@ -1539,10 +1539,26 @@ public sealed class AgentDefinitionResolverTests
     // The provider reports these as withheld by the cloud switches; the resolver must narrow them per definition.
     private static readonly CloudWithheldTool[] ProviderCloudWithheld =
     [
-        new() { Name = "mcp__weather__get_forecast", Switch = CloudToolSwitch.McpTools },
-        new() { Name = "mcp__files__read", Switch = CloudToolSwitch.McpTools },
-        new() { Name = "web_fetch", Switch = CloudToolSwitch.WebTools },
-        new() { Name = SpawnToolName, Switch = CloudToolSwitch.SubAgents }
+        new()
+        {
+            Name = "mcp__weather__get_forecast",
+            Switch = CloudToolSwitch.McpTools
+        },
+        new()
+        {
+            Name = "mcp__files__read",
+            Switch = CloudToolSwitch.McpTools
+        },
+        new()
+        {
+            Name = "web_fetch",
+            Switch = CloudToolSwitch.WebTools
+        },
+        new()
+        {
+            Name = SpawnToolName,
+            Switch = CloudToolSwitch.SubAgents
+        }
     ];
 
     private static AgentDefinitionResolver CreateResolverWithCloudWithheld(out IAgentDefinitionStore store)

@@ -281,6 +281,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 {
                     await dispatcher.ReportTurnContextSnapshotAsync(package.InvocationId, roundContext);
                 }
+
                 await dispatcher.ReportTurnTelemetryAsync(package.InvocationId,
                     stream?.ModelReadinessDurationMs is { } readinessMs ? (long)readinessMs : null,
                     stream?.UsageSnapshot is { } turnUsage

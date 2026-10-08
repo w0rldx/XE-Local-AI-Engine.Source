@@ -86,7 +86,8 @@ public sealed class EngineCommandDispatchTests
         AssertEx.Contains(output.ToString(), "--reset-admin-password <password>");
         AssertEx.Contains(output.ToString(), "XE_DATA_DIR must be an absolute path");
         AssertEx.Contains(output.ToString(), "Desktop app: [--debug]");
-        AssertEx.Contains(output.ToString(), "Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable; 7 unlock port lost; 8 node key does not open the database; 9 database migration failed.");
+        AssertEx.Contains(output.ToString(),
+            "Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable; 7 unlock port lost; 8 node key does not open the database; 9 database migration failed.");
     }
 
     [Test]

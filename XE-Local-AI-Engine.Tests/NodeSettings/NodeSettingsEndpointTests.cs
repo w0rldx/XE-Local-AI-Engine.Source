@@ -392,9 +392,18 @@ public sealed class NodeSettingsEndpointTests
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
         request.Content = JsonContent.Create(wireName switch
         {
-            "keepModelWarmModelName" => new SaveNodeSettingsRequest { KeepModelWarmModelName = malformed },
-            "rerankerModelName" => new SaveNodeSettingsRequest { RerankerModelName = malformed },
-            _ => new SaveNodeSettingsRequest { AutoEffortFastModelName = malformed }
+            "keepModelWarmModelName" => new SaveNodeSettingsRequest
+            {
+                KeepModelWarmModelName = malformed
+            },
+            "rerankerModelName" => new SaveNodeSettingsRequest
+            {
+                RerankerModelName = malformed
+            },
+            _ => new SaveNodeSettingsRequest
+            {
+                AutoEffortFastModelName = malformed
+            }
         });
         using var response = await client.SendAsync(request);
 

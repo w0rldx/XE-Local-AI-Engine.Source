@@ -106,7 +106,13 @@ public sealed class McpServerEndpointTests
     {
         // The SPA maps an mcp__{slug}__{tool} name back to its server by this slug; an unconnected server has none yet.
         var service = Substitute.For<IMcpServerService>();
-        service.ListAsync(Arg.Any<CancellationToken>()).Returns([CreateRecord("Filesystem", enabled: true) with { Slug = "filesystem" }, CreateRecord("Remote", enabled: false)]);
+        service.ListAsync(Arg.Any<CancellationToken>()).Returns([
+            CreateRecord("Filesystem", enabled: true) with
+            {
+                Slug = "filesystem"
+            },
+            CreateRecord("Remote", enabled: false)
+        ]);
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 

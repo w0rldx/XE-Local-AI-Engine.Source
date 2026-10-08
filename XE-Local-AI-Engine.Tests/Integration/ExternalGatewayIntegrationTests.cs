@@ -39,7 +39,11 @@ public sealed class ExternalGatewayIntegrationTests
         await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
         {
             RequiredBearerToken = Token,
-            RequiredHeaders = new Dictionary<string, string> { [PlainHeader] = PlainValue, [SecretHeader] = SecretValue }
+            RequiredHeaders = new Dictionary<string, string>
+            {
+                [PlainHeader] = PlainValue,
+                [SecretHeader] = SecretValue
+            }
         }, Token, [Plain(PlainValue), Secret(SecretValue)]);
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         var ct = deadline.Token;
@@ -68,7 +72,11 @@ public sealed class ExternalGatewayIntegrationTests
 
         rig.Gateway.State.SetScript(new FakeOpenAiGatewayScript
         {
-            ToolCall = new FakeOpenAiGatewayToolCall { Name = "calculator", Arguments = """{"expression":"12*9"}""" }
+            ToolCall = new FakeOpenAiGatewayToolCall
+            {
+                Name = "calculator",
+                Arguments = """{"expression":"12*9"}"""
+            }
         });
         var toolTurn = await client.GetResponseAsync("what is 12*9?", new ChatOptions
         {
@@ -96,7 +104,10 @@ public sealed class ExternalGatewayIntegrationTests
     {
         await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
         {
-            RequiredHeaders = new Dictionary<string, string> { [SecretHeader] = SecretValue }
+            RequiredHeaders = new Dictionary<string, string>
+            {
+                [SecretHeader] = SecretValue
+            }
         }, apiKey: null, [Plain(PlainValue), Secret(SecretValue)]);
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
@@ -113,7 +124,10 @@ public sealed class ExternalGatewayIntegrationTests
     [Test]
     public async Task SecretHeaderRotation_TakesEffectOnTheNextSendThroughTheSameClient()
     {
-        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions { RequiredBearerToken = Token }, Token, [Secret("demo-secret-v1")]);
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            RequiredBearerToken = Token
+        }, Token, [Secret("demo-secret-v1")]);
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
 
@@ -135,7 +149,10 @@ public sealed class ExternalGatewayIntegrationTests
     [Arguments(FakeOpenAiGatewayFailure.RateLimited, FailureCategory.ProviderRateLimited, "retry after 7")]
     public async Task GatewayRejection_IsClassifiedForTheOperator(FakeOpenAiGatewayFailure failure, FailureCategory expected, string? fragment)
     {
-        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions { RequiredBearerToken = Token }, Token, [Secret(SecretValue)]);
+        await using var rig = await Rig.StartAsync(new FakeOpenAiGatewayOptions
+        {
+            RequiredBearerToken = Token
+        }, Token, [Secret(SecretValue)]);
         using var deadline = new CancellationTokenSource(TestBudgets.Contended);
         using var client = new ExternalOpenAiChatClient(rig.Registry, ModelId);
         rig.Gateway.State.EnqueueFailure(failure);
@@ -155,12 +172,21 @@ public sealed class ExternalGatewayIntegrationTests
 
     private static StoredExternalProviderHeader Plain(string value)
     {
-        return new StoredExternalProviderHeader { Name = PlainHeader, Value = value };
+        return new StoredExternalProviderHeader
+        {
+            Name = PlainHeader,
+            Value = value
+        };
     }
 
     private static StoredExternalProviderHeader Secret(string? value)
     {
-        return new StoredExternalProviderHeader { Name = SecretHeader, Value = value, IsSecret = true };
+        return new StoredExternalProviderHeader
+        {
+            Name = SecretHeader,
+            Value = value,
+            IsSecret = true
+        };
     }
 
     private static ExternalProviderConnectionSaveRequest Request(FakeOpenAiGatewayServer gateway,
@@ -174,7 +200,15 @@ public sealed class ExternalGatewayIntegrationTests
             BaseUrl = gateway.BaseAddress.AbsoluteUri,
             Locality = ExternalProviderLocality.Cloud,
             ApiKey = apiKey,
-            Models = [new ExternalProviderModelSaveRequest { WireId = WireId, SupportsTools = true, ContextLength = 32768 }],
+            Models =
+            [
+                new ExternalProviderModelSaveRequest
+                {
+                    WireId = WireId,
+                    SupportsTools = true,
+                    ContextLength = 32768
+                }
+            ],
             Headers = headers
         };
     }

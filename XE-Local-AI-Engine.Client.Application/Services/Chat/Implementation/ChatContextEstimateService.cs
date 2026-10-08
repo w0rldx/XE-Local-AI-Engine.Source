@@ -88,7 +88,11 @@ internal sealed class ChatContextEstimateService : IChatContextEstimateService
             toolSchemaTokens += tokens;
             if (tools.Count < NodeChatContextWindowDto.MaxToolEntries)
             {
-                tools.Add(new NodeChatContextWindowTool { Name = allowedTools[i].Name, Tokens = tokens });
+                tools.Add(new NodeChatContextWindowTool
+                {
+                    Name = allowedTools[i].Name,
+                    Tokens = tokens
+                });
             }
         }
 

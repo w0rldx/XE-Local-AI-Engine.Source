@@ -421,7 +421,11 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         var perTool = new List<ProviderRoundToolTokens>(tools.Count);
         foreach (var tool in tools)
         {
-            perTool.Add(new ProviderRoundToolTokens { Name = tool.Name, Tokens = ProviderMessageTokenEstimator.EstimateTools([tool], charsPerToken) });
+            perTool.Add(new ProviderRoundToolTokens
+            {
+                Name = tool.Name,
+                Tokens = ProviderMessageTokenEstimator.EstimateTools([tool], charsPerToken)
+            });
         }
 
         return perTool;

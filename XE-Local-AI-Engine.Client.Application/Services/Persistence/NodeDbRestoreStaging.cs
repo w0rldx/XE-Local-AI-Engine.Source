@@ -324,7 +324,8 @@ public static partial class NodeDbRestoreStaging
         };
     }
 
-    private static string AsidePath(string databasePath, string stamp) => $"{databasePath}.prerestore-{stamp}";
+    private static string AsidePath(string databasePath, string stamp) =>
+        $"{databasePath}.prerestore-{stamp}";
 
     /// <summary>Writes the marker through a temporary file and a rename, so a crash never leaves half a marker; refuses a link.</summary>
     private static async Task WriteMarkerFileAsync(string markerPath, NodeDbRestoreMarker marker, CancellationToken cancellationToken)

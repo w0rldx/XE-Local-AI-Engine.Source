@@ -586,7 +586,11 @@ public sealed class BinaryManagerInstallTagTests
     {
         using var cache = new TempDir();
         var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
-        foreach (var tag in new[] { LlamaCppReleasePins.PinnedTag, installedTag })
+        foreach (var tag in new[]
+                 {
+                     LlamaCppReleasePins.PinnedTag,
+                     installedTag
+                 })
         {
             var server = Path.Combine(cache.Path, "llama.cpp", tag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(server)!);

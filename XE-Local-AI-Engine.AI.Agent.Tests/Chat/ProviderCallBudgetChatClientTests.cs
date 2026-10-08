@@ -42,7 +42,14 @@ public sealed class ProviderCallBudgetChatClientTests
         var system = new ChatMessage(ChatRole.System, "You are the worker. Follow the playbook.");
         var knowledge = Tagged(new ChatMessage(ChatRole.User, "Knowledge excerpt about deployments."), ContextMessageKinds.Knowledge);
         var attachment = Tagged(new ChatMessage(ChatRole.User, "Inlined attachment text."), ContextMessageKinds.Attachment);
-        var image = Tagged(new ChatMessage(ChatRole.User, [new DataContent(new byte[] { 1, 2, 3 }, "image/png")]), ContextMessageKinds.Image);
+        var image = Tagged(new ChatMessage(ChatRole.User, [
+            new DataContent(new byte[]
+            {
+                1,
+                2,
+                3
+            }, "image/png")
+        ]), ContextMessageKinds.Image);
         var compaction = Tagged(new ChatMessage(ChatRole.User, "Summary of the earlier conversation."), ContextMessageKinds.Compaction);
         var user = new ChatMessage(ChatRole.User, "What is the deployment status?");
         var assistant = new ChatMessage(ChatRole.Assistant, "Checking.");
@@ -148,11 +155,11 @@ public sealed class ProviderCallBudgetChatClientTests
 
         ProviderCallBudget budget;
         using (ToolRelevanceScope.BeginScope(active: true, new HashSet<string>(StringComparer.Ordinal)))
-        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
-        {
-            budget = AssertEx.NotNull(ProviderCallBudget.Current);
-            _ = await sut.GetResponseAsync([new ChatMessage(ChatRole.User, "search the documents")], options);
-        }
+            using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+            {
+                budget = AssertEx.NotNull(ProviderCallBudget.Current);
+                _ = await sut.GetResponseAsync([new ChatMessage(ChatRole.User, "search the documents")], options);
+            }
 
         var sent = AssertEx.NotNull(AssertEx.NotNull(inner.ReceivedOptions.Single()).Tools);
         var snapshot = AssertEx.NotNull(budget.LastRoundContext);
@@ -179,8 +186,7 @@ public sealed class ProviderCallBudgetChatClientTests
         using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
         {
             budget = AssertEx.NotNull(ProviderCallBudget.Current);
-            _ = await sut.GetResponseAsync(
-                [
+            _ = await sut.GetResponseAsync([
                     new ChatMessage(ChatRole.System, secretPrompt),
                     Tagged(new ChatMessage(ChatRole.User, "SECRET-KNOWLEDGE-0a1b"), ContextMessageKinds.Knowledge),
                     new ChatMessage(ChatRole.User, secretUser)
@@ -189,7 +195,16 @@ public sealed class ProviderCallBudgetChatClientTests
         }
 
         var json = JsonSerializer.Serialize(AssertEx.NotNull(budget.LastRoundContext));
-        foreach (var forbidden in new[] { secretPrompt, secretUser, secretInstructions, "SECRET-KNOWLEDGE-0a1b", tools[0].Description, "\"properties\"", "\"query\"" })
+        foreach (var forbidden in new[]
+                 {
+                     secretPrompt,
+                     secretUser,
+                     secretInstructions,
+                     "SECRET-KNOWLEDGE-0a1b",
+                     tools[0].Description,
+                     "\"properties\"",
+                     "\"query\""
+                 })
         {
             AssertEx.False(json.Contains(forbidden, StringComparison.Ordinal), $"The snapshot must not carry '{forbidden}'.");
         }
@@ -202,7 +217,12 @@ public sealed class ProviderCallBudgetChatClientTests
     {
         using var inner = new CapturingChatClient
         {
-            ResponseUsage = new UsageDetails { InputTokenCount = 812, OutputTokenCount = 40, ReasoningTokenCount = 9 }
+            ResponseUsage = new UsageDetails
+            {
+                InputTokenCount = 812,
+                OutputTokenCount = 40,
+                ReasoningTokenCount = 9
+            }
         };
         using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
 
@@ -232,7 +252,15 @@ public sealed class ProviderCallBudgetChatClientTests
         using var inner = new CapturingChatClient();
         using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
 
-        var snapshot = await StreamRoundsAsync(sut, inner, usagePerRound: [new UsageDetails { InputTokenCount = 500, OutputTokenCount = 20 }, null]);
+        var snapshot = await StreamRoundsAsync(sut, inner, usagePerRound:
+        [
+            new UsageDetails
+            {
+                InputTokenCount = 500,
+                OutputTokenCount = 20
+            },
+            null
+        ]);
 
         AssertEx.Equal(expected: 2, inner.ReceivedMessageSets.Count);
         AssertEx.Null(snapshot.ProviderInputTokens, "An earlier round's counts must never pair with the final round's estimate.");
@@ -244,7 +272,11 @@ public sealed class ProviderCallBudgetChatClientTests
     {
         using var inner = new CapturingChatClient
         {
-            ResponseUsage = new UsageDetails { InputTokenCount = 640, OutputTokenCount = 12 }
+            ResponseUsage = new UsageDetails
+            {
+                InputTokenCount = 640,
+                OutputTokenCount = 12
+            }
         };
         using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
 
@@ -283,7 +315,10 @@ public sealed class ProviderCallBudgetChatClientTests
 
     private static ChatMessage Tagged(ChatMessage message, string kind)
     {
-        message.AdditionalProperties = new AdditionalPropertiesDictionary { [ContextMessageKinds.Key] = kind };
+        message.AdditionalProperties = new AdditionalPropertiesDictionary
+        {
+            [ContextMessageKinds.Key] = kind
+        };
         return message;
     }
 

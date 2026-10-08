@@ -116,12 +116,27 @@ public sealed class LocalChatMapperPartsTests
                 ConversationTokens = 90,
                 TotalTokens = 800
             },
-            Tools = [new NodeChatContextWindowTool { Name = "get_time", Tokens = 50 }],
+            Tools =
+            [
+                new NodeChatContextWindowTool
+                {
+                    Name = "get_time",
+                    Tokens = 50
+                }
+            ],
             ToolsWithheldCount = 3,
-            Trimmed = new NodeChatContextWindowTrim { MessagesDropped = 1, ToolResultsTruncated = 2, ReasoningStripped = 4 }
+            Trimmed = new NodeChatContextWindowTrim
+            {
+                MessagesDropped = 1,
+                ToolResultsTruncated = 2,
+                ReasoningStripped = 4
+            }
         };
 
-        var response = AssertEx.NotNull((BuildMessage(null) with { ContextWindow = window }).ToResponse().ContextWindow);
+        var response = AssertEx.NotNull((BuildMessage(null) with
+        {
+            ContextWindow = window
+        }).ToResponse().ContextWindow);
 
         // Same property names on both sides: the serialized REST mirror equals the serialized DTO.
         AssertEx.Equal(JsonSerializer.Serialize(window, WebOptions), JsonSerializer.Serialize(response, WebOptions));

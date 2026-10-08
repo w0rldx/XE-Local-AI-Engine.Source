@@ -39,7 +39,11 @@ internal static class ModelsEndpoint
             data.Add(entry);
         }
 
-        await FakeOpenAiGatewayEndpointMapper.WriteJsonAsync(context, new JsonObject { ["object"] = "list", ["data"] = data });
+        await FakeOpenAiGatewayEndpointMapper.WriteJsonAsync(context, new JsonObject
+        {
+            ["object"] = "list",
+            ["data"] = data
+        });
         return Results.Empty;
     }
 }

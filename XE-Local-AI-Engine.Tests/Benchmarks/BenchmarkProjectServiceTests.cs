@@ -1154,6 +1154,7 @@ public sealed class BenchmarkProjectServiceTests
 
         /// <summary>The models the store reports a <c>measureExisting</c> write would enqueue.</summary>
         public IReadOnlyList<string> MissingFidelityModelNames { get; set; } = [RunModelName];
+
         public const string BaseFingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
         public IBenchmarkCatalogService Catalog { get; }

@@ -786,7 +786,10 @@ public sealed partial class InvocationRunner
                 // and the budgeter both carry AdditionalProperties through to the raw round.
                 if (message.Kind is { } kind)
                 {
-                    chatMessage.AdditionalProperties = new AdditionalPropertiesDictionary { [ContextMessageKinds.Key] = MapContextKind(kind) };
+                    chatMessage.AdditionalProperties = new AdditionalPropertiesDictionary
+                    {
+                        [ContextMessageKinds.Key] = MapContextKind(kind)
+                    };
                 }
 
                 messages.Add(chatMessage);

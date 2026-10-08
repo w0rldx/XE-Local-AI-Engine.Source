@@ -1028,7 +1028,14 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                                .Returns(new ResolvedAgentRuntime("Orchestrator persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 4,
                                    agentDefinitionId, "Orchestrator", Kind: AgentDefinitionKind.Orchestrator,
-                                   CloudWithheldTools: [new CloudWithheldTool { Name = "spawn_subagent", Switch = CloudToolSwitch.SubAgents }]));
+                                   CloudWithheldTools:
+                                   [
+                                       new CloudWithheldTool
+                                       {
+                                           Name = "spawn_subagent",
+                                           Switch = CloudToolSwitch.SubAgents
+                                       }
+                                   ]));
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                              .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration
@@ -1040,7 +1047,14 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                                  AgentDefinitionVersion = 4,
                                  AnyParticipantIsCloud = true,
                                  FirstCloudParticipantModel = "azure-specialist-deploy",
-                                 CloudWithheldTools = [new CloudWithheldTool { Name = "mcp__weather__get_forecast", Switch = CloudToolSwitch.McpTools }]
+                                 CloudWithheldTools =
+                                 [
+                                     new CloudWithheldTool
+                                     {
+                                         Name = "mcp__weather__get_forecast",
+                                         Switch = CloudToolSwitch.McpTools
+                                     }
+                                 ]
                              }));
 
         var service = new NodeChatRegenerationService(persistence,
@@ -1497,9 +1511,21 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                      .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>(providerReportsWithheld
                          ?
                          [
-                             new CloudWithheldTool { Name = "spawn_subagent", Switch = CloudToolSwitch.SubAgents },
-                             new CloudWithheldTool { Name = "web_fetch", Switch = CloudToolSwitch.WebTools },
-                             new CloudWithheldTool { Name = "mcp__weather__get_forecast", Switch = CloudToolSwitch.McpTools }
+                             new CloudWithheldTool
+                             {
+                                 Name = "spawn_subagent",
+                                 Switch = CloudToolSwitch.SubAgents
+                             },
+                             new CloudWithheldTool
+                             {
+                                 Name = "web_fetch",
+                                 Switch = CloudToolSwitch.WebTools
+                             },
+                             new CloudWithheldTool
+                             {
+                                 Name = "mcp__weather__get_forecast",
+                                 Switch = CloudToolSwitch.McpTools
+                             }
                          ]
                          : []));
 

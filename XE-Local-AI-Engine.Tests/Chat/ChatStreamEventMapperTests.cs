@@ -488,7 +488,12 @@ public sealed class ChatStreamEventMapperTests
     [Test]
     public void MessageEvent_CarriesTheContextWindowOnTerminalEventsOnly()
     {
-        var correlation = new NodeChatMessageCorrelation { ConversationId = Guid.NewGuid(), MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() };
+        var correlation = new NodeChatMessageCorrelation
+        {
+            ConversationId = Guid.NewGuid(),
+            MessageId = Guid.NewGuid(),
+            RequestId = Guid.NewGuid()
+        };
         var window = new NodeChatContextWindowDto
         {
             Kind = NodeChatContextWindowKind.LastRound,
@@ -502,12 +507,23 @@ public sealed class ChatStreamEventMapperTests
             ContextWindow = window
         };
 
-        foreach (var terminal in new[] { ChatStreamEventTypes.AssistantCompleted, ChatStreamEventTypes.AssistantCancelled, ChatStreamEventTypes.AssistantFailed, ChatStreamEventTypes.AssistantInterrupted })
+        foreach (var terminal in new[]
+                 {
+                     ChatStreamEventTypes.AssistantCompleted,
+                     ChatStreamEventTypes.AssistantCancelled,
+                     ChatStreamEventTypes.AssistantFailed,
+                     ChatStreamEventTypes.AssistantInterrupted
+                 })
         {
             AssertEx.True(ReferenceEquals(window, ChatStreamEventMapper.MessageEvent(terminal, correlation, message, Timestamp, sequence: 1).ContextWindow), $"{terminal} must carry the snapshot.");
         }
 
-        foreach (var lifecycle in new[] { ChatStreamEventTypes.AssistantPending, ChatStreamEventTypes.AssistantQueued, ChatStreamEventTypes.AssistantStreaming })
+        foreach (var lifecycle in new[]
+                 {
+                     ChatStreamEventTypes.AssistantPending,
+                     ChatStreamEventTypes.AssistantQueued,
+                     ChatStreamEventTypes.AssistantStreaming
+                 })
         {
             AssertEx.Null(ChatStreamEventMapper.MessageEvent(lifecycle, correlation, message, Timestamp, sequence: 1).ContextWindow);
         }

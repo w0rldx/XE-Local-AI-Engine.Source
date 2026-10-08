@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DataIngestion;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -287,7 +288,7 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT ingestion_attempts FROM knowledge_documents WHERE document_id = $id;";
         command.Parameters.AddWithValue("$id", documentId);
-        return Convert.ToInt64(await command.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
     }
 
     private static KnowledgeIngestionService CreateService(NodeChatDbContext context, IDocumentTextExtractor? extractor = null, TimeProvider? timeProvider = null)

@@ -46,7 +46,10 @@ public sealed class ChatContextEstimateServiceTests
     {
         var harness = new Harness(CreateTool("get_time"), CreateTool("read_file"));
 
-        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = LocalModel }));
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = LocalModel
+        }));
 
         var expected = AssertEx.NotNull(estimate.Estimated);
         AssertEx.Equal(NodeChatContextWindowKind.PreSendEstimate, estimate.Kind);
@@ -76,7 +79,10 @@ public sealed class ChatContextEstimateServiceTests
         var offered = Enumerable.Range(0, NodeChatContextWindowDto.MaxToolEntries + 6).Select(static index => CreateTool($"tool_{index:D3}")).ToArray();
         var harness = new Harness(offered);
 
-        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = LocalModel }));
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = LocalModel
+        }));
 
         AssertEx.Equal(NodeChatContextWindowDto.MaxToolEntries, estimate.Tools.Count);
         var expected = AssertEx.NotNull(estimate.Estimated);
@@ -95,7 +101,11 @@ public sealed class ChatContextEstimateServiceTests
         harness.AgentResolver.ResolveAsync(agentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                .Returns(new ResolvedAgentRuntime("Agent persona.", [narrow], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 2, agentId, "Narrow"));
 
-        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = LocalModel, AgentId = agentId }));
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = LocalModel,
+            AgentId = agentId
+        }));
 
         AssertEx.Equal("get_time", string.Join(",", estimate.Tools.Select(static tool => tool.Name)));
         AssertEx.Equal(ConversationContextBudgeter.EstimateSystemPromptTokens(harness.Estimator, "Agent persona.", harness.Estimator.ResolveDivisor(LocalModel)),
@@ -107,7 +117,10 @@ public sealed class ChatContextEstimateServiceTests
     {
         var harness = new Harness(CreateTool("get_time"));
 
-        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = NoToolsModel }));
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = NoToolsModel
+        }));
 
         var expected = AssertEx.NotNull(estimate.Estimated);
         AssertEx.Empty(estimate.Tools);
@@ -122,7 +135,11 @@ public sealed class ChatContextEstimateServiceTests
         // The send honours the composer's local-tools toggle; with it off the round offers nothing, so neither may the estimate.
         var harness = new Harness(CreateTool("get_time"), CreateTool("read_file"));
 
-        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = LocalModel, UseLocalTools = false }));
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = LocalModel,
+            UseLocalTools = false
+        }));
 
         var expected = AssertEx.NotNull(estimate.Estimated);
         AssertEx.Empty(estimate.Tools);
@@ -137,7 +154,10 @@ public sealed class ChatContextEstimateServiceTests
     {
         var harness = new Harness(CreateTool("get_time"));
 
-        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = CloudModel }));
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = CloudModel
+        }));
 
         AssertEx.Equal(NodeDefaultWindow, estimate.WindowTokens);
     }
@@ -148,7 +168,10 @@ public sealed class ChatContextEstimateServiceTests
         // A pre-launch turn budgets against the node default, not the train ceiling, so the estimate must not promise more.
         var harness = new Harness(CreateTool("get_time"));
 
-        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = ColdGgufModel }));
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = ColdGgufModel
+        }));
 
         AssertEx.Equal(NodeDefaultWindow, estimate.WindowTokens);
     }
@@ -158,7 +181,10 @@ public sealed class ChatContextEstimateServiceTests
     {
         var harness = new Harness(CreateTool("get_time"));
 
-        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = WarmGgufModel }));
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = WarmGgufModel
+        }));
 
         AssertEx.Equal(WarmGgufLaunchedWindow, estimate.WindowTokens);
     }
@@ -168,7 +194,11 @@ public sealed class ChatContextEstimateServiceTests
     {
         var harness = new Harness(CreateTool("get_time"));
 
-        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = WarmGgufModel, NumCtx = 4096 }));
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = WarmGgufModel,
+            NumCtx = 4096
+        }));
 
         AssertEx.Equal(4096, estimate.WindowTokens);
     }
@@ -178,7 +208,11 @@ public sealed class ChatContextEstimateServiceTests
     {
         var harness = new Harness(CreateTool("get_time"));
 
-        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = WarmGgufModel, NumCtx = 65536 }));
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = WarmGgufModel,
+            NumCtx = 65536
+        }));
 
         AssertEx.Equal(WarmGgufLaunchedWindow, estimate.WindowTokens);
     }
@@ -189,7 +223,11 @@ public sealed class ChatContextEstimateServiceTests
         // No launched window is known, so the send path budgets the requested window unchanged, above the node default too.
         var harness = new Harness(CreateTool("get_time"));
 
-        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = ColdGgufModel, NumCtx = 20000 }));
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = ColdGgufModel,
+            NumCtx = 20000
+        }));
 
         AssertEx.Equal(20000, estimate.WindowTokens);
     }
@@ -200,8 +238,15 @@ public sealed class ChatContextEstimateServiceTests
         var harness = new Harness(CreateTool("get_time"));
         var floor = new ConversationContextBudgetOptions().ReservedOutputTokenFloor;
 
-        var baseline = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = LocalModel }));
-        var widened = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = LocalModel, MaxOutputTokens = floor + 3000 }));
+        var baseline = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = LocalModel
+        }));
+        var widened = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = LocalModel,
+            MaxOutputTokens = floor + 3000
+        }));
 
         AssertEx.Equal(floor, baseline.ReservedOutputTokens);
         AssertEx.Equal(floor + 3000, widened.ReservedOutputTokens);
@@ -216,8 +261,16 @@ public sealed class ChatContextEstimateServiceTests
     {
         var harness = new Harness(CreateTool("get_time"));
 
-        var baseline = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = WarmGgufModel }));
-        var overridden = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = WarmGgufModel, NumCtx = value, MaxOutputTokens = value }));
+        var baseline = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = WarmGgufModel
+        }));
+        var overridden = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = WarmGgufModel,
+            NumCtx = value,
+            MaxOutputTokens = value
+        }));
 
         AssertEx.Equal(WarmGgufLaunchedWindow, overridden.WindowTokens);
         AssertEx.Equal(baseline.ReservedOutputTokens, overridden.ReservedOutputTokens);
@@ -229,7 +282,10 @@ public sealed class ChatContextEstimateServiceTests
     {
         var harness = new Harness(CreateTool("get_time"));
 
-        AssertEx.Null(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = UnknownModel }));
+        AssertEx.Null(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = UnknownModel
+        }));
     }
 
     [Test]
@@ -237,7 +293,10 @@ public sealed class ChatContextEstimateServiceTests
     {
         var harness = new Harness(CreateTool("get_time"));
 
-        AssertEx.Null(await harness.Service.EstimateAsync(new ChatContextEstimateRequest { ModelName = " " }));
+        AssertEx.Null(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = " "
+        }));
     }
 
     private static AllowedToolDto CreateTool(string name)
@@ -277,7 +336,8 @@ public sealed class ChatContextEstimateServiceTests
 
             var details = Substitute.For<ILocalModelDetailsResolver>();
             details.ResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new LocalModelDetailsResolution.NoLocalDetails());
-            details.ResolveAsync(Arg.Is<string>(static name => string.Equals(name, LocalModel, StringComparison.Ordinal) || string.Equals(name, NoToolsModel, StringComparison.Ordinal)), Arg.Any<CancellationToken>())
+            details.ResolveAsync(Arg.Is<string>(static name => string.Equals(name, LocalModel, StringComparison.Ordinal) || string.Equals(name, NoToolsModel, StringComparison.Ordinal)),
+                       Arg.Any<CancellationToken>())
                    .Returns(new LocalModelDetailsResolution.Ollama(new OllamaModelDetails
                    {
                        MaxContextTokens = LocalWindow,

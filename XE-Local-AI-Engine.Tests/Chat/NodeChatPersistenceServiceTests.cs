@@ -666,9 +666,21 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
                 ConversationTokens = 90,
                 TotalTokens = 800
             },
-            Tools = [new NodeChatContextWindowTool { Name = "get_time", Tokens = 50 }],
+            Tools =
+            [
+                new NodeChatContextWindowTool
+                {
+                    Name = "get_time",
+                    Tokens = 50
+                }
+            ],
             ToolsWithheldCount = 3,
-            Trimmed = new NodeChatContextWindowTrim { MessagesDropped = 1, ToolResultsTruncated = 2, ReasoningStripped = 4 }
+            Trimmed = new NodeChatContextWindowTrim
+            {
+                MessagesDropped = 1,
+                ToolResultsTruncated = 2,
+                ReasoningStripped = 4
+            }
         };
 
         var json = NodeChatMetadataSerializer.Decode(AssertEx.NotNull(NodeChatMetadataSerializer.SerializeMetadata(null, null, null, null, null, null, null, contextWindow: window)));
@@ -678,7 +690,17 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Equal(window.Estimated, loaded.Estimated);
         AssertEx.Equal(window.Trimmed, loaded.Trimmed);
         AssertEx.Equal(window.Tools.Single(), loaded.Tools.Single());
-        AssertEx.Equal(window with { Estimated = null, Tools = [], Trimmed = null }, loaded with { Estimated = null, Tools = [], Trimmed = null });
+        AssertEx.Equal(window with
+        {
+            Estimated = null,
+            Tools = [],
+            Trimmed = null
+        }, loaded with
+        {
+            Estimated = null,
+            Tools = [],
+            Trimmed = null
+        });
         AssertEx.Null(NodeChatMetadataSerializer.DeserializeMetadata("""{"model":"llama","inputCount":5}""").ContextWindow);
     }
 

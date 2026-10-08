@@ -670,9 +670,18 @@ public sealed class NodeSettingsAdministrationServiceTests
 
         var result = await service.ApplyAgenticPatchAsync(field switch
         {
-            NodeSettingsField.KeepModelWarmModelName => new NodeSettingsAgenticPatch { KeepModelWarmModelName = malformed },
-            NodeSettingsField.RerankerModelName => new NodeSettingsAgenticPatch { RerankerModelName = malformed },
-            _ => new NodeSettingsAgenticPatch { AutoEffortFastModelName = malformed }
+            NodeSettingsField.KeepModelWarmModelName => new NodeSettingsAgenticPatch
+            {
+                KeepModelWarmModelName = malformed
+            },
+            NodeSettingsField.RerankerModelName => new NodeSettingsAgenticPatch
+            {
+                RerankerModelName = malformed
+            },
+            _ => new NodeSettingsAgenticPatch
+            {
+                AutoEffortFastModelName = malformed
+            }
         });
 
         AssertEx.False(result.Updated);

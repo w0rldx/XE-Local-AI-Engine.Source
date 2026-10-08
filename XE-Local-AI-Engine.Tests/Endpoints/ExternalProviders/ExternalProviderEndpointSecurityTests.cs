@@ -99,7 +99,11 @@ public sealed class ExternalProviderEndpointSecurityTests
         await using var factory = CreateFactory(store, Substitute.For<IExternalProviderAdministrationService>(), Substitute.For<IExternalProviderProbeService>());
         using var client = factory.CreateClient();
 
-        foreach (var route in new[] { "/api/local/v1/external-providers/connections", "/api/local/v1/external-providers/connections/gateway" })
+        foreach (var route in new[]
+                 {
+                     "/api/local/v1/external-providers/connections",
+                     "/api/local/v1/external-providers/connections/gateway"
+                 })
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, route);
             factory.AddNodeBearerToken(request);

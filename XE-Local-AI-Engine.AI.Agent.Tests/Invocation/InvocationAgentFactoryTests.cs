@@ -1368,7 +1368,10 @@ public sealed class InvocationAgentFactoryTests
     {
         var tagged = new ChatMessage(ChatRole.User, "Knowledge excerpt.")
         {
-            AdditionalProperties = new AdditionalPropertiesDictionary { [ContextMessageKinds.Key] = ContextMessageKinds.Knowledge }
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                [ContextMessageKinds.Key] = ContextMessageKinds.Knowledge
+            }
         };
         var definition = new InvocationAgentDefinition
         {

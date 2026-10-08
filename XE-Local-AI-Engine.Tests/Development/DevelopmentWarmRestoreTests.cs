@@ -142,7 +142,8 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
         };
         var (repository, data, snapshot, baseCommit) = await SeedAsync(DotnetProfile);
         sandbox.BaseCommit = baseCommit;
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink(),
+            StubNodeRuntimeSettings.Create().Build());
 
         // A failing warm records nothing, which is what leaves the workspace in the "cloned but never warmed" state a
         // crash between the clone and the first warm would also produce.
@@ -187,7 +188,8 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(worktree, "half-cloned.txt"), "interrupted\n");
         var partial = worktree + ".partial-" + Guid.NewGuid().ToString("N");
         Directory.CreateDirectory(partial);
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink(),
+            StubNodeRuntimeSettings.Create().Build());
 
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
 
@@ -202,7 +204,8 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
     {
         var (repository, data, snapshot, baseCommit) = await SeedAsync(profile);
         sandbox.BaseCommit = baseCommit;
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink(),
+            StubNodeRuntimeSettings.Create().Build());
         var binding = Binding(snapshot, repository);
         var session = await provider.PrepareAsync(snapshot, binding);
         return (session, () => provider.PrepareAsync(snapshot, binding));

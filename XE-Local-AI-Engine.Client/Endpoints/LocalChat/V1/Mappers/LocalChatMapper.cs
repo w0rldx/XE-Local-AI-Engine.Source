@@ -147,7 +147,14 @@ internal static class LocalChatMapper
                     TotalTokens = estimate.TotalTokens
                 }
                 : null,
-            Tools = [.. contextWindow.Tools.Select(static tool => new NodeChatContextWindowToolResponse { Name = tool.Name, Tokens = tool.Tokens })],
+            Tools =
+            [
+                .. contextWindow.Tools.Select(static tool => new NodeChatContextWindowToolResponse
+                {
+                    Name = tool.Name,
+                    Tokens = tool.Tokens
+                })
+            ],
             ToolsWithheldCount = contextWindow.ToolsWithheldCount,
             Trimmed = contextWindow.Trimmed is { } trim
                 ? new NodeChatContextWindowTrimResponse

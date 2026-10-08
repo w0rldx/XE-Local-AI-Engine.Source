@@ -138,8 +138,7 @@ public sealed class ExternalProviderRegistryTests
     [Test]
     public async Task TryResolveTransportBindingAsync_CarriesEachConnectionsOwnHeaders_SecretValuesIncluded()
     {
-        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(
-            Connection("box-a", models: ["qwen3"]) with
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("box-a", models: ["qwen3"]) with
             {
                 Headers = [ExternalProviderStoreTests.Header("X-Project", "a"), ExternalProviderStoreTests.Header("X-Token", "t-a", isSecret: true)]
             },

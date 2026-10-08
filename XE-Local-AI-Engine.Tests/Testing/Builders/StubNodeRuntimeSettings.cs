@@ -909,7 +909,8 @@ public sealed class StubNodeRuntimeSettings
         settings.GetDevWorkflowsEnabled().Returns(_ => _devWorkflowsEnabled);
         settings.GetExecutionPreviewsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _executionPreviewsEnabled);
         settings.GetExecutionPreviewsEnabled().Returns(_ => _executionPreviewsEnabled);
-        settings.GetSandboxSecurityProfileAsync(Arg.Any<CancellationToken>()).Returns(_ => _sandboxSecurityProfile);        settings.ResolveEffectiveValues(Arg.Any<StoredNodeSettings>())
+        settings.GetSandboxSecurityProfileAsync(Arg.Any<CancellationToken>()).Returns(_ => _sandboxSecurityProfile);
+        settings.ResolveEffectiveValues(Arg.Any<StoredNodeSettings>())
                 .Returns(call =>
                 {
                     var stored = call.Arg<StoredNodeSettings>();

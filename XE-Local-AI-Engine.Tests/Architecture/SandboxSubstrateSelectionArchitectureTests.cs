@@ -192,7 +192,11 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
     {
         foreach (var (name, requirements) in EnumerateDeclarations())
         {
-            foreach (var configKey in new[] { false, true })
+            foreach (var configKey in new[]
+                     {
+                         false,
+                         true
+                     })
             {
                 var low = SandboxSecurityProfilePolicy.Preconditions(requirements, SandboxSecurityProfile.Low, configKey);
                 AssertEx.Equal(configKey, low.RequireEgressDenial, $"{name}: under low, egress is required exactly when the configuration key says so.");

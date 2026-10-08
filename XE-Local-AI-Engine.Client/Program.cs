@@ -73,7 +73,6 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Hosting.Vault;
     using XE_Local_AI_Engine.Client.Hubs;
     using XE_Local_AI_Engine.Client.Middleware;
-    using XE_Local_AI_Engine.Client.Persistence;
     using XE_Local_AI_Engine.Client.Persistence.Sqlite;
     using XE_Local_AI_Engine.Client.Services.Auth;
     using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
