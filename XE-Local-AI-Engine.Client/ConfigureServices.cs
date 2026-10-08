@@ -75,6 +75,8 @@ public static class ConfigureServices
     // send on purpose (a run or instance that is already gone). Only those are dropped; any other exception still logs.
     private static readonly Func<LogEvent, bool> FromHubDispatcher = Matching.FromSource("Microsoft.AspNetCore.SignalR.Internal.DefaultHubDispatcher");
 
+    private static readonly Lock SerializerOptionsLock = new();
+
     public static void AddServices(this IHostApplicationBuilder builder, IConfiguration configuration, NodeStartupSettings startupSettings)
     {
         ArgumentNullException.ThrowIfNull(startupSettings);
@@ -272,11 +274,7 @@ public static class ConfigureServices
                    hubOptions.MaximumReceiveMessageSize = HubReceiveCeilingBytes(security.Value.MaxMessageSizeKb));
         // Seed the FastEndpoints serializer global HERE, at registration time, or the OpenAPI generator snapshots a PascalCase copy. The global is
         // process-wide, so a read-only one has been served with already. See docs/wiki/09-api-and-hubs.md ("Why the FastEndpoints serializer global is seeded at registration time").
-        var fastEndpointsSerializerOptions = new Config().Serializer.Options;
-        if (!fastEndpointsSerializerOptions.IsReadOnly)
-        {
-            ConfigureJsonSerializerOptions(fastEndpointsSerializerOptions);
-        }
+        ConfigureJsonSerializerOptions(new Config().Serializer.Options);
 
         builder.Services.SwaggerDocument(options =>
         {
@@ -541,32 +539,43 @@ public static class ConfigureServices
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        // Stated rather than inherited: a runtime options instance already carries camelCase from JsonSerializerDefaults.Web, but the FastEndpoints
-        // serializer global starts as a bare PascalCase JsonSerializerOptions and the OpenAPI generator snapshots THAT.
-        options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-        options.PropertyNameCaseInsensitive = true;
-        options.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
-        options.TypeInfoResolver ??= new DefaultJsonTypeInfoResolver();
-
-        if (!options.Converters.OfType<SlashCommandActionTypeDtoJsonConverter>().Any())
+        // One lock for every caller: the FastEndpoints serializer global is process-wide, and two hosts built at once would
+        // otherwise enumerate its converter list while the other inserts into it ("Collection was modified").
+        lock (SerializerOptionsLock)
         {
-            options.Converters.Insert(index: 0, new SlashCommandActionTypeDtoJsonConverter());
-        }
+            // Checked under the lock: options already served with are read-only and keep the seeding they were served under.
+            if (options.IsReadOnly)
+            {
+                return;
+            }
 
-        if (!options.Converters.OfType<LocalModelOriginJsonConverter>().Any())
-        {
-            options.Converters.Insert(index: 0, new LocalModelOriginJsonConverter());
-        }
+            // Stated rather than inherited: a runtime options instance already carries camelCase from JsonSerializerDefaults.Web, but the FastEndpoints
+            // serializer global starts as a bare PascalCase JsonSerializerOptions and the OpenAPI generator snapshots THAT.
+            options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+            options.PropertyNameCaseInsensitive = true;
+            options.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
+            options.TypeInfoResolver ??= new DefaultJsonTypeInfoResolver();
 
-        if (!options.Converters.Any(static converter => converter is JsonStringEnumConverter<McpServerApiKeyScope>))
-        {
-            options.Converters.Insert(index: 0,
-                new JsonStringEnumConverter<McpServerApiKeyScope>(JsonNamingPolicy.CamelCase, allowIntegerValues: false));
-        }
+            if (!options.Converters.OfType<SlashCommandActionTypeDtoJsonConverter>().Any())
+            {
+                options.Converters.Insert(index: 0, new SlashCommandActionTypeDtoJsonConverter());
+            }
 
-        if (!options.Converters.OfType<JsonStringEnumConverter>().Any())
-        {
-            options.Converters.Add(new JsonStringEnumConverter());
+            if (!options.Converters.OfType<LocalModelOriginJsonConverter>().Any())
+            {
+                options.Converters.Insert(index: 0, new LocalModelOriginJsonConverter());
+            }
+
+            if (!options.Converters.Any(static converter => converter is JsonStringEnumConverter<McpServerApiKeyScope>))
+            {
+                options.Converters.Insert(index: 0,
+                    new JsonStringEnumConverter<McpServerApiKeyScope>(JsonNamingPolicy.CamelCase, allowIntegerValues: false));
+            }
+
+            if (!options.Converters.OfType<JsonStringEnumConverter>().Any())
+            {
+                options.Converters.Add(new JsonStringEnumConverter());
+            }
         }
     }
 

@@ -46,7 +46,7 @@ public interface IKnowledgeDocumentCatalogService
     Task<KnowledgeDocumentStatus?> GetStatusAsync(Guid documentId, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Resets one document to <see cref="KnowledgeDocumentStatus.Pending" /> (clearing any failure reason) so a
+    ///     Resets one document to <see cref="KnowledgeDocumentStatus.Pending" /> (clearing any failure reason and attempts) so a
     ///     reindex can re-run the pipeline. Returns <see langword="false" /> when the id is unknown.
     /// </summary>
     Task<bool> ResetToPendingAsync(Guid documentId, CancellationToken cancellationToken);
@@ -68,7 +68,8 @@ public interface IKnowledgeDocumentCatalogService
     /// <remarks>
     ///     Non-terminal means anything other than <see cref="KnowledgeDocumentStatus.Indexed" /> or
     ///     <see cref="KnowledgeDocumentStatus.Failed" />; terminal rows are left untouched. The background worker then
-    ///     re-dispatches documents whose in-memory queue entry was lost to a crash or hard stop.
+    ///     re-dispatches documents whose in-memory queue entry was lost to a crash or hard stop. A document whose
+    ///     ingestion already started three times is marked Failed instead and is not returned.
     /// </remarks>
     Task<IReadOnlyList<Guid>> ResetNonTerminalToPendingAsync(CancellationToken cancellationToken);
 

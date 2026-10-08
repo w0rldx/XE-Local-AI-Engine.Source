@@ -1,6 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -39,10 +42,11 @@ public sealed class StartupDatabaseRecoveryHintTests : IDisposable
         Directory.CreateDirectory(webRoot);
 
         using var standardError = new StringWriter();
+        ProgramStartResult start;
         await TestServerWebAppFactory.HostStartupLock.WaitAsync();
         try
         {
-            _ = await AssertEx.ThrowsAsync<Exception>(() => Program.CreateAppAsync([], new ProgramAppCustomization
+            start = await Program.CreateAppAsync([], new ProgramAppCustomization
             {
                 ContentRootPath = TestServerWebAppFactory.ResolveClientContentRoot(),
                 WebRootPath = webRoot,
@@ -56,7 +60,7 @@ public sealed class StartupDatabaseRecoveryHintTests : IDisposable
                     ["EntityFramework:ServiceProviderCaching"] = "false"
                 },
                 ConfigureBuilder = static builder => builder.WebHost.UseTestServer()
-            }));
+            });
         }
         finally
         {
@@ -64,8 +68,29 @@ public sealed class StartupDatabaseRecoveryHintTests : IDisposable
         }
 
         var output = standardError.ToString();
+        AssertEx.Null(start.App, output);
+        AssertEx.Equal(expected: 9, start.ExitCode, output);
         AssertEx.True(output.Contains("is damaged or is not a SQLite database", StringComparison.Ordinal), output);
         AssertEx.True(output.Contains("node.sqlite.broken", StringComparison.Ordinal), output);
         AssertEx.True(output.Contains(newestSnapshot, StringComparison.Ordinal), output);
+    }
+
+    [Test]
+    public void IsDatabaseFailure_MatchesADatabaseExceptionAnywhereInTheChain()
+    {
+        AssertEx.True(Program.IsDatabaseFailure(new SqliteException("file is not a database", 26)));
+        AssertEx.True(Program.IsDatabaseFailure(new InvalidOperationException("wrapped", new SqliteException("disk I/O error", 10))));
+    }
+
+    [Test]
+    public void IsDatabaseFailure_LeavesFileOptionsAndContainerFailuresToPropagate()
+    {
+        // These surface inside the migration pass without the database failing: options and DI resolve there first, and the canvas
+        // staging step writes its own file. Exit 9 with a "restore the snapshot" hint would misreport them.
+        AssertEx.False(Program.IsDatabaseFailure(new IOException("disk full")));
+        AssertEx.False(Program.IsDatabaseFailure(new UnauthorizedAccessException("read-only")));
+        AssertEx.False(Program.IsDatabaseFailure(new OptionsValidationException("WorkSessions", typeof(object), ["MaxParkedSeconds is too large."])));
+        AssertEx.False(Program.IsDatabaseFailure(new InvalidOperationException("Unable to resolve service for type 'IFoo'.")));
+        AssertEx.False(Program.IsDatabaseFailure(new HostAbortedException()));
     }
 }

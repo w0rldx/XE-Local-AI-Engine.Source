@@ -86,7 +86,35 @@ public sealed class EngineCommandDispatchTests
         AssertEx.Contains(output.ToString(), "--reset-admin-password <password>");
         AssertEx.Contains(output.ToString(), "XE_DATA_DIR must be an absolute path");
         AssertEx.Contains(output.ToString(), "Desktop app: [--debug]");
-        AssertEx.Contains(output.ToString(), "Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable.");
+        AssertEx.Contains(output.ToString(), "Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable; 7 unlock port lost; 8 node key does not open the database; 9 database migration failed.");
+    }
+
+    [Test]
+    public async Task McpKey_WhenTheDatabaseExistsButItsKeyIsMissing_ReturnsExitEightNamingTheKeyFile()
+    {
+        var dataDirectory = Path.Combine(Path.GetTempPath(), "xe-key-custody", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dataDirectory);
+        await File.WriteAllBytesAsync(Path.Combine(dataDirectory, DesktopBootstrap.DatabaseFileName), [1, 2, 3]);
+        var original = Environment.GetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable);
+        using var error = new StringWriter();
+        try
+        {
+            Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, dataDirectory);
+            var result = await Program.CreateAppAsync(["--mcp-key", "delegate"], new ProgramAppCustomization
+            {
+                StandardError = error
+            });
+
+            AssertEx.Null(result.App);
+            AssertEx.Equal(expected: 8, result.ExitCode, error.ToString());
+            AssertEx.Contains(error.ToString(), DesktopBootstrap.KeyFileName);
+            AssertEx.False(File.Exists(Path.Combine(dataDirectory, DesktopBootstrap.KeyFileName)), "No key may be generated next to an existing database.");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, original);
+            Directory.Delete(dataDirectory, recursive: true);
+        }
     }
 
     [Test]

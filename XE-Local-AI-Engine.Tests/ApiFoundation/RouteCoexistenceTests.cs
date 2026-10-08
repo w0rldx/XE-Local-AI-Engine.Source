@@ -92,13 +92,25 @@ public sealed class RouteCoexistenceTests
 
         using var response = await client.GetAsync("/assets/missing-route-coexistence-file.js");
 
-        // 401, not 404: the SPA fallback's {*path:nonfile} constraint excludes a dotted path, so routing matches no
-        // endpoint at all — and the FallbackPolicy answers exactly that case, so an unmatched path fails closed.
-        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // 404: the SPA fallback's {*path:nonfile} constraint excludes a dotted path, so routing matches no endpoint, and
+        // the middleware after UseRouting answers an unmatched /assets path itself before the FallbackPolicy would challenge it.
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
         AssertEx.False(string.Equals(response.Content.Headers.ContentType?.MediaType,
                 "text/html",
                 StringComparison.OrdinalIgnoreCase),
             "File-like asset requests should not be rewritten to the SPA shell.");
+    }
+
+    [Test]
+    public async Task FileLikePath_OutsideAssets_WhenUnmatched_StillFailsClosed()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/missing-route-coexistence-file.js");
+
+        // The 404 is scoped to /assets: any other dotted path matches no endpoint and the FallbackPolicy still challenges it.
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Test]

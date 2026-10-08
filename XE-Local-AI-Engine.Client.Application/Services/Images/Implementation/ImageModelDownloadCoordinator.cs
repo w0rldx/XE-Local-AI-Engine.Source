@@ -143,10 +143,16 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
             SetTerminal(modelName, ImageModelDownloadPhase.Failed, exception.Message);
             _logger.LogWarning("Image model download failed for {ModelName}: insufficient disk space.", modelName);
         }
+        catch (UnauthorizedAccessException exception)
+        {
+            // A fixed, path-free text: the raw message names the denied path.
+            SetTerminal(modelName, ImageModelDownloadPhase.Failed, "The image models folder is not writable. Check its permissions.");
+            _logger.LogWarning(exception, "Image model download failed for {ModelName}: access denied.", modelName);
+        }
         catch (Exception exception)
         {
-            // Every other fault (an UnauthorizedAccessException on an unwritable models dir included) must still end
-            // the status, or the UI spins until restart. Never surface a raw message (URL or path): collapse it.
+            // Every other fault must still end the status, or the UI spins until restart. Never surface a raw
+            // message (URL or path): collapse it.
             SetTerminal(modelName, ImageModelDownloadPhase.Failed, "Download failed.");
             _logger.LogWarning(exception, "Image model download failed for {ModelName}.", modelName);
         }

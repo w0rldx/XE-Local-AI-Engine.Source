@@ -90,7 +90,9 @@ public sealed class ImageModelDownloadCoordinatorTests
 
         var status = await WaitForTerminalAsync(coordinator, ticket.ModelName);
         AssertEx.Equal(ImageModelDownloadPhase.Failed, status.Phase);
-        AssertEx.Equal("Download failed.", AssertEx.NotNull(status.SanitizedError));
+        var error = AssertEx.NotNull(status.SanitizedError);
+        AssertEx.Equal("The image models folder is not writable. Check its permissions.", error);
+        AssertEx.False(error.Contains("/models/images", StringComparison.Ordinal), "The denied path must not reach the status text.");
     }
 
     [Test]

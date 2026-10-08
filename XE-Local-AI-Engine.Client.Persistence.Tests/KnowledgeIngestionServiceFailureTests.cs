@@ -113,6 +113,183 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
         AssertEx.True(AssertEx.NotNull(failureReason).Contains("took too long", StringComparison.Ordinal), failureReason);
     }
 
+    [Test]
+    public async Task RunAsync_WhenIngestionStarts_CountsOneAttempt()
+    {
+        var databasePath = GetDatabasePath("ingestion-attempt-count.sqlite");
+        var documentId = Guid.NewGuid();
+        await MigrateAsync(databasePath);
+        await SeedPendingDocumentAsync(databasePath, documentId);
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await CreateService(context).RunAsync(documentId, CancellationToken.None);
+        }
+
+        AssertEx.Equal(1L, await ReadAttemptsAsync(databasePath, documentId), "The move to Extracting must count one ingestion attempt.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheWorkerStopsMidRun_ReturnsTheDocumentToPendingWithoutCountingTheAttempt()
+    {
+        var databasePath = GetDatabasePath("ingestion-clean-drain.sqlite");
+        var documentId = Guid.NewGuid();
+        await MigrateAsync(databasePath);
+        await SeedPendingDocumentAsync(databasePath, documentId);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var never = new TaskCompletionSource<DocumentStructuredExtractionResult>();
+        var extractor = Substitute.For<IDocumentTextExtractor>();
+        extractor.ExtractStructuredAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                 .Returns(_ =>
+                 {
+                     entered.TrySetResult();
+                     return never.Task;
+                 });
+        using var workerStop = new CancellationTokenSource();
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            var run = CreateService(context, extractor).RunAsync(documentId, workerStop.Token);
+            await entered.Task;
+            AssertEx.Equal(1L, await ReadAttemptsAsync(databasePath, documentId), "The run must have counted its start before the stop.");
+            await workerStop.CancelAsync();
+            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => run.WaitAsync(TimeSpan.FromSeconds(30)));
+        }
+
+        var (status, failureReason) = await ReadStatusAsync(databasePath, documentId);
+        AssertEx.Equal(KnowledgeDocumentStatus.Pending.ToString(), status);
+        AssertEx.Null(failureReason);
+        AssertEx.Equal(0L, await ReadAttemptsAsync(databasePath, documentId), "A clean worker stop must not burn an attempt.");
+    }
+
+    [Test]
+    public async Task ResetNonTerminalToPendingAsync_SplitsRequeuedFromRepeatedlyInterruptedDocuments()
+    {
+        var databasePath = GetDatabasePath("recovery-reset.sqlite");
+        await MigrateAsync(databasePath);
+        var fresh = Guid.NewGuid();
+        var retrying = Guid.NewGuid();
+        var exhausted = Guid.NewGuid();
+        var indexed = Guid.NewGuid();
+        var failed = Guid.NewGuid();
+        await SeedPendingDocumentAsync(databasePath, fresh);
+        await SeedPendingDocumentAsync(databasePath, retrying, KnowledgeDocumentStatus.Chunking, ingestionAttempts: 2);
+        await SeedPendingDocumentAsync(databasePath, exhausted, KnowledgeDocumentStatus.Embedding, ingestionAttempts: 3);
+        await SeedPendingDocumentAsync(databasePath, indexed, KnowledgeDocumentStatus.Indexed, ingestionAttempts: 5);
+        await SeedPendingDocumentAsync(databasePath, failed, KnowledgeDocumentStatus.Failed, ingestionAttempts: 4);
+
+        IReadOnlyList<Guid> requeued;
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            requeued = await CreateCatalog(context).ResetNonTerminalToPendingAsync(CancellationToken.None);
+        }
+
+        AssertEx.Equal(2, requeued.Count, "Only the fresh and the still-retrying documents are re-queued.");
+        AssertEx.True(requeued.Contains(fresh) && requeued.Contains(retrying), "Both documents under the limit must be re-queued.");
+        var (retryingStatus, retryingReason) = await ReadStatusAsync(databasePath, retrying);
+        AssertEx.Equal(KnowledgeDocumentStatus.Pending.ToString(), retryingStatus);
+        AssertEx.Null(retryingReason);
+        var (exhaustedStatus, exhaustedReason) = await ReadStatusAsync(databasePath, exhausted);
+        AssertEx.Equal(KnowledgeDocumentStatus.Failed.ToString(), exhaustedStatus);
+        AssertEx.Equal("Ingestion was interrupted repeatedly and was stopped.", exhaustedReason);
+        AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), (await ReadStatusAsync(databasePath, indexed)).Status);
+        AssertEx.Equal(KnowledgeDocumentStatus.Failed.ToString(), (await ReadStatusAsync(databasePath, failed)).Status);
+    }
+
+    [Test]
+    public async Task StartupRecovery_AfterThreeInterruptedStarts_FailsTheDocumentAndStopsRequeuingIt()
+    {
+        var databasePath = GetDatabasePath("recovery-third-boot.sqlite");
+        var documentId = Guid.NewGuid();
+        await MigrateAsync(databasePath);
+        await SeedPendingDocumentAsync(databasePath, documentId);
+
+        // Each boot re-queues the document and its run starts, then the process dies mid-pipeline.
+        for (var boot = 1; boot <= 3; boot++)
+        {
+            AssertEx.True((await ResetNonTerminalAsync(databasePath)).Contains(documentId), $"Boot {boot} must still re-queue the document.");
+            await SimulateCrashedStartAsync(databasePath, documentId);
+        }
+
+        AssertEx.False((await ResetNonTerminalAsync(databasePath)).Contains(documentId), "The fourth boot must not re-queue it again.");
+        var (status, failureReason) = await ReadStatusAsync(databasePath, documentId);
+        AssertEx.Equal(KnowledgeDocumentStatus.Failed.ToString(), status);
+        AssertEx.Equal("Ingestion was interrupted repeatedly and was stopped.", failureReason);
+        AssertEx.False((await ResetNonTerminalAsync(databasePath)).Contains(documentId), "A stopped document stays stopped on later boots.");
+    }
+
+    [Test]
+    public async Task ResetToPendingAsync_OnAStoppedDocument_ZeroesTheAttemptsSoRecoveryRequeuesItAgain()
+    {
+        var databasePath = GetDatabasePath("recovery-user-retry.sqlite");
+        var documentId = Guid.NewGuid();
+        await MigrateAsync(databasePath);
+        await SeedPendingDocumentAsync(databasePath, documentId, KnowledgeDocumentStatus.Failed, ingestionAttempts: 3);
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            AssertEx.True(await CreateCatalog(context).ResetToPendingAsync(documentId, CancellationToken.None));
+        }
+
+        AssertEx.Equal(0L, await ReadAttemptsAsync(databasePath, documentId), "An explicit retry must start the count again.");
+        AssertEx.True((await ResetNonTerminalAsync(databasePath)).Contains(documentId), "A retried document must survive the next boot's recovery.");
+    }
+
+    [Test]
+    public async Task ResetStaleDocumentsToPendingAsync_ZeroesTheAttempts()
+    {
+        // The seeded row carries no parser version, so it is stale against the current pipeline without a provider.
+        var databasePath = GetDatabasePath("recovery-stale-reset.sqlite");
+        var documentId = Guid.NewGuid();
+        await MigrateAsync(databasePath);
+        await SeedPendingDocumentAsync(databasePath, documentId, KnowledgeDocumentStatus.Indexed, ingestionAttempts: 2);
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            AssertEx.True((await CreateCatalog(context).ResetStaleDocumentsToPendingAsync(CancellationToken.None)).Contains(documentId),
+                "The seeded document must be treated as stale.");
+        }
+
+        AssertEx.Equal(0L, await ReadAttemptsAsync(databasePath, documentId), "A stale-index reset must start the count again.");
+    }
+
+    private async Task<IReadOnlyList<Guid>> ResetNonTerminalAsync(string databasePath)
+    {
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        return await CreateCatalog(context).ResetNonTerminalToPendingAsync(CancellationToken.None);
+    }
+
+    private static KnowledgeDocumentCatalogService CreateCatalog(NodeChatDbContext context)
+    {
+        var options = Options.Create(new KnowledgeBaseOptions());
+        return new KnowledgeDocumentCatalogService(context,
+            new ThrowingProviderResolver(),
+            new EmbeddingModelResolver(options),
+            options,
+            TimeProvider.System);
+    }
+
+    // What a run that reached Extracting leaves behind when the process is killed: the counted start, a mid-pipeline status.
+    private static async Task SimulateCrashedStartAsync(string databasePath, Guid documentId)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE knowledge_documents SET status = 'Embedding', ingestion_attempts = ingestion_attempts + 1 WHERE document_id = $id;";
+        command.Parameters.AddWithValue("$id", documentId);
+        _ = await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<long> ReadAttemptsAsync(string databasePath, Guid documentId)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT ingestion_attempts FROM knowledge_documents WHERE document_id = $id;";
+        command.Parameters.AddWithValue("$id", documentId);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture);
+    }
+
     private static KnowledgeIngestionService CreateService(NodeChatDbContext context, IDocumentTextExtractor? extractor = null, TimeProvider? timeProvider = null)
     {
         var options = Options.Create(new KnowledgeBaseOptions());
@@ -179,18 +356,22 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
         await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
-    private static async Task SeedPendingDocumentAsync(string databasePath, Guid documentId, KnowledgeDocumentStatus status = KnowledgeDocumentStatus.Pending)
+    private static async Task SeedPendingDocumentAsync(string databasePath,
+        Guid documentId,
+        KnowledgeDocumentStatus status = KnowledgeDocumentStatus.Pending,
+        int ingestionAttempts = 0)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            INSERT INTO knowledge_documents (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path, status, chunk_count, embedding_model, created_at_utc, updated_at_utc)
-            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, $status, 0, 'nomic-embed-text', 1, 1);
+            INSERT INTO knowledge_documents (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path, status, chunk_count, embedding_model, ingestion_attempts, created_at_utc, updated_at_utc)
+            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, $status, 0, 'nomic-embed-text', $attempts, 1, 1);
             """;
         command.Parameters.AddWithValue("$id", documentId);
         command.Parameters.AddWithValue("$status", status.ToString());
+        command.Parameters.AddWithValue("$attempts", ingestionAttempts);
         command.Parameters.AddWithValue("$name", new byte[]
         {
             1,

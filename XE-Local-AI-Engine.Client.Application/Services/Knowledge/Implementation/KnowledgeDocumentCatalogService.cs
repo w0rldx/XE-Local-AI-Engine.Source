@@ -21,6 +21,10 @@ using static Chat.Implementation.NodeChatPersistenceSql;
 /// </remarks>
 public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogService
 {
+    // Ingestion starts after which startup recovery stops re-queuing a document and fails it instead.
+    private const int MaxInterruptedAttempts = 3;
+    private const string InterruptedRepeatedlyReason = "Ingestion was interrupted repeatedly and was stopped.";
+
     private readonly NodeChatDbContext _dbContext;
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IEmbeddingModelResolver _embeddingModelResolver;
@@ -248,7 +252,8 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               UPDATE knowledge_documents
-                              SET status = $status, failure_reason = NULL, updated_at_utc = $updated_at_utc
+                              SET status = $status, failure_reason = NULL, updated_at_utc = $updated_at_utc,
+                                  ingestion_attempts = 0
                               WHERE document_id = $document_id;
                               """;
         AddParameter(command, "$status", KnowledgeDocumentStatus.Pending.ToString());
@@ -307,7 +312,8 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             updateCommand.Transaction = transaction;
             updateCommand.CommandText = """
                                         UPDATE knowledge_documents
-                                        SET status = $status, failure_reason = NULL, updated_at_utc = $updated_at_utc
+                                        SET status = $status, failure_reason = NULL, updated_at_utc = $updated_at_utc,
+                                            ingestion_attempts = 0
                                         WHERE status = $indexed AND document_id = $document_id;
                                         """;
             AddParameter(updateCommand, "$status", KnowledgeDocumentStatus.Pending.ToString());
@@ -337,9 +343,13 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         await using (var selectCommand = connection.CreateCommand())
         {
             selectCommand.Transaction = transaction;
-            selectCommand.CommandText = "SELECT document_id FROM knowledge_documents WHERE status <> $indexed AND status <> $failed;";
+            selectCommand.CommandText = """
+                                        SELECT document_id FROM knowledge_documents
+                                        WHERE status <> $indexed AND status <> $failed AND ingestion_attempts < $max_attempts;
+                                        """;
             AddParameter(selectCommand, "$indexed", indexedStatus);
             AddParameter(selectCommand, "$failed", failedStatus);
+            AddParameter(selectCommand, "$max_attempts", MaxInterruptedAttempts);
 
             await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
@@ -348,16 +358,21 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             }
         }
 
-        if (interruptedIds.Count > 0)
+        // A document whose every start ended with the process gone (a crash, an OOM kill) would otherwise re-run at every
+        // boot forever: past the limit it fails for good, and only an explicit retry (which zeroes the count) re-runs it.
+        await using (var updateCommand = connection.CreateCommand())
         {
-            await using var updateCommand = connection.CreateCommand();
             updateCommand.Transaction = transaction;
             updateCommand.CommandText = """
                                         UPDATE knowledge_documents
-                                        SET status = $status, failure_reason = NULL, updated_at_utc = $updated_at_utc
+                                        SET status = CASE WHEN ingestion_attempts >= $max_attempts THEN $failed ELSE $pending END,
+                                            failure_reason = CASE WHEN ingestion_attempts >= $max_attempts THEN $reason ELSE NULL END,
+                                            updated_at_utc = $updated_at_utc
                                         WHERE status <> $indexed AND status <> $failed;
                                         """;
-            AddParameter(updateCommand, "$status", KnowledgeDocumentStatus.Pending.ToString());
+            AddParameter(updateCommand, "$pending", KnowledgeDocumentStatus.Pending.ToString());
+            AddParameter(updateCommand, "$reason", InterruptedRepeatedlyReason);
+            AddParameter(updateCommand, "$max_attempts", MaxInterruptedAttempts);
             AddParameter(updateCommand, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
             AddParameter(updateCommand, "$indexed", indexedStatus);
             AddParameter(updateCommand, "$failed", failedStatus);

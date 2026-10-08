@@ -76,6 +76,12 @@ internal static class AddNodeDevelopmentExtensions
         builder.Services.AddSingleton<IHostedService>(static services => services.GetRequiredService<DevelopmentAttemptExecutionSupervisor>());
         builder.Services.AddScoped<IDevelopmentManagementService, DevelopmentManagementService>();
         builder.Services.AddHostedService<DevelopmentStartupReconciler>();
+        // Per-task workspace retention; nothing else deletes a workspace. After the reconciler, which settles attempts first.
+        builder.Services.AddOptions<DevelopmentWorkspaceRetentionOptions>()
+               .Bind(configuration.GetSection(DevelopmentWorkspaceRetentionOptions.SectionName))
+               .ValidateDataAnnotations()
+               .ValidateOnStart();
+        builder.Services.AddHostedService<DevelopmentWorkspaceRetentionService>();
         return builder;
     }
 }

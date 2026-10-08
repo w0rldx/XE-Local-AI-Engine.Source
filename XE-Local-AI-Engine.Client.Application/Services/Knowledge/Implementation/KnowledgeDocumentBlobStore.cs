@@ -423,6 +423,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
                                                 vector_dim = 0,
                                                 parser_version = $parser_version,
                                                 chunker_version = $chunker_version,
+                                                ingestion_attempts = 0,
                                                 updated_at_utc = $updated_at_utc
                                             WHERE document_id = $document_id
                                               AND collection_id = $collection_id;
@@ -559,7 +560,8 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               UPDATE knowledge_documents
-                              SET status = $status, failure_reason = NULL, chunk_count = 0, updated_at_utc = $updated_at_utc
+                              SET status = $status, failure_reason = NULL, chunk_count = 0, ingestion_attempts = 0,
+                                  updated_at_utc = $updated_at_utc
                               WHERE document_id = $document_id;
                               """;
         AddParameter(command, "$status", KnowledgeDocumentStatus.Pending.ToString());

@@ -174,10 +174,16 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
             SetTerminal(entry.Id, WhisperModelDownloadPhase.Failed, exception.Message);
             _logger.LogWarning("Transcription model download failed for {ModelId}: insufficient disk space.", entry.Id);
         }
+        catch (UnauthorizedAccessException exception)
+        {
+            // A fixed, path-free text: the raw message names the denied path.
+            SetTerminal(entry.Id, WhisperModelDownloadPhase.Failed, "The models folder is not writable. Check its permissions.");
+            _logger.LogWarning(exception, "Transcription model download failed for {ModelId}: access denied.", entry.Id);
+        }
         catch (Exception exception)
         {
-            // Every other fault (an UnauthorizedAccessException on an unwritable models dir included) must still end
-            // the status, or the UI spins until restart. Never surface a raw message: it can carry a URL or a path.
+            // Every other fault must still end the status, or the UI spins until restart. Never surface a raw
+            // message: it can carry a URL or a path.
             SetTerminal(entry.Id, WhisperModelDownloadPhase.Failed, "Download failed.");
             _logger.LogWarning(exception, "Transcription model download failed for {ModelId}.", entry.Id);
         }

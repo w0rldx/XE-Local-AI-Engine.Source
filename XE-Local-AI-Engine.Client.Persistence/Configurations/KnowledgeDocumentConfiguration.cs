@@ -54,6 +54,11 @@ internal sealed class KnowledgeDocumentConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.FailureReason)
                .HasColumnName("failure_reason");
 
+        // A database default, because the raw-SQL insert path does not name this column.
+        builder.Property(entity => entity.IngestionAttempts)
+               .HasColumnName("ingestion_attempts")
+               .HasDefaultValue(0);
+
         builder.Property(entity => entity.ChunkCount)
                .HasColumnName("chunk_count");
 

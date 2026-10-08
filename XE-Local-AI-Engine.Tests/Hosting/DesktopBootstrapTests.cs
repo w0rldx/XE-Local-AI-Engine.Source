@@ -4,6 +4,7 @@ using System.Runtime.Versioning;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Hosting;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Vault;
 using XE_Local_AI_Engine.Client.Services.Vault.Implementation;
@@ -415,7 +416,7 @@ public sealed class DesktopBootstrapTests : IDisposable
         await File.WriteAllBytesAsync(Path.Combine(temp.DataDirectory, DesktopBootstrap.DatabaseFileName), [1, 2, 3]);
         using var configuration = new ConfigurationManager();
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await AssertEx.ThrowsAsync<NodeKeyCustodyException>(() =>
         {
             DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
             return Task.CompletedTask;

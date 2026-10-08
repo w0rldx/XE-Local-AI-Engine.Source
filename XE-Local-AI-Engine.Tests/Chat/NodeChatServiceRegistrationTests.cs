@@ -13,9 +13,6 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// AddServices mutates the process-global JSON serializer options, so two of these tests at once can enumerate the
-// converter list while the other inserts into it ("Collection was modified").
-[NotInParallel(nameof(NodeChatServiceRegistrationTests))]
 [Category(TestCategories.Integration)]
 public sealed class NodeChatServiceRegistrationTests : IDisposable
 {

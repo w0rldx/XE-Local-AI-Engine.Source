@@ -1,5 +1,6 @@
 using Serilog;
 using XE_Local_AI_Engine.Client.Hosting;
+using XE_Local_AI_Engine.Client.Persistence;
 
 // IMPORTANT: Velopack hook dispatch must be the first executable statement and stay outside the top-level catch, because hook-driven exits must not be
 // logged as startup failures. The Windows distribution uses the adjacent C# launcher as its managed executable locator; Linux and dev keep the default.
@@ -21,6 +22,13 @@ try
 catch (HostAbortedException)
 {
     Log.Information("The Application was aborted");
+}
+catch (NodeKeyCustodyException ex)
+{
+    // Raised by the node-key check while the host starts: a refusal with an operator-facing message, not a crash.
+    Log.Fatal(ex, "The node key cannot open the database; startup stopped.");
+    await Console.Error.WriteLineAsync(ex.Message);
+    return XE_Local_AI_Engine.Client.Program.NodeKeyCustodyExitCode;
 }
 catch (Exception ex)
 {
@@ -65,6 +73,7 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Hosting.Vault;
     using XE_Local_AI_Engine.Client.Hubs;
     using XE_Local_AI_Engine.Client.Middleware;
+    using XE_Local_AI_Engine.Client.Persistence;
     using XE_Local_AI_Engine.Client.Persistence.Sqlite;
     using XE_Local_AI_Engine.Client.Services.Auth;
     using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
@@ -345,7 +354,24 @@ namespace XE_Local_AI_Engine.Client
 
                 // A double-click launch supplies neither the node SQLite connection string nor the operator secret, so fill them from the per-user data directory
                 // BEFORE AddServices reads configuration below. Each key is layered in only when absent, so any value already supplied wins.
-                vaultState = DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration);
+                try
+                {
+                    vaultState = DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration);
+                }
+                catch (NodeKeyCustodyException custodyException)
+                {
+                    Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
+                    StartupLoggerReady = true;
+                    Log.Fatal(custodyException, "The node key cannot open the database; startup stopped.");
+                    await standardError.WriteLineAsync(custodyException.Message);
+                    await Log.CloseAndFlushAsync();
+                    instanceLease.Dispose();
+                    return new ProgramStartResult
+                    {
+                        App = null,
+                        ExitCode = NodeKeyCustodyExitCode
+                    };
+                }
             }
 
             builder.Logging.ClearProviders();
@@ -548,13 +574,19 @@ namespace XE_Local_AI_Engine.Client
                 await ApplyNodeIdentityMigrationsAsync(app.Services);
                 Log.Information("Database migrations applied.");
             }
-            catch (Exception migrationException)
+            catch (Exception migrationException) when (IsDatabaseFailure(migrationException))
             {
-                // Fail-loud is unchanged (the migration services already run transactionally and rethrow); this only adds a
-                // targeted error line with the cause before the top-level catch logs the generic fatal + rethrows.
+                // Only a database failure exits 9 with the recovery hint. Invalid options or a DI failure also surface here, the first
+                // place the container resolves services, and keep propagating to the top-level catch.
                 Log.Error(migrationException, "Database migrations failed to apply.");
                 await ReportDatabaseRecoveryAsync(app, migrationException, standardError);
-                throw;
+                await Log.CloseAndFlushAsync();
+                instanceLease?.Dispose();
+                return new ProgramStartResult
+                {
+                    App = null,
+                    ExitCode = DatabaseMigrationFailedExitCode
+                };
             }
 
             // Local admin password recovery, handled AFTER identity migrations guarantee the tables and Admin role and BEFORE the web host serves, so it runs against the SAME
@@ -683,12 +715,21 @@ namespace XE_Local_AI_Engine.Client
             // The SPA shell must not answer for the local API: detaching the selected endpoint here, rather than mapping a second fallback over the prefix, is
             // deliberate and is pinned by ValidateExecutableEndpointTests. See docs/wiki/09-api-and-hubs.md ("Static SPA fallback").
             var localApiPrefixPath = new PathString($"/{LocalApiRoutes.Prefix}");
+            var spaAssetsPath = new PathString("/assets");
             app.Use(async (context, next) =>
             {
                 if (context.GetEndpoint()?.Metadata.GetMetadata<SpaFallbackMarker>() is not null
                     && context.Request.Path.StartsWithSegments(localApiPrefixPath, StringComparison.OrdinalIgnoreCase))
                 {
                     context.SetEndpoint(endpoint: null);
+                }
+
+                // A bundle file static files did not serve is missing, not unauthorized: answer 404 before the FallbackPolicy
+                // challenges the unmatched request. A route mapped under /assets still has its endpoint and passes.
+                if (context.GetEndpoint() is null && context.Request.Path.StartsWithSegments(spaAssetsPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                    return;
                 }
 
                 await next(context);

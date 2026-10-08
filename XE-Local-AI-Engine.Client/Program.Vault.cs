@@ -16,6 +16,12 @@ public sealed partial class Program
     /// <summary>Exit code: the unlock page's port stayed taken after an unlock, so the real host did not start on a new origin.</summary>
     private const int UnlockPortLostExitCode = 7;
 
+    /// <summary>Exit code: the node key does not match the database, or the database's key file is missing.</summary>
+    internal const int NodeKeyCustodyExitCode = 8;
+
+    /// <summary>Exit code: the database migration pass failed; stderr names how to restore or move the database aside.</summary>
+    internal const int DatabaseMigrationFailedExitCode = 9;
+
     /// <summary>
     ///     Unwraps a locked v2 <c>node.key</c> before the host is built (ADR 0018). A CLI one-shot unlocks from what it
     ///     was given and never serves; anything else runs the <see cref="VaultUnlockHost" /> pre-host until the operator

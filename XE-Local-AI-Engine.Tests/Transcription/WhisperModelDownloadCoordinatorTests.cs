@@ -109,7 +109,9 @@ public sealed class WhisperModelDownloadCoordinatorTests
 
         await AssertEx.EventuallyAsync(() => fixture.Phase("base") == WhisperModelDownloadPhase.Failed, TestBudgets.Contended);
         var status = AssertEx.NotNull(fixture.Coordinator.GetStatus("base"));
-        AssertEx.Equal("Download failed.", AssertEx.NotNull(status.SanitizedError));
+        var error = AssertEx.NotNull(status.SanitizedError);
+        AssertEx.Equal("The models folder is not writable. Check its permissions.", error);
+        AssertEx.False(error.Contains("/models/whisper", StringComparison.Ordinal), "The denied path must not reach the status text.");
     }
 
     [Test]

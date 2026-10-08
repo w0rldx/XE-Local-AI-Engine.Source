@@ -27,6 +27,9 @@ public sealed class EngineCliProcessTests : IDisposable
 
     private const string ReadyPrefix = "XE_READY=1 ";
 
+    /// <summary>The node name every child runs under unless a test changes it; it is part of the node key derivation.</summary>
+    private const string DefaultNodeName = "engine-cli-test";
+
     private static readonly TimeSpan HandOverDeadline = TimeSpan.FromSeconds(60);
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-engine-cli-" + Guid.NewGuid().ToString("N"));
@@ -394,6 +397,26 @@ public sealed class EngineCliProcessTests : IDisposable
         }
     }
 
+    [Test]
+    public async Task Serve_WhenTheNodeKeyDoesNotMatchTheDatabase_ExitsEightInsteadOfCrashing()
+    {
+        Directory.CreateDirectory(_root);
+        await SetupLockedVaultAsync();
+        await using (var engine = StartServing(["--mcp-only"]))
+        {
+            // Readiness comes after the hosted services started, so the node-key check value is recorded by now.
+            AssertEx.NotNull(await engine.ReadReadyLineAsync(), "The first serve must reach readiness and record the key check.");
+        }
+
+        // The same node.key under another node name derives another database key, which the recorded check refuses.
+        var mismatched = await RunAsync(["--mcp-only"], launchMode: null, nodeName: "another-node-name");
+
+        AssertEx.Equal(expected: 8, mismatched.ExitCode, mismatched.CombinedOutput);
+        AssertEx.Contains(mismatched.StandardError, "does not match this database");
+        AssertEx.Contains(mismatched.StandardError, $"move {DesktopBootstrap.DatabaseFileName} aside");
+        AssertEx.False(mismatched.StandardOutput.Contains(ReadyPrefix, StringComparison.Ordinal), "A refused key must never announce readiness.");
+    }
+
     private static bool TryHold(int port, out TcpListener? holder)
     {
         var listener = new TcpListener(IPAddress.Loopback, port);
@@ -452,12 +475,13 @@ public sealed class EngineCliProcessTests : IDisposable
     private async Task<CommandResult> RunAsync(IReadOnlyList<string> arguments,
         string? launchMode,
         string? dataDirectory = null,
-        string? adminPassword = AdminPassword)
+        string? adminPassword = AdminPassword,
+        string nodeName = DefaultNodeName)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         using var process = new Process
         {
-            StartInfo = CreateStartInfo(arguments, launchMode, dataDirectory ?? _root, adminPassword)
+            StartInfo = CreateStartInfo(arguments, launchMode, dataDirectory ?? _root, adminPassword, nodeName)
         };
         if (!process.Start())
         {
@@ -499,7 +523,11 @@ public sealed class EngineCliProcessTests : IDisposable
         return new RunningEngine(process);
     }
 
-    private static ProcessStartInfo CreateStartInfo(IReadOnlyList<string> arguments, string? launchMode, string dataDirectory, string? adminPassword = AdminPassword)
+    private static ProcessStartInfo CreateStartInfo(IReadOnlyList<string> arguments,
+        string? launchMode,
+        string dataDirectory,
+        string? adminPassword = AdminPassword,
+        string nodeName = DefaultNodeName)
     {
         var startInfo = new ProcessStartInfo("dotnet")
         {
@@ -517,7 +545,7 @@ public sealed class EngineCliProcessTests : IDisposable
 
         startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Testing";
         startInfo.Environment["DOTNET_ENVIRONMENT"] = "Testing";
-        startInfo.Environment["WorkerNode__NodeName"] = "engine-cli-test";
+        startInfo.Environment["WorkerNode__NodeName"] = nodeName;
         startInfo.Environment[DesktopBootstrap.DataDirectoryEnvironmentVariable] = dataDirectory;
         startInfo.Environment[DesktopLaunch.AdminEmailEnvironmentVariable] = "agent@example.test";
         if (adminPassword is not null)

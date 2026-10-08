@@ -268,7 +268,7 @@ public sealed class NodeChatDbContext : DbContext
 
     /// <summary>
     ///     Checks the node key against the value this database recorded under it on first run, and records it when absent.
-    ///     Throws <see cref="InvalidOperationException" /> on a mismatch.
+    ///     Throws <see cref="NodeKeyCustodyException" /> on a mismatch.
     /// </summary>
     /// <remarks>
     ///     The value is an HMAC of a fixed label, so it reveals nothing about the key. Without a recorded value the key is
@@ -337,11 +337,12 @@ public sealed class NodeChatDbContext : DbContext
         _ = await Set<T>().AsNoTracking().Take(3).ToListAsync(cancellationToken);
     }
 
-    private static InvalidOperationException NodeKeyMismatch(Exception? innerException)
+    private NodeKeyCustodyException NodeKeyMismatch(Exception? innerException)
     {
-        return new InvalidOperationException("The node encryption key does not match this database: it was created under a different node.key, "
-                                             + "XE_NODE_SQLITE_KEY or WorkerNode:NodeName. Restore the original key or setting, or move node.sqlite aside "
-                                             + "to start with a new empty database. Startup stopped so nothing is written under the wrong key.",
+        var databaseFileName = Path.GetFileName(Database.GetDbConnection().DataSource);
+        return new NodeKeyCustodyException("The node encryption key does not match this database: it was created under a different node.key, "
+                                           + $"XE_NODE_SQLITE_KEY or WorkerNode:NodeName. Restore the original key or setting, or move {databaseFileName} aside "
+                                           + "to start with a new empty database. Startup stopped so nothing is written under the wrong key.",
             innerException);
     }
 

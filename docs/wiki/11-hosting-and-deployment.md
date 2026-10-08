@@ -147,6 +147,7 @@ Module-owned workers worth knowing about, registered alongside their feature rat
 | `GgufAcquisitionArtifactStartupReaper` | `Providers.HuggingFace` | sweeps partial GGUF acquisition artifacts left by a previous run |
 | `AppUpdateCheckService` | `AddAppUpdateExtensions` (local mode only) | one app self-update check per start, off the startup path (see [In-app self-update](#in-app-self-update-velopack)) |
 | `AgentHomeRunRetentionService` | `AddNodeAgentHomeExtensions` | retention sweep for the on-disk AgentHome run directories |
+| `DevelopmentWorkspaceRetentionService` | `AddNodeDevelopmentExtensions` | retention sweep for finished Development Mode task workspaces (see [Architecture Overview](01-architecture-overview.md#development-mode-registered-source-managed-worktree)) |
 | `DevWorkflowDefinitionSeeder`, `DevWorkflowStartupReconciler` | `AddNodeDevWorkflowsExtensions` | seed the shipped definition templates by slug; make node runs a crashed host left mid-flight dispatchable again (see [Dev Workflows](25-dev-workflows.md)) |
 | `GraphWorkflowStartupReconciler` | `AddNodeGraphWorkflowsExtensions` | make node runs a crashed host left in flight judgeable again (see [Graph Workflows](21-graph-workflows.md)) |
 | `WorkSessionStartupReconciler`, `WorkSessionAgentSeeder` | `AddNodeWorkSessionsExtensions` | collapse sessions a crashed host left mid-flight to `Interrupted`; seed the General and Research work-session personas |
@@ -348,6 +349,11 @@ canonical `ready.json` with `{version,url,mcpUrl,dataDir,pid,startedAtUtc}`. Gra
 the file; consumers must reject it when the PID is dead and poll `/health/ready` before trusting it.
 `--status --json` is one-shot, never starts the host or creates the data directory, and returns
 `{running,version,url,mcpUrl,dataDir,setupRequired,vault,installKind}`, where `vault` is `pending`, `locked` or `unlocked` (null when not running).
+
+Two startup refusals exit with their own code and an operator-facing stderr message instead of crashing: a node key
+that cannot open the database (it does not match the database's recorded key check, or `node.key` is missing next to
+an existing `node.sqlite`) exits **8**, and a failed database migration exits **9** after the restore or move-aside
+hint. The full exit-code list is in `--help` and the [agent install guide](../agentic-support/agent-install.md#11-exit-codes-and-troubleshooting).
 
 **Locked start ([ADR 0018](../adr/0018-local-vault-passphrase-wrapped-node-key.md)).** When `node.key` is a v2 vault
 (`DesktopBootstrap.EnsureLocalDataConfiguration` returns `VaultState.Locked`), `Program` holds the single-instance

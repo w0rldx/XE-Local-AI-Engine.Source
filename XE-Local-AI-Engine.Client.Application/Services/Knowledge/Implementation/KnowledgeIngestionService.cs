@@ -83,7 +83,8 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Genuine cancellation — do not rewrite the document status; let the worker observe the shutdown.
+            // The worker's own stop: hand the attempt back so a clean shutdown never counts toward the interrupted limit.
+            await SafeReleaseAsync(documentId, revision?.ContentHash);
             throw;
         }
         catch (OperationCanceledException exception) when (budget.IsCancellationRequested)
@@ -453,14 +454,17 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken);
 
+        // The move to Extracting is the real start of a run, so it is what counts an attempt for startup recovery.
         await using var command = connection.CreateCommand();
         command.CommandText = """
                               UPDATE knowledge_documents
-                              SET status = $status, failure_reason = $failure_reason, updated_at_utc = $updated_at_utc
+                              SET status = $status, failure_reason = $failure_reason, updated_at_utc = $updated_at_utc,
+                                  ingestion_attempts = ingestion_attempts + $attempt
                               WHERE document_id = $document_id
                                 AND content_hash = $content_hash;
                               """;
         AddParameter(command, "$status", status.ToString());
+        AddParameter(command, "$attempt", status == KnowledgeDocumentStatus.Extracting ? 1 : 0);
         AddParameter(command, "$failure_reason", failureReason);
         AddParameter(command, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
         AddParameter(command, "$document_id", documentId);
@@ -497,6 +501,50 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         {
             // The document may have been deleted, or the database may be unavailable; the failure reason is best-effort.
             _logger.LogWarning("Could not persist the Failed status for document {DocumentId} ({ErrorClass}).", documentId, exception.GetType().Name);
+        }
+    }
+
+    /// <summary>
+    ///     Returns a run stopped by the worker's own shutdown to Pending and takes back the attempt its start counted.
+    /// </summary>
+    /// <remarks>
+    ///     Only a row still mid-pipeline is touched: a run cancelled before it reached Extracting counted nothing. Runs
+    ///     on a fresh token because the caller's is already cancelled; best-effort like <see cref="SafeFailAsync" />.
+    /// </remarks>
+    private async Task SafeReleaseAsync(Guid documentId, string? contentHash)
+    {
+        if (contentHash is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var connection = _dbContext.Database.GetDbConnection();
+            await OpenIfNeededAsync(connection, CancellationToken.None);
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                                  UPDATE knowledge_documents
+                                  SET status = $pending, updated_at_utc = $updated_at_utc,
+                                      ingestion_attempts = MAX(ingestion_attempts - 1, 0)
+                                  WHERE document_id = $document_id
+                                    AND content_hash = $content_hash
+                                    AND status IN ($extracting, $chunking, $embedding);
+                                  """;
+            AddParameter(command, "$pending", nameof(KnowledgeDocumentStatus.Pending));
+            AddParameter(command, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+            AddParameter(command, "$document_id", documentId);
+            AddParameter(command, "$content_hash", contentHash);
+            AddParameter(command, "$extracting", nameof(KnowledgeDocumentStatus.Extracting));
+            AddParameter(command, "$chunking", nameof(KnowledgeDocumentStatus.Chunking));
+            AddParameter(command, "$embedding", nameof(KnowledgeDocumentStatus.Embedding));
+            _ = await command.ExecuteNonQueryAsync(CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is DbException or InvalidOperationException)
+        {
+            // Never replaces the caller's cancellation. The row then keeps its counted attempt; startup recovery bounds it.
+            _logger.LogWarning("Could not release the interrupted run of document {DocumentId} ({ErrorClass}).", documentId, exception.GetType().Name);
         }
     }
 

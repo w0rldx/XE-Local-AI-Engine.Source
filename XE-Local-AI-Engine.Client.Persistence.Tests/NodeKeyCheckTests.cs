@@ -54,9 +54,28 @@ public sealed class NodeKeyCheckTests : IDisposable
         using var otherKey = new OtherKeyHolder(fill: 7);
         await using var mismatched = CreateContext(databasePath, otherKey);
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => mismatched.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<NodeKeyCustodyException>(() => mismatched.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None));
 
         AssertEx.True(exception.Message.Contains("does not match", StringComparison.Ordinal), exception.Message);
+        AssertEx.True(exception.Message.Contains("move node.sqlite aside", StringComparison.Ordinal), exception.Message);
+    }
+
+    [Test]
+    public async Task VerifyOrRecord_UnderADifferentKey_NamesTheDatabaseFileItReallyOpened()
+    {
+        var databasePath = await MigratedDatabaseAsync("renamed-node.sqlite");
+        using var originalKey = new NullNodeSqliteKeyHolder();
+        await using (var original = CreateContext(databasePath, originalKey))
+        {
+            await original.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None);
+        }
+
+        using var otherKey = new OtherKeyHolder(fill: 7);
+        await using var mismatched = CreateContext(databasePath, otherKey);
+
+        var exception = await AssertEx.ThrowsAsync<NodeKeyCustodyException>(() => mismatched.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None));
+
+        AssertEx.True(exception.Message.Contains("move renamed-node.sqlite aside", StringComparison.Ordinal), exception.Message);
     }
 
     [Test]
@@ -78,7 +97,7 @@ public sealed class NodeKeyCheckTests : IDisposable
         using var keyB = new OtherKeyHolder(fill: 9);
         await using (var wrong = CreateContext(databasePath, keyB))
         {
-            _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => wrong.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None));
+            _ = await AssertEx.ThrowsAsync<NodeKeyCustodyException>(() => wrong.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None));
             AssertEx.Equal(expected: 0,
                 await wrong.MaintenanceState.CountAsync(state => state.Name == NodeChatDbContext.NodeKeyCheckStateName),
                 "A wrong key must not be bound on the first start, or the right key would be refused afterwards.");
@@ -107,7 +126,7 @@ public sealed class NodeKeyCheckTests : IDisposable
         using var keyB = new OtherKeyHolder(fill: 9);
         await using var wrong = CreateContext(databasePath, keyB);
 
-        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => wrong.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None));
+        _ = await AssertEx.ThrowsAsync<NodeKeyCustodyException>(() => wrong.VerifyOrRecordNodeKeyCheckAsync(CancellationToken.None));
         AssertEx.Equal(expected: 0, await wrong.MaintenanceState.CountAsync(state => state.Name == NodeChatDbContext.NodeKeyCheckStateName));
     }
 
@@ -155,10 +174,10 @@ public sealed class NodeKeyCheckTests : IDisposable
         };
     }
 
-    private async Task<string> MigratedDatabaseAsync()
+    private async Task<string> MigratedDatabaseAsync(string fileName = "node.sqlite")
     {
         Directory.CreateDirectory(_rootPath);
-        var databasePath = Path.Combine(_rootPath, "node.sqlite");
+        var databasePath = Path.Combine(_rootPath, fileName);
         await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
         return databasePath;
     }

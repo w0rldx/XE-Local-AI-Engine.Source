@@ -149,6 +149,12 @@ The source repository changes only through the final apply path. Preview and ind
 to the expected base commit and evidence hashes; apply revalidates those values before mutating the registered
 source. An agent cannot make its managed worktree authoritative merely by changing files there.
 
+Each task's clone (`development/workspaces/<project>/<task>`) and runtime directory (`development/runtime/<project>/<task>`)
+outlive the task's state changes, because a retried or resumed task reuses them (ADR 0001).
+`DevelopmentWorkspaceRetentionService` deletes both once the task is `Completed` or `Cancelled`, untouched for
+`Development:WorkspaceRetention:RetentionAge` (7 days) and has no live attempt; directories with no task row and
+interrupted partial clones go after a 15-minute grace period.
+
 This is an application-enforced workflow boundary, not operating-system isolation. Build and test code runs as
 the host user and retains the host filesystem and network access available to that user. MXC is not integrated
 through the `ISandboxRuntimeProvider` or workspace-provider seams, and the current architecture does not present

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Hosting;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Vault;
 using XE_Local_AI_Engine.Client.Services.Vault.Implementation;
@@ -332,7 +333,7 @@ internal static class DesktopBootstrap
         var database = new FileInfo(databasePath);
         if (database.Exists && database.Length > 0)
         {
-            throw new InvalidOperationException($"The database '{databasePath}' exists but its key file '{keyPath}' is missing. Restore the original "
+            throw new NodeKeyCustodyException($"The database '{databasePath}' exists but its key file '{keyPath}' is missing. Restore the original "
                                                 + $"{KeyFileName} next to it, or move {DatabaseFileName} aside to start with a new empty database; a new key "
                                                 + "is not generated automatically because it could not read the existing data.");
         }

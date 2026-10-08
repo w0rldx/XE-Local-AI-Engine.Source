@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client;
 
+using System.Data.Common;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.Data.Sqlite;
 using Serilog;
@@ -99,7 +100,7 @@ public sealed partial class Program
         try
         {
             var dataSource = new SqliteConnectionStringBuilder(app.Configuration.GetConnectionString("node-sqlite")).DataSource;
-            var databasePath = string.IsNullOrWhiteSpace(dataSource) ? "node.sqlite" : Path.GetFullPath(dataSource);
+            var databasePath = string.IsNullOrWhiteSpace(dataSource) ? DesktopBootstrap.DatabaseFileName : Path.GetFullPath(dataSource);
             var snapshotPath = app.Services.GetService<INodeDbBackupService>()?.FindNewestSnapshot();
             var hint = DescribeDatabaseRecovery(exception, databasePath, snapshotPath);
 
@@ -108,7 +109,7 @@ public sealed partial class Program
         }
         catch (Exception hintException) when (hintException is IOException or ArgumentException or InvalidOperationException)
         {
-            // The hint is advisory; never let it replace the migration failure the caller rethrows.
+            // The hint is advisory; never let it replace the migration failure the caller exits on.
             Log.Warning(hintException, "Could not describe how to recover the node database.");
         }
     }
@@ -124,6 +125,25 @@ public sealed partial class Program
         return IsDamagedDatabase(exception)
             ? $"The node database '{databasePath}' is damaged or is not a SQLite database. Stop the node and move that file aside (for example rename it to '{Path.GetFileName(databasePath)}.broken'). {restore}"
             : $"The node database '{databasePath}' could not be migrated. {restore}";
+    }
+
+    /// <summary>
+    ///     True when the migration pass failed on the database itself (a <see cref="DbException" /> in the chain), which exits 9.
+    ///     A file error from canvas staging, invalid options or a DI failure surfacing there is not a database failure.
+    /// </summary>
+    internal static bool IsDatabaseFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is DbException)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsDamagedDatabase(Exception exception)

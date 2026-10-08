@@ -139,8 +139,8 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
         }
         catch (OperationCanceledException) when (_drainDeadline.IsCancellationRequested)
         {
-            // The shutdown drain window elapsed before this document finished. It stays non-terminal and is re-dispatched
-            // on the next start — not a fault.
+            // The shutdown drain window elapsed before this document finished. The service put it back to Pending without
+            // counting the attempt, and it is re-dispatched on the next start — not a fault.
             _logger.LogInformation("Background knowledge ingestion for document {DocumentId} was interrupted by shutdown; it resumes on next start.", documentId);
         }
         catch (Exception exception)

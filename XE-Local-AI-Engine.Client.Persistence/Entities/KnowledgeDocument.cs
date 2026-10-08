@@ -58,6 +58,11 @@ internal sealed record class KnowledgeDocument
     /// <summary>Actionable, content-free reason set when <see cref="Status" /> is <c>Failed</c>; null otherwise.</summary>
     public string? FailureReason { get; set; }
 
+    /// <summary>
+    ///     Ingestion starts since the last explicit retry; startup recovery stops a document that keeps being interrupted.
+    /// </summary>
+    public int IngestionAttempts { get; set; }
+
     /// <summary>Number of persisted chunks; defaults to 0 and is backfilled when the document reaches <c>Indexed</c>.</summary>
     public int ChunkCount { get; set; }
 
