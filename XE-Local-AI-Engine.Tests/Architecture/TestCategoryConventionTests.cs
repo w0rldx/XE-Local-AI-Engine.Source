@@ -30,7 +30,8 @@ public sealed class TestCategoryConventionTests
         "XE-Local-AI-Engine.AI.Agent.Tests",
         "XE-Local-AI-Engine.Client.Testing",
         "XE-Local-AI-Engine.Testing.FakeOllama",
-        "XE-Local-AI-Engine.Testing.FakeDocker"
+        "XE-Local-AI-Engine.Testing.FakeDocker",
+        "XE-Local-AI-Engine.Testing.FakeOpenAiGateway"
     ];
 
     /// <summary>
@@ -44,7 +45,7 @@ public sealed class TestCategoryConventionTests
         Primitive("MigratedDatabaseTemplate"), Primitive("EnsureCreated", @"\bEnsureCreated\w*\b"),
         Primitive("Database.Migrate", @"\bDatabase\.Migrate\w*\b"),
         Primitive("new NodeChatDbContext", @"\bnew\s+NodeChatDbContext\b"),
-        Primitive("FakeOllamaServer"), Primitive("FakeDockerServer"),
+        Primitive("FakeOllamaServer"), Primitive("FakeDockerServer"), Primitive("FakeOpenAiGatewayServer"),
         Primitive("TcpListener"), Primitive("HttpListener"), Primitive("TcpClient"),
         Primitive("new Socket", @"\bnew\s+Socket\b"), Primitive("NamedPipe", @"\bNamedPipe\w*\b"),
         Primitive("KestrelServerOptions"), Primitive("UseKestrel"),

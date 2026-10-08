@@ -103,7 +103,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
         VerifyStillAuthorized(binding);
 
         var registration = binding.Registration;
-        var identity = EndpointIdentity.From(registration, transportBinding.ApiKey);
+        var identity = EndpointIdentity.From(registration, transportBinding.ApiKey, transportBinding.Headers);
         var current = Volatile.Read(ref _resolved);
         if (current is not null && current.Identity == identity)
         {
@@ -122,7 +122,7 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
             // The built stack is transferred into _resolved, which owns it until it is replaced (the previous one is
             // disposed just below) or this client is disposed. CA2000 cannot follow that ownership transfer.
 #pragma warning disable CA2000
-            var built = Build(registration, transportBinding.ApiKey, identity);
+            var built = Build(registration, transportBinding.ApiKey, transportBinding.Headers, identity);
 #pragma warning restore CA2000
             Volatile.Write(ref _resolved, built);
             current?.Dispose();
@@ -178,10 +178,13 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
         return ExternalReasoningEffort.Apply(options, model);
     }
 
-    // Assembles the per-connection stack: hardened transport, endpoint guard, chat-completions adapter, reasoning
-    // rewriting. Every disposable transfers into the returned ResolvedEndpoint, an ownership CA2000 cannot follow.
+    // Assembles the per-connection stack: hardened transport, endpoint guard, custom headers, chat-completions adapter,
+    // reasoning rewriting. Every disposable transfers into the returned ResolvedEndpoint, an ownership CA2000 cannot follow.
 #pragma warning disable CA2000
-    private ResolvedEndpoint Build(ExternalProviderModelRegistration registration, string? apiKey, EndpointIdentity identity)
+    private ResolvedEndpoint Build(ExternalProviderModelRegistration registration,
+        string? apiKey,
+        IReadOnlyList<KeyValuePair<string, string>> headers,
+        EndpointIdentity identity)
     {
         var baseAddress = OpenAICompatibleBaseAddress.Normalize(registration.Connection.BaseUrl);
         var inner = _transportHandlerFactory?.Invoke()
@@ -193,8 +196,9 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
                         AllowAutoRedirect = false
                     };
 
+        // Headers OUTSIDE the guard, so the guard stays directly above the socket and checks the request exactly as it leaves.
         var guarded = new ExternalEndpointGuardHandler(baseAddress, inner);
-        var httpClient = new HttpClient(guarded, disposeHandler: true)
+        var httpClient = new HttpClient(new CustomRequestHeadersHandler(headers, guarded), disposeHandler: true)
         {
             // The SDK's pinned NetworkTimeout owns the deadline; HttpClient's own 100 s default would otherwise cut a
             // legitimately long generation short well before it.
@@ -218,17 +222,20 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
     /// <remarks>
     ///     The CREDENTIAL is part of the identity. It was not, and that was a hole: rotating or clearing a key changes
     ///     neither the address nor the timeout, so the cached adapter kept presenting the previous key until something
-    ///     else happened to evict it — which is the failure an operator experiences as "I fixed the key and it still
-    ///     fails", or worse, as a revoked key that keeps working.
+    ///     else happened to evict it, which an operator experiences as "I fixed the key and it still fails". The custom
+    ///     headers join by VALUE (one joined string, not the list reference) for the same reason: a gateway token rotates too.
     /// </remarks>
-    private readonly record struct EndpointIdentity(string BaseUrl, string WireId, TimeSpan Timeout, string? ApiKey)
+    private readonly record struct EndpointIdentity(string BaseUrl, string WireId, TimeSpan Timeout, string? ApiKey, string Headers)
     {
-        public static EndpointIdentity From(ExternalProviderModelRegistration registration, string? apiKey)
+        public static EndpointIdentity From(ExternalProviderModelRegistration registration,
+            string? apiKey,
+            IReadOnlyList<KeyValuePair<string, string>> headers)
         {
             return new EndpointIdentity(registration.Connection.BaseUrl.AbsoluteUri,
                 registration.Model.WireId,
                 registration.Connection.Timeout ?? DefaultNetworkTimeout,
-                apiKey);
+                apiKey,
+                string.Join('\n', headers.Select(static header => header.Key + "\0" + header.Value)));
         }
     }
 

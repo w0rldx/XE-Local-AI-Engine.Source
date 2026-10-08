@@ -2,16 +2,17 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ExternalProviders.V1.Validators;
 
 using FastEndpoints;
 using FluentValidation;
+using XE_Local_AI_Engine.Client.Endpoints.ExternalProviders.V1.Mappers;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
-///     Shape and requiredness only.
+///     Shape and requiredness, plus the custom header rules.
 /// </summary>
 /// <remarks>
-///     Every BOUND — the connection and model caps, the name lengths, the timeout range, the wire-id grammar, duplicate
-///     rejection, the reasoning-effort vocabulary, a positive context length — is enforced by the encrypted store at
-///     save time and surfaces as a 400 carrying the store's own message. Restating those rules here would produce two
-///     places that must agree about what is storable, and the store is the one that decides.
+///     Every other BOUND (caps, name lengths, timeout range, wire-id grammar, duplicates, reasoning-effort vocabulary,
+///     context length) is enforced by the store at save time and surfaces as a 400 carrying its own message. The header
+///     rules run here too because the probe sends headers without a save; both call <see cref="StoredExternalProviderHeader.FindViolations" />.
 /// </remarks>
 public sealed class SaveExternalProviderConnectionRequestValidator : Validator<SaveExternalProviderConnectionRequest>
 {
@@ -38,6 +39,18 @@ public sealed class SaveExternalProviderConnectionRequestValidator : Validator<S
             .WithMessage("Models is required (send an empty list to register none).")
             .Must(static models => models is null || models.All(static model => !string.IsNullOrWhiteSpace(model.WireId)))
             .WithMessage("Every registered model needs a non-blank WireId.");
+
+        RuleFor(static request => request.Headers)
+            .Custom(static (headers, context) => AddHeaderViolations(headers, context.AddFailure));
+    }
+
+    /// <summary>Adds one failure per header rule violation; the messages name the header, never its value.</summary>
+    internal static void AddHeaderViolations(IReadOnlyList<ExternalProviderHeaderRequest>? headers, Action<string> addFailure)
+    {
+        foreach (var violation in StoredExternalProviderHeader.FindViolations(headers.ToStoreHeaders()))
+        {
+            addFailure(violation);
+        }
     }
 }
 
@@ -52,5 +65,8 @@ public sealed class ExternalProviderProbeRequestValidator : Validator<ExternalPr
         RuleFor(static request => request)
             .Must(static request => !string.IsNullOrWhiteSpace(request.ConnectionId) || !string.IsNullOrWhiteSpace(request.BaseUrl))
             .WithMessage("Either ConnectionId or BaseUrl is required.");
+
+        RuleFor(static request => request.Headers)
+            .Custom(static (headers, context) => SaveExternalProviderConnectionRequestValidator.AddHeaderViolations(headers, context.AddFailure));
     }
 }

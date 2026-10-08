@@ -306,7 +306,7 @@ The one **cloud** chat provider. `CodexOAuthChatClientFactory` (`ICodexOAuthChat
 
 ### `Providers.OpenAICompat` — operator-registered external endpoints
 
-One multiplexer `ILocalModelProvider` (`ProviderName = "external"`) serving every connection the operator registered, dispatched by parsing `ext:{connectionId}/{wireId}` through `IExternalProviderRegistry`. Capabilities are DECLARED, never probed: only `POST /v1/chat/completions` is universal across OpenAI-compatible servers, and none of them advertises tool, vision or reasoning support in a way that survives llama.cpp / vLLM / LM Studio / a hosted API alike. The connect-time probe is `GET {base}/models` and nothing else.
+One multiplexer `ILocalModelProvider` (`ProviderName = "external"`) serving every connection the operator registered, dispatched by parsing `ext:{connectionId}/{wireId}` through `IExternalProviderRegistry`. Capabilities are DECLARED, never probed: only `POST /v1/chat/completions` is universal across OpenAI-compatible servers, and none of them advertises tool, vision or reasoning support in a way that survives llama.cpp / vLLM / LM Studio / a hosted API alike. The connect-time probe is `GET {base}/models` and nothing else. A connection may carry operator-defined request headers (a gateway's project header, a secret token under its own name), sent on chat, health and the probe; they made the store schema 3.
 
 See [the reference page](reference/03-satellite-and-cloud-providers.md#providersopenaicompat--operator-registered-external-endpoints) for the rest of this section.
 

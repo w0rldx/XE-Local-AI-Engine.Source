@@ -241,6 +241,40 @@ public sealed class AzureFoundryProviderSurfaceTests
         AssertEx.Equal(AzureFoundryProviderErrorKind.AuthFailed, error.Kind);
     }
 
+    [Test]
+    [Arguments(AzureFoundryAuthMode.ApiKey, 401, "Azure Foundry rejected the credentials (check the API key or the managed-identity RBAC role).")]
+    [Arguments(AzureFoundryAuthMode.EntraId, 401, "Azure Foundry rejected the Entra ID bearer token (sign in again, or check the token scope).")]
+    [Arguments(AzureFoundryAuthMode.EntraId, 403, "Azure Foundry rejected the Entra ID bearer token (sign in again, or check the token scope).")]
+    [Arguments(AzureFoundryAuthMode.ManagedIdentity, 403,
+        "Azure Foundry rejected the managed-identity bearer token (check the identity's RBAC role and the token scope).")]
+    public async Task ErrorTranslatingChatClient_WhenAuthRejected_NamesTheCredentialOfTheAuthMode(AzureFoundryAuthMode authMode, int status, string expectedMessage)
+    {
+        using var response = new FakePipelineResponse(status, content: null);
+        using var inner = new ThrowingChatClient(new ClientResultException(response, innerException: null));
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner, authMode);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+
+        AssertEx.Equal(AzureFoundryProviderErrorKind.AuthFailed, error.Kind);
+        AssertEx.Equal(expectedMessage, error.Message);
+    }
+
+    [Test]
+    public async Task ErrorTranslatingChatClient_WhenEntraModeRequestFailed401_NamesTheBearerToken()
+    {
+        var requestFailed = new RequestFailedException(status: 401, message: "Unauthorized", errorCode: "Unauthorized", innerException: null);
+        using var inner = new ThrowingChatClient(requestFailed);
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner, AzureFoundryAuthMode.EntraId);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+
+        AssertEx.Equal(AzureFoundryProviderErrorKind.AuthFailed, error.Kind);
+        AssertEx.True(error.Message.Contains("bearer token", StringComparison.Ordinal), error.Message);
+        AssertEx.False(error.Message.Contains("API key", StringComparison.Ordinal), error.Message);
+    }
+
     private static async Task<TException> ThrowsAsync<TException>(Func<Task> action)
         where TException : Exception
     {

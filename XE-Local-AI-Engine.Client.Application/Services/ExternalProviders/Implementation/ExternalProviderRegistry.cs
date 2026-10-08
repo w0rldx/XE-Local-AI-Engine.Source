@@ -82,7 +82,8 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
                 Generation = snapshot.Generation,
                 Registration = registration
             },
-            ApiKey = apiKey
+            ApiKey = apiKey,
+            Headers = snapshot.HeadersByConnectionId.GetValueOrDefault(registration.Connection.Id) ?? []
         };
     }
 
@@ -184,6 +185,8 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
 
         public required FrozenDictionary<string, string> KeysByConnectionId { get; init; }
 
+        public required FrozenDictionary<string, IReadOnlyList<KeyValuePair<string, string>>> HeadersByConnectionId { get; init; }
+
         public static ExternalProviderSnapshot Build(long generation, StoredExternalProviderConfig config)
         {
             // Shared with the reconciler (see ExternalProviderConfigProjection): the pass that DELETES drift derives its
@@ -205,7 +208,8 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
                 Generation = generation,
                 Registrations = registrations,
                 ByModelId = index.ToFrozenDictionary(StringComparer.Ordinal),
-                KeysByConnectionId = keys.ToFrozenDictionary(StringComparer.Ordinal)
+                KeysByConnectionId = keys.ToFrozenDictionary(StringComparer.Ordinal),
+                HeadersByConnectionId = projection.HeadersByConnectionId.ToFrozenDictionary(StringComparer.Ordinal)
             };
         }
     }

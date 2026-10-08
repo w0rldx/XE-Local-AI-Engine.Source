@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 
 /// <summary>
 ///     Persistence boundary for cloud credential data.
@@ -345,9 +346,9 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
     // and any secret header that never resolved to a value.
     private static void ValidateHeaders(StoredAzureFoundryConnection connection, string paramName)
     {
-        if (connection.Headers.Count > AzureFoundryHeaderRules.MaxHeaderCount)
+        if (connection.Headers.Count > CustomHeaderRules.MaxHeaderCount)
         {
-            throw new ArgumentException($"Stored cloud provider connection has more than {AzureFoundryHeaderRules.MaxHeaderCount} custom headers.",
+            throw new ArgumentException($"Stored cloud provider connection has more than {CustomHeaderRules.MaxHeaderCount} custom headers.",
                 paramName);
         }
 
@@ -356,13 +357,13 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         {
             var name = header.Name?.Trim() ?? string.Empty;
 
-            if (!AzureFoundryHeaderRules.IsValidHeaderName(name)
-                || name.Length > AzureFoundryHeaderRules.MaxHeaderNameLength)
+            if (!CustomHeaderRules.IsValidHeaderName(name)
+                || name.Length > CustomHeaderRules.MaxHeaderNameLength)
             {
                 throw new ArgumentException("A stored custom header name is empty, too long, or contains invalid characters.", paramName);
             }
 
-            if (AzureFoundryHeaderRules.IsReservedName(name))
+            if (CustomHeaderRules.IsReservedName(name))
             {
                 throw new ArgumentException("A stored custom header uses a reserved header name.", paramName);
             }
@@ -372,8 +373,8 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
                 throw new ArgumentException("A stored custom header name is duplicated.", paramName);
             }
 
-            if ((header.Value?.Length ?? 0) > AzureFoundryHeaderRules.MaxHeaderValueLength
-                || !AzureFoundryHeaderRules.IsValidHeaderValue(header.Value))
+            if ((header.Value?.Length ?? 0) > CustomHeaderRules.MaxHeaderValueLength
+                || !CustomHeaderRules.IsValidHeaderValue(header.Value))
             {
                 throw new ArgumentException("A stored custom header value is too long or contains invalid control characters.", paramName);
             }
@@ -387,9 +388,9 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
 
     private static void ValidateHostSuffixes(StoredAzureFoundryConnection connection, string paramName)
     {
-        if (connection.AdditionalAllowedHostSuffixes.Count > AzureFoundryHeaderRules.MaxHostSuffixCount)
+        if (connection.AdditionalAllowedHostSuffixes.Count > CustomHeaderRules.MaxHostSuffixCount)
         {
-            throw new ArgumentException($"Stored cloud provider connection has more than {AzureFoundryHeaderRules.MaxHostSuffixCount} allowed host suffixes.",
+            throw new ArgumentException($"Stored cloud provider connection has more than {CustomHeaderRules.MaxHostSuffixCount} allowed host suffixes.",
                 paramName);
         }
 

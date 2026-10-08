@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
 using System.ClientModel.Primitives;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 
 /// <summary>
 ///     A System.ClientModel pipeline policy that appends a fixed, already-resolved custom header set to every outbound
@@ -40,7 +41,7 @@ internal sealed class CustomHeaderPipelinePolicy : PipelinePolicy
         foreach (var (name, value) in _headers)
         {
             // Belt-and-suspenders vs the save-time reject: a reserved name must never override auth/transport headers.
-            if (AzureFoundryHeaderRules.IsReservedName(name))
+            if (CustomHeaderRules.IsReservedName(name))
             {
                 continue;
             }

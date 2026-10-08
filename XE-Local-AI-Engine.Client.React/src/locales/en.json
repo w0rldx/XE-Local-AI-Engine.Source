@@ -3007,14 +3007,7 @@
 				"headers": {
 					"title": "Custom headers",
 					"description": "Append custom HTTP headers to every Azure request (for example an APIM gateway subscription key). Mark a value secret to store it write-only.",
-					"nameLabel": "Header name",
-					"namePlaceholder": "Ocp-Apim-Subscription-Key",
-					"valueLabel": "Value",
-					"valuePlaceholder": "value",
-					"secretLabel": "Secret",
-					"secretStoredHint": "A secret value is stored. Enter a new value to replace it.",
-					"addHeader": "Add header",
-					"removeHeader": "Remove header"
+					"namePlaceholder": "Ocp-Apim-Subscription-Key"
 				},
 				"hostSuffixes": {
 					"title": "Allowed host suffixes",
@@ -3125,8 +3118,12 @@
 				"baseUrlLabel": "Base URL",
 				"baseUrlHint": "The OpenAI-compatible base, with or without the trailing /v1. Chat and the connection test both use the normalized address.",
 				"baseUrlPlaceholder": "http://127.0.0.1:8080/v1",
-				"apiKeyLabel": "API key (optional)",
-				"apiKeyHint": "Sent as a Bearer token. Leave it blank for a server that needs no authentication — no Authorization header is sent then.",
+				"apiKeyLabel": "API key or bearer token (optional)",
+				"apiKeyHint": "Sent as \"Authorization: Bearer <value>\", so a gateway's bearer token (for example a JWT) can be pasted as is. Leave it blank for a server that needs no authentication — no Authorization header is sent then.",
+				"headersTitle": "Custom headers",
+				"headersDescription": "Extra HTTP headers sent with every request to this connection, including Test connection. Mark a value secret to store it write-only.",
+				"headersNamePlaceholder": "X-Example-Project",
+				"headersGatewayHint": "Private AI gateways often expect a project or tenant header next to the token; ask the gateway's operator for its name and value.",
 				"apiKeyStoredHint": "A key is stored. Leave this blank to keep it, type a new one to replace it, or use Remove key to go keyless.",
 				"apiKeyRemovalPending": "The stored key will be removed when you save, and this connection will send no Authorization header.",
 				"removeApiKey": "Remove key",
@@ -8037,6 +8034,15 @@
 			"clear": "Clear stored value",
 			"cleared": "This value will be removed when you save.",
 			"undo": "Undo"
+		},
+		"customHeaders": {
+			"nameLabel": "Header name",
+			"valueLabel": "Value",
+			"valuePlaceholder": "value",
+			"secretLabel": "Secret",
+			"secretStoredHint": "A secret value is stored. Enter a new value to replace it.",
+			"addHeader": "Add header",
+			"removeHeader": "Remove header"
 		},
 		"loginCard": {
 			"signIn": "Sign In",

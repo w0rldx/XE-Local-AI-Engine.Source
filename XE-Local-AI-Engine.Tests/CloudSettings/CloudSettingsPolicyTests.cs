@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.CloudSettings;
 
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -72,28 +73,28 @@ public sealed class CloudSettingsPolicyTests
     [Test]
     public void ControlCharacterValue_AndOverlongName_AreRejected_WithoutLeakingTheValue()
     {
-        var longName = new string('a', AzureFoundryHeaderRules.MaxHeaderNameLength + 1);
+        var longName = new string('a', CustomHeaderRules.MaxHeaderNameLength + 1);
         var errors = Validate([Header("X-Crlf", "bad\r\nvalue"), Header(longName, "x")], []);
 
         AssertEx.Contains(errors, "Custom header 'X-Crlf' value contains invalid control characters.");
-        AssertEx.Contains(errors, $"Custom header name '{longName}' exceeds {AzureFoundryHeaderRules.MaxHeaderNameLength} characters.");
+        AssertEx.Contains(errors, $"Custom header name '{longName}' exceeds {CustomHeaderRules.MaxHeaderNameLength} characters.");
         AssertEx.Empty(errors.Where(error => error.Contains("bad", StringComparison.Ordinal)));
     }
 
     [Test]
     public void OverCaps_AreRejected()
     {
-        var headers = Enumerable.Range(0, AzureFoundryHeaderRules.MaxHeaderCount + 1)
+        var headers = Enumerable.Range(0, CustomHeaderRules.MaxHeaderCount + 1)
                                 .Select(index => Header($"X-H{index}", "v"))
                                 .ToArray();
-        var suffixes = Enumerable.Range(0, AzureFoundryHeaderRules.MaxHostSuffixCount + 1)
+        var suffixes = Enumerable.Range(0, CustomHeaderRules.MaxHostSuffixCount + 1)
                                  .Select(index => $".host{index}.example.com")
                                  .ToArray();
 
         var errors = Validate(headers, suffixes);
 
-        AssertEx.Contains(errors, $"A maximum of {AzureFoundryHeaderRules.MaxHeaderCount} custom headers is allowed.");
-        AssertEx.Contains(errors, $"A maximum of {AzureFoundryHeaderRules.MaxHostSuffixCount} allowed host suffixes is allowed.");
+        AssertEx.Contains(errors, $"A maximum of {CustomHeaderRules.MaxHeaderCount} custom headers is allowed.");
+        AssertEx.Contains(errors, $"A maximum of {CustomHeaderRules.MaxHostSuffixCount} allowed host suffixes is allowed.");
     }
 
     [Test]

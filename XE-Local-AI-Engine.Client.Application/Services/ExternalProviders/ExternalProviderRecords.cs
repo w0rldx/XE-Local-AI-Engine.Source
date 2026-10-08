@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ExternalProviders;
 
+using System.Text;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
@@ -69,6 +70,26 @@ public sealed record StoredExternalProviderConnection
 
     /// <summary>The models the operator registered on this connection.</summary>
     public IReadOnlyList<StoredExternalProviderModel> Models { get; init; } = [];
+
+    /// <summary>The custom request headers sent with every request to this connection. Absent before schema 3, so it reads empty.</summary>
+    public IReadOnlyList<StoredExternalProviderHeader> Headers { get; init; } = [];
+
+    // The sealed-record PrintMembers signature is private; it redacts the key and the secret header values from ToString.
+    private bool PrintMembers(StringBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Append("Id = ").Append(Id);
+        builder.Append(", DisplayName = ").Append(DisplayName);
+        builder.Append(", BaseUrl = ").Append(BaseUrl);
+        builder.Append(", ApiKey = ").Append(ApiKey is null ? "null" : "[REDACTED]");
+        builder.Append(", Locality = ").Append(Locality);
+        builder.Append(", TimeoutSeconds = ").Append(TimeoutSeconds);
+        builder.Append(", AllowInsecureHttp = ").Append(AllowInsecureHttp);
+        builder.Append(", Models = ").Append(Models.Count);
+        builder.Append(", Headers = [").AppendJoin(", ", Headers).Append(']');
+        return true;
+    }
 }
 
 /// <summary>
@@ -117,10 +138,10 @@ public sealed record StoredExternalProviderModel
 public static class ExternalProviderStoreSchema
 {
     /// <summary>
-    ///     The schema version this build writes. Version 2 made the model capability flags tri-state; a version-1 file is
-    ///     lifted on read and written back as version 2 on the next save.
+    ///     The schema version this build writes. Version 2 made the model capability flags tri-state (a version-1 file is
+    ///     lifted on read); version 3 added custom headers, so an older build refuses a file that carries them.
     /// </summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     /// <summary>Upper bound on configured connections — a guard against a hand-edited or corrupted payload, not a product limit.</summary>
     public const int MaxConnections = 32;

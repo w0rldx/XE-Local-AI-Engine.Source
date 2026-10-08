@@ -102,7 +102,7 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             ? BuildOpenAiV1Client(endpoint, connection).GetChatClient(deploymentName).AsIChatClient()
             : BuildAzureDeploymentsClient(endpoint, connection).GetChatClient(deploymentName).AsIChatClient();
 
-        return new AzureFoundryErrorTranslatingChatClient(innerClient);
+        return new AzureFoundryErrorTranslatingChatClient(innerClient, connection.AuthMode);
     }
 
     // The classic Azure deployments surface (default, ApiSurface.AzureDeployments): {endpoint}/openai/deployments/{deployment}/....

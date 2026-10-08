@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.Testing.FakeDocker\XE-Local-AI-Engine.Testing.FakeDocker.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Testing.FakeOllama\XE-Local-AI-Engine.Testing.FakeOllama.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Testing.FakeOpenAiGateway\XE-Local-AI-Engine.Testing.FakeOpenAiGateway.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.WindowsLauncher\XE-Local-AI-Engine.WindowsLauncher.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Desktop\XE-Local-AI-Engine.Desktop.csproj"/>

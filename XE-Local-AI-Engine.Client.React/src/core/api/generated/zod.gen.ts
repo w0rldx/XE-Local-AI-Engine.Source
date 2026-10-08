@@ -3080,6 +3080,19 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1DeleteExternalPro
 	z.never(),
 );
 
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderHeaderRequest = z.object({
+	name: z.string().nullish(),
+	value: z.string().nullish(),
+	isSecret: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderHeaderResponse = z.object({
+	name: z.string(),
+	value: z.string().nullish(),
+	isSecret: z.boolean(),
+	hasStoredValue: z.boolean(),
+});
+
 export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderModelResponse = z.object({
 	wireId: z.string(),
 	modelId: z.string(),
@@ -3110,6 +3123,7 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderC
 	allowInsecureHttp: z.boolean(),
 	insecureTransport: z.boolean(),
 	models: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderModelResponse).optional(),
+	headers: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderHeaderResponse).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse = z.object({
@@ -3131,6 +3145,7 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderP
 	baseUrl: z.string().nullish(),
 	apiKey: z.string().nullish(),
 	allowInsecureHttp: z.boolean().optional(),
+	headers: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderHeaderRequest).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse = z.object({
@@ -3172,6 +3187,7 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvi
 		.nullish(),
 	allowInsecureHttp: z.boolean().optional(),
 	models: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderModelRequest),
+	headers: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderHeaderRequest).optional(),
 	expectedRevision: z.string().nullish(),
 });
 
@@ -6463,6 +6479,8 @@ export const zXeLocalAiEngineClientModelsEnumsFailureCategory = z.enum([
 	"ModelLoadFailed",
 	"ModelNotInstalled",
 	"ContextWindowExceeded",
+	"ProviderAuthFailed",
+	"ProviderRateLimited",
 ]);
 
 export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse = z.object({

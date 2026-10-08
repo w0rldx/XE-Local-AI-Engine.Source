@@ -64,6 +64,38 @@ public sealed record ExternalProviderConnectionResponse
 
     /// <summary>The models registered on this connection.</summary>
     public IReadOnlyList<ExternalProviderModelResponse> Models { get; init; } = [];
+
+    /// <summary>The custom request headers. A secret header's value is never returned.</summary>
+    public IReadOnlyList<ExternalProviderHeaderResponse> Headers { get; init; } = [];
+}
+
+/// <summary>One stored custom request header as the editor reads it.</summary>
+public sealed record ExternalProviderHeaderResponse
+{
+    /// <summary>The header name.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>The value of a plain header; always null for a secret header.</summary>
+    public string? Value { get; init; }
+
+    /// <summary>True when the value is write-only.</summary>
+    public required bool IsSecret { get; init; }
+
+    /// <summary>True when a value is stored. Lets the editor show a "stored" hint for a secret header it cannot read.</summary>
+    public required bool HasStoredValue { get; init; }
+}
+
+/// <summary>One custom request header row on a save or a probe.</summary>
+public sealed record ExternalProviderHeaderRequest
+{
+    /// <summary>The header name: an RFC 7230 token outside the reserved set.</summary>
+    public string? Name { get; init; }
+
+    /// <summary>The value. Blank on a secret row means "keep the stored value", on the stored origin only.</summary>
+    public string? Value { get; init; }
+
+    /// <summary>True when the value is write-only.</summary>
+    public bool IsSecret { get; init; }
 }
 
 /// <summary>One registered model, with the namespaced id the rest of the node addresses it by.</summary>
@@ -162,6 +194,9 @@ public sealed record SaveExternalProviderConnectionRequest
     /// <summary>The models to register. May be empty: a probe-then-pick flow saves the connection first.</summary>
     public IReadOnlyList<SaveExternalProviderModelRequest> Models { get; init; } = [];
 
+    /// <summary>The custom request headers. Absent means none; the list replaces the stored set.</summary>
+    public IReadOnlyList<ExternalProviderHeaderRequest> Headers { get; init; } = [];
+
     /// <summary>The revision the caller read, or null to write unconditionally.</summary>
     public string? ExpectedRevision { get; init; }
 }
@@ -210,6 +245,12 @@ public sealed record ExternalProviderProbeRequest
 
     /// <summary>Opts a plain-http address that is not loopback in; without it such an address is refused before any request.</summary>
     public bool AllowInsecureHttp { get; init; }
+
+    /// <summary>
+    ///     The editor's draft header rows, sent with the probe. Absent means "use the stored connection's headers", an empty
+    ///     list sends none; stored values travel only on the stored origin.
+    /// </summary>
+    public IReadOnlyList<ExternalProviderHeaderRequest>? Headers { get; init; }
 }
 
 /// <summary>What the probe found. Never carries the API key or a raw response body.</summary>

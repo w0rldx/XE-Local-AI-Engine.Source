@@ -13,6 +13,7 @@ import {
 	errorMessage,
 	nextExternalRowId,
 	probeInputFingerprint,
+	toProbeRequestBody,
 } from "@/features/external-providers/models/ExternalProviderFormState";
 import type { ExternalProviderFormValues } from "@/features/external-providers/models/ExternalProviderModel";
 
@@ -37,7 +38,6 @@ export function ExternalProviderProbePanel({
 	const { t } = useTranslation();
 	const probeMutation = useMutation(withResponseValidation(probeExternalProviderMutation()));
 
-	const typedKey = values.apiKey.trim();
 	const baseUrl = values.baseUrl.trim();
 
 	const runProbe = (): void => {
@@ -45,19 +45,7 @@ export function ExternalProviderProbePanel({
 		// operator has edited the form is recognized as describing a different endpoint.
 		const fingerprint = probeInputFingerprint(values);
 		probeMutation.mutate(
-			{
-				body: {
-					// The connection id rides ALONGSIDE the draft address, never instead of it: the backend falls back to
-					// the stored key only when the draft address is on the stored connection's own origin, which is
-					// exactly the case where the key the editor cannot see is the right credential. Sending only the id
-					// would probe the OLD endpoint and hide an edited address. A pending key removal drops the id — that
-					// draft is deliberately keyless.
-					...(isStored && hasStoredApiKey && !values.clearApiKey ? { connectionId: values.connectionId.trim() } : {}),
-					baseUrl,
-					...(typedKey.length > 0 ? { apiKey: values.apiKey } : {}),
-					...(values.allowInsecureHttp ? { allowInsecureHttp: true } : {}),
-				},
-			},
+			{ body: toProbeRequestBody(values, isStored, hasStoredApiKey) },
 			{
 				onSuccess: (result) => dispatch({ type: "probeSucceeded", fingerprint, result }),
 				onError: (error) => dispatch({ type: "probeFailed", fingerprint, failure: errorMessage(error) }),

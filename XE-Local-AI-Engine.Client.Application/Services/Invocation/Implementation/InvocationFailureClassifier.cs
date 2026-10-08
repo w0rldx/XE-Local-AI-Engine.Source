@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
+using System.ClientModel;
 using System.Net;
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -17,8 +19,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     Pure functions over an <see cref="Exception" />, with no invocation state, so the switch-arm ORDER in
 ///     <see cref="MapFailure" /> is the whole contract and <c>InvocationRunnerTests</c> pins it. Three rules run through
 ///     every arm: an arm whose type derives from a later arm's type comes first; a new <see cref="FailureCategory" />
-///     value would drift the generated OpenAPI/zod client, so a new failure reuses the closest category and carries its
-///     own fixed, path-free message; and only an already-sanitized message is surfaced verbatim.
+///     value drifts the generated OpenAPI/zod client, so prefer the closest existing category with its own fixed,
+///     path-free message; and only an already-sanitized message is surfaced verbatim.
 /// </remarks>
 internal static class InvocationFailureClassifier
 {
@@ -53,6 +55,18 @@ internal static class InvocationFailureClassifier
     // A generic (non-inter-chunk) timeout: the invocation-level cancel-after or an HTTP client timeout. Its framework
     // message can name hosts/paths and is unbounded, so a fixed, path-free constant is surfaced in its place.
     private const string TimedOutMessage = "The operation timed out.";
+
+    // A provider or gateway HTTP 404: nothing is installed locally, so the node's "not installed" text would mislead.
+    private const string ProviderModelNotOfferedMessage = "The provider does not offer the selected model. Check the model id on the connection.";
+
+    // A provider or gateway HTTP 401/403. Fixed and path-free: the response body, URL and credential are never surfaced.
+    private const string ProviderAuthFailedMessage =
+        "The provider rejected the credentials. Replace the API key or bearer token in the connection settings.";
+
+    private const string ProviderRateLimitedMessage = "The provider rate-limited this request";
+
+    // Longer Retry-After values are dropped rather than cut: an HTTP-date is 29 characters, delta-seconds far fewer.
+    private const int MaxRetryAfterLength = 64;
 
     private static readonly Regex FrameworkExceptionNamePattern =
         new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant,
@@ -105,6 +119,19 @@ internal static class InvocationFailureClassifier
             NotSupportedException notSupportedException => new FailureClassification(FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(notSupportedException.Message)),
             InvalidOperationException invalidOperationException when invalidOperationException.Message.Contains("Response size exceeded", StringComparison.Ordinal) =>
                 new FailureClassification(FailureCategory.Unexpected, invalidOperationException.Message),
+            // The Azure translator already sanitized its auth text (mode-aware). Other Azure kinds keep their old landing, so the
+            // ClientResultException arms below skip any chain that holds an AzureFoundryProviderException.
+            _ when FindInChain<AzureFoundryProviderException>(exception) is
+                { Kind: AzureFoundryProviderErrorKind.AuthFailed or AzureFoundryProviderErrorKind.AuthRequired } azureAuth =>
+                new FailureClassification(FailureCategory.ProviderAuthFailed, azureAuth.Message),
+            // An OpenAI-compatible provider or gateway rejecting a call by status. 400 and 5xx fall through to the grammar, capability and model-load
+            // arms, which read a wrapper's text; the 5xx arm follows them. The body and URL are never surfaced.
+            _ when FindProviderClientResult(exception) is { Status: 401 or 403 } =>
+                new FailureClassification(FailureCategory.ProviderAuthFailed, ProviderAuthFailedMessage),
+            _ when FindProviderClientResult(exception) is { Status: 404 } =>
+                new FailureClassification(FailureCategory.ModelUnavailable, ProviderModelNotOfferedMessage),
+            _ when FindProviderClientResult(exception) is { Status: 429 } rateLimited =>
+                new FailureClassification(FailureCategory.ProviderRateLimited, BuildRateLimitedMessage(rateLimited)),
             HttpRequestException httpRequestException when httpRequestException.StatusCode == HttpStatusCode.NotFound =>
                 new FailureClassification(FailureCategory.ModelUnavailable, ModelUnavailableMessage),
             // llama-server reports an uncompilable tool-schema grammar as an HTTP 400, so this arm MUST match before the ReportsModelLoadFailure and generic
@@ -117,6 +144,8 @@ internal static class InvocationFailureClassifier
                 new FailureClassification(FailureCategory.ModelCapabilityUnsupported, capabilityMessage),
             _ when ReportsModelLoadFailure(exception) =>
                 new FailureClassification(FailureCategory.ModelLoadFailed, ModelLoadFailedMessage),
+            _ when FindProviderClientResult(exception) is { Status: >= 500 and <= 599 } =>
+                new FailureClassification(FailureCategory.ProviderUnreachable, ProviderUnavailableMessage),
             HttpRequestException => new FailureClassification(FailureCategory.ProviderUnreachable, ProviderUnavailableMessage),
             _ when IsAgentRuntimeException(exception) => new FailureClassification(FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(exception.Message)),
             _ => new FailureClassification(FailureCategory.Unexpected, TruncateUnexpectedMessage(exception.Message))
@@ -199,6 +228,46 @@ internal static class InvocationFailureClassifier
         }
 
         return false;
+    }
+
+    /// <summary>The first <see cref="ClientResultException" /> in the chain, unless an Azure provider exception sits anywhere in it.</summary>
+    private static ClientResultException? FindProviderClientResult(Exception exception)
+    {
+        return FindInChain<AzureFoundryProviderException>(exception) is null
+            ? FindInChain<ClientResultException>(exception)
+            : null;
+    }
+
+    private static TException? FindInChain<TException>(Exception exception)
+        where TException : Exception
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is TException match)
+            {
+                return match;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The fixed rate-limit message, plus the response's <c>Retry-After</c> value when it is short and plain.</summary>
+    /// <remarks>
+    ///     The value is quoted verbatim (delta-seconds or an HTTP-date) only when it fits <see cref="MaxRetryAfterLength" />
+    ///     and holds letters, digits, spaces and <c>,:+-.</c>; anything else is dropped, so a hostile header cannot inject text.
+    /// </remarks>
+    private static string BuildRateLimitedMessage(ClientResultException exception)
+    {
+        string? retryAfter = null;
+        _ = exception.GetRawResponse()?.Headers.TryGetValue("Retry-After", out retryAfter);
+        retryAfter = retryAfter?.Trim();
+
+        return string.IsNullOrEmpty(retryAfter)
+               || retryAfter.Length > MaxRetryAfterLength
+               || !retryAfter.All(static c => char.IsAsciiLetterOrDigit(c) || c is ' ' or ',' or ':' or '+' or '-' or '.')
+            ? $"{ProviderRateLimitedMessage}."
+            : $"{ProviderRateLimitedMessage}, retry after {retryAfter}.";
     }
 
     private static string RedactAgentRuntimeMessage(string message)

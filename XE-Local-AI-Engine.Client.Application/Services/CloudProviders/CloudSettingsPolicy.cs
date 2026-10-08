@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 
 /// <summary>
 ///     Cross-field save policy for an Azure Foundry connection's deployment names, custom headers and operator-added
@@ -27,16 +28,12 @@ public static class CloudSettingsPolicy
         ArgumentNullException.ThrowIfNull(additionalAllowedHostSuffixes);
         ArgumentNullException.ThrowIfNull(existingHeaders);
 
-        var errors = new List<string>();
+        // The shared rules first (count, names, reserved set, duplicates, values): one home, CustomHeaderRules.
+        var errors = CustomHeaderRules.FindViolations([.. headers.Select(static header => new KeyValuePair<string?, string?>(header.Name, header.Value))]).ToList();
 
-        if (headers.Count > AzureFoundryHeaderRules.MaxHeaderCount)
+        if (additionalAllowedHostSuffixes.Count > CustomHeaderRules.MaxHostSuffixCount)
         {
-            errors.Add($"A maximum of {AzureFoundryHeaderRules.MaxHeaderCount} custom headers is allowed.");
-        }
-
-        if (additionalAllowedHostSuffixes.Count > AzureFoundryHeaderRules.MaxHostSuffixCount)
-        {
-            errors.Add($"A maximum of {AzureFoundryHeaderRules.MaxHostSuffixCount} allowed host suffixes is allowed.");
+            errors.Add($"A maximum of {CustomHeaderRules.MaxHostSuffixCount} allowed host suffixes is allowed.");
         }
 
         // Names of stored headers that are secret, so a fresh/renamed blank secret header (no stored secret to merge
@@ -46,45 +43,19 @@ public static class CloudSettingsPolicy
                                                     .Select(static header => header.Name.Trim()),
             StringComparer.OrdinalIgnoreCase);
 
-        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var header in headers)
         {
             var name = header.Name.Trim();
 
             if (name.Length == 0)
             {
-                if (!string.IsNullOrWhiteSpace(header.Value) || header.IsSecret)
+                // Azure-only: a secret row with neither name nor value is still a row the operator marked, not an empty one.
+                if (header.IsSecret && string.IsNullOrWhiteSpace(header.Value))
                 {
-                    errors.Add("A custom header value was provided without a header name.");
+                    errors.Add(CustomHeaderRules.ValueWithoutNameMessage);
                 }
 
                 continue;
-            }
-
-            if (name.Length > AzureFoundryHeaderRules.MaxHeaderNameLength)
-            {
-                errors.Add($"Custom header name '{name}' exceeds {AzureFoundryHeaderRules.MaxHeaderNameLength} characters.");
-            }
-            else if (!AzureFoundryHeaderRules.IsValidHeaderName(name))
-            {
-                errors.Add($"Custom header name '{name}' contains invalid characters.");
-            }
-            else if (AzureFoundryHeaderRules.IsReservedName(name))
-            {
-                errors.Add($"Custom header name '{name}' is reserved and cannot be set.");
-            }
-            else if (!seenNames.Add(name))
-            {
-                errors.Add($"Custom header name '{name}' is duplicated.");
-            }
-
-            if ((header.Value?.Length ?? 0) > AzureFoundryHeaderRules.MaxHeaderValueLength)
-            {
-                errors.Add($"Custom header '{name}' value exceeds {AzureFoundryHeaderRules.MaxHeaderValueLength} characters.");
-            }
-            else if (!AzureFoundryHeaderRules.IsValidHeaderValue(header.Value))
-            {
-                errors.Add($"Custom header '{name}' value contains invalid control characters.");
             }
 
             // A blank secret header only resolves when CloudSettingsHeaderMerge finds a stored secret of the same name; a

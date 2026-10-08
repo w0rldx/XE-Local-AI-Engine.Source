@@ -3,12 +3,14 @@ import { IconAlertTriangle, IconArrowBackUp, IconDeviceFloppy, IconTrash, IconX 
 import type { Dispatch } from "react";
 import { useTranslation } from "react-i18next";
 
+import { CustomHeaderRows } from "@/core/ui/components/CustomHeaderRows/CustomHeaderRows";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { ExternalProviderModelFields } from "@/features/external-providers/components/ExternalProviderModelFields";
 import { ExternalProviderProbePanel } from "@/features/external-providers/components/ExternalProviderProbePanel";
-import type {
-	ExternalProviderFormAction,
-	ExternalProviderProbeState,
+import {
+	type ExternalProviderFormAction,
+	type ExternalProviderProbeState,
+	nextExternalRowId,
 } from "@/features/external-providers/models/ExternalProviderFormState";
 import {
 	type ExternalProviderFormErrors,
@@ -21,6 +23,7 @@ interface ExternalProviderConnectionEditorProps {
 	readonly values: ExternalProviderFormValues;
 	readonly visibleErrors: ExternalProviderFormErrors;
 	readonly modelRowIds: readonly string[];
+	readonly headerRowIds: readonly string[];
 	readonly probe: ExternalProviderProbeState | null;
 	readonly dispatch: Dispatch<ExternalProviderFormAction>;
 	readonly connection: {
@@ -42,7 +45,7 @@ const segmentedControlStyles = { label: { whiteSpace: "normal" as const } };
 
 export function ExternalProviderConnectionEditor(props: ExternalProviderConnectionEditorProps) {
 	const { t } = useTranslation();
-	const { values, visibleErrors, modelRowIds, probe, dispatch, connection, status } = props;
+	const { values, visibleErrors, modelRowIds, headerRowIds, probe, dispatch, connection, status } = props;
 	const isActionPending = status.isSaving || status.isDeleting;
 
 	return (
@@ -169,7 +172,7 @@ export function ExternalProviderConnectionEditor(props: ExternalProviderConnecti
 				<Group align="flex-end" gap="xs" wrap="nowrap">
 					<PasswordInput
 						style={{ flex: "1 1 auto", minWidth: 0 }}
-						label={t("pages.externalProviders.editor.apiKeyLabel", "API key (optional)")}
+						label={t("pages.externalProviders.editor.apiKeyLabel", "API key or bearer token (optional)")}
 						description={
 							connection.hasApiKey
 								? t("pages.externalProviders.editor.apiKeyStoredHint")
@@ -199,6 +202,26 @@ export function ExternalProviderConnectionEditor(props: ExternalProviderConnecti
 					) : null}
 				</Group>
 			)}
+
+			<Stack gap={4}>
+				<CustomHeaderRows
+					headers={values.headers}
+					rowIds={headerRowIds}
+					title={t("pages.externalProviders.editor.headersTitle", "Custom headers")}
+					description={t("pages.externalProviders.editor.headersDescription")}
+					namePlaceholder={t("pages.externalProviders.editor.headersNamePlaceholder", "X-Example-Project")}
+					error={visibleErrors.headers}
+					testIdPrefix="external-provider"
+					onAdd={() => dispatch({ type: "addHeader", rowId: nextExternalRowId("external-header") })}
+					onRemove={(index) => dispatch({ type: "removeHeader", index })}
+					onChange={(index, field, value) => dispatch({ type: "setHeaderField", index, field, value })}
+					onToggleSecret={(index) => dispatch({ type: "toggleHeaderSecret", index })}
+					onBlur={() => dispatch({ type: "touchField", field: "headers" })}
+				/>
+				<Text size="xs" c="dimmed">
+					{t("pages.externalProviders.editor.headersGatewayHint")}
+				</Text>
+			</Stack>
 
 			<TextInput
 				style={{ maxWidth: "16rem" }}

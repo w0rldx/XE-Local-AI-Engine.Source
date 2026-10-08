@@ -45,5 +45,6 @@
     <Folder Name="/Tests/Fixture/">
         <Project Path="XE-Local-AI-Engine.Testing.FakeDocker/XE-Local-AI-Engine.Testing.FakeDocker.csproj"/>
         <Project Path="XE-Local-AI-Engine.Testing.FakeOllama/XE-Local-AI-Engine.Testing.FakeOllama.csproj"/>
+        <Project Path="XE-Local-AI-Engine.Testing.FakeOpenAiGateway/XE-Local-AI-Engine.Testing.FakeOpenAiGateway.csproj"/>
     </Folder>
 </Solution>

@@ -171,6 +171,23 @@ public sealed class ExternalOpenAiModelProviderTests
     }
 
     [Test]
+    public async Task CheckHealthAsync_SendsTheConnectionsCustomHeaders()
+    {
+        // A gateway that requires a project header rejects a health probe without it, which would report a working
+        // connection as unhealthy.
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(),
+            ExternalProviderTestData.Model(),
+            apiKey: "demo-jwt",
+            headers: [new("X-Demo-Project", "demo"), new("Authorization", "smuggled")]);
+
+        _ = await Build(registry, recorder).CheckHealthAsync(CancellationToken.None);
+
+        AssertEx.Equal("demo", recorder.LastRequest.Headers.GetValueOrDefault("X-Demo-Project"));
+        AssertEx.Equal("Bearer demo-jwt", recorder.LastRequest.Authorization, "a reserved name never overrides the key, even past the save-time check");
+    }
+
+    [Test]
     public async Task CheckHealthAsync_WhenTheEndpointRejectsTheListing_IsUnhealthy()
     {
         var recorder = new OpenAiWireRecorder

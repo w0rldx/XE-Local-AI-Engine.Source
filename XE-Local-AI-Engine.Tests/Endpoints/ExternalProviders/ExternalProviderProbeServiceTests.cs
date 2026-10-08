@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ExternalProviderProbeServiceTests
 {
     private const string StoredKey = "sk-unsloth-super-secret";
+    private const string StoredHeaderValue = "stored-header-super-secret";
 
     [Test]
     public async Task Probe_WhenTheListingIsWellFormed_ReturnsTheIdsAndTheDeclaredWindows()
@@ -264,6 +265,106 @@ public sealed class ExternalProviderProbeServiceTests
         AssertEx.False(transport.LastRequestHadAuthorization);
     }
 
+    [Test]
+    public async Task Probe_ForADraft_SendsItsHeaderRows()
+    {
+        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
+        var service = CreateService(transport);
+
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null,
+            "http://127.0.0.1:18099",
+            "demo-jwt",
+            Headers: [Header(" X-Demo-Project ", "demo"), Header("X-Demo-Token", "typed", isSecret: true), Header("", "")]));
+
+        AssertEx.Equal("Bearer demo-jwt", transport.LastAuthorization);
+        AssertEx.Equal("demo", transport.LastHeaders.GetValueOrDefault("X-Demo-Project"));
+        AssertEx.Equal("typed", transport.LastHeaders.GetValueOrDefault("X-Demo-Token"));
+    }
+
+    [Test]
+    [Arguments(null)]
+    [Arguments("http://127.0.0.1:18099/openai/v1")]
+    public async Task Probe_ForAStoredConnection_ABlankSecretHeaderRowUsesTheStoredValueOnItsOrigin(string? draftBaseUrl)
+    {
+        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
+        var service = CreateService(transport, CreateConfig());
+
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box",
+            draftBaseUrl,
+            ApiKey: null,
+            Headers: [Header("x-stored-token", value: null, isSecret: true)]));
+
+        AssertEx.Equal(StoredHeaderValue, transport.LastHeaders.GetValueOrDefault("X-Stored-Token"));
+    }
+
+    [Test]
+    public async Task Probe_ForADraftAddressOnAnotherOrigin_DoesNotForwardAStoredSecretHeaderValue()
+    {
+        // The key's exfiltration path, for a gateway token kept in a header instead.
+        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
+        var service = CreateService(transport, CreateConfig());
+
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box",
+            "http://attacker.example.com/v1",
+            ApiKey: null,
+            AllowInsecureHttp: true,
+            Headers: [Header("X-Stored-Token", value: null, isSecret: true), Header("X-Demo-Project", "demo")]));
+
+        AssertEx.Equal(expected: 1, transport.RequestCount);
+        AssertEx.False(transport.LastHeaders.ContainsKey("X-Stored-Token"));
+        AssertEx.False(transport.LastHeaders.Values.Any(static value => value.Contains(StoredHeaderValue, StringComparison.Ordinal)));
+        AssertEx.Equal("demo", transport.LastHeaders.GetValueOrDefault("X-Demo-Project"));
+    }
+
+    [Test]
+    [Arguments(null)]
+    [Arguments("http://127.0.0.1:18099/openai/v1")]
+    public async Task Probe_ForAStoredConnectionWithNoHeaderRows_SendsTheStoredHeadersOnItsOrigin(string? draftBaseUrl)
+    {
+        // A caller that probes a saved connection without rows gets the stored headers, as a blank key gets the stored
+        // key; otherwise a header-gated gateway answers 403 to every such probe.
+        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
+        var service = CreateService(transport, CreateConfig());
+
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", draftBaseUrl, ApiKey: null, Headers: null));
+
+        AssertEx.Equal(StoredHeaderValue, transport.LastHeaders.GetValueOrDefault("X-Stored-Token"));
+    }
+
+    [Test]
+    public async Task Probe_ForAStoredConnectionWithNoHeaderRows_DoesNotSendTheStoredHeadersToAnotherOrigin()
+    {
+        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
+        var service = CreateService(transport, CreateConfig());
+
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://attacker.example.com/v1", ApiKey: null, AllowInsecureHttp: true, Headers: null));
+
+        AssertEx.Equal(expected: 1, transport.RequestCount);
+        AssertEx.False(transport.LastHeaders.Values.Any(static value => value.Contains(StoredHeaderValue, StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task Probe_ForAStoredConnectionWithAnEmptyRowList_SendsNoCustomHeaders()
+    {
+        // An explicit empty list is the editor saying "this draft has no headers", which must not be overridden.
+        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
+        var service = CreateService(transport, CreateConfig());
+
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", BaseUrl: null, ApiKey: null, Headers: []));
+
+        AssertEx.False(transport.LastHeaders.ContainsKey("X-Stored-Token"));
+    }
+
+    private static StoredExternalProviderHeader Header(string name, string? value, bool isSecret = false)
+    {
+        return new StoredExternalProviderHeader
+        {
+            Name = name,
+            Value = value,
+            IsSecret = isSecret
+        };
+    }
+
     private static StoredExternalProviderConfig CreateConfig()
     {
         return new StoredExternalProviderConfig
@@ -277,7 +378,8 @@ public sealed class ExternalProviderProbeServiceTests
                     DisplayName = "Unsloth box",
                     BaseUrl = "http://127.0.0.1:18099/v1/",
                     ApiKey = StoredKey,
-                    Locality = ExternalProviderLocality.Local
+                    Locality = ExternalProviderLocality.Local,
+                    Headers = [Header("X-Stored-Token", StoredHeaderValue, isSecret: true)]
                 }
             ]
         };
@@ -319,6 +421,8 @@ public sealed class ExternalProviderProbeServiceTests
 
         public bool LastRequestHadAuthorization { get; private set; }
 
+        public IReadOnlyDictionary<string, string> LastHeaders { get; private set; } = new Dictionary<string, string>();
+
         public HttpMessageHandler CreateHandler()
         {
             return new RecordingHandler(this);
@@ -338,6 +442,9 @@ public sealed class ExternalProviderProbeServiceTests
                 _transport.LastRequestUri = request.RequestUri;
                 _transport.LastAuthorization = request.Headers.Authorization?.ToString();
                 _transport.LastRequestHadAuthorization = request.Headers.Contains("Authorization");
+                _transport.LastHeaders = request.Headers.NonValidated.ToDictionary(static header => header.Key,
+                    static header => string.Join(",", header.Value),
+                    StringComparer.OrdinalIgnoreCase);
                 var index = _transport.RequestCount++;
                 return Task.FromResult(_transport._responder(index));
             }

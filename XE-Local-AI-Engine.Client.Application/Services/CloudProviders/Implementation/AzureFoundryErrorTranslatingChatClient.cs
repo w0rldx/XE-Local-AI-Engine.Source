@@ -26,9 +26,20 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
     private const int MaxSanitizedDetailLength = 300;
     private static readonly char[] NewlineSeparators = ['\n', '\r'];
 
-    public AzureFoundryErrorTranslatingChatClient(IChatClient innerClient)
+    private readonly string _authFailedMessage;
+
+    /// <param name="authMode">The connection's auth mode; picks the 401/403 text (API key versus a rejected bearer token).</param>
+    public AzureFoundryErrorTranslatingChatClient(IChatClient innerClient, AzureFoundryAuthMode authMode = AzureFoundryAuthMode.ApiKey)
         : base(innerClient)
     {
+        _authFailedMessage = authMode switch
+        {
+            AzureFoundryAuthMode.EntraId =>
+                "Azure Foundry rejected the Entra ID bearer token (sign in again, or check the token scope).",
+            AzureFoundryAuthMode.ManagedIdentity =>
+                "Azure Foundry rejected the managed-identity bearer token (check the identity's RBAC role and the token scope).",
+            _ => "Azure Foundry rejected the credentials (check the API key or the managed-identity RBAC role)."
+        };
     }
 
     public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
@@ -102,7 +113,7 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
     ///     The message carries only the status code and the Azure error code / body detail — never the exception's full
     ///     content, which could echo request fields, and never a credential value.
     /// </remarks>
-    private static AzureFoundryProviderException Translate(RequestFailedException exception)
+    private AzureFoundryProviderException Translate(RequestFailedException exception)
     {
         if (exception.Status == 400
             && string.Equals(exception.ErrorCode, ContentFilterErrorCode, StringComparison.OrdinalIgnoreCase))
@@ -115,7 +126,7 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
         if (exception.Status is 401 or 403)
         {
             return new AzureFoundryProviderException(AzureFoundryProviderErrorKind.AuthFailed,
-                "Azure Foundry rejected the credentials (check the API key or the managed-identity RBAC role).",
+                _authFailedMessage,
                 exception);
         }
 
@@ -131,7 +142,7 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
     ///     it carries no <c>ErrorCode</c> property, so content-filter detection here reads the response body's
     ///     <c>error.code</c> instead.
     /// </remarks>
-    private static AzureFoundryProviderException Translate(ClientResultException exception)
+    private AzureFoundryProviderException Translate(ClientResultException exception)
     {
         var detail = ExtractErrorBodyDetail(exception.GetRawResponse()?.Content);
 
@@ -145,7 +156,7 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
         if (exception.Status is 401 or 403)
         {
             return new AzureFoundryProviderException(AzureFoundryProviderErrorKind.AuthFailed,
-                "Azure Foundry rejected the credentials (check the API key or the managed-identity RBAC role).",
+                _authFailedMessage,
                 exception);
         }
 

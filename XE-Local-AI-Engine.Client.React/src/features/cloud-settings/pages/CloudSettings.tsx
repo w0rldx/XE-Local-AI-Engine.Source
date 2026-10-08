@@ -13,6 +13,7 @@ import {
 	saveCloudSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { toHeaderRequests } from "@/core/http-headers/CustomHeaders";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
@@ -29,7 +30,6 @@ import {
 } from "@/features/cloud-settings/models/CloudSettingsFormState";
 import {
 	type CloudFoundryModelDraft,
-	type CloudHeaderDraft,
 	type CloudSettingsFormValues,
 	shouldWarnManagedIdentityEgress,
 	validateCloudSettingsForm,
@@ -41,20 +41,6 @@ function configuredModels(models: readonly CloudFoundryModelDraft[]) {
 		if (deploymentName.length > 0) {
 			const displayLabel = model.displayLabel.trim();
 			configured.push({ deploymentName, ...(displayLabel.length > 0 ? { displayLabel } : {}) });
-		}
-		return configured;
-	}, []);
-}
-
-function configuredHeaders(headers: readonly CloudHeaderDraft[]) {
-	return headers.reduce<Array<{ name: string; isSecret: boolean; value?: string }>>((configured, header) => {
-		const name = header.name.trim();
-		if (name.length > 0) {
-			configured.push({
-				name,
-				isSecret: header.isSecret,
-				value: header.isSecret ? (header.value.trim().length > 0 ? header.value : undefined) : header.value,
-			});
 		}
 		return configured;
 	}, []);
@@ -180,7 +166,7 @@ export function CloudSettings() {
 				models: configuredModels(formValues.models),
 				// Drop blank-name rows. Secret rows send no value when left blank so the stored secret is kept;
 				// a typed value replaces it. Non-secret values round-trip as entered.
-				headers: configuredHeaders(formValues.headers),
+				headers: toHeaderRequests(formValues.headers),
 				additionalAllowedHostSuffixes: configuredHostSuffixes(formValues.hostSuffixes),
 				// Ignored by the backend outside EntraId mode. A blank secret keeps the stored secret (or selects
 				// interactive sign-in when none is stored) — same write-only semantics as a secret header value.

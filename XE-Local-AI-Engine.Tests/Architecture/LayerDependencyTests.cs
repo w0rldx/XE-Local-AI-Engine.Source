@@ -427,9 +427,10 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.Testing.FakeOllama"
             ],
-            // Both fakes are deliberately reference-free: a fake that reaches into the code under test stops being a fake.
+            // Every fake is deliberately reference-free: a fake that reaches into the code under test stops being a fake.
             ["XE-Local-AI-Engine.Testing.FakeOllama/XE-Local-AI-Engine.Testing.FakeOllama.csproj"] = [],
             ["XE-Local-AI-Engine.Testing.FakeDocker/XE-Local-AI-Engine.Testing.FakeDocker.csproj"] = [],
+            ["XE-Local-AI-Engine.Testing.FakeOpenAiGateway/XE-Local-AI-Engine.Testing.FakeOpenAiGateway.csproj"] = [],
             ["XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj"] =
             [
                 "XE-Local-AI-Engine.Desktop",
@@ -450,6 +451,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.ServiceDefaults",
                 "XE-Local-AI-Engine.Testing.FakeDocker",
                 "XE-Local-AI-Engine.Testing.FakeOllama",
+                "XE-Local-AI-Engine.Testing.FakeOpenAiGateway",
                 "XE-Local-AI-Engine.WindowsLauncher"
             ]
         };

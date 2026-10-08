@@ -130,6 +130,9 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   path names visible). The capability summary reports such a role as `PreviewIsolated`, never `Isolated`, and a host
   missing MXC's one-time `wxc-host-prep` step reports the exact command. AgentHome, Coder and work sessions are unchanged,
   and `run_python` stays Linux-only for now (ADR 0019).
+- **Custom request headers on external connections** — an external OpenAI-compatible connection can send extra
+  headers (name, value, and whether the value is a secret) with every request, so a private AI gateway's project or
+  routing header reaches it. A gateway that expects a bearer token takes it pasted into the API key field.
 
 ### Changed
 
@@ -159,6 +162,11 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 - **The external-providers store moves to schema 2 (tri-state model capabilities).** An older build cannot read a
   file saved by this version: its external models disappear, fail closed, and writes are refused until this
   version or later is running again.
+- **The external-providers store moves to schema 3 (custom request headers).** An older build cannot read a file
+  saved by this version and hides every external connection until this version or later is running again.
+- **Chat names gateway rejections.** A provider or gateway that rejects the credentials (HTTP 401/403) or rate-limits
+  a request (HTTP 429, with its `Retry-After` when sent) now fails the turn under its own category and says what to do,
+  instead of a generic error; Azure auth failures also name the API key or the bearer token, by auth mode.
 - **Launching the packaged app with no arguments opens the native desktop window instead of a browser.** That is
   double-clicking `XE-Local-AI-Engine.WindowsLauncher.exe` on Windows, and running the AppImage — whose main
   executable is `XE-Local-AI-Engine.Desktop` — on Ubuntu. `--browser` and `--headless` restore the previous
@@ -284,6 +292,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 - `CA2254` (varying log message template) and `CA2200` (rethrow that destroys the stack trace) are stated explicitly
   in `.editorconfig`. Both are already error-equivalent under `TreatWarningsAsErrors`; the lines exist so an SDK
   default this repository does not control cannot quietly relax either one.
+- `XE-Local-AI-Engine.Testing.FakeOpenAiGateway` is an in-tree, loopback fake OpenAI-compatible gateway for tests: it
+  requires a bearer token and a configured header, records every request, and injects auth, rate-limit and stream faults.
 
 ## [1.0.0-rc.2] — 2026-08-24
 

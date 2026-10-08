@@ -3007,14 +3007,7 @@
 				"headers": {
 					"title": "Benutzerdefinierte Header",
 					"description": "Füge jeder Azure-Anfrage benutzerdefinierte HTTP-Header hinzu (zum Beispiel einen APIM-Gateway-Abonnementschlüssel). Markiere einen Wert als geheim, um ihn nur schreibbar zu speichern.",
-					"nameLabel": "Header-Name",
-					"namePlaceholder": "Ocp-Apim-Subscription-Key",
-					"valueLabel": "Wert",
-					"valuePlaceholder": "Wert",
-					"secretLabel": "Geheim",
-					"secretStoredHint": "Ein geheimer Wert ist gespeichert. Gib einen neuen Wert ein, um ihn zu ersetzen.",
-					"addHeader": "Header hinzufügen",
-					"removeHeader": "Header entfernen"
+					"namePlaceholder": "Ocp-Apim-Subscription-Key"
 				},
 				"hostSuffixes": {
 					"title": "Erlaubte Host-Suffixe",
@@ -3125,8 +3118,12 @@
 				"baseUrlLabel": "Basis-URL",
 				"baseUrlHint": "Die OpenAI-kompatible Basis, mit oder ohne abschließendes /v1. Chat und Verbindungstest nutzen beide die normalisierte Adresse.",
 				"baseUrlPlaceholder": "http://127.0.0.1:8080/v1",
-				"apiKeyLabel": "API-Schlüssel (optional)",
-				"apiKeyHint": "Wird als Bearer-Token gesendet. Bei einem Server ohne Authentifizierung leer lassen — dann wird gar kein Authorization-Header gesendet.",
+				"apiKeyLabel": "API-Schlüssel oder Bearer-Token (optional)",
+				"apiKeyHint": "Wird als „Authorization: Bearer <Wert>“ gesendet, ein Bearer-Token eines Gateways (zum Beispiel ein JWT) kann also unverändert eingefügt werden. Bei einem Server ohne Authentifizierung leer lassen — dann wird gar kein Authorization-Header gesendet.",
+				"headersTitle": "Benutzerdefinierte Header",
+				"headersDescription": "Zusätzliche HTTP-Header, die mit jeder Anfrage an diese Verbindung gesendet werden, auch beim Verbindungstest. Markiere einen Wert als geheim, um ihn nur schreibbar zu speichern.",
+				"headersNamePlaceholder": "X-Example-Project",
+				"headersGatewayHint": "Private KI-Gateways erwarten neben dem Token oft einen Projekt- oder Mandanten-Header; Name und Wert erfährst du beim Betreiber des Gateways.",
 				"apiKeyStoredHint": "Ein Schlüssel ist gespeichert. Leer lassen, um ihn zu behalten, einen neuen eintippen, um ihn zu ersetzen, oder „Schlüssel entfernen“ für den Betrieb ohne Schlüssel.",
 				"apiKeyRemovalPending": "Der gespeicherte Schlüssel wird beim Speichern entfernt, und diese Verbindung sendet dann keinen Authorization-Header mehr.",
 				"removeApiKey": "Schlüssel entfernen",
@@ -8037,6 +8034,15 @@
 			"clear": "Gespeicherten Wert löschen",
 			"cleared": "Dieser Wert wird beim Speichern entfernt.",
 			"undo": "Rückgängig"
+		},
+		"customHeaders": {
+			"nameLabel": "Header-Name",
+			"valueLabel": "Wert",
+			"valuePlaceholder": "Wert",
+			"secretLabel": "Geheim",
+			"secretStoredHint": "Ein geheimer Wert ist gespeichert. Gib einen neuen Wert ein, um ihn zu ersetzen.",
+			"addHeader": "Header hinzufügen",
+			"removeHeader": "Header entfernen"
 		},
 		"loginCard": {
 			"signIn": "Anmelden",

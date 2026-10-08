@@ -95,7 +95,17 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
         var carriedStoredKey = ExternalProviderStore.IsSameOrigin(stored?.BaseUrl, baseAddress.AbsoluteUri) ? stored?.ApiKey : null;
         var apiKey = string.IsNullOrWhiteSpace(query.ApiKey) ? carriedStoredKey : query.ApiKey;
 
-        return await SendProbeAsync(baseAddress, apiKey, cancellationToken);
+        // No rows at all means "use what is stored", like a blank key and on the same origin only; explicit rows take the
+        // per-name rule for secret values. The endpoint validator has already checked the rows.
+        var carriedStoredHeaders = ExternalProviderStore.IsSameOrigin(stored?.BaseUrl, baseAddress.AbsoluteUri) ? stored?.Headers ?? [] : [];
+        var headers = query.Headers is null
+            ? carriedStoredHeaders
+            : ExternalProviderStore.MergeHeaders(ExternalProviderStore.NormalizeHeaders(query.Headers),stored, baseAddress.AbsoluteUri, isSave: false);
+
+        return await SendProbeAsync(baseAddress,
+            apiKey,
+            [.. headers.Select(static header => new KeyValuePair<string, string>(header.Name, header.Value ?? string.Empty))],
+            cancellationToken);
     }
 
     private async Task<StoredExternalProviderConnection?> ResolveStoredConnectionAsync(string? connectionId, CancellationToken cancellationToken)
@@ -110,7 +120,10 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
         return config.Connections.FirstOrDefault(connection => string.Equals(connection.Id, canonicalId, StringComparison.Ordinal));
     }
 
-    private async Task<ExternalProviderProbeResult> SendProbeAsync(Uri baseAddress, string? apiKey, CancellationToken cancellationToken)
+    private async Task<ExternalProviderProbeResult> SendProbeAsync(Uri baseAddress,
+        string? apiKey,
+        IReadOnlyList<KeyValuePair<string, string>> headers,
+        CancellationToken cancellationToken)
     {
         // The probe's own deadline must not be indistinguishable from the caller cancelling: a linked source lets the
         // catch below tell "the operator navigated away" (rethrow) from "the endpoint did not answer" (a verdict).
@@ -131,7 +144,7 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
                               // and then report that host as the connection's reachability. A 3xx is reported below.
                               AllowAutoRedirect = false
                           };
-            using var httpClient = new HttpClient(handler, disposeHandler: true)
+            using var httpClient = new HttpClient(new CustomRequestHeadersHandler(headers, handler), disposeHandler: true)
             {
                 Timeout = Timeout.InfiniteTimeSpan
             };

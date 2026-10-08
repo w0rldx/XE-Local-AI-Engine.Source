@@ -2767,11 +2767,25 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderCon
 	allowInsecureHttp: boolean;
 	insecureTransport: boolean;
 	models?: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderModelResponse>;
+	headers?: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderHeaderResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse = {
 	revision: string;
 	connections?: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderHeaderRequest = {
+	name?: string | null;
+	value?: string | null;
+	isSecret?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderHeaderResponse = {
+	name: string;
+	value?: string | null;
+	isSecret: boolean;
+	hasStoredValue: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderModelResponse = {
@@ -2796,6 +2810,7 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderPro
 	baseUrl?: string | null;
 	apiKey?: string | null;
 	allowInsecureHttp?: boolean;
+	headers?: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderHeaderRequest> | null;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse = {
@@ -2817,6 +2832,7 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvide
 	timeoutSeconds?: number | null;
 	allowInsecureHttp?: boolean;
 	models: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderModelRequest>;
+	headers?: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderHeaderRequest>;
 	expectedRevision?: string | null;
 };
 
@@ -6802,7 +6818,9 @@ export type XeLocalAiEngineClientModelsEnumsFailureCategory =
 	| "ModelCapabilityUnsupported"
 	| "ModelLoadFailed"
 	| "ModelNotInstalled"
-	| "ContextWindowExceeded";
+	| "ContextWindowExceeded"
+	| "ProviderAuthFailed"
+	| "ProviderRateLimited";
 
 export type XeLocalAiEngineClientPersistenceAgentDefinitionKind = "Single" | "Orchestrator";
 

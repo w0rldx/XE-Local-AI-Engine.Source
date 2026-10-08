@@ -4,15 +4,16 @@ import { ApiError } from "@/core/api/errors/ApiError";
 import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import {
 	connectionToFormValues,
-	createModelRowIds,
-	emptyFormValues,
-	emptyModelDraft,
+	createFormRowIds,
 	type ExternalProviderConnectionDto,
 	type ExternalProviderFormState,
+	emptyFormValues,
+	emptyModelDraft,
 	formReducer,
 	initialFormState,
 	parseConnectionsConflict,
 	probeInputFingerprint,
+	toProbeRequestBody,
 	toSaveRequestBody,
 } from "@/features/external-providers/models/ExternalProviderFormState";
 import type { ExternalProviderModelDraft } from "@/features/external-providers/models/ExternalProviderModel";
@@ -45,7 +46,8 @@ function storedConnection(overrides: Partial<ExternalProviderConnectionDto> = {}
 }
 
 function stateWith(values: ExternalProviderFormState["values"]): ExternalProviderFormState {
-	return { ...initialFormState, values, modelRowIds: createModelRowIds(values) };
+	const rowIds = createFormRowIds(values);
+	return { ...initialFormState, values, modelRowIds: rowIds.models, headerRowIds: rowIds.headers };
 }
 
 // The editor always keeps at least one row, so a missing first row is a broken fixture rather than a case to handle.
@@ -313,7 +315,7 @@ describe("formReducer", () => {
 			type: "touchField",
 			field: "baseUrl",
 		});
-		const reset = formReducer(dirty, { type: "reset", values: emptyFormValues, rowIds: ["row-1"] });
+		const reset = formReducer(dirty, { type: "reset", values: emptyFormValues, rowIds: { models: ["row-1"], headers: [] } });
 
 		expect(reset.submitted).toBe(false);
 		expect(reset.touched).toEqual({});
@@ -426,7 +428,7 @@ describe("formReducer — probe results are bound to the configuration they desc
 
 	it("drops the result when another connection is loaded into the editor", () => {
 		const other = connectionToFormValues(storedConnection({ id: "gateway", baseUrl: "https://gw.example.com/v1" }));
-		const switched = formReducer(probed(stored()), { type: "reset", values: other, rowIds: createModelRowIds(other) });
+		const switched = formReducer(probed(stored()), { type: "reset", values: other, rowIds: createFormRowIds(other) });
 
 		expect(switched.probe).toBeNull();
 	});
@@ -448,5 +450,88 @@ describe("formReducer — probe results are bound to the configuration they desc
 
 		expect(failed.probe?.failure).toBe("Connection refused");
 		expect(formReducer(failed, { type: "setField", field: "baseUrl", value: "http://127.0.0.1:9090/v1" }).probe).toBeNull();
+	});
+});
+
+describe("custom header rows", () => {
+	const plainRow = { name: "X-Example-Project", value: "demo", isSecret: false, hasStoredValue: true };
+	const headerRows = [plainRow, { name: "X-Example-Token", value: null, isSecret: true, hasStoredValue: true }];
+
+	function withHeaders(): ExternalProviderFormState {
+		return stateWith(connectionToFormValues(storedConnection({ headers: headerRows })));
+	}
+
+	it("loads a secret value blank with the stored flag, and a plain value as stored", () => {
+		expect(withHeaders().values.headers).toEqual([
+			{ name: "X-Example-Project", value: "demo", isSecret: false, hasStoredSecret: false },
+			{ name: "X-Example-Token", value: "", isSecret: true, hasStoredSecret: true },
+		]);
+		expect(withHeaders().headerRowIds).toHaveLength(2);
+	});
+
+	it("saves every row, omitting a blank secret value so the stored one is kept", () => {
+		expect(toSaveRequestBody(withHeaders().values, "rev-1").headers).toEqual([
+			{ name: "X-Example-Project", isSecret: false, value: "demo" },
+			{ name: "X-Example-Token", isSecret: true },
+		]);
+	});
+
+	it("sends an empty list once every row is removed, which clears the stored headers", () => {
+		const cleared = formReducer(formReducer(withHeaders(), { type: "removeHeader", index: 0 }), {
+			type: "removeHeader",
+			index: 0,
+		});
+
+		expect(cleared.headerRowIds).toEqual([]);
+		expect(toSaveRequestBody(cleared.values, "rev-1").headers).toEqual([]);
+	});
+
+	it("adds, edits and toggles a row, and drops a row whose name stays blank", () => {
+		const added = formReducer(initialFormState, { type: "addHeader", rowId: "header-1" });
+		const blankRow = formReducer(added, { type: "addHeader", rowId: "header-2" });
+		const named = formReducer(blankRow, { type: "setHeaderField", index: 0, field: "name", value: "X-Example-Project" });
+		const valued = formReducer(named, { type: "setHeaderField", index: 0, field: "value", value: "demo" });
+		const secret = formReducer(valued, { type: "toggleHeaderSecret", index: 0 });
+
+		expect(secret.headerRowIds).toEqual(["header-1", "header-2"]);
+		expect(toSaveRequestBody(secret.values, undefined).headers).toEqual([
+			{ name: "X-Example-Project", isSecret: true, value: "demo" },
+		]);
+	});
+
+	it("sends the header rows with every probe, and the connection id when a stored secret value is kept", () => {
+		const keyless = connectionToFormValues(storedConnection({ hasApiKey: false, headers: headerRows }));
+
+		expect(toProbeRequestBody(keyless, true, false)).toEqual({
+			connectionId: "unsloth-box",
+			baseUrl: "http://127.0.0.1:8080/v1",
+			headers: [
+				{ name: "X-Example-Project", isSecret: false, value: "demo" },
+				{ name: "X-Example-Token", isSecret: true },
+			],
+		});
+	});
+
+	it("probes without the connection id when nothing stored is needed, or while the key is being removed", () => {
+		const plain = connectionToFormValues(storedConnection({ hasApiKey: false, headers: [plainRow] }));
+		expect(toProbeRequestBody(plain, true, false)).not.toHaveProperty("connectionId");
+
+		const removing = formReducer(withHeaders(), { type: "removeApiKey" }).values;
+		expect(toProbeRequestBody(removing, true, true)).not.toHaveProperty("connectionId");
+	});
+
+	it("drops a probe result when a header row changes", () => {
+		const state = withHeaders();
+		const probed = formReducer(state, {
+			type: "probeSucceeded",
+			fingerprint: probeInputFingerprint(state.values),
+			result: { reachable: true, models: [] },
+		});
+
+		expect(probed.probe).not.toBeNull();
+		expect(formReducer(probed, { type: "setHeaderField", index: 0, field: "value", value: "other" }).probe).toBeNull();
+		expect(formReducer(probed, { type: "toggleHeaderSecret", index: 0 }).probe).toBeNull();
+		expect(formReducer(probed, { type: "addHeader", rowId: "header-9" }).probe).not.toBeNull();
+		expect(formReducer(probed, { type: "removeHeader", index: 1 }).probe).toBeNull();
 	});
 });

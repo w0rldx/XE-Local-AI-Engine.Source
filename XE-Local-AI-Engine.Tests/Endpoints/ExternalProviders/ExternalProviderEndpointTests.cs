@@ -154,6 +154,109 @@ public sealed class ExternalProviderEndpointTests
     }
 
     [Test]
+    public async Task SaveConnection_PassesHeaderRowsThrough_ABlankSecretValueAsAbsent()
+    {
+        var administrationService = Substitute.For<IExternalProviderAdministrationService>();
+        administrationService.SaveConnectionAsync(Arg.Any<ExternalProviderConnectionSaveRequest>(), Arg.Any<CancellationToken>())
+                             .Returns(new ExternalProviderWriteResult.Committed(CreateConfig(), Changed: true));
+        await using var factory = CreateFactory(administrationService: administrationService);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, ConnectionRoute);
+        request.Content = JsonContent.Create(ValidSaveRequest() with
+        {
+            Headers =
+            [
+                new ExternalProviderHeaderRequest
+                {
+                    Name = "X-Demo-Project",
+                    Value = "demo"
+                },
+                new ExternalProviderHeaderRequest
+                {
+                    Name = "X-Demo-Token",
+                    IsSecret = true
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await administrationService.Received(1).SaveConnectionAsync(Arg.Is<ExternalProviderConnectionSaveRequest>(saved =>
+                saved.Headers.Count == 2
+                && saved.Headers[0].Name == "X-Demo-Project" && saved.Headers[0].Value == "demo" && !saved.Headers[0].IsSecret
+                && saved.Headers[1].Name == "X-Demo-Token" && saved.Headers[1].Value == null && saved.Headers[1].IsSecret),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments("Authorization", "v4lue-must-not-leak", "is reserved")]
+    [Arguments("AUTHORIZATION", "v4lue-must-not-leak", "is reserved")]
+    [Arguments("cookie", "v4lue-must-not-leak", "is reserved")]
+    [Arguments("X-Demo-Project", "v4lue-must-not-leak\r\nX-Injected: 1", "invalid control characters")]
+    [Arguments("X-Demo-Project", "v4lue-must-not-leak\0", "invalid control characters")]
+    [Arguments("X-Demo Project", "v4lue-must-not-leak", "invalid characters")]
+    [Arguments("", "v4lue-must-not-leak", "without a header name")]
+    public async Task SaveConnection_WithAnInvalidHeaderRow_Returns400NamingItWithoutReachingTheStore(string name, string value, string expected)
+    {
+        var administrationService = Substitute.For<IExternalProviderAdministrationService>();
+        await using var factory = CreateFactory(administrationService: administrationService);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, ConnectionRoute);
+        request.Content = JsonContent.Create(ValidSaveRequest() with
+        {
+            Headers =
+            [
+                new ExternalProviderHeaderRequest
+                {
+                    Name = name,
+                    Value = value,
+                    IsSecret = true
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(body, expected);
+        AssertEx.False(body.Contains("v4lue-must-not-leak", StringComparison.Ordinal), "a refusal names the header, never its value");
+        await administrationService.DidNotReceiveWithAnyArgs()
+                                   .SaveConnectionAsync(Arg.Any<ExternalProviderConnectionSaveRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveConnection_WithDuplicateHeaderNamesByCase_Returns400()
+    {
+        var administrationService = Substitute.For<IExternalProviderAdministrationService>();
+        await using var factory = CreateFactory(administrationService: administrationService);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, ConnectionRoute);
+        request.Content = JsonContent.Create(ValidSaveRequest() with
+        {
+            Headers =
+            [
+                new ExternalProviderHeaderRequest
+                {
+                    Name = "X-Demo-Project",
+                    Value = "a"
+                },
+                new ExternalProviderHeaderRequest
+                {
+                    Name = "x-demo-project",
+                    Value = "b"
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "is duplicated");
+    }
+
+    [Test]
     public async Task SaveConnection_WhenTheLocalityIsNotDeclared_Returns400WithoutReachingTheStore()
     {
         var administrationService = Substitute.For<IExternalProviderAdministrationService>();

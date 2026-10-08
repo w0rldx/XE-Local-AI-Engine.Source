@@ -40,8 +40,33 @@ internal static class ExternalProviderEndpointDtoMapper
             TimeoutSeconds = connection.TimeoutSeconds,
             AllowInsecureHttp = connection.AllowInsecureHttp,
             InsecureTransport = ExternalProviderTransportPolicy.IsInsecureRemote(connection.BaseUrl),
-            Models = [.. connection.Models.Select(model => ToResponse(model, connection.Id))]
+            Models = [.. connection.Models.Select(model => ToResponse(model, connection.Id))],
+            Headers =
+            [
+                .. connection.Headers.Select(static header => new ExternalProviderHeaderResponse
+                {
+                    Name = header.Name,
+                    // A secret value crosses INWARD only, like the key.
+                    Value = header.IsSecret ? null : header.Value,
+                    IsSecret = header.IsSecret,
+                    HasStoredValue = !string.IsNullOrEmpty(header.Value)
+                })
+            ]
         };
+    }
+
+    /// <summary>Maps header rows onto the store's shape untouched; the store trims, validates and merges them.</summary>
+    public static IReadOnlyList<StoredExternalProviderHeader> ToStoreHeaders(this IReadOnlyList<ExternalProviderHeaderRequest>? headers)
+    {
+        return
+        [
+            .. (headers ?? []).Select(static header => new StoredExternalProviderHeader
+            {
+                Name = header.Name ?? string.Empty,
+                Value = header.Value,
+                IsSecret = header.IsSecret
+            })
+        ];
     }
 
     /// <summary>
@@ -66,6 +91,7 @@ internal static class ExternalProviderEndpointDtoMapper
             TimeoutSeconds = request.TimeoutSeconds,
             AllowInsecureHttp = request.AllowInsecureHttp,
             Models = [.. request.Models.Select(ToSaveRequest)],
+            Headers = request.Headers.ToStoreHeaders(),
             ExpectedRevision = request.ExpectedRevision
         };
     }

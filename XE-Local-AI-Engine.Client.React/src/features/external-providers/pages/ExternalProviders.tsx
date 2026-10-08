@@ -20,7 +20,7 @@ import { ExternalProviderConnectionEditor } from "@/features/external-providers/
 import { ExternalProviderConnectionList } from "@/features/external-providers/components/ExternalProviderConnectionList";
 import {
 	connectionToFormValues,
-	createModelRowIds,
+	createFormRowIds,
 	type ExternalProviderConnectionsDto,
 	emptyFormValues,
 	errorMessage,
@@ -48,7 +48,7 @@ export function ExternalProviders() {
 	} = useQuery(withResponseValidation(listExternalProviderConnectionsOptions()));
 
 	const [formState, dispatch] = useReducer(formReducer, initialFormState);
-	const { values, touched, submitted, modelRowIds, probe } = formState;
+	const { values, touched, submitted, modelRowIds, headerRowIds, probe } = formState;
 	const [editorTarget, setEditorTarget] = useState<EditorTarget | null>(null);
 	// Set when a write loses the revision race. The 409 carries the whole configuration, so the page renders that
 	// instead of refetching — and this notice explains why the editor's contents just changed under the operator.
@@ -78,13 +78,16 @@ export function ExternalProviders() {
 	//
 	// `apiKey` is the exception: its only error is raised by an edit to the BASE URL, and Save is disabled while it
 	// stands, so gating it on having visited the key field (or on a submit that can never fire) would hide the one
-	// message that explains why saving is blocked.
+	// message that explains why saving is blocked. `headers` is shown at once for the same reason: a moved address
+	// raises the secret-header error, and a fresh form has no rows to pre-redden.
 	const visibleErrors = useMemo<ExternalProviderFormErrors>(
 		() =>
 			submitted
 				? errors
 				: (Object.fromEntries(
-						Object.entries(errors).filter(([key]) => key === "apiKey" || touched[key as keyof ExternalProviderFormValues]),
+						Object.entries(errors).filter(
+							([key]) => key === "apiKey" || key === "headers" || touched[key as keyof ExternalProviderFormValues],
+						),
 					) as ExternalProviderFormErrors),
 		[errors, submitted, touched],
 	);
@@ -92,12 +95,12 @@ export function ExternalProviders() {
 	const openEditor = useCallback((target: EditorTarget, formValues: ExternalProviderFormValues) => {
 		setConflictNotice(null);
 		setEditorTarget(target);
-		dispatch({ type: "reset", values: formValues, rowIds: createModelRowIds(formValues) });
+		dispatch({ type: "reset", values: formValues, rowIds: createFormRowIds(formValues) });
 	}, []);
 
 	const closeEditor = useCallback(() => {
 		setEditorTarget(null);
-		dispatch({ type: "reset", values: emptyFormValues, rowIds: createModelRowIds(emptyFormValues) });
+		dispatch({ type: "reset", values: emptyFormValues, rowIds: createFormRowIds(emptyFormValues) });
 	}, []);
 
 	// Renders what the server says is stored right now. When the connection under edit survived the other writer's
@@ -121,12 +124,12 @@ export function ExternalProviders() {
 					setEditorTarget({ connectionId: current.id, isNew: false });
 				}
 				const formValues = connectionToFormValues(current);
-				dispatch({ type: "reset", values: formValues, rowIds: createModelRowIds(formValues) });
+				dispatch({ type: "reset", values: formValues, rowIds: createFormRowIds(formValues) });
 				return;
 			}
 			if (!editorTarget.isNew) {
 				setEditorTarget(null);
-				dispatch({ type: "reset", values: emptyFormValues, rowIds: createModelRowIds(emptyFormValues) });
+				dispatch({ type: "reset", values: emptyFormValues, rowIds: createFormRowIds(emptyFormValues) });
 			}
 		},
 		[editorTarget, queryClient, values.connectionId],
@@ -138,7 +141,7 @@ export function ExternalProviders() {
 			toast.success(message);
 			setConflictNotice(null);
 			setEditorTarget(null);
-			dispatch({ type: "reset", values: emptyFormValues, rowIds: createModelRowIds(emptyFormValues) });
+			dispatch({ type: "reset", values: emptyFormValues, rowIds: createFormRowIds(emptyFormValues) });
 		},
 		[queryClient],
 	);
@@ -245,6 +248,7 @@ export function ExternalProviders() {
 					values={values}
 					visibleErrors={visibleErrors}
 					modelRowIds={modelRowIds}
+					headerRowIds={headerRowIds}
 					probe={probe}
 					dispatch={dispatch}
 					connection={{ isNew: editorTarget.isNew, hasApiKey: storedConnection?.hasApiKey ?? false }}

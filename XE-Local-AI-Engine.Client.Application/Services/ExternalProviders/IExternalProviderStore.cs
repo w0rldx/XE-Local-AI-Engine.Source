@@ -163,6 +163,12 @@ public sealed record ExternalProviderConnectionSaveRequest
     /// <summary>The models registered on the connection. May be empty: a probe-then-pick flow saves the connection first.</summary>
     public IReadOnlyList<ExternalProviderModelSaveRequest> Models { get; init; } = [];
 
+    /// <summary>
+    ///     The custom request headers. A secret row with a blank value keeps the stored value of the same name, on the
+    ///     same origin only, exactly like <see cref="ApiKey" />.
+    /// </summary>
+    public IReadOnlyList<StoredExternalProviderHeader> Headers { get; init; } = [];
+
     /// <summary>The revision the caller read, or <see langword="null" /> to write unconditionally.</summary>
     public string? ExpectedRevision { get; init; }
 }

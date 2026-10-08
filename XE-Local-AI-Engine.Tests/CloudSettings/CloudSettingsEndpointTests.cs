@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Endpoints.CloudSettings.V1;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Integration)]
@@ -224,7 +225,7 @@ public sealed class CloudSettingsEndpointTests
     [Test]
     public async Task SaveCloudSettings_WhenOverCaps_ReturnsValidationProblem()
     {
-        var headers = Enumerable.Range(0, AzureFoundryHeaderRules.MaxHeaderCount + 1)
+        var headers = Enumerable.Range(0, CustomHeaderRules.MaxHeaderCount + 1)
                                 .Select(index => new SaveAzureFoundryHeaderRequest
                                 {
                                     Name = $"X-H{index}",

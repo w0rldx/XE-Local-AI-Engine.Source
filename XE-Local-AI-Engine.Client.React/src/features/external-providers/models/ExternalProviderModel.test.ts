@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { emptyFormValues, emptyModelDraft } from "@/features/external-providers/models/ExternalProviderFormState";
+import {
+	connectionToFormValues,
+	emptyFormValues,
+	emptyModelDraft,
+} from "@/features/external-providers/models/ExternalProviderFormState";
 import {
 	baseUrlOrigin,
 	type ExternalProviderFormValues,
@@ -238,5 +242,62 @@ describe("validateExternalProviderForm", () => {
 		expect(withContext("32768")).toBeUndefined();
 		expect(withContext("-1")).toBeDefined();
 		expect(withContext("lots")).toBeDefined();
+	});
+});
+
+describe("validateExternalProviderForm — custom headers", () => {
+	const keptSecret = { name: "X-Example-Token", value: "", isSecret: true, hasStoredSecret: true };
+	const stored = { baseUrl: "https://gw.example.com/v1", hasApiKey: false };
+
+	it("does not keep a PLAIN stored value once the row is turned secret and blanked", () => {
+		const loaded = connectionToFormValues({
+			id: "gw",
+			displayName: "Gateway",
+			baseUrl: "https://gw.example.com/v1",
+			locality: "Cloud",
+			hasApiKey: false,
+			allowInsecureHttp: false,
+			insecureTransport: false,
+			headers: [{ name: "X-Example-Project", value: "demo", isSecret: false, hasStoredValue: true }],
+		});
+		expect(loaded.headers[0]?.hasStoredSecret).toBe(false);
+		const turnedSecret = { ...loaded, headers: loaded.headers.map((row) => ({ ...row, isSecret: true, value: "" })) };
+
+		expect(validateExternalProviderForm(turnedSecret, false, stored).headers).toEqual({
+			message: 'Enter a value for the secret header "X-Example-Project".',
+			index: 0,
+		});
+	});
+
+	it("names the offending row for a header rule violation", () => {
+		const headers = [
+			{ name: "X-Example-Project", value: "demo", isSecret: false, hasStoredSecret: false },
+			{ name: "authorization", value: "x", isSecret: false, hasStoredSecret: false },
+		];
+
+		expect(validateExternalProviderForm(values({ headers }), true).headers).toEqual({
+			message: 'Header name "authorization" is reserved and cannot be set.',
+			index: 1,
+		});
+	});
+
+	it("keeps a stored secret value on the same origin, also across a path-only edit", () => {
+		const samePath = values({ baseUrl: "https://gw.example.com/v1", headers: [keptSecret] });
+		const newPath = values({ baseUrl: "https://gw.example.com/openai/v1", headers: [keptSecret] });
+
+		expect(validateExternalProviderForm(samePath, false, stored).headers).toBeUndefined();
+		expect(validateExternalProviderForm(newPath, false, stored).headers).toBeUndefined();
+	});
+
+	it("asks for a kept secret value again once the address moves to another origin, even without a stored key", () => {
+		const moved = values({ baseUrl: "https://other.example.com/v1", headers: [keptSecret] });
+
+		expect(validateExternalProviderForm(moved, false, stored).headers).toEqual({
+			message:
+				'The stored value of secret header "X-Example-Token" was issued for a different address. Enter it again for the new endpoint.',
+			index: 0,
+		});
+		const retyped = values({ baseUrl: "https://other.example.com/v1", headers: [{ ...keptSecret, value: "new" }] });
+		expect(validateExternalProviderForm(retyped, false, stored).headers).toBeUndefined();
 	});
 });

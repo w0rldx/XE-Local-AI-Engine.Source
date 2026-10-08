@@ -85,7 +85,8 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             var existing = FindConnection(current, candidate.Id);
             var merged = candidate with
             {
-                ApiKey = MergeApiKey(request, existing, candidate.BaseUrl)
+                ApiKey = MergeApiKey(request, existing, candidate.BaseUrl),
+                Headers = MergeHeaders(candidate.Headers, existing, candidate.BaseUrl, isSave: true)
             };
 
             if (existing is not null && IsUnchanged(existing, merged))
@@ -232,6 +233,61 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     }
 
     /// <summary>
+    ///     Resolves the headers to store or send: a secret row with a blank value takes the stored secret value of the
+    ///     same (case-insensitive) name, under <see cref="MergeApiKey" />'s same-origin rule.
+    /// </summary>
+    /// <remarks>
+    ///     A save (<paramref name="isSave" />) refuses a secret row it cannot resolve, or one whose stored value would cross
+    ///     an origin change; a probe drops such a row instead, as a moved endpoint probes keyless. A blank plain value stays blank.
+    /// </remarks>
+    internal static IReadOnlyList<StoredExternalProviderHeader> MergeHeaders(IReadOnlyList<StoredExternalProviderHeader> incoming,
+        StoredExternalProviderConnection? existing,
+        string normalizedBaseUrl,
+        bool isSave)
+    {
+        var merged = new List<StoredExternalProviderHeader>(incoming.Count);
+        foreach (var header in incoming)
+        {
+            if (!header.IsSecret || !string.IsNullOrEmpty(header.Value))
+            {
+                merged.Add(header);
+                continue;
+            }
+
+            var stored = existing?.Headers.FirstOrDefault(candidate => candidate.IsSecret
+                                                                       && !string.IsNullOrEmpty(candidate.Value)
+                                                                       && string.Equals(candidate.Name, header.Name, StringComparison.OrdinalIgnoreCase));
+            if (existing is null || stored is null)
+            {
+                if (isSave)
+                {
+                    throw new ExternalProviderValidationException($"Secret custom header '{header.Name}' requires a value.");
+                }
+
+                continue;
+            }
+
+            if (!IsSameOrigin(existing.BaseUrl, normalizedBaseUrl))
+            {
+                if (isSave)
+                {
+                    throw new ExternalProviderValidationException(
+                        $"This connection's endpoint moved to a different host, so the stored value of secret header '{header.Name}' was not carried over. Enter it again for the new endpoint.");
+                }
+
+                continue;
+            }
+
+            merged.Add(header with
+            {
+                Value = stored.Value
+            });
+        }
+
+        return merged;
+    }
+
+    /// <summary>
     ///     Whether two NORMALIZED base URLs address the same origin — scheme, host and port.
     /// </summary>
     /// <remarks>
@@ -276,20 +332,24 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     }
 
     /// <summary>
-    ///     Structural equality of two connections, models included. Record equality would compare the model LISTS by
-    ///     reference, so it reports every save as a change and the no-op skip below would never fire.
+    ///     Structural equality of two connections, models and headers included. Record equality would compare the LISTS
+    ///     by reference, so it reports every save as a change and the no-op skip below would never fire.
     /// </summary>
     private static bool IsUnchanged(StoredExternalProviderConnection left, StoredExternalProviderConnection right)
     {
         var noModels = Array.Empty<StoredExternalProviderModel>();
+        var noHeaders = Array.Empty<StoredExternalProviderHeader>();
         return left with
                {
-                   Models = noModels
+                   Models = noModels,
+                   Headers = noHeaders
                } == right with
                {
-                   Models = noModels
+                   Models = noModels,
+                   Headers = noHeaders
                }
-               && left.Models.SequenceEqual(right.Models);
+               && left.Models.SequenceEqual(right.Models)
+               && left.Headers.SequenceEqual(right.Headers);
     }
 
     private static StoredExternalProviderConnection Validate(ExternalProviderConnectionSaveRequest request)
@@ -334,8 +394,41 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             // Kept only where it means something: a stale tick carried onto an https or loopback address would otherwise
             // pre-approve plain http the next time the address changes back.
             AllowInsecureHttp = request.AllowInsecureHttp && ExternalProviderTransportPolicy.IsInsecureRemote(baseUrl),
-            Models = ValidateModels(request.Models)
+            Models = ValidateModels(request.Models),
+            Headers = ValidateHeaders(request.Headers)
         };
+    }
+
+    /// <summary>
+    ///     Checks the header rows against <see cref="CustomHeaderRules" /> and returns them trimmed, with empty editor rows
+    ///     (no name, no value) dropped. Messages name the header, never its value.
+    /// </summary>
+    private static IReadOnlyList<StoredExternalProviderHeader> ValidateHeaders(IReadOnlyList<StoredExternalProviderHeader> headers)
+    {
+        ArgumentNullException.ThrowIfNull(headers);
+
+        var violations = StoredExternalProviderHeader.FindViolations(headers);
+        if (violations.Count > 0)
+        {
+            throw new ExternalProviderValidationException(string.Join(" ", violations));
+        }
+
+        return NormalizeHeaders(headers);
+    }
+
+    /// <summary>Trims names and values and drops rows without a name; shared by the save and the probe.</summary>
+    internal static IReadOnlyList<StoredExternalProviderHeader> NormalizeHeaders(IReadOnlyList<StoredExternalProviderHeader> headers)
+    {
+        return
+        [
+            .. headers.Where(static header => !string.IsNullOrWhiteSpace(header.Name))
+                      .Select(static header => new StoredExternalProviderHeader
+                      {
+                          Name = header.Name.Trim(),
+                          Value = header.Value?.Trim() ?? string.Empty,
+                          IsSecret = header.IsSecret
+                      })
+        ];
     }
 
     private static IReadOnlyList<StoredExternalProviderModel> ValidateModels(IReadOnlyList<ExternalProviderModelSaveRequest> models)
@@ -459,7 +552,12 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
                 return new ExternalProviderLoadResult.UnsupportedSchema(config.SchemaVersion);
             }
 
-            return new ExternalProviderLoadResult.Loaded(config.SchemaVersion < 2 ? LiftSchema1(config) : config);
+            // Schema 2 to 3 is a no-op lift: a schema-2 file has no Headers property, which reads back as an empty list.
+            return new ExternalProviderLoadResult.Loaded(config.SchemaVersion switch
+            {
+                < 2 => LiftSchema1(config),
+                _ => config
+            });
         }
         catch (JsonException exception)
         {

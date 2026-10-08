@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.ExternalProviders.V1;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -58,6 +59,59 @@ public sealed class ExternalProviderEndpointSecurityTests
                                    .SaveConnectionAsync(Arg.Any<ExternalProviderConnectionSaveRequest>(), Arg.Any<CancellationToken>());
         await administrationService.DidNotReceiveWithAnyArgs().DeleteConnectionAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         await probeService.DidNotReceiveWithAnyArgs().ProbeAsync(Arg.Any<ExternalProviderProbeQuery>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExternalProviderReads_NeverReturnASecretHeaderValue_OnlyThatOneIsStored()
+    {
+        // A secret header value crosses inward only, like the API key: an authorized reader learns its presence, never
+        // the value, so a gateway token cannot be read back out of the settings page or the API.
+        const string SecretValue = "gateway-token-must-not-leak";
+        var store = Substitute.For<IExternalProviderStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredExternalProviderConfig
+        {
+            Revision = "rev-1",
+            Connections =
+            [
+                new StoredExternalProviderConnection
+                {
+                    Id = "gateway",
+                    DisplayName = "Gateway",
+                    BaseUrl = "https://gateway.example.com/v1/",
+                    Locality = ExternalProviderLocality.Cloud,
+                    Headers =
+                    [
+                        new StoredExternalProviderHeader
+                        {
+                            Name = "X-Demo-Token",
+                            Value = SecretValue,
+                            IsSecret = true
+                        },
+                        new StoredExternalProviderHeader
+                        {
+                            Name = "X-Demo-Project",
+                            Value = "demo"
+                        }
+                    ]
+                }
+            ]
+        });
+        await using var factory = CreateFactory(store, Substitute.For<IExternalProviderAdministrationService>(), Substitute.For<IExternalProviderProbeService>());
+        using var client = factory.CreateClient();
+
+        foreach (var route in new[] { "/api/local/v1/external-providers/connections", "/api/local/v1/external-providers/connections/gateway" })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, route);
+            factory.AddNodeBearerToken(request);
+            request.Headers.Add("Origin", "http://localhost");
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+
+            AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, route);
+            AssertEx.False(body.Contains(SecretValue, StringComparison.Ordinal), $"{route} returned a secret header value");
+            AssertEx.Contains(body, "\"hasStoredValue\":true");
+            AssertEx.Contains(body, "\"value\":\"demo\"");
+        }
     }
 
     private static TestServerWebAppFactory CreateFactory(IExternalProviderStore store,

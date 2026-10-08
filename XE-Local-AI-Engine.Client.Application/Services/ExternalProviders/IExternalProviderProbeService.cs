@@ -30,7 +30,12 @@ public interface IExternalProviderProbeService
 /// <param name="BaseUrl">A raw, operator-entered endpoint, not yet saved. Takes precedence over the stored address and is normalized here by the save path's normalizer.</param>
 /// <param name="ApiKey">An explicitly supplied key. Takes precedence over the stored one; blank means "use the stored key, if any".</param>
 /// <param name="AllowInsecureHttp">The editor's opt-in to a plain-http, non-loopback address; without it such an address is refused before any request.</param>
-public readonly record struct ExternalProviderProbeQuery(string? ConnectionId, string? BaseUrl, string? ApiKey, bool AllowInsecureHttp = false);
+/// <param name="Headers">The draft header rows; <see langword="null" /> uses the stored connection's headers and an empty list sends none. Stored values travel only on the stored origin, like the key.</param>
+public readonly record struct ExternalProviderProbeQuery(string? ConnectionId,
+    string? BaseUrl,
+    string? ApiKey,
+    bool AllowInsecureHttp = false,
+    IReadOnlyList<StoredExternalProviderHeader>? Headers = null);
 
 /// <summary>Why a probe could not even be attempted, or how the endpoint answered.</summary>
 public enum ExternalProviderProbeOutcome

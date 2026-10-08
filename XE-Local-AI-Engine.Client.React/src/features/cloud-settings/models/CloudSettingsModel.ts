@@ -1,3 +1,5 @@
+import { type CustomHeaderDraft, validateHeaders } from "@/core/http-headers/CustomHeaders";
+
 // Auth modes accepted by the Azure Foundry connection. Mirrors the backend `authMode` string
 // ("ApiKey" | "ManagedIdentity" | "EntraId"); managed identity uses DefaultAzureCredential and needs no key.
 // EntraId requests its own bearer token (app-only client-credentials when a secret is configured, otherwise
@@ -54,23 +56,13 @@ export interface CloudFoundryModelDraft {
 	displayLabel: string;
 }
 
-// One editable custom-header row. Secret values are write-only: the backend never returns them, so
-// `value` is blank on load for a secret row and `hasStoredValue` records that a secret is stored
-// server-side (drives the "stored" hint and the no-resurrection guard when Secret is turned off).
-export interface CloudHeaderDraft {
-	name: string;
-	value: string;
-	isSecret: boolean;
-	hasStoredValue: boolean;
-}
-
 export interface CloudSettingsFormValues {
 	endpoint: string;
 	authMode: CloudAuthMode;
 	apiSurface: CloudApiSurface;
 	apiKey: string;
 	models: CloudFoundryModelDraft[];
-	headers: CloudHeaderDraft[];
+	headers: CustomHeaderDraft[];
 	hostSuffixes: string[];
 	entraTenantId: string;
 	entraClientId: string;
@@ -88,31 +80,9 @@ export interface CloudSettingsFormValues {
 // matches none of these but matches an operator-added suffix triggers the Entra-token egress warning.
 const AZURE_BUILTIN_HOST_SUFFIXES = [".openai.azure.com", ".services.ai.azure.com", ".cognitiveservices.azure.com"] as const;
 
-// Reserved header names (lower-cased for case-insensitive compare) that must never be operator-set —
-// they would override credentials or transport framing. Mirrors the backend reserved set.
-const RESERVED_HEADER_NAMES = new Set<string>([
-	"api-key",
-	"authorization",
-	"host",
-	"content-type",
-	"content-length",
-	"content-encoding",
-	"cookie",
-	"proxy-authorization",
-	"transfer-encoding",
-	"connection",
-	"expect",
-]);
-
-// RFC 7230 header-name token charset.
-const HEADER_NAME_TOKEN = /^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$/;
-
 // DNS label charset for an operator host suffix (alphanumerics + hyphen, no leading/trailing hyphen).
 const DNS_LABEL = /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$/;
 
-const MAX_HEADERS = 32;
-const MAX_HEADER_NAME_LENGTH = 128;
-const MAX_HEADER_VALUE_LENGTH = 4096;
 const MAX_HOST_SUFFIXES = 16;
 const MAX_HOST_SUFFIX_LENGTH = 253;
 
@@ -129,21 +99,6 @@ export function hasAtLeastOneModel(models: CloudFoundryModelDraft[]): boolean {
 	return models.some((model) => model.deploymentName.trim().length > 0);
 }
 
-// RFC 7230 field-value guard: reject CR/LF/NUL and any control char except HTAB (0x09),
-// plus DEL (0x7F). Implemented char-by-char to avoid a control-char regex literal (biome lint).
-function hasControlCharacter(value: string): boolean {
-	for (let index = 0; index < value.length; index += 1) {
-		const code = value.charCodeAt(index);
-		if (code === 0x09) {
-			continue;
-		}
-		if (code <= 0x1f || code === 0x7f) {
-			return true;
-		}
-	}
-	return false;
-}
-
 // Shape guard for an operator-added host suffix: leading '.', ≥ 2 non-empty DNS labels
 // (so a bare TLD like `.com` is rejected), no wildcard, valid label chars, within the length cap.
 export function isValidHostSuffix(suffix: string): boolean {
@@ -155,62 +110,6 @@ export function isValidHostSuffix(suffix: string): boolean {
 		return false;
 	}
 	return labels.every((label) => label.length > 0 && label.length <= 63 && DNS_LABEL.test(label));
-}
-
-// Validates the custom-header rows, returning the first problem as a single message (mirrors the
-// backend guards so the operator sees an inline error before save). Blank-name rows are dropped, so
-// only a blank name that carries a value is an error.
-function validateHeaders(headers: CloudHeaderDraft[]): string | undefined {
-	if (headers.length > MAX_HEADERS) {
-		return `Remove some headers — at most ${MAX_HEADERS} custom headers are allowed.`;
-	}
-
-	const seenNames = new Set<string>();
-	for (const header of headers) {
-		const name = header.name.trim();
-		const hasValue = header.value.trim().length > 0;
-
-		if (name.length === 0) {
-			if (hasValue) {
-				return "Enter a header name for every row that has a value.";
-			}
-			continue;
-		}
-
-		if (name.length > MAX_HEADER_NAME_LENGTH) {
-			return `Header name "${name}" is too long (max ${MAX_HEADER_NAME_LENGTH} characters).`;
-		}
-		if (!HEADER_NAME_TOKEN.test(name)) {
-			return `Header name "${name}" contains characters that are not allowed in an HTTP header name.`;
-		}
-		const nameKey = name.toLowerCase();
-		if (RESERVED_HEADER_NAMES.has(nameKey)) {
-			return `Header name "${name}" is reserved and cannot be set.`;
-		}
-		if (seenNames.has(nameKey)) {
-			return `Header name "${name}" is duplicated.`;
-		}
-		seenNames.add(nameKey);
-
-		if (header.value.length > MAX_HEADER_VALUE_LENGTH) {
-			return `Value for header "${name}" is too long (max ${MAX_HEADER_VALUE_LENGTH} characters).`;
-		}
-		if (hasControlCharacter(header.value)) {
-			return `Value for header "${name}" contains a line break or control character.`;
-		}
-
-		// Secret rows keep the stored value only while both secret and blank. Turning "Secret" off on a
-		// stored-secret row with a blank value must not silently reuse the stored value.
-		if (!header.isSecret && header.hasStoredValue && !hasValue) {
-			return `Enter a new value for header "${name}" before saving — the stored secret is not reused once "Secret" is turned off.`;
-		}
-		// A secret row with no stored value must carry a fresh value to resolve to anything.
-		if (header.isSecret && !header.hasStoredValue && !hasValue) {
-			return `Enter a value for the secret header "${name}".`;
-		}
-	}
-
-	return undefined;
 }
 
 // Client-credentials (app-only) token requests are rejected by Entra ID (AADSTS1002012) unless the scope ends in
@@ -368,7 +267,7 @@ export function validateCloudSettingsForm(
 
 	const headerError = validateHeaders(values.headers);
 	if (headerError !== undefined) {
-		errors.headers = headerError;
+		errors.headers = headerError.message;
 	}
 
 	const hostSuffixError = validateHostSuffixes(values.hostSuffixes);

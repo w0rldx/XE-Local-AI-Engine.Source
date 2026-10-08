@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 using OS = TUnit.Core.Enums.OS;
@@ -21,6 +22,9 @@ using OS = TUnit.Core.Enums.OS;
 [Category(TestCategories.Unit)]
 public sealed class ExternalProviderStoreTests : IDisposable
 {
+    // A value no refusal, ToString or payload may ever contain.
+    private const string SecretMarker = "v4lue-must-not-leak";
+
     // Matches the store's own options, so a hand-written payload is spelled exactly as the store would spell it.
     private static readonly JsonSerializerOptions RawSerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -652,7 +656,7 @@ public sealed class ExternalProviderStoreTests : IDisposable
     }
 
     [Test]
-    public async Task SaveConnectionAsync_OverASchema1File_WritesSchema2AndKeepsTheTriState()
+    public async Task SaveConnectionAsync_OverASchema1File_WritesTheCurrentSchemaAndKeepsTheTriState()
     {
         using var store = CreateStore();
         await WriteRawAsync(new StoredExternalProviderConfig
@@ -678,9 +682,9 @@ public sealed class ExternalProviderStoreTests : IDisposable
 
         var onDisk = JsonSerializer.Deserialize<StoredExternalProviderConfig>(new MockDataProtector().Unprotect(await File.ReadAllBytesAsync(StorePath)),
             RawSerializerOptions)!;
-        AssertEx.Equal(2, onDisk.SchemaVersion);
+        AssertEx.Equal(ExternalProviderStoreSchema.CurrentVersion, onDisk.SchemaVersion);
         var model = (await store.LoadAsync()).Connections.Single().Models.Single();
-        AssertEx.True(model.SupportsTools == false, "an explicit No survives a schema-2 round-trip");
+        AssertEx.True(model.SupportsTools == false, "an explicit No survives a current-schema round-trip");
         AssertEx.Null(model.SupportsVision);
         AssertEx.True(model.SupportsReasoning == true);
     }
@@ -745,7 +749,264 @@ public sealed class ExternalProviderStoreTests : IDisposable
         AssertEx.True(result is ExternalProviderWriteResult.Superseded);
     }
 
+    /// <summary>
+    ///     The bypass table for operator-supplied header rows. Every later review finding about header input adds a row
+    ///     here. Each row must be refused with a message naming the problem, persist nothing, and never echo a value.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(HeaderBypassCases))]
+    public async Task SaveConnectionAsync_WithAHeaderBypassAttempt_IsRefusedAndPersistsNothingNew(HeaderBypassCase bypass)
+    {
+        using var store = CreateStore();
+        var before = bypass.Arrange is null ? null : await bypass.Arrange(store);
+
+        var exception = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () =>
+            await SaveAsync(store, Request(baseUrl: bypass.BaseUrl) with
+            {
+                ClearApiKey = true,
+                Headers = bypass.Headers
+            }));
+
+        AssertEx.Contains(exception.Message, bypass.ExpectedMessageFragment, StringComparison.Ordinal, bypass.Label);
+        AssertEx.False(exception.Message.Contains(SecretMarker, StringComparison.Ordinal), $"{bypass.Label}: the refusal must not echo a value.");
+        var after = await store.LoadAsync();
+        AssertEx.Equal(before?.Revision ?? string.Empty, after.Revision, $"{bypass.Label}: a refused save writes nothing.");
+    }
+
+    public static IEnumerable<Func<HeaderBypassCase>> HeaderBypassCases()
+    {
+        const string https = "https://gateway.example.com/v1";
+        foreach (var reserved in new[]
+                 {
+                     "Authorization", "authorization", "AUTHORIZATION", "aUtHoRiZaTiOn", " Authorization ", "api-key", "API-KEY", "Api-Key", "host", "HOST",
+                     "cookie", "COOKIE", "proxy-authorization", "Proxy-Authorization", "content-type", "Content-Length", "CONTENT-ENCODING", "transfer-encoding",
+                     "Connection", "expect",
+                     // Content headers .NET refuses on a request; accepted, they threw on every send of the connection.
+                     "Allow", "content-disposition", "Content-Language", "CONTENT-LOCATION", "Content-MD5", "content-range", "Expires", "last-modified"
+                 })
+        {
+            yield return () => new HeaderBypassCase($"reserved name '{reserved}'", https, [Header(reserved, SecretMarker)], "is reserved");
+        }
+
+        yield return () => new HeaderBypassCase("CR LF in a value", https, [Header("X-Project", SecretMarker + "\r\nX-Injected: 1")], "invalid control characters");
+        yield return () => new HeaderBypassCase("LF in a value", https, [Header("X-Project", SecretMarker + "\nX-Injected: 1")], "invalid control characters");
+        yield return () => new HeaderBypassCase("NUL in a value", https, [Header("X-Project", SecretMarker + "\0")], "invalid control characters");
+        yield return () => new HeaderBypassCase("non-ASCII in a value", https, [Header("X-Project", SecretMarker + "-café")], "non-ASCII characters");
+        yield return () => new HeaderBypassCase("non-BMP in a value", https, [Header("X-Project", SecretMarker + "-😀")], "non-ASCII characters");
+        yield return () => new HeaderBypassCase("DEL in a value", https, [Header("X-Project", SecretMarker + "\u007F")], "invalid control characters");
+        yield return () => new HeaderBypassCase("CR LF in a name", https, [Header("X-Project\r\nX-Injected", SecretMarker)], "invalid characters");
+        yield return () => new HeaderBypassCase("NUL in a name", https, [Header("X-Pro\0ject", SecretMarker)], "invalid characters");
+        yield return () => new HeaderBypassCase("colon in a name", https, [Header("X-Project:", SecretMarker)], "invalid characters");
+        yield return () => new HeaderBypassCase("over-length name", https, [Header(new string('a', CustomHeaderRules.MaxHeaderNameLength + 1), SecretMarker)], "exceeds");
+        yield return () => new HeaderBypassCase("over-length value",
+            https,
+            [Header("X-Project", SecretMarker + new string('v', CustomHeaderRules.MaxHeaderValueLength))],
+            "value exceeds");
+        yield return () => new HeaderBypassCase("too many headers",
+            https,
+            [.. Enumerable.Range(0, CustomHeaderRules.MaxHeaderCount + 1).Select(static index => Header($"X-H{index}", SecretMarker))],
+            "A maximum of");
+        yield return () => new HeaderBypassCase("duplicate names by case", https, [Header("X-Project", SecretMarker), Header("x-PROJECT", SecretMarker)], "is duplicated");
+        yield return () => new HeaderBypassCase("duplicate names by padding", https, [Header("X-Project", SecretMarker), Header(" X-Project", SecretMarker)], "is duplicated");
+        yield return () => new HeaderBypassCase("blank name with a value", https, [Header("", SecretMarker)], "without a header name");
+        yield return () => new HeaderBypassCase("whitespace name with a value", https, [Header("   ", SecretMarker)], "without a header name");
+        yield return () => new HeaderBypassCase("blank secret with nothing stored", https, [Header("X-Token", value: null, isSecret: true)], "requires a value");
+        yield return () => new HeaderBypassCase("stored secret value across an origin change",
+            "https://attacker.example.net/v1",
+            [Header("X-Token", value: null, isSecret: true)],
+            "moved to a different host",
+            static async store => (await SaveAsync(store, Request(baseUrl: https) with
+            {
+                Headers = [Header("X-Token", SecretMarker, isSecret: true)]
+            })).Config);
+        yield return () => new HeaderBypassCase("blank secret under a new name carries nothing",
+            https,
+            [Header("X-Other-Token", value: null, isSecret: true)],
+            "requires a value",
+            static async store => (await SaveAsync(store, Request(baseUrl: https) with
+            {
+                Headers = [Header("X-Token", SecretMarker, isSecret: true)]
+            })).Config);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_WithHeaders_StoresThemTrimmedAndDropsEmptyRows()
+    {
+        using var store = CreateStore();
+
+        var committed = await SaveAsync(store, Request() with
+        {
+            Headers = [Header(" X-Project ", " demo "), Header("", ""), Header("X-Token", "t0ken", isSecret: true), Header("X-Empty", "")]
+        });
+
+        var headers = committed.Config.Connections.Single().Headers;
+        AssertEx.Equal(3, headers.Count);
+        AssertEx.Equal(Header("X-Project", "demo"), headers[0]);
+        AssertEx.Equal(Header("X-Token", "t0ken", isSecret: true), headers[1]);
+        AssertEx.Equal(Header("X-Empty", ""), headers[2], "a blank plain value is stored as blank");
+        AssertEx.True(headers.SequenceEqual((await store.LoadAsync()).Connections.Single().Headers), "the headers round-trip through the encrypted file");
+    }
+
+    [Test]
+    [Arguments("X-Token")]
+    [Arguments("x-token")]
+    public async Task SaveConnectionAsync_WithABlankSecretHeaderValue_KeepsTheStoredValueOnTheSameOrigin(string resentName)
+    {
+        using var store = CreateStore();
+        _ = await SaveAsync(store, Request() with
+        {
+            Headers = [Header("X-Token", "t0ken", isSecret: true)]
+        });
+
+        // A path-only edit is not a re-authorization, exactly like the key.
+        var committed = await SaveAsync(store, Request(baseUrl: "http://127.0.0.1:18099/openai/v1") with
+        {
+            Headers = [Header(resentName, value: null, isSecret: true)]
+        });
+
+        AssertEx.Equal("t0ken", committed.Config.Connections.Single().Headers.Single().Value);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_WithANewSecretHeaderValue_ReplacesTheStoredOne()
+    {
+        using var store = CreateStore();
+        _ = await SaveAsync(store, Request() with
+        {
+            Headers = [Header("X-Token", "old", isSecret: true)]
+        });
+
+        var committed = await SaveAsync(store, Request() with
+        {
+            Headers = [Header("X-Token", "new", isSecret: true)]
+        });
+
+        AssertEx.True(committed.Changed);
+        AssertEx.Equal("new", committed.Config.Connections.Single().Headers.Single().Value);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_WhenTheOriginChangesWithANewSecretHeaderValue_IsAccepted()
+    {
+        using var store = CreateStore();
+        _ = await SaveAsync(store, Request(baseUrl: "https://gateway.example.com/v1") with
+        {
+            Headers = [Header("X-Token", "old", isSecret: true)]
+        });
+
+        var committed = await SaveAsync(store, Request(baseUrl: "https://other.example.com/v1") with
+        {
+            Headers = [Header("X-Token", "new", isSecret: true)]
+        });
+
+        AssertEx.Equal("new", committed.Config.Connections.Single().Headers.Single().Value);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_AHeaderOnlyEdit_IsAChange_AndAnIdenticalResaveIsNot()
+    {
+        using var store = CreateStore();
+        _ = await SaveAsync(store, Request() with
+        {
+            Headers = [Header("X-Project", "a")]
+        });
+
+        var edited = await SaveAsync(store, Request() with
+        {
+            Headers = [Header("X-Project", "b")]
+        });
+        var resaved = await SaveAsync(store, Request() with
+        {
+            Headers = [Header("X-Project", "b")]
+        });
+
+        AssertEx.True(edited.Changed, "a header edit must reach the registry and the chat-client cache");
+        AssertEx.False(resaved.Changed);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_DoesNotWriteASecretHeaderValueInPlaintext()
+    {
+        using var store = CreateStore(DataProtectionProvider.Create(new DirectoryInfo(Path.Combine(_contentRootPath, "keys"))));
+
+        _ = await SaveAsync(store, Request() with
+        {
+            Headers = [Header("X-Token", SecretMarker, isSecret: true)]
+        });
+
+        var payload = Encoding.UTF8.GetString(await File.ReadAllBytesAsync(StorePath));
+        AssertEx.False(payload.Contains(SecretMarker, StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void StoredConnection_ToString_RedactsTheKeyAndSecretHeaderValues()
+    {
+        var connection = new StoredExternalProviderConnection
+        {
+            Id = "gw",
+            DisplayName = "Gateway",
+            BaseUrl = "https://gateway.example.com/v1/",
+            Locality = ExternalProviderLocality.Cloud,
+            ApiKey = SecretMarker + "-key",
+            Headers = [Header("X-Token", SecretMarker + "-header", isSecret: true), Header("X-Project", "demo")]
+        };
+
+        var printed = connection.ToString();
+
+        AssertEx.False(printed.Contains(SecretMarker, StringComparison.Ordinal), printed);
+        AssertEx.Contains(printed, "X-Project");
+        AssertEx.Contains(printed, "demo");
+    }
+
+    [Test]
+    public async Task LoadAsync_ASchema2File_ReadsWithNoHeaders_AndTheNextSaveWritesTheCurrentSchema()
+    {
+        using var store = CreateStore();
+        var schema2 = JsonSerializer.SerializeToNode(new StoredExternalProviderConfig
+        {
+            SchemaVersion = 2,
+            Revision = "r",
+            Connections =
+            [
+                new StoredExternalProviderConnection
+                {
+                    Id = "unsloth-box",
+                    DisplayName = "Unsloth box",
+                    BaseUrl = "http://127.0.0.1:18099/v1/",
+                    Locality = ExternalProviderLocality.Local,
+                    ApiKey = "sk-kept"
+                }
+            ]
+        }, RawSerializerOptions)!;
+        schema2["connections"]![0]!.AsObject().Remove("headers");
+        await File.WriteAllBytesAsync(StorePath, new MockDataProtector().Protect(Encoding.UTF8.GetBytes(schema2.ToJsonString())));
+
+        var loaded = (await store.LoadAsync()).Connections.Single();
+        AssertEx.Empty(loaded.Headers);
+        AssertEx.Equal("sk-kept", loaded.ApiKey);
+
+        // A real edit: an identical resave is skipped and would leave the file untouched.
+        _ = await SaveAsync(store, Request(displayName: "Renamed box") with
+        {
+            ExpectedRevision = "r"
+        });
+        var onDisk = JsonSerializer.Deserialize<StoredExternalProviderConfig>(new MockDataProtector().Unprotect(await File.ReadAllBytesAsync(StorePath)),
+            RawSerializerOptions)!;
+        AssertEx.Equal(3, onDisk.SchemaVersion);
+        AssertEx.Equal("sk-kept", onDisk.Connections.Single().ApiKey);
+    }
+
     private string StorePath => Path.Combine(_contentRootPath, "external-providers.enc");
+
+    internal static StoredExternalProviderHeader Header(string name, string? value, bool isSecret = false)
+    {
+        return new StoredExternalProviderHeader
+        {
+            Name = name,
+            Value = value,
+            IsSecret = isSecret
+        };
+    }
 
     private static async Task<ExternalProviderWriteResult.Committed> SaveAsync(ExternalProviderStore store,
         ExternalProviderConnectionSaveRequest request)
@@ -795,5 +1056,37 @@ public sealed class ExternalProviderStoreTests : IDisposable
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(config, RawSerializerOptions);
         await File.WriteAllBytesAsync(StorePath, new MockDataProtector().Protect(payload));
+    }
+
+    /// <summary>One row of the header bypass table; <see cref="Arrange" /> seeds stored state and returns it.</summary>
+    public sealed class HeaderBypassCase
+    {
+        public HeaderBypassCase(string label,
+            string baseUrl,
+            IReadOnlyList<StoredExternalProviderHeader> headers,
+            string expectedMessageFragment,
+            Func<ExternalProviderStore, Task<StoredExternalProviderConfig>>? arrange = null)
+        {
+            Label = label;
+            BaseUrl = baseUrl;
+            Headers = headers;
+            ExpectedMessageFragment = expectedMessageFragment;
+            Arrange = arrange;
+        }
+
+        public string Label { get; }
+
+        public string BaseUrl { get; }
+
+        public IReadOnlyList<StoredExternalProviderHeader> Headers { get; }
+
+        public string ExpectedMessageFragment { get; }
+
+        public Func<ExternalProviderStore, Task<StoredExternalProviderConfig>>? Arrange { get; }
+
+        public override string ToString()
+        {
+            return Label;
+        }
     }
 }

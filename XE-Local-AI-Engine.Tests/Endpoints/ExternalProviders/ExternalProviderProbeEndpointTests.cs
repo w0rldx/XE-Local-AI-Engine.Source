@@ -2,12 +2,17 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.ExternalProviders;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.ExternalProviders.V1;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>How each probe outcome reaches the wire, and what the probe route refuses to carry.</summary>
@@ -189,6 +194,125 @@ public sealed class ExternalProviderProbeEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(probe.Reachable);
         AssertEx.NotNull(probe.Error);
+    }
+
+    [Test]
+    public async Task Probe_WithHeaderRows_PutsThemOnTheWire_AndCarriesAStoredSecretOnItsOrigin()
+    {
+        // The real probe service behind the real route, over a recording transport: the rows the editor sends are what
+        // the gateway sees, and a blank secret row takes the stored value without the value ever being returned.
+        var store = Substitute.For<IExternalProviderStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredExternalProviderConfig
+        {
+            Connections =
+            [
+                new StoredExternalProviderConnection
+                {
+                    Id = "gateway",
+                    DisplayName = "Gateway",
+                    BaseUrl = "http://127.0.0.1:18099/v1/",
+                    Locality = ExternalProviderLocality.Cloud,
+                    Headers =
+                    [
+                        new StoredExternalProviderHeader
+                        {
+                            Name = "X-Demo-Token",
+                            Value = "stored-demo-token",
+                            IsSecret = true
+                        }
+                    ]
+                }
+            ]
+        });
+        var recorder = new OpenAiWireRecorder
+        {
+            Responder = static _ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"data\":[]}", Encoding.UTF8, "application/json")
+            }
+        };
+        await using var factory = CreateFactory(new ExternalProviderProbeService(store, NullLogger<ExternalProviderProbeService>.Instance, recorder.CreateHandler));
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory);
+        request.Content = JsonContent.Create(new ExternalProviderProbeRequest
+        {
+            ConnectionId = "gateway",
+            ApiKey = "demo-jwt",
+            Headers =
+            [
+                new ExternalProviderHeaderRequest
+                {
+                    Name = "X-Demo-Project",
+                    Value = "demo"
+                },
+                new ExternalProviderHeaderRequest
+                {
+                    Name = "X-Demo-Token",
+                    IsSecret = true
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("Bearer demo-jwt", recorder.LastRequest.Authorization);
+        AssertEx.Equal("demo", recorder.LastRequest.Headers.GetValueOrDefault("X-Demo-Project"));
+        AssertEx.Equal("stored-demo-token", recorder.LastRequest.Headers.GetValueOrDefault("X-Demo-Token"));
+        AssertEx.False(body.Contains("stored-demo-token", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task Probe_WithoutAHeadersField_PassesNullSoTheStoredHeadersApply()
+    {
+        // An absent field must reach the service as null ("use what is stored"), never as an empty list ("send none").
+        var probeService = Substitute.For<IExternalProviderProbeService>();
+        probeService.ProbeAsync(Arg.Any<ExternalProviderProbeQuery>(), Arg.Any<CancellationToken>())
+                    .Returns(new ExternalProviderProbeResult
+                    {
+                        Outcome = ExternalProviderProbeOutcome.Answered
+                    });
+        await using var factory = CreateFactory(probeService);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory);
+        request.Content = new StringContent("{\"connectionId\":\"gateway\"}", Encoding.UTF8, "application/json");
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await probeService.Received(1).ProbeAsync(Arg.Is<ExternalProviderProbeQuery>(query => query.ConnectionId == "gateway" && query.Headers == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments("Authorization", "x")]
+    [Arguments("api-KEY", "x")]
+    [Arguments("X-Demo-Project", "a\r\nX-Injected: 1")]
+    [Arguments("X-Demo\nProject", "x")]
+    public async Task Probe_WithAnInvalidHeaderRow_Returns400WithoutCallingTheService(string name, string value)
+    {
+        var probeService = Substitute.For<IExternalProviderProbeService>();
+        await using var factory = CreateFactory(probeService);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory);
+        request.Content = JsonContent.Create(new ExternalProviderProbeRequest
+        {
+            BaseUrl = "http://127.0.0.1:18099",
+            Headers =
+            [
+                new ExternalProviderHeaderRequest
+                {
+                    Name = name,
+                    Value = value
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await probeService.DidNotReceiveWithAnyArgs().ProbeAsync(Arg.Any<ExternalProviderProbeQuery>(), Arg.Any<CancellationToken>());
     }
 
     private static TestServerWebAppFactory CreateFactory(IExternalProviderProbeService probeService)

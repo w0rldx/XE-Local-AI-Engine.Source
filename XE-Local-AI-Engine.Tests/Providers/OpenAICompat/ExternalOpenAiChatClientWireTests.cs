@@ -238,6 +238,85 @@ public sealed class ExternalOpenAiChatClientWireTests
     }
 
     [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Send_WithCustomHeaders_CarriesTheBearerAndEveryHeader(bool streaming)
+    {
+        var recorder = new OpenAiWireRecorder
+        {
+            Responder = _ => streaming ? OpenAiWireRecorder.Stream("{\"content\":\"ok\"}") : OpenAiWireRecorder.Completion("ok")
+        };
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(),
+            ExternalProviderTestData.Model(),
+            apiKey: "demo-jwt",
+            headers: [new("X-Demo-Project", "demo"), new("X-Demo-Secret", "s3cret")]);
+        using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
+
+        if (streaming)
+        {
+            _ = await client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None)
+                            .ToChatResponseAsync(CancellationToken.None);
+        }
+        else
+        {
+            _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+        }
+
+        var sent = recorder.LastRequest;
+        AssertEx.Equal("Bearer demo-jwt", sent.Authorization);
+        AssertEx.Equal("demo", sent.Headers.GetValueOrDefault("X-Demo-Project"));
+        AssertEx.Equal("s3cret", sent.Headers.GetValueOrDefault("X-Demo-Secret"));
+    }
+
+    [Test]
+    public async Task Send_OnAKeylessConnectionWithCustomHeaders_SendsTheHeadersButNoAuthorization()
+    {
+        // A gateway that wants its token under another name gets it as a secret header with the key blank: then no
+        // Authorization header may appear at all.
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(),
+            ExternalProviderTestData.Model(),
+            apiKey: null,
+            headers: [new("X-Demo-Token", "demo-jwt")]);
+        using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
+
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+
+        AssertEx.False(recorder.LastRequest.HasAuthorizationHeader);
+        AssertEx.Equal("demo-jwt", recorder.LastRequest.Headers.GetValueOrDefault("X-Demo-Token"));
+    }
+
+    [Test]
+    public async Task Send_AfterAHeaderValueIsRotated_PresentsTheNewValue()
+    {
+        // Same hole as the key rotation above: the headers join the adapter identity by value, or an edited gateway
+        // token would keep the previous one on the wire until something else evicted the adapter.
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(),
+            ExternalProviderTestData.Model(),
+            headers: [new("X-Demo-Project", "old")]);
+        var builds = 0;
+        using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, () =>
+        {
+            builds++;
+            return recorder.CreateHandler();
+        });
+
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+        // A fresh but equal list must NOT rebuild the adapter; only the value edit below does.
+        registry.Replace(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model(), headers: [new("X-Demo-Project", "old")]);
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+        AssertEx.Equal(1, builds, "an equal header list is the same endpoint identity");
+        registry.Replace(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model(), headers: [new("X-Demo-Project", "new")]);
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+
+        AssertEx.Equal(2, builds);
+        AssertEx.Equal("old", recorder.Requests[0].Headers.GetValueOrDefault("X-Demo-Project"));
+        AssertEx.Equal("old", recorder.Requests[1].Headers.GetValueOrDefault("X-Demo-Project"));
+        AssertEx.Equal("new", recorder.Requests[2].Headers.GetValueOrDefault("X-Demo-Project"));
+    }
+
+    [Test]
     public async Task Send_WhenTheConnectionFlipsLocalToCloudMidInvocation_AbortsRatherThanRedirecting()
     {
         // The mid-invocation swap. The turn's tools were authorized against a declared-LOCAL connection — workspace,

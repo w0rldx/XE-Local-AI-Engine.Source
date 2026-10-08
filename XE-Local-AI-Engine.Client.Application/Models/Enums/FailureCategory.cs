@@ -46,5 +46,17 @@ public enum FailureCategory
     ///     Surfaced BEFORE any provider call — a clean, classified hard-stop instead of silently overrunning the model's launched context
     ///     window or being rejected deep inside the provider with an opaque error.
     /// </remarks>
-    ContextWindowExceeded = 11
+    ContextWindowExceeded = 11,
+
+    /// <summary>
+    ///     The provider or gateway rejected the connection's credentials (HTTP 401/403, or a failed Azure sign-in). The
+    ///     operator must replace the API key or bearer token, or sign in again.
+    /// </summary>
+    ProviderAuthFailed = 12,
+
+    /// <summary>
+    ///     The provider or gateway rate-limited the request (HTTP 429). The message quotes a bounded <c>Retry-After</c>
+    ///     value when the response carried one.
+    /// </summary>
+    ProviderRateLimited = 13
 }

@@ -28,7 +28,7 @@ The solution is an `.slnx` (XML-format) file, not a classic `.sln`. Source: `XE-
 | `/Src/Aspire/` | `AppHost` (dev orchestration) and `ServiceDefaults` (shared telemetry/resilience). |
 | `/Src/Providers/` | All model/provider projects behind a shared abstraction. |
 | `/Tests/` | Unit + E2E test projects. |
-| `/Tests/Fixture/` | `Testing.FakeOllama` and `Testing.FakeDocker` test fixtures. |
+| `/Tests/Fixture/` | `Testing.FakeOllama`, `Testing.FakeDocker` and `Testing.FakeOpenAiGateway` test fixtures. |
 
 Two `.csproj` files on disk are intentionally **not** in `XE-Local-AI-Engine.slnx`:
 
@@ -89,13 +89,14 @@ Provider projects reference `Providers.Abstractions` and, for the two that speak
 
 | Project | SDK / kind | Role |
 |---|---|---|
-| `XE-Local-AI-Engine.Tests` | `Exe`, MTP | Main unit suite. References `Client`, `WindowsLauncher`, `Desktop`, `Client.Application`, `Client.Testing`, `ServiceDefaults`, every concrete provider project (`Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `OpenAICompat`, `StableDiffusionCpp`, `Python`, `Training`, `WhisperCpp`), the leaf `OpenAICompatible.Core`, `Testing.FakeOllama` and `Testing.FakeDocker`. |
+| `XE-Local-AI-Engine.Tests` | `Exe`, MTP | Main unit suite. References `Client`, `WindowsLauncher`, `Desktop`, `Client.Application`, `Client.Testing`, `ServiceDefaults`, every concrete provider project (`Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `OpenAICompat`, `StableDiffusionCpp`, `Python`, `Training`, `WhisperCpp`), the leaf `OpenAICompatible.Core`, `Testing.FakeOllama`, `Testing.FakeDocker` and `Testing.FakeOpenAiGateway`. |
 | `XE-Local-AI-Engine.Tests.E2ETests` | `Exe`, MTP | End-to-end suite. References `Client`, `Client.Application`, `Client.Persistence`, `Providers.Abstractions`, `Providers.Ollama`, plus `Testing.FakeOllama` and `Client.Testing` fixtures. See [13-testing-and-validation.md](13-testing-and-validation.md). |
 | `XE-Local-AI-Engine.AI.Agent.Tests` | `Exe`, MTP | Unit suite scoped to `AI.Agent`. |
 | `XE-Local-AI-Engine.Client.Persistence.Tests` | `Exe`, MTP | Persistence/migration suite. References `Client.Application`, `Client.Persistence`, `Client`, `Providers.LlamaServer`. |
 | `XE-Local-AI-Engine.Client.Testing` | library | Reusable test fixtures/harness for `Client` + `Client.Application` (shared by E2E). |
 | `XE-Local-AI-Engine.Testing.FakeOllama` | library | In-memory fake Ollama server fixture so tests never hit a real model runtime. |
 | `XE-Local-AI-Engine.Testing.FakeDocker` | library | In-memory fake Docker Engine API server fixture (the subset of routes `DockerDotNetRuntimeClient` calls) so tests never need a real daemon for wire-shape coverage. |
+| `XE-Local-AI-Engine.Testing.FakeOpenAiGateway` | `Exe` | Loopback fake OpenAI-compatible gateway fixture (bearer and required-header checks, SSE, scripted tool calls, fault queue, request log); also runnable by hand with `dotnet run`. |
 | `...Client.Persistence.NegativeFence` | library, **not in slnx** | Compile-only negative-fence guard over `Client.Persistence`. |
 | `tools/AgentTemplateGenerator` | `Exe`, **not in slnx** | Standalone agent-template generator; own `Directory.Build.props`. |
 

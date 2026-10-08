@@ -39,13 +39,13 @@ export function settingsToFormValues(settings: CloudSettings): CloudSettingsForm
 				displayLabel: model.displayLabel ?? "",
 			})),
 		),
-		// Secret header values are write-only: they load blank with a "stored" hint driven by hasStoredValue;
+		// Secret header values are write-only: they load blank with a "stored" hint driven by hasStoredSecret;
 		// non-secret values round-trip for inline editing.
 		headers: (azure?.headers ?? []).map((header) => ({
 			name: header.name ?? "",
 			value: header.isSecret ? "" : (header.value ?? ""),
 			isSecret: header.isSecret ?? false,
-			hasStoredValue: header.hasStoredValue ?? false,
+			hasStoredSecret: (header.isSecret ?? false) && (header.hasStoredValue ?? false),
 		})),
 		hostSuffixes: azure?.additionalAllowedHostSuffixes ?? [],
 		entraTenantId: azure?.entraTenantId ?? "",
@@ -210,7 +210,7 @@ export function formReducer(state: CloudSettingsFormState, action: CloudSettings
 				...state,
 				values: {
 					...state.values,
-					headers: [...state.values.headers, { name: "", value: "", isSecret: false, hasStoredValue: false }],
+					headers: [...state.values.headers, { name: "", value: "", isSecret: false, hasStoredSecret: false }],
 				},
 				headerRowIds: [...state.headerRowIds, action.rowId],
 			};

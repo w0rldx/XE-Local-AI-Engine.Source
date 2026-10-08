@@ -1,8 +1,9 @@
-import { ActionIcon, Button, Flex, Group, PasswordInput, Stack, Switch, Text, TextInput } from "@mantine/core";
+import { ActionIcon, Button, Flex, Group, Stack, Text, TextInput } from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import type { Dispatch } from "react";
 import { useTranslation } from "react-i18next";
 
+import { CustomHeaderRows } from "@/core/ui/components/CustomHeaderRows/CustomHeaderRows";
 import { type CloudSettingsFormAction, nextCloudRowId } from "@/features/cloud-settings/models/CloudSettingsFormState";
 import type { CloudSettingsFormValues } from "@/features/cloud-settings/models/CloudSettingsModel";
 
@@ -89,99 +90,20 @@ export function AzureCloudSettingsDynamicFields(props: AzureCloudSettingsDynamic
 				</Group>
 			</Stack>
 
-			<Stack gap={6}>
-				<Text size="sm" fw={500}>
-					{t("pages.cloudSettings.azure.headers.title", "Custom headers")}
-				</Text>
-				<Text size="xs" c="dimmed">
-					{t("pages.cloudSettings.azure.headers.description")}
-				</Text>
-				{formValues.headers.map((header, index) => (
-					<Group key={headerRowIds[index]} align="flex-end" gap="xs" wrap="nowrap">
-						<Flex
-							direction={{ base: "column", sm: "row" }}
-							gap="xs"
-							align={{ base: "stretch", sm: "flex-end" }}
-							style={{ flex: "1 1 auto", minWidth: 0 }}
-						>
-							<TextInput
-								style={{ flex: "1 1 auto", minWidth: 0 }}
-								aria-label={t("pages.cloudSettings.azure.headers.nameLabel", "Header name")}
-								label={index === 0 ? t("pages.cloudSettings.azure.headers.nameLabel", "Header name") : undefined}
-								placeholder={t("pages.cloudSettings.azure.headers.namePlaceholder", "Ocp-Apim-Subscription-Key")}
-								value={header.name}
-								onChange={(event) => {
-									const value = event.currentTarget.value;
-									dispatch({ type: "setHeaderField", index, field: "name", value });
-								}}
-								onBlur={() => dispatch({ type: "touchField", field: "headers" })}
-							/>
-							{header.isSecret ? (
-								<PasswordInput
-									style={{ flex: "1 1 auto", minWidth: 0 }}
-									aria-label={t("pages.cloudSettings.azure.headers.valueLabel", "Value")}
-									label={index === 0 ? t("pages.cloudSettings.azure.headers.valueLabel", "Value") : undefined}
-									description={header.hasStoredValue ? t("pages.cloudSettings.azure.headers.secretStoredHint") : undefined}
-									placeholder={t("pages.cloudSettings.azure.headers.valuePlaceholder", "value")}
-									value={header.value}
-									onChange={(event) => {
-										const value = event.currentTarget.value;
-										dispatch({ type: "setHeaderField", index, field: "value", value });
-									}}
-									onBlur={() => dispatch({ type: "touchField", field: "headers" })}
-								/>
-							) : (
-								<TextInput
-									style={{ flex: "1 1 auto", minWidth: 0 }}
-									aria-label={t("pages.cloudSettings.azure.headers.valueLabel", "Value")}
-									label={index === 0 ? t("pages.cloudSettings.azure.headers.valueLabel", "Value") : undefined}
-									placeholder={t("pages.cloudSettings.azure.headers.valuePlaceholder", "value")}
-									value={header.value}
-									onChange={(event) => {
-										const value = event.currentTarget.value;
-										dispatch({ type: "setHeaderField", index, field: "value", value });
-									}}
-									onBlur={() => dispatch({ type: "touchField", field: "headers" })}
-								/>
-							)}
-							<Switch
-								data-testid={`cloud-settings-header-secret-${index}`}
-								aria-label={t("pages.cloudSettings.azure.headers.secretLabel", "Secret")}
-								label={index === 0 ? t("pages.cloudSettings.azure.headers.secretLabel", "Secret") : undefined}
-								checked={header.isSecret}
-								onChange={() => dispatch({ type: "toggleHeaderSecret", index })}
-								style={{ flex: "0 0 auto" }}
-							/>
-						</Flex>
-						<ActionIcon
-							variant="subtle"
-							color="red"
-							size="lg"
-							data-testid={`cloud-settings-remove-header-${index}`}
-							aria-label={t("pages.cloudSettings.azure.headers.removeHeader", "Remove header")}
-							onClick={() => dispatch({ type: "removeHeader", index })}
-						>
-							<IconTrash size={16} />
-						</ActionIcon>
-					</Group>
-				))}
-				{visibleErrors.headers ? (
-					<Text size="xs" c="red" data-testid="cloud-settings-headers-error">
-						{visibleErrors.headers}
-					</Text>
-				) : null}
-				<Group>
-					<Button
-						variant="light"
-						size="xs"
-						leftSection={<IconPlus size={14} />}
-						data-testid="cloud-settings-add-header"
-						onClick={() => dispatch({ type: "addHeader", rowId: nextCloudRowId("cloud-header") })}
-					>
-						{t("pages.cloudSettings.azure.headers.addHeader", "Add header")}
-					</Button>
-				</Group>
-			</Stack>
+			<CustomHeaderRows
+				headers={formValues.headers}
+				rowIds={headerRowIds}
+				title={t("pages.cloudSettings.azure.headers.title", "Custom headers")}
+				description={t("pages.cloudSettings.azure.headers.description")}
+				namePlaceholder={t("pages.cloudSettings.azure.headers.namePlaceholder", "Ocp-Apim-Subscription-Key")}
+				error={visibleErrors.headers ? { message: visibleErrors.headers } : undefined}
+				testIdPrefix="cloud-settings"
+				onAdd={() => dispatch({ type: "addHeader", rowId: nextCloudRowId("cloud-header") })}
+				onRemove={(index) => dispatch({ type: "removeHeader", index })}
+				onChange={(index, field, value) => dispatch({ type: "setHeaderField", index, field, value })}
+				onToggleSecret={(index) => dispatch({ type: "toggleHeaderSecret", index })}
+				onBlur={() => dispatch({ type: "touchField", field: "headers" })}
+			/>
 
 			<Stack gap={6}>
 				<Text size="sm" fw={500}>

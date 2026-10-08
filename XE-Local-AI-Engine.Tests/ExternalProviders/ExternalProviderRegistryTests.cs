@@ -136,6 +136,44 @@ public sealed class ExternalProviderRegistryTests
     }
 
     [Test]
+    public async Task TryResolveTransportBindingAsync_CarriesEachConnectionsOwnHeaders_SecretValuesIncluded()
+    {
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(
+            Connection("box-a", models: ["qwen3"]) with
+            {
+                Headers = [ExternalProviderStoreTests.Header("X-Project", "a"), ExternalProviderStoreTests.Header("X-Token", "t-a", isSecret: true)]
+            },
+            Connection("box-b", models: ["qwen3"], baseUrl: "http://127.0.0.1:18100/v1/")));
+
+        var a = AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:box-a/qwen3", CancellationToken.None));
+        var b = AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:box-b/qwen3", CancellationToken.None));
+
+        // The transport is the one consumer that needs the secret VALUE; it rides with the endpoint like the key.
+        AssertEx.True(a.Headers.SequenceEqual([new("X-Project", "a"), new("X-Token", "t-a")]), string.Join(", ", a.Headers.Select(static header => header.Key)));
+        AssertEx.Empty(b.Headers);
+    }
+
+    [Test]
+    public async Task TryResolveTransportBindingAsync_AfterAHeaderEditAndInvalidation_SeesTheNewValue()
+    {
+        var store = new FakeExternalProviderStore(Connection("box-a", models: ["qwen3"]) with
+        {
+            Headers = [ExternalProviderStoreTests.Header("X-Project", "old")]
+        });
+        var registry = new ExternalProviderRegistry(store);
+        _ = await registry.TryResolveTransportBindingAsync("ext:box-a/qwen3", CancellationToken.None);
+
+        store.Replace(Connection("box-a", models: ["qwen3"]) with
+        {
+            Headers = [ExternalProviderStoreTests.Header("X-Project", "new")]
+        });
+        registry.Invalidate();
+
+        var binding = AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:box-a/qwen3", CancellationToken.None));
+        AssertEx.Equal("new", binding.Headers.Single().Value);
+    }
+
+    [Test]
     public async Task TryResolveBindingAsync_StampsANewGenerationAfterAnInvalidation()
     {
         var store = new FakeExternalProviderStore(Connection("box-a", models: ["qwen3"]));

@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -185,7 +186,7 @@ public sealed class AzureFoundryHeaderStoreTests : IDisposable
     public async Task SaveConfigAsync_WhenOverHeaderCap_ThrowsArgumentException()
     {
         using var store = CreateStore();
-        var headers = Enumerable.Range(0, AzureFoundryHeaderRules.MaxHeaderCount + 1)
+        var headers = Enumerable.Range(0, CustomHeaderRules.MaxHeaderCount + 1)
                                 .Select(index => new StoredAzureFoundryHeader
                                 {
                                     Name = $"X-H{index}",

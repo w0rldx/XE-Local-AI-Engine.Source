@@ -35552,6 +35552,12 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderModelResponse"
             }
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderHeaderResponse"
+            }
           }
         }
       },
@@ -35570,6 +35576,47 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse"
             }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderHeaderRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "value": {
+            "type": "string",
+            "nullable": true
+          },
+          "isSecret": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderHeaderResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "isSecret",
+          "hasStoredValue"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "nullable": true
+          },
+          "isSecret": {
+            "type": "boolean"
+          },
+          "hasStoredValue": {
+            "type": "boolean"
           }
         }
       },
@@ -35657,6 +35704,13 @@
           },
           "allowInsecureHttp": {
             "type": "boolean"
+          },
+          "headers": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderHeaderRequest"
+            }
           }
         }
       },
@@ -35729,6 +35783,12 @@
             "nullable": false,
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1SaveExternalProviderModelRequest"
+            }
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderHeaderRequest"
             }
           },
           "expectedRevision": {
@@ -50134,7 +50194,9 @@
           "ModelCapabilityUnsupported",
           "ModelLoadFailed",
           "ModelNotInstalled",
-          "ContextWindowExceeded"
+          "ContextWindowExceeded",
+          "ProviderAuthFailed",
+          "ProviderRateLimited"
         ],
         "enum": [
           "Cancelled",
@@ -50148,7 +50210,9 @@
           "ModelCapabilityUnsupported",
           "ModelLoadFailed",
           "ModelNotInstalled",
-          "ContextWindowExceeded"
+          "ContextWindowExceeded",
+          "ProviderAuthFailed",
+          "ProviderRateLimited"
         ]
       },
       "XE_Local_AI_EngineClientPersistenceAgentDefinitionKind": {
