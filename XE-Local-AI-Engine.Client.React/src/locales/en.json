@@ -612,6 +612,9 @@
 				"network": "Network",
 				"limits": "Resource limits",
 				"readOnlyMounts": "Read-only mounts",
+				"required": "Required",
+				"served": "Served",
+				"noAxes": "None",
 				"yes": "Yes",
 				"no": "No",
 				"egressRequired": "required",
@@ -2925,6 +2928,7 @@
 				"privacy": "Privacy & updates",
 				"integrations": "Integrations & keys",
 				"workspaces": "Agent workspaces",
+				"sandbox": "Sandbox & isolation",
 				"usage": "Usage & limits",
 				"showAdvanced": "Show advanced sections",
 				"hideAdvanced": "Hide advanced sections"
@@ -2934,6 +2938,35 @@
 				"description": "Preview sandbox mechanisms will run Python and sandboxed MCP servers. On Windows that is the AppContainer boundary: the code cannot read your user profile or the engine's data, but it runs with no CPU, memory or process-count limit (only the time limit stops it), and it can see host path names. Turn this on only if you accept that.",
 				"confirm": "Turn on",
 				"cancel": "Cancel"
+			},
+			"sandboxProfile": {
+				"title": "Sandbox security profile",
+				"description": "Decides whether the boundaries a workload asks for are preferences or requirements. A change applies to the next sandbox.",
+				"effective": "Effective profile: {{profile}}",
+				"notChosen": "Not chosen"
+			},
+			"sandboxProfileLowerConfirm": {
+				"title": "Lower the sandbox security profile?",
+				"description": "With the Low profile, a workload that asks for a boundary this host cannot provide runs without it instead of refusing to start. The safety floors every profile keeps still apply. Lower it only if you accept that.",
+				"confirm": "Lower to Low",
+				"cancel": "Cancel"
+			}
+		},
+		"sandboxProfile": {
+			"setupTitle": "How strict should the sandbox be?",
+			"setupSubtitle": "This decides what happens when this host cannot isolate a workload the way it asks to be isolated. You can change it later in Node settings.",
+			"recommended": "Recommended for this host",
+			"refusalsTitle": "These workloads will refuse on this host:",
+			"previewsNote": "Execution previews stay a separate setting: neither profile turns them on.",
+			"saveError": "Could not save your choice. Try again.",
+			"continue": "Continue",
+			"low": {
+				"title": "Low",
+				"body": "Every workload runs with the boundaries this host can give it. A workload that asks for a boundary the host lacks still runs, without it. No extra overhead, and nothing is refused beyond the safety floors every profile keeps."
+			},
+			"high": {
+				"title": "High",
+				"body": "Every boundary a workload asks for becomes a requirement: filesystem isolation, resource limits and denied network access. A workload this host cannot isolate that way refuses to start instead of running with less. Resource limits add a little start-up overhead, and some workloads may not run on this host."
 			}
 		},
 		"cloudSettings": {
@@ -4125,7 +4158,8 @@
 					"Tls": "The TLS negotiation with the MCP server failed.",
 					"ServerExited": "The MCP server process exited.",
 					"SessionLost": "The MCP server no longer recognises this node's session; it has probably restarted.",
-					"ServerStartupFailed": "The MCP server exited before completing the MCP handshake."
+					"ServerStartupFailed": "The MCP server exited before completing the MCP handshake.",
+					"SandboxRefusedByProfile": "The high sandbox security profile refused to start this server, because this host cannot serve every boundary the profile requires."
 				}
 			},
 			"delete": {

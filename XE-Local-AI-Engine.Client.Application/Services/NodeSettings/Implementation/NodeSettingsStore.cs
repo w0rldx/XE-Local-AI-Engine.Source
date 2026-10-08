@@ -461,6 +461,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             UsageRates = NormalizeUsageRates(settings.UsageRates),
             ExternalAccessProfile = NormalizeExternalAccessProfile(settings.ExternalAccessProfile),
             UiMode = NormalizeUiMode(settings.UiMode),
+            SandboxSecurityProfile = NormalizeSandboxSecurityProfile(settings.SandboxSecurityProfile),
             UpdateChannel = NormalizeUpdateChannel(settings.UpdateChannel)
         };
     }
@@ -574,6 +575,28 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         }
 
         return StoredNodeSettings.IsValidExternalAccessProfile(trimmed) ? trimmed : StoredNodeSettings.ExternalAccessProfilePending;
+    }
+
+    /// <summary>
+    ///     The external-access profile's rule, for the external-access profile's reason: blank stays <see langword="null" /> (undecided and
+    ///     backfillable), an unrecognised non-blank value loads as <see cref="StoredNodeSettings.SandboxSecurityProfilePending" /> so the
+    ///     operator is ASKED AGAIN rather than answered for.
+    /// </summary>
+    /// <remarks>
+    ///     Folding junk to <c>low</c> would silently lower a node whose operator wrote something; folding it to <c>high</c> would refuse
+    ///     work nobody chose to refuse. <c>pending</c> reads as <c>low</c> until the chooser is answered, and the backfill leaves it alone.
+    ///     Ordinal, so <c>"High"</c> is unrecognised and <c>"  high  "</c> is not.
+    /// </remarks>
+    private static string? NormalizeSandboxSecurityProfile(string? value)
+    {
+        var trimmed = TrimToNull(value);
+
+        if (trimmed is null)
+        {
+            return null;
+        }
+
+        return StoredNodeSettings.IsValidSandboxSecurityProfile(trimmed) ? trimmed : StoredNodeSettings.SandboxSecurityProfilePending;
     }
 
     /// <summary>

@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -28,6 +29,7 @@ internal sealed class McpClientFactory : IMcpClientFactory
     private readonly IOptions<LocalContainerOptions> _nodeOptions;
     private readonly McpOptions _options;
     private readonly IAgentSandboxRuntimeProvider _sandboxProvider;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     public McpClientFactory(IOptions<McpOptions> options,
         IAgentSandboxRuntimeProvider sandboxProvider,
@@ -35,9 +37,13 @@ internal sealed class McpClientFactory : IMcpClientFactory
         INodeDataDirectory nodeDataDirectory,
         IOptions<ComputeOptions> ceilingDefaults,
         IOptions<LocalContainerOptions> nodeOptions,
+        INodeRuntimeSettings runtimeSettings,
         ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        // Handed to every Sandboxed transport, which reads the sandbox security profile per connect.
+        _runtimeSettings = runtimeSettings;
         _options = options.Value;
         _sandboxProvider = sandboxProvider ?? throw new ArgumentNullException(nameof(sandboxProvider));
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
@@ -80,7 +86,7 @@ internal sealed class McpClientFactory : IMcpClientFactory
     {
         return record.TrustTier switch
         {
-            McpTrustTier.Sandboxed => new SandboxedMcpStdioTransport(record, _sandboxProvider, _identityProvider, _nodeDataDirectory, _ceilingDefaults, _nodeOptions, _loggerFactory, sessionKey),
+            McpTrustTier.Sandboxed => new SandboxedMcpStdioTransport(record, _sandboxProvider, _identityProvider, _nodeDataDirectory, _ceilingDefaults, _nodeOptions, _runtimeSettings, _loggerFactory, sessionKey),
             McpTrustTier.PrivilegedHost => new StdioClientTransport(BuildStdioTransportOptions(record), _loggerFactory),
             // BuiltInTrusted names an engine-owned transport and there is no engine-owned STDIO one: a row carrying it passed both
             // the CRUD refusal and the schema check, so serving it as either other tier would pick a privilege level on its behalf.

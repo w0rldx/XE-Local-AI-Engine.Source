@@ -12,6 +12,7 @@ import type {
 } from "@/core/api/generated";
 import {
 	getDefaultAssistantToolOfferQueryKey,
+	getDevelopmentCapabilityOptions,
 	getDevelopmentCapabilityQueryKey,
 	getDevWorkflowCapabilityQueryKey,
 	getGraphWorkflowCapabilityQueryKey,
@@ -45,6 +46,7 @@ import {
 } from "@/features/node-settings/components/NodeSettingsAuxiliaryPanels";
 import { NodeSettingsBrowserOnlyBadge } from "@/features/node-settings/components/NodeSettingsBrowserOnlyBadge";
 import { NodeSettingsFieldsCard } from "@/features/node-settings/components/NodeSettingsFieldsCard";
+import { NodeSettingsSandboxProfileCard } from "@/features/node-settings/components/NodeSettingsSandboxProfileCard";
 import { NodeSettingsSaveBar } from "@/features/node-settings/components/NodeSettingsSaveBar";
 import { NodeSettingsSectionNav } from "@/features/node-settings/components/NodeSettingsSectionNav";
 import { SourceBuildCard } from "@/features/node-settings/components/SourceBuildCard";
@@ -57,6 +59,7 @@ import {
 	type ExternalAccessPreset,
 	featureSwitchFields,
 	isExternalAccessBooleanField,
+	lowersSandboxSecurityProfile,
 	type NodeSettingsFieldsForm,
 	summarizePendingChanges,
 	toNodeSettingsFieldBounds,
@@ -91,9 +94,11 @@ interface NodeSettingsProps {
 	readonly onSectionChange?: (section: NodeSettingsSectionId) => void;
 	// The application update-channel picker. It lives in another feature, so the route supplies it.
 	readonly updateChannelSelector?: ReactNode;
+	// The per-role isolation table. It belongs to the development feature, so the route supplies it.
+	readonly sandboxIsolationPanel?: ReactNode;
 }
 
-export function NodeSettings({ section, onSectionChange, updateChannelSelector }: NodeSettingsProps) {
+export function NodeSettings({ section, onSectionChange, updateChannelSelector, sandboxIsolationPanel }: NodeSettingsProps) {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const { confirm } = useConfirm();
@@ -138,6 +143,12 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector }
 	// a definite `false` disables the endpoint field, so a still-loading or failed probe leaves the field in place.
 	const ollamaRuntimeDisabled = useOllamaRuntimeConfigured().data === false;
 	const effectiveToolCapableModels = useEffectiveToolCapableModels();
+	// The workloads the high profile would refuse on this host. Read only while the Sandbox section is open; it shares the
+	// development capability cache entry, which a saved profile change invalidates below.
+	const capabilityQuery = useQuery({
+		...withResponseValidation(getDevelopmentCapabilityOptions()),
+		enabled: activeSection === "sandbox",
+	});
 
 	// Replaces the draft (and the save baseline) with a server state. Every deliberate "take the server's values" path
 	// goes through here: the first load, Reset, and a successful save.
@@ -246,8 +257,9 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector }
 				),
 			);
 			// The capability probes the nav and the gated pages read answer from the live switches; a cached answer from
-			// before the save would keep a re-enabled feature hidden (or a disabled one offered) until it went stale.
-			if (featureSwitchFields.some((field) => field in variables.body)) {
+			// before the save would keep a re-enabled feature hidden (or a disabled one offered) until it went stale. The
+			// sandbox profile decides the capability's required and satisfied columns, so a profile change refreshes it too.
+			if (featureSwitchFields.some((field) => field in variables.body) || "sandboxSecurityProfile" in variables.body) {
 				await Promise.all(
 					[
 						getDevelopmentCapabilityQueryKey(),
@@ -299,6 +311,22 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector }
 				),
 				confirmationText: t("pages.nodeSettings.executionPreviewsConfirm.confirm", "Turn on"),
 				cancellationText: t("pages.nodeSettings.executionPreviewsConfirm.cancel", "Cancel"),
+			}))
+		) {
+			return;
+		}
+		// Lowering the profile turns every declared boundary back into a preference, so a workload this host cannot isolate
+		// runs with less instead of refusing. Raising it narrows nothing and is never asked about.
+		if (
+			lowersSandboxSecurityProfile(draftRequest.body) &&
+			!(await confirm({
+				title: t("pages.nodeSettings.sandboxProfileLowerConfirm.title", "Lower the sandbox security profile?"),
+				description: t(
+					"pages.nodeSettings.sandboxProfileLowerConfirm.description",
+					"With the Low profile, a workload that asks for a boundary this host cannot provide runs without it instead of refusing to start. The safety floors every profile keeps still apply. Lower it only if you accept that.",
+				),
+				confirmationText: t("pages.nodeSettings.sandboxProfileLowerConfirm.confirm", "Lower to Low"),
+				cancellationText: t("pages.nodeSettings.sandboxProfileLowerConfirm.cancel", "Cancel"),
 			}))
 		) {
 			return;
@@ -487,6 +515,19 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector }
 				);
 			case "integrations":
 				return <NodeSettingsIntegrationPanels />;
+			case "sandbox":
+				return (
+					<>
+						<NodeSettingsSandboxProfileCard
+							form={fieldsForm}
+							errors={modelOptions.visibleErrors}
+							onChange={handleFieldChange}
+							effectiveProfile={seededSource?.sandboxSecurityProfile}
+							highRefusals={capabilityQuery.data?.highProfileRefusals}
+						/>
+						{sandboxIsolationPanel}
+					</>
+				);
 			default:
 				return fields;
 		}

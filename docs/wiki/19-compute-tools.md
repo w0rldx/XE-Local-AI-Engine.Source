@@ -220,6 +220,8 @@ Seeded agent example: `MathematicianAgentSeeder` (`Services/Agents/Implementatio
 
 **Resource limits remain capability-gated** — an old system without cgroup v2 or systemd `--user` runs without the ceilings and says so in the containment log, because they bound *cost* rather than reachability. Degrading them costs no advertised guarantee; degrading the boundary would.
 
+**Under the `high` sandbox security profile the ceilings become a precondition** ([ADR 0020](../adr/0020-sandbox-security-profile.md)). `ComputeToolGateway` then treats a backend that cannot impose them as unable to serve the call and refuses with the existing `NoResourceLimits` refusal code, naming the profile, before provisioning and before any jail is created. The profile is read on every call, so switching it applies to the next `run_python` without a restart. Under `low` nothing here changes. On Windows the AppContainer boundary imposes no CPU, memory or process ceiling, so under `high` `run_python` is refused there too, even with execution previews on.
+
 **Maintainer rule**: The `Enabled` kill-switch is the single source of truth for "is this node allowed to execute code" — it parallels `AgentHome:Enabled` and is read the same way. Never add a code path that runs Python without checking this flag first.
 
 ---

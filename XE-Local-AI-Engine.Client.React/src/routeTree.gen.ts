@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as ExternalAccessRouteImport } from './routes/external-access'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as SandboxProfileSetupRouteImport } from './routes/sandbox-profile-setup'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as UiModeSetupRouteImport } from './routes/ui-mode-setup'
 import { Route as VaultRouteImport } from './routes/vault'
@@ -71,6 +72,11 @@ const ExternalAccessRoute = ExternalAccessRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SandboxProfileSetupRoute = SandboxProfileSetupRouteImport.update({
+  id: '/sandbox-profile-setup',
+  path: '/sandbox-profile-setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SetupRoute = SetupRouteImport.update({
@@ -321,6 +327,7 @@ export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
   '/external-access': typeof ExternalAccessRoute
   '/login': typeof LoginRoute
+  '/sandbox-profile-setup': typeof SandboxProfileSetupRoute
   '/setup': typeof SetupRoute
   '/ui-mode-setup': typeof UiModeSetupRoute
   '/vault': typeof VaultRoute
@@ -370,6 +377,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/external-access': typeof ExternalAccessRoute
   '/login': typeof LoginRoute
+  '/sandbox-profile-setup': typeof SandboxProfileSetupRoute
   '/setup': typeof SetupRoute
   '/ui-mode-setup': typeof UiModeSetupRoute
   '/vault': typeof VaultRoute
@@ -422,6 +430,7 @@ export interface FileRoutesById {
   '/_layout': typeof LayoutRouteWithChildren
   '/external-access': typeof ExternalAccessRoute
   '/login': typeof LoginRoute
+  '/sandbox-profile-setup': typeof SandboxProfileSetupRoute
   '/setup': typeof SetupRoute
   '/ui-mode-setup': typeof UiModeSetupRoute
   '/vault': typeof VaultRoute
@@ -475,6 +484,7 @@ export interface FileRouteTypes {
     | '/'
     | '/external-access'
     | '/login'
+    | '/sandbox-profile-setup'
     | '/setup'
     | '/ui-mode-setup'
     | '/vault'
@@ -524,6 +534,7 @@ export interface FileRouteTypes {
   to:
     | '/external-access'
     | '/login'
+    | '/sandbox-profile-setup'
     | '/setup'
     | '/ui-mode-setup'
     | '/vault'
@@ -575,6 +586,7 @@ export interface FileRouteTypes {
     | '/_layout'
     | '/external-access'
     | '/login'
+    | '/sandbox-profile-setup'
     | '/setup'
     | '/ui-mode-setup'
     | '/vault'
@@ -627,6 +639,7 @@ export interface RootRouteChildren {
   LayoutRoute: typeof LayoutRouteWithChildren
   ExternalAccessRoute: typeof ExternalAccessRoute
   LoginRoute: typeof LoginRoute
+  SandboxProfileSetupRoute: typeof SandboxProfileSetupRoute
   SetupRoute: typeof SetupRoute
   UiModeSetupRoute: typeof UiModeSetupRoute
   VaultRoute: typeof VaultRoute
@@ -654,6 +667,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sandbox-profile-setup': {
+      id: '/sandbox-profile-setup'
+      path: '/sandbox-profile-setup'
+      fullPath: '/sandbox-profile-setup'
+      preLoaderRoute: typeof SandboxProfileSetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/setup': {
@@ -1080,6 +1100,7 @@ const rootRouteChildren: RootRouteChildren = {
   LayoutRoute: LayoutRouteWithChildren,
   ExternalAccessRoute: ExternalAccessRoute,
   LoginRoute: LoginRoute,
+  SandboxProfileSetupRoute: SandboxProfileSetupRoute,
   SetupRoute: SetupRoute,
   UiModeSetupRoute: UiModeSetupRoute,
   VaultRoute: VaultRoute,

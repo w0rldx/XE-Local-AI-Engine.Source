@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
@@ -59,6 +60,9 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     // Read only on a sandbox failure, to tell "this node cannot sandbox at all" from "the sandbox refused this server".
     private readonly IAgentSandboxRuntimeProvider _sandboxProvider;
 
+    // Read only on a sandbox failure too, to tell a refusal the sandbox security profile caused from every other one.
+    private readonly INodeRuntimeSettings _runtimeSettings;
+
     // The store is DbContext-backed and therefore Scoped, so this singleton manager resolves it per refresh through a scope rather
     // than capturing it: a captive dependency would fail ValidateOnBuild and risk concurrent DbContext use.
     private readonly IServiceScopeFactory _scopeFactory;
@@ -77,11 +81,14 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         IMcpToolRegistry registry,
         IMcpClientFactory clientFactory,
         IAgentSandboxRuntimeProvider sandboxProvider,
+        INodeRuntimeSettings runtimeSettings,
         IOptions<McpOptions> options,
         IOptions<AgentToolPipelineOptions> pipelineOptions,
         TimeProvider timeProvider,
         ILogger<McpServerConnectionManager> logger)
     {
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
@@ -536,11 +543,22 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         }
         catch (SandboxCapabilityNotSupportedException ex)
         {
-            // The reason still tells an operator "this node cannot sandbox" from "your server is broken", but the exception text
-            // can name a sensitive host path (a denied root, the home directory), so it stays in the log like every other failure.
-            var reason = _sandboxProvider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation)
-                ? McpConnectionFailureReason.SandboxRefused
-                : McpConnectionFailureReason.SandboxUnavailable;
+            // The reason tells "cannot sandbox" from "the profile refused" (the transport's own policy) from "server broken"; the exception
+            // text can name a sensitive host path (a denied root, the home directory), so it stays in the log like every other failure.
+            var capabilities = _sandboxProvider.Capabilities;
+            var refusedByProfile = SandboxSecurityProfilePolicy.Refuses(SandboxWorkloads.McpStdio,
+                capabilities,
+                await _runtimeSettings.GetSandboxSecurityProfileAsync(cancellationToken),
+                configRequiresEgressDenial: false);
+            var reason = McpConnectionFailureReason.SandboxRefused;
+            if (!capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation))
+            {
+                reason = McpConnectionFailureReason.SandboxUnavailable;
+            }
+            else if (refusedByProfile)
+            {
+                reason = McpConnectionFailureReason.SandboxRefusedByProfile;
+            }
             _logger.LogWarning(ex, "MCP server {ServerId} could not be started under its trust tier ({Reason}); it will contribute no tools.", record.Id, reason);
             return ConnectResult.Failed(SafeMessage(reason), reason);
         }
@@ -1132,6 +1150,9 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                 : "This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.",
             McpConnectionFailureReason.SandboxRefused =>
                 "The sandbox refused to start the MCP server: its command or working directory overlaps a protected location, or the sandbox boundary could not be established. Point it at the directory holding the server's own files.",
+            McpConnectionFailureReason.SandboxRefusedByProfile =>
+                "The node's sandbox security profile is 'high', and this node's sandbox cannot impose the CPU, memory and process-count ceilings that profile requires for a Sandboxed MCP server. Install the missing mechanism the sandbox isolation summary names, or "
+                + SandboxSecurityProfilePolicy.Remedy + ".",
             McpConnectionFailureReason.ServerNotFound => "The MCP server's command was not found or could not be started.",
             McpConnectionFailureReason.Authentication => "The MCP server rejected the configured credentials.",
             McpConnectionFailureReason.AuthenticationRequired => "The MCP server requires authentication, and no credential is configured. Add an Authorization header to the registration.",

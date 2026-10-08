@@ -721,6 +721,42 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    [Arguments("low", StoredNodeSettings.SandboxSecurityProfileLow)]
+    [Arguments("high", StoredNodeSettings.SandboxSecurityProfileHigh)]
+    [Arguments("pending", StoredNodeSettings.SandboxSecurityProfilePending)]
+    [Arguments("  high  ", StoredNodeSettings.SandboxSecurityProfileHigh)]
+    public async Task Normalize_KeepsAValidSandboxSecurityProfile_Trimmed(string stored, string expected)
+    {
+        await WriteSettingsJsonAsync($"{{ \"sandboxSecurityProfile\": \"{stored}\" }}");
+
+        AssertEx.Equal(expected, (await LoadAsync()).SandboxSecurityProfile);
+    }
+
+    // The external-access rule, for its reason: a value somebody wrote but this engine does not know makes the operator choose again,
+    // rather than being lowered to "low" or raised to "high" on their behalf. Ordinal, so "High" is unknown.
+    [Test]
+    [Arguments("maximum")]
+    [Arguments("High")]
+    public async Task Normalize_MapsAnUnknownSandboxSecurityProfileToPending(string stored)
+    {
+        await WriteSettingsJsonAsync($"{{ \"sandboxSecurityProfile\": \"{stored}\" }}");
+
+        AssertEx.Equal(StoredNodeSettings.SandboxSecurityProfilePending, (await LoadAsync()).SandboxSecurityProfile);
+    }
+
+    // Blank and absent stay null: undecided and backfillable, which is how an upgraded node is stamped "low" instead of being asked.
+    [Test]
+    [Arguments("{ \"sandboxSecurityProfile\": \"\" }")]
+    [Arguments("{ \"sandboxSecurityProfile\": \"   \" }")]
+    [Arguments("{ \"maxMessageRequestTimeoutSeconds\": 120 }")]
+    public async Task Normalize_LeavesABlankOrAbsentSandboxSecurityProfileNull(string json)
+    {
+        await WriteSettingsJsonAsync(json);
+
+        AssertEx.Null((await LoadAsync()).SandboxSecurityProfile);
+    }
+
+    [Test]
     public async Task OldFileMissingTheExternalAccessMembers_LoadsToNull_WithoutThrowing()
     {
         // An upgraded node's file predates all four members. They must deserialize to null — never to a spurious false,

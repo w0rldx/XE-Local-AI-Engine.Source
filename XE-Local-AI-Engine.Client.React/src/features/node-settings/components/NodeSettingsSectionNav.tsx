@@ -27,6 +27,7 @@ function sectionLabel(t: Translate, section: NodeSettingsSectionId): string {
 		privacy: t("pages.nodeSettings.sections.privacy", "Privacy & updates"),
 		integrations: t("pages.nodeSettings.sections.integrations", "Integrations & keys"),
 		workspaces: t("pages.nodeSettings.sections.workspaces", "Agent workspaces"),
+		sandbox: t("pages.nodeSettings.sections.sandbox", "Sandbox & isolation"),
 		usage: t("pages.nodeSettings.sections.usage", "Usage & limits"),
 	};
 	return labels[section];

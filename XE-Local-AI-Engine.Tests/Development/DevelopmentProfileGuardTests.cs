@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 using PersistenceDevelopmentTaskStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentTaskStatus;
 
@@ -54,7 +55,7 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
         var snapshot = Snapshot(identity);
 
         using var sandbox = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository, identity));
 
         // The profile carries a DIFFERENT ImportDigest from what the worktree contains, to pin that the tamper check

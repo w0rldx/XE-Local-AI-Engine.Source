@@ -86,6 +86,16 @@ public sealed record NodeSettingsResponse
     public string? UiMode { get; init; }
 
     /// <summary>
+    ///     The node-wide sandbox security profile: <c>low</c> or <c>high</c> in effect, or <c>pending</c> while an administrator exists and
+    ///     has not chosen yet (ADR 0020).
+    /// </summary>
+    /// <remarks>
+    ///     Never <see langword="null" />: an undecided node reports the profile it runs under, <c>low</c>. <c>pending</c> is engine-written
+    ///     and is what the SPA's first-run chooser step keys on; it also runs under <c>low</c>. Operator-only: absent from every agentic surface.
+    /// </remarks>
+    public string SandboxSecurityProfile { get; init; } = StoredNodeSettings.SandboxSecurityProfileLow;
+
+    /// <summary>
     ///     Which application-update channel this node follows: <c>stable</c>, <c>preview</c> or <c>development</c>.
     /// </summary>
     /// <remarks>
@@ -805,6 +815,15 @@ public sealed record SaveNodeSettingsRequest
     ///     on its own — which is how both the first-run step and the Node Settings toggle save it.
     /// </remarks>
     public string? UiMode { get; init; }
+
+    /// <summary>
+    ///     Set the sandbox security profile: <c>low</c> or <c>high</c> ONLY; anything else, <c>pending</c> included, is rejected with a 400.
+    /// </summary>
+    /// <remarks>
+    ///     <see langword="null" /> keeps the current stored value. Applies to the next sandbox created. Lowering it (<c>high</c> to
+    ///     <c>low</c>) is security-widening: the UI confirms the change before saving it (ADR 0020).
+    /// </remarks>
+    public string? SandboxSecurityProfile { get; init; }
 
     /// <summary>
     ///     Set the update channel: <c>stable</c>, <c>preview</c> or <c>development</c> ONLY; anything else is rejected

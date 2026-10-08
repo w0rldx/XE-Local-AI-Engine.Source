@@ -16,8 +16,9 @@ interface Props {
 	readonly onChange: <K extends keyof NodeSettingsFieldsForm>(field: K, value: NodeSettingsFieldsForm[K]) => void;
 }
 
-// The ten node feature switches. Development and Scheduler carry the restart badge (they decide what the host
+// The nine node feature switches. Development and Scheduler carry the restart badge (they decide what the host
 // registers); the others apply on the next request, and their descriptions name the part that waits for a restart.
+// The tenth entry of featureSwitchFields, execution previews, is edited in the Sandbox & isolation section.
 export function NodeSettingsFeaturesCard({ form, errors, onChange }: Props) {
 	const { t } = useTranslation();
 
@@ -122,15 +123,6 @@ export function NodeSettingsFeaturesCard({ form, errors, onChange }: Props) {
 					"scheduler",
 					t("pages.nodeSettings.fields.schedulerEnabled.label", "Scheduler"),
 					t("pages.nodeSettings.fields.schedulerEnabled.description", "Run agents and jobs on a schedule."),
-				)}
-				{featureSwitch(
-					"executionPreviewsEnabled",
-					"execution-previews",
-					t("pages.nodeSettings.fields.executionPreviewsEnabled.label", "Execution previews"),
-					t(
-						"pages.nodeSettings.fields.executionPreviewsEnabled.description",
-						"Lets Preview sandbox mechanisms run Python and sandboxed MCP servers. On Windows this is the AppContainer boundary: no CPU, memory or process limit, only the time limit, and host path names stay visible. Applies to the next sandbox.",
-					),
 				)}
 			</Stack>
 		</Card>

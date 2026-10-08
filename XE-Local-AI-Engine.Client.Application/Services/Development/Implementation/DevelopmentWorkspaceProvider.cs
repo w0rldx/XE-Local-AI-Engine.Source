@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
@@ -103,17 +104,22 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     private readonly DevelopmentSandboxOptions _sandboxOptions;
     private readonly IDevelopmentWorkspaceSecretsSink _secretsSink;
     private readonly TimeProvider _timeProvider;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     public DevelopmentWorkspaceProvider(INodeDataDirectory dataDirectory,
         IDevelopmentSandboxRuntimeProvider sandbox,
         IOptions<DevelopmentOptions> options,
         TimeProvider timeProvider,
         IDevelopmentWorkspaceSecretsSink secretsSink,
+        INodeRuntimeSettings runtimeSettings,
         ISensitiveFileExclusionService? exclusions = null,
         IOptions<DevelopmentSandboxOptions>? sandboxOptions = null,
         IOptions<ComputeOptions>? ceilingDefaults = null,
         IOptions<LocalContainerOptions>? nodeOptions = null)
     {
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        // Required, never defaulted: a provider built without node settings would silently run under `low` (ADR 0020).
+        _runtimeSettings = runtimeSettings;
         _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
         _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
         ArgumentNullException.ThrowIfNull(options);
@@ -143,6 +149,11 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         {
             throw new SandboxCapabilityNotSupportedException($"The '{_sandbox.ProviderName}' provider cannot bind a preserved trusted host workspace.");
         }
+
+        // Read once per prepare and applied to BOTH sandboxes it creates: under `high` the declared ceilings are a precondition for the
+        // warm-restore sandbox too, and egress denial for the agent-facing one (the warm restore keeps its deliberate egress). ADR 0020.
+        var profile = await _runtimeSettings.GetSandboxSecurityProfileAsync(cancellationToken);
+        SandboxSecurityProfilePolicy.EnsureServed(SandboxWorkloads.DevelopmentModeHostToolchain, _sandbox.Capabilities, profile);
 
         var canonicalRepositoryRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository.RepositoryRoot);
         var identity = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonicalRepositoryRoot);
@@ -303,7 +314,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         {
             AttachKey = attachKey,
             RuntimeProfile = RuntimeProfile,
-            NetworkPolicy = ResolveAgentFacingNetworkPolicy(),
+            NetworkPolicy = ResolveAgentFacingNetworkPolicy(profile),
             TrustedHostWorkspace = new SandboxTrustedHostWorkspace
             {
                 RootPath = worktreePath
@@ -370,14 +381,15 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///     Capability-gated, a real limitation rather than defensive coding: a backend fails a request it cannot
     ///     honour CLOSED, so an unconditional <c>None</c> would remove Development Mode from every node resolved to
     ///     the process backend, where the attempt therefore still has egress — reported as the posture SERVED.
-    ///     <see cref="DevelopmentSandboxOptions.RequireEgressDenial" /> makes denial a precondition instead, and
-    ///     <see cref="SandboxEgressPolicy" /> holds the decision, so no consumer can stop matching the backend.
+    ///     <see cref="DevelopmentSandboxOptions.RequireEgressDenial" /> or the <c>high</c> sandbox security profile makes denial a
+    ///     precondition instead, and <see cref="SandboxSecurityProfilePolicy" /> holds the decision, so no consumer can stop matching the backend.
     /// </remarks>
-    private SandboxNetworkPolicy ResolveAgentFacingNetworkPolicy() =>
-        SandboxEgressPolicy.Resolve(_sandbox.Capabilities,
+    private SandboxNetworkPolicy ResolveAgentFacingNetworkPolicy(SandboxSecurityProfile profile) =>
+        SandboxSecurityProfilePolicy.ResolveEgress(SandboxWorkloads.DevelopmentModeHostToolchain,
+            _sandbox.Capabilities,
+            profile,
             _sandboxOptions.RequireEgressDenial,
-            SandboxEgressPolicy.DevelopmentOptionKey,
-            SandboxWorkloads.DevelopmentModeHostToolchain.Workload);
+            SandboxEgressPolicy.DevelopmentOptionKey);
 
     /// <summary>
     ///     Populates the per-task package cache from the BASE COMMIT's dependency manifests, in a second short-lived

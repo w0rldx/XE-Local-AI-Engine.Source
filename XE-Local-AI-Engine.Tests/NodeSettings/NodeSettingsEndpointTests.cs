@@ -2400,6 +2400,97 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    [Arguments(StoredNodeSettings.SandboxSecurityProfileLow)]
+    [Arguments(StoredNodeSettings.SandboxSecurityProfileHigh)]
+    public async Task SaveNodeSettings_RoundTripsTheSandboxSecurityProfile(string profile)
+    {
+        // Both halves, for the UiMode reason: ToStoredSettings builds a FRESH record, so an omitted member would ERASE the profile.
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            SandboxSecurityProfile = profile
+        });
+        using var response = await client.SendAsync(request);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(response);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(profile, settings.SandboxSecurityProfile);
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate).SandboxSecurityProfile == profile),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments(StoredNodeSettings.SandboxSecurityProfilePending)]
+    [Arguments("High")]
+    [Arguments("maximum")]
+    [Arguments("")]
+    public async Task SaveNodeSettings_WhenTheSandboxSecurityProfileIsNotAChoice_ReturnsBadRequestWithoutSaving(string profile)
+    {
+        // "pending" is engine-written at setup, so a client must never claim it; anything else is not one of the two literals. Both are
+        // rejected at the boundary, ahead of Normalize's defence in depth, and an empty string is not read as "keep".
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            SandboxSecurityProfile = StoredNodeSettings.SandboxSecurityProfileHigh
+        });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            SandboxSecurityProfile = profile
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenASaveOmitsTheSandboxSecurityProfile_KeepsTheStoredOne()
+    {
+        // An unrelated save must never lower the profile: that would be a widening nobody confirmed.
+        var settings = await SaveAsync(new StoredNodeSettings
+            {
+                SandboxSecurityProfile = StoredNodeSettings.SandboxSecurityProfileHigh
+            },
+            new SaveNodeSettingsRequest
+            {
+                MaxMessageRequestTimeoutSeconds = 600
+            });
+
+        AssertEx.Equal(StoredNodeSettings.SandboxSecurityProfileHigh, settings.SandboxSecurityProfile);
+    }
+
+    // The response reports "pending" as itself, for the SPA's first-run guard, and every other state as the profile in effect: an
+    // undecided node runs under low and says so, never null.
+    [Test]
+    [Arguments(StoredNodeSettings.SandboxSecurityProfilePending, StoredNodeSettings.SandboxSecurityProfilePending)]
+    [Arguments(null, StoredNodeSettings.SandboxSecurityProfileLow)]
+    [Arguments(StoredNodeSettings.SandboxSecurityProfileHigh, StoredNodeSettings.SandboxSecurityProfileHigh)]
+    public async Task GetNodeSettings_ReportsPendingOrTheProfileInEffect(string? stored, string expected)
+    {
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            SandboxSecurityProfile = stored
+        });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var response = await client.SendAsync(request);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(response);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(expected, settings.SandboxSecurityProfile);
+    }
+
+    [Test]
     [Arguments(AppUpdateChannelNames.Stable)]
     [Arguments(AppUpdateChannelNames.Preview)]
     [Arguments(AppUpdateChannelNames.Development)]

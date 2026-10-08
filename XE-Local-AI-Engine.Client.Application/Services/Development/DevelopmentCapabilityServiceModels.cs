@@ -15,6 +15,16 @@ public sealed class DevelopmentCapability
     public required DockerDaemonPreflight? ContainerRuntime { get; init; }
 
     public required IReadOnlyList<DevelopmentIsolationRole> Isolation { get; init; }
+
+    /// <summary>The node's effective sandbox security profile, which every row's required flags are computed under.</summary>
+    public required SandboxSecurityProfile SandboxSecurityProfile { get; init; }
+
+    /// <summary>The roles <c>high</c> would refuse on this host that <c>low</c> does not already refuse, whatever the profile in effect.</summary>
+    /// <remarks>
+    ///     Computed by <see cref="SandboxSecurityProfilePolicy.Refuses" />, the rule the create sites enforce, after the selector's isolation
+    ///     floor and a withheld boundary, which refuse under every profile.
+    /// </remarks>
+    public required IReadOnlyList<string> HighProfileRefusals { get; init; }
 }
 
 /// <summary>One sandbox role's inputs to the served-isolation projection, in the order the panel lists them.</summary>
@@ -31,6 +41,9 @@ public sealed class DevelopmentIsolationRole
 
     /// <summary>The <c>RequireEgressDenial</c> switch of the options section that constrains this role.</summary>
     public required bool NodeRequiresEgressDenial { get; init; }
+
+    /// <summary>The node's effective sandbox security profile, for the row's required flags.</summary>
+    public required SandboxSecurityProfile SandboxSecurityProfile { get; init; }
 
     /// <summary>
     ///     Set when a host fact outside the sandbox mechanism takes this role's filesystem boundary away; the projection

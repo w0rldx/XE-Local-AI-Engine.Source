@@ -110,6 +110,15 @@ server wrote to `stderr`, with every configured environment value of 8 character
 `Transport`, `Protocol`, `Authentication` and `Unknown` cover the rest with one fixed wording each; on every reason
 the exception itself is logged at Warning and never reaches the UI.
 
+**Under the `high` sandbox security profile** ([ADR 0020](../adr/0020-sandbox-security-profile.md)) the `Sandboxed` tier
+gains one precondition: resource ceilings. A Sandboxed server declares that it asks for them, so on a host that cannot
+impose them (no systemd user scope on Linux, and the Preview AppContainer boundary on Windows) the registration is
+refused before any sandbox is created. The connection status then carries the reason `SandboxRefusedByProfile`, with
+one fixed text that names the profile and the remedy, so the operator sees a policy choice rather than a missing
+install. The filesystem and network floors are unchanged, `PrivilegedHost` is not a sandbox and is unaffected, and the
+profile is read on every connection attempt. Under `low` nothing changes. Raising the profile does not reach a
+Sandboxed server that is already connected: it applies at that server's next connect or at the next node restart.
+
 **Windows.** `HostSandboxContainmentProbe` reports `SandboxContainment.None` on Windows because there is no Job
 Object containment implementation. `Sandboxed` is unavailable there, so every stdio server refuses to start with the
 message above. The `mcp-stdio` row on the Development status isolation panel reports the same fact ahead of any

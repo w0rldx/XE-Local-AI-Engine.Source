@@ -12,10 +12,27 @@ import type { XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummary
 import { SandboxIsolationPanel } from "@/features/development/components/SandboxIsolationPanel";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
-function renderPanel(roles: readonly SandboxIsolation[] | undefined) {
+// The profile fields default to "nothing required, satisfied, no network reason" (a low-profile row) unless a case
+// sets them, so the posture cases below stay about the axes they pin.
+type RoleFixture = Omit<
+	SandboxIsolation,
+	"filesystemIsolationRequired" | "resourceLimitsRequired" | "satisfied" | "networkIsolationUnavailableReason"
+> &
+	Partial<SandboxIsolation>;
+
+function renderPanel(roles: readonly RoleFixture[] | undefined) {
+	const full = roles?.map(
+		(role): SandboxIsolation => ({
+			filesystemIsolationRequired: false,
+			resourceLimitsRequired: false,
+			satisfied: true,
+			networkIsolationUnavailableReason: null,
+			...role,
+		}),
+	);
 	render(
 		<MantineProvider env="test" theme={testMantineTheme}>
-			<SandboxIsolationPanel roles={roles} />
+			<SandboxIsolationPanel roles={full} />
 		</MantineProvider>,
 	);
 }
@@ -251,6 +268,57 @@ describe("SandboxIsolationPanel", () => {
 		expect(screen.getByTestId("sandbox-isolation-maturity-run_python").textContent).toBe("Preview");
 		expect(screen.getByTestId("sandbox-isolation-level-agent-home").textContent).toBe("Isolated");
 		expect(screen.getByTestId("sandbox-isolation-maturity-agent-home").textContent).toBe("Stable");
+	});
+
+	// Under the high profile a declared boundary is a requirement. The Required column lists what the role needs, Served
+	// the part of it this host delivers, and a row whose requirement is not met is the one that refuses to start.
+	it("shows required against served boundaries and marks an unsatisfied row", () => {
+		renderPanel([
+			{
+				role: "run_python",
+				provider: "process",
+				backend: "process",
+				level: "None",
+				maturity: "Stable",
+				filesystemIsolation: false,
+				networkIsolation: false,
+				networkIsolationRequired: true,
+				resourceLimits: true,
+				readOnlyMounts: false,
+				filesystemIsolationRequired: true,
+				resourceLimitsRequired: true,
+				satisfied: false,
+				filesystemIsolationUnavailableReason: "bubblewrap is not installed",
+				networkIsolationUnavailableReason: "the network namespace probe failed",
+				resourceLimitsUnavailableReason: null,
+			},
+			{
+				role: "agent-home",
+				provider: "process",
+				backend: "bwrap",
+				level: "Isolated",
+				maturity: "Stable",
+				filesystemIsolation: true,
+				networkIsolation: true,
+				networkIsolationRequired: false,
+				resourceLimits: true,
+				readOnlyMounts: false,
+				filesystemIsolationUnavailableReason: null,
+				resourceLimitsUnavailableReason: null,
+			},
+		]);
+
+		expect(screen.getByTestId("sandbox-isolation-required-run_python").textContent).toBe("Filesystem, Network, Resource limits");
+		expect(screen.getByTestId("sandbox-isolation-served-run_python").textContent).toBe("Resource limits");
+		expect(screen.getByTestId("sandbox-isolation-row-run_python").getAttribute("data-satisfied")).toBe("false");
+		expect(screen.getByTestId("sandbox-isolation-network-reason-run_python").textContent).toContain(
+			"the network namespace probe failed",
+		);
+
+		expect(screen.getByTestId("sandbox-isolation-required-agent-home").textContent).toBe("None");
+		expect(screen.getByTestId("sandbox-isolation-served-agent-home").textContent).toBe("None");
+		expect(screen.getByTestId("sandbox-isolation-row-agent-home").getAttribute("data-satisfied")).toBe("true");
+		expect(screen.queryByTestId("sandbox-isolation-network-reason-agent-home")).toBeNull();
 	});
 
 	it("renders nothing rather than an empty table when the backend reported no roles", () => {

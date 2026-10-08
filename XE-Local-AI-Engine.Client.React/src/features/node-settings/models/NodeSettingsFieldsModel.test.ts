@@ -6,6 +6,7 @@ import {
 	buildNodeSettingsRequest,
 	featureSwitchFields,
 	isExternalAccessBooleanField,
+	lowersSandboxSecurityProfile,
 	newUsageRateRow,
 	nodeSettingsFieldDefaults,
 	kvCacheTypeSelectValues,
@@ -850,6 +851,42 @@ describe("display units", () => {
 
 		const blank = buildNodeSettingsRequest({ ...baseline, agentHomeMaxPatchBytes: "" }, baseline, bounds, true);
 		expect(blank.errors["agentHomeMaxPatchBytes"]).toBe("positive");
+	});
+});
+
+describe("sandbox security profile", () => {
+	const bounds = toNodeSettingsFieldBounds(undefined);
+	const high = toNodeSettingsFieldsForm({ sandboxSecurityProfile: "high" } as NodeSettingsResponse);
+	const low = toNodeSettingsFieldsForm({ sandboxSecurityProfile: "low" } as NodeSettingsResponse);
+
+	it("seeds the profile from the response and leaves an absent one undecided", () => {
+		expect(high.sandboxSecurityProfile).toBe("high");
+		expect(toNodeSettingsFieldsForm({} as NodeSettingsResponse).sandboxSecurityProfile).toBe("");
+	});
+
+	it("flags only the high-to-low change for confirmation", () => {
+		const lowered = buildNodeSettingsRequest({ ...high, sandboxSecurityProfile: "low" }, high, bounds, false);
+		expect(lowered.body).toEqual({ sandboxSecurityProfile: "low" });
+		expect(lowersSandboxSecurityProfile(lowered.body)).toBe(true);
+
+		const raised = buildNodeSettingsRequest({ ...low, sandboxSecurityProfile: "high" }, low, bounds, false);
+		expect(raised.body).toEqual({ sandboxSecurityProfile: "high" });
+		expect(lowersSandboxSecurityProfile(raised.body)).toBe(false);
+
+		// Already low and untouched: the body does not carry it, so an unrelated save is not asked about it.
+		expect(
+			lowersSandboxSecurityProfile(buildNodeSettingsRequest({ ...low, computeEnabled: true }, low, bounds, false).body),
+		).toBe(false);
+	});
+
+	it("never sends a literal other than low or high", () => {
+		const pending = toNodeSettingsFieldsForm({ sandboxSecurityProfile: "pending" } as NodeSettingsResponse);
+		expect(buildNodeSettingsRequest({ ...high, sandboxSecurityProfile: "pending" }, high, bounds, false).body).toEqual({});
+		expect(buildNodeSettingsRequest({ ...pending, sandboxSecurityProfile: "" }, pending, bounds, false).body).toEqual({});
+	});
+
+	it("is read live, so it never asks for a restart", () => {
+		expect(restartGatedNodeSettingsFields.has("sandboxSecurityProfile")).toBe(false);
 	});
 });
 

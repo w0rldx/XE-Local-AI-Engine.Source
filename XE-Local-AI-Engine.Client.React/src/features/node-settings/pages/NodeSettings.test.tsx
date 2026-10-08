@@ -76,7 +76,9 @@ const { generatedMock } = vi.hoisted(() => ({
 		// One-click recommended-embedding download mutation.
 		downloadRecommendedEmbeddingMutation: vi.fn(),
 		downloadEmbeddingFn: vi.fn(),
-		// The capability probes a feature-switch save invalidates.
+		// The capability probes a feature-switch save invalidates. The development one is also READ by the Sandbox section
+		// for the workloads the high profile would refuse.
+		getDevelopmentCapabilityOptions: vi.fn(),
 		getDevelopmentCapabilityQueryKey: vi.fn(() => ["getDevelopmentCapability"]),
 		getDevWorkflowCapabilityQueryKey: vi.fn(() => ["getDevWorkflowCapability"]),
 		getGraphWorkflowCapabilityQueryKey: vi.fn(() => ["getGraphWorkflowCapability"]),
@@ -110,6 +112,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	updateLlamaCppRuntimeMutation: generatedMock.updateLlamaCppRuntimeMutation,
 	downloadRecommendedRerankerMutation: generatedMock.downloadRecommendedRerankerMutation,
 	downloadRecommendedEmbeddingMutation: generatedMock.downloadRecommendedEmbeddingMutation,
+	getDevelopmentCapabilityOptions: generatedMock.getDevelopmentCapabilityOptions,
 	getDevelopmentCapabilityQueryKey: generatedMock.getDevelopmentCapabilityQueryKey,
 	getDevWorkflowCapabilityQueryKey: generatedMock.getDevWorkflowCapabilityQueryKey,
 	getGraphWorkflowCapabilityQueryKey: generatedMock.getGraphWorkflowCapabilityQueryKey,
@@ -226,6 +229,7 @@ function Harness({ initialSection }: { readonly initialSection: NodeSettingsSect
 				setSection(next);
 			}}
 			updateChannelSelector={<div data-testid="update-channel-slot" />}
+			sandboxIsolationPanel={<div data-testid="sandbox-isolation-slot" />}
 		/>
 	);
 }
@@ -277,6 +281,10 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		});
 		generatedMock.saveFn.mockResolvedValue(settingsResponse as SaveNodeSettingsResponse);
 		generatedMock.saveNodeSettingsMutation.mockReturnValue({ mutationFn: generatedMock.saveFn });
+		generatedMock.getDevelopmentCapabilityOptions.mockReturnValue({
+			queryKey: ["getDevelopmentCapability"],
+			queryFn: async () => ({ highProfileRefusals: [] }),
+		});
 		// The draft-model picker's installed-models query resolves to an empty list by default (no draft models offered).
 		generatedMock.listLocalModelsOptions.mockReturnValue({
 			queryKey: fakeQueryKey("listLocalModels"),
@@ -426,7 +434,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 	// Turning execution previews on widens what sandboxed code may run under, so the save asks first and names the residual
 	// risk; declining sends nothing and keeps the draft, accepting saves the switch with everything else.
 	it("confirms before saving execution previews turned on, and saves nothing when declined", async () => {
-		renderPage("general");
+		renderPage("sandbox");
 		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
 
 		confirmMock.mockResolvedValueOnce(false);
@@ -453,7 +461,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			queryKey: ["getNodeSettings"],
 			queryFn: async () => ({ ...settingsResponse, executionPreviewsEnabled: true }),
 		});
-		renderPage("general");
+		renderPage("sandbox");
 		await waitFor(() =>
 			expect((screen.getByTestId("node-settings-feature-execution-previews") as HTMLInputElement).checked).toBe(true),
 		);
@@ -467,6 +475,94 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 			}),
 		);
 		expect(confirmMock).not.toHaveBeenCalled();
+	});
+
+	// The previews switch moved out of the Features card: it sits beside the profile it shares a subject with, and the
+	// section also mounts the isolation table the route supplies.
+	it("edits execution previews in the Sandbox section, not on the Features card", async () => {
+		renderPage("general");
+		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
+		expect(screen.getByTestId("node-settings-features-card")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-feature-execution-previews")).toBeNull();
+
+		openSection("sandbox");
+		expect(screen.getByTestId("node-settings-feature-execution-previews")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-sandbox-profile-card")).toBeTruthy();
+		expect(screen.getByTestId("sandbox-isolation-slot")).toBeTruthy();
+	});
+
+	it("confirms before lowering the sandbox profile and invalidates the capability once saved", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, sandboxSecurityProfile: "high" }),
+		});
+		generatedMock.saveFn.mockResolvedValue({ ...settingsResponse, sandboxSecurityProfile: "low" });
+		const queryClient = renderPage("sandbox");
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		await waitFor(() =>
+			expect(screen.getByTestId("node-settings-sandbox-profile-effective").textContent).toBe("Effective profile: High"),
+		);
+
+		confirmMock.mockResolvedValueOnce(false);
+		fireEvent.click(screen.getByTestId("node-settings-sandbox-profile-low-card"));
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
+		expect(String(confirmMock.mock.calls[0]?.[0]?.title)).toBe("Lower the sandbox security profile?");
+		expect(generatedMock.saveFn).not.toHaveBeenCalled();
+
+		confirmMock.mockResolvedValueOnce(true);
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
+				body: { sandboxSecurityProfile: "low", maxMessageRequestTimeoutSeconds: 600 },
+			}),
+		);
+		await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["getDevelopmentCapability"] }));
+	});
+
+	it("raises the sandbox profile without asking", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, sandboxSecurityProfile: "low" }),
+		});
+		renderPage("sandbox");
+		await waitFor(() =>
+			expect(screen.getByTestId("node-settings-sandbox-profile-effective").textContent).toBe("Effective profile: Low"),
+		);
+
+		fireEvent.click(screen.getByTestId("node-settings-sandbox-profile-high-card"));
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
+				body: { sandboxSecurityProfile: "high", maxMessageRequestTimeoutSeconds: 600 },
+			}),
+		);
+		expect(confirmMock).not.toHaveBeenCalled();
+	});
+
+	it("lists the workloads high would refuse only while the draft is high", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, sandboxSecurityProfile: "low" }),
+		});
+		generatedMock.getDevelopmentCapabilityOptions.mockReturnValue({
+			queryKey: ["getDevelopmentCapability"],
+			queryFn: async () => ({ highProfileRefusals: ["run_python"] }),
+		});
+		renderPage("sandbox");
+		await waitFor(() =>
+			expect(screen.getByTestId("node-settings-sandbox-profile-effective").textContent).toBe("Effective profile: Low"),
+		);
+		expect(screen.queryByTestId("node-settings-sandbox-profile-refusals")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("node-settings-sandbox-profile-high-card"));
+
+		const refusals = await screen.findByTestId("node-settings-sandbox-profile-refusals");
+		expect(refusals.textContent).toContain("These workloads will refuse on this host:");
+		expect(refusals.textContent).toContain("run_python");
 	});
 
 	it("adopts a fresher server state on mount over a stale cache while the draft is untouched", async () => {

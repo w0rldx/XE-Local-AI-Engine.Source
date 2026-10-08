@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>The single read surface migrated consumers use for user-editable runtime knobs.</summary>
 /// <remarks>
@@ -317,6 +318,12 @@ public interface INodeRuntimeSettings
     ///     create and per capability read.
     /// </summary>
     Task<bool> GetExecutionPreviewsEnabledAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The effective sandbox security profile (stored <c>high</c> &gt; <c>low</c>; no configuration seed). Read per sandbox create and
+    ///     per capability read, so a change applies to the next sandbox without a restart (ADR 0020).
+    /// </summary>
+    Task<SandboxSecurityProfile> GetSandboxSecurityProfileAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Whether old conversations are deleted (stored &gt; <c>ChatRetention:Enabled</c> &gt; off). Read per sweep.</summary>
     Task<bool> GetChatRetentionEnabledAsync(CancellationToken cancellationToken = default);

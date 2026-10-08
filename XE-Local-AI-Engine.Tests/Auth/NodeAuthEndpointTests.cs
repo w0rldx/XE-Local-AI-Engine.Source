@@ -200,6 +200,21 @@ public sealed class NodeAuthEndpointTests
         AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, stored.ExternalAccessProfile);
     }
 
+    // The sandbox security profile is stamped in the same write (ADR 0020): "pending" is what routes the operator to the chooser, and it
+    // keeps the boot backfill, which would decide "low", away from a node whose operator is about to choose.
+    [Test]
+    public async Task Setup_WhenItSucceeds_MarksTheSandboxSecurityProfilePending()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        using var setupResponse = await SetupAsync(client);
+        AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
+
+        var stored = await factory.Services.GetRequiredService<INodeSettingsStore>().LoadAsync();
+        AssertEx.Equal(StoredNodeSettings.SandboxSecurityProfilePending, stored.SandboxSecurityProfile);
+    }
+
     // R5b's ordering, from the failure side: the profile write lands, the operation is cancelled, and the identity
     // transaction never commits. The orphan this leaves is the harmless one — a pending profile with no administrator —
     // and both halves are asserted, because the whole point of writing before the commit is that the OTHER orphan
@@ -250,6 +265,7 @@ public sealed class NodeAuthEndpointTests
             AssertEx.False(await SetupRequiredAsync(factory));
             var stored = await store.LoadAsync();
             AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, stored.ExternalAccessProfile);
+            AssertEx.Equal(StoredNodeSettings.SandboxSecurityProfilePending, stored.SandboxSecurityProfile);
         }
         finally
         {

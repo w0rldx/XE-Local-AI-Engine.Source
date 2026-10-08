@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -627,9 +628,13 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
             AgentHomeEnabled = stored.AgentHomeEnabled ?? _agentHomeEnabledSeed,
             SchedulerEnabled = stored.SchedulerEnabled ?? _schedulerEnabledSeed,
             DevWorkflowsEnabled = stored.DevWorkflowsEnabled ?? _devWorkflowsEnabledSeed,
-            ExecutionPreviewsEnabled = stored.ExecutionPreviewsEnabled ?? _executionPreviewsEnabledSeed
+            ExecutionPreviewsEnabled = stored.ExecutionPreviewsEnabled ?? _executionPreviewsEnabledSeed,
+            SandboxSecurityProfile = SandboxSecurityProfilePolicy.Parse(stored.SandboxSecurityProfile)
         };
     }
+
+    public async Task<SandboxSecurityProfile> GetSandboxSecurityProfileAsync(CancellationToken cancellationToken = default) =>
+        SandboxSecurityProfilePolicy.Parse((await LoadAsync(cancellationToken)).SandboxSecurityProfile);
 
     public async Task<bool> GetDevelopmentEnabledAsync(CancellationToken cancellationToken = default) =>
         (await LoadAsync(cancellationToken)).DevelopmentEnabled ?? _developmentEnabledSeed;

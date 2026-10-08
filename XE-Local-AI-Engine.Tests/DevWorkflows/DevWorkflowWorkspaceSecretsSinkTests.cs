@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Tests.Development;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 /// <summary>
@@ -108,7 +109,7 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
         var snapshot = NodeRunSnapshot(projectId, nodeRunId, identity);
 
         using var sandbox = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, sink);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, sink, StubNodeRuntimeSettings.Create().Build());
 
         var session = await provider.PrepareAsync(snapshot, new DevelopmentRepositoryBinding
         {

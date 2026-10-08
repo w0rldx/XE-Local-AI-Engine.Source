@@ -409,6 +409,26 @@ public sealed class NodeAdminMcpToolsTests
             "no node-admin tool argument may name the preview switch");
     }
 
+    /// <summary>
+    ///     The sandbox security profile is a TIGHTENING switch stored as a node setting (ADR 0020), so lowering it must not be reachable by
+    ///     any agent: not in the agentic patch, tool arguments or view. Only the Operator REST endpoint writes it.
+    /// </summary>
+    [Test]
+    public void SandboxSecurityProfile_IsNotWritableOrReadableThroughTheAgenticSurface()
+    {
+        const string Property = nameof(StoredNodeSettings.SandboxSecurityProfile);
+
+        AssertEx.Null(typeof(NodeSettingsAgenticPatch).GetProperty(Property), "the agentic patch must not carry the sandbox security profile");
+        AssertEx.Null(typeof(NodeSettingsAgenticView).GetProperty(Property), "the agentic view must not expose the sandbox security profile");
+        _ = AssertEx.Throws<ArgumentOutOfRangeException>(() => McpAdminWireNames.SettingsArgument(Property));
+
+        var parameters = typeof(NodeAdminMcpTools).GetMethod(nameof(NodeAdminMcpTools.UpdateNodeSettingsAsync))!.GetParameters();
+        AssertEx.False(parameters.Any(static parameter => parameter.Name!.Contains("sandbox", StringComparison.OrdinalIgnoreCase)
+                                                          || parameter.Name.Contains("security", StringComparison.OrdinalIgnoreCase)
+                                                          || parameter.Name.Contains("profile", StringComparison.OrdinalIgnoreCase)),
+            "no node-admin tool argument may name the sandbox security profile");
+    }
+
     [Test]
     public void AgenticSettings_AllSeventeenPropertiesHaveStableSnakeCaseWireNames()
     {

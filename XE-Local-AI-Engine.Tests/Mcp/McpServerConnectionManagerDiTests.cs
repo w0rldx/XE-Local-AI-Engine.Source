@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Regression guard for the captive-dependency fix (HIGH): the singleton connection manager must NOT capture the
@@ -39,6 +40,7 @@ public sealed class McpServerConnectionManagerDiTests
         services.AddSingleton<IAgentSandboxRuntimeProvider>(new FakeSandboxRuntimeProvider(TimeProvider.System));
         services.AddSingleton<IAgentHomeIdentityProvider, StubIdentityProvider>();
         services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(Path.Combine(Path.GetTempPath(), "xe-mcp-di-tests")));
+        services.AddSingleton(StubNodeRuntimeSettings.Create().Build());
         services.AddSingleton<IMcpClientFactory, McpClientFactory>();
         services.AddSingleton<IMcpServerConnectionManager, McpServerConnectionManager>();
 

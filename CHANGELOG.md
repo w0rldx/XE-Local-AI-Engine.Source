@@ -24,6 +24,14 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Sandbox security profile** — the operator chooses `low` (today's behaviour) or `high` once in the first-run chain,
+  after external access, and changes it on the new **Sandbox & isolation** section of Node settings, with a
+  confirmation when lowering. Under `high`, every containment axis a workload declares it prefers (egress denial, a
+  stable filesystem boundary, resource ceilings) becomes a precondition and is refused fail-closed, naming the profile.
+  The Development isolation table now shows what is required and whether it is satisfied. The execution-previews switch
+  moves into the same section. Upgraded nodes are set to `low`. The setting is Operator-only and absent from every
+  agentic surface. On Windows, and on Linux without a systemd user scope, `high` refuses every executing workload.
+  [ADR 0020](docs/adr/0020-sandbox-security-profile.md).
 - **Node database backups** — the operator can list the node's database snapshots, take one on demand, and restore
   one through `node/backups`. A restore checks the snapshot, stops the node, and is applied at the next start before
   anything opens the database; the replaced database is kept beside it. The list also says whether this start's

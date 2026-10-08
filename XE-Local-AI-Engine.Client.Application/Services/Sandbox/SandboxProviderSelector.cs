@@ -137,6 +137,21 @@ internal static class SandboxProviderSelector
             AgentConstraintKey);
     }
 
+    /// <summary>Whether a backend advertising <paramref name="capabilities" /> serves the declaration's isolation FLOOR, under every profile.</summary>
+    /// <remarks>
+    ///     The floor is the property, so it is checked against <c>SupportsHostFilesystemBoundary</c>, never <c>SupportsFilesystemIsolation</c>:
+    ///     that one names a mechanism's create-request contract, which run_python asks for per call and gating the floor on would refuse a
+    ///     container. Shared with the capability summary so a floor-refused role is never blamed on the <c>high</c> profile.
+    /// </remarks>
+    internal static bool ServesIsolationFloor(SandboxRequirements requirements, SandboxProviderCapabilities capabilities)
+    {
+        ArgumentNullException.ThrowIfNull(requirements);
+
+        return requirements.IsolationFloor != SandboxIsolationMode.Filesystem
+               || capabilities.HasFlag(SandboxProviderCapabilities.SupportsHostFilesystemBoundary);
+    }
+
+
     /// <summary>
     ///     The whole of the axis vocabulary in one pure function: the first requirement a backend supplying
     ///     <paramref name="backendToolchain" /> and advertising <paramref name="capabilities" /> cannot honour, or
@@ -160,10 +175,7 @@ internal static class SandboxProviderSelector
             return $"toolchain source ({requirements.Toolchain})";
         }
 
-        // The FLOOR is the property, so it is checked against SupportsHostFilesystemBoundary, never SupportsFilesystemIsolation: that one
-        // names a mechanism's create-request contract, which run_python asks for per call and gating the floor on would refuse a container.
-        if (requirements.IsolationFloor == SandboxIsolationMode.Filesystem
-            && !capabilities().HasFlag(SandboxProviderCapabilities.SupportsHostFilesystemBoundary))
+        if (!ServesIsolationFloor(requirements, capabilities()))
         {
             return $"isolation floor ({requirements.IsolationFloor})";
         }

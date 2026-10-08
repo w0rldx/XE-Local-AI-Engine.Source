@@ -1669,6 +1669,8 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResp
 	sandboxProvider: string;
 	containerRuntime: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse | null;
 	isolation: Array<XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse>;
+	sandboxSecurityProfile: string;
+	highProfileRefusals: Array<string>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse = {
@@ -1852,10 +1854,14 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryRe
 	filesystemIsolation: boolean;
 	networkIsolation: boolean;
 	networkIsolationRequired: boolean;
+	filesystemIsolationRequired: boolean;
+	resourceLimitsRequired: boolean;
+	satisfied: boolean;
 	resourceLimits: boolean;
 	readOnlyMounts: boolean;
 	filesystemIsolationUnavailableReason: string | null;
 	resourceLimitsUnavailableReason: string | null;
+	networkIsolationUnavailableReason: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowDefinitionRequest = {
@@ -4948,6 +4954,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	webSearchSearxngUrl?: string | null;
 	externalAccessProfile?: string | null;
 	uiMode?: string | null;
+	sandboxSecurityProfile?: string;
 	updateChannel?: string | null;
 	autoCheckApplicationUpdates?: boolean | null;
 	autoCheckRuntimeUpdates?: boolean | null;
@@ -5214,6 +5221,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	webSearchSearxngUrl?: string | null;
 	externalAccessProfile?: string | null;
 	uiMode?: string | null;
+	sandboxSecurityProfile?: string | null;
 	updateChannel?: string | null;
 	autoCheckApplicationUpdates?: boolean | null;
 	autoCheckRuntimeUpdates?: boolean | null;
@@ -7027,7 +7035,8 @@ export type XeLocalAiEngineClientServicesMcpMcpConnectionFailureReason =
 	| "Tls"
 	| "ServerExited"
 	| "SessionLost"
-	| "ServerStartupFailed";
+	| "ServerStartupFailed"
+	| "SandboxRefusedByProfile";
 
 export type XeLocalAiEngineClientServicesMcpMcpServerApiKeyScope = "delegate" | "agentic";
 

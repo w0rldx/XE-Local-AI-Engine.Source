@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Testing.Builders;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
 ///     Builds a configured <see cref="INodeRuntimeSettings" /> substitute for tests of consumers that were repointed off
@@ -119,6 +120,7 @@ public sealed class StubNodeRuntimeSettings
     private bool _schedulerEnabled = true;
     private bool _devWorkflowsEnabled = true;
     private bool _executionPreviewsEnabled;
+    private SandboxSecurityProfile _sandboxSecurityProfile;
 
     // A READ, not a value: the wait-until-decided gate re-reads the profile on every poll tick, so a test that flips the
     // decision mid-wait needs the substitute to answer differently on the second call. Same shape as the tool-relevance
@@ -743,6 +745,12 @@ public sealed class StubNodeRuntimeSettings
         return this;
     }
 
+    public StubNodeRuntimeSettings WithSandboxSecurityProfile(SandboxSecurityProfile value)
+    {
+        _sandboxSecurityProfile = value;
+        return this;
+    }
+
     public INodeRuntimeSettings Build()
     {
         var settings = Substitute.For<INodeRuntimeSettings>();
@@ -901,7 +909,7 @@ public sealed class StubNodeRuntimeSettings
         settings.GetDevWorkflowsEnabled().Returns(_ => _devWorkflowsEnabled);
         settings.GetExecutionPreviewsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_ => _executionPreviewsEnabled);
         settings.GetExecutionPreviewsEnabled().Returns(_ => _executionPreviewsEnabled);
-        settings.ResolveEffectiveValues(Arg.Any<StoredNodeSettings>())
+        settings.GetSandboxSecurityProfileAsync(Arg.Any<CancellationToken>()).Returns(_ => _sandboxSecurityProfile);        settings.ResolveEffectiveValues(Arg.Any<StoredNodeSettings>())
                 .Returns(call =>
                 {
                     var stored = call.Arg<StoredNodeSettings>();
@@ -934,7 +942,10 @@ public sealed class StubNodeRuntimeSettings
                         AgentHomeEnabled = stored.AgentHomeEnabled ?? _agentHomeEnabled,
                         SchedulerEnabled = stored.SchedulerEnabled ?? _schedulerEnabled,
                         DevWorkflowsEnabled = stored.DevWorkflowsEnabled ?? _devWorkflowsEnabled,
-                        ExecutionPreviewsEnabled = stored.ExecutionPreviewsEnabled ?? _executionPreviewsEnabled
+                        ExecutionPreviewsEnabled = stored.ExecutionPreviewsEnabled ?? _executionPreviewsEnabled,
+                        SandboxSecurityProfile = stored.SandboxSecurityProfile is null
+                            ? _sandboxSecurityProfile
+                            : SandboxSecurityProfilePolicy.Parse(stored.SandboxSecurityProfile)
                     };
                 });
         return settings;

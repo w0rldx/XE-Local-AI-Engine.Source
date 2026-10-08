@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 /// <summary>
@@ -232,7 +233,8 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
             sandbox,
             Options.Create(OptionsValue()),
             TimeProvider.System,
-            sink);
+            sink,
+            StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot,
             new DevelopmentRepositoryBinding
             {

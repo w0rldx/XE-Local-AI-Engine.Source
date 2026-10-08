@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 using System.Numerics;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 internal static class NodeSettingsEndpointDtoMapper
 {
@@ -25,6 +26,10 @@ internal static class NodeSettingsEndpointDtoMapper
             WebSearchSearxngUrl = settings.WebSearchSearxngUrl,
             ExternalAccessProfile = settings.ExternalAccessProfile,
             UiMode = settings.UiMode,
+            // `pending` is passed through for the first-run guard; every other state reports the profile in effect.
+            SandboxSecurityProfile = string.Equals(settings.SandboxSecurityProfile, StoredNodeSettings.SandboxSecurityProfilePending, StringComparison.Ordinal)
+                ? StoredNodeSettings.SandboxSecurityProfilePending
+                : SandboxSecurityProfilePolicy.ToLiteral(effective.SandboxSecurityProfile),
             UpdateChannel = settings.UpdateChannel,
             AutoCheckApplicationUpdates = settings.AutoCheckApplicationUpdates,
             AutoCheckRuntimeUpdates = settings.AutoCheckRuntimeUpdates,
@@ -323,6 +328,10 @@ internal static class NodeSettingsEndpointDtoMapper
             UiMode = request.UiMode is null
                 ? currentSettings.UiMode
                 : request.UiMode.Trim(),
+            // The UiMode merge: the validator has proven a supplied value is low or high, and the store's Normalize re-checks it.
+            SandboxSecurityProfile = request.SandboxSecurityProfile is null
+                ? currentSettings.SandboxSecurityProfile
+                : request.SandboxSecurityProfile.Trim(),
             UpdateChannel = request.UpdateChannel is null
                 ? currentSettings.UpdateChannel
                 : request.UpdateChannel.Trim(),

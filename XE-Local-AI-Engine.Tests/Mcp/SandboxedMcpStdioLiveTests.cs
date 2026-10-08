@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     LIVE proof that a <see cref="McpTrustTier.Sandboxed" /> stdio MCP server is really confined: a real bubblewrap
@@ -54,6 +55,7 @@ public sealed class SandboxedMcpStdioLiveTests
             NodeDataDirectory(),
             Options.Create(new ComputeOptions()),
             Options.Create(new LocalContainerOptions()),
+            new StubNodeRuntimeSettings().Build(),
             NullLoggerFactory.Instance);
 
         using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -98,6 +100,7 @@ public sealed class SandboxedMcpStdioLiveTests
                 NodeDataDirectory(),
                 Options.Create(new ComputeOptions()),
                 Options.Create(new LocalContainerOptions()),
+                new StubNodeRuntimeSettings().Build(),
                 NullLoggerFactory.Instance);
 
             using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -146,6 +149,7 @@ public sealed class SandboxedMcpStdioLiveTests
             NodeDataDirectory(),
             Options.Create(new ComputeOptions()),
             Options.Create(new LocalContainerOptions()),
+            new StubNodeRuntimeSettings().Build(),
             NullLoggerFactory.Instance);
 
         using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -179,6 +183,7 @@ public sealed class SandboxedMcpStdioLiveTests
             NodeDataDirectory(),
             Options.Create(new ComputeOptions()),
             Options.Create(new LocalContainerOptions()),
+            new StubNodeRuntimeSettings().Build(),
             NullLoggerFactory.Instance);
 
         using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -214,6 +219,7 @@ public sealed class SandboxedMcpStdioLiveTests
             NodeDataDirectory(),
             Options.Create(new ComputeOptions()),
             Options.Create(new LocalContainerOptions()),
+            new StubNodeRuntimeSettings().Build(),
             NullLoggerFactory.Instance);
 
         using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));

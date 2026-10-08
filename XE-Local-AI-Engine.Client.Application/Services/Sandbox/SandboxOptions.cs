@@ -28,8 +28,8 @@ public sealed class SandboxOptions
     ///     Off, these roles ask for <see cref="SandboxNetworkPolicy.None" /> wherever the backend advertises it and keep running where it
     ///     cannot be enforced, the served posture visible in the isolation table. Set, denial is a PRECONDITION: a node whose backend does
     ///     not advertise network confinement refuses to prepare the sandbox with <see cref="SandboxCapabilityNotSupportedException" />
-    ///     naming this key. <see cref="SandboxEgressPolicy" /> is the single decision site. Operator configuration, deliberately not a
-    ///     stored node setting an API caller or a model can write: a tightening switch something inside the node could clear is not one.
+    ///     naming this key. <see cref="SandboxSecurityProfilePolicy" /> is the single decision site. Operator configuration, and it stays
+    ///     tighten-only ABOVE the stored sandbox security profile, which ADR 0020 made the one Operator-only stored tightening setting.
     /// </remarks>
     public bool RequireEgressDenial { get; set; }
 }

@@ -1437,6 +1437,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         services.AddLogging();
         services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
         services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(dataRoot));
+        services.AddSingleton(StubNodeRuntimeSettings.Create().Build());
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IOptions<DevelopmentOptions>>(options);
         // Registered under the Development role, not the bare contract: per-feature selection means nothing

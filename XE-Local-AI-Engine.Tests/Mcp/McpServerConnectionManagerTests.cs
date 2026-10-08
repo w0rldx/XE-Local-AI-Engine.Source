@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 // System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
 using CategoryAttribute = CategoryAttribute;
 
@@ -286,6 +287,32 @@ public sealed class McpServerConnectionManagerTests
         AssertEx.Equal(SandboxUnavailableMessage, status.LastError);
     }
 
+    /// <summary>
+    ///     A refusal the <c>high</c> profile caused gets its own reason and fixed text naming the profile and remedy (ADR 0020): this
+    ///     isolation-capable backend advertises no ceilings, which <c>high</c> requires.
+    /// </summary>
+    [Test]
+    public async Task RefreshAsync_SandboxRefusalUnderTheHighProfile_ReportsSandboxRefusedByProfile()
+    {
+        var status = await RefreshWithFailureAsync(static () => new SandboxCapabilityNotSupportedException("refused"), IsolationCapableProvider(),
+            profile: SandboxSecurityProfile.High);
+
+        AssertEx.Equal(McpConnectionFailureReason.SandboxRefusedByProfile, status.FailureReason);
+        AssertEx.Equal(McpServerConnectionManager.SafeMessage(McpConnectionFailureReason.SandboxRefusedByProfile), status.LastError);
+        AssertEx.Contains(status.LastError!, "'high'");
+        AssertEx.Contains(status.LastError!, SandboxSecurityProfilePolicy.Remedy);
+    }
+
+    // The control: the same refusal under `low` keeps today's reason, so the new one is reported only when the profile's rule refused.
+    [Test]
+    public async Task RefreshAsync_SandboxRefusalUnderTheLowProfile_KeepsSandboxRefused()
+    {
+        var status = await RefreshWithFailureAsync(static () => new SandboxCapabilityNotSupportedException("refused"), IsolationCapableProvider(),
+            profile: SandboxSecurityProfile.Low);
+
+        AssertEx.Equal(McpConnectionFailureReason.SandboxRefused, status.FailureReason);
+    }
+
     private static IAgentSandboxRuntimeProvider IsolationCapableProvider()
     {
         var provider = Substitute.For<IAgentSandboxRuntimeProvider>();
@@ -409,7 +436,7 @@ public sealed class McpServerConnectionManagerTests
     }
 
     private static async Task<McpServerConnectionStatus> RefreshWithFailureAsync(Func<Exception> failure, IAgentSandboxRuntimeProvider? sandboxProvider = null,
-        Dictionary<string, string>? environment = null)
+        Dictionary<string, string>? environment = null, SandboxSecurityProfile profile = SandboxSecurityProfile.Low)
     {
         var record = StdioRecord("Broken") with
         {
@@ -417,7 +444,8 @@ public sealed class McpServerConnectionManagerTests
         };
         var factory = new FakeMcpClientFactory();
         factory.FailFor(record.Id, failure);
-        await using var manager = CreateManager(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), factory, new FakeMcpServerStore(record), sandboxProvider);
+        await using var manager = CreateManager(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), factory, new FakeMcpServerStore(record), sandboxProvider,
+            profile: profile);
 
         await manager.RefreshAsync();
 
@@ -1130,9 +1158,10 @@ public sealed class McpServerConnectionManagerTests
     }
 
     private static McpServerConnectionManager CreateManager(McpToolRegistry registry, FakeMcpClientFactory factory, IMcpServerStore store, IAgentSandboxRuntimeProvider? sandboxProvider = null,
-        TimeProvider? timeProvider = null, McpOptions? mcpOptions = null)
+        TimeProvider? timeProvider = null, McpOptions? mcpOptions = null, SandboxSecurityProfile profile = SandboxSecurityProfile.Low)
     {
         return new McpServerConnectionManager(BuildScopeFactory(store), registry, factory, sandboxProvider ?? new FakeSandboxRuntimeProvider(TimeProvider.System),
+            new StubNodeRuntimeSettings().WithSandboxSecurityProfile(profile).Build(),
             mcpOptions is null ? Options() : Microsoft.Extensions.Options.Options.Create(mcpOptions),
             Microsoft.Extensions.Options.Options.Create(new AgentToolPipelineOptions()), timeProvider ?? TimeProvider.System, NullLogger<McpServerConnectionManager>.Instance);
     }

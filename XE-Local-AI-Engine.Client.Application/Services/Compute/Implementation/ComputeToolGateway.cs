@@ -144,13 +144,20 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         }
 
         // The ceilings are CAPABILITY-gated (SandboxResourceCeilings.Resolve returns null when the backend cannot impose them), so on a host
-        // with no working systemd user scope a script runs unbounded. Acceptable for a call a human approved, not for unattended code — so only a caller that asks is refused.
-        if (requireResourceLimits && !_provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits))
+        // with no working systemd user scope a script runs unbounded. Acceptable for an approved call, not for unattended code or under the `high` profile (ADR 0020).
+        var refusedByProfile = SandboxSecurityProfilePolicy.Refuses(SandboxWorkloads.RunPython,
+            _provider.Capabilities,
+            await _runtimeSettings.GetSandboxSecurityProfileAsync(cancellationToken),
+            configRequiresEgressDenial: false);
+        if ((requireResourceLimits && !_provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits)) || refusedByProfile)
         {
             _logger.LogWarning("A compute execution requiring enforceable resource ceilings was refused: the '{Provider}' sandbox provider cannot impose CPU, memory or process limits on this host.",
                 _provider.ProviderName);
             return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.NoResourceLimits,
-                "run_python rejected: this node's sandbox cannot enforce CPU, memory and process ceilings, and unattended execution is not run without them.");
+                requireResourceLimits
+                    ? "run_python rejected: this node's sandbox cannot enforce CPU, memory and process ceilings, and unattended execution is not run without them."
+                    : $"run_python rejected: the node's {SandboxSecurityProfilePolicy.ProfileOptionKey} requires CPU, memory and process ceilings, and this node's sandbox cannot enforce them. "
+                      + $"An operator can {SandboxSecurityProfilePolicy.Remedy}.");
         }
 
         // One id for everything this invocation owns: its jail and its execution. Killing the jail discards every byte the script

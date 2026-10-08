@@ -92,6 +92,12 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => request.UiMode is not null)
             .WithMessage("Interface mode must be simple or advanced.");
 
+        // The CHOICE allow-list, not the persistable one: "pending" is engine-written by setup, so a client must never claim it as input.
+        RuleFor(static request => request.SandboxSecurityProfile)
+            .Must(StoredNodeSettings.IsSandboxSecurityProfileChoice)
+            .When(static request => request.SandboxSecurityProfile is not null)
+            .WithMessage("Sandbox security profile must be low or high.");
+
         // Same allow-list and same message as the dedicated PUT app-update/channel validator, so the two surfaces
         // that may write the channel cannot drift apart.
         RuleFor(static request => request.UpdateChannel)

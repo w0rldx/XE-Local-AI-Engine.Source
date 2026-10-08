@@ -148,12 +148,14 @@ Route paths and their capability flags are declared centrally in `src/capabiliti
 
 ### First-run steps and the Simple / Advanced navigation mode
 
-Two questions are answered once, in order, before an operator reaches the app. `_layout.tsx`'s `beforeLoad` is the
-single place both are enforced — it authenticates, then `ensureQueryData(getNodeSettingsOptions())` once per session
-and redirects on the first unanswered one: `externalAccessProfile === "pending"` → `/external-access`, then a null
-`uiMode` → `/ui-mode-setup`. Each step's own route redirects home once its question is answered, so a typed URL or a
+Three questions are answered once, in order, before an operator reaches the app. `_layout.tsx`'s `beforeLoad` is the
+single place all three are enforced — it authenticates, then `ensureQueryData(getNodeSettingsOptions())` once per session
+and redirects on the first unanswered one: `externalAccessProfile === "pending"` → `/external-access`, then
+`sandboxSecurityProfile === "pending"` → `/sandbox-profile-setup`, then a null `uiMode` → `/ui-mode-setup`. The sandbox
+step sits after external access and before the interface mode because it is a security decision, not a presentation
+one, and the interface mode stays the last, lightest question. Each step's own route redirects home once its question is answered, so a typed URL or a
 back-navigation cannot re-ask it, and each fails *toward* its chooser on a settings read error while the layout guard
-fails *open*. Both chooser pages save through `saveNodeSettingsMutation` and then `queryClient.setQueryData` — seeding,
+fails *open*. All three chooser pages save through `saveNodeSettingsMutation` and then `queryClient.setQueryData` — seeding,
 never invalidating, because an invalidation would leave the layout guard reading back the value it had already cached.
 
 `uiMode` (`simple` | `advanced`, `null` = not answered) is a presentation setting stored in `node-settings.json`
@@ -183,16 +185,16 @@ forbidden read hides nothing.
 ### Node Settings: one draft, one save bar
 
 `features/node-settings/pages/NodeSettings.tsx` treats the whole page as **one draft**. `nodeSettingsFieldSections`
-(`models/NodeSettingsSections.ts`) is a `Record` over every draft field keyed to exactly one of eleven sections
+(`models/NodeSettingsSections.ts`) is a `Record` over every draft field keyed to exactly one of twelve sections
 (`general`, `chat`, `runtime`, `runtimes`, `models`, `knowledge`, `voice`, `privacy`, `integrations`, `workspaces`,
-`usage`) — a `Record`, not a lookup with a fallback, so a new stored field that is not placed fails the build rather
+`sandbox`, `usage`) — a `Record`, not a lookup with a fallback, so a new stored field that is not placed fails the build rather
 than landing in no section or two. `NodeSettingsSectionNav` renders that list as `NavLink`s from the `sm` breakpoint up
 and a `Select` on phone width; the active section is driven by the route's `?section=` search param
 (`nodeSettingsSearchSchema` falls an unrecognized value back to the default section rather than failing the route) so
 every section is a bookmarkable, linkable URL.
 
-**General holds the Features card** (`components/NodeSettingsFeaturesCard.tsx`): the ten feature switches, each
-showing its effective value. `developmentEnabled` and `schedulerEnabled` are in `restartGatedNodeSettingsFields`; the
+**General holds the Features card** (`components/NodeSettingsFeaturesCard.tsx`): the feature switches, each
+showing its effective value (the execution-previews switch is not among them: it lives in the **Sandbox & isolation** section below). `developmentEnabled` and `schedulerEnabled` are in `restartGatedNodeSettingsFields`; the
 External apps, Compute tools and Development workflows descriptions name the part that waits for a restart (the
 container bridge listener, the seeded Mathematician agent and workflow definitions). `buildNodeSettingsRequest`
 mirrors the server's two couplings so the refusal lands on the field: development workflows without work sessions
@@ -210,6 +212,22 @@ variant (`chatOutputCapModeSelectValues`: cap, notice, off) and the cap's ceilin
 variant and the ceiling may be unset: a blank number field shows the shipped default as its placeholder and a set one
 offers **Use default**; the two selects carry a "Default (…)" option. The save sends `-1` for a blanked number and an
 empty string for a default option, which the node stores as unset.
+
+**Sandbox & isolation holds the profile** (`sandbox`, an advanced section). It has three parts. The **profile card**
+(`NodeSettingsSandboxProfileCard`) is two `Radio.Card`s, `low` and `high`, with the effective profile and the workloads
+that would refuse on this host when the draft is `high` (`highProfileRefusals` from the Development capability
+response). The **execution-previews switch**
+(`executionPreviewsEnabled`) lives here rather than on the Features card, with its off-to-on confirmation unchanged;
+the profile and the previews switch stay two independent switches. The **isolation table** (`SandboxIsolationPanel`)
+is supplied by the route as a `ReactNode` prop, the same composition the update-channel selector uses, so the feature
+takes no cross-feature import; the Development page keeps mounting the same panel. Its Required column lists the
+boundaries the effective profile makes preconditions for a role, Served the part of them this host delivers, and a row
+whose `satisfied` is false is tinted red: that workload refuses to start. The save flow adds
+`lowersSandboxSecurityProfile(body)` beside the previews confirm: the request carries changed fields only, so a body
+that sets `low` is always the `high` to `low` change, and it asks for confirmation before it is sent. A saved profile
+change invalidates the capability query. The first-run chooser (`SandboxProfileSetup`) is the same two cards with
+nothing preselected and no skip control; it recommends `high` only when no role would be refused on this host, and
+`low` otherwise. Semantics: [ADR 0020](../adr/0020-sandbox-security-profile.md).
 
 **The draft is `fieldsForm`; `fieldsBaseline` is the server state it was last seeded from.** `buildNodeSettingsRequest`
 diffs the two and sends only the changed fields, matching the PUT DTO's optional-field-keeps-current-value contract
@@ -237,8 +255,8 @@ idle TTL and HTTP timeout, the AgentHome prepare/command/max-run timeouts and th
 for the AgentHome folder/patch byte caps; GB for the Hugging Face disk margin, the benchmark KL-divergence cache and the
 AgentHome run byte cap) — the wire value and its stored bounds
 never change, `nodeSettingsScaleOf`/`toDisplayBounds` only affect what the `NumberInput` shows and
-`buildNodeSettingsRequest` multiplies the display value back before it is sent. Simple UI mode collapses the five
-sections classified `runtime`/`runtimes`/`integrations`/`workspaces`/`usage` behind a "Show advanced sections" toggle
+`buildNodeSettingsRequest` multiplies the display value back before it is sent. Simple UI mode collapses the
+sections classified `runtime`/`runtimes`/`integrations`/`workspaces`/`sandbox`/`usage` behind a "Show advanced sections" toggle
 in the nav (`isAdvancedNodeSettingsSection`), but every one of them stays reachable by its own `?section=` link even
 with the toggle off — a validation error naming a field in a section the operator is not looking at, or a linked
 advanced section, both force it into the visible list.

@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 using OS = TUnit.Core.Enums.OS;
 
@@ -128,7 +129,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         const string patch = """
@@ -153,7 +154,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         string[] patches =
@@ -182,7 +183,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         const string patch = """
@@ -209,7 +210,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         _ = await tools.WriteFileAsync("large.txt", "0123456789abcdefg");
@@ -238,7 +239,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
 
@@ -282,7 +283,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
 
@@ -321,7 +322,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         _ = await tools.WriteFileAsync(".env", "AWS_SECRET_ACCESS_KEY=renamebypasssentinel\n");
@@ -390,7 +391,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
 
@@ -447,7 +448,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
 
@@ -742,7 +743,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using (var sandbox = CreateSandbox())
         {
-            var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+            var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
             first = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
             var tools = new DevelopmentWorkspaceTools(sandbox, first, options, GenericProfile);
 
@@ -771,7 +772,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         }
 
         using var replacementSandbox = CreateSandbox();
-        var replacementProvider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), replacementSandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var replacementProvider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), replacementSandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var replacement = await replacementProvider.PrepareAsync(snapshot, Binding(snapshot, repository));
         AssertEx.Equal(first.HostWorktreePath, replacement.HostWorktreePath);
         var replacementTools = new DevelopmentWorkspaceTools(replacementSandbox, replacement, options, GenericProfile);
@@ -814,7 +815,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         };
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var firstSession = await provider.PrepareAsync(first, Binding(first, repository));
         var secondSession = await provider.PrepareAsync(second, Binding(second, repository));
 
@@ -864,7 +865,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonical));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var workspace = session.HostWorktreePath;
 
@@ -937,7 +938,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         _ = await tools.WriteFileAsync("src/feature.txt", "bounded change\n");
@@ -986,7 +987,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using (var sandbox = CreateSandbox())
         {
-            var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+            var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
             session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
 
             // Identity is supplied per-command because the managed workspace is now a standalone clone: `git clone`
@@ -1007,7 +1008,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         }
 
         using var replacementSandbox = CreateSandbox();
-        var replacement = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), replacementSandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var replacement = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), replacementSandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => replacement.PrepareAsync(snapshot, Binding(snapshot, repository)));
     }
 
@@ -1021,7 +1022,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         _ = await tools.WriteFileAsync("large.txt", new string('x', 1024));
@@ -1069,7 +1070,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             });
 
         using var sandbox = CreateSandbox();
-        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var runner = new DevelopmentCoderAttemptRunner(store,
             workspace,
             sandbox,
@@ -1140,7 +1141,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             });
 
         using var sandbox = CreateSandbox();
-        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var runner = new DevelopmentCoderAttemptRunner(store,
             workspace,
             sandbox,
@@ -1207,7 +1208,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         using var cancellation = new CancellationTokenSource();
-        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var runner = new DevelopmentCoderAttemptRunner(store,
             workspace,
             sandbox,
@@ -1314,7 +1315,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
              .Returns(call => Operation(snapshot, artifactId: null));
 
         using var sandbox = CreateSandbox();
-        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var runner = new DevelopmentCoderAttemptRunner(store,
             workspace,
             sandbox,
@@ -1443,7 +1444,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             });
 
         using var sandbox = CreateSandbox();
-        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var binding = Binding(firstAttempt, repository);
 
         DevelopmentCoderAttemptRunner Runner(IDevelopmentCoderModel model) =>
@@ -1501,7 +1502,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink(), StubNodeRuntimeSettings.Create().Build());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
 
         var workspaceParent = Path.GetDirectoryName(session.HostWorktreePath)!;

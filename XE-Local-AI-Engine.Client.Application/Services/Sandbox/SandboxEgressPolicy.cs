@@ -28,7 +28,8 @@ public static class SandboxEgressPolicy
     /// </param>
     /// <param name="optionKey">
     ///     The key <paramref name="required" /> was read from, so the refusal names the switch an operator would clear:
-    ///     <see cref="AgentOptionKey" /> or <see cref="DevelopmentOptionKey" />.
+    ///     <see cref="AgentOptionKey" />, <see cref="DevelopmentOptionKey" />, or
+    ///     <see cref="SandboxSecurityProfilePolicy.ProfileOptionKey" /> when the profile made denial mandatory.
     /// </param>
     /// <param name="workload">The declaring workload's name, so the refusal says which role could not start.</param>
     /// <exception cref="SandboxCapabilityNotSupportedException">
@@ -47,12 +48,19 @@ public static class SandboxEgressPolicy
             return SandboxNetworkPolicy.None;
         }
 
-        return required
-            ? throw new SandboxCapabilityNotSupportedException($"'{optionKey}' is set, so the '{workload}' sandbox may only run with egress denied — but the resolved sandbox "
-                                                               + "backend does not advertise network confinement on this host, so it cannot deny it. Install the missing "
-                                                               + $"mechanism (on Linux, the user-namespace support the sandbox containment probe reports as unavailable), or clear '{optionKey}' "
-                                                               + "to accept that this role runs with the host's network.")
-            : SandboxNetworkPolicy.Unrestricted;
+        if (!required)
+        {
+            return SandboxNetworkPolicy.Unrestricted;
+        }
+
+        // The profile is not a key an operator clears, so its refusal names the profile and the place to lower it (ADR 0020).
+        var byProfile = string.Equals(optionKey, SandboxSecurityProfilePolicy.ProfileOptionKey, StringComparison.Ordinal);
+        var source = byProfile ? $"The {optionKey} is in force" : $"'{optionKey}' is set";
+        var remedy = byProfile ? SandboxSecurityProfilePolicy.Remedy : $"clear '{optionKey}'";
+        throw new SandboxCapabilityNotSupportedException($"{source}, so the '{workload}' sandbox may only run with egress denied — but the resolved sandbox "
+                                                         + "backend does not advertise network confinement on this host, so it cannot deny it. Install the missing "
+                                                         + $"mechanism (on Linux, the user-namespace support the sandbox containment probe reports as unavailable), or {remedy} "
+                                                         + "to accept that this role runs with the host's network.");
     }
 
     /// <summary>

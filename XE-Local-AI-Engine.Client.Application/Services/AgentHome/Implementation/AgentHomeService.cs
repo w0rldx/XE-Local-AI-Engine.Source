@@ -167,6 +167,11 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
         var layout = await _manifestService.InitializeAsync(attachKey, prepareToken);
 
+        // Read per call so a profile change applies to the next run; under `high` a preferred boundary or ceiling the backend cannot
+        // serve refuses the run here, naming the profile (ADR 0020). Coder shares this sandbox, so it inherits the refusal.
+        var profile = await _runtimeSettings.GetSandboxSecurityProfileAsync(prepareToken);
+        SandboxSecurityProfilePolicy.EnsureServed(SandboxWorkloads.AgentHome, _provider.Capabilities, profile);
+
         var createRequest = new SandboxCreateRequest
         {
             AttachKey = attachKey,
@@ -176,11 +181,12 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             Isolation = SandboxWorkloads.AgentHome.RequestedIsolation(_provider.Capabilities),
 
             // Default-deny egress wherever the provider can enforce it: everything AgentHome and Coder run in the sandbox
-            // is local, so denial costs no capability. Capability-gated, with RequireEgressDenial demanding a refusal.
-            NetworkPolicy = SandboxEgressPolicy.Resolve(_provider.Capabilities,
+            // is local, so denial costs no capability. Capability-gated, with RequireEgressDenial or the `high` profile demanding a refusal.
+            NetworkPolicy = SandboxSecurityProfilePolicy.ResolveEgress(SandboxWorkloads.AgentHome,
+                _provider.Capabilities,
+                profile,
                 _sandboxOptions.RequireEgressDenial,
-                SandboxEgressPolicy.AgentOptionKey,
-                SandboxWorkloads.AgentHome.Workload),
+                SandboxEgressPolicy.AgentOptionKey),
 
             // The node's ceilings wherever the backend can impose them, derived through the one helper every create
             // site shares so this request cannot disagree with SandboxWorkloads.AgentHome's declaration.

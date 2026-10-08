@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The trust tier's one load-bearing consequence: WHERE a stdio MCP server's process runs. These cases decide it
@@ -82,6 +83,7 @@ public sealed class SandboxedMcpStdioTransportTests
             NodeDataDirectory(),
             Options.Create(new ComputeOptions()),
             Options.Create(new LocalContainerOptions()),
+            new StubNodeRuntimeSettings().Build(),
             NullLoggerFactory.Instance);
 
         var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => transport.ConnectAsync());
@@ -113,6 +115,7 @@ public sealed class SandboxedMcpStdioTransportTests
             NodeDataDirectory(),
             Options.Create(new ComputeOptions()),
             Options.Create(new LocalContainerOptions()),
+            new StubNodeRuntimeSettings().Build(),
             NullLoggerFactory.Instance);
 
         var request = transport.BuildCreateRequest(new AgentHomeOwnerIdentity
@@ -131,6 +134,60 @@ public sealed class SandboxedMcpStdioTransportTests
             request.ResourceLimits);
     }
 
+    /// <summary>
+    ///     Under <c>high</c> the tier's declared ceilings are a precondition: a backend that isolates but cannot impose ceilings is refused
+    ///     before anything is created, naming the profile (ADR 0020).
+    /// </summary>
+    [Test]
+    public async Task ConnectAsync_UnderTheHighProfile_OnABackendWithoutCeilings_RefusesNamingTheProfile()
+    {
+        var provider = IsolatingProviderWithoutCeilings();
+        var transport = MissingCommandTransport(provider, SandboxSecurityProfile.High);
+
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => transport.ConnectAsync());
+
+        AssertEx.Contains(exception.Message, SandboxSecurityProfilePolicy.ProfileOptionKey);
+        AssertEx.Contains(exception.Message, SandboxSecurityProfilePolicy.Remedy);
+        await provider.DidNotReceiveWithAnyArgs().CreateOrAttachAsync(default!, default);
+    }
+
+    // The control: the same backend under `low` passes the profile check and reaches the next one, the PATH lookup of a command that
+    // cannot exist, which fails without creating anything. So the refusal above is the profile's and nothing else's.
+    [Test]
+    public async Task ConnectAsync_UnderTheLowProfile_OnABackendWithoutCeilings_IsNotRefusedByTheProfile()
+    {
+        var provider = IsolatingProviderWithoutCeilings();
+        var transport = MissingCommandTransport(provider, SandboxSecurityProfile.Low);
+
+        _ = await AssertEx.ThrowsAsync<FileNotFoundException>(() => transport.ConnectAsync());
+        await provider.DidNotReceiveWithAnyArgs().CreateOrAttachAsync(default!, default);
+    }
+
+    private static IAgentSandboxRuntimeProvider IsolatingProviderWithoutCeilings()
+    {
+        var provider = Substitute.For<IAgentSandboxRuntimeProvider>();
+        provider.ProviderName.Returns("process");
+        provider.Capabilities.Returns(SandboxProviderCapabilities.SupportsHostFilesystemBoundary
+                                      | SandboxProviderCapabilities.SupportsFilesystemIsolation
+                                      | SandboxProviderCapabilities.SupportsNetworkPolicy);
+        return provider;
+    }
+
+    private static SandboxedMcpStdioTransport MissingCommandTransport(IAgentSandboxRuntimeProvider provider, SandboxSecurityProfile profile)
+    {
+        return new SandboxedMcpStdioTransport(StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "/nonexistent/xe-mcp-missing-server"
+            },
+            provider,
+            IdentityProvider(),
+            NodeDataDirectory(),
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
+            StubNodeRuntimeSettings.Create().WithSandboxSecurityProfile(profile).Build(),
+            NullLoggerFactory.Instance);
+    }
+
     [Test]
     public async Task ConnectAsync_CommandMissingOnTheHost_ThrowsFileNotFoundBeforeAnySandboxExists()
     {
@@ -147,6 +204,7 @@ public sealed class SandboxedMcpStdioTransportTests
             NodeDataDirectory(),
             Options.Create(new ComputeOptions()),
             Options.Create(new LocalContainerOptions()),
+            new StubNodeRuntimeSettings().Build(),
             NullLoggerFactory.Instance);
 
         _ = await AssertEx.ThrowsAsync<FileNotFoundException>(() => transport.ConnectAsync());
@@ -317,6 +375,7 @@ public sealed class SandboxedMcpStdioTransportTests
                 NodeDataDirectory(),
                 Options.Create(new ComputeOptions()),
                 Options.Create(new LocalContainerOptions()),
+                new StubNodeRuntimeSettings().Build(),
                 NullLoggerFactory.Instance,
                 sessionKey: Guid.NewGuid().ToString("N")).ConnectAsync();
 
@@ -756,6 +815,7 @@ public sealed class SandboxedMcpStdioTransportTests
             NodeDataDirectory(),
             Options.Create(new ComputeOptions()),
             Options.Create(new LocalContainerOptions()),
+            new StubNodeRuntimeSettings().Build(),
             NullLoggerFactory.Instance);
     }
 
@@ -816,6 +876,7 @@ public sealed class SandboxedMcpStdioTransportTests
             NodeDataDirectory(),
             Options.Create(new ComputeOptions()),
             Options.Create(new LocalContainerOptions()),
+            new StubNodeRuntimeSettings().Build(),
             NullLoggerFactory.Instance);
     }
 

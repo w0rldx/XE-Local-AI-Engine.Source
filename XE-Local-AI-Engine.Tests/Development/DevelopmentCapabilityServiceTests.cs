@@ -48,20 +48,88 @@ public sealed class DevelopmentCapabilityServiceTests
         AssertEx.True(capability.Isolation.All(static row => row.FilesystemIsolationWithheldReason is null));
     }
 
-    private static DevelopmentCapabilityService CreateService(IDockerDaemonPreflightService preflight, string home)
+    /// <summary>
+    ///     The capability carries the profile in effect and the roles <c>high</c> WOULD refuse here whatever is in effect, from the rule the
+    ///     create sites enforce (ADR 0020).
+    /// </summary>
+    /// <remarks>
+    ///     The deterministic fake serves no egress denial, no ceilings and no host-filesystem boundary: the three roles without a Filesystem
+    ///     floor are listed, while run_python and mcp-stdio are refused by their floor under every profile and are not blamed on high.
+    /// </remarks>
+    [Test]
+    [Arguments(SandboxSecurityProfile.Low, "low")]
+    [Arguments(SandboxSecurityProfile.High, "high")]
+    public async Task GetAsync_ReportsTheProfileInEffect_AndTheRolesOnlyHighWouldRefuseOnThisHost(SandboxSecurityProfile profile, string literal)
     {
-        var provider = new FakeSandboxRuntimeProvider(TimeProvider.System);
+        var service = CreateService(Substitute.For<IDockerDaemonPreflightService>(), home: "/home/operator", profile);
+
+        var response = (await service.GetAsync()).ToResponse();
+
+        AssertEx.Equal(literal, response.SandboxSecurityProfile);
+        AssertEx.Equal("agent-home,development,work-session", string.Join(',', response.HighProfileRefusals));
+        AssertEx.Equal(profile == SandboxSecurityProfile.High,
+            response.Isolation.Single(static row => row.Role == "agent-home").ResourceLimitsRequired);
+    }
+
+    // AgentHome's config key set on a backend that cannot deny egress: AgentHome and work sessions are refused under low already, so
+    // high adds nothing for them and they must not be listed; the one floor-free role high still adds ceilings to stays listed.
+    [Test]
+    public async Task GetAsync_DoesNotBlameHighForARoleTheConfigKeyAlreadyRefusesUnderLow()
+    {
+        var service = CreateService(Substitute.For<IDockerDaemonPreflightService>(), home: "/home/operator", agentKeyRequiresEgressDenial: true);
+
+        var response = (await service.GetAsync()).ToResponse();
+
+        AssertEx.Equal("development", string.Join(',', response.HighProfileRefusals));
+    }
+
+    // A backend that serves the Filesystem floor but no ceilings: the floor roles now run under low and are listed, except mcp-stdio while its
+    // boundary is withheld for want of a home directory, which refuses every Sandboxed connection whatever the profile.
+    [Test]
+    [Arguments("/home/operator", "agent-home,run_python,mcp-stdio,development,work-session")]
+    [Arguments("", "agent-home,run_python,development,work-session")]
+    public async Task GetAsync_ListsAFloorRoleOnlyWhereItsFloorIsServedAndItsBoundaryIsNotWithheld(string home, string expected)
+    {
+        var service = CreateService(Substitute.For<IDockerDaemonPreflightService>(),
+            home,
+            capabilities: new FakeSandboxRuntimeProvider(TimeProvider.System).Capabilities | SandboxProviderCapabilities.SupportsHostFilesystemBoundary);
+
+        var response = (await service.GetAsync()).ToResponse();
+
+        AssertEx.Equal(expected, string.Join(',', response.HighProfileRefusals));
+    }
+
+    private static DevelopmentCapabilityService CreateService(IDockerDaemonPreflightService preflight,
+        string home,
+        SandboxSecurityProfile profile = SandboxSecurityProfile.Low,
+        bool agentKeyRequiresEgressDenial = false,
+        SandboxProviderCapabilities? capabilities = null)
+    {
+        var fake = new FakeSandboxRuntimeProvider(TimeProvider.System);
         var probe = Substitute.For<ISandboxContainmentProbe>();
         probe.Containment.Returns(SandboxContainment.None);
         return new DevelopmentCapabilityService(Options.Create(new DevelopmentOptions()),
-            Options.Create(new SandboxOptions()),
+            Options.Create(new SandboxOptions
+            {
+                RequireEgressDenial = agentKeyRequiresEgressDenial
+            }),
             Options.Create(new DevelopmentSandboxOptions()),
-            provider,
-            provider,
-            provider,
+            capabilities is null ? fake : Advertising<IDevelopmentSandboxRuntimeProvider>(fake.ProviderName, capabilities.Value),
+            capabilities is null ? fake : Advertising<IAgentSandboxRuntimeProvider>(fake.ProviderName, capabilities.Value),
+            capabilities is null ? fake : Advertising<IWorkSessionSandboxRuntimeProvider>(fake.ProviderName, capabilities.Value),
             probe,
             preflight,
-            StubNodeRuntimeSettings.Create().Build(),
+            StubNodeRuntimeSettings.Create().WithSandboxSecurityProfile(profile).Build(),
             () => home);
+    }
+
+    // The capability projection reads only the name and the advertised flags, so a substitute advertising a chosen set stands in for a backend.
+    private static TProvider Advertising<TProvider>(string providerName, SandboxProviderCapabilities capabilities)
+        where TProvider : class, ISandboxRuntimeProvider
+    {
+        var provider = Substitute.For<TProvider>();
+        _ = provider.ProviderName.Returns(providerName);
+        _ = provider.Capabilities.Returns(capabilities);
+        return provider;
     }
 }

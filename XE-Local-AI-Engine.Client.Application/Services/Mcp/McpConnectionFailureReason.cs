@@ -46,5 +46,11 @@ public enum McpConnectionFailureReason
     SessionLost = 12,
 
     /// <summary>The server's process exited during startup, before the MCP handshake completed.</summary>
-    ServerStartupFailed = 13
+    ServerStartupFailed = 13,
+
+    /// <summary>
+    ///     The node's <c>high</c> sandbox security profile requires a containment axis (resource ceilings) this node's sandbox cannot
+    ///     serve, so the Sandboxed server is refused rather than started without it (ADR 0020).
+    /// </summary>
+    SandboxRefusedByProfile = 14
 }

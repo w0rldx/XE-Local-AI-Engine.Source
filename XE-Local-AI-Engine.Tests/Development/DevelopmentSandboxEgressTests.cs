@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Development.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 /// <summary>
@@ -113,6 +114,50 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
 
         AssertEx.Contains(exception.Message, SandboxEgressPolicy.DevelopmentOptionKey);
         AssertEx.Contains(exception.Message, SandboxWorkloads.DevelopmentModeHostToolchain.Workload);
+        AssertEx.Equal(expected: 0, sandbox.Created.Count, "the refusal must land BEFORE a sandbox is created.");
+    }
+
+    /// <summary>
+    ///     <c>high</c> on Development Mode promotes egress denial and ceilings, the preferences it declares, and never a boundary it does not
+    ///     ask for: this backend advertises none and still serves (ADR 0020).
+    /// </summary>
+    [Test]
+    public async Task PrepareAsync_UnderTheHighProfile_OnABackendServingEgressDenialAndCeilings_ServesWithoutAskingForABoundary()
+    {
+        var sandbox = new CapabilitySandbox(SandboxProviderCapabilities.SupportsTrustedHostWorkspace
+                                            | SandboxProviderCapabilities.SupportsNetworkPolicy
+                                            | SandboxProviderCapabilities.SupportsResourceLimits
+                                            | SandboxProviderCapabilities.SupportsKill);
+
+        _ = await PrepareAsync(sandbox, profile: SandboxSecurityProfile.High);
+
+        AssertEx.Equal(expected: 1, sandbox.Created.Count);
+        AssertEx.Equal(SandboxNetworkPolicy.None, sandbox.Created[0].NetworkPolicy);
+        AssertEx.NotNull(sandbox.Created[0].ResourceLimits);
+        AssertEx.Equal(SandboxIsolationMode.None, sandbox.Created[0].Isolation);
+    }
+
+    /// <summary>
+    ///     The two refusals <c>high</c> adds, no ceilings or no egress denial: each names the profile and its remedy, not a key the operator
+    ///     never set, before any sandbox exists.
+    /// </summary>
+    [Test]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    public async Task PrepareAsync_UnderTheHighProfile_WhenADeclaredAxisIsUnserved_RefusesNamingTheProfile(bool canDenyEgress, bool canLimitResources)
+    {
+        var sandbox = new CapabilitySandbox(SandboxProviderCapabilities.SupportsTrustedHostWorkspace
+                                            | SandboxProviderCapabilities.SupportsKill
+                                            | (canDenyEgress ? SandboxProviderCapabilities.SupportsNetworkPolicy : SandboxProviderCapabilities.None)
+                                            | (canLimitResources ? SandboxProviderCapabilities.SupportsResourceLimits : SandboxProviderCapabilities.None));
+
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(async () =>
+            await PrepareAsync(sandbox, profile: SandboxSecurityProfile.High));
+
+        AssertEx.Contains(exception.Message, SandboxSecurityProfilePolicy.ProfileOptionKey);
+        AssertEx.Contains(exception.Message, SandboxSecurityProfilePolicy.Remedy);
+        AssertEx.False(exception.Message.Contains(SandboxEgressPolicy.DevelopmentOptionKey, StringComparison.Ordinal),
+            "a refusal the profile caused must not send the operator to a configuration key they never set.");
         AssertEx.Equal(expected: 0, sandbox.Created.Count, "the refusal must land BEFORE a sandbox is created.");
     }
 
@@ -352,7 +397,9 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         }
     }
 
-    private async Task<DevelopmentWorkspaceSession> PrepareAsync(CapabilitySandbox sandbox, bool requireEgressDenial = false)
+    private async Task<DevelopmentWorkspaceSession> PrepareAsync(CapabilitySandbox sandbox,
+        bool requireEgressDenial = false,
+        SandboxSecurityProfile profile = SandboxSecurityProfile.Low)
     {
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N")[..8]);
@@ -373,6 +420,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
             Options.Create(OptionsValue()),
             TimeProvider.System,
             new RecordingWorkspaceSecretsSink(),
+            StubNodeRuntimeSettings.Create().WithSandboxSecurityProfile(profile).Build(),
             exclusions: null,
             Options.Create(new DevelopmentSandboxOptions
             {

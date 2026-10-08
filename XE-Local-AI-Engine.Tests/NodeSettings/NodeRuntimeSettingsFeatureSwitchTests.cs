@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -121,6 +122,43 @@ public sealed class NodeRuntimeSettingsFeatureSwitchTests
             AssertEx.Equal(feature.CodeDefault, feature.Sync(sut), feature.Key);
             AssertEx.Equal(feature.CodeDefault, feature.Effective(effective), feature.Key);
         }
+    }
+
+    /// <summary>
+    ///     The sandbox security profile has no configuration seed (ADR 0020): only the stored literal <c>high</c> reads as High, through
+    ///     the per-call getter and the effective values alike, and every other state, undecided and <c>pending</c> included, reads as Low.
+    /// </summary>
+    [Test]
+    [Arguments(StoredNodeSettings.SandboxSecurityProfileHigh, SandboxSecurityProfile.High)]
+    [Arguments(StoredNodeSettings.SandboxSecurityProfileLow, SandboxSecurityProfile.Low)]
+    [Arguments(StoredNodeSettings.SandboxSecurityProfilePending, SandboxSecurityProfile.Low)]
+    [Arguments(null, SandboxSecurityProfile.Low)]
+    public async Task SandboxSecurityProfile_IsTheStoredLiteral_WithNoSeed(string? stored, SandboxSecurityProfile expected)
+    {
+        var record = new StoredNodeSettings
+        {
+            SandboxSecurityProfile = stored
+        };
+        var sut = SeededNodeRuntimeSettings.Create(stored: () => record);
+
+        AssertEx.Equal(expected, await sut.GetSandboxSecurityProfileAsync(CancellationToken.None));
+        AssertEx.Equal(expected, sut.ResolveEffectiveValues(record).SandboxSecurityProfile);
+    }
+
+    // Read per call: a save applies to the next sandbox without a restart, which is what lets the settings section take effect at once.
+    [Test]
+    public async Task SandboxSecurityProfile_IsReadPerCall()
+    {
+        var record = new StoredNodeSettings();
+        var sut = SeededNodeRuntimeSettings.Create(stored: () => record);
+        AssertEx.Equal(SandboxSecurityProfile.Low, await sut.GetSandboxSecurityProfileAsync(CancellationToken.None));
+
+        record = record with
+        {
+            SandboxSecurityProfile = StoredNodeSettings.SandboxSecurityProfileHigh
+        };
+
+        AssertEx.Equal(SandboxSecurityProfile.High, await sut.GetSandboxSecurityProfileAsync(CancellationToken.None));
     }
 
     [Test]

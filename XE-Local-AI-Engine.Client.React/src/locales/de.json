@@ -612,6 +612,9 @@
 				"network": "Netzwerk",
 				"limits": "Ressourcenlimits",
 				"readOnlyMounts": "Schreibgeschützte Mounts",
+				"required": "Erforderlich",
+				"served": "Bereitgestellt",
+				"noAxes": "Keine",
 				"yes": "Ja",
 				"no": "Nein",
 				"egressRequired": "erforderlich",
@@ -2925,6 +2928,7 @@
 				"privacy": "Datenschutz & Updates",
 				"integrations": "Integrationen & Schlüssel",
 				"workspaces": "Agent-Arbeitsbereiche",
+				"sandbox": "Sandbox & Isolation",
 				"usage": "Nutzung & Limits",
 				"showAdvanced": "Erweiterte Bereiche anzeigen",
 				"hideAdvanced": "Erweiterte Bereiche ausblenden"
@@ -2934,6 +2938,35 @@
 				"description": "Sandbox-Mechanismen im Vorschau-Status führen dann Python und abgeschottete MCP-Server aus. Unter Windows ist das die AppContainer-Grenze: Der Code kann Ihr Benutzerprofil und die Daten der Engine nicht lesen, läuft aber ohne CPU-, Speicher- oder Prozessanzahl-Grenze (nur das Zeitlimit stoppt ihn) und kann Host-Pfadnamen sehen. Schalten Sie das nur ein, wenn Sie das akzeptieren.",
 				"confirm": "Einschalten",
 				"cancel": "Abbrechen"
+			},
+			"sandboxProfile": {
+				"title": "Sandbox-Sicherheitsprofil",
+				"description": "Legt fest, ob die Grenzen, die eine Arbeitslast anfordert, Wünsche oder Voraussetzungen sind. Eine Änderung gilt ab der nächsten Sandbox.",
+				"effective": "Wirksames Profil: {{profile}}",
+				"notChosen": "Nicht gewählt"
+			},
+			"sandboxProfileLowerConfirm": {
+				"title": "Sandbox-Sicherheitsprofil herabsetzen?",
+				"description": "Mit dem Profil Niedrig läuft eine Arbeitslast, die eine Grenze anfordert, die dieser Host nicht bereitstellen kann, ohne diese Grenze, statt den Start zu verweigern. Die Sicherheitsuntergrenzen, die jedes Profil behält, gelten weiter. Setzen Sie es nur herab, wenn Sie das akzeptieren.",
+				"confirm": "Auf Niedrig setzen",
+				"cancel": "Abbrechen"
+			}
+		},
+		"sandboxProfile": {
+			"setupTitle": "Wie streng soll die Sandbox sein?",
+			"setupSubtitle": "Das entscheidet, was passiert, wenn dieser Host eine Arbeitslast nicht so abschotten kann, wie sie es anfordert. Sie können das später in den Node-Einstellungen ändern.",
+			"recommended": "Für diesen Host empfohlen",
+			"refusalsTitle": "Diese Arbeitslasten verweigern auf diesem Host den Start:",
+			"previewsNote": "Ausführungs-Vorschauen bleiben eine eigene Einstellung: Keines der beiden Profile schaltet sie ein.",
+			"saveError": "Ihre Auswahl konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+			"continue": "Weiter",
+			"low": {
+				"title": "Niedrig",
+				"body": "Jede Arbeitslast läuft mit den Grenzen, die dieser Host ihr geben kann. Eine Arbeitslast, die eine Grenze anfordert, die dem Host fehlt, läuft trotzdem, nur ohne sie. Kein zusätzlicher Aufwand, und nichts wird über die Sicherheitsuntergrenzen hinaus verweigert, die jedes Profil behält."
+			},
+			"high": {
+				"title": "Hoch",
+				"body": "Jede Grenze, die eine Arbeitslast anfordert, wird zur Voraussetzung: Dateisystem-Isolation, Ressourcenlimits und gesperrter Netzwerkzugriff. Eine Arbeitslast, die dieser Host so nicht abschotten kann, verweigert den Start, statt mit weniger zu laufen. Ressourcenlimits verlängern den Start etwas, und manche Arbeitslasten laufen auf diesem Host eventuell nicht."
 			}
 		},
 		"cloudSettings": {
@@ -4125,7 +4158,8 @@
 					"Tls": "Die TLS-Aushandlung mit dem MCP-Server ist fehlgeschlagen.",
 					"ServerExited": "Der MCP-Serverprozess wurde beendet.",
 					"SessionLost": "Der MCP-Server erkennt die Sitzung dieses Knotens nicht mehr; er wurde vermutlich neu gestartet.",
-					"ServerStartupFailed": "Der MCP-Server wurde beendet, bevor der MCP-Handshake abgeschlossen war."
+					"ServerStartupFailed": "Der MCP-Server wurde beendet, bevor der MCP-Handshake abgeschlossen war.",
+					"SandboxRefusedByProfile": "Das hohe Sandbox-Sicherheitsprofil hat den Start dieses Servers verweigert, weil dieser Host nicht jede Grenze bereitstellen kann, die das Profil verlangt."
 				}
 			},
 			"delete": {

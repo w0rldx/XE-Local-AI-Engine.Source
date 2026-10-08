@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -75,6 +76,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     private readonly INodeDataDirectory _nodeDataDirectory;
     private readonly LocalContainerOptions _nodeOptions;
     private readonly IAgentSandboxRuntimeProvider _provider;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly McpServerRecord _record;
 
     // Names this session's jail and execution: per SERVER for the shared session, per server AND session key for a
@@ -87,9 +89,12 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         INodeDataDirectory nodeDataDirectory,
         IOptions<ComputeOptions> ceilingDefaults,
         IOptions<LocalContainerOptions> nodeOptions,
+        INodeRuntimeSettings runtimeSettings,
         ILoggerFactory loggerFactory,
         string? sessionKey = null)
     {
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         _record = record ?? throw new ArgumentNullException(nameof(record));
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
@@ -208,6 +213,12 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
                 $"The MCP server '{_record.Name}' is registered at the Sandboxed trust tier, and this node's '{_provider.ProviderName}' sandbox cannot isolate a process from the host filesystem. "
                 + SandboxBoundaryRemedy.ForThisHost() + ", or change this server to the Privileged host tier if it genuinely needs access to this machine.");
         }
+
+        // Read per connect: under `high` the declared ceilings are a precondition, so a backend that cannot impose them refuses the server
+        // before anything is created, naming the profile, instead of starting it unbounded (ADR 0020).
+        SandboxSecurityProfilePolicy.EnsureServed(SandboxWorkloads.McpStdio,
+            _provider.Capabilities,
+            await _runtimeSettings.GetSandboxSecurityProfileAsync(cancellationToken));
 
         // In the jail a missing command is just an early exit, so it is checked here against the JAIL's PATH (see JailSearchPath):
         // this node's PATH never reaches the jail, so a command found only there would pass and still not start.

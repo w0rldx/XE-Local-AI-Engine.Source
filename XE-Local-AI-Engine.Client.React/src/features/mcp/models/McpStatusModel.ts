@@ -24,6 +24,7 @@ export function hasEngineDetail(reason: McpConnectionFailureReason | null): bool
 		reason === "ServerNotFound" ||
 		reason === "SandboxUnavailable" ||
 		reason === "SandboxRefused" ||
+		reason === "SandboxRefusedByProfile" ||
 		reason === "ServerExited" ||
 		reason === "ServerStartupFailed"
 	);

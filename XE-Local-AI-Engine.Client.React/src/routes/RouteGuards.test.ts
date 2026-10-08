@@ -45,9 +45,12 @@ vi.mock("@/features/node-settings/pages/ExternalAccessSetup", () => ({ ExternalA
 
 vi.mock("@/features/node-settings/pages/UiModeSetup", () => ({ UiModeSetup: () => null }));
 
+vi.mock("@/features/node-settings/pages/SandboxProfileSetup", () => ({ SandboxProfileSetup: () => null }));
+
 import { Route as ExternalAccessRoute } from "@/routes/external-access";
 import { Route as LayoutRoute } from "@/routes/_layout";
 import { Route as LoginRoute } from "@/routes/login";
+import { Route as SandboxProfileSetupRoute } from "@/routes/sandbox-profile-setup";
 import { Route as SetupRoute } from "@/routes/setup";
 import { Route as UiModeSetupRoute } from "@/routes/ui-mode-setup";
 import { Route as VaultRoute } from "@/routes/vault";
@@ -55,9 +58,9 @@ import { Route as VaultSetupRoute } from "@/routes/vault-setup";
 
 // A client whose node-settings entry is already resolved, so `ensureQueryData` answers from the cache; the queryFn is
 // what a read FAILURE runs.
-function clientWith(profile: string | null, uiMode: string | null = "advanced"): QueryClient {
+function clientWith(profile: string | null, uiMode: string | null = "advanced", sandboxSecurityProfile = "high"): QueryClient {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	queryClient.setQueryData(getNodeSettingsQueryKey(), { externalAccessProfile: profile, uiMode });
+	queryClient.setQueryData(getNodeSettingsQueryKey(), { externalAccessProfile: profile, uiMode, sandboxSecurityProfile });
 	return queryClient;
 }
 
@@ -209,6 +212,51 @@ describe("route guards for the first-run external-access and interface-mode choi
 		);
 
 		expect(redirectTarget(error)).toBe("/external-access");
+	});
+
+	it("redirects an authenticated operator with a pending sandbox profile to the sandbox-profile route", async () => {
+		await expect(guardOutcome(runLayoutGuard(clientWith("recommended", "advanced", "pending")))).resolves.toBe(
+			"/sandbox-profile-setup",
+		);
+	});
+
+	// The sandbox profile is the middle question: after external access, before the interface mode.
+	it("asks the sandbox profile after external access and before the interface mode", async () => {
+		await expect(guardOutcome(runLayoutGuard(clientWith("pending", null, "pending")))).resolves.toBe("/external-access");
+		await expect(guardOutcome(runLayoutGuard(clientWith("recommended", null, "pending")))).resolves.toBe(
+			"/sandbox-profile-setup",
+		);
+		await expect(guardOutcome(runLayoutGuard(clientWith("recommended", null, "low")))).resolves.toBe("/ui-mode-setup");
+	});
+
+	it("keeps the sandbox-profile chooser open while the profile is pending", async () => {
+		await expect(guardOutcome(runGuard(SandboxProfileSetupRoute, clientWith("recommended", null, "pending")))).resolves.toBe(
+			"stay",
+		);
+	});
+
+	it("redirects away from the sandbox-profile route once the profile is decided", async () => {
+		await expect(guardOutcome(runGuard(SandboxProfileSetupRoute, clientWith("recommended", null, "low")))).resolves.toBe("/");
+		await expect(guardOutcome(runGuard(SandboxProfileSetupRoute, clientWith("recommended", null, "high")))).resolves.toBe("/");
+	});
+
+	it("sends a visitor of the sandbox-profile route back to external access while that is still pending", async () => {
+		await expect(guardOutcome(runGuard(SandboxProfileSetupRoute, clientWith("pending", null, "pending")))).resolves.toBe(
+			"/external-access",
+		);
+	});
+
+	it("renders the sandbox-profile chooser when its settings read fails", async () => {
+		await expect(guardOutcome(runGuard(SandboxProfileSetupRoute, failingClient()))).resolves.toBe("stay");
+	});
+
+	it("sends an unauthenticated visitor of the sandbox-profile route to login", async () => {
+		useNodeAuthStore.getState().actions.clear();
+		restoreMock.mockResolvedValue("unauthenticated");
+
+		await expect(guardOutcome(runGuard(SandboxProfileSetupRoute, clientWith("recommended", null, "pending")))).resolves.toBe(
+			"/login",
+		);
 	});
 
 	it("lets an authenticated operator with a decided interface mode through the layout", async () => {

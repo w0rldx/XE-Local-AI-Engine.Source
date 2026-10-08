@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
+using XE_Local_AI_Engine.Client.Services.Sandbox;
+
 /// <summary>
 ///     The effective value (stored, else the configuration seed) of every migrated node-settings switch and retention window,
 ///     so the settings page shows, and can change, a value an appsettings seed set but nobody ever saved.
@@ -61,4 +63,7 @@ public sealed record NodeSettingsEffectiveValues
     public required bool DevWorkflowsEnabled { get; init; }
 
     public required bool ExecutionPreviewsEnabled { get; init; }
+
+    /// <summary>The profile every sandbox gate reads: <c>high</c> only when the stored literal is <c>high</c>. There is no configuration seed.</summary>
+    public required SandboxSecurityProfile SandboxSecurityProfile { get; init; }
 }

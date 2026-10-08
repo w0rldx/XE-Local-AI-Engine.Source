@@ -14,6 +14,7 @@ export const nodeSettingsSectionIds = [
 	"privacy",
 	"integrations",
 	"workspaces",
+	"sandbox",
 	"usage",
 ] as const;
 
@@ -27,6 +28,7 @@ const advancedSections: ReadonlySet<NodeSettingsSectionId> = new Set<NodeSetting
 	"runtimes",
 	"integrations",
 	"workspaces",
+	"sandbox",
 	"usage",
 ]);
 
@@ -55,7 +57,8 @@ const nodeSettingsFieldSections: Readonly<
 	agentHomeEnabled: "general",
 	schedulerEnabled: "general",
 	devWorkflowsEnabled: "general",
-	executionPreviewsEnabled: "general",
+	executionPreviewsEnabled: "sandbox",
+	sandboxSecurityProfile: "sandbox",
 	maxMessageRequestTimeoutSeconds: "chat",
 	defaultModelName: "chat",
 	enableTools: "chat",

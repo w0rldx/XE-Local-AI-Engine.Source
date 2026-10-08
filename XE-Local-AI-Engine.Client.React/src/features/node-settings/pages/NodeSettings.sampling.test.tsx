@@ -56,6 +56,8 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getNodeSettingsOptions: () => ({ queryKey: ["node-settings"], queryFn: () => Promise.resolve(null) }),
 	getNodeSettingsQueryKey: () => ["node-settings"],
 	saveNodeSettingsMutation: () => ({ mutationFn: vi.fn() }),
+	// Read only by the Sandbox section (disabled elsewhere), so it never runs here.
+	getDevelopmentCapabilityOptions: () => ({ queryKey: ["development-capability"], queryFn: vi.fn() }),
 	// Installed-models query feeding the speculative draft-model picker; empty list is enough for these tests.
 	listLocalModelsOptions: () => ({
 		queryKey: ["local-models"],

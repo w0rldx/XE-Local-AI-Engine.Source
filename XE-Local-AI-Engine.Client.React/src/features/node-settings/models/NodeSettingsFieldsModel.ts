@@ -274,6 +274,9 @@ export interface NodeSettingsFieldsForm {
 	autoProvisionFirstRunModel: boolean;
 	// Navigation mode as the server stores it ("simple" / "advanced", or "" / another literal while undecided).
 	uiMode: string;
+	// The sandbox security profile ("low" / "high", or "pending" / "" before the first-run chooser answered it). Lowering it
+	// is confirmed in the save flow (see lowersSandboxSecurityProfile).
+	sandboxSecurityProfile: string;
 	// Node-level voice gate and the default voice for new users on this node.
 	voiceFeatureEnabled: boolean;
 	defaultVoiceProfile: string;
@@ -583,6 +586,7 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	autoCheckRuntimeUpdates: true,
 	autoProvisionFirstRunModel: true,
 	uiMode: "",
+	sandboxSecurityProfile: "",
 	voiceFeatureEnabled: false,
 	defaultVoiceProfile: "",
 	orchestrationIdleTimeoutSeconds: 120,
@@ -751,6 +755,7 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		autoCheckRuntimeUpdates: response.autoCheckRuntimeUpdates ?? nodeSettingsFieldDefaults.autoCheckRuntimeUpdates,
 		autoProvisionFirstRunModel: response.autoProvisionFirstRunModel ?? nodeSettingsFieldDefaults.autoProvisionFirstRunModel,
 		uiMode: response.uiMode ?? "",
+		sandboxSecurityProfile: response.sandboxSecurityProfile ?? "",
 		voiceFeatureEnabled: response.voiceFeatureEnabled ?? nodeSettingsFieldDefaults.voiceFeatureEnabled,
 		defaultVoiceProfile: response.defaultVoiceProfile ?? "",
 		orchestrationIdleTimeoutSeconds: numberOr(
@@ -1099,7 +1104,7 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 // computeEnabled / devWorkflowsEnabled (their agent and workflow definitions are seeded at startup).
 // Every other form field is read live on each call and must NOT be listed here: agentHome*, keepModelWarm*,
 // toolCapableModels, enableTools, customToolsEnabled, toolRelevanceEnabled, webAccessEnabled, webSearchSearxngUrl,
-// detachedGraceSeconds, usageRates, uiMode, voiceFeatureEnabled, defaultVoiceProfile, and the message-request timeout.
+// detachedGraceSeconds, usageRates, uiMode, sandboxSecurityProfile, voiceFeatureEnabled, defaultVoiceProfile, and the message-request timeout.
 export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsFieldsForm> = new Set<keyof NodeSettingsFieldsForm>([
 	"defaultModelName",
 	"ollamaEndpoint",
@@ -1153,6 +1158,12 @@ export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsField
 // transition, the one the page confirms before saving; turning them off widens nothing and is never asked about.
 export function turnsOnExecutionPreviews(body: SaveNodeSettingsRequest): boolean {
 	return body.executionPreviewsEnabled === true;
+}
+
+// The save lowers the sandbox security profile. The body carries changed fields only, so "low" here is always the
+// high-to-low transition (a pending node never reaches this page: the first-run chooser owns that write).
+export function lowersSandboxSecurityProfile(body: SaveNodeSettingsRequest): boolean {
+	return body.sandboxSecurityProfile === "low";
 }
 
 export function touchesRestartGatedField(body: SaveNodeSettingsRequest): boolean {
@@ -1414,6 +1425,15 @@ export function buildNodeSettingsRequest(
 
 	if (form.uiMode !== baseline.uiMode) {
 		body.uiMode = form.uiMode;
+	}
+
+	// Only the two real literals are ever sent: the server rejects anything else, and "pending" is the first-run chooser's
+	// to answer, never this page's.
+	if (
+		form.sandboxSecurityProfile !== baseline.sandboxSecurityProfile &&
+		(form.sandboxSecurityProfile === "low" || form.sandboxSecurityProfile === "high")
+	) {
+		body.sandboxSecurityProfile = form.sandboxSecurityProfile;
 	}
 
 	// The chat switches: explicit false is meaningful (it turns compaction, distillation or retries off).

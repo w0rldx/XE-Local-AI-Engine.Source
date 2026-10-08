@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Tests.Architecture.Support;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -176,6 +177,82 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
             "Every sandbox workload asks for the node's CPU / memory / process-count ceilings wherever the backend can "
             + $"impose them. These declare that they do not, so nothing bounds a runaway command in them: {string.Join(", ", silent)}. "
             + "Making a role unbounded is an operator decision, not an implementation detail.");
+    }
+
+    /// <summary>
+    ///     The sandbox security profile over every declaration (ADR 0020): <c>high</c> promotes EXACTLY the preferences a declaration states,
+    ///     and <c>low</c> adds nothing beyond the configuration key.
+    /// </summary>
+    /// <remarks>
+    ///     Enumerated, not listed, so a declaration added to <see cref="SandboxWorkloads" /> is judged by its own fields: a new workload cannot
+    ///     be refused under <c>high</c> for an axis it never asked for, and a floor is never restated as a profile precondition.
+    /// </remarks>
+    [Test]
+    public void SecurityProfile_PromotesExactlyTheDeclaredPreferences_AndLeavesFloorsAlone()
+    {
+        foreach (var (name, requirements) in EnumerateDeclarations())
+        {
+            foreach (var configKey in new[] { false, true })
+            {
+                var low = SandboxSecurityProfilePolicy.Preconditions(requirements, SandboxSecurityProfile.Low, configKey);
+                AssertEx.Equal(configKey, low.RequireEgressDenial, $"{name}: under low, egress is required exactly when the configuration key says so.");
+                AssertEx.False(low.RequireFilesystemBoundary, $"{name}: low must never require a filesystem boundary.");
+                AssertEx.False(low.RequireResourceCeilings, $"{name}: low must never require ceilings.");
+
+                var high = SandboxSecurityProfilePolicy.Preconditions(requirements, SandboxSecurityProfile.High, configKey);
+                AssertEx.Equal(configKey || requirements.NetworkFloor == SandboxNetworkPolicy.Unrestricted,
+                    high.RequireEgressDenial,
+                    $"{name}: high promotes egress denial only for a workload that tightens where advertised; a None floor already denies it.");
+                AssertEx.Equal(requirements.RequestsFilesystemIsolationWhereAdvertised,
+                    high.RequireFilesystemBoundary,
+                    $"{name}: high requires a boundary exactly when the declaration prefers one.");
+                AssertEx.Equal(requirements.RequestsResourceLimits,
+                    high.RequireResourceCeilings,
+                    $"{name}: high requires ceilings exactly when the declaration asks for them.");
+
+                if (requirements.IsolationFloor == SandboxIsolationMode.Filesystem)
+                {
+                    AssertEx.False(high.RequireFilesystemBoundary, $"{name}: a filesystem FLOOR is not restated as a profile precondition.");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Every production file that creates a sandbox (<c>.CreateOrAttachAsync(</c>) outside the substrate itself goes through
+    ///     <see cref="SandboxSecurityProfilePolicy" />, so a new create site cannot skip the profile (ADR 0020).
+    /// </summary>
+    /// <remarks>
+    ///     A source scan, because one type per file makes a file a create site. <c>Services/Sandbox/</c> is exempt: those are the providers
+    ///     and registries below the policy, forwarding a request a consumer already shaped. The exact set is asserted too, so the scan
+    ///     cannot pass by finding nothing, and a new create site is a reviewed edit here.
+    /// </remarks>
+    [Test]
+    public void EverySandboxCreateSite_GoesThroughTheSecurityProfilePolicy()
+    {
+        var createSites = new List<string>();
+        foreach (var (path, relative) in EnforcedSourceFiles.All())
+        {
+            var project = relative.Split('/')[0];
+            if (project.Contains(".Tests", StringComparison.Ordinal) || relative.Contains("/Services/Sandbox/", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var code = SourceCommentStripper.StripCommentsAndLiterals(File.ReadAllText(path));
+            if (!code.Contains(".CreateOrAttachAsync(", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            createSites.Add(Path.GetFileName(relative));
+            AssertEx.True(code.Contains(nameof(SandboxSecurityProfilePolicy) + ".", StringComparison.Ordinal),
+                $"{relative} creates a sandbox without calling {nameof(SandboxSecurityProfilePolicy)}: under the high profile it would serve "
+                + "a sandbox the profile refuses. Call EnsureServed/ResolveEgress (or Refuses) for the workload's declaration before creating.");
+        }
+
+        AssertEx.Equal("AgentHomeService.cs,ComputeToolGateway.cs,DevelopmentWorkspaceProvider.cs,McpWorkspaceExecutionSessionFactory.cs,SandboxedMcpStdioTransport.cs",
+            string.Join(',', createSites.Order(StringComparer.Ordinal)));
     }
 
     /// <summary>

@@ -31265,7 +31265,9 @@
           "enabled",
           "sandboxProvider",
           "containerRuntime",
-          "isolation"
+          "isolation",
+          "sandboxSecurityProfile",
+          "highProfileRefusals"
         ],
         "properties": {
           "enabled": {
@@ -31286,6 +31288,15 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse"
+            }
+          },
+          "sandboxSecurityProfile": {
+            "type": "string"
+          },
+          "highProfileRefusals": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         }
@@ -31930,10 +31941,14 @@
           "filesystemIsolation",
           "networkIsolation",
           "networkIsolationRequired",
+          "filesystemIsolationRequired",
+          "resourceLimitsRequired",
+          "satisfied",
           "resourceLimits",
           "readOnlyMounts",
           "filesystemIsolationUnavailableReason",
-          "resourceLimitsUnavailableReason"
+          "resourceLimitsUnavailableReason",
+          "networkIsolationUnavailableReason"
         ],
         "properties": {
           "role": {
@@ -31960,6 +31975,15 @@
           "networkIsolationRequired": {
             "type": "boolean"
           },
+          "filesystemIsolationRequired": {
+            "type": "boolean"
+          },
+          "resourceLimitsRequired": {
+            "type": "boolean"
+          },
+          "satisfied": {
+            "type": "boolean"
+          },
           "resourceLimits": {
             "type": "boolean"
           },
@@ -31971,6 +31995,10 @@
             "nullable": true
           },
           "resourceLimitsUnavailableReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "networkIsolationUnavailableReason": {
             "type": "string",
             "nullable": true
           }
@@ -43314,6 +43342,9 @@
             "type": "string",
             "nullable": true
           },
+          "sandboxSecurityProfile": {
+            "type": "string"
+          },
           "updateChannel": {
             "type": "string",
             "nullable": true
@@ -44404,6 +44435,10 @@
             "nullable": true
           },
           "uiMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "sandboxSecurityProfile": {
             "type": "string",
             "nullable": true
           },
@@ -51032,7 +51067,8 @@
           "Tls",
           "ServerExited",
           "SessionLost",
-          "ServerStartupFailed"
+          "ServerStartupFailed",
+          "SandboxRefusedByProfile"
         ],
         "enum": [
           "Unknown",
@@ -51048,7 +51084,8 @@
           "Tls",
           "ServerExited",
           "SessionLost",
-          "ServerStartupFailed"
+          "ServerStartupFailed",
+          "SandboxRefusedByProfile"
         ]
       },
       "XE_Local_AI_EngineClientServicesMcpMcpServerApiKeyScope": {

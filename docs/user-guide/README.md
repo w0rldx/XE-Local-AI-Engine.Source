@@ -237,6 +237,25 @@ Everything below runs **on your own machine** unless you deliberately connect an
 
 </details>
 
+### Sandbox security: Low or High
+
+When an agent or a tool runs commands, the app tries to fence it in: no access to the rest of your files, no network,
+and a cap on the CPU and memory it can use. How much of that your computer can actually provide differs from one
+machine to the next. You choose what the app does when the fence cannot be built in full. The app asks once, the
+first time you set it up, and an upgraded install starts on **Low**.
+
+- **Low** — the app builds as much of the fence as your computer allows and runs the work anyway. Nothing is
+  refused for a missing safeguard, and the Development page shows what was actually in place.
+- **High** — a safeguard the work asks for becomes a requirement. If your computer cannot provide it, the work is
+  **refused** with a message that names this setting, instead of running with a weaker fence. On Windows today, and
+  on Linux without a per-user system service manager, **High refuses every command-running feature**, so the app
+  recommends Low there.
+
+You can change it at any time under **Node Settings → Sandbox & isolation**, which also lists which features High
+would refuse on your computer before you save. Switching from High to Low asks you to confirm, because it loosens
+the fence. Only you can change it in the app: an agent connected to the app cannot. Windows previews (the
+experimental isolation for Windows) are a separate switch in the same section, and **High does not turn them on**.
+
 ### Not included yet
 
 - **No two-way voice chat** — reading replies aloud and transcribing speech are separate features;

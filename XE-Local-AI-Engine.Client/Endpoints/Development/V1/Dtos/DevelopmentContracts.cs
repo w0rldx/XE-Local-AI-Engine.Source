@@ -137,6 +137,16 @@ public sealed class DevelopmentCapabilityResponse
     ///     only reads the three axes above is unaffected.
     /// </summary>
     public required IReadOnlyList<SandboxIsolationSummaryResponse> Isolation { get; init; }
+
+    /// <summary>The node's effective sandbox security profile, <c>low</c> or <c>high</c>; the rows' required flags are computed under it (ADR 0020).</summary>
+    public required string SandboxSecurityProfile { get; init; }
+
+    /// <summary>The <see cref="SandboxIsolationSummaryResponse.Role" /> names <c>high</c> would refuse here that <c>low</c> does not already refuse.</summary>
+    /// <remarks>
+    ///     Whatever profile is in effect, so the chooser can name what <c>high</c> would cost before the operator picks it. A role a
+    ///     configuration key, its isolation floor or a withheld boundary refuses under every profile is not listed.
+    /// </remarks>
+    public required IReadOnlyList<string> HighProfileRefusals { get; init; }
 }
 
 /// <summary>What one sandbox ROLE is actually isolated by on this host, as the operator sees it.</summary>
@@ -208,6 +218,21 @@ public sealed record SandboxIsolationSummaryResponse
     public required bool NetworkIsolationRequired { get; init; }
 
     /// <summary>
+    ///     Whether a filesystem boundary is a PRECONDITION for this role: its declaration's floor demands one, or the <c>high</c> sandbox
+    ///     security profile promotes the boundary it prefers. Parallel to <see cref="NetworkIsolationRequired" />.
+    /// </summary>
+    public required bool FilesystemIsolationRequired { get; init; }
+
+    /// <summary>Whether CPU, memory and process-count ceilings are a PRECONDITION for this role: the <c>high</c> profile and a declaration asking for them.</summary>
+    public required bool ResourceLimitsRequired { get; init; }
+
+    /// <summary>
+    ///     Whether every required axis is served here. <see langword="false" /> is the one value that means this role will REFUSE TO START
+    ///     on this host under the profile in effect.
+    /// </summary>
+    public required bool Satisfied { get; init; }
+
+    /// <summary>
     ///     Whether memory / PID / CPU ceilings are actually imposed on THIS role — the host can impose them and the
     ///     role asks for them.
     /// </summary>
@@ -236,6 +261,9 @@ public sealed record SandboxIsolationSummaryResponse
     ///     host cannot impose them.
     /// </remarks>
     public required string? ResourceLimitsUnavailableReason { get; init; }
+
+    /// <summary>Why egress cannot be denied for this role, or null when it can: the containment probe's measured reason.</summary>
+    public required string? NetworkIsolationUnavailableReason { get; init; }
 }
 
 /// <summary>The container-runtime preflight, as the operator sees it.</summary>

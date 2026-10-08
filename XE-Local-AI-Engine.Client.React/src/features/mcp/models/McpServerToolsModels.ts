@@ -7,7 +7,7 @@
 // Connection state for a registered MCP server as seen by the node connection manager.
 export type McpConnectionStatus = "connected" | "disabled" | "error" | "connecting";
 
-// Why the last connect attempt failed, or why a connected server was lost; set only with the "error" status. The two
+// Why the last connect attempt failed, or why a connected server was lost; set only with the "error" status. The three
 // sandbox reasons carry an engine-authored remedy in `error`; the exit and startup reasons append the server's scrubbed
 // stderr tail to it; every other reason is a fixed server wording the panel replaces with its own.
 export type McpConnectionFailureReason =
@@ -24,7 +24,8 @@ export type McpConnectionFailureReason =
 	| "Tls"
 	| "ServerExited"
 	| "SessionLost"
-	| "ServerStartupFailed";
+	| "ServerStartupFailed"
+	| "SandboxRefusedByProfile";
 
 // A tool discovered from a connected MCP server. The name is the qualified executable name
 // (mcp__{server}__{tool}); requiresApproval is the catalog default (ON for MCP tools).

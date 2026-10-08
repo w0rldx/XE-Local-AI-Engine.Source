@@ -51,8 +51,15 @@ export const Route = createFileRoute("/_layout")({
 				throw redirect({ to: "/external-access" });
 			}
 
-			// The same typed-URL catch for the step AFTER it. Order is load-bearing: the profile check above runs first,
-			// so a fresh install answers the two questions in sequence and cannot bounce between them. An upgraded node
+			// The sandbox security profile is the second question: a security decision, so it comes before the interface
+			// mode. "pending" is stamped for a fresh node only; SandboxSecurityProfileBackfillService gives an upgraded node
+			// a real profile before Kestrel accepts a request, so it never lands here.
+			if (settings.sandboxSecurityProfile === "pending") {
+				throw redirect({ to: "/sandbox-profile-setup" });
+			}
+
+			// The same typed-URL catch for the LAST step. Order is load-bearing: the two checks above run first, so a
+			// fresh install answers the questions in sequence and cannot bounce between them. An upgraded node
 			// never reaches this branch — UiModeBackfillService stamps "advanced" before Kestrel accepts a request — so a
 			// null mode here really does mean "nobody has been asked yet".
 			if (settings.uiMode === null || settings.uiMode === undefined) {

@@ -1978,10 +1978,14 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummary
 	filesystemIsolation: z.boolean(),
 	networkIsolation: z.boolean(),
 	networkIsolationRequired: z.boolean(),
+	filesystemIsolationRequired: z.boolean(),
+	resourceLimitsRequired: z.boolean(),
+	satisfied: z.boolean(),
 	resourceLimits: z.boolean(),
 	readOnlyMounts: z.boolean(),
 	filesystemIsolationUnavailableReason: z.string().nullable(),
 	resourceLimitsUnavailableReason: z.string().nullable(),
+	networkIsolationUnavailableReason: z.string().nullable(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = z.object({
@@ -1989,6 +1993,8 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityRe
 	sandboxProvider: z.string(),
 	containerRuntime: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse.nullable(),
 	isolation: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse),
+	sandboxSecurityProfile: z.string(),
+	highProfileRefusals: z.array(z.string()),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowWorkItemRequest = z.object({
@@ -7514,6 +7520,7 @@ export const zXeLocalAiEngineClientServicesMcpMcpConnectionFailureReason = z.enu
 	"ServerExited",
 	"SessionLost",
 	"ServerStartupFailed",
+	"SandboxRefusedByProfile",
 ]);
 
 export const zXeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse = z.object({
@@ -7604,6 +7611,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 	webSearchSearxngUrl: z.string().nullish(),
 	externalAccessProfile: z.string().nullish(),
 	uiMode: z.string().nullish(),
+	sandboxSecurityProfile: z.string().optional(),
 	updateChannel: z.string().nullish(),
 	autoCheckApplicationUpdates: z.boolean().nullish(),
 	autoCheckRuntimeUpdates: z.boolean().nullish(),
@@ -8640,6 +8648,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	webSearchSearxngUrl: z.string().nullish(),
 	externalAccessProfile: z.string().nullish(),
 	uiMode: z.string().nullish(),
+	sandboxSecurityProfile: z.string().nullish(),
 	updateChannel: z.string().nullish(),
 	autoCheckApplicationUpdates: z.boolean().nullish(),
 	autoCheckRuntimeUpdates: z.boolean().nullish(),

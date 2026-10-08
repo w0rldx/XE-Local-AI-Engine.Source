@@ -106,7 +106,8 @@ does not do.
   previews, and the server cannot tell a confirmed request from an unconfirmed one. The mitigations are that it is
   Operator-only, never agent-writable, visible on the settings page and in the node-info report, and off by default.
   The analogous configuration-only switch `RequireEgressDenial` is a TIGHTENING switch; this one widens, which is why the
-  confirmation exists.
+  confirmation exists. [ADR 0020](0020-sandbox-security-profile.md) later made the sandbox security profile a stored,
+  Operator-only tightening setting, so the configuration-only ruling no longer holds for the profile.
 
 ## Consequences
 

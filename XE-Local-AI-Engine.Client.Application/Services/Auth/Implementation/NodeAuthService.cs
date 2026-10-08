@@ -80,7 +80,7 @@ public sealed class NodeAuthService : INodeAuthService
         };
     }
 
-    /// <summary>Creates the single administrator account and stamps the pending external-access profile.</summary>
+    /// <summary>Creates the single administrator account and stamps the pending external-access and sandbox security profiles.</summary>
     /// <remarks>
     ///     The settings file cannot join the identity transaction, so one of the two writes has to be the orphanable one. Writing the profile
     ///     FIRST makes the orphan "profile pending, no administrator", which is inert: setup fails and is retryable, the gated services keep
@@ -152,14 +152,13 @@ public sealed class NodeAuthService : INodeAuthService
                 };
             }
 
-            // Written BEFORE the commit and only when nothing has been chosen yet — see this method's remarks for why that order is the safe
-            // one. The token is SetupAsync's own: a cancellation here throws before the commit, so the transaction disposes unconfirmed.
-            await _nodeSettingsStore.UpdateAsync(latest => latest.ExternalAccessProfile is null
-                    ? latest with
-                    {
-                        ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfilePending
-                    }
-                    : latest,
+            // Both profiles (ADR 0020 for the sandbox one), BEFORE the commit and only where nothing was chosen yet: the remarks say why that
+            // order is safe. The token is SetupAsync's own: a cancellation here throws before the commit, so the transaction disposes unconfirmed.
+            await _nodeSettingsStore.UpdateAsync(latest => latest with
+                {
+                    ExternalAccessProfile = latest.ExternalAccessProfile ?? StoredNodeSettings.ExternalAccessProfilePending,
+                    SandboxSecurityProfile = latest.SandboxSecurityProfile ?? StoredNodeSettings.SandboxSecurityProfilePending
+                },
                 cancellationToken);
 
             // The vault wrap is the last step inside the transaction: if it throws, the transaction disposes unconfirmed and

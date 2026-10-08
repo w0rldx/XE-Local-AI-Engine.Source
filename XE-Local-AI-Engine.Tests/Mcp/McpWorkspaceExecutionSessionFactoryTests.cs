@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 [Category(TestCategories.Unit)]
 public sealed class McpWorkspaceExecutionSessionFactoryTests
@@ -89,6 +90,48 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
             "preparation diagnostics must not expose the resolved host path.");
         AssertEx.Equal(1, lease.DisposeCallCount);
         AssertEx.Equal(1, harness.Isolation.RecoverCallCount);
+    }
+
+    /// <summary>
+    ///     Under <c>high</c> a work session's declared ceilings are a precondition, so a backend without them is refused before a sandbox
+    ///     exists (ADR 0020).
+    /// </summary>
+    /// <remarks>The caller keeps the fixed preparation failure; the log names the unserved axis, which is engine-authored and path-free.</remarks>
+    [Test]
+    public async Task OpenAsync_UnderTheHighProfile_WhenCeilingsAreUnserved_RefusesBeforeTheSandboxAndLogsTheAxis()
+    {
+        var lease = new TrackingLease();
+        var harness = new Harness(lease);
+        _ = harness.Settings.WithSandboxSecurityProfile(SandboxSecurityProfile.High);
+
+        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None);
+
+        AssertEx.Equal(McpExecutionFailureCodes.WorkspacePreparationFailed, result.FailureCode!);
+        AssertEx.Null(result.Session);
+        await harness.Provider.DidNotReceiveWithAnyArgs().CreateOrAttachAsync(default!, default);
+        var logText = string.Join(Environment.NewLine, harness.Logger.Entries.Select(entry => entry.Message));
+        AssertEx.Contains(logText, "ceilings");
+        AssertEx.Equal(1, harness.Isolation.RecoverCallCount);
+        AssertEx.Equal(1, lease.DisposeCallCount);
+    }
+
+    [Test]
+    public async Task OpenAsync_UnderTheHighProfile_WhenEveryDeclaredAxisIsServed_CreatesWithDeniedEgressAndCeilings()
+    {
+        var lease = new TrackingLease();
+        var harness = new Harness(lease);
+        _ = harness.Settings.WithSandboxSecurityProfile(SandboxSecurityProfile.High);
+        harness.Provider.Capabilities.Returns(SandboxProviderCapabilities.SupportsNetworkPolicy | SandboxProviderCapabilities.SupportsResourceLimits);
+
+        var result = await harness.Factory.OpenAsync(harness.Workspace.Id, CancellationToken.None);
+        using (result.Session)
+        {
+            AssertEx.NotNull(result.Session);
+        }
+
+        await harness.Provider.Received(1).CreateOrAttachAsync(Arg.Is<SandboxCreateRequest>(request => request.NetworkPolicy == SandboxNetworkPolicy.None
+                                                                                                       && request.ResourceLimits != null),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -268,10 +311,14 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
                 Options.Create(new SandboxOptions()),
                 Options.Create(new ComputeOptions()),
                 Options.Create(new LocalContainerOptions()),
+                Settings.Build(),
                 Logger);
         }
 
         public McpWorkspaceExecutionSessionFactory Factory { get; }
+
+        // The built substitute reads the profile per call, so a test can set it after the factory exists.
+        public StubNodeRuntimeSettings Settings { get; } = new();
 
         public FakeIdentityProvider Identity { get; } = new();
 

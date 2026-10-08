@@ -884,6 +884,51 @@ public sealed class ComputeToolGatewayTests
         AssertEx.Null(provider.CreateRequest, "the refusal must land before a jail is created");
     }
 
+    /// <summary>
+    ///     Under the <c>high</c> profile every call requires ceilings, approved or not; the refusal reuses the existing code and names the
+    ///     profile and its remedy (ADR 0020).
+    /// </summary>
+    [Test]
+    public async Task ExecuteDetailedAsync_UnderTheHighProfile_WhenCeilingsAreUnenforceable_RefusesNamingTheProfile()
+    {
+        var provider = new RecordingSandboxProvider(Contained);
+        var gateway = CreateGateway(provider, runtimeSettings: HighProfileSettings());
+
+        var outcome = await gateway.ExecuteDetailedAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        }, requireResourceLimits: false);
+
+        AssertEx.False(outcome.Ran);
+        AssertEx.Equal(ComputeRefusalCodes.NoResourceLimits, outcome.RefusalCode);
+        AssertEx.Contains(AssertEx.NotNull(outcome.RefusalMessage), SandboxSecurityProfilePolicy.ProfileOptionKey);
+        AssertEx.Contains(outcome.RefusalMessage!, SandboxSecurityProfilePolicy.Remedy);
+        AssertEx.Null(provider.CreateRequest, "the refusal must land before a jail is created");
+    }
+
+    [Test]
+    public async Task ExecuteDetailedAsync_UnderTheHighProfile_WhenCeilingsAreEnforceable_RunsWithThem()
+    {
+        var provider = new RecordingSandboxProvider(Contained | SandboxProviderCapabilities.SupportsResourceLimits);
+        var gateway = CreateGateway(provider, runtimeSettings: HighProfileSettings());
+
+        var outcome = await gateway.ExecuteDetailedAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        }, requireResourceLimits: false);
+
+        AssertEx.True(outcome.Ran);
+        AssertEx.NotNull(AssertEx.NotNull(provider.CreateRequest).ResourceLimits);
+    }
+
+    private static INodeRuntimeSettings HighProfileSettings()
+    {
+        return StubNodeRuntimeSettings.Create()
+                                      .WithComputeEnabled(true)
+                                      .WithSandboxSecurityProfile(SandboxSecurityProfile.High)
+                                      .Build();
+    }
+
     [Test]
     public async Task RunPython_WithoutResourceLimits_StillRuns_BehaviourUnchanged()
     {

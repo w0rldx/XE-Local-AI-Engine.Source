@@ -155,25 +155,31 @@ internal static class DevelopmentContractMapper
             Enabled = value.Enabled,
             SandboxProvider = value.SandboxProvider,
             ContainerRuntime = value.ContainerRuntime?.ToResponse(),
-            Isolation = value.Isolation.Select(ToIsolationSummary).ToArray()
+            Isolation = value.Isolation.Select(ToIsolationSummary).ToArray(),
+            SandboxSecurityProfile = SandboxSecurityProfilePolicy.ToLiteral(value.SandboxSecurityProfile),
+            HighProfileRefusals = value.HighProfileRefusals
         };
 
     private static SandboxIsolationSummaryResponse ToIsolationSummary(DevelopmentIsolationRole value)
     {
-        var summary = ToIsolationSummary(value.Role, value.Requirements, value.Provider, value.Containment, value.NodeRequiresEgressDenial);
+        var summary = ToIsolationSummary(value.Role,
+            value.Requirements,
+            value.Provider,
+            value.Containment,
+            value.NodeRequiresEgressDenial,
+            value.SandboxSecurityProfile);
         return value.FilesystemIsolationWithheldReason is null
             ? summary
             : summary with
             {
                 FilesystemIsolation = false,
-                FilesystemIsolationUnavailableReason = value.FilesystemIsolationWithheldReason
+                FilesystemIsolationUnavailableReason = value.FilesystemIsolationWithheldReason,
+                // A withheld boundary the role requires is an unserved required axis.
+                Satisfied = summary.Satisfied && !summary.FilesystemIsolationRequired
             };
     }
 
-    /// <summary>
-    ///     Projects one sandbox role's SERVED isolation posture — the role's own declaration INTERSECTED with what its
-    ///     provider advertises, never a capability read-out — into the operator-facing summary.
-    /// </summary>
+    /// <summary>Projects one role's SERVED isolation posture (its declaration INTERSECTED with what its provider advertises) into the operator-facing summary.</summary>
     /// <remarks>
     ///     Network is the one axis NOT intersected with the role's <c>NetworkFloor</c>: the floor is the weakest posture a workload will ACCEPT, while every consumer
     ///     requests <c>SandboxNetworkPolicy.None</c> wherever the flag is advertised (<c>AgentHomeService.ResolveNetworkPolicy</c>,
@@ -185,11 +191,13 @@ internal static class DevelopmentContractMapper
     /// <param name="requirements">The role's ADR 0007 declaration from <see cref="SandboxWorkloads" />, passed in so this projection owns no second per-role table.</param>
     /// <param name="containment">The host containment measurement, for the probe reason.</param>
     /// <param name="nodeRequiresEgressDenial">This role's section's <c>RequireEgressDenial</c> switch; defaults to the shipped <see langword="false" />.</param>
+    /// <param name="profile">The node's effective sandbox security profile, for the required flags; defaults to <c>low</c> (ADR 0020).</param>
     public static SandboxIsolationSummaryResponse ToIsolationSummary(string role,
         SandboxRequirements requirements,
         ISandboxRuntimeProvider provider,
         SandboxContainment containment,
-        bool nodeRequiresEgressDenial = false)
+        bool nodeRequiresEgressDenial = false,
+        SandboxSecurityProfile profile = SandboxSecurityProfile.Low)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(role);
         ArgumentNullException.ThrowIfNull(requirements);
@@ -204,7 +212,9 @@ internal static class DevelopmentContractMapper
         var filesystem = boundaryFloor
             ? capabilities.HasFlag(SandboxProviderCapabilities.SupportsHostFilesystemBoundary)
             : requirements.RequestedIsolation(capabilities) == SandboxIsolationMode.Filesystem;
-        var networkRequired = SandboxEgressPolicy.IsRequired(requirements, nodeRequiresEgressDenial);
+        var preconditions = SandboxSecurityProfilePolicy.Preconditions(requirements, profile, nodeRequiresEgressDenial);
+        var networkRequired = SandboxEgressPolicy.IsRequired(requirements, preconditions.RequireEgressDenial);
+        var filesystemRequired = boundaryFloor || preconditions.RequireFilesystemBoundary;
         var limitsAdvertised = capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits);
         var limits = requirements.RequestsResourceLimits && limitsAdvertised;
         // The process provider serves the boundary through bwrap where measured, otherwise through the AppContainer boundary it advertised
@@ -214,7 +224,15 @@ internal static class DevelopmentContractMapper
                                    && !containment.SupportsFilesystemIsolation
                                    && capabilities.HasFlag(SandboxProviderCapabilities.SupportsAppContainerBoundary);
         // The MXC policy denies egress, ingress and host loopback on every AppContainer launch, so that role's network axis is served too.
-        var network = servedByAppContainer || capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        var isolatedByBwrap = filesystem
+                              && !servedByAppContainer
+                              && string.Equals(provider.ProviderName, ProcessSandboxRuntimeProvider.Name, StringComparison.Ordinal)
+                              && requirements.RequestedIsolation(capabilities) == SandboxIsolationMode.Filesystem;
+        // An isolated bwrap request carries its own empty network namespace (--unshare-net), which is how the selector and
+        // SandboxSecurityProfilePolicy.UnservedAxes count a None-floor role; an Unrestricted floor's egress still needs SupportsNetworkPolicy.
+        var network = servedByAppContainer
+                      || capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy)
+                      || (isolatedByBwrap && requirements.NetworkFloor != SandboxNetworkPolicy.Unrestricted);
         var enforced = (filesystem ? 1 : 0) + (network ? 1 : 0) + (limits ? 1 : 0);
         var preview = servedByAppContainer && containment.AppContainerBoundaryMaturity == SandboxMechanismMaturity.Preview;
         var boundaryReason = boundaryRequested
@@ -245,11 +263,26 @@ internal static class DevelopmentContractMapper
             FilesystemIsolation = filesystem,
             NetworkIsolation = network,
             NetworkIsolationRequired = networkRequired,
+            FilesystemIsolationRequired = filesystemRequired,
+            ResourceLimitsRequired = preconditions.RequireResourceCeilings,
+            Satisfied = (!filesystemRequired || filesystem)
+                        && (!networkRequired || network)
+                        && (!preconditions.RequireResourceCeilings || limits),
             ResourceLimits = limits,
             ReadOnlyMounts = capabilities.HasFlag(SandboxProviderCapabilities.SupportsReadOnlyMounts),
             FilesystemIsolationUnavailableReason = filesystem ? null : boundaryReason,
-            ResourceLimitsUnavailableReason = limits ? null : limitsReason
+            ResourceLimitsUnavailableReason = limits ? null : limitsReason,
+            NetworkIsolationUnavailableReason = network ? null : ToNetworkIsolationUnavailableReason(provider.ProviderName, containment)
         };
+    }
+
+    // Guarded on the provider for ToResourceLimitsUnavailableReason's reason: the probe measures the process provider's mechanism only.
+    private static string ToNetworkIsolationUnavailableReason(string providerName, SandboxContainment containment)
+    {
+        return string.Equals(providerName, ProcessSandboxRuntimeProvider.Name, StringComparison.Ordinal)
+            ? containment.NetworkIsolationUnavailableReason
+              ?? "the supervised process sandbox did not advertise network confinement on this host"
+            : $"the '{providerName}' sandbox provider does not advertise network confinement";
     }
 
     // Derived from the declaration rather than written per role, so a workload added to SandboxWorkloads gets a true

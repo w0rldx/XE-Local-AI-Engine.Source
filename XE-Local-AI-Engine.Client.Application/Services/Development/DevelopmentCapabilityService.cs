@@ -97,7 +97,8 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
     public async Task<DevelopmentCapability> GetAsync(CancellationToken cancellationToken = default)
     {
         var providerName = _sandboxRuntimeProvider.ProviderName;
-        var isolation = BuildIsolation();
+        var profile = await _runtimeSettings.GetSandboxSecurityProfileAsync(cancellationToken);
+        var isolation = BuildIsolation(profile);
         var preflight = string.Equals(providerName, DockerSandboxRuntimeProvider.Name, StringComparison.Ordinal)
             ? await _dockerDaemonPreflight.InspectAsync(cancellationToken)
             : null;
@@ -108,13 +109,30 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
             Enabled = _options.Value.Enabled && await _runtimeSettings.GetDevelopmentEnabledAsync(cancellationToken),
             SandboxProvider = providerName,
             ContainerRuntime = preflight,
-            Isolation = isolation
+            Isolation = isolation,
+            SandboxSecurityProfile = profile,
+            // What `high` ADDS, whatever is in effect: runs under low and not under high, so a role a config key, its own isolation floor or a
+            // withheld boundary refuses today is not blamed on the profile and the chooser does not recommend `low` for nothing.
+            HighProfileRefusals =
+            [
+                .. isolation.Where(static row => RunsUnder(row, SandboxSecurityProfile.Low) && !RunsUnder(row, SandboxSecurityProfile.High))
+                            .Select(static row => row.Role)
+            ]
         };
+    }
+
+    // Whether a create for the row's role would get a sandbox here under `profile`: the floor and a withheld boundary refuse under every
+    // profile (the selector's rule and the mcp-stdio caveat), and the profile rule itself is the one the create sites enforce.
+    private static bool RunsUnder(DevelopmentIsolationRole row, SandboxSecurityProfile profile)
+    {
+        return row.FilesystemIsolationWithheldReason is null
+               && SandboxProviderSelector.ServesIsolationFloor(row.Requirements, row.Provider.Capabilities)
+               && !SandboxSecurityProfilePolicy.Refuses(row.Requirements, row.Provider.Capabilities, profile, row.NodeRequiresEgressDenial);
     }
 
     // Reaches no daemon: the role providers are DI singletons and the container preflight above is the one call that talks to anything (it caches its attestation).
     // The containment measurement is a process-lifetime Lazy, so the first caller pays once; the probe is bounded and best-effort by contract, never a failure.
-    private List<DevelopmentIsolationRole> BuildIsolation()
+    private List<DevelopmentIsolationRole> BuildIsolation(SandboxSecurityProfile profile)
     {
         var containment = _containmentProbe.Containment;
         // Each role reads the switch of the section that CONSTRAINS it, which is the same split the provider keys
@@ -124,17 +142,17 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
 
         return
         [
-            Row("agent-home", SandboxWorkloads.AgentHome, _agentSandboxRuntimeProvider, containment, agentRequiresDenial),
+            Row("agent-home", SandboxWorkloads.AgentHome, _agentSandboxRuntimeProvider, containment, agentRequiresDenial, profile),
             // run_python shares AgentHome's provider instance (ComputeToolGateway injects IAgentSandboxRuntimeProvider) and is still its own row: the ONE workload declaring
             // SandboxIsolationMode.Filesystem, so folding them reports one role's boundary for the other. Reported whether or not Compute:Enabled is set: it answers what a role WOULD get here.
-            Row("run_python", SandboxWorkloads.RunPython, _agentSandboxRuntimeProvider, containment, agentRequiresDenial),
+            Row("run_python", SandboxWorkloads.RunPython, _agentSandboxRuntimeProvider, containment, agentRequiresDenial, profile),
             // A Sandboxed stdio MCP server: served by the agent-role provider instance, its own row for run_python's reason, and the row an operator reads BEFORE registering a server — on a host that
             // cannot isolate, every Sandboxed registration refuses to connect. A PrivilegedHost server has no row: it declares nothing, an explicit per-server host grant.
-            Row("mcp-stdio", SandboxWorkloads.McpStdio, _agentSandboxRuntimeProvider, containment, agentRequiresDenial, HomeDirectoryCaveat()),
+            Row("mcp-stdio", SandboxWorkloads.McpStdio, _agentSandboxRuntimeProvider, containment, agentRequiresDenial, profile, HomeDirectoryCaveat()),
             // Either Development declaration works: DevelopmentModeImageToolchain is DevelopmentModeHostToolchain `with` a different name and toolchain source, and this projection reads only the
             // isolation floor, None on both. The host-toolchain constant avoids re-deriving SandboxProviderSelector.ResolveDevelopment's predicate; the resolved PROVIDER comes from the instance.
-            Row("development", SandboxWorkloads.DevelopmentModeHostToolchain, _sandboxRuntimeProvider, containment, developmentRequiresDenial),
-            Row("work-session", SandboxWorkloads.WorkSession, _workSessionSandboxRuntimeProvider, containment, agentRequiresDenial)
+            Row("development", SandboxWorkloads.DevelopmentModeHostToolchain, _sandboxRuntimeProvider, containment, developmentRequiresDenial, profile),
+            Row("work-session", SandboxWorkloads.WorkSession, _workSessionSandboxRuntimeProvider, containment, agentRequiresDenial, profile)
         ];
     }
 
@@ -156,6 +174,7 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
         ISandboxRuntimeProvider provider,
         SandboxContainment containment,
         bool nodeRequiresEgressDenial,
+        SandboxSecurityProfile profile,
         string? filesystemIsolationWithheldReason = null)
     {
         return new DevelopmentIsolationRole
@@ -165,6 +184,7 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
             Provider = provider,
             Containment = containment,
             NodeRequiresEgressDenial = nodeRequiresEgressDenial,
+            SandboxSecurityProfile = profile,
             FilesystemIsolationWithheldReason = filesystemIsolationWithheldReason
         };
     }

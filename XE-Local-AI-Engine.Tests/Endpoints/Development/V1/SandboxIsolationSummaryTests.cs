@@ -110,6 +110,40 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.False(SandboxWorkloads.AgentHome.NetworkFloor == SandboxWorkloads.RunPython.NetworkFloor);
     }
 
+    /// <summary>bwrap measured, the standalone unshare probe not: a floor role's row serves network the way its create site does.</summary>
+    /// <remarks>
+    ///     An isolated None-floor request carries bwrap's own empty network namespace, which is what the selector and
+    ///     <see cref="SandboxSecurityProfilePolicy.UnservedAxes" /> count, so the row must not claim the create site refuses. AgentHome's
+    ///     egress goes through <see cref="SandboxEgressPolicy" /> and still needs the separate mechanism under <c>high</c>.
+    /// </remarks>
+    [Test]
+    public void ToIsolationSummary_ForAFloorRoleIsolatedByBwrapWithoutTheUnshareProbe_ServesNetworkAsTheCreateSiteDoes()
+    {
+        var containment = FullyContainedHost() with
+        {
+            SupportsNetworkIsolation = false,
+            NetworkIsolationUnavailableReason = "unshare could not create a network namespace"
+        };
+        using var provider = CreateProcessProvider(containment);
+
+        var runPython = DevelopmentContractMapper.ToIsolationSummary("run_python", SandboxWorkloads.RunPython, provider, containment, profile: SandboxSecurityProfile.High);
+        var mcp = DevelopmentContractMapper.ToIsolationSummary("mcp-stdio", SandboxWorkloads.McpStdio, provider, containment, profile: SandboxSecurityProfile.High);
+        var agentHome = DevelopmentContractMapper.ToIsolationSummary("agent-home", SandboxWorkloads.AgentHome, provider, containment, profile: SandboxSecurityProfile.High);
+
+        AssertEx.False(provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy));
+        AssertEx.True(runPython.NetworkIsolation);
+        AssertEx.True(runPython.Satisfied);
+        AssertEx.Null(runPython.NetworkIsolationUnavailableReason);
+        AssertEx.Equal("Isolated", runPython.Level);
+        AssertEx.True(mcp.NetworkIsolation);
+        AssertEx.True(mcp.Satisfied);
+        AssertEx.False(SandboxSecurityProfilePolicy.Refuses(SandboxWorkloads.RunPython, provider.Capabilities, SandboxSecurityProfile.High, configRequiresEgressDenial: false));
+        AssertEx.False(agentHome.NetworkIsolation);
+        AssertEx.False(agentHome.Satisfied);
+        AssertEx.Equal("unshare could not create a network namespace", agentHome.NetworkIsolationUnavailableReason);
+        AssertEx.True(SandboxSecurityProfilePolicy.Refuses(SandboxWorkloads.AgentHome, provider.Capabilities, SandboxSecurityProfile.High, configRequiresEgressDenial: false));
+    }
+
     /// <summary>
     ///     <c>run_python</c> is the ONE role that declares <see cref="SandboxIsolationMode.Filesystem" />, so on a host
     ///     whose bubblewrap chain the probe exercised it is the one role that reaches <c>Isolated</c> over <c>bwrap</c>.
@@ -468,6 +502,118 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.Equal("Isolated", summary.Level);
         AssertEx.Equal("Stable", summary.Maturity);
         AssertEx.Equal("bwrap", summary.Backend);
+    }
+
+    /// <summary>
+    ///     Under <c>low</c> the new required flags add nothing the row did not already require: no profile precondition, a boundary
+    ///     required only where a floor demands it, and every row satisfied on a host that serves its floors. The byte-identical half.
+    /// </summary>
+    [Test]
+    public void ToIsolationSummary_UnderTheLowProfile_RequiresOnlyFloorsAndTheKey()
+    {
+        var containment = SandboxContainment.None;
+        using var provider = CreateProcessProvider(containment);
+
+        var agentHome = DevelopmentContractMapper.ToIsolationSummary("agent-home", SandboxWorkloads.AgentHome, provider, containment);
+
+        AssertEx.False(agentHome.FilesystemIsolationRequired);
+        AssertEx.False(agentHome.ResourceLimitsRequired);
+        AssertEx.False(agentHome.NetworkIsolationRequired);
+        AssertEx.True(agentHome.Satisfied, "low requires nothing of AgentHome, so a host serving nothing still runs it, as today.");
+    }
+
+    /// <summary>
+    ///     Under <c>high</c> on a host that serves nothing, AgentHome requires all three axes and is not satisfied: the row an operator
+    ///     reads to learn the run will refuse. Development requires egress and ceilings, never a boundary it does not ask for.
+    /// </summary>
+    [Test]
+    public void ToIsolationSummary_UnderTheHighProfile_OnAnUncontainedHost_RequiresTheDeclaredAxesAndIsNotSatisfied()
+    {
+        var containment = SandboxContainment.None;
+        using var provider = CreateProcessProvider(containment);
+
+        var agentHome = DevelopmentContractMapper.ToIsolationSummary("agent-home",
+            SandboxWorkloads.AgentHome,
+            provider,
+            containment,
+            profile: SandboxSecurityProfile.High);
+        var development = DevelopmentContractMapper.ToIsolationSummary("development",
+            SandboxWorkloads.DevelopmentModeHostToolchain,
+            provider,
+            containment,
+            profile: SandboxSecurityProfile.High);
+
+        AssertEx.True(agentHome.FilesystemIsolationRequired);
+        AssertEx.True(agentHome.ResourceLimitsRequired);
+        AssertEx.True(agentHome.NetworkIsolationRequired);
+        AssertEx.False(agentHome.Satisfied);
+        AssertEx.False(development.FilesystemIsolationRequired, "high never requires a boundary Development Mode does not ask for.");
+        AssertEx.True(development.ResourceLimitsRequired);
+        AssertEx.True(development.NetworkIsolationRequired);
+        AssertEx.False(development.Satisfied);
+    }
+
+    [Test]
+    public void ToIsolationSummary_UnderTheHighProfile_OnAFullyContainedHost_IsSatisfiedForEveryRole()
+    {
+        var containment = FullyContainedHost();
+        using var provider = CreateProcessProvider(containment);
+
+        foreach (var requirements in new[]
+                 {
+                     SandboxWorkloads.AgentHome,
+                     SandboxWorkloads.WorkSession,
+                     SandboxWorkloads.RunPython,
+                     SandboxWorkloads.McpStdio,
+                     SandboxWorkloads.DevelopmentModeHostToolchain
+                 })
+        {
+            var summary = DevelopmentContractMapper.ToIsolationSummary("role", requirements, provider, containment, profile: SandboxSecurityProfile.High);
+
+            AssertEx.True(summary.Satisfied, requirements.Workload);
+            AssertEx.True(summary.ResourceLimitsRequired, requirements.Workload);
+            AssertEx.Null(summary.NetworkIsolationUnavailableReason, requirements.Workload);
+        }
+    }
+
+    /// <summary>
+    ///     A filesystem FLOOR is reported as required under either profile, parallel to the egress floor; and the Preview boundary that
+    ///     serves it on Windows does not serve <c>high</c>'s ceilings, so the row is not satisfied (ADR 0019 Q3).
+    /// </summary>
+    [Test]
+    public void ToIsolationSummary_ForAFloorRoleOnThePreviewBoundary_IsSatisfiedUnderLowButNotUnderHigh()
+    {
+        var containment = SandboxContainment.None with
+        {
+            FilesystemIsolationUnavailableReason = "the host is not Linux",
+            AppContainerBoundary = PreviewBoundary()
+        };
+        using var provider = CreateProcessProvider(containment, previewsEnabled: true);
+
+        var low = DevelopmentContractMapper.ToIsolationSummary("run_python", SandboxWorkloads.RunPython, provider, containment);
+        var high = DevelopmentContractMapper.ToIsolationSummary("run_python", SandboxWorkloads.RunPython, provider, containment, profile: SandboxSecurityProfile.High);
+
+        AssertEx.True(low.FilesystemIsolationRequired);
+        AssertEx.True(low.Satisfied);
+        AssertEx.True(high.ResourceLimitsRequired);
+        AssertEx.False(high.Satisfied);
+    }
+
+    /// <summary>The network axis now carries the probe's reason when it is unavailable, as the other two axes always have.</summary>
+    [Test]
+    public void ToIsolationSummary_WhenEgressCannotBeDenied_ReportsTheMeasuredNetworkReason()
+    {
+        const string Reason = "unshare could not create a network namespace";
+        var containment = SandboxContainment.None with
+        {
+            NetworkIsolationUnavailableReason = Reason
+        };
+        using var provider = CreateProcessProvider(containment);
+
+        var summary = DevelopmentContractMapper.ToIsolationSummary("agent-home", SandboxWorkloads.AgentHome, provider, containment);
+
+        AssertEx.False(summary.NetworkIsolation);
+        AssertEx.Equal(Reason, summary.NetworkIsolationUnavailableReason);
     }
 
     private static SandboxContainment FullyContainedHost()

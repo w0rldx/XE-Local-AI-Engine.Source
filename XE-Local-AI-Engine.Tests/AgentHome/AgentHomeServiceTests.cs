@@ -110,6 +110,36 @@ public sealed class AgentHomeServiceTests : IDisposable
     }
 
     /// <summary>
+    ///     Under <c>high</c> AgentHome's three declared preferences are preconditions: a backend missing ANY one is refused before a sandbox
+    ///     exists, naming the profile and its remedy (ADR 0020).
+    /// </summary>
+    /// <remarks>Under <c>low</c> the tests above are unchanged, which is the byte-identical half.</remarks>
+    [Test]
+    [Arguments(false, true, true)]
+    [Arguments(true, false, true)]
+    [Arguments(true, true, false)]
+    [Arguments(false, false, false)]
+    public async Task PrepareAsync_UnderTheHighProfile_WhenTheBackendLacksADeclaredAxis_RefusesNamingTheProfile(bool canDenyEgress,
+        bool canLimitResources,
+        bool canIsolateFilesystem)
+    {
+        var clock = new ManualTimeProvider(FixedNow);
+        var provider = new CapabilityOverridingProvider(new FakeSandboxRuntimeProvider(clock), canDenyEgress, canLimitResources, canIsolateFilesystem);
+        using var harness = CreateHarness(clock, provider, new FakeSelectedFolderResolver(), profile: SandboxSecurityProfile.High);
+
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(async () =>
+            await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+            {
+                SelectedFolderIds = []
+            }));
+
+        AssertEx.Contains(exception.Message, SandboxSecurityProfilePolicy.ProfileOptionKey);
+        AssertEx.Contains(exception.Message, SandboxSecurityProfilePolicy.Remedy);
+        AssertEx.Contains(exception.Message, SandboxWorkloads.AgentHome.Workload);
+        AssertEx.Null(provider.LastCreate, "the refusal must land BEFORE a sandbox is created, not after one exists.");
+    }
+
+    /// <summary>
     ///     The ceilings half: AgentHome's create request carries exactly what the shared derivation yields for its own
     ///     declaration, so the site cannot drift from the constant the isolation summary reports.
     /// </summary>
@@ -1137,7 +1167,8 @@ public sealed class AgentHomeServiceTests : IDisposable
         IAgentHomeGoalExecutor? goalExecutor = null,
         AgentHomeRunExecutionRegistry? executingRuns = null,
         bool? optionsEnabled = null,
-        string? rootPath = null)
+        string? rootPath = null,
+        SandboxSecurityProfile profile = SandboxSecurityProfile.Low)
     {
         var root = rootPath ?? Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
         _tempRoots.Add(root);
@@ -1151,6 +1182,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         var runtimeSettings = StubNodeRuntimeSettings.Create()
                                                      .WithAgentHomeEnabled(enabled)
                                                      .WithAgentHomeCommandTimeoutSeconds(commandTimeoutSeconds)
+                                                     .WithSandboxSecurityProfile(profile)
                                                      .Build();
         var leases = leaseManager ?? new AgentHomeExecutionLeaseManager();
         var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, leases, clock, NullLogger<AgentHomeManifestService>.Instance);
@@ -1219,24 +1251,29 @@ public sealed class AgentHomeServiceTests : IDisposable
         private readonly FakeSandboxRuntimeProvider _inner;
         private readonly bool _canDenyEgress;
         private readonly bool _canLimitResources;
+        private readonly bool _canIsolateFilesystem;
 
         public CapabilityOverridingProvider(FakeSandboxRuntimeProvider inner,
             bool canDenyEgress,
-            bool canLimitResources = false)
+            bool canLimitResources = false,
+            bool canIsolateFilesystem = false)
         {
             _inner = inner;
             _canDenyEgress = canDenyEgress;
             _canLimitResources = canLimitResources;
+            _canIsolateFilesystem = canIsolateFilesystem;
         }
 
         public SandboxCreateRequest? LastCreate { get; private set; }
 
         public string ProviderName => _inner.ProviderName;
 
+        // Advertising the boundary is enough for the profile tests: each refuses before a create, so the fake never has to honour it.
         public SandboxProviderCapabilities Capabilities =>
             (_inner.Capabilities
              | (_canDenyEgress ? SandboxProviderCapabilities.SupportsNetworkPolicy : SandboxProviderCapabilities.None)
-             | (_canLimitResources ? SandboxProviderCapabilities.SupportsResourceLimits : SandboxProviderCapabilities.None))
+             | (_canLimitResources ? SandboxProviderCapabilities.SupportsResourceLimits : SandboxProviderCapabilities.None)
+             | (_canIsolateFilesystem ? SandboxProviderCapabilities.SupportsFilesystemIsolation : SandboxProviderCapabilities.None))
             & ~(_canDenyEgress ? SandboxProviderCapabilities.None : SandboxProviderCapabilities.SupportsNetworkPolicy)
             & ~(_canLimitResources ? SandboxProviderCapabilities.None : SandboxProviderCapabilities.SupportsResourceLimits);
 

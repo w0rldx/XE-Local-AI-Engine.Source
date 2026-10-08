@@ -44,6 +44,10 @@ containment check (jail paths, symlink guards, path containment, patch apply).
 
 **Rule:** a `Sandboxed` stdio MCP server sees only its command's directory, its working directory and `/usr`, read-only: a symlinked command's target and a script's interpreter are not bound, so npm/npx/uv/uvx/mise/nvm/venv installs need `PrivilegedHost`. The jail `PATH` is `/usr/bin:/bin`; a registration `PATH` variable REPLACES it (the chain applies registration env last), it never extends it, and this node's `PATH` never reaches the jail. Only a server that dies before its first message gets a stderr tail. **Prevents:** debugging a sandboxed server by fixing the host `PATH`, or adding one directory to `PATH` and losing `/usr/bin`. **Authority:** `SandboxIsolatedChain.SandboxPath`, `SandboxedMcpStdioTransport.JailSearchPath`, `SandboxedMcpStdioTransportTests`; `docs/security/mcp-trust-tiers.md`.
 
+### The `high` sandbox security profile is ONE rule, and it promotes only what a declaration asks for
+
+**Rule:** the `high` rule lives in `SandboxSecurityProfilePolicy` and is called by both enforcement and the capability summary; never add an axis a declaration does not ask for, never re-derive the rule in a caller or the SPA, and read the profile per call through `INodeRuntimeSettings`. Floors are untouched and the two `RequireEgressDenial` keys stay tighten-only above it. **Prevents:** a row that says `Satisfied` while a create site refuses, work refused for a boundary it never asks for, and the profile reaching an agentic surface. **Authority:** [ADR 0020](../adr/0020-sandbox-security-profile.md); `SandboxSecurityProfilePolicy`, `SandboxSecurityProfilePolicyTests`, the sandbox architecture tests enumerating `SandboxWorkloads`.
+
 ## Compute and AgentHome
 
 ### `ExecuteDetailedAsync` is the single compute execution boundary
@@ -76,3 +80,4 @@ Superseded claims; the entries above are the active rules.
 | MXC is TypeScript-only, has no NuGet package, is "not a security boundary", and needs build 26100. | MXC 1.0.0 ships `Microsoft.Mxc.Sdk` on NuGet, the README caveat is gone, and the floor is whatever `GetPlatformSupport` + `Probe` report on the host; it is a Preview launch mechanism here (ADR 0019). |
 | Compute venv chmod can undo read-only mode. | Inside the namespace the read-only bind makes chmod/write fail. |
 | Compute egress is gated by `SupportsNetworkPolicy`. | Filesystem isolation/bwrap owns the network namespace; use that boundary (§4). |
+| A tightening sandbox switch is never a stored node setting. | Corrected for the profile only: `SandboxSecurityProfile` is a stored, Operator-only node setting (ADR 0020). The `RequireEgressDenial` configuration keys are unchanged, stay configuration-only and tighten above the profile. |

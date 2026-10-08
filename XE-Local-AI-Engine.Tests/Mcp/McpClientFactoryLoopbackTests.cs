@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Security guard for the HTTP MCP loopback allowlist. The factory rejects any HTTP URL
@@ -162,6 +163,7 @@ public sealed class McpClientFactoryLoopbackTests
             new FakeNodeDataDirectory(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".xe-node-data-fixture")),
             Options.Create(new ComputeOptions()),
             Options.Create(new LocalContainerOptions()),
+            new StubNodeRuntimeSettings().Build(),
             NullLoggerFactory.Instance);
     }
 

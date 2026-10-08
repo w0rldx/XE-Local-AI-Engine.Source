@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
@@ -27,6 +28,7 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
     private readonly LocalContainerOptions _nodeOptions;
     private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly SandboxOptions _sandboxOptions;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly ISelectedFolderResolver _resolver;
     private readonly IAgentHomeWorkspaceService _workspaceService;
 
@@ -41,8 +43,11 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
         IOptions<SandboxOptions> sandboxOptions,
         IOptions<ComputeOptions> ceilingDefaults,
         IOptions<LocalContainerOptions> nodeOptions,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<McpWorkspaceExecutionSessionFactory> logger)
     {
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
+        _runtimeSettings = runtimeSettings;
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
         _leaseManager = leaseManager ?? throw new ArgumentNullException(nameof(leaseManager));
         _isolation = isolation ?? throw new ArgumentNullException(nameof(isolation));
@@ -66,6 +71,8 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
         }
 
         var identity = await _identityProvider.GetAsync(cancellationToken);
+        // Read once, BEFORE the lease: a failing settings read then has nothing to leak, and the refusal catch below reuses it (ADR 0020).
+        var profile = await _runtimeSettings.GetSandboxSecurityProfileAsync(cancellationToken);
         var leaseKey = new AgentHomeExecutionLeaseKey(identity.OwnerUserId, identity.NodeId);
         var lease = _leaseManager.TryAcquire(leaseKey);
         if (lease is null)
@@ -87,16 +94,19 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
         try
         {
             _ = await _manifestService.InitializeAsync(attachKey, cancellationToken);
+            // Under `high` the session is refused where its declared ceilings or egress denial cannot be served.
+            SandboxSecurityProfilePolicy.EnsureServed(SandboxWorkloads.WorkSession, _provider.Capabilities, profile);
             var handle = await _provider.CreateOrAttachAsync(new SandboxCreateRequest
                 {
                     AttachKey = attachKey,
                     RuntimeProfile = _options.DefaultRuntimeProfile,
                     // The same two decisions AgentHome's own create site makes, through the same two helpers rather than re-derived here: this jail is
                     // AgentHome's substrate under another lease holder, so it reads the AgentHome section's switch and never resolves its own posture.
-                    NetworkPolicy = SandboxEgressPolicy.Resolve(_provider.Capabilities,
+                    NetworkPolicy = SandboxSecurityProfilePolicy.ResolveEgress(SandboxWorkloads.WorkSession,
+                        _provider.Capabilities,
+                        profile,
                         _sandboxOptions.RequireEgressDenial,
-                        SandboxEgressPolicy.AgentOptionKey,
-                        SandboxWorkloads.WorkSession.Workload),
+                        SandboxEgressPolicy.AgentOptionKey),
                     ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.WorkSession, _provider.Capabilities, _ceilingDefaults, _nodeOptions)
                 },
                 cancellationToken);
@@ -130,6 +140,20 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
             _ = await TryRecoverAsync(attachKey, leaseKey, workspaceId);
             lease.Dispose();
             throw;
+        }
+        catch (SandboxCapabilityNotSupportedException)
+        {
+            // The caller still sees the fixed preparation failure, but the operator needs the reason. The exception text is not logged, as
+            // below, because a backend refusal can name a host path; the axes the policy names are engine-authored and path-free.
+            var unserved = SandboxSecurityProfilePolicy.UnservedAxes(SandboxWorkloads.WorkSession,
+                _provider.Capabilities,
+                SandboxSecurityProfilePolicy.Preconditions(SandboxWorkloads.WorkSession,
+                    profile,
+                    _sandboxOptions.RequireEgressDenial));
+            _logger.LogError("MCP workspace preparation for workspace {WorkspaceId} was refused by the sandbox; required and unserved on this host: {Unserved}.",
+                workspaceId,
+                unserved.Count == 0 ? "none (the backend refused the request itself)" : string.Join(", ", unserved));
+            return await RejectAfterRecoveryAsync(attachKey, leaseKey, WorkspacePreparationFailed());
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {

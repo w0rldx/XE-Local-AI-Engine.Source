@@ -707,6 +707,18 @@ public sealed partial record StoredNodeSettings
     /// </summary>
     public const string DefaultUiMode = UiModeAdvanced;
 
+    /// <summary>The <see cref="SandboxSecurityProfile" /> literal for today's behaviour: preferred containment degrades where the host cannot serve it.</summary>
+    public const string SandboxSecurityProfileLow = "low";
+
+    /// <summary>The <see cref="SandboxSecurityProfile" /> literal that turns every declared containment preference into a precondition (ADR 0020).</summary>
+    public const string SandboxSecurityProfileHigh = "high";
+
+    /// <summary>
+    ///     The <see cref="SandboxSecurityProfile" /> literal first-run setup writes once the administrator exists and before the operator has
+    ///     chosen. Engine-written: a client never sends it, and the boundary validator rejects it.
+    /// </summary>
+    public const string SandboxSecurityProfilePending = "pending";
+
     /// <summary>
     ///     Automatic application-update checks are ON when unset, so an upgraded node behaves exactly as it did before this
     ///     switch existed. Gates <c>AppUpdateCheckService</c> only; the manual check and apply flow ignore it.
@@ -856,6 +868,28 @@ public sealed partial record StoredNodeSettings
     public static bool IsValidUiMode(string? mode)
     {
         return mode is UiModeSimple or UiModeAdvanced;
+    }
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="profile" /> is one of the three PERSISTABLE sandbox security profile literals:
+    ///     <see cref="SandboxSecurityProfileLow" />, <see cref="SandboxSecurityProfileHigh" />, <see cref="SandboxSecurityProfilePending" />.
+    /// </summary>
+    /// <remarks>
+    ///     Ordinal, like the external-access literals, so <c>"High"</c> is rejected rather than silently accepted. <see langword="null" /> is
+    ///     a state (undecided), not a literal, and is <see langword="false" /> here.
+    /// </remarks>
+    public static bool IsValidSandboxSecurityProfile(string? profile)
+    {
+        return profile is SandboxSecurityProfileLow or SandboxSecurityProfileHigh or SandboxSecurityProfilePending;
+    }
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="profile" /> is a profile a CLIENT may send: <see cref="SandboxSecurityProfileLow" />
+    ///     or <see cref="SandboxSecurityProfileHigh" />. <see cref="SandboxSecurityProfilePending" /> is engine-written only.
+    /// </summary>
+    public static bool IsSandboxSecurityProfileChoice(string? profile)
+    {
+        return profile is SandboxSecurityProfileLow or SandboxSecurityProfileHigh;
     }
 
     /// <summary>
@@ -1521,6 +1555,20 @@ public sealed partial record StoredNodeSettings
     ///     <c>NodeSettingsAgenticPatch</c> so no MCP tool or model can turn it on. See ADR 0019.
     /// </remarks>
     public bool? ExecutionPreviewsEnabled { get; init; }
+
+    /// <summary>
+    ///     The node-wide sandbox security profile: <see cref="SandboxSecurityProfileLow" /> or <see cref="SandboxSecurityProfileHigh" /> once
+    ///     chosen, <see cref="SandboxSecurityProfilePending" /> while an administrator exists and has not chosen, <see langword="null" /> when
+    ///     undecided and backfillable. Read per sandbox create; only the literal <c>high</c> is <c>high</c>, everything else reads as <c>low</c>.
+    /// </summary>
+    /// <remarks>
+    ///     A TIGHTENING switch stored as a node setting by ADR 0020, which reverses the configuration-only ruling for this one field: it is
+    ///     writable only through the Operator settings endpoint and is deliberately absent from <c>NodeSettingsAgenticPatch</c> and
+    ///     <c>NodeSettingsAgenticView</c>, so no MCP tool or model can lower it. No configuration seed: a fresh node is asked at first run, an
+    ///     upgraded node is stamped <c>low</c> by <c>SandboxSecurityProfileBackfillService</c>. Stored as a string for
+    ///     <see cref="ContainerRuntimeSelection" />'s reason.
+    /// </remarks>
+    public string? SandboxSecurityProfile { get; init; }
 
     /// <summary>
     ///     Which container runtime application containers use: <c>auto</c> (the default) or <c>docker</c>.
