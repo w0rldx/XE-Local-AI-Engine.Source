@@ -13,6 +13,7 @@ export type { ReasoningEffort };
 // module so a backend field rename stays a one-line fix.
 import type { PendingUserQuestion } from "@/features/chat/api/AskUserQuestionWire";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
+import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
 import type { NodeChatWebReviewPreviewDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 export type ChatRole = "user" | "assistant" | "system" | "tool";
@@ -153,6 +154,8 @@ export interface ChatMessageModel {
 	outputTokens?: number;
 	totalTokens?: number;
 	reasoningTokens?: number;
+	// Context-window snapshot of the turn's last provider round; absent for user, legacy and pre-feature rows.
+	contextWindow?: ContextWindowSnapshot;
 	parentMessageId?: string;
 	variantGroupId?: string;
 	// Ordered interleave (reasoning → tool → reasoning → …) for an assistant turn. Drives the in-order render of
@@ -353,6 +356,10 @@ export interface ContextUsageModel {
 	isAuthoritative: boolean;
 	modelLabel: string;
 	nodeLabel: string;
+	// Display name of the agent the request belongs to, when agent mode applies.
+	agentLabel?: string;
+	// The last provider round's snapshot from the newest assistant message; undefined before the first response.
+	contextWindow?: ContextWindowSnapshot;
 }
 
 export interface ChatInputStatus {

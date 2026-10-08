@@ -111,7 +111,9 @@ public sealed class NodeChatPersistenceContractTests
 
             foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
-                AssertEx.False(IsSecretBearingName(property.Name), $"{type.Name}.{property.Name} must not expose secrets.");
+                // A credential is text; a numeric member whose name ends in "Tokens" is a token COUNT (the context-window
+                // snapshot's WindowTokens, ProviderInputTokens, ...), so the name heuristic applies to non-numeric members only.
+                AssertEx.False(IsSecretBearingName(property.Name) && !IsNumeric(property.PropertyType), $"{type.Name}.{property.Name} must not expose secrets.");
                 AssertEx.False(property.PropertyType.FullName?.Contains("Persistence.Entities", StringComparison.Ordinal) == true, $"{type.Name}.{property.Name} must not expose EF entities.");
             }
         }
@@ -128,6 +130,12 @@ public sealed class NodeChatPersistenceContractTests
             AssertEx.True(parameters.Length > 0, $"{method.Name} should accept at least one parameter.");
             AssertEx.Equal(typeof(CancellationToken), parameters[^1].ParameterType, $"{method.Name} should end with CancellationToken.");
         }
+    }
+
+    private static bool IsNumeric(Type type)
+    {
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+        return underlying == typeof(int) || underlying == typeof(long) || underlying == typeof(double) || underlying == typeof(decimal);
     }
 
     private static bool IsSecretBearingName(string name)

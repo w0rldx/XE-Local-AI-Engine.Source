@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 
@@ -126,6 +127,13 @@ public interface IWorkerEventDispatcher
     /// <param name="toolSchemaTokens">Cumulative estimate across the turn's provider rounds.</param>
     /// <param name="maxToolSchemaTokens">The largest single round's estimate.</param>
     Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens);
+
+    /// <summary>
+    ///     Records the content-free context snapshot of the turn's last provider round on the invocation state, so the
+    ///     terminalize write can persist it onto the assistant message and the terminal stream event.
+    /// </summary>
+    /// <remarks>Reported beside <see cref="ReportToolSchemaTokensAsync" /> on every terminal path. Names and counts only.</remarks>
+    Task ReportTurnContextSnapshotAsync(Guid invocationId, ProviderRoundContextSnapshot snapshot);
 
     /// <summary>
     ///     Records the turn-scoped facts that belong on the run-envelope row rather than on the message: how long the

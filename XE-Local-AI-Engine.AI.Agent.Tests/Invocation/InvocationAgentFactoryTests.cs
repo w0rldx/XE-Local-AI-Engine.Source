@@ -1364,6 +1364,34 @@ public sealed class InvocationAgentFactoryTests
     }
 
     [Test]
+    public async Task RunStreamingAsync_TaggedSeedMessage_ReachesTheRawChatClientWithItsContextKind()
+    {
+        var tagged = new ChatMessage(ChatRole.User, "Knowledge excerpt.")
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary { [ContextMessageKinds.Key] = ContextMessageKinds.Knowledge }
+        };
+        var definition = new InvocationAgentDefinition
+        {
+            ModelId = "qwen3.5:0.8b",
+            Instructions = "You are the worker.",
+            Tools = [],
+            ConversationContext = [tagged, new ChatMessage(ChatRole.User, "Summarise the deployment status.")]
+        };
+
+        using var chatClient = new CapturingChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+        await DriveAsync(context.Agent, context);
+
+        var messages = AssertEx.NotNull(chatClient.CapturedMessages);
+        var sent = messages.Single(message => string.Equals(message.Text, "Knowledge excerpt.", StringComparison.Ordinal));
+        AssertEx.Equal(ContextMessageKinds.Knowledge, sent.AdditionalProperties?[ContextMessageKinds.Key] as string);
+        AssertEx.True(messages.Where(message => !ReferenceEquals(message, sent)).All(message => message.AdditionalProperties?.ContainsKey(ContextMessageKinds.Key) != true),
+            "only the tagged seed message may carry a context kind");
+    }
+
+    [Test]
     public async Task RunStreamingAsync_WithExplicitlyOmittedSystemPrompt_SendsOnlyTheUserPromptInOneProviderCall()
     {
         var definition = new InvocationAgentDefinition

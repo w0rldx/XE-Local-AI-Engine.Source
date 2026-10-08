@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction.State;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -69,9 +70,10 @@ public sealed class CompactionContextResolverTests
     {
         var conversation = Conversation(summary: "the synopsis", State(("e1", false, "use Postgres")));
 
-        var content = AssertEx.NotNull(CompactionContextResolver.Resolve(conversation, sortOrder: 0)).Summary.Content;
+        var summary = AssertEx.NotNull(CompactionContextResolver.Resolve(conversation, sortOrder: 0)).Summary;
 
-        AssertEx.True(content.StartsWith("[Summary of the earlier conversation", StringComparison.Ordinal));
+        AssertEx.True(summary.Content.StartsWith("[Summary of the earlier conversation", StringComparison.Ordinal));
+        AssertEx.Equal(ConversationContextKind.Compaction, summary.Kind);
     }
 
     [Test]

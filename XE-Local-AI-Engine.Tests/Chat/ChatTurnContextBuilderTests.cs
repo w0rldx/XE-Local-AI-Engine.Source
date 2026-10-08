@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
@@ -66,6 +67,7 @@ public sealed class ChatTurnContextBuilderTests
         AssertEx.Equal(MessageRole.User, message!.Role);
         AssertEx.True(message.Content.Contains("runbook.md", StringComparison.Ordinal));
         AssertEx.True(message.Content.Contains("restart the service", StringComparison.Ordinal));
+        AssertEx.Equal(ConversationContextKind.Attachment, message.Kind);
     }
 
     [Test]
@@ -100,6 +102,7 @@ public sealed class ChatTurnContextBuilderTests
 
         AssertEx.NotNull(message);
         AssertEx.Equal(expected: 1, message!.Images!.Count);
+        AssertEx.Equal(ConversationContextKind.Image, message.Kind);
     }
 
     /// <summary>
@@ -196,6 +199,7 @@ public sealed class ChatTurnContextBuilderTests
         AssertEx.NotNull(grounding);
         AssertEx.True(grounding!.Message.Content.Contains("restart the service", StringComparison.Ordinal));
         AssertEx.Equal(expected: 1, grounding.Sources.Count);
+        AssertEx.Equal(ConversationContextKind.Knowledge, grounding.Message.Kind);
     }
 
     [Test]
@@ -292,6 +296,7 @@ public sealed class ChatTurnContextBuilderTests
         AssertEx.NotNull(message);
         AssertEx.Equal(MessageRole.User, message!.Role);
         AssertEx.True(message.Content.Contains("attachments/runbook.md", StringComparison.Ordinal));
+        AssertEx.Equal(ConversationContextKind.Attachment, message.Kind);
     }
 
     private static ChatTurnContextBuilder CreateBuilder(IConversationUploadedFileStore? uploadedFileStore = null,

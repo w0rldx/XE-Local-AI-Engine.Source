@@ -18,6 +18,7 @@ internal static class McpServerMapper
             Id = record.Id,
             Name = record.Name,
             Description = record.Description,
+            Slug = record.Slug,
             TransportKind = record.TransportKind,
             Command = record.Command,
             Arguments = record.Arguments,

@@ -643,6 +643,46 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public void Metadata_ContextWindow_RoundTripsWithItsKindByName_AndALegacyBlobLoadsAsNull()
+    {
+        var window = new NodeChatContextWindowDto
+        {
+            Kind = NodeChatContextWindowKind.LastRound,
+            ModelId = "served-model",
+            WindowTokens = 8192,
+            ReservedOutputTokens = 1024,
+            UsableWindowTokens = 5939,
+            SafetyMarginTokens = 1229,
+            ProviderInputTokens = 900,
+            Estimated = new NodeChatContextWindowEstimate
+            {
+                SystemPromptTokens = 300,
+                InstructionsTokens = 20,
+                ToolSchemaTokens = 150,
+                ToolTemplatePreambleTokens = 30,
+                KnowledgeTokens = 60,
+                AttachmentTokens = 70,
+                CompactionTokens = 80,
+                ConversationTokens = 90,
+                TotalTokens = 800
+            },
+            Tools = [new NodeChatContextWindowTool { Name = "get_time", Tokens = 50 }],
+            ToolsWithheldCount = 3,
+            Trimmed = new NodeChatContextWindowTrim { MessagesDropped = 1, ToolResultsTruncated = 2, ReasoningStripped = 4 }
+        };
+
+        var json = NodeChatMetadataSerializer.Decode(AssertEx.NotNull(NodeChatMetadataSerializer.SerializeMetadata(null, null, null, null, null, null, null, contextWindow: window)));
+        var loaded = AssertEx.NotNull(NodeChatMetadataSerializer.DeserializeMetadata(json).ContextWindow);
+
+        AssertEx.Contains(json, "\"kind\":\"LastRound\"");
+        AssertEx.Equal(window.Estimated, loaded.Estimated);
+        AssertEx.Equal(window.Trimmed, loaded.Trimmed);
+        AssertEx.Equal(window.Tools.Single(), loaded.Tools.Single());
+        AssertEx.Equal(window with { Estimated = null, Tools = [], Trimmed = null }, loaded with { Estimated = null, Tools = [], Trimmed = null });
+        AssertEx.Null(NodeChatMetadataSerializer.DeserializeMetadata("""{"model":"llama","inputCount":5}""").ContextWindow);
+    }
+
+    [Test]
     public void Metadata_SourceScoreKind_PersistsAsEnumName()
     {
         var source = new NodeChatMessageSource(Guid.NewGuid(), Guid.NewGuid(), "Runbook", Section: null, 4.5d, KnowledgeScoreKind.Rerank);

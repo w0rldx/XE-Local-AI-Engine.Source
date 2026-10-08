@@ -139,6 +139,12 @@ public sealed class McpServerResponse
 
     public string? Description { get; init; }
 
+    /// <summary>
+    ///     The slug in this server's qualified tool names (<c>mcp__{slug}__{tool}</c>), so a client can map a tool name back
+    ///     to its server. Null until the first connect assigns it.
+    /// </summary>
+    public string? Slug { get; init; }
+
     public required McpTransportKind TransportKind { get; init; }
 
     public string? Command { get; init; }

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Chat;
 
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -8,6 +9,7 @@ using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -26,6 +28,263 @@ public sealed class ProviderCallBudgetChatClientTests
         // No scope was seeded, so the middleware is a transparent pass-through (eval / preview paths stay byte-identical).
         var received = inner.ReceivedMessageSets.Single();
         AssertEx.Equal(messages.Count, received.Count);
+    }
+
+    [Test]
+    public async Task GetResponseAsync_RecordsARoundContextWhoseCategoriesSumToTheBudgetedEstimate()
+    {
+        var store = new TokenEstimatorCalibrationStore();
+        store.SetToolTemplatePreamble(ModelId, preambleTokens: 37);
+        var divisor = store.ResolveDivisor(ModelId);
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance, store);
+
+        var system = new ChatMessage(ChatRole.System, "You are the worker. Follow the playbook.");
+        var knowledge = Tagged(new ChatMessage(ChatRole.User, "Knowledge excerpt about deployments."), ContextMessageKinds.Knowledge);
+        var attachment = Tagged(new ChatMessage(ChatRole.User, "Inlined attachment text."), ContextMessageKinds.Attachment);
+        var image = Tagged(new ChatMessage(ChatRole.User, [new DataContent(new byte[] { 1, 2, 3 }, "image/png")]), ContextMessageKinds.Image);
+        var compaction = Tagged(new ChatMessage(ChatRole.User, "Summary of the earlier conversation."), ContextMessageKinds.Compaction);
+        var user = new ChatMessage(ChatRole.User, "What is the deployment status?");
+        var assistant = new ChatMessage(ChatRole.Assistant, "Checking.");
+        var tools = ManyTools(3);
+        var options = LargeWindowOptions();
+        options.Instructions = "Skill listing.";
+        options.Tools = tools;
+
+        ProviderCallBudget budget;
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            _ = await sut.GetResponseAsync([system, knowledge, attachment, image, compaction, user, assistant], options);
+        }
+
+        var snapshot = AssertEx.NotNull(budget.LastRoundContext);
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTokens(system, divisor), snapshot.SystemPromptTokens);
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTokens(knowledge, divisor), snapshot.KnowledgeTokens);
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTokens(attachment, divisor) + ProviderMessageTokenEstimator.EstimateTokens(image, divisor), snapshot.AttachmentTokens);
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTokens(compaction, divisor), snapshot.CompactionTokens);
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTokens(user, divisor) + ProviderMessageTokenEstimator.EstimateTokens(assistant, divisor), snapshot.ConversationTokens);
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTokens("Skill listing.", divisor), snapshot.InstructionsTokens);
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTools(tools, divisor), snapshot.ToolSchemaTokens);
+        AssertEx.Equal(expected: 37, snapshot.ToolTemplatePreambleTokens);
+
+        var categories = snapshot.SystemPromptTokens + snapshot.InstructionsTokens + snapshot.ToolSchemaTokens + snapshot.ToolTemplatePreambleTokens
+                         + snapshot.KnowledgeTokens + snapshot.AttachmentTokens + snapshot.CompactionTokens + snapshot.ConversationTokens;
+        AssertEx.Equal(snapshot.EstimatedInputTokens, categories, "The categories must partition the budgeter's own estimate of the round.");
+        AssertEx.Equal(budget.CumulativeInputTokens, (long)snapshot.EstimatedInputTokens, "The snapshot total is the estimate the ceiling registered.");
+
+        AssertEx.Equal(ModelId, snapshot.ModelId);
+        AssertEx.Equal(expected: 1_000_000, snapshot.WindowTokens);
+        AssertEx.True(snapshot.UsableWindowTokens > 0 && snapshot.UsableWindowTokens < snapshot.WindowTokens - snapshot.ReservedOutputTokens,
+            "The usable window sits below the window after the margins and the reserve.");
+        AssertEx.True(tools.Select(static tool => tool.Name).SequenceEqual(snapshot.Tools.Select(static tool => tool.Name), StringComparer.Ordinal),
+            "The snapshot lists the sent tools in offer order.");
+        AssertEx.True(snapshot.Tools.All(entry => entry.Tokens == ProviderMessageTokenEstimator.EstimateTools([tools.Single(tool => tool.Name == entry.Name)], divisor)));
+        AssertEx.Equal(expected: 0, snapshot.ToolsWithheldCount);
+        AssertEx.Equal(expected: 0, snapshot.MessagesDropped);
+    }
+
+    [Test]
+    public async Task GetResponseAsync_RoundContextCapsTheToolListButCountsEveryTool()
+    {
+        var tools = ManyTools(ProviderRoundContextSnapshot.MaxToolEntries + 6);
+        var options = LargeWindowOptions();
+        options.Tools = tools;
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        ProviderCallBudget budget;
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            _ = await sut.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options);
+        }
+
+        var snapshot = AssertEx.NotNull(budget.LastRoundContext);
+        AssertEx.Equal(ProviderRoundContextSnapshot.MaxToolEntries, snapshot.Tools.Count);
+        AssertEx.True(tools.Take(ProviderRoundContextSnapshot.MaxToolEntries).Select(static tool => tool.Name).SequenceEqual(snapshot.Tools.Select(static tool => tool.Name), StringComparer.Ordinal),
+            "The cap keeps the first tools in offer order.");
+        AssertEx.Equal(ProviderMessageTokenEstimator.EstimateTools(tools, new TokenEstimatorCalibrationStore().ResolveDivisor(ModelId)), snapshot.ToolSchemaTokens,
+            "The schema total keeps counting the tools the capped list leaves out.");
+        AssertEx.True(snapshot.ToolSchemaTokens > snapshot.Tools.Sum(static tool => tool.Tokens));
+    }
+
+    [Test]
+    public async Task GetResponseAsync_RoundContextRecordsTheTrimCounters()
+    {
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        ProviderCallBudget budget;
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   OversizedToolResultExcerptChars = 40,
+                   ReservedOutputTokenFloor = 0
+               }))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            _ = await sut.GetResponseAsync(ManyMessagesWithHugeToolResult(), SmallWindowOptions());
+        }
+
+        var snapshot = AssertEx.NotNull(budget.LastRoundContext);
+        AssertEx.Equal(expected: 1, snapshot.ToolResultsTruncated);
+        AssertEx.Equal(expected: 200, snapshot.WindowTokens);
+        AssertEx.Equal(snapshot.EstimatedInputTokens,
+            snapshot.SystemPromptTokens + snapshot.InstructionsTokens + snapshot.ToolSchemaTokens + snapshot.ToolTemplatePreambleTokens + snapshot.ConversationTokens,
+            "A trimmed round still partitions into its categories.");
+    }
+
+    [Test]
+    public async Task GetResponseAsync_BelowTheRelevanceHop_RecordsHowManyToolsTheRoundWithheld()
+    {
+        var tools = new List<AITool>();
+        tools.Add(new ListToolsFunction(tools));
+        tools.AddRange(ManyTools(12));
+        var options = LargeWindowOptions();
+        options.Tools = tools;
+        using var inner = new CapturingChatClient();
+        using var budgetHop = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+        using var sut = new ToolRelevanceChatClient(budgetHop, new LexicalToolRelevanceSelector(), new ToolRelevanceOptions(), NullLogger<ToolRelevanceChatClient>.Instance);
+
+        ProviderCallBudget budget;
+        using (ToolRelevanceScope.BeginScope(active: true, new HashSet<string>(StringComparer.Ordinal)))
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            _ = await sut.GetResponseAsync([new ChatMessage(ChatRole.User, "search the documents")], options);
+        }
+
+        var sent = AssertEx.NotNull(AssertEx.NotNull(inner.ReceivedOptions.Single()).Tools);
+        var snapshot = AssertEx.NotNull(budget.LastRoundContext);
+        AssertEx.True(sent.Count < tools.Count, "Thirteen tools exceed the relevance threshold, so the hop narrows the array.");
+        AssertEx.Equal(tools.Count - sent.Count, snapshot.ToolsWithheldCount);
+        AssertEx.True(sent.Select(static tool => tool.Name).SequenceEqual(snapshot.Tools.Select(static tool => tool.Name), StringComparer.Ordinal),
+            "The snapshot lists the tools actually sent, after the relevance narrowing.");
+    }
+
+    [Test]
+    public async Task GetResponseAsync_RoundContextCarriesNoPromptTextDescriptionOrSchema()
+    {
+        const string secretPrompt = "SECRET-SYSTEM-PROMPT-7f3a";
+        const string secretUser = "SECRET-USER-TEXT-91bc";
+        const string secretInstructions = "SECRET-INSTRUCTIONS-44de";
+        var tools = ManyTools(2);
+        var options = LargeWindowOptions();
+        options.Tools = tools;
+        options.Instructions = secretInstructions;
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        ProviderCallBudget budget;
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            _ = await sut.GetResponseAsync(
+                [
+                    new ChatMessage(ChatRole.System, secretPrompt),
+                    Tagged(new ChatMessage(ChatRole.User, "SECRET-KNOWLEDGE-0a1b"), ContextMessageKinds.Knowledge),
+                    new ChatMessage(ChatRole.User, secretUser)
+                ],
+                options);
+        }
+
+        var json = JsonSerializer.Serialize(AssertEx.NotNull(budget.LastRoundContext));
+        foreach (var forbidden in new[] { secretPrompt, secretUser, secretInstructions, "SECRET-KNOWLEDGE-0a1b", tools[0].Description, "\"properties\"", "\"query\"" })
+        {
+            AssertEx.False(json.Contains(forbidden, StringComparison.Ordinal), $"The snapshot must not carry '{forbidden}'.");
+        }
+
+        AssertEx.Contains(json, tools[0].Name);
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_AttachesTheRoundsOwnReportedUsageToItsSnapshot()
+    {
+        using var inner = new CapturingChatClient
+        {
+            ResponseUsage = new UsageDetails { InputTokenCount = 812, OutputTokenCount = 40, ReasoningTokenCount = 9 }
+        };
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        var snapshot = await StreamRoundsAsync(sut, inner, usagePerRound: null);
+
+        AssertEx.Equal(expected: 812, snapshot.ProviderInputTokens);
+        AssertEx.Equal(expected: 40, snapshot.ProviderOutputTokens);
+        AssertEx.Equal(expected: 9, snapshot.ProviderReasoningTokens);
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_ARoundThatReportsNoUsage_LeavesTheProviderCountsNull()
+    {
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        var snapshot = await StreamRoundsAsync(sut, inner, usagePerRound: null);
+
+        AssertEx.Null(snapshot.ProviderInputTokens);
+        AssertEx.Null(snapshot.ProviderOutputTokens);
+        AssertEx.Null(snapshot.ProviderReasoningTokens);
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WhenOnlyTheFirstRoundReportsUsage_TheLastSnapshotCarriesNoProviderCounts()
+    {
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        var snapshot = await StreamRoundsAsync(sut, inner, usagePerRound: [new UsageDetails { InputTokenCount = 500, OutputTokenCount = 20 }, null]);
+
+        AssertEx.Equal(expected: 2, inner.ReceivedMessageSets.Count);
+        AssertEx.Null(snapshot.ProviderInputTokens, "An earlier round's counts must never pair with the final round's estimate.");
+        AssertEx.Null(snapshot.ProviderOutputTokens);
+    }
+
+    [Test]
+    public async Task GetResponseAsync_AttachesTheRoundsOwnReportedUsageToItsSnapshot()
+    {
+        using var inner = new CapturingChatClient
+        {
+            ResponseUsage = new UsageDetails { InputTokenCount = 640, OutputTokenCount = 12 }
+        };
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        ProviderCallBudget budget;
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            _ = await sut.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], LargeWindowOptions());
+        }
+
+        var snapshot = AssertEx.NotNull(budget.LastRoundContext);
+        AssertEx.Equal(expected: 640, snapshot.ProviderInputTokens);
+        AssertEx.Equal(expected: 12, snapshot.ProviderOutputTokens);
+        AssertEx.Null(snapshot.ProviderReasoningTokens);
+    }
+
+    /// <summary>Streams one round per <paramref name="usagePerRound" /> entry (one round with the fake's usage when null) and returns the last snapshot.</summary>
+    private static async Task<ProviderRoundContextSnapshot> StreamRoundsAsync(ProviderCallBudgetChatClient sut, CapturingChatClient inner, UsageDetails?[]? usagePerRound)
+    {
+        ProviderCallBudget budget;
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            budget = AssertEx.NotNull(ProviderCallBudget.Current);
+            foreach (var usage in usagePerRound ?? [inner.ResponseUsage])
+            {
+                inner.ResponseUsage = usage;
+                await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")], LargeWindowOptions()))
+                {
+                    // Drain so the round completes and its usage is attached.
+                }
+            }
+        }
+
+        return AssertEx.NotNull(budget.LastRoundContext);
+    }
+
+    private static ChatMessage Tagged(ChatMessage message, string kind)
+    {
+        message.AdditionalProperties = new AdditionalPropertiesDictionary { [ContextMessageKinds.Key] = kind };
+        return message;
     }
 
     [Test]

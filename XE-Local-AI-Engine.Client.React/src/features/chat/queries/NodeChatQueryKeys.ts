@@ -1,3 +1,5 @@
+import type { ContextEstimateRequest } from "@/features/chat/api/NodeChatAdapter";
+
 export const nodeChatQueryKeys = {
 	all: ["node-chat"] as const,
 	conversations: () => [...nodeChatQueryKeys.all, "conversations"] as const,
@@ -15,4 +17,16 @@ export const nodeChatQueryKeys = {
 	// invalidation reaches it; the compact mutation invalidates it explicitly so an open panel refreshes after a fold.
 	conversationContextState: (conversationId: string) =>
 		[...nodeChatQueryKeys.conversation(conversationId), "context-state"] as const,
+	// Pre-send estimate of the fixed context parts for a model and agent. Not under a conversation: it depends only
+	// on what the next request would resolve, so a new conversation reuses it.
+	contextEstimate: ({ modelName, agentId, useLocalTools, maxOutputTokens, numCtx }: ContextEstimateRequest) =>
+		[
+			...nodeChatQueryKeys.all,
+			"context-estimate",
+			modelName,
+			agentId ?? null,
+			useLocalTools,
+			maxOutputTokens ?? null,
+			numCtx ?? null,
+		] as const,
 };

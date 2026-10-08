@@ -866,6 +866,8 @@ export function applyNodeChatStreamEvent(
 		outputTokens: event.outputTokens ?? existing?.outputTokens,
 		totalTokens: event.totalTokens ?? existing?.totalTokens,
 		reasoningTokens: event.reasoningTokens ?? existing?.reasoningTokens,
+		// Only the terminal event carries a snapshot; every other event keeps the one already on the message.
+		contextWindow: event.contextWindow ?? existing?.contextWindow,
 	};
 	const nextConversation: ChatConversationModel = {
 		...conversation,
@@ -938,6 +940,7 @@ export function markNodeChatStreamTerminated(
 		outputTokens: existing?.outputTokens,
 		totalTokens: existing?.totalTokens,
 		reasoningTokens: existing?.reasoningTokens,
+		contextWindow: existing?.contextWindow,
 	};
 	const nextConversation = {
 		...conversation,

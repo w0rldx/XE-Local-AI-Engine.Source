@@ -102,8 +102,14 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
     /// </remarks>
     private async ValueTask<ChatOptions?> ResolveOptionsAsync(IReadOnlyList<ChatMessage> messages, ChatOptions? options, CancellationToken cancellationToken)
     {
-        if (ToolRelevanceScope.Current is not { Active: true } scope
-            || options?.Tools is not { Count: > 0 } tools)
+        if (ToolRelevanceScope.Current is not { Active: true } scope)
+        {
+            return options;
+        }
+
+        // Every path below that does not narrow sends the whole array; only the narrowing path records a non-zero count.
+        scope.RecordRoundWithheld(0);
+        if (options?.Tools is not { Count: > 0 } tools)
         {
             return options;
         }
@@ -163,6 +169,7 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
         var sent = decision.SentNames();
         var narrowed = options.Clone();
         narrowed.Tools = [.. tools.Where(tool => sent.Contains(tool.Name))];
+        scope.RecordRoundWithheld(tools.Count - narrowed.Tools.Count);
         return narrowed;
     }
 

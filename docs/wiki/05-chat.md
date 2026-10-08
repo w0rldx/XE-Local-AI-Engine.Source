@@ -20,6 +20,7 @@
 - [Per-send advanced sampling](#per-send-advanced-sampling)
 - [Reasoning effort + cloud clamp](#reasoning-effort--cloud-clamp)
 - [Conversation compaction (non-destructive)](#conversation-compaction-non-destructive)
+- [Context window breakdown](#context-window-breakdown)
 - [Chat workflow mode](#chat-workflow-mode)
 - [Persistence](#persistence)
 - [React chat feature (src/features/chat)](#react-chat-feature-srcfeatureschat)
@@ -643,6 +644,74 @@ only seed them:
 `RecentMessagesToKeepVerbatim`, `MaxSummaryChars` and `MaxInputCharsPerSummarizationCall` (above) apply to the
 summarizer, and — for `MaxInputCharsPerSummarizationCall` — to the distiller's own budget arithmetic too.
 
+## Context window breakdown
+
+The composer's `ContextUsageBadge` is the trigger of `ContextUsagePopover`, a Mantine popover that answers where
+the window went: the window, the output reserve, the safety margin, what is left, and a per-category split of the
+last request. Every figure is labelled provider-reported, estimated or unknown; only the usage counts of a finished
+round are provider-reported, the category split is always the calibrated character heuristic.
+
+**Capture.** `ProviderCallBudgetChatClient` is the one hop that sees the request as sent, so after budgeting a
+round it builds a `ProviderRoundContextSnapshot` and records it on the ambient `ProviderCallBudget`
+(`LastRoundContext`, last wins, like the last-round usage). When that same round completes,
+`ProviderCallBudgetChatClient.AttachRoundUsage` swaps in the usage it reported (input, output, reasoning), only while
+the snapshot is still the last one, so the counts always belong to the round the estimate describes. A round that
+reported no usage keeps null counts, which the SPA shows as estimated. It holds names and counts only, never prompt text, tool
+descriptions, schemas, arguments or results. The categories sum to the budgeter's own estimate of the round's input
+(`EstimatedInputTokens`):
+
+| Category | What it counts |
+|---|---|
+| System prompt | Every `System` message: the resolved prompt (scaffold, persona and playbook memory as one unit) |
+| Instructions | `ChatOptions.Instructions`, in production only what the agent boundary adds, such as the skill listing |
+| Tools | The sent tools' name, description and schema, plus the model's chat-template tool preamble, charged once |
+| Knowledge, attachments, compaction | Leading context messages tagged by kind |
+| Conversation | Everything else, including tool results and loaded skill bodies |
+
+The kind tag is `ConversationContextKind` on `ConversationMessageDto`, set where the turn context is built and
+copied by the invocation runner into the `ChatMessage` as `ContextMessageKinds.Key` in `AdditionalProperties`, so
+the budget hop can attribute tokens without reading content. An untagged message counts as conversation.
+
+**Tools are the ones sent.** The list is read after `ToolRelevanceChatClient` narrowed the offer, in offer order and
+capped at `NodeChatContextWindowDto.MaxToolEntries`. The relevance hop records how many tools it withheld from the
+round on `ToolRelevanceScope.LastRoundWithheldCount`; the snapshot carries it as `ToolsWithheldCount` (the withheld
+tools stay reachable through `list_tools`), and the popover shows one "withheld" line.
+
+**Carrier.** The runner reads `ProviderCallBudget.LastRoundContext` after the turn and reports it through the
+worker event dispatcher into `InvocationState.ContextSnapshot`. `NodeChatInvocationPump.MapContextWindow` maps it,
+with the provider counts the snapshot already carries (not the state's last reporting round, which can be an earlier one), to `NodeChatContextWindowDto` (kind `LastRound`) and
+puts it on the terminalize request. It is stored in `NodeChatMessageMetadata.ContextWindow`, a trailing optional
+member of the encrypted metadata blob, so rows written before the feature read back with `null`. It leaves the node
+in exactly two places: the REST message response and the terminal `ChatStreamEvent`
+(`ChatStreamEventMapper` sets it only on terminal event types). Intermediate stream events never carry it.
+
+**Before the first send.** With no assistant message there is no snapshot, so the popover fetches
+`GET chat/context-estimate?modelName&agentId&useLocalTools` (`GetNodeChatContextEstimateEndpoint`, Operator policy,
+`ChatContextEstimateService`). A blank model means the node's local default chat model (the composer sends the
+picker's local-default sentinel as no model, as a send does), no agent means the Default Assistant, and
+`useLocalTools` mirrors the composer's "Local tools" toggle (absent means on), so tools are offered only when a
+send would offer them. In developer mode the SPA also sends the sampling preferences' `maxOutputTokens`, which widens the output
+reserve above the node floor by the send path's `TurnPolicy.ResolveReservedOutputTokens` rule, and `numCtx`, the
+requested window, which a known launched window caps and which is otherwise taken as is (`TurnPolicy.WithEffectiveContext`).
+Non-positive values are ignored. The service reuses the send path's turn resolution and tool offer, so the figures follow what a
+first send would resolve, and measures them with the outer budgeter's estimator and framing. It estimates the fixed
+parts only: system prompt (the embedded `LocalChatDefaultPrompt` when the turn resolves no prompt of its own), the
+offered tools with the template preamble, the default output reserve and the safety margin. Instructions,
+knowledge, attachments, compaction and conversation are zero, and the response has kind `PreSendEstimate`, no
+provider counts and no trim counters. **404** when no model resolves (no installed chat model for a blank request)
+or when the model is not a cloud model and the node has no local details for it; a model that is known but declares
+no context length takes the node default window, and a cold local GGUF takes the smaller of its train ceiling
+and the node default, matching what a pre-launch turn is budgeted against (the first round's snapshot corrects it). The SPA shows the estimate with the "estimated" label until the
+first assistant message arrives, and ignores it as soon as a snapshot exists.
+
+**Stale snapshots.** The snapshot's `modelId` is the model the round ran on. `ContextUsagePopover` keeps the last
+round only when `isSnapshotForModel` (`ContextUsageBreakdown`) accepts it for the selected model, comparing without
+case and ignoring a provider prefix; a snapshot that names a different model is treated as absent and the estimate is
+shown, so switching model does not display the previous model's window. `ChatComposerToolbar` first maps the
+picker's local-default sentinel to a blank name with `toNodeChatRequestModel`, the send path's rule. A blank
+selection (the node default) or a snapshot without a `modelId` cannot be contradicted and counts as a match, and a
+blank name is sent to the estimate route as no `modelName`.
+
 ## Chat workflow mode
 
 A Graph Workflow of kind `Chat` ([Graph Workflows](21-graph-workflows.md) §3.6) runs from an ordinary chat
@@ -791,10 +860,10 @@ Organized by concern:
 | Folder | Highlights |
 |---|---|
 | `api/` | `NodeChatAdapter` (REST via hey-api generated clients + the SignalR streaming bridge), `NodeChatConnection` (the persistent local hub connection), `NodeChatMapper` (DTO → view model), `NodeChatStreamGuard` / `NodeChatStreamState` (stream state machine), `useNodeChatConnectionReadiness` |
-| `components/` | `ChatInputArea`, `ChatMessage` / `ChatMessageList`, `MessageParts` + `ThoughtsSection` + `ToolCallCard` (ordered-parts rendering), `ChatSourcesStrip`, `AgentSelectorCard`, `ModelSelectorCard`, `ChatSamplingOptionsDialog`, `StreamingIndicator` / `StreamCaret`, `ContextUsageBadge`, `CompactButton` (manual compaction, beside the badge), `ContextStatePanel` (read-only drawer over the distilled state, opened beside `CompactButton` in `ChatInputArea/ChatComposerToolbar`), `MessageFeedbackControl`, `LocalToolsOverview` |
-| `models/` | `ChatModels`, `ChatSamplingOptions`, `MessageParts`, `MessageRevisionGrouping`, `ChatCapabilityGates`, `ContextUsageDerivation`, and the pure `ChatConversationDerivations` helpers for selected-detail merging, cold-resume row selection, title derivation, and temporary regenerate grouping |
+| `components/` | `ChatInputArea`, `ChatMessage` / `ChatMessageList`, `MessageParts` + `ThoughtsSection` + `ToolCallCard` (ordered-parts rendering), `ChatSourcesStrip`, `AgentSelectorCard`, `ModelSelectorCard`, `ChatSamplingOptionsDialog`, `StreamingIndicator` / `StreamCaret`, `ContextUsageBadge` (the trigger of `ContextUsagePopover`), `ContextUsagePopover` (`components/ContextUsagePopover/`, with the pure `ContextUsageBreakdown` helpers), `CompactButton` (manual compaction, beside the badge), `ContextStatePanel` (read-only drawer over the distilled state, opened beside `CompactButton` in `ChatInputArea/ChatComposerToolbar`), `MessageFeedbackControl`, `LocalToolsOverview` |
+| `models/` | `ChatModels`, `ChatSamplingOptions`, `MessageParts`, `MessageRevisionGrouping`, `ChatCapabilityGates`, `ContextUsageDerivation`, `ContextWindowModels` (the context snapshot view types), and the pure `ChatConversationDerivations` helpers for selected-detail merging, cold-resume row selection, title derivation, and temporary regenerate grouping |
 | `pages/` | `Chat.tsx` (top-level orchestration), model-picker filters/options |
-| `queries/` | `NodeChatQueryKeys`, `useCodexModelOptions` |
+| `queries/` | `NodeChatQueryKeys`, `useCodexModelOptions`, `useContextEstimate` (the pre-send estimate, fetched only while the popover is open with no snapshot) |
 | `stores/` | `NodeChatPreferencesStore` (model/effort/local-tools selection + `clampReasoningEffort`), `ChatSamplingPreferencesStore` |
 | `workflow/` | Chat workflow mode: `useChatWorkflow`, `WorkflowSelectorCard`, `WorkflowRunStatusCard`, `WorkflowActivityBlock`, `ChatWorkflowModels`, `ChatWorkflowStore` |
 

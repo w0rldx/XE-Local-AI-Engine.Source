@@ -45,6 +45,9 @@ public static class LocalApiRoutes
 
         // Read-only view of the distilled state and the synopsis the compaction path maintains. GET, literal "context-state" segment.
         public const string ConversationContextState = "chat/conversations/{conversationId}/context-state";
+
+        // Pre-send estimate of the next request's fixed parts (prompt, offered tools, reserve, margin) for a model and agent. GET, query-only.
+        public const string ContextEstimate = "chat/context-estimate";
         public const string BranchConversation = "chat/conversations/{conversationId}/branch/{messageId}";
         public const string MessageRevisions = "chat/conversations/{conversationId}/messages/{messageId}/revisions";
         public const string MessageFeedback = "chat/conversations/{conversationId}/messages/{messageId}/feedback";

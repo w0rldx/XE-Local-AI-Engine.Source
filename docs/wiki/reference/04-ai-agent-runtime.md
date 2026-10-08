@@ -313,6 +313,16 @@ pass-through, except for the tool-call ceiling below.
   `UsageContent` on one of the updates (llama.cpp reports it on the final chunk), last one wins —
   matching the invocation runner's own reading of the same signal — and it is recorded in the `finally`
   so an abandoned or faulted enumeration still contributes the usage it did report.
+- **Per-round context snapshot.** Once a round has passed every ceiling and is about to be sent, the hop records
+  a `ProviderRoundContextSnapshot` on the scope's `ProviderCallBudget` (`LastRoundContext`, last wins, like the
+  last-round usage). It carries the window, reserve and usable budget, the estimated tokens per category (system
+  prompt, instructions, tool schemas, template preamble, knowledge, attachments, compaction, conversation, summing
+  to the round's estimated input), the sent tools' names with their tokens (capped), the trim counters and the count
+  the relevance hop withheld (`ToolRelevanceScope.LastRoundWithheldCount`, recorded by `ToolRelevanceChatClient`
+  for the round). Names and counts only, never message or tool content; leading context messages are attributed by
+  the `ContextMessageKinds.Key` tag, not by reading text. The chat pump persists it; see
+  [Chat](../05-chat.md#context-window-breakdown).
+
 - **Elapsed time** for a streamed call covers the complete enumerator lifetime, including consumer
   backpressure while the provider request remains open: this is provider-round elapsed time, not CPU
   time.

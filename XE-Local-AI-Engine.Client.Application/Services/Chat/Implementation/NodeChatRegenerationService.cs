@@ -266,7 +266,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
             {
                 InvocationId = requestId,
                 ConversationId = conversationId,
-                ResolvedSystemPrompt = resolved?.ResolvedSystemPrompt ?? await LoadResolvedSystemPromptAsync(_localChatOptions.Value),
+                ResolvedSystemPrompt = resolved?.ResolvedSystemPrompt ?? await LocalChatDefaultPrompt.LoadAsync(_localChatOptions.Value),
                 ConversationContext = BuildRegenerationContext(conversation, original, selectedPath, knowledge?.Message),
                 ModelProfile = resolution.EffectiveModel,
                 AgentDefinitionVersion = resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
@@ -734,38 +734,6 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                    Content = message.Content
                })
                .ToArray();
-    }
-
-    // The same resource AgentInstructionProvider.GetBaseScaffold reads, kept as a local literal to avoid a DI
-    // dependency on IAgentInstructionProvider in this already-large constructor.
-    private const string BaseScaffoldResourceName = "XE_Local_AI_Engine.AI.Agent.Instructions.BaseScaffold.txt";
-
-    /// <summary>
-    ///     Reads the embedded chat prompt for the null-definition fallback and prepends the same versioned base
-    ///     scaffold a resolved agent gets, so an unbound regenerate is covered identically to a bound one.
-    /// </summary>
-    private static async Task<string> LoadResolvedSystemPromptAsync(LocalChatAgentOptions options)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-        if (string.IsNullOrWhiteSpace(options.InstructionsResource))
-        {
-            throw new ArgumentException("Instructions resource must be provided.", nameof(options));
-        }
-
-        var persona = await LoadEmbeddedResourceAsync(options.InstructionsResource);
-        var scaffold = await LoadEmbeddedResourceAsync(BaseScaffoldResourceName);
-        return string.IsNullOrWhiteSpace(scaffold) ? persona : $"{scaffold.TrimEnd()}\n\n{persona}";
-    }
-
-    // Reads an embedded manifest resource: the bytes are already in the loaded assembly image, so there is no I/O to
-    // abandon. CancellationToken.None is the analyzers' documented "intentionally not propagating" opt-out.
-    private static async Task<string> LoadEmbeddedResourceAsync(string resourceName)
-    {
-        var assembly = typeof(LocalChatAgentOptions).Assembly;
-        await using var stream = assembly.GetManifestResourceStream(resourceName)
-                                 ?? throw new InvalidOperationException($"Embedded instructions resource '{resourceName}' was not found.");
-        using var reader = new StreamReader(stream);
-        return await reader.ReadToEndAsync(CancellationToken.None);
     }
 
     /// <summary>

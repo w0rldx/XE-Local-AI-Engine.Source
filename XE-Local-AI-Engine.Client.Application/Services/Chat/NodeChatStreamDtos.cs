@@ -192,4 +192,7 @@ public sealed record ChatStreamEvent
     public string? NoticeDetail { get; init; }
 
     public string? RuntimePhaseChangedAtUtc { get; init; }
+
+    /// <summary>On a terminal event only: the content-free context-window snapshot of the turn's last provider round.</summary>
+    public NodeChatContextWindowDto? ContextWindow { get; init; }
 }

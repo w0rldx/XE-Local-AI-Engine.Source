@@ -5207,6 +5207,85 @@
         ]
       }
     },
+    "/api/local/v1/chat/context-estimate": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "getNodeChatContextEstimate",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "agentId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          },
+          {
+            "name": "useLocalTools",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            }
+          },
+          {
+            "name": "maxOutputTokens",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          },
+          {
+            "name": "numCtx",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatContextWindowResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/chat/conversations": {
       "get": {
         "tags": [
@@ -39293,6 +39372,10 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1GetNodeChatContextEstimateRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "XE_Local_AI_EngineClientEndpointsLocalChatV1GetNodeChatConversationContextStateRequest": {
         "type": "object",
         "additionalProperties": false
@@ -39408,6 +39491,178 @@
           },
           "cancelled": {
             "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatContextWindowEstimateResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "systemPromptTokens",
+          "instructionsTokens",
+          "toolSchemaTokens",
+          "toolTemplatePreambleTokens",
+          "knowledgeTokens",
+          "attachmentTokens",
+          "compactionTokens",
+          "conversationTokens",
+          "totalTokens"
+        ],
+        "properties": {
+          "systemPromptTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "instructionsTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "toolSchemaTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "toolTemplatePreambleTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "knowledgeTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "attachmentTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "compactionTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "conversationTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalTokens": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatContextWindowResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "windowTokens",
+          "reservedOutputTokens",
+          "usableWindowTokens",
+          "safetyMarginTokens",
+          "tools",
+          "toolsWithheldCount"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesChatNodeChatContextWindowKind"
+          },
+          "modelId": {
+            "type": "string",
+            "nullable": true
+          },
+          "windowTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reservedOutputTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "usableWindowTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "safetyMarginTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "providerInputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "providerOutputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "providerReasoningTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "estimated": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatContextWindowEstimateResponse"
+              }
+            ]
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatContextWindowToolResponse"
+            }
+          },
+          "toolsWithheldCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "trimmed": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatContextWindowTrimResponse"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatContextWindowToolResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "tokens"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "tokens": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatContextWindowTrimResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messagesDropped",
+          "toolResultsTruncated",
+          "reasoningStripped"
+        ],
+        "properties": {
+          "messagesDropped": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "toolResultsTruncated": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reasoningStripped": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -39799,6 +40054,14 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesChatNodeChatMessageSource"
             }
+          },
+          "contextWindow": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatContextWindowResponse"
+              }
+            ]
           }
         }
       },
@@ -40643,6 +40906,10 @@
             "type": "string"
           },
           "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "slug": {
             "type": "string",
             "nullable": true
           },
@@ -50260,6 +50527,18 @@
         "enum": [
           "Primary",
           "Judge"
+        ]
+      },
+      "XE_Local_AI_EngineClientServicesChatNodeChatContextWindowKind": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "LastRound",
+          "PreSendEstimate"
+        ],
+        "enum": [
+          "LastRound",
+          "PreSendEstimate"
         ]
       },
       "XE_Local_AI_EngineClientServicesChatNodeChatMessagePart": {

@@ -3827,6 +3827,10 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversationR
 	purgeImmediately?: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatContextEstimateRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationContextStateRequest = {
 	[key: string]: never;
 };
@@ -3873,6 +3877,45 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageRespon
 	requestId: string;
 	status: string;
 	cancelled: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowEstimateResponse = {
+	systemPromptTokens: number;
+	instructionsTokens: number;
+	toolSchemaTokens: number;
+	toolTemplatePreambleTokens: number;
+	knowledgeTokens: number;
+	attachmentTokens: number;
+	compactionTokens: number;
+	conversationTokens: number;
+	totalTokens: number;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowResponse = {
+	kind: XeLocalAiEngineClientServicesChatNodeChatContextWindowKind;
+	modelId?: string | null;
+	windowTokens: number;
+	reservedOutputTokens: number;
+	usableWindowTokens: number;
+	safetyMarginTokens: number;
+	providerInputTokens?: number | null;
+	providerOutputTokens?: number | null;
+	providerReasoningTokens?: number | null;
+	estimated?: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowEstimateResponse | null;
+	tools: Array<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowToolResponse>;
+	toolsWithheldCount: number;
+	trimmed?: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowTrimResponse | null;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowToolResponse = {
+	name: string;
+	tokens: number;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowTrimResponse = {
+	messagesDropped: number;
+	toolResultsTruncated: number;
+	reasoningStripped: number;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateEntryResponse = {
@@ -3970,6 +4013,7 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse = {
 	reasoningEffort?: string | null;
 	generationDurationMs?: number | null;
 	sources?: Array<XeLocalAiEngineClientServicesChatNodeChatMessageSource> | null;
+	contextWindow?: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowResponse | null;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse = {
@@ -4232,6 +4276,7 @@ export type XeLocalAiEngineClientEndpointsMcpV1McpServerResponse = {
 	id: string;
 	name: string;
 	description?: string | null;
+	slug?: string | null;
 	transportKind: XeLocalAiEngineClientPersistenceMcpTransportKind;
 	command?: string | null;
 	arguments: Array<string>;
@@ -6831,6 +6876,8 @@ export type XeLocalAiEngineClientServicesAgentsSkillImportConflictResolution = "
 export type XeLocalAiEngineClientServicesAgentsSkillImportStatus = "Imported" | "Replaced" | "Skipped";
 
 export type XeLocalAiEngineClientServicesBenchmarksBenchmarkCancellationTarget = "Primary" | "Judge";
+
+export type XeLocalAiEngineClientServicesChatNodeChatContextWindowKind = "LastRound" | "PreSendEstimate";
 
 export type XeLocalAiEngineClientServicesChatNodeChatMessagePart = {
 	kind?: string;
@@ -10004,6 +10051,39 @@ export type CancelNodeChatMessageResponses = {
 };
 
 export type CancelNodeChatMessageResponse = CancelNodeChatMessageResponses[keyof CancelNodeChatMessageResponses];
+
+export type GetNodeChatContextEstimateData = {
+	body?: never;
+	path?: never;
+	query?: {
+		modelName?: string | null;
+		agentId?: string | null;
+		useLocalTools?: boolean | null;
+		maxOutputTokens?: number | null;
+		numCtx?: number | null;
+	};
+	url: "/api/local/v1/chat/context-estimate";
+};
+
+export type GetNodeChatContextEstimateErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetNodeChatContextEstimateResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowResponse;
+};
+
+export type GetNodeChatContextEstimateResponse = GetNodeChatContextEstimateResponses[keyof GetNodeChatContextEstimateResponses];
 
 export type ListNodeChatConversationsData = {
 	body?: never;

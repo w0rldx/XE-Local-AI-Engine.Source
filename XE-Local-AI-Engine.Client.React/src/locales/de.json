@@ -1323,7 +1323,49 @@
 				"maxKnown": "Maximaler Kontext vom ausgewählten Node gemeldet",
 				"tooltip": "{{usedOrigin}}. {{maxOrigin}}. Modell: {{model}}. Node: {{node}}.",
 				"srUnknown": "Kontextfenster-Nutzung unbekannt, {{used}} von {{max}} Tokens.",
-				"srUsed": "Kontextfenster zu {{percent}} Prozent genutzt, {{used}} von {{max}} Tokens."
+				"srUsed": "Kontextfenster zu {{percent}} Prozent genutzt, {{used}} von {{max}} Tokens.",
+				"trigger": "Nutzung des Kontextfensters anzeigen",
+				"unknownValue": "unbekannt",
+				"window": "Kontextfenster",
+				"remaining": "Verbleibend",
+				"reportedInput": "Gemeldete Eingabe (letzte Anfrage)",
+				"toolsSent": "Gesendete Tools ({{count}})",
+				"withheld": "{{count}} Tools vom Relevanzfilter zurückgehalten",
+				"afterFirstResponse": "Wird nach der ersten Antwort aktualisiert.",
+				"estimateFailed": "Die Schätzung konnte nicht geladen werden.",
+				"section": {
+					"systemPrompt": "Systemprompt",
+					"instructions": "Anweisungen",
+					"tools": "Tools (Schema und Präambel)",
+					"knowledge": "Wissen",
+					"attachments": "Anhänge",
+					"compaction": "Kompaktierungszusammenfassung",
+					"conversation": "Unterhaltung",
+					"used": "Letzte Anfrage",
+					"reservedOutput": "Für Ausgabe reserviert",
+					"safetyMargin": "Sicherheitsreserve",
+					"free": "Frei"
+				},
+				"source": {
+					"reported": "Vom Modell gemeldet",
+					"estimated": "Geschätzt",
+					"unknown": "Unbekannt"
+				},
+				"toolGroup": {
+					"builtIn": "Integriert",
+					"mcp": "MCP: {{server}}",
+					"custom": "Benutzerdefiniert",
+					"skills": "Skills"
+				},
+				"trimmed": {
+					"messagesDropped": "{{count}} ältere Nachrichten entfernt",
+					"toolResultsTruncated": "{{count}} Tool-Ergebnisse gekürzt",
+					"reasoningStripped": "{{count}} Reasoning-Blöcke entfernt"
+				},
+				"footer": {
+					"reported": "Die Summe stammt aus der Meldung des Modells zur letzten Anfrage. Die Kategorien sind Schätzungen.",
+					"estimated": "Alle Werte sind Schätzungen, bis das Modell die Nutzung einer Anfrage meldet."
+				}
 			},
 			"compact": {
 				"tooltip": "Ältere Nachrichten zusammenfassen, um Kontext freizugeben",

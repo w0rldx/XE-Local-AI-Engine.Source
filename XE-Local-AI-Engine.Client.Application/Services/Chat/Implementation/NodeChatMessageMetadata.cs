@@ -27,4 +27,7 @@ internal sealed record NodeChatMessageMetadata(
     long? GenerationDurationMs = null,
     // Knowledge-base sources that grounded this plain-chat turn: a trailing optional member, so a legacy blob omits
     // the key. Only NON-SENSITIVE provenance rides here — ids, derived title and section, score, no chunk body.
-    IReadOnlyList<NodeChatMessageSource>? Sources = null);
+    IReadOnlyList<NodeChatMessageSource>? Sources = null,
+    // Content-free context-window snapshot of the last provider round: a trailing optional member, so a legacy blob
+    // omits the key and deserializes to null. Names and counts only, in the same encrypted blob.
+    NodeChatContextWindowDto? ContextWindow = null);

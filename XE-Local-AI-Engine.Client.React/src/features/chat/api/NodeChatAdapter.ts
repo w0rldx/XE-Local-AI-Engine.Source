@@ -6,6 +6,7 @@ import {
 	compactNodeChatConversation,
 	createNodeChatConversation,
 	deleteNodeChatConversation,
+	getNodeChatContextEstimate,
 	getNodeChatConversation,
 	getNodeChatConversationContextState,
 	listNodeChatConversations,
@@ -36,6 +37,7 @@ import type {
 	ChatMessageRevisions,
 } from "@/features/chat/models/ChatModels";
 import type { WireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
+import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
 import type { NodeChatStreamEventDto, NodeChatStreamRequestDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 interface RequestOptions {
@@ -83,6 +85,16 @@ export interface SendMessageRequest {
 	autoAcceptWebContent?: boolean;
 }
 
+// What the next request would resolve, so the pre-send estimate matches the turn: model (blank = node default), agent,
+// the local-tools toggle and the developer-mode output reserve and window overrides.
+export interface ContextEstimateRequest {
+	modelName: string;
+	agentId?: string;
+	useLocalTools: boolean;
+	maxOutputTokens?: number;
+	numCtx?: number;
+}
+
 export interface NodeChatAdapter {
 	listConversations(options?: ListConversationsOptions): Promise<ChatConversationListModel>;
 	getConversation(conversationId: string, options?: RequestOptions): Promise<ChatConversationModel>;
@@ -94,6 +106,7 @@ export interface NodeChatAdapter {
 		conversationId: string,
 		options?: RequestOptions,
 	): Promise<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateResponse | null>;
+	getContextEstimate(request: ContextEstimateRequest, options?: RequestOptions): Promise<ContextWindowSnapshot | null>;
 	setConversationPinned(conversationId: string, isPinned: boolean, options?: RequestOptions): Promise<ChatConversationModel>;
 	setConversationArchived(conversationId: string, archived: boolean, options?: RequestOptions): Promise<ChatConversationModel>;
 	setConversationMemoryExcluded(
@@ -235,6 +248,24 @@ export const nodeChatAdapter: NodeChatAdapter = {
 			return data;
 		} catch (error) {
 			// An unknown (or not yet persisted) conversation has no state to show: null renders the empty panel.
+			if (error instanceof ApiError && error.statusCode === 404) {
+				return null;
+			}
+			throw error;
+		}
+	},
+	async getContextEstimate({ modelName, ...rest }, options) {
+		try {
+			const { data } = await callWithResponseValidation(
+				getNodeChatContextEstimate({
+					query: { modelName: modelName.length > 0 ? modelName : undefined, ...rest },
+					signal: options?.signal,
+					throwOnError: true,
+				}),
+			);
+			return data;
+		} catch (error) {
+			// A model the node does not know has no estimate: null renders the "after the first response" state.
 			if (error instanceof ApiError && error.statusCode === 404) {
 				return null;
 			}

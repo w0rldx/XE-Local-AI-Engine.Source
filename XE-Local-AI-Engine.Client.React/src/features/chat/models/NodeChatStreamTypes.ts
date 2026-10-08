@@ -1,6 +1,8 @@
 // SignalR-stream-only DTOs for the node chat streaming path. These have NO OpenAPI/generated equivalent
 // (the stream rides the SignalR hub, not the REST surface), so they remain hand-authored beside the chat feature.
 
+import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
+
 export interface NodeChatStreamRequestDto {
 	conversationId: string;
 	content: string;
@@ -101,6 +103,8 @@ export interface NodeChatStreamEventDto {
 	outputTokens?: number | null;
 	totalTokens?: number | null;
 	reasoningTokens?: number | null;
+	// Last-round context-window snapshot, present on the terminal assistant event only.
+	contextWindow?: ContextWindowSnapshot | null;
 	// Tool lifecycle fields: present on `tool-call-requested` / `tool-call-completed` events only.
 	toolCallId?: string | null;
 	toolName?: string | null;

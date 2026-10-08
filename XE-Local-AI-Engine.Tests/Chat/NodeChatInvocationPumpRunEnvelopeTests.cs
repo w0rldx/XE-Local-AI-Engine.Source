@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -584,6 +585,99 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
                 && request.Envelope.DispatchedTier == "fast"
                 && request.Envelope.AuthoredEffort == "auto"),
             Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_WithALastRoundSnapshot_MapsItWithTheProviderUsageOntoTheTerminalizeRequest()
+    {
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1",
+            InputTokens = 900,
+            OutputTokens = 40,
+            ReasoningTokens = 12,
+            ContextSnapshot = new ProviderRoundContextSnapshot
+            {
+                ModelId = "served-model",
+                WindowTokens = 8192,
+                ReservedOutputTokens = 1024,
+                UsableWindowTokens = 5939,
+                SystemPromptTokens = 300,
+                InstructionsTokens = 20,
+                ToolSchemaTokens = 150,
+                ToolTemplatePreambleTokens = 30,
+                KnowledgeTokens = 60,
+                AttachmentTokens = 70,
+                CompactionTokens = 80,
+                ConversationTokens = 90,
+                EstimatedInputTokens = 800,
+                Tools = [new ProviderRoundToolTokens { Name = "get_time", Tokens = 50 }, new ProviderRoundToolTokens { Name = "mcp__docs__search", Tokens = 100 }],
+                ToolsWithheldCount = 3,
+                MessagesDropped = 1,
+                ToolResultsTruncated = 2,
+                ReasoningStripped = 4,
+                ProviderInputTokens = 850,
+                ProviderOutputTokens = 33,
+                ProviderReasoningTokens = 7
+            }
+        };
+
+        _ = await pump.TerminalizeAsync(new NodeChatMessageCorrelation { ConversationId = state.ConversationId, MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() },
+            state,
+            "requested-model");
+
+        var request = (NodeChatTerminalizeMessageRequest)persistence.ReceivedCalls().Single().GetArguments()[0]!;
+        var window = AssertEx.NotNull(request.ContextWindow);
+        AssertEx.Equal(NodeChatContextWindowKind.LastRound, window.Kind);
+        AssertEx.Equal("served-model", window.ModelId);
+        AssertEx.Equal(expected: 8192, window.WindowTokens);
+        AssertEx.Equal(expected: 1024, window.ReservedOutputTokens);
+        AssertEx.Equal(expected: 5939, window.UsableWindowTokens);
+        AssertEx.Equal(expected: 8192 - 1024 - 5939, window.SafetyMarginTokens);
+        // The snapshot's own round usage, not the state's last-reporting round (900/40/12 above).
+        AssertEx.Equal(expected: 850, window.ProviderInputTokens);
+        AssertEx.Equal(expected: 33, window.ProviderOutputTokens);
+        AssertEx.Equal(expected: 7, window.ProviderReasoningTokens);
+        var estimate = AssertEx.NotNull(window.Estimated);
+        AssertEx.Equal(expected: 300, estimate.SystemPromptTokens);
+        AssertEx.Equal(expected: 20, estimate.InstructionsTokens);
+        AssertEx.Equal(expected: 150, estimate.ToolSchemaTokens);
+        AssertEx.Equal(expected: 30, estimate.ToolTemplatePreambleTokens);
+        AssertEx.Equal(expected: 60, estimate.KnowledgeTokens);
+        AssertEx.Equal(expected: 70, estimate.AttachmentTokens);
+        AssertEx.Equal(expected: 80, estimate.CompactionTokens);
+        AssertEx.Equal(expected: 90, estimate.ConversationTokens);
+        AssertEx.Equal(expected: 800, estimate.TotalTokens);
+        AssertEx.Equal(expected: 2, window.Tools.Count);
+        AssertEx.Equal(new NodeChatContextWindowTool { Name = "mcp__docs__search", Tokens = 100 }, window.Tools[1]);
+        AssertEx.Equal(expected: 3, window.ToolsWithheldCount);
+        AssertEx.Equal(new NodeChatContextWindowTrim { MessagesDropped = 1, ToolResultsTruncated = 2, ReasoningStripped = 4 }, window.Trimmed);
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_WithoutASnapshot_LeavesTheContextWindowNullSoThePersistedValueIsKept()
+    {
+        var persistence = CreatePersistence();
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = Guid.NewGuid(),
+            Status = InvocationStatus.Failed,
+            InputTokens = 900
+        };
+
+        _ = await pump.TerminalizeAsync(new NodeChatMessageCorrelation { ConversationId = state.ConversationId, MessageId = Guid.NewGuid(), RequestId = Guid.NewGuid() },
+            state,
+            "requested-model");
+
+        var request = (NodeChatTerminalizeMessageRequest)persistence.ReceivedCalls().Single().GetArguments()[0]!;
+        AssertEx.Null(request.ContextWindow);
     }
 
     private static INodeChatPersistenceService CreatePersistence()

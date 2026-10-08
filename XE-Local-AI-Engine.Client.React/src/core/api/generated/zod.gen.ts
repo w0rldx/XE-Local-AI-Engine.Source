@@ -4079,6 +4079,8 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1DeleteNodeChatConversatio
 	purgeImmediately: z.boolean().optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatContextEstimateRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsLocalChatV1GetNodeChatConversationContextStateRequest = z.record(
 	z.string(),
 	z.never(),
@@ -4113,6 +4115,68 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageResp
 	requestId: z.guid(),
 	status: z.string(),
 	cancelled: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowEstimateResponse = z.object({
+	systemPromptTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	instructionsTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	toolSchemaTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	toolTemplatePreambleTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	knowledgeTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	attachmentTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	compactionTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	conversationTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	totalTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowToolResponse = z.object({
+	name: z.string(),
+	tokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowTrimResponse = z.object({
+	messagesDropped: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	toolResultsTruncated: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	reasoningStripped: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationContextStateEntryResponse = z.object({
@@ -6754,6 +6818,7 @@ export const zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse = z.object({
 	id: z.guid(),
 	name: z.string(),
 	description: z.string().nullish(),
+	slug: z.string().nullish(),
 	transportKind: zXeLocalAiEngineClientPersistenceMcpTransportKind,
 	command: z.string().nullish(),
 	arguments: z.array(z.string()),
@@ -6881,6 +6946,51 @@ export const zXeLocalAiEngineClientServicesBenchmarksBenchmarkCancellationTarget
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1CancelBenchmarkRunRequest = z.object({
 	target: zXeLocalAiEngineClientServicesBenchmarksBenchmarkCancellationTarget.optional(),
 	expectedVersion: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientServicesChatNodeChatContextWindowKind = z.enum(["LastRound", "PreSendEstimate"]);
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowResponse = z.object({
+	kind: zXeLocalAiEngineClientServicesChatNodeChatContextWindowKind,
+	modelId: z.string().nullish(),
+	windowTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	reservedOutputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	usableWindowTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	safetyMarginTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	providerInputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	providerOutputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	providerReasoningTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	estimated: zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowEstimateResponse.nullish(),
+	tools: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowToolResponse),
+	toolsWithheldCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	trimmed: zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowTrimResponse.nullish(),
 });
 
 export const zXeLocalAiEngineClientServicesChatNodeChatMessagePart = z.object({
@@ -7346,6 +7456,7 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse =
 	reasoningEffort: z.string().nullish(),
 	generationDurationMs: z.int().nullish(),
 	sources: z.array(zXeLocalAiEngineClientServicesChatNodeChatMessageSource).nullish(),
+	contextWindow: zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowResponse.nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = z.object({
@@ -10258,6 +10369,27 @@ export const zCancelNodeChatMessageBody = zXeLocalAiEngineClientEndpointsLocalCh
  * Success
  */
 export const zCancelNodeChatMessageResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse;
+
+export const zGetNodeChatContextEstimateQuery = z.object({
+	modelName: z.string().nullish(),
+	agentId: z.guid().nullish(),
+	useLocalTools: z.boolean().nullish(),
+	maxOutputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	numCtx: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zGetNodeChatContextEstimateResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatContextWindowResponse;
 
 export const zListNodeChatConversationsQuery = z.object({
 	includeArchived: z.boolean(),

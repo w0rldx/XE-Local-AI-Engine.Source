@@ -90,6 +90,44 @@ public sealed class LocalChatMapperPartsTests
         AssertEx.Null(response.GenerationDurationMs);
     }
 
+    [Test]
+    public void ToResponse_MapsTheContextWindowFieldForField_AndLeavesItNullWhenAbsent()
+    {
+        var window = new NodeChatContextWindowDto
+        {
+            Kind = NodeChatContextWindowKind.LastRound,
+            ModelId = "served-model",
+            WindowTokens = 8192,
+            ReservedOutputTokens = 1024,
+            UsableWindowTokens = 5939,
+            SafetyMarginTokens = 1229,
+            ProviderInputTokens = 900,
+            ProviderOutputTokens = 40,
+            ProviderReasoningTokens = 12,
+            Estimated = new NodeChatContextWindowEstimate
+            {
+                SystemPromptTokens = 300,
+                InstructionsTokens = 20,
+                ToolSchemaTokens = 150,
+                ToolTemplatePreambleTokens = 30,
+                KnowledgeTokens = 60,
+                AttachmentTokens = 70,
+                CompactionTokens = 80,
+                ConversationTokens = 90,
+                TotalTokens = 800
+            },
+            Tools = [new NodeChatContextWindowTool { Name = "get_time", Tokens = 50 }],
+            ToolsWithheldCount = 3,
+            Trimmed = new NodeChatContextWindowTrim { MessagesDropped = 1, ToolResultsTruncated = 2, ReasoningStripped = 4 }
+        };
+
+        var response = AssertEx.NotNull((BuildMessage(null) with { ContextWindow = window }).ToResponse().ContextWindow);
+
+        // Same property names on both sides: the serialized REST mirror equals the serialized DTO.
+        AssertEx.Equal(JsonSerializer.Serialize(window, WebOptions), JsonSerializer.Serialize(response, WebOptions));
+        AssertEx.Null(BuildMessage(null).ToResponse().ContextWindow);
+    }
+
     private static NodeChatPersistedMessageDto BuildMessage(IReadOnlyList<NodeChatMessagePart>? parts)
     {
         return new NodeChatPersistedMessageDto

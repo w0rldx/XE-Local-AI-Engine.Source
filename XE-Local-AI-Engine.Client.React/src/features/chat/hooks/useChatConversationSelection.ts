@@ -4,7 +4,8 @@ import { useCallback, useMemo, useState } from "react";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { mergeSelectedConversation } from "@/features/chat/models/ChatConversationDerivations";
 import type { ChatConversationModel, ChatMessageFeedback, ChatScope } from "@/features/chat/models/ChatModels";
-import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
+import { deriveContextWindow, deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
+import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 
 const emptyConversations: ChatConversationModel[] = [];
@@ -39,6 +40,7 @@ interface ChatConversationSelection {
 	isRemoteConversation: boolean;
 	feedbackByMessageId: Record<string, ChatMessageFeedback>;
 	usedContextTokens?: number;
+	contextWindow?: ContextWindowSnapshot;
 }
 
 /** Which conversation is on screen, its full payload, and everything derived from that payload. */
@@ -150,6 +152,7 @@ export function useChatConversationSelection({
 		() => deriveUsedContextTokens(activeConversation?.messages ?? []),
 		[activeConversation?.messages],
 	);
+	const contextWindow = useMemo(() => deriveContextWindow(activeConversation?.messages ?? []), [activeConversation?.messages]);
 
 	return {
 		conversations,
@@ -173,5 +176,6 @@ export function useChatConversationSelection({
 		isRemoteConversation,
 		feedbackByMessageId,
 		usedContextTokens,
+		contextWindow,
 	};
 }

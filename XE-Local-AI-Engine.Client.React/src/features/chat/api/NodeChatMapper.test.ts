@@ -188,6 +188,36 @@ describe("node chat mapper", () => {
 		]);
 	});
 
+	it("maps the context-window snapshot through unchanged and leaves it undefined when the row carries none", () => {
+		const snapshot = {
+			kind: "LastRound" as const,
+			modelId: "local-model",
+			windowTokens: 8192,
+			reservedOutputTokens: 1024,
+			usableWindowTokens: 5939,
+			safetyMarginTokens: 1229,
+			providerInputTokens: 10,
+			providerOutputTokens: 2,
+			providerReasoningTokens: 1,
+			estimated: {
+				systemPromptTokens: 4,
+				instructionsTokens: 0,
+				toolSchemaTokens: 3,
+				toolTemplatePreambleTokens: 2,
+				knowledgeTokens: 0,
+				attachmentTokens: 0,
+				compactionTokens: 0,
+				conversationTokens: 1,
+				totalTokens: 10,
+			},
+			tools: [{ name: "read_file", tokens: 3 }],
+			toolsWithheldCount: 1,
+			trimmed: { messagesDropped: 0, toolResultsTruncated: 0, reasoningStripped: 0 },
+		};
+		expect(mapSingleMessage({ contextWindow: snapshot }).contextWindow).toEqual(snapshot);
+		expect(mapSingleMessage({ contextWindow: null }).contextWindow).toBeUndefined();
+	});
+
 	it("maps message-borne feedback (rating + comment) onto the message model", () => {
 		expect(mapSingleMessage({ feedbackRating: "up", feedbackComment: "Clear answer" })).toMatchObject({
 			feedbackRating: "up",

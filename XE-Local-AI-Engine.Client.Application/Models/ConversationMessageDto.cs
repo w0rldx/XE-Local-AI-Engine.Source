@@ -46,6 +46,13 @@ public sealed record ConversationMessageDto
     /// </summary>
     [JsonIgnore]
     public Func<int, string?>? ShortenAttachment { get; init; }
+
+    /// <summary>
+    ///     TRANSIENT kind of a synthetic leading context message, set where it is composed; null on every real turn. The
+    ///     runner tags the provider-bound message with it so the budget hop can attribute its tokens without reading content.
+    /// </summary>
+    [JsonIgnore]
+    public ConversationContextKind? Kind { get; init; }
 }
 
 /// <summary>

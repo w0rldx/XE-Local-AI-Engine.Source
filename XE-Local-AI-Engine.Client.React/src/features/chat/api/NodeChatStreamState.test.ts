@@ -9,6 +9,7 @@ import {
 	nodeChatStreamEventTypes,
 } from "@/features/chat/api/NodeChatStreamState";
 import type { ChatConversationModel, ChatToolPart } from "@/features/chat/models/ChatModels";
+import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 const conversation: ChatConversationModel = {
@@ -110,6 +111,45 @@ describe("node chat stream state", () => {
 				totalTokens: 13,
 			},
 		]);
+	});
+
+	it("carries the terminal event's context-window snapshot onto the message and keeps it through a client terminal", () => {
+		const snapshot: ContextWindowSnapshot = {
+			kind: "LastRound",
+			windowTokens: 32_768,
+			reservedOutputTokens: 4_096,
+			usableWindowTokens: 24_000,
+			safetyMarginTokens: 4_672,
+			providerInputTokens: 1_200,
+			tools: [{ name: "web_search", tokens: 140 }],
+			toolsWithheldCount: 0,
+		};
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hello",
+			"2026-05-24T00:00:01.000Z",
+			"local-default",
+		);
+		const partial = applyNodeChatStreamEvent(optimistic, streamEvent({ content: "hi", delta: "hi" }));
+		const terminal = applyNodeChatStreamEvent(
+			partial.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantCompleted,
+				status: "completed",
+				content: "hi",
+				delta: null,
+				contextWindow: snapshot,
+			}),
+		);
+		const assistantOf = (applied: AppliedNodeChatStreamEvent) =>
+			applied.conversation.messages.find((message) => message.id === "assistant-1");
+
+		expect(assistantOf(partial)?.contextWindow).toBeUndefined();
+		expect(assistantOf(terminal)?.contextWindow).toEqual(snapshot);
+		expect(assistantOf(markNodeChatStreamTerminated(terminal.conversation, "assistant-1", "interrupted"))?.contextWindow).toEqual(
+			snapshot,
+		);
 	});
 
 	it("appends the delta and ignores a stale content field on an assistant-delta", () => {

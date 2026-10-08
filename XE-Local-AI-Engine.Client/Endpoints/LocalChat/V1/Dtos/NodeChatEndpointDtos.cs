@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 
+using FastEndpoints;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
@@ -141,6 +142,30 @@ public sealed class CompactNodeChatConversationResponse
 public sealed class GetNodeChatConversationContextStateRequest
 {
     public Guid ConversationId { get; init; }
+}
+
+/// <summary>Query for the pre-send context estimate; a blank model means the node's local default chat model, no agent the Default Assistant.</summary>
+public sealed class GetNodeChatContextEstimateRequest
+{
+    // [QueryParam] puts both in the OpenAPI document as query parameters, not a request body. An unparsable agent id
+    // fails binding with a 400 before the handler runs.
+    [QueryParam]
+    public string? ModelName { get; init; }
+
+    [QueryParam]
+    public Guid? AgentId { get; init; }
+
+    /// <summary>The composer's local-tools toggle, as the send carries it; absent means on.</summary>
+    [QueryParam]
+    public bool? UseLocalTools { get; init; }
+
+    /// <summary>The developer-mode per-send max output tokens; widens the output reserve above the node floor.</summary>
+    [QueryParam]
+    public int? MaxOutputTokens { get; init; }
+
+    /// <summary>The developer-mode per-send context window request; capped by a known launched window.</summary>
+    [QueryParam]
+    public int? NumCtx { get; init; }
 }
 
 /// <summary>
@@ -476,6 +501,85 @@ public sealed class NodeChatMessageResponse
     ///     never chunk body text or the encrypted original file name.
     /// </remarks>
     public IReadOnlyList<NodeChatMessageSource>? Sources { get; init; }
+
+    /// <summary>
+    ///     Content-free account of how this assistant turn's last provider round occupied its context window. Null for
+    ///     legacy turns, user messages and turns that never reached a provider round. Names and counts only.
+    /// </summary>
+    public NodeChatContextWindowResponse? ContextWindow { get; init; }
+}
+
+/// <summary>
+///     REST mirror of <see cref="NodeChatContextWindowDto" />, property for property: the window and its reserves,
+///     provider-reported usage, a heuristic per-category estimate, the tools sent, the withheld count and trim counters.
+/// </summary>
+public sealed record NodeChatContextWindowResponse
+{
+    public required NodeChatContextWindowKind Kind { get; init; }
+
+    public string? ModelId { get; init; }
+
+    public required int WindowTokens { get; init; }
+
+    public required int ReservedOutputTokens { get; init; }
+
+    public required int UsableWindowTokens { get; init; }
+
+    public required int SafetyMarginTokens { get; init; }
+
+    public int? ProviderInputTokens { get; init; }
+
+    public int? ProviderOutputTokens { get; init; }
+
+    public int? ProviderReasoningTokens { get; init; }
+
+    public NodeChatContextWindowEstimateResponse? Estimated { get; init; }
+
+    public required IReadOnlyList<NodeChatContextWindowToolResponse> Tools { get; init; }
+
+    public required int ToolsWithheldCount { get; init; }
+
+    public NodeChatContextWindowTrimResponse? Trimmed { get; init; }
+}
+
+/// <summary>REST mirror of <see cref="NodeChatContextWindowEstimate" />; every value is a heuristic estimate.</summary>
+public sealed record NodeChatContextWindowEstimateResponse
+{
+    public required int SystemPromptTokens { get; init; }
+
+    public required int InstructionsTokens { get; init; }
+
+    public required int ToolSchemaTokens { get; init; }
+
+    public required int ToolTemplatePreambleTokens { get; init; }
+
+    public required int KnowledgeTokens { get; init; }
+
+    public required int AttachmentTokens { get; init; }
+
+    public required int CompactionTokens { get; init; }
+
+    public required int ConversationTokens { get; init; }
+
+    public required int TotalTokens { get; init; }
+}
+
+/// <summary>REST mirror of <see cref="NodeChatContextWindowTool" />: a sent tool's name and estimated definition tokens.</summary>
+public sealed record NodeChatContextWindowToolResponse
+{
+    public required string Name { get; init; }
+
+    public required int Tokens { get; init; }
+}
+
+/// <summary>REST mirror of <see cref="NodeChatContextWindowTrim" />.</summary>
+public sealed record NodeChatContextWindowTrimResponse
+{
+    public required int MessagesDropped { get; init; }
+
+    public required int ToolResultsTruncated { get; init; }
+
+    public required int ReasoningStripped { get; init; }
 }
 
 public sealed class NodeChatCancelMessageResponse

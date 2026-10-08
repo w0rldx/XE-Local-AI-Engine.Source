@@ -351,7 +351,8 @@ internal sealed class NodeChatMessageCommands
             envelopeWriteMode: RunEnvelopeWriteMode.Upsert,
             // KB sources that grounded this turn; null on paths that retrieved nothing preserves any
             // existing persisted sources, just like Parts.
-            sources: request.Sources);
+            sources: request.Sources,
+            contextWindow: request.ContextWindow);
     }
 
     public async Task<NodeChatCancelResultDto> CancelMessageAsync(NodeChatCancelRequest request, CancellationToken cancellationToken = default)
@@ -557,7 +558,8 @@ internal sealed class NodeChatMessageCommands
         IReadOnlySet<string>? requiredCurrentStatuses = null,
         AgentRunEnvelopeMetadata? envelope = null,
         RunEnvelopeWriteMode envelopeWriteMode = RunEnvelopeWriteMode.InsertIfAbsent,
-        IReadOnlyList<NodeChatMessageSource>? sources = null)
+        IReadOnlyList<NodeChatMessageSource>? sources = null,
+        NodeChatContextWindowDto? contextWindow = null)
     {
         ValidateCorrelation(correlation);
         if (requiredCurrentStatuses is { Count: 0 or > MaxSourceStatusSlots })
@@ -603,10 +605,12 @@ internal sealed class NodeChatMessageCommands
                 // KB sources are reported once at terminalize; a null arg (partial flush) preserves any
                 // existing value, mirroring the parts/duration preservation above.
                 var nextSources = sources ?? current.Sources;
+                // The context snapshot is reported once at terminalize; a null arg preserves any existing value.
+                var nextContextWindow = contextWindow ?? current.ContextWindow;
                 // Agent attribution and the reasoning effort are stamped once at mint and never updated here, so they
                 // are always preserved from current, or a later flush would re-serialize the blob without them.
                 var metadata = SerializeMetadata(current.MetadataJson, nextReasoning, nextModel, nextInputTokens, nextOutputTokens, nextTotalTokens, nextReasoningTokens, nextParts,
-                    current.AgentDefinitionId, current.AgentName, current.ReasoningEffort, nextGenerationDurationMs, nextSources);
+                    current.AgentDefinitionId, current.AgentName, current.ReasoningEffort, nextGenerationDurationMs, nextSources, nextContextWindow);
 
                 // With an envelope to write, the message UPDATE, the envelope insert and the conversation touch share
                 // ONE transaction; a non-terminal update keeps the single-statement autocommit path of the hot path.

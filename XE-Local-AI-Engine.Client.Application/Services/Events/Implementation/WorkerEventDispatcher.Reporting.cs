@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Events.Implementation;
 
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models.Enums;
 
@@ -107,6 +108,21 @@ public sealed partial class WorkerEventDispatcher
             {
                 state.ToolSchemaTokens = toolSchemaTokens;
                 state.MaxToolSchemaTokens = maxToolSchemaTokens;
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
+    public Task ReportTurnContextSnapshotAsync(Guid invocationId, ProviderRoundContextSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        // A no-op when the id is not the current invocation, exactly like the reports above.
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                state.ContextSnapshot = snapshot;
                 return state;
             });
 

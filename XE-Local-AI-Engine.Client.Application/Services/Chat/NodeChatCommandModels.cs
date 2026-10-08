@@ -180,6 +180,9 @@ public sealed class NodeChatTerminalizeMessageRequest
     // Knowledge-base sources that grounded this turn, which the plain-chat send path passes so they land on the
     // terminal row's metadata_json. Null preserves any existing persisted sources, as Parts does.
     public IReadOnlyList<NodeChatMessageSource>? Sources { get; init; }
+
+    // Content-free context-window snapshot of the turn's last provider round. Null preserves any existing value, as Sources does.
+    public NodeChatContextWindowDto? ContextWindow { get; init; }
 }
 
 /// <summary>

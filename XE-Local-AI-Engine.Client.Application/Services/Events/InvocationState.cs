@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models.Enums;
 
 /// <summary>
@@ -156,6 +157,12 @@ public sealed class InvocationState
     public int? MaxToolSchemaTokens { get; set; }
 
     /// <summary>
+    ///     The content-free context snapshot of the turn's last provider round; null until the runner reports it, on the
+    ///     platform path and on a turn that never reached a provider round.
+    /// </summary>
+    public ProviderRoundContextSnapshot? ContextSnapshot { get; set; }
+
+    /// <summary>
     ///     The turn's context window after the launched window was folded in (<c>TurnPolicy.ContextCapacityTokens</c>);
     ///     null until the runner reports it.
     /// </summary>
@@ -276,6 +283,7 @@ public sealed class InvocationState
             TurnReasoningTokens = TurnReasoningTokens,
             ToolSchemaTokens = ToolSchemaTokens,
             MaxToolSchemaTokens = MaxToolSchemaTokens,
+            ContextSnapshot = ContextSnapshot,
             ContextCapacityTokens = ContextCapacityTokens,
             ReservedOutputTokens = ReservedOutputTokens,
             ModelReadinessMs = ModelReadinessMs,

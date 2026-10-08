@@ -509,7 +509,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 
         if (!string.IsNullOrEmpty(systemPrompt))
         {
-            overhead += _estimator.EstimateTokensWithDivisor(AsFramedMessage(systemPrompt), divisor);
+            overhead += EstimateSystemPromptTokens(_estimator, systemPrompt, divisor);
         }
 
         if (toolDefinitions is { Count: > 0 })
@@ -524,7 +524,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 
                 // One framed message plus the measured JSON wrapper per tool, exactly as the inner estimator charges a tool, so a
                 // tool-heavy agent's schema footprint is counted rather than silently ignored.
-                overhead += _estimator.EstimateTokensWithDivisor(AsFramedMessage(definition), divisor) + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens;
+                overhead += EstimateToolDefinitionTokens(_estimator, definition, divisor);
                 toolsCounted = true;
             }
 
@@ -535,6 +535,20 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         }
 
         return overhead;
+    }
+
+    /// <summary>The fixed-overhead charge for a resolved system prompt: one framed System message.</summary>
+    /// <remarks>Shared with the pre-send context estimate so the endpoint and the budgeter cannot size the prompt differently.</remarks>
+    internal static int EstimateSystemPromptTokens(ITokenEstimator estimator, string systemPrompt, int divisor)
+    {
+        return estimator.EstimateTokensWithDivisor(AsFramedMessage(systemPrompt), divisor);
+    }
+
+    /// <summary>The fixed-overhead charge for one rendered tool definition: one framed message plus the measured JSON wrapper.</summary>
+    /// <remarks>Shared with the pre-send context estimate so the endpoint and the budgeter cannot size a tool differently.</remarks>
+    internal static int EstimateToolDefinitionTokens(ITokenEstimator estimator, string definition, int divisor)
+    {
+        return estimator.EstimateTokensWithDivisor(AsFramedMessage(definition), divisor) + TokenEstimatorCalibrationStore.ToolDefinitionWrapperTokens;
     }
 
     /// <summary>Whether the history already carries the resolved system prompt as one of its System messages.</summary>

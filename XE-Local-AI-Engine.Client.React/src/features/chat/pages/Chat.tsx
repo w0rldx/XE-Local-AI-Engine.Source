@@ -146,6 +146,8 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		pinnedAgentModelProfile,
 		scopedModelPending,
 	});
+	// The agent the next request resolves, by the send path's rule: agent mode on and the agent still listed.
+	const contextAgentLabel = agentModeEnabled ? agentOptions.find((agent) => agent.id === selectedAgentId)?.name : undefined;
 	const [streamError, setStreamError] = useState<string | undefined>();
 	const [conversationSearchQuery, setConversationSearchQuery] = useState("");
 	const [mutatingConversationId, setMutatingConversationId] = useState<string | undefined>();
@@ -170,6 +172,7 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		isRemoteConversation,
 		feedbackByMessageId,
 		usedContextTokens,
+		contextWindow,
 	} = useChatConversationSelection({ scope, requestedConversationId });
 
 	const createConversationMutation = useMutation({
@@ -707,6 +710,8 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 					isAuthoritative: usedContextTokens !== undefined,
 					modelLabel: contextModelLabel,
 					nodeLabel: t("pages.chat.contextUsage.localNode", "Local node"),
+					agentLabel: contextAgentLabel,
+					contextWindow,
 				}}
 				maxMessageSizeKb={maxMessageSizeKb}
 				streamingMessage={streamingMessage}

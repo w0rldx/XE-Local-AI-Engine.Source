@@ -78,8 +78,18 @@ internal static class ChatStreamEventMapper
             OutputTokens = outputTokens ?? message.OutputCount,
             TotalTokens = totalTokens ?? message.TotalCount,
             ReasoningTokens = reasoningTokens ?? message.ReasoningCount,
-            InvocationTimeoutSeconds = invocationTimeoutSeconds
+            InvocationTimeoutSeconds = invocationTimeoutSeconds,
+            // Terminal events only: the snapshot describes a finished turn, and lifecycle frames stay lean.
+            ContextWindow = IsTerminalEventType(type) ? message.ContextWindow : null
         };
+    }
+
+    private static bool IsTerminalEventType(string type)
+    {
+        return type is ChatStreamEventTypes.AssistantCompleted
+            or ChatStreamEventTypes.AssistantCancelled
+            or ChatStreamEventTypes.AssistantFailed
+            or ChatStreamEventTypes.AssistantInterrupted;
     }
 
     /// <summary>

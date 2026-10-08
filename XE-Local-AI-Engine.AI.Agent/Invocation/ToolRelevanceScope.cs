@@ -260,6 +260,19 @@ internal sealed class ToolRelevanceState
     /// </summary>
     public int PendingNoticeTotalCount;
 
+    private int _lastRoundWithheldCount;
+
+    /// <summary>
+    ///     How many tools the most recent provider round of this turn left out of its array; zero when it sent the whole
+    ///     array. A count only: read by the budget hop for the round's context snapshot, apart from the notice drain.
+    /// </summary>
+    public int LastRoundWithheldCount => Volatile.Read(ref _lastRoundWithheldCount);
+
+    internal void RecordRoundWithheld(int count)
+    {
+        Volatile.Write(ref _lastRoundWithheldCount, Math.Max(count, 0));
+    }
+
     public required bool Active { get; init; }
 
     public required IReadOnlySet<string> CoreNames { get; init; }

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -27,14 +28,17 @@ using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -4354,6 +4358,115 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Null(ChatTurnContextBuilder.BuildAgentAttachmentHintContent([], "server-secret-seed-xyz"));
     }
 
+    /// <summary>
+    ///     The pre-send context estimate must measure the request a send really makes: for the same model and agent it
+    ///     resolves the system prompt and tool offer this service hands the runner.
+    /// </summary>
+    /// <remarks>Covers a bound narrowing agent and the unbound embedded default persona with the base scaffold.</remarks>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task SendMessageAsync_ResolvesTheSamePromptAndToolOfferAsTheContextEstimate(bool boundAgent)
+    {
+        const string model = "parity-model";
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        Guid? agentId = boundAgent ? Guid.NewGuid() : null;
+        var narrowTool = CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}");
+        var offerProvider = CreateOfferProvider(narrowTool, CreateLocalToolDto("lookup_note", "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}}}"));
+        var agentResolver = CreateAgentDefinitionResolver();
+        if (agentId is { } boundId)
+        {
+            agentResolver.ResolveAsync(boundId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                         .Returns(new ResolvedAgentRuntime("Narrow agent persona.", [narrowTool], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 3, boundId, "Narrow Agent"));
+        }
+
+        var turnResolver = new ChatTurnResolver(agentResolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance);
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithEnableTools(true).Build();
+        var localChatOptions = Options.Create(new LocalChatAgentOptions
+        {
+            EnableTools = true
+        });
+        var defaultAgentProvider = CreateDefaultAgentProvider();
+        var nodeSettingsStore = CreateNodeSettingsStore();
+        var localDefaultResolver = CreateLocalDefaultChatModelResolver();
+        var approvalPolicy = new PermissiveToolApprovalPolicy();
+
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new PackageCapturingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            turnResolver,
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            localChatOptions,
+            runtimeSettings,
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            defaultAgentProvider,
+            nodeSettingsStore,
+            localDefaultResolver,
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            CreateTurnContextBuilder(),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            approvalPolicy,
+            Substitute.For<IGraphWorkflowStore>(),
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var detailsResolver = Substitute.For<ILocalModelDetailsResolver>();
+        detailsResolver.ResolveAsync(model, Arg.Any<CancellationToken>())
+                       .Returns(new LocalModelDetailsResolution.Ollama(new OllamaModelDetails
+                       {
+                           MaxContextTokens = 32768,
+                           Capabilities = ["completion", "tools"]
+                       }));
+        var estimator = new HeuristicTokenEstimator();
+        var estimateService = new ChatContextEstimateService(turnResolver,
+            defaultAgentProvider,
+            nodeSettingsStore,
+            localDefaultResolver,
+            runtimeSettings,
+            offerProvider,
+            approvalPolicy,
+            localChatOptions,
+            detailsResolver,
+            estimator,
+            Options.Create(new ConversationContextBudgetOptions()));
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           Model: model,
+                           UseLocalTools: true,
+                           AgentDefinitionId: agentId)))
+        {
+            drained++;
+        }
+
+        var estimateInputs = await estimateService.ResolveAsync(model, agentId, useLocalTools: true, CancellationToken.None);
+        var estimatePrompt = estimateInputs.SystemPrompt;
+        var estimateOffer = estimateInputs.Offer;
+        var estimate = AssertEx.NotNull(await estimateService.EstimateAsync(new ChatContextEstimateRequest { ModelName = model, AgentId = agentId }, CancellationToken.None));
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        var sentPrompt = AssertEx.NotNull(runner.LastSystemPrompt);
+        AssertEx.Equal(sentPrompt, estimatePrompt);
+        var sentToolNames = string.Join(",", runner.LastAllowedTools.Select(static tool => tool.Name));
+        AssertEx.Equal(sentToolNames, string.Join(",", (estimateOffer.AllowedTools ?? []).Select(static tool => tool.Name)));
+        AssertEx.Equal(sentToolNames, string.Join(",", estimate.Tools.Select(static tool => tool.Name)));
+        AssertEx.Equal(boundAgent ? "GetCurrentTime" : "GetCurrentTime,lookup_note", sentToolNames);
+        AssertEx.Equal(ConversationContextBudgeter.EstimateSystemPromptTokens(estimator, sentPrompt, estimator.ResolveDivisor(model)), estimate.Estimated!.SystemPromptTokens);
+    }
+
     private static ILocalToolOfferProvider CreateOfferProvider(params AllowedToolDto[] tools)
     {
         var provider = Substitute.For<ILocalToolOfferProvider>();
@@ -6021,6 +6134,16 @@ public sealed class NodeChatStreamServiceTests
                 CurrentInvocation.ReasoningTokens = reasoningTokens;
                 CurrentInvocation.GenerationDurationMs = generationDurationMs;
                 RaiseChanged();
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task ReportTurnContextSnapshotAsync(Guid invocationId, ProviderRoundContextSnapshot snapshot)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.ContextSnapshot = snapshot;
             }
 
             return Task.CompletedTask;

@@ -56,10 +56,12 @@ internal static class NodeChatMetadataSerializer
         string? agentName = null,
         string? reasoningEffort = null,
         long? generationDurationMs = null,
-        IReadOnlyList<NodeChatMessageSource>? sources = null)
+        IReadOnlyList<NodeChatMessageSource>? sources = null,
+        NodeChatContextWindowDto? contextWindow = null)
     {
         if (metadataJson is null && reasoning is null && model is null && inputTokens is null && outputTokens is null && totalTokens is null && reasoningTokens is null && parts is null
-            && agentDefinitionId is null && agentName is null && reasoningEffort is null && generationDurationMs is null && sources is null)
+            && agentDefinitionId is null && agentName is null && reasoningEffort is null && generationDurationMs is null && sources is null
+            && contextWindow is null)
         {
             return null;
         }
@@ -67,7 +69,8 @@ internal static class NodeChatMetadataSerializer
         return Encode(JsonSerializer.Serialize(new NodeChatMessageMetadata(metadataJson, reasoning, model, inputTokens, outputTokens, totalTokens, reasoningTokens, parts, agentDefinitionId, agentName,
                 reasoningEffort,
                 generationDurationMs,
-                sources),
+                sources,
+                contextWindow),
             MetadataJsonOptions));
     }
 

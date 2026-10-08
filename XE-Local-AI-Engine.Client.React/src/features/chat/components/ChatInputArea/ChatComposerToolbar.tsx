@@ -16,9 +16,10 @@ import { AnswerNowButton } from "@/features/chat/components/ChatInputArea/Answer
 import { WebContentAutoAcceptToggle } from "@/features/chat/components/ChatInputArea/WebContentAutoAcceptToggle";
 import { CompactButton } from "@/features/chat/components/CompactButton";
 import { ContextStateButton } from "@/features/chat/components/ContextStatePanel";
-import { ContextUsageBadge } from "@/features/chat/components/ContextUsageBadge";
+import { ContextUsagePopover } from "@/features/chat/components/ContextUsagePopover/ContextUsagePopover";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
 import type { AgentOption, ContextUsageModel, ModelOption, ReasoningEffort } from "@/features/chat/models/ChatModels";
+import { toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { VoiceComposerControls } from "@/features/voice/components/VoiceComposerControls";
 
 interface ChatComposerToolbarProps {
@@ -261,7 +262,17 @@ export function ChatComposerToolbar({
 				{showVoiceControls ? <VoiceComposerControls /> : null}
 				{showContextUsage && contextUsage ? (
 					<Group gap={4} wrap="nowrap">
-						<ContextUsageBadge {...contextUsage} />
+						<ContextUsagePopover
+							usage={contextUsage}
+							// The send path's model rule: the local-default sentinel travels as no model, which the node resolves itself.
+							modelName={toNodeChatRequestModel(selectedModel) ?? ""}
+							// The send path's rule: an agent applies only in agent mode and while it is still listed.
+							agentId={
+								agentModeEnabled && agentOptions.some((agent) => agent.id === selectedAgentId) ? selectedAgentId : undefined
+							}
+							// The send path sends the toggle as is, so the estimate counts local tools only when it is on.
+							useLocalTools={toolsEnabled}
+						/>
 						<CompactButton
 							percentUsed={
 								contextUsage.usedTokens !== undefined && contextUsage.maxTokens !== undefined && contextUsage.maxTokens > 0

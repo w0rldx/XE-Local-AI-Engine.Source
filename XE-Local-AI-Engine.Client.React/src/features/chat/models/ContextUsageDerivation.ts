@@ -1,4 +1,5 @@
 import type { ChatRole } from "@/features/chat/models/ChatModels";
+import type { ContextWindowSnapshot } from "@/features/chat/models/ContextWindowModels";
 
 interface ContextUsageMessageTokenFields {
 	role: ChatRole | string;
@@ -24,6 +25,20 @@ export function deriveUsedContextTokens(messages: readonly ContextUsageMessageTo
 			message.outputTokens !== undefined
 		) {
 			return message.inputTokens + message.outputTokens;
+		}
+	}
+
+	return undefined;
+}
+
+// The newest assistant snapshot, walking back past a turn still streaming (it has none yet), the same way the used
+// count walks past a turn without usage, so the popover and the badge describe the same round.
+export function deriveContextWindow(
+	messages: readonly { role: ChatRole | string; contextWindow?: ContextWindowSnapshot | null }[],
+): ContextWindowSnapshot | undefined {
+	for (const message of messages.toReversed()) {
+		if (isAssistantRole(message.role) && message.contextWindow) {
+			return message.contextWindow;
 		}
 	}
 

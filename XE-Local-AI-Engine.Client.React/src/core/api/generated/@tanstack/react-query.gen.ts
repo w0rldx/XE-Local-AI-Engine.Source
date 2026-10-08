@@ -224,6 +224,7 @@ import {
 	getMcpServerTools,
 	getModelCatalogInfo,
 	getModelLaunchArguments,
+	getNodeChatContextEstimate,
 	getNodeChatConversation,
 	getNodeChatConversationContextState,
 	getNodeChatMessageFeedback,
@@ -1004,6 +1005,8 @@ import type {
 	GetModelLaunchArgumentsData,
 	GetModelLaunchArgumentsError,
 	GetModelLaunchArgumentsResponse,
+	GetNodeChatContextEstimateData,
+	GetNodeChatContextEstimateResponse,
 	GetNodeChatConversationContextStateData,
 	GetNodeChatConversationContextStateResponse,
 	GetNodeChatConversationData,
@@ -3737,6 +3740,28 @@ export const cancelNodeChatMessageMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getNodeChatContextEstimateQueryKey = (options?: Options<GetNodeChatContextEstimateData>) =>
+	createQueryKey("getNodeChatContextEstimate", options);
+
+export const getNodeChatContextEstimateOptions = (options?: Options<GetNodeChatContextEstimateData>) =>
+	queryOptions<
+		GetNodeChatContextEstimateResponse,
+		AxiosError<DefaultError>,
+		GetNodeChatContextEstimateResponse,
+		ReturnType<typeof getNodeChatContextEstimateQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getNodeChatContextEstimate({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getNodeChatContextEstimateQueryKey(options),
+	});
 
 export const listNodeChatConversationsQueryKey = (options: Options<ListNodeChatConversationsData>) =>
 	createQueryKey("listNodeChatConversations", options);

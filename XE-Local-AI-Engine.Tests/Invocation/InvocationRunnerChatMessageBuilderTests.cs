@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -15,6 +16,33 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 [Category(TestCategories.Unit)]
 public sealed class InvocationRunnerChatMessageBuilderTests
 {
+    [Test]
+    public void BuildChatMessages_ForATaggedContextMessage_CarriesItsKindAndLeavesTheTurnUntagged()
+    {
+        var package = RuntimePackageBuilder.Valid().WithUserMessage("what changed?").Build();
+        package = package with
+        {
+            ConversationContext =
+            [
+                new ConversationMessageDto
+                {
+                    Id = Guid.NewGuid(),
+                    Role = MessageRole.User,
+                    Content = "Summary of the earlier conversation.",
+                    SortOrder = -1,
+                    Kind = ConversationContextKind.Compaction
+                },
+                .. package.ConversationContext
+            ]
+        };
+
+        var messages = InvocationRunner.BuildChatMessages(package);
+
+        AssertEx.Equal(expected: 2, messages.Count);
+        AssertEx.Equal(ContextMessageKinds.Compaction, messages[0].AdditionalProperties?[ContextMessageKinds.Key] as string);
+        AssertEx.Null(messages[1].AdditionalProperties, "A real turn carries no context kind and so counts as conversation.");
+    }
+
     [Test]
     public void BuildChatMessages_ForAToolExchange_EmitsACallOnlyAssistantMessageThenItsToolResult()
     {

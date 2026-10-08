@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Diagnostics;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 
@@ -162,7 +163,8 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
                 Envelope = envelope,
                 // KB sources that grounded this turn; null when the turn used no knowledge base, which
                 // preserves any existing persisted sources on the row.
-                Sources = sources
+                Sources = sources,
+                ContextWindow = state.ContextSnapshot is { } snapshot ? MapContextWindow(snapshot, state) : null
             },
             CancellationToken.None);
 
@@ -175,6 +177,45 @@ public sealed class NodeChatInvocationPump : INodeChatInvocationPump
             Persisted = persisted,
             TerminalStatus = winningStatus,
             EventType = MapTerminalEventType(winningStatus, eventType)
+        };
+    }
+
+    /// <summary>
+    ///     Maps the runner's last-round snapshot plus the provider-reported last-round usage on the state into the
+    ///     content-free DTO persisted on the message and carried by the terminal event.
+    /// </summary>
+    internal static NodeChatContextWindowDto MapContextWindow(ProviderRoundContextSnapshot snapshot, InvocationState state)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(state);
+
+        return new NodeChatContextWindowDto
+        {
+            Kind = NodeChatContextWindowKind.LastRound,
+            ModelId = snapshot.ModelId ?? state.ModelUsed,
+            WindowTokens = snapshot.WindowTokens,
+            ReservedOutputTokens = snapshot.ReservedOutputTokens,
+            UsableWindowTokens = snapshot.UsableWindowTokens,
+            SafetyMarginTokens = Math.Max(snapshot.WindowTokens - snapshot.ReservedOutputTokens - snapshot.UsableWindowTokens, 0),
+            // The round's own reported usage, never the state's last-REPORTING round, which can be an earlier one.
+            ProviderInputTokens = snapshot.ProviderInputTokens,
+            ProviderOutputTokens = snapshot.ProviderOutputTokens,
+            ProviderReasoningTokens = snapshot.ProviderReasoningTokens,
+            Estimated = new NodeChatContextWindowEstimate
+            {
+                SystemPromptTokens = snapshot.SystemPromptTokens,
+                InstructionsTokens = snapshot.InstructionsTokens,
+                ToolSchemaTokens = snapshot.ToolSchemaTokens,
+                ToolTemplatePreambleTokens = snapshot.ToolTemplatePreambleTokens,
+                KnowledgeTokens = snapshot.KnowledgeTokens,
+                AttachmentTokens = snapshot.AttachmentTokens,
+                CompactionTokens = snapshot.CompactionTokens,
+                ConversationTokens = snapshot.ConversationTokens,
+                TotalTokens = snapshot.EstimatedInputTokens
+            },
+            Tools = [.. snapshot.Tools.Take(NodeChatContextWindowDto.MaxToolEntries).Select(static tool => new NodeChatContextWindowTool { Name = tool.Name, Tokens = tool.Tokens })],
+            ToolsWithheldCount = snapshot.ToolsWithheldCount,
+            Trimmed = new NodeChatContextWindowTrim { MessagesDropped = snapshot.MessagesDropped, ToolResultsTruncated = snapshot.ToolResultsTruncated, ReasoningStripped = snapshot.ReasoningStripped }
         };
     }
 

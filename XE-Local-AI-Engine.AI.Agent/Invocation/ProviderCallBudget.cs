@@ -100,6 +100,7 @@ public sealed class ProviderCallBudget
     private int _agentHandoffs;
     private int _trimLogged;
     private int _thinkingOff;
+    private ProviderRoundContextSnapshot? _lastRoundContext;
 
     private ProviderCallBudget(ProviderCallBudgetOptions options, long startedTimestamp)
     {
@@ -123,6 +124,27 @@ public sealed class ProviderCallBudget
 
     /// <summary>Total estimated input tokens registered so far this invocation.</summary>
     public long CumulativeInputTokens => Interlocked.Read(ref _cumulativeInputTokens);
+
+    /// <summary>
+    ///     The content-free context snapshot of the most recent provider round this invocation sent, or
+    ///     <see langword="null" /> before the first one. Last wins, matching the last-round usage the runner reports.
+    /// </summary>
+    public ProviderRoundContextSnapshot? LastRoundContext => Volatile.Read(ref _lastRoundContext);
+
+    /// <summary>Records the snapshot of a round that passed every ceiling and is about to be sent.</summary>
+    internal void RecordRoundContext(ProviderRoundContextSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        Volatile.Write(ref _lastRoundContext, snapshot);
+    }
+
+    /// <summary>Swaps in <paramref name="replacement" /> only while <paramref name="recorded" /> is still the last round's snapshot.</summary>
+    internal void ReplaceRoundContext(ProviderRoundContextSnapshot recorded, ProviderRoundContextSnapshot replacement)
+    {
+        ArgumentNullException.ThrowIfNull(recorded);
+        ArgumentNullException.ThrowIfNull(replacement);
+        _ = Interlocked.CompareExchange(ref _lastRoundContext, replacement, recorded);
+    }
 
     /// <summary>
     ///     The distinct tool names this invocation asked for, ordinal-sorted and capped at sixteen. A snapshot: the set

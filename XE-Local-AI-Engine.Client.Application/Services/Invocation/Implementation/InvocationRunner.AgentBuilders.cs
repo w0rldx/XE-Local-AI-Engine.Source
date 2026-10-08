@@ -781,11 +781,31 @@ public sealed partial class InvocationRunner
 
             if (contents.Count > 0)
             {
-                messages.Add(new ChatMessage(MapRole(message.Role), contents));
+                var chatMessage = new ChatMessage(MapRole(message.Role), contents);
+                // The kind tag lets the provider-boundary hop attribute this message's tokens without reading it; MAF
+                // and the budgeter both carry AdditionalProperties through to the raw round.
+                if (message.Kind is { } kind)
+                {
+                    chatMessage.AdditionalProperties = new AdditionalPropertiesDictionary { [ContextMessageKinds.Key] = MapContextKind(kind) };
+                }
+
+                messages.Add(chatMessage);
             }
         }
 
         return messages;
+    }
+
+    private static string MapContextKind(ConversationContextKind kind)
+    {
+        return kind switch
+        {
+            ConversationContextKind.Knowledge => ContextMessageKinds.Knowledge,
+            ConversationContextKind.Attachment => ContextMessageKinds.Attachment,
+            ConversationContextKind.Image => ContextMessageKinds.Image,
+            ConversationContextKind.Compaction => ContextMessageKinds.Compaction,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown conversation context kind.")
+        };
     }
 
     /// <summary>

@@ -189,6 +189,10 @@ public sealed record NodeChatPersistedMessageDto : ISelectedPathMessage
     // Knowledge-base sources that grounded this plain-chat assistant turn, surfaced from the metadata
     // blob (no DB column). Null/empty for legacy turns, turns that did not use the knowledge base, and user messages.
     public IReadOnlyList<NodeChatMessageSource>? Sources { get; init; }
+
+    // Content-free context-window snapshot of this assistant turn's last provider round, surfaced from the metadata
+    // blob (no DB column). Null for legacy turns, user messages and turns that never reached a provider round.
+    public NodeChatContextWindowDto? ContextWindow { get; init; }
 }
 
 /// <summary>

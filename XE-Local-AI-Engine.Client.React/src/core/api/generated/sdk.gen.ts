@@ -651,6 +651,9 @@ import type {
 	GetModelLaunchArgumentsData,
 	GetModelLaunchArgumentsErrors,
 	GetModelLaunchArgumentsResponses,
+	GetNodeChatContextEstimateData,
+	GetNodeChatContextEstimateErrors,
+	GetNodeChatContextEstimateResponses,
 	GetNodeChatConversationContextStateData,
 	GetNodeChatConversationContextStateErrors,
 	GetNodeChatConversationContextStateResponses,
@@ -1838,6 +1841,8 @@ import {
 	zGetModelCatalogInfoResponse,
 	zGetModelLaunchArgumentsPath,
 	zGetModelLaunchArgumentsResponse,
+	zGetNodeChatContextEstimateQuery,
+	zGetNodeChatContextEstimateResponse,
 	zGetNodeChatConversationContextStatePath,
 	zGetNodeChatConversationContextStateResponse,
 	zGetNodeChatConversationPath,
@@ -5066,6 +5071,36 @@ export const cancelNodeChatMessage = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const getNodeChatContextEstimate = <ThrowOnError extends boolean = false>(
+	options?: Options<GetNodeChatContextEstimateData, ThrowOnError>,
+): RequestResult<GetNodeChatContextEstimateResponses, GetNodeChatContextEstimateErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetNodeChatContextEstimateResponses, GetNodeChatContextEstimateErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zGetNodeChatContextEstimateQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetNodeChatContextEstimateResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/chat/context-estimate",
+		...options,
 	});
 
 export const listNodeChatConversations = <ThrowOnError extends boolean = false>(

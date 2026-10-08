@@ -102,6 +102,24 @@ public sealed class McpServerEndpointTests
     }
 
     [Test]
+    public async Task ListServers_CarriesTheToolNameSlug_AndNullBeforeTheFirstConnect()
+    {
+        // The SPA maps an mcp__{slug}__{tool} name back to its server by this slug; an unconnected server has none yet.
+        var service = Substitute.For<IMcpServerService>();
+        service.ListAsync(Arg.Any<CancellationToken>()).Returns([CreateRecord("Filesystem", enabled: true) with { Slug = "filesystem" }, CreateRecord("Remote", enabled: false)]);
+        await using var factory = CreateFactory(service);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, ServersRoute);
+        using var response = await client.SendAsync(request);
+        var body = await ReadJsonAsync<ListMcpServersResponse>(response);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("filesystem", body.Items.Single(item => string.Equals(item.Name, "Filesystem", StringComparison.Ordinal)).Slug);
+        AssertEx.Null(body.Items.Single(item => string.Equals(item.Name, "Remote", StringComparison.Ordinal)).Slug);
+    }
+
+    [Test]
     public async Task ListServers_MasksEveryEnvironmentValue_AndCarriesTheTrustTier()
     {
         // Encryption at rest only helps against someone holding the FILE. Returning the plaintext to anything holding

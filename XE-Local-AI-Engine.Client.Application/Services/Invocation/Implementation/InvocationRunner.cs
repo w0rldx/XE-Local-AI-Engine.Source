@@ -277,6 +277,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
             {
                 var efficiency = providerBudget.CaptureEfficiencySnapshot();
                 await dispatcher.ReportToolSchemaTokensAsync(package.InvocationId, efficiency.ToolSchemaTokens, efficiency.MaximumToolSchemaTokens);
+                if (providerBudget.LastRoundContext is { } roundContext)
+                {
+                    await dispatcher.ReportTurnContextSnapshotAsync(package.InvocationId, roundContext);
+                }
                 await dispatcher.ReportTurnTelemetryAsync(package.InvocationId,
                     stream?.ModelReadinessDurationMs is { } readinessMs ? (long)readinessMs : null,
                     stream?.UsageSnapshot is { } turnUsage

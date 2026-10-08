@@ -72,6 +72,7 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         {
             var response = await base.GetResponseAsync(round.Messages, round.Options, cancellationToken).ConfigureAwait(false);
             RecordObservedUsage(round, response.Usage?.InputTokenCount);
+            AttachRoundUsage(budget, round, response.Usage);
 
             var ceiling = new ToolCallCeiling(_maxToolCallsPerResponse);
             foreach (var message in response.Messages)
@@ -105,6 +106,7 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         // Terminal usage arrives as a UsageContent on one of the streamed updates (llama.cpp reports it on the final
         // chunk). Last one wins, matching the invocation runner's own reading of the same signal.
         long? observedInputTokens = null;
+        UsageDetails? observedUsage = null;
         var ceiling = new ToolCallCeiling(_maxToolCallsPerResponse);
         try
         {
@@ -114,9 +116,13 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
                 {
                     foreach (var content in contents)
                     {
-                        if (content is UsageContent usage && usage.Details.InputTokenCount is { } inputTokens)
+                        if (content is UsageContent usage)
                         {
-                            observedInputTokens = inputTokens;
+                            observedUsage = usage.Details;
+                            if (usage.Details.InputTokenCount is { } inputTokens)
+                            {
+                                observedInputTokens = inputTokens;
+                            }
                         }
                     }
 
@@ -145,7 +151,37 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
             // Recorded here rather than after the loop so an abandoned or faulted enumeration still contributes the
             // usage it did report; a round that reported none contributes nothing.
             RecordObservedUsage(round, observedInputTokens);
+            AttachRoundUsage(budget, round, observedUsage);
         }
+    }
+
+    /// <summary>
+    ///     Pairs the round's own reported usage with the snapshot this hop recorded for that same request, so the
+    ///     context window never shows an earlier round's counts beside this round's estimate.
+    /// </summary>
+    /// <remarks>
+    ///     A round that reported nothing keeps null provider counts. The swap is conditional, so a later round's
+    ///     snapshot recorded meanwhile is never overwritten by this one.
+    /// </remarks>
+    private static void AttachRoundUsage(ProviderCallBudget? budget, in BudgetedRound round, UsageDetails? usage)
+    {
+        if (budget is null || round.Context is not { } recorded || usage is null)
+        {
+            return;
+        }
+
+        budget.ReplaceRoundContext(recorded,
+            recorded with
+            {
+                ProviderInputTokens = ToNullableInt(usage.InputTokenCount),
+                ProviderOutputTokens = ToNullableInt(usage.OutputTokenCount),
+                ProviderReasoningTokens = ToNullableInt(usage.ReasoningTokenCount)
+            });
+    }
+
+    private static int? ToNullableInt(long? value)
+    {
+        return value is { } count ? (int)Math.Clamp(count, 0, int.MaxValue) : null;
     }
 
     /// <summary>
@@ -281,15 +317,19 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         var charsPerToken = _calibrationStore.ResolveDivisor(modelId);
         // Instructions AND tool definitions (name + description + JSON schema) are fixed per-round input the model never
         // sees as a droppable message; folding both in stops a tool-heavy agent rounding an over-window request through.
-        var toolSchemaTokens = ProviderMessageTokenEstimator.EstimateTools(options?.Tools, charsPerToken);
-        // The template's once-per-request tool instructions, measured per model by the calibration round; charged only when a tool is offered.
-        if (options?.Tools is { Count: > 0 })
+        var toolTokens = EstimatePerTool(options?.Tools, charsPerToken); // per tool for the snapshot; sums to EstimateTools
+        var schemaOnlyTokens = 0;
+        foreach (var tool in toolTokens)
         {
-            toolSchemaTokens += _calibrationStore.ResolveToolTemplatePreamble(modelId);
+            schemaOnlyTokens += tool.Tokens;
         }
 
-        var instructionsTokens = ProviderMessageTokenEstimator.EstimateTokens(options?.Instructions, charsPerToken)
-                                 + toolSchemaTokens;
+        // The template's once-per-request tool instructions, measured per model by the calibration round; charged only when a tool is offered.
+        var preambleTokens = options?.Tools is { Count: > 0 } ? _calibrationStore.ResolveToolTemplatePreamble(modelId) : 0;
+        var toolSchemaTokens = schemaOnlyTokens + preambleTokens;
+
+        var optionsInstructionsTokens = ProviderMessageTokenEstimator.EstimateTokens(options?.Instructions, charsPerToken);
+        var instructionsTokens = optionsInstructionsTokens + toolSchemaTokens;
 
         var result = ProviderCallBudgeter.Budget(materialized, instructionsTokens, effectiveWindow, budgetOptions, charsPerToken);
 
@@ -342,6 +382,21 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
             throw;
         }
 
+        var roundContext = CaptureRoundContext(result,
+            charsPerToken,
+            new RoundFixedCosts
+            {
+                ModelId = modelId,
+                Window = window,
+                Reserved = reserved,
+                EffectiveWindow = effectiveWindow,
+                InstructionsTokens = optionsInstructionsTokens,
+                ToolSchemaTokens = schemaOnlyTokens,
+                PreambleTokens = preambleTokens
+            },
+            toolTokens);
+        budget.RecordRoundContext(roundContext);
+
         var sendOptions = NarrowReasoningBudget(options, window, result.EstimatedTokensAfter);
         if (budget.IsThinkingOff)
         {
@@ -352,14 +407,112 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
             sendOptions,
             // Only a named model can be calibrated; an unnamed round is sent but teaches nothing.
             string.IsNullOrWhiteSpace(modelId) ? null : modelId,
-            result.EstimatedTokensAfter);
+            result.EstimatedTokensAfter,
+            roundContext);
+    }
+
+    private static List<ProviderRoundToolTokens> EstimatePerTool(IList<AITool>? tools, int charsPerToken)
+    {
+        if (tools is not { Count: > 0 })
+        {
+            return [];
+        }
+
+        var perTool = new List<ProviderRoundToolTokens>(tools.Count);
+        foreach (var tool in tools)
+        {
+            perTool.Add(new ProviderRoundToolTokens { Name = tool.Name, Tokens = ProviderMessageTokenEstimator.EstimateTools([tool], charsPerToken) });
+        }
+
+        return perTool;
+    }
+
+    /// <summary>
+    ///     Splits the budgeted round into content-free categories by one pass over the messages actually sent, on the
+    ///     same per-message estimate the budgeter used, so the categories sum to its <c>EstimatedTokensAfter</c>.
+    /// </summary>
+    /// <remarks>
+    ///     A <c>System</c> message is the system prompt; a message tagged with <see cref="ContextMessageKinds.Key" /> is
+    ///     that leading-context kind; everything else is conversation. Names and counts only, never content.
+    /// </remarks>
+    private static ProviderRoundContextSnapshot CaptureRoundContext(ProviderBudgetResult result,
+        int charsPerToken,
+        RoundFixedCosts fixedCosts,
+        List<ProviderRoundToolTokens> toolTokens)
+    {
+        int system = 0, knowledge = 0, attachment = 0, compaction = 0, conversation = 0;
+        foreach (var message in result.Messages)
+        {
+            var tokens = ProviderMessageTokenEstimator.EstimateTokens(message, charsPerToken);
+            if (message.Role == ChatRole.System)
+            {
+                system += tokens;
+                continue;
+            }
+
+            switch (message.AdditionalProperties?.TryGetValue(ContextMessageKinds.Key, out var kind) == true ? kind as string : null)
+            {
+                case ContextMessageKinds.Knowledge:
+                    knowledge += tokens;
+                    break;
+                case ContextMessageKinds.Attachment or ContextMessageKinds.Image:
+                    attachment += tokens;
+                    break;
+                case ContextMessageKinds.Compaction:
+                    compaction += tokens;
+                    break;
+                default:
+                    conversation += tokens;
+                    break;
+            }
+        }
+
+        return new ProviderRoundContextSnapshot
+        {
+            ModelId = fixedCosts.ModelId,
+            WindowTokens = fixedCosts.Window,
+            ReservedOutputTokens = fixedCosts.Reserved,
+            UsableWindowTokens = fixedCosts.EffectiveWindow,
+            SystemPromptTokens = system,
+            InstructionsTokens = fixedCosts.InstructionsTokens,
+            ToolSchemaTokens = fixedCosts.ToolSchemaTokens,
+            ToolTemplatePreambleTokens = fixedCosts.PreambleTokens,
+            KnowledgeTokens = knowledge,
+            AttachmentTokens = attachment,
+            CompactionTokens = compaction,
+            ConversationTokens = conversation,
+            EstimatedInputTokens = result.EstimatedTokensAfter,
+            Tools = toolTokens.Count > ProviderRoundContextSnapshot.MaxToolEntries ? toolTokens[..ProviderRoundContextSnapshot.MaxToolEntries] : toolTokens,
+            ToolsWithheldCount = ToolRelevanceScope.Current?.LastRoundWithheldCount ?? 0,
+            MessagesDropped = result.MessagesDropped,
+            ToolResultsTruncated = result.ToolResultsTruncated,
+            ReasoningStripped = result.ReasoningStripped
+        };
+    }
+
+    /// <summary>The round's fixed, message-independent costs and window, as <see cref="ApplyBudget" /> resolved them.</summary>
+    private sealed record RoundFixedCosts
+    {
+        public required string? ModelId { get; init; }
+
+        public required int Window { get; init; }
+
+        public required int Reserved { get; init; }
+
+        public required int EffectiveWindow { get; init; }
+
+        public required int InstructionsTokens { get; init; }
+
+        public required int ToolSchemaTokens { get; init; }
+
+        public required int PreambleTokens { get; init; }
     }
 
     /// <summary>
     ///     One budgeted provider round: what to send, what to send it with, and the (model, estimated input tokens)
     ///     pair the response's reported usage is compared against once the round comes back.
     /// </summary>
-    private readonly record struct BudgetedRound(IEnumerable<ChatMessage> Messages, ChatOptions? Options, string? ModelName, int EstimatedInputTokens);
+    private readonly record struct BudgetedRound(IEnumerable<ChatMessage> Messages, ChatOptions? Options, string? ModelName, int EstimatedInputTokens, ProviderRoundContextSnapshot? Context = null);
 
     /// <summary>
     ///     Narrows the llama.cpp thinking-budget marker to the room THIS round's input actually leaves, when the turn

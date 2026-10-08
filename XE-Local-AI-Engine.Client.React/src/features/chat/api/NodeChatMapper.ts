@@ -218,6 +218,8 @@ function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 		outputTokens: dto.outputTokens ?? undefined,
 		totalTokens: dto.totalTokens ?? undefined,
 		reasoningTokens: dto.reasoningTokens ?? undefined,
+		// Last-round context-window snapshot (names and counts only); absent on legacy rows and user turns.
+		contextWindow: dto.contextWindow ?? undefined,
 		parentMessageId: dto.parentMessageId ?? undefined,
 		variantGroupId: dto.variantGroupId ?? undefined,
 		// Feedback travels on the message (feedback flow): map rating only when present (null = no feedback), so the

@@ -6,6 +6,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -758,6 +759,9 @@ public sealed class ToolApprovalCoordinatorTests
 
         public Task ReportToolSchemaTokensAsync(Guid invocationId, long? toolSchemaTokens, int? maxToolSchemaTokens) =>
             _inner.ReportToolSchemaTokensAsync(invocationId, toolSchemaTokens, maxToolSchemaTokens);
+
+        public Task ReportTurnContextSnapshotAsync(Guid invocationId, ProviderRoundContextSnapshot snapshot) =>
+            _inner.ReportTurnContextSnapshotAsync(invocationId, snapshot);
 
         public Task ReportTurnTelemetryAsync(Guid invocationId, long? modelReadinessMs, TurnUsageTotals? usage) =>
             _inner.ReportTurnTelemetryAsync(invocationId, modelReadinessMs, usage);

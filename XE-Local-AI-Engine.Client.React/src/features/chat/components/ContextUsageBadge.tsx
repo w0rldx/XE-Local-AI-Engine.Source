@@ -3,26 +3,7 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
 import type { ContextUsageModel } from "@/features/chat/models/ChatModels";
-
-function trimNumber(value: number): string {
-	return value.toFixed(1).replace(/\.0$/, "");
-}
-
-function formatTokenCount(value: number | undefined): string {
-	if (value === undefined) {
-		return "—";
-	}
-
-	if (value >= 1_000_000) {
-		return `${trimNumber(value / 1_000_000)}m`;
-	}
-
-	if (value >= 1_000) {
-		return `${trimNumber(value / 1_000)}k`;
-	}
-
-	return value.toString();
-}
+import { formatTokenCount } from "@/features/chat/models/TokenCountFormatting";
 
 function tooltip({ isAuthoritative, maxTokens, modelLabel, nodeLabel, usedTokens }: ContextUsageModel, t: TFunction): string {
 	const usedOrigin =

@@ -122,6 +122,7 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
             Role = MessageRole.User,
             Content = content,
             SortOrder = 0,
+            Kind = ConversationContextKind.Attachment,
             // The fixed cap above knows nothing of the window; the runner, which does, shrinks it further (model-matrix F6).
             ShortenAttachment = charBudget => ConversationAttachmentContextComposer.Compose(parts, Math.Min(charBudget, maxChars), fenceSeed)
         };
@@ -200,7 +201,8 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
             Role = MessageRole.User,
             Content = string.Empty,
             SortOrder = 0,
-            Images = images
+            Images = images,
+            Kind = ConversationContextKind.Image
         };
     }
 
@@ -282,7 +284,8 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
                 Id = Guid.NewGuid(),
                 Role = MessageRole.User,
                 Content = composed.Context,
-                SortOrder = 0
+                SortOrder = 0,
+                Kind = ConversationContextKind.Knowledge
             };
             return new KnowledgeChatGrounding
             {
@@ -325,7 +328,8 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
             Id = Guid.NewGuid(),
             Role = MessageRole.User,
             Content = content,
-            SortOrder = 0
+            SortOrder = 0,
+            Kind = ConversationContextKind.Attachment
         };
     }
 

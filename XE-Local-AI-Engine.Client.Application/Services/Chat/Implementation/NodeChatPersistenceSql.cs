@@ -255,7 +255,8 @@ internal static class NodeChatPersistenceSql
                 AgentName = metadata.AgentName,
                 ReasoningEffort = metadata.ReasoningEffort,
                 GenerationDurationMs = metadata.GenerationDurationMs,
-                Sources = metadata.Sources
+                Sources = metadata.Sources,
+                ContextWindow = metadata.ContextWindow
             });
         }
 

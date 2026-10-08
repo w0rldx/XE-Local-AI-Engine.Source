@@ -1323,7 +1323,49 @@
 				"maxKnown": "Max context reported by selected node",
 				"tooltip": "{{usedOrigin}}. {{maxOrigin}}. Model: {{model}}. Node: {{node}}.",
 				"srUnknown": "Context window usage unknown, {{used}} of {{max}} tokens.",
-				"srUsed": "Context window {{percent}} percent used, {{used}} of {{max}} tokens."
+				"srUsed": "Context window {{percent}} percent used, {{used}} of {{max}} tokens.",
+				"trigger": "Show context window usage",
+				"unknownValue": "unknown",
+				"window": "Context window",
+				"remaining": "Remaining",
+				"reportedInput": "Reported input (last request)",
+				"toolsSent": "Tools sent ({{count}})",
+				"withheld": "{{count}} tools withheld by relevance filter",
+				"afterFirstResponse": "Will update after the first response.",
+				"estimateFailed": "The estimate could not be loaded.",
+				"section": {
+					"systemPrompt": "System prompt",
+					"instructions": "Instructions",
+					"tools": "Tools (schema and preamble)",
+					"knowledge": "Knowledge",
+					"attachments": "Attachments",
+					"compaction": "Compaction summary",
+					"conversation": "Conversation",
+					"used": "Last request",
+					"reservedOutput": "Reserved for output",
+					"safetyMargin": "Safety margin",
+					"free": "Free"
+				},
+				"source": {
+					"reported": "Reported by model",
+					"estimated": "Estimated",
+					"unknown": "Unknown"
+				},
+				"toolGroup": {
+					"builtIn": "Built-in",
+					"mcp": "MCP: {{server}}",
+					"custom": "Custom",
+					"skills": "Skills"
+				},
+				"trimmed": {
+					"messagesDropped": "{{count}} older messages dropped",
+					"toolResultsTruncated": "{{count}} tool results truncated",
+					"reasoningStripped": "{{count}} reasoning blocks stripped"
+				},
+				"footer": {
+					"reported": "The total comes from the model's report for the last request. The categories are estimates.",
+					"estimated": "All values are estimates until the model reports usage for a request."
+				}
 			},
 			"compact": {
 				"tooltip": "Compact older messages into a summary to free up context",

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -4041,6 +4042,16 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                 CurrentInvocation.ReasoningTokens = reasoningTokens;
                 CurrentInvocation.GenerationDurationMs = generationDurationMs;
                 RaiseChanged();
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task ReportTurnContextSnapshotAsync(Guid invocationId, ProviderRoundContextSnapshot snapshot)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.ContextSnapshot = snapshot;
             }
 
             return Task.CompletedTask;

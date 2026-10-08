@@ -112,7 +112,51 @@ internal static class LocalChatMapper
             GenerationDurationMs = message.GenerationDurationMs,
             // Surface the persisted knowledge-base sources verbatim; null for legacy turns, non-knowledge turns, and
             // user messages. The DTO source records carry no transport-specific shape, so they pass through unchanged.
-            Sources = message.Sources
+            Sources = message.Sources,
+            ContextWindow = message.ContextWindow is { } contextWindow ? ToResponse(contextWindow) : null
+        };
+    }
+
+    /// <summary>Maps the content-free context-window DTO to its REST mirror, field for field.</summary>
+    public static NodeChatContextWindowResponse ToResponse(NodeChatContextWindowDto contextWindow)
+    {
+        ArgumentNullException.ThrowIfNull(contextWindow);
+
+        return new NodeChatContextWindowResponse
+        {
+            Kind = contextWindow.Kind,
+            ModelId = contextWindow.ModelId,
+            WindowTokens = contextWindow.WindowTokens,
+            ReservedOutputTokens = contextWindow.ReservedOutputTokens,
+            UsableWindowTokens = contextWindow.UsableWindowTokens,
+            SafetyMarginTokens = contextWindow.SafetyMarginTokens,
+            ProviderInputTokens = contextWindow.ProviderInputTokens,
+            ProviderOutputTokens = contextWindow.ProviderOutputTokens,
+            ProviderReasoningTokens = contextWindow.ProviderReasoningTokens,
+            Estimated = contextWindow.Estimated is { } estimate
+                ? new NodeChatContextWindowEstimateResponse
+                {
+                    SystemPromptTokens = estimate.SystemPromptTokens,
+                    InstructionsTokens = estimate.InstructionsTokens,
+                    ToolSchemaTokens = estimate.ToolSchemaTokens,
+                    ToolTemplatePreambleTokens = estimate.ToolTemplatePreambleTokens,
+                    KnowledgeTokens = estimate.KnowledgeTokens,
+                    AttachmentTokens = estimate.AttachmentTokens,
+                    CompactionTokens = estimate.CompactionTokens,
+                    ConversationTokens = estimate.ConversationTokens,
+                    TotalTokens = estimate.TotalTokens
+                }
+                : null,
+            Tools = [.. contextWindow.Tools.Select(static tool => new NodeChatContextWindowToolResponse { Name = tool.Name, Tokens = tool.Tokens })],
+            ToolsWithheldCount = contextWindow.ToolsWithheldCount,
+            Trimmed = contextWindow.Trimmed is { } trim
+                ? new NodeChatContextWindowTrimResponse
+                {
+                    MessagesDropped = trim.MessagesDropped,
+                    ToolResultsTruncated = trim.ToolResultsTruncated,
+                    ReasoningStripped = trim.ReasoningStripped
+                }
+                : null
         };
     }
 }
