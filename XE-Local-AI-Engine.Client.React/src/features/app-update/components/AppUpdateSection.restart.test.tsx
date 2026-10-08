@@ -17,6 +17,7 @@ const baseStatus = {
 	lastCheckedUtc: 1_700_000_000_000,
 };
 const statusQuery = vi.hoisted(() => vi.fn());
+const applyResult = vi.hoisted(() => vi.fn());
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getAppUpdateStatusQueryKey: vi.fn((options) => [{ _id: "getAppUpdateStatus", query: options?.query }]),
@@ -24,7 +25,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 		queryKey: [{ _id: "getAppUpdateStatus", query: options?.query }],
 		queryFn: statusQuery,
 	})),
-	applyAppUpdateMutation: vi.fn(() => ({ mutationFn: async () => ({ applying: true }) })),
+	applyAppUpdateMutation: vi.fn(() => ({ mutationFn: applyResult })),
 }));
 
 // This file is about the restart polling, so the channel picker is stubbed out rather than fed a fixture and a
@@ -46,6 +47,7 @@ import { testMantineTheme } from "@/test/MantineTestRender";
 describe("AppUpdateSection restart polling", () => {
 	beforeEach(() => {
 		statusQuery.mockReset().mockResolvedValue(baseStatus);
+		applyResult.mockReset().mockResolvedValue({ applying: true, targetVersion: "0.1.1" });
 		Object.defineProperty(window, "matchMedia", {
 			writable: true,
 			value: vi.fn().mockImplementation((query: string) => ({
@@ -115,5 +117,39 @@ describe("AppUpdateSection restart polling", () => {
 		});
 
 		expect(getAppUpdateStatus).toHaveBeenCalledTimes(2);
+	});
+
+	it("reloads for the version the apply actually installed when a newer release replaced the cached offer", async () => {
+		// The browser was offered 0.1.1, but the apply's live re-check found and installed 0.1.2.
+		applyResult.mockResolvedValue({ applying: true, targetVersion: "0.1.2" });
+		vi.mocked(getAppUpdateStatus).mockResolvedValue({
+			data: { ...baseStatus, currentVersion: "0.1.2", availableVersion: null, updateAvailable: false },
+		} as never);
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+		});
+		render(
+			<QueryClientProvider client={queryClient}>
+				<MantineProvider env="test" theme={testMantineTheme}>
+					<AppUpdateSection />
+				</MantineProvider>
+			</QueryClientProvider>,
+		);
+		await waitFor(() => expect(screen.getByRole("button", { name: /update now/i })).toBeTruthy());
+
+		vi.useFakeTimers();
+		await act(async () => {
+			fireEvent.click(screen.getByRole("button", { name: /update now/i }));
+			await Promise.resolve();
+			await vi.advanceTimersByTimeAsync(2000);
+		});
+
+		// The first probe answered the installed version, so polling stopped there instead of running to the timeout.
+		expect(getAppUpdateStatus).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(10_000);
+		});
+		expect(getAppUpdateStatus).toHaveBeenCalledTimes(1);
+		expect(screen.queryByText(/restarting/i)).toBeNull();
 	});
 });

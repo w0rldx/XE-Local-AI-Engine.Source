@@ -89,6 +89,16 @@ export const addUnauthorizedErrorInterceptor = (axiosInstance: AxiosInstance) =>
 				return Promise.reject(error);
 			}
 
+			// A late 401 for a request sent with an older token: a refresh already rotated it, so replay with the current one.
+			// Refreshing again per late 401 spends the auth rate limit that login, refresh and every tab share.
+			const sentAuthorization = requestConfig.headers.Authorization;
+			const currentToken = useNodeAuthStore.getState().accessToken;
+			if (typeof sentAuthorization === "string" && currentToken && sentAuthorization !== `Bearer ${currentToken}`) {
+				retriedRequests.add(requestConfig);
+				requestConfig.headers.Authorization = `Bearer ${currentToken}`;
+				return axiosInstance(requestConfig);
+			}
+
 			try {
 				const token = await refreshNodeAuthToken();
 				useNodeAuthStore.getState().actions.setToken(token);

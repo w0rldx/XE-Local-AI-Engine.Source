@@ -431,9 +431,9 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         catch (CryptographicException exception)
         {
             // The key ring rotated out from under the file (a node re-key, a restored profile): the payload can never be recovered and leaving it
-            // would fail every later save's read-modify-write, so it is quarantined as the cloud credential store does. Quarantined means GONE, hence Missing, not Unreadable.
-            _logger.LogWarning(exception, "External provider store decryption failed. Clearing the stored external connections.");
-            ClearStoreFileBestEffort();
+            // would fail every later save's read-modify-write, so it is renamed aside as the cloud credential store does. Moved aside means GONE from this path, hence Missing, not Unreadable.
+            _logger.LogWarning(exception, "External provider store decryption failed. Moving the stored external connections aside.");
+            MoveStoreFileAsideBestEffort();
             return new ExternalProviderLoadResult.Missing();
         }
         catch (IOException exception)
@@ -463,8 +463,8 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         }
         catch (JsonException exception)
         {
-            _logger.LogWarning(exception, "External provider store could not be deserialized. Clearing the stored external connections.");
-            ClearStoreFileBestEffort();
+            _logger.LogWarning(exception, "External provider store could not be deserialized. Moving the stored external connections aside.");
+            MoveStoreFileAsideBestEffort();
             return new ExternalProviderLoadResult.Missing();
         }
     }
@@ -560,18 +560,16 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         }
     }
 
-    private void ClearStoreFileBestEffort()
+    private void MoveStoreFileAsideBestEffort()
     {
         try
         {
-            if (File.Exists(_storePath))
-            {
-                File.Delete(_storePath);
-            }
+            var movedTo = SecureFilePermissions.MoveAsideUnreadable(_storePath);
+            _logger.LogWarning("The unreadable external provider store file was kept as {QuarantinePath}.", movedTo);
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Failed to delete the external provider store file.");
+            _logger.LogWarning(exception, "Failed to move the unreadable external provider store file aside.");
         }
     }
 }

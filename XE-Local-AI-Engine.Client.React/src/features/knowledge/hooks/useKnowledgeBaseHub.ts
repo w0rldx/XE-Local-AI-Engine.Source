@@ -3,7 +3,11 @@ import { useEffect } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import { knowledgeInvalidationKey, knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
-import type { KnowledgeDocument, KnowledgeDocumentStatus } from "@/features/knowledge/models/KnowledgeModels";
+import {
+	type KnowledgeDocument,
+	type KnowledgeDocumentStatus,
+	knowledgeStatusDescriptor,
+} from "@/features/knowledge/models/KnowledgeModels";
 
 // Server-pushed knowledge-base events. Each push carries the document id + its new indexing status. The handler
 // applies that status to the cached list row IMMEDIATELY (optimistic), then invalidates so the remaining fields
@@ -13,6 +17,7 @@ import type { KnowledgeDocument, KnowledgeDocumentStatus } from "@/features/know
 // row visually stuck. Writing the pushed status directly guarantees the terminal status is never lost. The event
 // name is the string method name the backend invokes on the client.
 const DOCUMENT_CHANGED = "knowledge.documentChanged";
+const CLOSED_HUB_POLL_MS = 10_000;
 
 /** Payload of the {@link DOCUMENT_CHANGED} push: which document changed and its new status. */
 interface KnowledgeDocumentChangedEvent {
@@ -71,7 +76,35 @@ export function useKnowledgeBaseHub(): void {
 
 		connection.on(DOCUMENT_CHANGED, applyDocumentChanged);
 
+		// Hub's own fallback: the hub has no replay, so a reconnect re-reads what changed in the gap, and while it is
+		// closed (until the shared manager's restart reports back) a still-indexing row is polled instead of freezing.
+		let closedPoll: ReturnType<typeof setInterval> | undefined;
+		const stopClosedPoll = (): void => {
+			if (closedPoll !== undefined) {
+				clearInterval(closedPoll);
+				closedPoll = undefined;
+			}
+		};
+		const hasInProgressRow = (): boolean =>
+			queryClient
+				.getQueriesData<KnowledgeDocumentListCache>({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listDocuments) })
+				.some(([, data]) => data?.items?.some((item) => knowledgeStatusDescriptor(item.status)?.inProgress === true) === true);
+		// release() drops these registrations.
+		hub.onReconnected(() => {
+			stopClosedPoll();
+			invalidateDocuments();
+		});
+		hub.onClosed(() => {
+			stopClosedPoll();
+			closedPoll = setInterval(() => {
+				if (hasInProgressRow()) {
+					invalidateDocuments();
+				}
+			}, CLOSED_HUB_POLL_MS);
+		});
+
 		return () => {
+			stopClosedPoll();
 			connection.off(DOCUMENT_CHANGED, applyDocumentChanged);
 			// Release the shared lease: the manager stops the connection only after the LAST subscriber releases, and only
 			// once the start promise settles (so cleanup never aborts an in-flight negotiation under StrictMode / fast remounts).

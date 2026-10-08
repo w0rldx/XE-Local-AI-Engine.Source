@@ -1,7 +1,7 @@
-import { type HubConnection, HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
+import { type HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from "@microsoft/signalr";
 
+import { resolveHubAccessToken } from "@/core/api/signalr/ResolveHubAccessToken";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
-import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
 // Refcounted, module-level SignalR connections — ONE shared HubConnection per hub path, reused across component mounts.
 //
@@ -21,12 +21,11 @@ import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 // double-invoke, or a quick navigation back) never aborts an in-flight negotiation and never tears the connection down
 // once a new subscriber has already taken it over.
 //
-// Auth / logout: accessTokenFactory reads the CURRENT store token on the initial negotiate and on every automatic
-// reconnect, exactly as the per-mount hooks did — so a long-lived shared connection re-authenticates with the live token
-// across reconnects. On logout the store token clears and the pages holding a hub unmount (they are redirected to
-// sign-in), which drops the refcount to zero and stops the connection, so a shared connection does not outlive logout in
-// a broken state. Parity gap versus the chat hub: this factory does NOT proactively refresh a near-expiry token
-// (NodeChatConnection does); the seven hooks this replaces never did either, so current behavior is preserved.
+// Auth / logout: accessTokenFactory resolves the token on the initial negotiate and on every automatic reconnect, and
+// refreshes a missing or near-expiry one first (the same resolver as the chat hub), so a reconnect after an idle tab or
+// a sleep does not negotiate with an expired token and get a 401. On logout the store token clears and the pages
+// holding a hub unmount (they are redirected to sign-in), which drops the refcount to zero and stops the connection,
+// so a shared connection does not outlive logout in a broken state.
 
 /** Registered reconnected callback: receives the new connectionId (undefined when the transport reports none). */
 type ReconnectedCallback = (connectionId?: string) => void;
@@ -39,7 +38,7 @@ export interface SharedHubHandle {
 	/** The shared connection, started on first acquire. Stable for this handle's lifetime (a fixed connection until release). */
 	readonly connection: HubConnection;
 	/**
-	 * Resolves when the INITIAL start attempt settles — success OR failure (the start error is swallowed to a warning,
+	 * Resolves when the start attempt current at acquire time settles — success OR failure (the start error is swallowed to a warning,
 	 * matching the best-effort hooks). Check `connection.state === Connected` before acting. A subscriber that acquires
 	 * after the connection is already up sees this resolve on the next microtask, so on-connect work still runs for it.
 	 */
@@ -58,7 +57,8 @@ export interface SharedHubHandle {
 	onReconnecting(callback: HubLifecycleCallback): () => void;
 	/**
 	 * Register a callback for the connection closing for good — the automatic-reconnect policy gave up, so nothing
-	 * further arrives on this connection and a subscriber must fall back to polling until it is rebuilt.
+	 * further arrives on this connection and a subscriber must fall back to polling until the manager's backoff restart
+	 * succeeds, which fires {@link onReconnected}.
 	 */
 	onClosed(callback: HubLifecycleCallback): () => void;
 	/** Release this acquisition. The last release stops (and discards) the shared connection. Idempotent. */
@@ -71,8 +71,14 @@ interface HubEntry {
 	readonly reconnectingCallbacks: Set<HubLifecycleCallback>;
 	readonly closedCallbacks: Set<HubLifecycleCallback>;
 	refCount: number;
-	/** The (already-caught, always-resolving) initial start promise. Stop is deferred behind it. */
-	readonly startPromise: Promise<void>;
+	/** The (already-caught, always-resolving) latest start promise. Stop is deferred behind it. */
+	startPromise: Promise<void>;
+	/** True while a start() is in flight, so an acquire or a restart never starts a second one. */
+	starting: boolean;
+	/** Consecutive failed starts, indexing RESTART_DELAYS_MS. Reset by a successful start. */
+	restartAttempt: number;
+	/** Pending backoff restart after a close or a failed start (see RESTART_DELAYS_MS). */
+	restartTimer?: ReturnType<typeof setTimeout>;
 	/** Pending deferred-stop timer while the entry lingers at refcount zero (see STOP_LINGER_MS). */
 	lingerTimer?: ReturnType<typeof setTimeout>;
 }
@@ -84,15 +90,19 @@ interface HubEntry {
 // the same exposure class as the chat hub's permanent singleton, for at most this window) do not accumulate.
 const STOP_LINGER_MS = 30_000;
 
+// Backoff for restarting a connection that closed for good (withAutomaticReconnect gave up, e.g. a node restart or a
+// long sleep) or whose start failed (withAutomaticReconnect never retries a start). The last delay repeats while a
+// subscriber holds a lease: shell components hold some hubs for the whole tab, so giving up would freeze them for good.
+const RESTART_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
+
 // One entry per hub path, created lazily on first acquire and deleted when the last subscriber releases.
 const entries = new Map<string, HubEntry>();
 
 function buildEntry(hubPath: string): HubEntry {
 	const connection = new HubConnectionBuilder()
 		.withUrl(buildLocalApiUrl(hubPath), {
-			// Read the live store token on every negotiate/reconnect, matching the per-mount hooks (never proactively
-			// refreshed — see the logout note above). Never log the returned token; it can end up in WS query strings.
-			accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
+			// Never log the returned token; it can end up in WS query strings.
+			accessTokenFactory: () => resolveHubAccessToken(),
 		})
 		.withAutomaticReconnect()
 		.configureLogging(LogLevel.Warning)
@@ -116,20 +126,77 @@ function buildEntry(hubPath: string): HubEntry {
 	});
 	// The retry policy gave up. Nothing more arrives on this connection, and — unlike a reconnecting blip — nothing will
 	// announce that later either, so a subscriber that ignores this shows frozen data behind a healthy-looking page.
+	const entry: HubEntry = {
+		connection,
+		reconnectedCallbacks,
+		reconnectingCallbacks,
+		closedCallbacks,
+		refCount: 0,
+		startPromise: Promise.resolve(),
+		starting: false,
+		restartAttempt: 0,
+	};
 	connection.onclose((error) => {
 		for (const callback of closedCallbacks) {
 			callback(error);
 		}
+		scheduleRestart(hubPath, entry);
 	});
 
-	// A hub that cannot connect must not break the page — subscribers tolerate a failed start (their queries/stores still
-	// serve last-good state). withAutomaticReconnect does NOT retry the initial start, so a first-start failure leaves the
-	// connection disconnected until the last release rebuilds it, exactly as the per-mount hooks behaved on remount.
-	const startPromise = connection.start().catch((error: unknown) => {
-		console.warn(`shared signalr hub "${hubPath}" failed to start`, error);
-	});
+	startEntry(hubPath, entry, false);
+	return entry;
+}
 
-	return { connection, reconnectedCallbacks, reconnectingCallbacks, closedCallbacks, refCount: 0, startPromise };
+// A hub that cannot connect must not break the page — subscribers tolerate a failed start (their queries/stores still
+// serve last-good state) and the manager retries on RESTART_DELAYS_MS. Restarting the SAME connection keeps every
+// subscriber's handlers; a successful restart fans out as a reconnect so subscribers re-read what they missed.
+function startEntry(hubPath: string, entry: HubEntry, isRestart: boolean): void {
+	if (entry.restartTimer !== undefined) {
+		clearTimeout(entry.restartTimer);
+		entry.restartTimer = undefined;
+	}
+	entry.starting = true;
+	entry.startPromise = entry.connection
+		.start()
+		.then(
+			() => {
+				entry.restartAttempt = 0;
+				if (isRestart) {
+					for (const callback of entry.reconnectedCallbacks) {
+						callback(entry.connection.connectionId ?? undefined);
+					}
+				}
+			},
+			(error: unknown) => {
+				console.warn(`shared signalr hub "${hubPath}" failed to start`, error);
+				scheduleRestart(hubPath, entry);
+			},
+		)
+		.finally(() => {
+			entry.starting = false;
+		});
+}
+
+function scheduleRestart(hubPath: string, entry: HubEntry): void {
+	// No restart once the last subscriber left (the linger stop owns the entry) or the entry was discarded; the stop on
+	// the last release also fires onclose and lands here.
+	if (entry.refCount === 0 || entries.get(hubPath) !== entry || entry.restartTimer !== undefined) {
+		return;
+	}
+	const delayMs = RESTART_DELAYS_MS[Math.min(entry.restartAttempt, RESTART_DELAYS_MS.length - 1)] ?? 0;
+	entry.restartAttempt += 1;
+	entry.restartTimer = setTimeout(() => {
+		entry.restartTimer = undefined;
+		if (
+			entry.refCount === 0 ||
+			entries.get(hubPath) !== entry ||
+			entry.starting ||
+			entry.connection.state !== HubConnectionState.Disconnected
+		) {
+			return;
+		}
+		startEntry(hubPath, entry, true);
+	}, delayMs);
 }
 
 function releaseEntry(hubPath: string, entry: HubEntry): void {
@@ -174,6 +241,11 @@ export function acquireHubConnection(hubPath: string): SharedHubHandle {
 	if (entry.lingerTimer !== undefined) {
 		clearTimeout(entry.lingerTimer);
 		entry.lingerTimer = undefined;
+	}
+	// A closed connection (or one whose start failed) must not be handed out dead: start it now instead of waiting for
+	// a pending backoff restart.
+	if (!entry.starting && entry.connection.state === HubConnectionState.Disconnected) {
+		startEntry(hubPath, entry, true);
 	}
 	const activeEntry = entry;
 
@@ -227,6 +299,10 @@ export function resetSharedHubConnectionsForTest(): void {
 		if (entry.lingerTimer !== undefined) {
 			clearTimeout(entry.lingerTimer);
 			entry.lingerTimer = undefined;
+		}
+		if (entry.restartTimer !== undefined) {
+			clearTimeout(entry.restartTimer);
+			entry.restartTimer = undefined;
 		}
 	}
 	entries.clear();

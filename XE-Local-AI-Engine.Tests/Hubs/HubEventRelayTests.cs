@@ -51,6 +51,45 @@ public sealed class HubEventRelayTests
     }
 
     [Test]
+    public async Task ExecuteAsync_WhenASendThrows_KeepsRelaying()
+    {
+        var buffer = new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions()));
+        var proxy = Substitute.For<IClientProxy>();
+        var delivered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sends = 0;
+        proxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object?[]>(), Arg.Any<CancellationToken>())
+             .Returns(_ =>
+             {
+                 if (Interlocked.Increment(ref sends) == 1)
+                 {
+                     return Task.FromException(new InvalidOperationException("serializer refused the payload"));
+                 }
+
+                 delivered.TrySetResult();
+                 return Task.CompletedTask;
+             });
+        var clients = Substitute.For<IHubClients>();
+        clients.Group(Arg.Any<string>()).Returns(proxy);
+        var hubContext = Substitute.For<IHubContext<BenchmarkRunHub>>();
+        hubContext.Clients.Returns(clients);
+        var logger = new RecordingLogger<BenchmarkRunHubEventRelay>();
+        var runId = Guid.NewGuid();
+
+        using var relay = new BenchmarkRunHubEventRelay(buffer, hubContext, logger);
+        await relay.StartAsync(CancellationToken.None);
+        _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "lost" });
+        var second = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "kept" });
+        await delivered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await relay.StopAsync(CancellationToken.None);
+
+        await proxy.Received(1).SendCoreAsync(BenchmarkRunHubEvents.Event,
+            Arg.Is<object?[]>(arguments => arguments.Length == 1 && ReferenceEquals(arguments[0], second)),
+            Arg.Any<CancellationToken>());
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "InvalidOperationException"));
+        AssertEx.False(relay.ExecuteTask is { IsFaulted: true });
+    }
+
+    [Test]
     public async Task Enqueue_WhenTheBoundIsReached_DropsTheTransportCopyAndWarns()
     {
         var logger = new RecordingLogger<BenchmarkRunHubEventRelay>();

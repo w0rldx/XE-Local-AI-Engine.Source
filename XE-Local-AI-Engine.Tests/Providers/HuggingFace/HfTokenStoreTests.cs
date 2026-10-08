@@ -85,8 +85,12 @@ public sealed class HfTokenStoreTests : IDisposable
 
         var loaded = await store.GetTokenAsync(CancellationToken.None);
 
+        // Anonymous now, but kept: restoring the key ring that wrote it must still be able to recover the token.
         AssertEx.Null(loaded);
         AssertEx.False(File.Exists(GetTokenPath()));
+        var kept = Directory.GetFiles(_contentRootPath, Path.GetFileName(GetTokenPath()) + ".unreadable-*");
+        AssertEx.Equal(expected: 1, kept.Length);
+        AssertEx.Equal("010203", Convert.ToHexString(await File.ReadAllBytesAsync(kept[0])));
     }
 
     [Test]

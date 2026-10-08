@@ -58,6 +58,7 @@ internal static class AddNodeModelRuntimeExtensions
 
         builder.Services.AddSingleton<NodeChatMigrationRecoveryService>();
         builder.Services.AddSingleton<INodeDbBackupService, NodeDbBackupService>();
+        builder.Services.TryAddSingleton<IFreeSpaceProbe, DriveInfoFreeSpaceProbe>();
         builder.Services.AddSingleton<IKnowledgeDowngradeSafetyService, KnowledgeDowngradeSafetyService>();
 
         // Node SQLite concurrency posture, resolved once: publish the pragma settings to the static raw-open helpers

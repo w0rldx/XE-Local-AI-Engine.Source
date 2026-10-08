@@ -33,6 +33,12 @@ public interface IInvocationAttachmentTracker
     IReadOnlyCollection<DetachedInvocation> ListDetached();
 
     /// <summary>
+    ///     Drops the entry of a run whose stream has ended, for an exit that never published a terminal state: a cancel
+    ///     while queued, or a turn refused before it ran. A no-op when the entry is already gone.
+    /// </summary>
+    void Forget(Guid invocationId);
+
+    /// <summary>
     ///     Raised when an invocation gains its first consumer or loses its last. The runner listens so a re-attach
     ///     during a human park restores the full park budget from the moment of re-attach.
     /// </summary>

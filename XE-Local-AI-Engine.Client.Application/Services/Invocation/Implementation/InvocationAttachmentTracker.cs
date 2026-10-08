@@ -67,6 +67,16 @@ public sealed class InvocationAttachmentTracker : IInvocationAttachmentTracker
         return detached ?? (IReadOnlyCollection<DetachedInvocation>)[];
     }
 
+    public void Forget(Guid invocationId)
+    {
+        if (_entries.TryRemove(invocationId, out var entry) && entry.Retire())
+        {
+            // The run ended while still detached, so the gauge's other exit: it must fall back to zero whether
+            // the client came back or the turn simply ended.
+            NodeMetrics.ChatStreamDetachedInvocations.Add(-1);
+        }
+    }
+
     // Subscribes on the FIRST attach rather than at construction: by then the container has finished building, so resolving the dispatcher is safe, and before
     // that there are no entries for a terminal event to remove. Exactly once for the process lifetime — both are singletons, so there is no unsubscribe path.
     private void EnsureSubscribed()
@@ -90,13 +100,9 @@ public sealed class InvocationAttachmentTracker : IInvocationAttachmentTracker
     // that was ever watched would linger in the dictionary (and in ListDetached) for the process lifetime.
     private void OnInvocationStateChanged(object? sender, InvocationStateChangedEventArgs args)
     {
-        if (args.State.Status is InvocationStatus.Completed or InvocationStatus.Cancelled or InvocationStatus.Failed
-            && _entries.TryRemove(args.State.InvocationId, out var entry)
-            && entry.Retire())
+        if (args.State.Status is InvocationStatus.Completed or InvocationStatus.Cancelled or InvocationStatus.Failed)
         {
-            // The run terminalized while still detached, so the gauge's other exit: it must fall back to zero whether
-            // the client came back or the turn simply ended.
-            NodeMetrics.ChatStreamDetachedInvocations.Add(-1);
+            Forget(args.State.InvocationId);
         }
     }
 

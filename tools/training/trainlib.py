@@ -20,10 +20,32 @@ CANCELLED_EXIT_CODE = 3
 ADDITIONAL_CHAT_TEMPLATES_DIRECTORY = "additional_chat_templates"
 
 
+class DatasetError(ValueError):
+    """A frozen dataset line the trainer cannot use; train.py reports it as the "dataset" error category."""
+
+
 def load_samples(dataset_path, holdout_sequences):
-    """Reads the canonical JSONL, dropping the frozen holdout and every sample labelled as behaviour to avoid."""
+    """Reads the canonical JSONL, dropping the frozen holdout and every sample labelled as behaviour to avoid.
+
+    Every line is shape-checked here, before the caller loads the base model, so a corrupt or truncated dataset
+    fails in seconds with the line number instead of minutes later as an AttributeError.
+    """
     with open(dataset_path, encoding="utf-8") as handle:
-        return filter_samples((json.loads(line) for line in handle if line.strip()), holdout_sequences)
+        records = [_parse_record(line, number) for number, line in enumerate(handle, start=1) if line.strip()]
+    return filter_samples(records, holdout_sequences)
+
+
+def _parse_record(line, number):
+    try:
+        record = json.loads(line)
+    except json.JSONDecodeError as error:
+        raise DatasetError(f"line {number} is not valid JSON ({error.msg}).") from None
+    if not isinstance(record, dict):
+        raise DatasetError(f"line {number} is not a JSON object.")
+    parts = record.get("parts")
+    if parts is not None and (not isinstance(parts, list) or not all(isinstance(part, dict) for part in parts)):
+        raise DatasetError(f"line {number} has a 'parts' value that is not a list of objects.")
+    return record
 
 
 def filter_samples(records, holdout_sequences):

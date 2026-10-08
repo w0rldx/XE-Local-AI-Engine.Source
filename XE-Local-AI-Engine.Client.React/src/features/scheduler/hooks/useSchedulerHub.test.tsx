@@ -126,15 +126,17 @@ describe("useSchedulerHub", () => {
 		vi.clearAllMocks();
 	});
 
-	it("connects to the scheduler hub with the access-token factory and auto-reconnect", () => {
-		useNodeAuthStore.getState().actions.setToken({ accessToken: "sched-token", expiresAtUtc: "2026-06-03T12:00:00Z" });
+	it("connects to the scheduler hub with the access-token factory and auto-reconnect", async () => {
+		useNodeAuthStore
+			.getState()
+			.actions.setToken({ accessToken: "sched-token", expiresAtUtc: new Date(Date.now() + 10 * 60_000).toISOString() });
 		renderHub();
 
 		expect(signalRMock.builder.withUrl).toHaveBeenCalledWith(
 			expect.stringContaining("/api/local/v1/scheduler/hub"),
 			expect.objectContaining({ accessTokenFactory: expect.any(Function) }),
 		);
-		expect(signalRMock.builder.withUrl.mock.calls[0]?.[1].accessTokenFactory()).toBe("sched-token");
+		await expect(signalRMock.builder.withUrl.mock.calls[0]?.[1].accessTokenFactory()).resolves.toBe("sched-token");
 		expect(signalRMock.builder.withAutomaticReconnect).toHaveBeenCalled();
 		expect(signalRMock.connection.start).toHaveBeenCalled();
 	});

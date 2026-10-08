@@ -164,8 +164,10 @@ public sealed class CudaManagedRuntimeTests
     [Test]
     [ExcludeOn(OS.Windows)]
     [UnsupportedOSPlatform("windows")]
-    public async Task EnsureBinary_ManagedCuda_WorldWritableAncestor_Discarded()
+    public async Task EnsureBinary_ManagedCuda_WorldWritableAncestor_RefusesServeAndKeepsRecord()
     {
+        // The serve is refused, but a perms failure is not evidence the build is foreign: discarding the record here
+        // cost the operator a 20-40 min rebuild for a fixable chmod. Only a SHA mismatch or a missing server discards.
         using var dir = new TempDir();
         var (binDir, _, sha) = SeedSourceBuild(dir.Path, GpuStub);
         using var store = new InstalledRuntimeStore(dir.Path);
@@ -183,8 +185,46 @@ public sealed class CudaManagedRuntimeTests
             OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
-        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
-        AssertEx.False(signal.IsAvailable);
+        AssertEx.Equal(binDir, (await store.ReadAsync(CancellationToken.None))?.SourceBuildPath);
+    }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task EnsureBinary_ManagedCuda_TransientReadFailure_KeepsRecordAndServesOnceReadable()
+    {
+        if (string.Equals(Environment.UserName, "root", StringComparison.Ordinal))
+        {
+            Skip.Test("root reads a 0300 file, so the read failure cannot be produced.");
+        }
+
+        // Any exception during serve validation used to discard the record, so one transient read error on the server
+        // binary lost the build for good.
+        using var dir = new TempDir();
+        var (binDir, serverPath, sha) = SeedSourceBuild(dir.Path, GpuStub);
+        using var store = new InstalledRuntimeStore(dir.Path);
+        await store.WriteAsync(SourceBuildState(binDir, sha), CancellationToken.None);
+        var signal = new CudaManagedBuildSignal();
+        signal.MarkAvailable();
+        using var handler = new ThrowingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
+        var readable = File.GetUnixFileMode(serverPath);
+
+        File.SetUnixFileMode(serverPath, UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        try
+        {
+            await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
+        }
+        finally
+        {
+            File.SetUnixFileMode(serverPath, readable);
+        }
+
+        AssertEx.Equal(binDir, (await store.ReadAsync(CancellationToken.None))?.SourceBuildPath);
+        var binary = await manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None);
+        AssertEx.Equal(serverPath, binary.ServerExecutablePath);
     }
 
     /// <summary>

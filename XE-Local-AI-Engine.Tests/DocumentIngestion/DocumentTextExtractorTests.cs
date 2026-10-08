@@ -85,6 +85,34 @@ public sealed class DocumentTextExtractorTests
     }
 
     [Test]
+    public async Task Extractor_WhenHtmlProseHasBareLessThan_KeepsEveryParagraph()
+    {
+        // A bare '<' used to open a "tag" that the apostrophe then held open across both paragraphs, dropping them silently.
+        const string html = "<p>if a < b, it's true</p><p>Next paragraph's text</p>";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(html));
+
+        var result = await CreateExtractor().ExtractAsync(stream, "page.html", ".html", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Extracted, result.Status);
+        var markdown = AssertEx.NotNull(result.Markdown);
+        AssertEx.Contains(markdown, "if a < b, it's true");
+        AssertEx.Contains(markdown, "Next paragraph's text");
+    }
+
+    [Test]
+    public async Task Extractor_WhenHtmlScriptIsUnclosed_KeepsTheTextBeforeItAndDropsTheScriptBody()
+    {
+        // The HTML tokenizer rule: an unclosed raw element runs to end of input, so its body is never extracted as prose.
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("<p>Visible before it's loaded</p><script>var hidden = 'script body';"));
+
+        var result = await CreateExtractor().ExtractAsync(stream, "page.html", ".html", CancellationToken.None);
+
+        var markdown = AssertEx.NotNull(result.Markdown);
+        AssertEx.Contains(markdown, "Visible before it's loaded");
+        AssertEx.False(markdown.Contains("script body", StringComparison.Ordinal), markdown);
+    }
+
+    [Test]
     public async Task Extractor_WhenPlaintextIsWhitespaceOnly_ReportsNoExtractedChars()
     {
         // A non-zero count made chat inline an empty fence and skip the unsent-attachment notice.

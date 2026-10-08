@@ -1,14 +1,34 @@
 namespace XE_Local_AI_Engine.Client.Persistence;
 
+using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Configurations;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 public sealed class NodeChatDbContext : DbContext
 {
+    /// <summary>The <c>chat_maintenance_state</c> row holding the node-key check value.</summary>
+    internal const string NodeKeyCheckStateName = "node_key_check";
+
+    private static readonly byte[] NodeKeyCheckLabel = "xe-node-key-check|v1"u8.ToArray();
+
     private readonly INodeSqliteKeyHolder _nodeSqliteKeyHolder;
+
+#pragma warning disable S3011 // This type's own private generic helper, closed over each entity CLR type the model declares; nothing outside is reached.
+    private static readonly MethodInfo SampleEntitySetMethod =
+        typeof(NodeChatDbContext).GetMethod(nameof(SampleEntitySetAsync), BindingFlags.NonPublic | BindingFlags.Instance)!;
+#pragma warning restore S3011
+
+    // Non-null only while ListSkippingUnreadableAsync runs; the materialization interceptor adds undecryptable rows to it.
+    private HashSet<object>? _unreadableRows;
+
+    // Non-null only while the key check samples existing rows; the materialization interceptor reports each row to it.
+    private NodeKeyProbe? _keyProbe;
 
     public NodeChatDbContext(DbContextOptions<NodeChatDbContext> options, INodeSqliteKeyHolder nodeSqliteKeyHolder) : base(options)
     {
@@ -204,6 +224,126 @@ public sealed class NodeChatDbContext : DbContext
     internal DbSet<TranscriptSegment> TranscriptSegments => Set<TranscriptSegment>();
 
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
+
+    /// <summary>
+    ///     Runs a list query, no-tracking, that drops with a warning each row whose encrypted columns fail to decrypt,
+    ///     instead of failing the whole list.
+    /// </summary>
+    /// <remarks>
+    ///     One bit-rotted or partially restored row would otherwise fail the list on every call, leaving the user no way
+    ///     to reach the bad row to delete it. Detail reads stay strict. Always no-tracking: a half-decrypted entity must
+    ///     never be saved back.
+    /// </remarks>
+    internal async Task<List<T>> ListSkippingUnreadableAsync<T>(IQueryable<T> query, CancellationToken cancellationToken)
+        where T : class
+    {
+        _unreadableRows = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        try
+        {
+            var rows = await query.AsNoTracking().ToListAsync(cancellationToken);
+            var skipped = rows.RemoveAll(_unreadableRows.Contains);
+            if (skipped > 0)
+            {
+                this.GetService<ILoggerFactory>()
+                    .CreateLogger<NodeChatDbContext>()
+                    .LogWarning("Skipped {Count} {EntityType} row(s) whose encrypted columns could not be decrypted.", skipped, typeof(T).Name);
+            }
+
+            return rows;
+        }
+        finally
+        {
+            _unreadableRows = null;
+        }
+    }
+
+    /// <summary>The key-check probe in flight, or <see langword="null" /> outside one.</summary>
+    internal NodeKeyProbe? KeyProbe => _keyProbe;
+
+    /// <summary>Records an undecryptable row for the tolerant list read in flight; <see langword="false" /> outside one.</summary>
+    internal bool TryRecordUnreadableRow(object entity)
+    {
+        return _unreadableRows?.Add(entity) ?? false;
+    }
+
+    /// <summary>
+    ///     Checks the node key against the value this database recorded under it on first run, and records it when absent.
+    ///     Throws <see cref="InvalidOperationException" /> on a mismatch.
+    /// </summary>
+    /// <remarks>
+    ///     The value is an HMAC of a fixed label, so it reveals nothing about the key. Without a recorded value the key is
+    ///     first tried on up to 3 rows of every entity set: one decrypt accepts it, only failures refuse it, no ciphertext
+    ///     binds it. Fail-closed edge: a database whose only sampled ciphertext is corrupt is refused under the right key.
+    /// </remarks>
+    public async Task VerifyOrRecordNodeKeyCheckAsync(CancellationToken cancellationToken)
+    {
+        var expected = Convert.ToBase64String(HMACSHA256.HashData(NodeEncryptionKey.Span, NodeKeyCheckLabel));
+        var stored = await MaintenanceState.AsNoTracking()
+                                           .Where(state => state.Name == NodeKeyCheckStateName)
+                                           .Select(state => state.Value)
+                                           .FirstOrDefaultAsync(cancellationToken);
+        if (stored is null)
+        {
+            // First start with the check on an existing database: authenticate the key against existing ciphertext before
+            // binding it, or a wrong key on that one start would be recorded for good and the right key refused afterwards.
+            var probe = await ProbeExistingCiphertextAsync(cancellationToken);
+            if (probe.Decrypted == 0 && probe.Failed > 0)
+            {
+                throw NodeKeyMismatch(innerException: null);
+            }
+
+            MaintenanceState.Add(new ChatMaintenanceState
+            {
+                Name = NodeKeyCheckStateName,
+                Value = expected
+            });
+            await SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        if (!string.Equals(stored, expected, StringComparison.Ordinal))
+        {
+            throw NodeKeyMismatch(innerException: null);
+        }
+    }
+
+    /// <summary>Materializes up to 3 rows of every entity set, no-tracking, with the interceptor reporting each row to a probe.</summary>
+    /// <remarks>
+    ///     Driven by the model and the interceptor's own cases rather than a hand-kept list, so an entity that gains an
+    ///     encrypted column is sampled without touching this method.
+    /// </remarks>
+    private async Task<NodeKeyProbe> ProbeExistingCiphertextAsync(CancellationToken cancellationToken)
+    {
+        var probe = new NodeKeyProbe();
+        _keyProbe = probe;
+        try
+        {
+            foreach (var entityType in Model.GetEntityTypes().Where(static type => type.FindPrimaryKey() is not null && !type.IsOwned() && type.BaseType is null && !type.HasSharedClrType))
+            {
+                await (Task)SampleEntitySetMethod.MakeGenericMethod(entityType.ClrType).Invoke(this, [cancellationToken])!;
+            }
+        }
+        finally
+        {
+            _keyProbe = null;
+        }
+
+        return probe;
+    }
+
+    private async Task SampleEntitySetAsync<T>(CancellationToken cancellationToken)
+        where T : class
+    {
+        _ = await Set<T>().AsNoTracking().Take(3).ToListAsync(cancellationToken);
+    }
+
+    private static InvalidOperationException NodeKeyMismatch(Exception? innerException)
+    {
+        return new InvalidOperationException("The node encryption key does not match this database: it was created under a different node.key, "
+                                             + "XE_NODE_SQLITE_KEY or WorkerNode:NodeName. Restore the original key or setting, or move node.sqlite aside "
+                                             + "to start with a new empty database. Startup stopped so nothing is written under the wrong key.",
+            innerException);
+    }
 
     /// <summary>
     ///     Encrypts a conversation title string for raw-SQL persistence, returning null when the title is null so the

@@ -20,4 +20,10 @@ public sealed class NodeDbBackupOptions
     ///     least one.
     /// </summary>
     public int RetainCount { get; set; } = 3;
+
+    /// <summary>
+    ///     Longest the snapshot may run before it is interrupted and skipped with a warning. Sized to leave the migrations
+    ///     and host start room inside the desktop shell's two-minute readiness deadline.
+    /// </summary>
+    public TimeSpan SnapshotTimeout { get; set; } = TimeSpan.FromSeconds(60);
 }

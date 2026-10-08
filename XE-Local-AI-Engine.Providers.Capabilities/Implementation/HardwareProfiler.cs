@@ -59,12 +59,19 @@ internal sealed class HardwareProfiler : IHardwareProfiler
 
         // The probe is read-only and idempotent, so an un-serialized concurrent first-probe is harmless (last write
         // wins on the cached field). Avoiding a lock keeps the singleton non-disposable.
-        var profile = await ProbeAsync(ct).ConfigureAwait(false);
-        _cachedProfile = profile;
-        return profile;
+        var outcome = await ProbeAsync(ct).ConfigureAwait(false);
+
+        // A CPU-safe degrade caused only by a probe timeout is not a real answer: leave the cache empty so the next
+        // non-forced reader probes again instead of pinning GPU backends to CPU for the whole session.
+        if (outcome.Cacheable)
+        {
+            _cachedProfile = outcome.Profile;
+        }
+
+        return outcome.Profile;
     }
 
-    private async Task<HardwareProfile> ProbeAsync(CancellationToken ct)
+    private async Task<ProbeOutcome> ProbeAsync(CancellationToken ct)
     {
         var (totalRam, availableRam) = ProbeRam();
 
@@ -81,7 +88,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
             if (_cachedProfile is { } lastGood)
             {
                 _logger.LogWarning("nvidia-smi hardware probe timed out; reusing the last cached hardware profile.");
-                return lastGood;
+                return new ProbeOutcome(lastGood, Cacheable: true);
             }
 
             _logger.LogWarning("nvidia-smi hardware probe timed out and no cached profile exists; degrading to the CPU-safe default (VRAM unknown).");
@@ -112,7 +119,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         // Degrade rule: VRAM unknown ⇒ no GPU budget, regardless of a detected vendor.
         var gpuAccelAvailable = vramKnown && vendor is GpuVendor.Nvidia or GpuVendor.Amd or GpuVendor.Intel;
 
-        return new HardwareProfile
+        var profile = new HardwareProfile
         {
             TotalRamBytes = totalRam,
             AvailableRamBytes = availableRam,
@@ -124,6 +131,8 @@ internal sealed class HardwareProfiler : IHardwareProfiler
             CpuCores = _environment.ProcessorCount,
             FreeDiskBytes = _environment.GetFreeDiskBytes(_options.ModelsVolumePath)
         };
+
+        return new ProbeOutcome(profile, Cacheable: !nvidia.TimedOut);
     }
 
     private RamSnapshot ProbeRam()
@@ -257,10 +266,11 @@ internal sealed class HardwareProfiler : IHardwareProfiler
             // A named row means an NVIDIA GPU is present (vendor signal). Take the VRAM figures from the FIRST row that
             // carries a parseable total, reading free from that same row so total/free describe one device, then stop.
             present = true;
-            if (TryParseMib(columns[1], out var total))
+            // Free may be 0 (another process holds all VRAM); only the total must be positive.
+            if (TryParseMib(columns[1], minimumMib: 1, out var total))
             {
                 totalBytes = total;
-                freeBytes = columns.Length >= 3 && TryParseMib(columns[2], out var free) ? free : null;
+                freeBytes = columns.Length >= 3 && TryParseMib(columns[2], minimumMib: 0, out var free) ? free : null;
                 break;
             }
         }
@@ -270,9 +280,9 @@ internal sealed class HardwareProfiler : IHardwareProfiler
             : NvidiaProbe.Absent;
     }
 
-    private static bool TryParseMib(string token, out long bytes)
+    private static bool TryParseMib(string token, long minimumMib, out long bytes)
     {
-        if (long.TryParse(token.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var mib) && mib > 0)
+        if (long.TryParse(token.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var mib) && mib >= minimumMib)
         {
             bytes = mib * 1024L * 1024L;
             return true;
@@ -413,6 +423,10 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     // The host's physical memory in bytes as the probe read it: the installed total and the currently available slice.
     [StructLayout(LayoutKind.Auto)]
     private readonly record struct RamSnapshot(long TotalRamBytes, long AvailableRamBytes);
+
+    // A probed profile and whether it may be cached (false for a timeout-only CPU degrade).
+    [StructLayout(LayoutKind.Auto)]
+    private readonly record struct ProbeOutcome(HardwareProfile Profile, bool Cacheable);
 
     // One Windows adapter-description source: the executable to run and its argument vector.
     private sealed record AdapterListCommand(string FileName, IReadOnlyList<string> Arguments);

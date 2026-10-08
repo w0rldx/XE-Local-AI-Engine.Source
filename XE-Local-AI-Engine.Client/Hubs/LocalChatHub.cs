@@ -55,7 +55,7 @@ public sealed class LocalChatHub : Hub
             };
         }
 
-        return TrackAttachment(RejectInvalidRequest(() => _streamService.SendMessageAsync(request, cancellationToken)), cancellationToken);
+        return TrackAttachment(RejectInvalidRequest(() => _streamService.SendMessageAsync(request, cancellationToken)), sourceOwnsRun: true, cancellationToken);
     }
 
     /// <summary>
@@ -121,6 +121,7 @@ public sealed class LocalChatHub : Hub
                     samplingOptions,
                     autoAcceptWebContent,
                     cancellationToken)),
+            sourceOwnsRun: true,
             cancellationToken);
     }
 
@@ -135,7 +136,18 @@ public sealed class LocalChatHub : Hub
     public IAsyncEnumerable<ChatStreamEvent> ResumeMessage(Guid invocationId,
         CancellationToken cancellationToken)
     {
-        return TrackAttachment(_resumeRegistry.ResumeAsync(invocationId, cancellationToken), cancellationToken);
+        IAsyncEnumerable<ChatStreamEvent> resumed;
+        try
+        {
+            resumed = _resumeRegistry.ResumeAsync(invocationId, cancellationToken);
+        }
+        catch (InvalidOperationException exception)
+        {
+            // Unknown or already terminal: the message carries only the caller's own id, and tells it to refetch.
+            throw new HubException(exception.Message, exception);
+        }
+
+        return TrackAttachment(resumed, sourceOwnsRun: false, cancellationToken);
     }
 
     /// <summary>
@@ -153,9 +165,20 @@ public sealed class LocalChatHub : Hub
         CancellationToken cancellationToken)
     {
         var invocationId = _resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId);
-        return invocationId is null
-            ? AsyncEnumerable.Empty<ChatStreamEvent>()
-            : TrackAttachment(_resumeRegistry.ResumeAsync(invocationId.Value, cancellationToken), cancellationToken);
+        if (invocationId is null)
+        {
+            return AsyncEnumerable.Empty<ChatStreamEvent>();
+        }
+
+        try
+        {
+            return TrackAttachment(_resumeRegistry.ResumeAsync(invocationId.Value, cancellationToken), sourceOwnsRun: false, cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            // The turn ended between the lookup and the resume: nothing is live, which is the empty-stream answer.
+            return AsyncEnumerable.Empty<ChatStreamEvent>();
+        }
     }
 
     /// <summary>
@@ -169,11 +192,17 @@ public sealed class LocalChatHub : Hub
     ///     disconnects — and NOT by the source enumerable completing, which does not return until the whole run is over
     ///     and would record the detach too late to reap. See docs/wiki/09-api-and-hubs.md ("Chat hub: attachment and refusals").
     /// </remarks>
+    /// <param name="sourceOwnsRun">
+    ///     True for a send or regenerate, whose stream ends only when the run is over, so its entry is dropped then.
+    ///     Never for a resume.
+    /// </param>
     private async IAsyncEnumerable<ChatStreamEvent> TrackAttachment(IAsyncEnumerable<ChatStreamEvent> source,
+        bool sourceOwnsRun,
         [EnumeratorCancellation]
         CancellationToken cancellationToken)
     {
         IDisposable? attachment = null;
+        Guid? invocationId = null;
         await using var registration = cancellationToken.Register(() => attachment?.Dispose());
 
         try
@@ -182,6 +211,7 @@ public sealed class LocalChatHub : Hub
             {
                 if (attachment is null)
                 {
+                    invocationId = streamEvent.RequestId;
                     attachment = _attachmentTracker.Attach(streamEvent.RequestId);
 
                     // Closes the one gap the callback cannot: a cancellation that fired while we were latching has
@@ -198,6 +228,12 @@ public sealed class LocalChatHub : Hub
         finally
         {
             attachment?.Dispose();
+
+            // A cancel while queued or a turn refused before it ran publishes no terminal, so nothing else would drop the entry.
+            if (sourceOwnsRun && invocationId is { } ended)
+            {
+                _attachmentTracker.Forget(ended);
+            }
         }
     }
 

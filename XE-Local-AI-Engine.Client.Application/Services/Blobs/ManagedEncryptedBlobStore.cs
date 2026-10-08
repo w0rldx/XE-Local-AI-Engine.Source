@@ -67,7 +67,15 @@ internal sealed class ManagedEncryptedBlobStore
         try
         {
             var encrypted = Encrypt(scopeId, blobId, content.Span);
-            await File.WriteAllBytesAsync(tempPath, encrypted, cancellationToken);
+            await using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 4096, useAsync: true))
+            {
+                await stream.WriteAsync(encrypted, cancellationToken);
+
+                // fsync before the rename, or a power loss can keep a renamed zero-length blob that reads as Tampered forever.
+#pragma warning disable CA1849 // FlushAsync never reaches the disk; only Flush(flushToDisk: true) issues the fsync this needs.
+                stream.Flush(flushToDisk: true);
+#pragma warning restore CA1849
+            }
 
             var verifiedEncrypted = await File.ReadAllBytesAsync(tempPath, cancellationToken);
             var verifiedPlaintext = Decrypt(scopeId, blobId, verifiedEncrypted);

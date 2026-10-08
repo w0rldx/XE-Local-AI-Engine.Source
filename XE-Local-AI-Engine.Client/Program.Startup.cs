@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client;
 
 using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.Data.Sqlite;
 using Serilog;
 using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Hosting;
@@ -17,6 +18,9 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
 public sealed partial class Program
 {
+    private const int SqliteCorruptErrorCode = 11;
+    private const int SqliteNotADatabaseErrorCode = 26;
+
     /// <summary>
     ///     Reads every saved Open Canvas workflow BEFORE migrations, because the <c>DropCanvasWorkflows</c> migration
     ///     removes the table they live in and no migration can decrypt the graph blob.
@@ -84,6 +88,55 @@ public sealed partial class Program
 
         var migrationService = scope.ServiceProvider.GetRequiredService<NodeChatMigrationRecoveryService>();
         await migrationService.MigrateAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    ///     Turns a failed migration pass into an actionable fatal message on stderr (the desktop shell shows its tail):
+    ///     the newest pre-migration snapshot and how to restore it, or how to move a damaged database aside.
+    /// </summary>
+    private static async Task ReportDatabaseRecoveryAsync(WebApplication app, Exception exception, TextWriter standardError)
+    {
+        try
+        {
+            var dataSource = new SqliteConnectionStringBuilder(app.Configuration.GetConnectionString("node-sqlite")).DataSource;
+            var databasePath = string.IsNullOrWhiteSpace(dataSource) ? "node.sqlite" : Path.GetFullPath(dataSource);
+            var snapshotPath = app.Services.GetService<INodeDbBackupService>()?.FindNewestSnapshot();
+            var hint = DescribeDatabaseRecovery(exception, databasePath, snapshotPath);
+
+            Log.Fatal("{DatabaseRecoveryHint}", hint);
+            await standardError.WriteLineAsync(hint);
+        }
+        catch (Exception hintException) when (hintException is IOException or ArgumentException or InvalidOperationException)
+        {
+            // The hint is advisory; never let it replace the migration failure the caller rethrows.
+            Log.Warning(hintException, "Could not describe how to recover the node database.");
+        }
+    }
+
+    internal static string DescribeDatabaseRecovery(Exception exception, string databasePath, string? snapshotPath)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        var restore = snapshotPath is null
+            ? "No pre-migration snapshot exists in the data directory's backups folder."
+            : $"To restore the newest pre-migration snapshot, stop the node, delete '{databasePath}-wal' and '{databasePath}-shm' if present, then copy '{snapshotPath}' to '{databasePath}'.";
+
+        return IsDamagedDatabase(exception)
+            ? $"The node database '{databasePath}' is damaged or is not a SQLite database. Stop the node and move that file aside (for example rename it to '{Path.GetFileName(databasePath)}.broken'). {restore}"
+            : $"The node database '{databasePath}' could not be migrated. {restore}";
+    }
+
+    private static bool IsDamagedDatabase(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is SqliteException { SqliteErrorCode: SqliteCorruptErrorCode or SqliteNotADatabaseErrorCode })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static async Task ApplyNodeIdentityMigrationsAsync(IServiceProvider services)

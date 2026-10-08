@@ -5,6 +5,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -143,9 +144,16 @@ internal sealed class HfHubClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
 
+        // A malformed id names no repository: answer "not found" without sending the token anywhere. A valid id has no '@', so the cache key below is unambiguous.
+        if (!HuggingFaceRepoId.IsValid(repoId))
+        {
+            return Task.FromResult<HubModelDetail?>(null);
+        }
+
+        var repoPath = HuggingFaceRepoId.EscapePath(repoId);
         var url = string.IsNullOrWhiteSpace(revision)
-            ? $"{TrimBase(_options.HubBaseUrl)}/api/models/{repoId}?blobs=true"
-            : $"{TrimBase(_options.HubBaseUrl)}/api/models/{repoId}/revision/{Uri.EscapeDataString(revision)}?blobs=true";
+            ? $"{TrimBase(_options.HubBaseUrl)}/api/models/{repoPath}?blobs=true"
+            : $"{TrimBase(_options.HubBaseUrl)}/api/models/{repoPath}/revision/{Uri.EscapeDataString(revision)}?blobs=true";
         var cacheKey = string.IsNullOrWhiteSpace(revision) ? repoId : $"{repoId}@{revision}";
         return _repoDetailCache.GetOrAddAsync(cacheKey, _options.HubMetadataCacheTtl, token => FetchRepoAsync(url, repoId, token), ct);
     }

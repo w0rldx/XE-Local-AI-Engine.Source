@@ -11,8 +11,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 /// <remarks>
 ///     Seeding is what lets a previously-adopted source build be selected after a restart without a per-call store
-///     read. Reconciliation failure is fatal to startup, so readiness cannot be reported against ambiguous runtime
-///     state.
+///     read. An active/backup reconciliation failure is fatal to startup, so readiness cannot be reported against
+///     ambiguous runtime state; undeletable scratch directories are not (they only refuse new builds).
 /// </remarks>
 internal sealed class CudaBuildStartupService : IHostedService
 {

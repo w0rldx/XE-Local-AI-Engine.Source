@@ -62,6 +62,23 @@ describe("AppErrorFallback", () => {
 		expect(onRetry).toHaveBeenCalledTimes(1);
 	});
 
+	it("offers a reload and a way home, since Retry re-renders the same crash", () => {
+		const reload = vi.fn();
+		const assign = vi.fn();
+		vi.stubGlobal("location", { ...window.location, reload, assign });
+		try {
+			renderFallback();
+
+			fireEvent.click(screen.getByRole("button", { name: strings.reload }));
+			fireEvent.click(screen.getByRole("button", { name: strings.goHome }));
+
+			expect(reload).toHaveBeenCalledTimes(1);
+			expect(assign).toHaveBeenCalledWith("/");
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
 	it("disables export with a hint while no snapshot is stored", () => {
 		renderFallback();
 

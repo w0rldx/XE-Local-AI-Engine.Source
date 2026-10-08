@@ -134,6 +134,55 @@ describe("auth axios interceptors", () => {
 		expect(useNodeAuthStore.getState().accessToken).toBe("fresh-token");
 	});
 
+	it("replays a late 401 sent with the old token using the current one, without a second refresh", async () => {
+		// Two requests leave with the old token. The first 401 refreshes; the second 401 lands after that refresh has
+		// settled, so the single-flight no longer covers it. Refreshing again per late 401 burns the shared auth budget.
+		const sentAuthorizations: unknown[] = [];
+		let releaseLateResponse!: () => void;
+		const lateResponseGate = new Promise<void>((resolve) => {
+			releaseLateResponse = resolve;
+		});
+		const instance = axios.create({
+			adapter: async (config) => {
+				const authorization = config.headers.Authorization;
+				sentAuthorizations.push(authorization);
+				if (authorization === "Bearer fresh-token") {
+					return okResponse(config);
+				}
+				if (sentAuthorizations.length === 2) {
+					await lateResponseGate;
+				}
+				throw unauthorizedError(config);
+			},
+		});
+		addAuthRequestInterceptor(instance);
+		addUnauthorizedErrorInterceptor(instance);
+		useNodeAuthStore.getState().actions.setToken({ accessToken: "old-token", expiresAtUtc: "2026-05-25T12:00:00Z" });
+		let releaseRefresh!: () => void;
+		const freshToken = { accessToken: "fresh-token", expiresAtUtc: "2026-05-25T12:15:00Z" };
+		authApiMock.refreshNodeAuthToken
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						releaseRefresh = () => resolve(freshToken);
+					}),
+			)
+			.mockResolvedValue(freshToken);
+
+		const first = instance.get("/api/local/v1/first");
+		const late = instance.get("/api/local/v1/late");
+		await vi.waitFor(() => expect(authApiMock.refreshNodeAuthToken).toHaveBeenCalledTimes(1));
+		expect(sentAuthorizations).toEqual(["Bearer old-token", "Bearer old-token"]);
+		releaseRefresh();
+		await expect(first).resolves.toMatchObject({ data: { ok: true } });
+
+		releaseLateResponse();
+		await expect(late).resolves.toMatchObject({ data: { ok: true } });
+
+		expect(authApiMock.refreshNodeAuthToken).toHaveBeenCalledTimes(1);
+		expect(sentAuthorizations.at(-1)).toBe("Bearer fresh-token");
+	});
+
 	it("clears local auth and redirects to login when refresh answers 401", async () => {
 		const instance = axios.create({
 			adapter: async (config) => {

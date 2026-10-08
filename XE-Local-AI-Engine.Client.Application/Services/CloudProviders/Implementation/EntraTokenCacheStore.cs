@@ -58,14 +58,14 @@ public sealed class EntraTokenCacheStore : IEntraTokenCacheStore, IDisposable
             }
             catch (CryptographicException exception)
             {
-                _logger.LogWarning(exception, "Entra ID authentication record decryption failed. Clearing the stored record.");
-                ClearRecordFileBestEffort();
+                _logger.LogWarning(exception, "Entra ID authentication record decryption failed. Moving the stored record aside.");
+                MoveRecordFileAsideBestEffort();
                 return null;
             }
             catch (JsonException exception)
             {
-                _logger.LogWarning(exception, "Entra ID authentication record could not be deserialized. Clearing the stored record.");
-                ClearRecordFileBestEffort();
+                _logger.LogWarning(exception, "Entra ID authentication record could not be deserialized. Moving the stored record aside.");
+                MoveRecordFileAsideBestEffort();
                 return null;
             }
             catch (IOException exception)
@@ -120,22 +120,20 @@ public sealed class EntraTokenCacheStore : IEntraTokenCacheStore, IDisposable
         _lock.Dispose();
     }
 
-    private void ClearRecordFileBestEffort()
+    private void MoveRecordFileAsideBestEffort()
     {
         try
         {
-            if (File.Exists(_recordPath))
-            {
-                File.Delete(_recordPath);
-            }
+            var movedTo = SecureFilePermissions.MoveAsideUnreadable(_recordPath);
+            _logger.LogWarning("The unreadable Entra ID authentication record was kept as {QuarantinePath}.", movedTo);
         }
         catch (IOException exception)
         {
-            _logger.LogWarning(exception, "Failed to delete the Entra ID authentication record file.");
+            _logger.LogWarning(exception, "Failed to move the unreadable Entra ID authentication record aside.");
         }
         catch (UnauthorizedAccessException exception)
         {
-            _logger.LogWarning(exception, "Failed to delete the Entra ID authentication record file.");
+            _logger.LogWarning(exception, "Failed to move the unreadable Entra ID authentication record aside.");
         }
     }
 }

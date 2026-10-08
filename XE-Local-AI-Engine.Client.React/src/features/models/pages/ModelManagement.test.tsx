@@ -28,6 +28,7 @@ vi.mock("@microsoft/signalr", () => ({
 		};
 		return builder;
 	}),
+	HubConnectionState: { Connected: "Connected", Disconnected: "Disconnected" },
 	LogLevel: { Warning: 3 },
 }));
 

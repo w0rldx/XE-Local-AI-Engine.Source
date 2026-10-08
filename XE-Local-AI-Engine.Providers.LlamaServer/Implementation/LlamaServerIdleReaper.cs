@@ -147,7 +147,16 @@ internal sealed class LlamaServerIdleReaper : IDisposable
                         running.IsTransient ? "transient" : "interactive", key.ModelName, key.Role, (now - running.LastUsedUtc).TotalSeconds, ttl.TotalSeconds);
                 }
 
-                await RemoveProcessAsync(key, running).ConfigureAwait(false);
+                // A teardown failure must not fault the reaper loop (it would never run again) or skip the remaining processes.
+                try
+                {
+                    await RemoveProcessAsync(key, running).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogWarning(exception, "Tearing down an idle llama-server for model {ModelName} role {Role} (pid {ProcessId}) failed; its slot and port were already released.",
+                        key.ModelName, key.Role, running.Handle.ProcessId);
+                }
             }
         }
     }

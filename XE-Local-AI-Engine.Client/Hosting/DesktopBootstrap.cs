@@ -122,7 +122,7 @@ internal static class DesktopBootstrap
             }
             else
             {
-                overrides[NodeOperatorSecretProvider.EnvVarName] = EnsureOperatorSecret(keyPath);
+                overrides[NodeOperatorSecretProvider.EnvVarName] = EnsureOperatorSecret(keyPath, Path.Combine(dataDirectory, DatabaseFileName));
                 vaultState = VaultState.Pending;
             }
         }
@@ -318,13 +318,23 @@ internal static class DesktopBootstrap
         return configuration[NodeOperatorSecretProvider.AspireParameterPath];
     }
 
-    private static string EnsureOperatorSecret(string keyPath)
+    private static string EnsureOperatorSecret(string keyPath, string databasePath)
     {
         if (File.Exists(keyPath))
         {
             // The exists-check can observe a concurrent first launch's just-created key BEFORE its (tiny) content lands, so
             // this read tolerates a torn file like the lost-race path. A corrupt key still fails loudly, after the retry budget.
             return ReadWinnerSecretWithRetry(keyPath);
+        }
+
+        // A database without its key is a lost or unrestored key, not a first run: a fresh key would boot, fail every encrypted
+        // read, and encrypt new rows under a key the old rows do not share, so neither key would open the whole database again.
+        var database = new FileInfo(databasePath);
+        if (database.Exists && database.Length > 0)
+        {
+            throw new InvalidOperationException($"The database '{databasePath}' exists but its key file '{keyPath}' is missing. Restore the original "
+                                                + $"{KeyFileName} next to it, or move {DatabaseFileName} aside to start with a new empty database; a new key "
+                                                + "is not generated automatically because it could not read the existing data.");
         }
 
         return GenerateAndPersistSecret(keyPath);
@@ -480,7 +490,7 @@ internal static class DesktopBootstrap
             using (stream)
             {
                 stream.Write(Encoding.ASCII.GetBytes(fileContent));
-                stream.Flush();
+                stream.Flush(flushToDisk: true);
             }
 #pragma warning restore MA0045
 

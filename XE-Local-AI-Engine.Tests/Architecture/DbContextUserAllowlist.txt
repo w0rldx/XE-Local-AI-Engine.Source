@@ -18,6 +18,7 @@ XE_Local_AI_Engine.Client.DependencyInjection.Modules.AddNodeModelRuntimeExtensi
 
 # ---------------------------------------------------------------- permanent: migration bootstrap
 XE_Local_AI_Engine.Client.Services.GraphWorkflows.Import.CanvasWorkflowImport|permanent|Startup-only pre/post-migration shim: reads the about-to-be-dropped canvas_workflows table before migrations run, then writes through IGraphWorkflowStore after. Its only caller is the host's Program.Startup.
+XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeKeyCheckStartupService|permanent|Post-migration startup gate: checks the node key against the database's recorded key-check value before any other hosted service touches an encrypted row. Its subject is the context's key, so a store between them would hide what it checks.
 XE_Local_AI_Engine.Client.Services.Persistence.Implementation.NodeChatMigrationRecoveryService|permanent|Migration-recovery machinery: drops a stuck EF migrations-history lock table so the migration run can proceed. It repairs the schema a store would depend on.
 
 # ---------------------------------------------------------------- permanent: retention sweeper

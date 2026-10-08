@@ -407,6 +407,41 @@ public sealed class DesktopBootstrapTests : IDisposable
     }
 
     [Test]
+    public async Task EnsureLocalDataConfiguration_WhenTheDatabaseExistsButTheKeyIsMissing_RefusesToGenerateAKey()
+    {
+        // A fresh key would boot "fine" and then fail every encrypted read, and new writes would mix keys in one database.
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(temp.DataDirectory);
+        await File.WriteAllBytesAsync(Path.Combine(temp.DataDirectory, DesktopBootstrap.DatabaseFileName), [1, 2, 3]);
+        using var configuration = new ConfigurationManager();
+
+        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
+        {
+            DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
+            return Task.CompletedTask;
+        });
+
+        AssertEx.Contains(exception.Message, DesktopBootstrap.KeyFileName);
+        AssertEx.Contains(exception.Message, "restore", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(File.Exists(Path.Combine(temp.DataDirectory, DesktopBootstrap.KeyFileName)), "No key may be generated next to an existing database.");
+    }
+
+    [Test]
+    public async Task EnsureLocalDataConfiguration_WhenTheDatabaseFileIsEmpty_StillGeneratesAKey()
+    {
+        // An empty file holds no encrypted rows, so it is a first run, not a lost key.
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(temp.DataDirectory);
+        await File.WriteAllBytesAsync(Path.Combine(temp.DataDirectory, DesktopBootstrap.DatabaseFileName), []);
+        using var configuration = new ConfigurationManager();
+
+        var state = DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
+
+        AssertEx.Equal(VaultState.Pending, state);
+        AssertEx.True(File.Exists(Path.Combine(temp.DataDirectory, DesktopBootstrap.KeyFileName)));
+    }
+
+    [Test]
     public async Task EnsureLocalDataConfiguration_LegacyRawKeyFile_InjectsItsSecretAndReportsPendingManagedVault()
     {
         using var temp = new TempDirectory();

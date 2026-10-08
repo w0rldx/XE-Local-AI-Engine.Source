@@ -125,6 +125,11 @@ internal sealed class HfDownloadClient
         CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
+        if (!HuggingFaceRepoId.IsValid(repoId))
+        {
+            throw new ArgumentException(HuggingFaceRepoId.InvalidMessage, nameof(repoId));
+        }
+
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
         ArgumentException.ThrowIfNullOrWhiteSpace(revision);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
@@ -831,21 +836,28 @@ internal sealed class HfDownloadClient
         IHfDownloadMetrics downloadMetrics,
         CancellationToken ct)
     {
-        if (idleCts is null)
-        {
-            return await source.ReadAsync(buffer, ct).ConfigureAwait(false);
-        }
-
-        idleCts.CancelAfter(readIdleTimeout);
         try
         {
+            if (idleCts is null)
+            {
+                return await source.ReadAsync(buffer, ct).ConfigureAwait(false);
+            }
+
+            idleCts.CancelAfter(readIdleTimeout);
             return await source.ReadAsync(buffer, idleCts.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException exception) when (idleCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (idleCts is not null && idleCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
             downloadMetrics.RecordReadIdleTimeout();
             throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
                 "The model download stalled with no data received and was retried.", exception);
+        }
+        catch (IOException exception) when (!IsDiskFull(exception))
+        {
+            // A body read failing (HttpIOException on a connection reset mid-body) is transient, so the retry loop resumes
+            // from the recorded cursor. Write-side IOExceptions never pass through here; disk-full keeps its own reason.
+            throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
+                "The connection dropped during the model download and was retried.", exception);
         }
     }
 
@@ -906,7 +918,7 @@ internal sealed class HfDownloadClient
     {
         var baseUrl = _options.DownloadBaseUrl.TrimEnd('/');
         var encodedFile = string.Join(separator: '/', fileName.Split('/').Select(Uri.EscapeDataString));
-        return new Uri($"{baseUrl}/{repoId}/resolve/{Uri.EscapeDataString(revision)}/{encodedFile}");
+        return new Uri($"{baseUrl}/{HuggingFaceRepoId.EscapePath(repoId)}/resolve/{Uri.EscapeDataString(revision)}/{encodedFile}");
     }
 
     private static long GetExistingPartLength(string partPath)

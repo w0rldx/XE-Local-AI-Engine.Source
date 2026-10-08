@@ -248,6 +248,25 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             // Canceled with no state to map. Awaiting it would rethrow, the dispatcher would swallow it, and the row would rethrow on every tick forever.
             written = await SettleCancelledAsync(store, run, nodeRun, CancelledInFlight, cancellationToken);
         }
+        else if (flight.Work.IsFaulted)
+        {
+            // Checked before the await for the same reason: a throw outside the turn's own catch would rethrow on every sweep, the row would stay Running and
+            // a Cancel could never finish it. Reading the exception also observes it.
+            _logger.LogWarning(flight.Work.Exception,
+                "Graph workflow run {RunId} node run {NodeRunId} ('{NodeKey}') had its model turn end in a fault rather than an outcome.",
+                run.Id,
+                nodeRun.Id,
+                node.NodeKey);
+            written = await FailAsync(store,
+                graph,
+                run,
+                node,
+                nodeRun,
+                GraphWorkflowFailures.Classify(GraphWorkflowFailureClass.NodeFailed, nodeRun.Attempt, node.MaxAttempts),
+                "This node run's model turn did not complete. See the node logs for details.",
+                eventType: null,
+                cancellationToken);
+        }
         else
         {
             // A Queued row whose turn landed between ticks: the state machine has no Queued → Succeeded edge, and

@@ -71,12 +71,21 @@ internal sealed class McpAgentRunCompactionService : BackgroundService
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IMcpAgentRunStore>();
-        var count = await store.CompactExpiredPayloadsAsync(_timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken);
+        var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        var count = await store.CompactExpiredPayloadsAsync(now, cancellationToken);
         if (count > 0)
         {
             await _metrics.RefreshAsync(store, CancellationToken.None);
             _metrics.RecordLifecycle("payload_compacted");
             _logger.LogInformation("Compacted expired payloads for {Count} durable MCP agent run(s).", count);
+        }
+
+        // Without the prune the identity and tombstone-byte caps only fill, and every later start answers capacity_exceeded for good.
+        var pruned = await store.PruneExpiredTombstonesAsync(now, cancellationToken);
+        if (pruned > 0)
+        {
+            await _metrics.RefreshAsync(store, CancellationToken.None);
+            _logger.LogInformation("Pruned {Count} expired durable MCP agent run tombstone(s).", pruned);
         }
     }
 }

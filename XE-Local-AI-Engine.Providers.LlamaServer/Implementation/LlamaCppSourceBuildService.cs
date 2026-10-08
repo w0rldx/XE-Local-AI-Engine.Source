@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
@@ -31,6 +32,12 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     // The number of streamed log lines retained for the status GET (the hub streams every line live).
     private const int LogRingCapacity = 400;
 
+    private const string ScratchCleanupFailedMessage =
+        "Source builds are unavailable until the previous build's scratch directories in the runtime cache can be removed. Check their ownership and permissions, then try again.";
+
+    // A staging tree older than this belongs to no live acquisition, this node's or another's on the same cache root.
+    private static readonly TimeSpan StaleStagingAge = TimeSpan.FromHours(1);
+
     private readonly ILlamaCppBinaryManager _binaryManager;
     private readonly ILlamaCppSourceBuildActivity _buildActivity;
     private readonly IInstalledRuntimeStore _installedRuntimeStore;
@@ -51,6 +58,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     private DateTimeOffset? _completedAtUtc;
     private LlamaCppSourceBuildDescriptor? _currentBuild;
     private bool _isRunning;
+    private volatile bool _scratchCleanupFailed;
     private long _logStartSequence;
     private List<string> _logLines = [];
     private long _nextLogSequence;
@@ -172,6 +180,11 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             // Recovery, prerequisite validation, and slot claim are one serialized start transaction. A losing caller must
             // not delete the winning build's .work tree or repeat expensive prerequisite probes.
             await RecoverAsync(ct).ConfigureAwait(false);
+            if (_scratchCleanupFailed)
+            {
+                throw new LlamaRuntimeException(ScratchCleanupFailedMessage);
+            }
+
             var report = await _prerequisiteProbe.ProbeAsync(normalized.Backend, ct).ConfigureAwait(false);
             if (!report.CanBuild)
             {
@@ -351,9 +364,50 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     /// <inheritdoc />
     public async Task RecoverAsync(CancellationToken ct)
     {
-        DeleteDirectoryRequired(WorkDirectory);
-        DeleteDirectoryRequired(Path.Combine(SourceBuildRoot, ".staging"));
+        // Scratch trees hold no state, so an undeletable one must not block host start; it only refuses new builds until a
+        // later recovery removes it. Both are attempted so one failure does not leave the other behind.
+        var workDeleted = TryDeleteScratchDirectory(WorkDirectory);
+        var stagingDeleted = TryDeleteScratchDirectory(Path.Combine(SourceBuildRoot, ".staging"));
+        _scratchCleanupFailed = !workDeleted || !stagingDeleted;
+
+        SweepStalePrebuiltStaging();
         await ReconcileActiveAndBackupAsync(ct).ConfigureAwait(false);
+    }
+
+    // Prebuilt acquisitions killed mid-extract or mid-publish leave {variant}.{guid}.tmp trees nothing else removes. No
+    // record lock: acquisitions do not hold it while staging, so only the age bound protects another node's live tree.
+    private void SweepStalePrebuiltStaging()
+    {
+        try
+        {
+            var swept = LlamaCppBinaryManager.SweepStaleStagingDirectories(_cacheRoot, _timeProvider.GetUtcNow() - StaleStagingAge);
+            if (swept > 0)
+            {
+                _logger.LogInformation("Removed {Count} stale llama.cpp runtime staging directories left by an interrupted acquisition.", swept);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(exception, "Sweeping stale llama.cpp runtime staging directories failed; they are retried on the next start.");
+        }
+    }
+
+    private bool TryDeleteScratchDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(exception, "The source-build scratch directory {Path} could not be removed; new source builds are refused until it can be.", path);
+            return false;
+        }
     }
 
     [SupportedOSPlatform("linux")]
@@ -642,6 +696,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         {
             if (await ValidateLegacyRecordAsync(installed!, ct).ConfigureAwait(false))
             {
+                await WarnIfBackendNotLiveAsync(installed!.SourceBuildPath!, GpuVariant.Cuda, ct).ConfigureAwait(false);
                 _activeSignal.SetActive(GpuVariant.Cuda);
                 return;
             }
@@ -724,6 +779,13 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         var current = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
         if (current?.SourceBuildPath is { Length: > 0 })
         {
+            if (recordTargetsActive && PathsEqual(current.SourceBuildPath, canonicalActiveBin))
+            {
+                await WarnIfBackendNotLiveAsync(canonicalActiveBin, current.Variant, ct).ConfigureAwait(false);
+            }
+
+            // The signal follows the kept record even when the device is not live: EnsureBinaryAsync serves a recorded
+            // build regardless, so an unset signal would admit on another variant and spawn this one.
             _activeSignal.SetActive(current.Variant);
         }
     }
@@ -799,10 +861,37 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             return false;
         }
 
+        // Identity only (manifest, provenance, links, SHA-256). Liveness is checked separately: a GPU that is briefly
+        // invisible at boot must never make a valid build look foreign and get it deleted.
         await using var stream = new FileStream(server, FileMode.Open, FileAccess.Read, FileShare.Read);
         var hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
-        return string.Equals(hash, state.Sha256, StringComparison.OrdinalIgnoreCase)
-               && await ValidateBinaryBackendAsync(server, state.Variant, ct).ConfigureAwait(false);
+        return string.Equals(hash, state.Sha256, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Warns when a kept source build whose identity matches its record cannot report its backend device.</summary>
+    /// <remarks>
+    ///     The tree and the record stay: the usual causes (a driver/library mismatch until reboot, lost WSL GPU
+    ///     passthrough, a slow probe) are transient, and deleting would cost the operator a full rebuild.
+    /// </remarks>
+    private async Task WarnIfBackendNotLiveAsync(string binDirectory, GpuVariant variant, CancellationToken ct)
+    {
+        bool live;
+        try
+        {
+            live = await ValidateBinaryBackendAsync(Path.Combine(binDirectory, ManagedServerFileName), variant, ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is Win32Exception or IOException or InvalidOperationException)
+        {
+            live = false;
+        }
+
+        if (!live)
+        {
+            _logger.LogWarning(
+                "The source-built llama.cpp runtime in {BinDirectory} matches its record, but its {Variant} backend reported no usable device. It is kept; GPU inference may fail until the device is available again (for example after a reboot).",
+                binDirectory,
+                variant);
+        }
     }
 
     private bool IsPreProvenanceLegacyRecord(InstalledRuntimeState? state)
@@ -847,8 +936,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
         await using var stream = new FileStream(server, FileMode.Open, FileAccess.Read, FileShare.Read);
         var hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
-        return string.Equals(hash, state.Sha256, StringComparison.OrdinalIgnoreCase)
-               && await ValidateBinaryBackendAsync(server, GpuVariant.Cuda, ct).ConfigureAwait(false);
+        return string.Equals(hash, state.Sha256, StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<bool> ValidateBinaryBackendAsync(string server, GpuVariant variant, CancellationToken ct)

@@ -365,6 +365,48 @@ public sealed class GgufStoreTests
     }
 
     [Test]
+    public async Task Download_WhenConnectionResetsMidBody_RetriesAndResumesFromTheCursor()
+    {
+        // HttpClient raises HttpIOException (an IOException) on a premature body end. It escaped the copy loop raw, so
+        // the transient retry/resume never ran and a multi-GB download failed where a resume would have finished it.
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = new HuggingFaceOptions
+        {
+            ModelsDirectory = dir.Path,
+            DiskMarginBytes = 0,
+            DefaultQuant = Infra.Quant,
+            MaxDownloadRetries = 3
+        };
+        const int resetAfter = 256;
+
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((request, callIndex) =>
+        {
+            if (callIndex > 0)
+            {
+                return request.Headers.Range is null ? FullDownload(ModelBytes) : PartialDownload(ModelBytes, resetAfter);
+            }
+
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new ResettingStream(ModelBytes, resetAfter))
+            };
+            response.Content.Headers.ContentLength = ModelBytes.Length;
+            response.Headers.TryAddWithoutValidation("X-Repo-Commit", "abc123def456");
+            return response;
+        });
+        using var http = new HttpClient(handler);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+
+        var destination = dir.FilePath(Infra.FileName);
+        _ = await download.DownloadAsync(Infra.RepoId, Infra.FileName, Infra.Revision, Infra.ModelName, destination, ModelBytes.Length, expectedSha256: null, progress: null, CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, handler.CallCount);
+        AssertEx.NotNull(handler.Requests[1].Range);
+        AssertEx.Contains(handler.Requests[1].Range!, resetAfter.ToString(CultureInfo.InvariantCulture));
+        AssertEx.True((await File.ReadAllBytesAsync(destination)).SequenceEqual(ModelBytes));
+    }
+
+    [Test]
     public async Task GgufStore_DiskFullMidDownload_SurfacesReason_LeavesPartIntact()
     {
         using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
@@ -934,6 +976,66 @@ public sealed class GgufStoreTests
         public override void Flush()
         {
         }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    // A body that yields resetAfter bytes, then fails the way HttpClient reports a connection reset mid-body.
+    private sealed class ResettingStream : Stream
+    {
+        private readonly byte[] _bytes;
+        private readonly int _resetAfter;
+        private int _position;
+
+        public ResettingStream(byte[] bytes, int resetAfter)
+        {
+            _bytes = bytes;
+            _resetAfter = resetAfter;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => _bytes.Length;
+        public override long Position { get => _position; set => throw new NotSupportedException(); }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            return Read(buffer.AsSpan(offset, count));
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            if (_position >= _resetAfter)
+            {
+                throw new HttpIOException(HttpRequestError.ResponseEnded, "The response ended prematurely.");
+            }
+
+            var toCopy = Math.Min(buffer.Length, _resetAfter - _position);
+            _bytes.AsSpan(_position, toCopy).CopyTo(buffer);
+            _position += toCopy;
+            return toCopy;
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromResult(Read(buffer.Span));
+        }
+
+        public override void Flush() { }
 
         public override long Seek(long offset, SeekOrigin origin)
         {

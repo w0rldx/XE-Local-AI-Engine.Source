@@ -23,6 +23,12 @@ public interface IMcpAgentRunStore
 
     Task<int> CompactExpiredPayloadsAsync(long expiresBeforeUtc, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Deletes compacted tombstones older than the tombstone retention and releases their identity and byte charge
+    ///     in the same transaction; a pruned request id is admitted as new work again.
+    /// </summary>
+    Task<int> PruneExpiredTombstonesAsync(long nowUtc, CancellationToken cancellationToken = default);
+
     Task<McpAgentRunLedgerVerification> VerifyLedgerAsync(CancellationToken cancellationToken = default);
 
     Task<McpAgentRunLedgerCounters> RebuildLedgerAsync(long updatedAtUtc, CancellationToken cancellationToken = default);

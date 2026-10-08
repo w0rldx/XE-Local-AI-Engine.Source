@@ -789,7 +789,26 @@
 				"channelChangeError": "Der Update-Kanal konnte nicht geändert werden. Bitte versuche es erneut.",
 				"offline": "Der Update-Dienst konnte nicht erreicht werden. Prüfe deine Verbindung und versuche es erneut.",
 				"checkFailed": "Die Update-Informationen konnten nicht verarbeitet werden. Bitte versuche es später erneut.",
-				"notConfigured": "Automatische Updates sind in diesem Build nicht verfügbar. Für eine neuere Version installiere sie bitte manuell."
+				"notConfigured": "Automatische Updates sind in diesem Build nicht verfügbar. Für eine neuere Version installiere sie bitte manuell.",
+				"busy": {
+					"title": "Aktualisieren und laufende Arbeit beenden?",
+					"description": "Das Update startet XE neu. Diese Arbeit läuft gerade und wird beendet:",
+					"confirm": "Trotzdem aktualisieren",
+					"kinds": {
+						"trainingRun": "Trainingslauf",
+						"evaluationRun": "Evaluationslauf",
+						"trainingExport": "Modellexport",
+						"modelDownload": "Modell-Download",
+						"imageModelDownload": "Download eines Bildmodells",
+						"transcriptionModelDownload": "Download eines Transkriptionsmodells",
+						"llamaCppSourceBuild": "llama.cpp-Build aus dem Quellcode",
+						"whisperCppSourceBuild": "whisper.cpp-Build aus dem Quellcode",
+						"stableDiffusionCppSourceBuild": "stable-diffusion.cpp-Build aus dem Quellcode",
+						"invocation": "KI-Antwort wird erzeugt",
+						"workSession": "Arbeitssitzung",
+						"unknown": "Laufende Aufgabe"
+					}
+				}
 			},
 			"runtimeTerms": "Bedingungen der .NET-Plattformkomponenten",
 			"bundledDataTerms": "Bedingungen der mitgelieferten Daten"
@@ -8795,6 +8814,8 @@
 			"description": "Versuchen Sie es erneut, um die aktuelle Route neu darzustellen.",
 			"unknownError": "Unbekannter Fehler",
 			"retry": "Erneut versuchen",
+			"goHome": "Zur Startseite",
+			"reload": "Neu laden",
 			"exportDiagnostics": "Diagnose exportieren",
 			"exportUnavailable": "Es ist noch kein Diagnose-Snapshot gespeichert, daher gibt es nichts zu exportieren.",
 			"openIssue": "GitHub-Issue öffnen"

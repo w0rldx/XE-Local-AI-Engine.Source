@@ -17,13 +17,15 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 /// </remarks>
 internal sealed class McpToolCallTimeoutAIFunction : DelegatingAIFunction
 {
+    private readonly Func<CancellationToken, ValueTask>? _onTimeout;
     private readonly TimeSpan _timeout;
 
-    public McpToolCallTimeoutAIFunction(AIFunction innerFunction, TimeSpan timeout)
+    public McpToolCallTimeoutAIFunction(AIFunction innerFunction, TimeSpan timeout, Func<CancellationToken, ValueTask>? onTimeout = null)
         : base(innerFunction)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
         _timeout = timeout;
+        _onTimeout = onTimeout;
     }
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -40,6 +42,12 @@ internal sealed class McpToolCallTimeoutAIFunction : DelegatingAIFunction
             // Only OUR deadline fired, not the run's cancellation: report a clean, model-actionable tool error and let the loop
             // continue. Never rethrow as cancel, which would surface as a run cancellation, and never retry a non-idempotent call.
             NodeMetrics.McpToolTimeoutTotal.Add(1);
+            if (_onTimeout is not null)
+            {
+                // The call's own token identifies the session it ran on.
+                await _onTimeout(timeoutCts.Token);
+            }
+
             return ToolFailureText.Format(ToolFailureText.TimeoutCode,
                 $"The MCP tool '{Name}' did not respond within the configured {_timeout.TotalSeconds:0.##}s tool-call timeout and was cancelled. The server may be slow or unresponsive; do not retry the same call — continue without it or try a different approach.");
         }

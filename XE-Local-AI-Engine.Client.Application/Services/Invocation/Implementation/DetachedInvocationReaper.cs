@@ -23,8 +23,8 @@ public sealed class DetachedInvocationReaper : BackgroundService
     private readonly IInvocationRunner _invocationRunner;
     private readonly ILogger<DetachedInvocationReaper> _logger;
 
-    // Invocations already cancelled by this reaper. An entry survives in the tracker until the run reports a terminal state — a tick or two later, or never if
-    // the run ignores its cancellation — so without this the same turn is re-cancelled every tick. Keyed on the DETACH INSTANT too, so a re-detach is reapable.
+    // Invocations already reported as reaped, so the log line and the metric fire once per detach. Keyed on the DETACH INSTANT too, so a re-detach counts again.
+    // The cancel itself is re-issued every tick: one sent while the turn still waits for the slot is a no-op, and the turn would otherwise run unwatched.
     private readonly HashSet<DetachedInvocation> _reaped = [];
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly TimeProvider _timeProvider;
@@ -89,16 +89,20 @@ public sealed class DetachedInvocationReaper : BackgroundService
 
         foreach (var detached in detachedInvocations)
         {
-            if (nowUtc - detached.DetachedAtUtc < grace || !_reaped.Add(detached))
+            if (nowUtc - detached.DetachedAtUtc < grace)
             {
                 continue;
             }
 
-            _logger.LogInformation("Cancelling invocation {InvocationId}: no client has been attached for {DetachedSeconds:F0}s, past the {GraceSeconds}s disconnect grace.",
-                detached.InvocationId,
-                (nowUtc - detached.DetachedAtUtc).TotalSeconds,
-                graceSeconds);
-            NodeMetrics.ChatDetachedInvocationReapedTotal.Add(1);
+            if (_reaped.Add(detached))
+            {
+                _logger.LogInformation("Cancelling invocation {InvocationId}: no client has been attached for {DetachedSeconds:F0}s, past the {GraceSeconds}s disconnect grace.",
+                    detached.InvocationId,
+                    (nowUtc - detached.DetachedAtUtc).TotalSeconds,
+                    graceSeconds);
+                NodeMetrics.ChatDetachedInvocationReapedTotal.Add(1);
+            }
+
             _invocationRunner.CancelDetached(detached.InvocationId);
         }
     }

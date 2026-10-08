@@ -223,9 +223,6 @@ XE-Local-AI-Engine.Client.Persistence.Tests/MigrationChainTests.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence.Tests/Models/InstalledModelSnapshotCoordinatorTests.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence.Tests/Models/ModelCoordinationTests.cs|run|1
 XE-Local-AI-Engine.Client.Persistence.Tests/NativeSqliteVersionTests.cs|summary|1
-XE-Local-AI-Engine.Client.Persistence.Tests/NodeChatMigrationRecoveryServiceTests.cs|block|1
-XE-Local-AI-Engine.Client.Persistence.Tests/NodeChatMigrationRecoveryServiceTests.cs|run|1
-XE-Local-AI-Engine.Client.Persistence.Tests/NodeChatMigrationRecoveryServiceTests.cs|summary|2
 XE-Local-AI-Engine.Client.Persistence.Tests/PersistenceEncryptionTests.cs|run|2
 XE-Local-AI-Engine.Client.Persistence.Tests/RepairAndUniqueMessageSequenceMigrationTests.cs|summary|1
 XE-Local-AI-Engine.Client.Persistence.Tests/Scheduler/ModelRecommendationScheduleSeederTests.cs|run|1

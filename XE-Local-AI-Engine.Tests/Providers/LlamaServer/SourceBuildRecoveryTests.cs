@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -137,13 +138,161 @@ public sealed class SourceBuildRecoveryTests
         var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
         await SeedTreeAndStateAsync(active, GpuVariant.Cpu, store, GpuVariant.Cpu, requireBinaryWorkingDirectory: true);
         var signal = new CudaManagedBuildSignal();
-        using var service = CreateService(temp.Path, store, signal);
+        var logger = new RecordingLogger<LlamaCppSourceBuildService>();
+        using var service = CreateService(temp.Path, store, signal, logger);
 
         await service.RecoverAsync(CancellationToken.None);
 
         AssertEx.True(Directory.Exists(active));
         AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
         AssertEx.Equal(GpuVariant.Cpu, signal.ActiveVariant);
+        // A wrong working directory makes the script exit 42, which now surfaces as the liveness warning.
+        AssertEx.False(logger.HasEntry(LogLevel.Warning, "reported no usable device"));
+    }
+
+    /// <summary>
+    ///     Booting while CUDA is briefly unusable (driver/library mismatch until reboot, lost WSL passthrough) makes
+    ///     <c>--list-devices</c> print no device. That used to read as "the tree is not what the record promises" and
+    ///     deleted a valid 20-40 min build.
+    /// </summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Recover_ActiveTreeIdentityMatchesButNoDevice_KeepsTreeAndRecordAndWarns()
+    {
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
+        await SeedTreeAndStateAsync(active, GpuVariant.Cuda, store, GpuVariant.Cuda, reportsDevice: false);
+        var logger = new RecordingLogger<LlamaCppSourceBuildService>();
+        using var service = CreateService(temp.Path, store, new CudaManagedBuildSignal(), logger);
+
+        await service.RecoverAsync(CancellationToken.None);
+
+        AssertEx.True(File.Exists(Path.Combine(active, "build", "bin", "llama-server")));
+        AssertEx.Equal(Path.Combine(active, "build", "bin"), (await store.ReadAsync(CancellationToken.None))?.SourceBuildPath);
+        AssertEx.True(logger.HasEntry(LogLevel.Warning, "reported no usable device"));
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public async Task Recover_SweepsStaleRuntimeStagingDirectoriesAndKeepsFreshOnes()
+    {
+        // A kill mid-extract or mid-publish leaves {variant}.{guid}.tmp trees that only a finally block removed.
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var time = new AdvanceableTimeProvider();
+        var tagDir = Path.Combine(temp.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag);
+        var stale = Path.Combine(tagDir, "vulkan." + Guid.NewGuid().ToString("N") + ".tmp");
+        var fresh = Path.Combine(tagDir, "cpu." + Guid.NewGuid().ToString("N") + ".tmp");
+        var published = Path.Combine(tagDir, "cpu");
+
+        // A publish renames the OLD runtime aside, and a rename keeps its old mtime: mid-publish on another node it is the
+        // only rollback copy, so no age bound may delete it.
+        var aside = Path.Combine(tagDir, "cuda." + Guid.NewGuid().ToString("N") + ".aside");
+        foreach (var path in new[] { stale, fresh, published, aside })
+        {
+            Directory.CreateDirectory(path);
+        }
+
+        Directory.SetLastWriteTimeUtc(stale, time.GetUtcNow().UtcDateTime - TimeSpan.FromHours(2));
+        Directory.SetLastWriteTimeUtc(fresh, time.GetUtcNow().UtcDateTime - TimeSpan.FromMinutes(5));
+        Directory.SetLastWriteTimeUtc(published, time.GetUtcNow().UtcDateTime - TimeSpan.FromDays(30));
+        Directory.SetLastWriteTimeUtc(aside, time.GetUtcNow().UtcDateTime - TimeSpan.FromDays(30));
+        using var service = CreateService(temp.Path, store, new CudaManagedBuildSignal(), timeProvider: time);
+
+        await service.RecoverAsync(CancellationToken.None);
+
+        AssertEx.False(Directory.Exists(stale), "a staging tree older than an hour belongs to no live acquisition.");
+        AssertEx.True(Directory.Exists(fresh), "a recent staging tree may be another node's live acquisition.");
+        AssertEx.True(Directory.Exists(published), "a published variant directory is never a sweep target.");
+        AssertEx.True(Directory.Exists(aside), "a publish aside may be a live rollback copy, whatever its mtime.");
+    }
+
+    /// <summary>
+    ///     Scratch directories hold no state. An undeletable one (a root-owned file from a sudo build attempt) used to
+    ///     fail host start for every user, cloud-only ones included; now it boots and only new builds are refused.
+    /// </summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Startup_WhenScratchCleanupFails_BootsAndRefusesNewBuilds()
+    {
+        if (string.Equals(Environment.UserName, "root", StringComparison.Ordinal))
+        {
+            Skip.Test("root deletes through a 0500 directory, so the cleanup failure cannot be produced.");
+        }
+
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var locked = Path.Combine(temp.Path, "llama.cpp", "source-build", ".work", "locked");
+        Directory.CreateDirectory(locked);
+        await File.WriteAllTextAsync(Path.Combine(locked, "file"), "x");
+        File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            using var buildService = CreateService(temp.Path, store, new CudaManagedBuildSignal());
+            var startup = new CudaBuildStartupService(buildService, store, new CudaManagedBuildSignal(), NullLogger<CudaBuildStartupService>.Instance);
+
+            await startup.StartAsync(CancellationToken.None);
+
+            var refusal = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => buildService.StartAsync(new LlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackend.Cpu,
+                Source = LlamaCppSourceSelection.Official
+            }, CancellationToken.None));
+            AssertEx.Contains(refusal.Message, "scratch directories");
+
+            // Fixing the permissions is enough: every start re-runs recovery, which re-attempts the delete and clears the latch.
+            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            var started = await buildService.StartAsync(new LlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackend.Cpu,
+                Source = LlamaCppSourceSelection.Official
+            }, CancellationToken.None);
+            // RuntimeBusy comes from the lease step AFTER the scratch check (the test supervisor grants no lease), so no build is launched.
+            AssertEx.Equal(LlamaCppSourceBuildStartOutcome.RuntimeBusy, started.Outcome);
+            AssertEx.False(Directory.Exists(Path.Combine(temp.Path, "llama.cpp", "source-build", ".work", "locked")));
+        }
+        finally
+        {
+            if (Directory.Exists(locked))
+            {
+                File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+    }
+
+    /// <summary>An active/backup pair that cannot be reconciled is ambiguous runtime state, so it still blocks startup.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Startup_WhenActiveBackupPairCannotBeReconciled_BlocksStartup()
+    {
+        if (string.Equals(Environment.UserName, "root", StringComparison.Ordinal))
+        {
+            Skip.Test("root deletes through a 0500 directory, so the reconcile failure cannot be produced.");
+        }
+
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var sourceRoot = Path.Combine(temp.Path, "llama.cpp", "source-build");
+        var backup = Path.Combine(sourceRoot, ".backup");
+        await SeedTreeAndStateAsync(Path.Combine(sourceRoot, "active"), GpuVariant.Cpu, store, manifestVariant: GpuVariant.Cpu);
+        var locked = Path.Combine(backup, "locked");
+        Directory.CreateDirectory(locked);
+        await File.WriteAllTextAsync(Path.Combine(locked, "file"), "x");
+        File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            using var buildService = CreateService(temp.Path, store, new CudaManagedBuildSignal());
+            var startup = new CudaBuildStartupService(buildService, store, new CudaManagedBuildSignal(), NullLogger<CudaBuildStartupService>.Instance);
+
+            await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => startup.StartAsync(CancellationToken.None));
+        }
+        finally
+        {
+            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     [Test]
@@ -300,19 +449,6 @@ public sealed class SourceBuildRecoveryTests
         AssertEx.True(logger.HasEntry(LogLevel.Warning, "(none)"));
     }
 
-    [Test]
-    public async Task Startup_WhenRecoveryFails_PropagatesAndBlocksStartup()
-    {
-        using var temp = new TempDirectory();
-        using var store = new InstalledRuntimeStore(temp.Path);
-        var service = new CudaBuildStartupService(new FailingRecoveryBuildService(),
-            store,
-            new CudaManagedBuildSignal(),
-            NullLogger<CudaBuildStartupService>.Instance);
-
-        await AssertEx.ThrowsAsync<IOException>(() => service.StartAsync(CancellationToken.None));
-    }
-
     /// <summary>
     ///     A shutdown that overruns the host's budget must still exit cleanly.
     ///     <para>
@@ -383,10 +519,11 @@ public sealed class SourceBuildRecoveryTests
         bool requireBinaryWorkingDirectory = false,
         string? sourceRepository = null,
         string? requestedCommit = null,
-        string? resolvedCommit = null)
+        string? resolvedCommit = null,
+        bool reportsDevice = true)
     {
         var bin = Path.Combine(tree, "build", "bin");
-        var server = WriteServer(bin, variant, requireBinaryWorkingDirectory);
+        var server = WriteServer(bin, variant, requireBinaryWorkingDirectory, reportsDevice);
         var sha = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(server)));
         var activeBin = Path.Combine(Path.GetDirectoryName(tree)!, "active", "build", "bin");
         var state = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, "source", sha, variant, DateTimeOffset.UtcNow, activeBin,
@@ -411,10 +548,14 @@ public sealed class SourceBuildRecoveryTests
         return state;
     }
 
-    private static string WriteServer(string bin, GpuVariant variant, bool requireBinaryWorkingDirectory = false)
+    private static string WriteServer(string bin, GpuVariant variant, bool requireBinaryWorkingDirectory = false, bool reportsDevice = true)
     {
         Directory.CreateDirectory(bin);
         var device = variant == GpuVariant.Cuda ? "CUDA0:" : "Vulkan0:";
+        if (!reportsDevice)
+        {
+            device = "no devices";
+        }
         var path = Path.Combine(bin, "llama-server");
         var workingDirectoryCheck = requireBinaryWorkingDirectory
             ? "[ -f \"$PWD/runtime.sentinel\" ] || exit 42; "
@@ -439,9 +580,10 @@ public sealed class SourceBuildRecoveryTests
     private static LlamaCppSourceBuildService CreateService(string root,
         IInstalledRuntimeStore store,
         IActiveSourceBuildSignal signal,
-        ILogger<LlamaCppSourceBuildService>? logger = null) =>
+        ILogger<LlamaCppSourceBuildService>? logger = null,
+        TimeProvider? timeProvider = null) =>
         new(new ReadyProbe(), new NoopManager(), store, signal, new LeaseSupervisor(), new LlamaCppSourceBuildActivity(),
-            new NullLlamaCppSourceBuildEventPublisher(), logger ?? NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, root);
+            new NullLlamaCppSourceBuildEventPublisher(), logger ?? NullLogger<LlamaCppSourceBuildService>.Instance, timeProvider ?? TimeProvider.System, root);
 
     private sealed class ReadyProbe : ILlamaCppSourceBuildPrerequisiteProbe
     {
@@ -513,21 +655,6 @@ public sealed class SourceBuildRecoveryTests
 
         public Task DeleteAsync(CancellationToken ct) =>
             throw new NotSupportedException();
-    }
-
-    private sealed class FailingRecoveryBuildService : ILlamaCppSourceBuildService
-    {
-        public Task<LlamaCppSourceBuildStartResult> StartAsync(LlamaCppSourceBuildRequest request, CancellationToken ct) =>
-            throw new NotSupportedException();
-
-        public LlamaCppSourceBuildStatus GetStatus() =>
-            throw new NotSupportedException();
-
-        public bool Cancel() =>
-            false;
-
-        public Task RecoverAsync(CancellationToken ct) =>
-            throw new IOException("reconciliation failed");
     }
 
     private sealed class TempDirectory : IDisposable

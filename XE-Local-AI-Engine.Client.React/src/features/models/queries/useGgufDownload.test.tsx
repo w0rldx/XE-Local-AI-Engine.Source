@@ -35,6 +35,7 @@ vi.mock("@microsoft/signalr", () => ({
 	HubConnectionBuilder: vi.fn(function HubConnectionBuilder() {
 		return signalRMock.builder;
 	}),
+	HubConnectionState: { Connected: "Connected", Disconnected: "Disconnected" },
 	LogLevel: { Warning: 3 },
 }));
 
@@ -63,6 +64,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getGgufDownloadsOptions: () => getGgufDownloadsOptionsMock(),
 	getGgufImportsOptions: () => getGgufImportsOptionsMock(),
 	getGgufDownloadsQueryKey: () => [{ _id: "getGgufDownloads" }],
+	getGgufImportsQueryKey: () => [{ _id: "getGgufImports" }],
 	inspectGgufRepositoryOptions: vi.fn(),
 	listLocalModelsQueryKey: () => [{ _id: "listLocalModels" }],
 	startGgufDownloadMutation: vi.fn(),
@@ -104,7 +106,20 @@ function renderActiveAcquisitions() {
 	function Wrapper({ children }: { children: ReactNode }) {
 		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 	}
-	return renderHook(() => useActiveGgufAcquisitions(), { wrapper: Wrapper });
+	return { ...renderHook(() => useActiveGgufAcquisitions(), { wrapper: Wrapper }), queryClient };
+}
+
+// The shared manager registers ONE fan-out per lifecycle event on the connection; fire the latest one.
+function fireLifecycle(registration: ReturnType<typeof vi.fn>): void {
+	const fanout = registration.mock.calls.at(-1)?.[0] as ((arg?: unknown) => void) | undefined;
+	if (!fanout) {
+		throw new Error("the shared manager registered no lifecycle callback");
+	}
+	act(() => fanout());
+}
+
+function invalidatedIds(spy: { mock: { calls: unknown[][] } }): (string | undefined)[] {
+	return spy.mock.calls.map(([filter]) => ((filter as { queryKey?: readonly { _id?: string }[] })?.queryKey ?? [])[0]?._id);
 }
 
 function acquisitionStatus(
@@ -132,7 +147,9 @@ describe("useActiveGgufDownloads", () => {
 		vi.clearAllMocks();
 		resetSharedHubConnectionsForTest();
 		useNodeAuthStore.getState().actions.clear();
-		useNodeAuthStore.getState().actions.setToken({ accessToken: "node-token", expiresAtUtc: "2026-06-26T12:00:00Z" });
+		useNodeAuthStore
+			.getState()
+			.actions.setToken({ accessToken: "node-token", expiresAtUtc: new Date(Date.now() + 10 * 60_000).toISOString() });
 		useGgufBrowseStore.setState({ browseQuery: "", inFlightDownloads: [] });
 		signalRMock.builder.withUrl.mockReturnValue(signalRMock.builder);
 		signalRMock.builder.withAutomaticReconnect.mockReturnValue(signalRMock.builder);
@@ -146,14 +163,14 @@ describe("useActiveGgufDownloads", () => {
 		vi.clearAllMocks();
 	});
 
-	it("opens the download hub with the access-token factory and subscribes to the status-changed event", () => {
+	it("opens the download hub with the access-token factory and subscribes to the status-changed event", async () => {
 		renderActiveDownloads();
 
 		expect(signalRMock.builder.withUrl).toHaveBeenCalledWith(
 			expect.stringContaining("/api/local/v1/model-fit/gguf/downloads/hub"),
 			expect.objectContaining({ accessTokenFactory: expect.any(Function) }),
 		);
-		expect(signalRMock.builder.withUrl.mock.calls[0]?.[1].accessTokenFactory()).toBe("node-token");
+		await expect(signalRMock.builder.withUrl.mock.calls[0]?.[1].accessTokenFactory()).resolves.toBe("node-token");
 		expect(signalRMock.builder.withAutomaticReconnect).toHaveBeenCalled();
 		expect(signalRMock.connection.on).toHaveBeenCalledWith(STATUS_CHANGED, expect.any(Function));
 		expect(signalRMock.connection.start).toHaveBeenCalled();
@@ -412,6 +429,48 @@ describe("useActiveGgufDownloads", () => {
 		expect(prunedHandled.has("expired")).toBe(false);
 		expect(prunedHandled.has("handled-000")).toBe(true);
 		expect(prunedHandled.has(`handled-${ACQUISITION_TERMINAL_RETENTION_LIMIT}`)).toBe(false);
+	});
+
+	it("re-reads downloads and imports when the hub reconnects, so a push lost in the gap is recovered", () => {
+		const { queryClient } = renderActiveAcquisitions();
+		const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+
+		fireLifecycle(signalRMock.connection.onreconnected);
+
+		expect(invalidatedIds(invalidateSpy)).toEqual(expect.arrayContaining(["getGgufDownloads", "getGgufImports"]));
+	});
+
+	it("polls the lists while the hub is closed and a row is still active", async () => {
+		const queryFn = vi.fn(() => Promise.resolve({ items: [] }));
+		getGgufDownloadsOptionsMock.mockReturnValue({ queryKey: [{ _id: "getGgufDownloads" }], queryFn });
+		vi.useFakeTimers();
+		try {
+			renderActiveAcquisitions();
+			await act(() => vi.advanceTimersByTimeAsync(0));
+			act(() => {
+				handlers.get(STATUS_CHANGED)?.({
+					operationId: "11111111-1111-1111-1111-111111111111",
+					operationKind: "Download",
+					modelName: "unsloth/x:Q4_K_M",
+					phase: "Running",
+					completedBytes: 10,
+					totalBytes: 20,
+				});
+			});
+			const callsBeforeClose = queryFn.mock.calls.length;
+
+			fireLifecycle(signalRMock.connection.onclose);
+			await act(() => vi.advanceTimersByTimeAsync(5_000));
+
+			expect(queryFn.mock.calls.length).toBeGreaterThan(callsBeforeClose);
+		} finally {
+			vi.useRealTimers();
+			getGgufDownloadsOptionsMock.mockReset();
+			getGgufDownloadsOptionsMock.mockImplementation(() => ({
+				queryKey: [{ _id: "getGgufDownloads" }],
+				queryFn: () => Promise.resolve({ items: [] }),
+			}));
+		}
 	});
 
 	it("stops the connection on unmount", async () => {

@@ -151,6 +151,15 @@ tool's input schema before binding (`invalid_arguments`, unknown names included)
 structured result carrying a top-level `failure_code`. Argument problems are tool errors, not
 JSON-RPC `InvalidParams`, as the MCP spec routes input validation to `isError`.
 
+Durable inbound runs (`start_agent_run`) are admitted against the singleton ledger in `mcp_agent_run_ledger`:
+at most 32 queued or running runs, 1,000,000 request identities, 256 MiB of active encrypted payload and
+128 MiB of tombstone charge (the constants on `McpAgentRunStore`). A start past any cap answers
+`capacity_exceeded`. A finished run keeps its payload for 24 hours; `McpAgentRunCompactionService` then
+compacts it to a payload-free tombstone that still answers a retried request id with `result_expired`. The
+same sweep deletes a tombstone 30 days after compaction and releases its identity and byte charge in the same
+transaction, so the caps bound a window of recent work rather than the node's lifetime. A request id older
+than that window is admitted as new work.
+
 Outbound registrations (`mcp/servers`) carry two fields beside the command/URL: `headers`, HTTP
 request headers sent on every request of an HTTP server's session (for example `Authorization`),
 and `sessionScope` (`Shared` or `PerConversation`, see [Agent Mode](04-agent-mode.md)). Responses

@@ -118,10 +118,7 @@ public sealed class CustomToolStore : ICustomToolStore
 
     public async Task<IReadOnlyList<CustomToolRecord>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var entities = await _dbContext.CustomTools
-                                       .AsNoTracking()
-                                       .OrderBy(tool => tool.Name)
-                                       .ToListAsync(cancellationToken);
+        var entities = await _dbContext.ListSkippingUnreadableAsync(_dbContext.CustomTools.OrderBy(tool => tool.Name), cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }

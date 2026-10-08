@@ -4,6 +4,7 @@ using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using static Chat.Implementation.NodeChatPersistenceSql;
@@ -23,6 +24,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     private const string ExtractionFailedReason = "The document text could not be extracted.";
     private const string EmptyDocumentReason = "No extractable text was found in the document.";
     private const string UnexpectedReason = "Ingestion failed unexpectedly. Retry the upload.";
+    private const string TimedOutReason = "The document took too long to process and was stopped.";
 
     private readonly NodeChatDbContext _dbContext;
     private readonly IKnowledgeDocumentBlobStore _blobStore;
@@ -32,6 +34,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     private readonly IKnowledgeIndexWriter _indexWriter;
     private readonly IKnowledgeIndexingNotifier _notifier;
     private readonly IKnowledgeChunkEmbeddingCache? _embeddingCache;
+    private readonly TimeSpan _documentTimeout;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<KnowledgeIngestionService> _logger;
 
@@ -44,8 +47,10 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         IKnowledgeIndexingNotifier notifier,
         TimeProvider timeProvider,
         ILogger<KnowledgeIngestionService> logger,
-        IKnowledgeChunkEmbeddingCache? embeddingCache = null)
+        IKnowledgeChunkEmbeddingCache? embeddingCache = null,
+        IOptions<KnowledgeBaseOptions>? options = null)
     {
+        _documentTimeout = TimeSpan.FromMinutes(Math.Max(1, (options?.Value ?? new KnowledgeBaseOptions()).IngestionDocumentTimeoutMinutes));
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
         _extractor = extractor ?? throw new ArgumentNullException(nameof(extractor));
@@ -61,20 +66,30 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     public async Task RunAsync(Guid documentId, CancellationToken cancellationToken)
     {
         DocumentRevision? revision = null;
+        using var budget = new CancellationTokenSource(_documentTimeout, _timeProvider);
+        using var run = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, budget.Token);
         try
         {
-            revision = await ReadDocumentRevisionAsync(documentId, cancellationToken);
-            if (revision is null)
+            revision = await ReadDocumentRevisionAsync(documentId, run.Token);
+
+            // Every (re)ingest path resets the row to Pending first, so an Indexed row at this point is a duplicate run of
+            // the current content: re-running it would only drop it out of search, or flip it to Failed if the run fails.
+            if (revision is null || revision.Value.Status == nameof(KnowledgeDocumentStatus.Indexed))
             {
                 return;
             }
 
-            await IngestAsync(documentId, revision.Value, cancellationToken);
+            await IngestAsync(documentId, revision.Value, run.Token);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Genuine cancellation — do not rewrite the document status; let the worker observe the shutdown.
             throw;
+        }
+        catch (OperationCanceledException exception) when (budget.IsCancellationRequested)
+        {
+            LogIngestionFailure(documentId, exception);
+            await SafeFailAsync(documentId, revision?.ContentHash, TimedOutReason);
         }
         catch (KnowledgeIngestionException exception)
         {
@@ -135,10 +150,13 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         }
 
         using var stream = new MemoryStream(bytes, writable: false);
-        var extraction = await _extractor.ExtractStructuredAsync(stream,
-            revision.SourcePath ?? documentId.ToString("D"),
-            revision.Extension,
-            cancellationToken);
+        // On the pool and awaited with the token, so a parser that never checks it still frees the slot when the budget fires.
+        var extraction = await Task.Run(() => _extractor.ExtractStructuredAsync(stream,
+                    revision.SourcePath ?? documentId.ToString("D"),
+                    revision.Extension,
+                    cancellationToken),
+                cancellationToken)
+            .WaitAsync(cancellationToken);
         switch (extraction.Status)
         {
             case DocumentExtractionStatus.Unsupported:
@@ -324,7 +342,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         await OpenIfNeededAsync(connection, cancellationToken);
 
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT extension, source_path, content_hash FROM knowledge_documents WHERE document_id = $document_id;";
+        command.CommandText = "SELECT extension, source_path, content_hash, status FROM knowledge_documents WHERE document_id = $document_id;";
         AddParameter(command, "$document_id", documentId);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
@@ -334,7 +352,8 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
 
         return new DocumentRevision(reader.GetString(0),
             await reader.IsDBNullAsync(1, cancellationToken) ? null : reader.GetString(1),
-            reader.GetString(2));
+            reader.GetString(2),
+            reader.GetString(3));
     }
 
     private static KnowledgeChunkingResult ApplySourceMetadata(KnowledgeChunkingResult chunking, string extension, string? sourcePath)
@@ -481,7 +500,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         }
     }
 
-    private readonly record struct DocumentRevision(string Extension, string? SourcePath, string ContentHash);
+    private readonly record struct DocumentRevision(string Extension, string? SourcePath, string ContentHash, string Status);
 
     // How a chunk's source file is labelled for retrieval: the coarse kind ("code", "log", "markup", "structured",
     // "text") plus the concrete language when the extension names one.

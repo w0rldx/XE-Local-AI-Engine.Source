@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence;
 
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -13,6 +14,27 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
             return entity;
         }
 
+        if (context.KeyProbe is { } probe)
+        {
+            // The node-key check's sampling pass: count the outcome instead of throwing.
+            probe.Observe(entity, () => DecryptColumns(context, entity));
+            return entity;
+        }
+
+        try
+        {
+            DecryptColumns(context, entity);
+        }
+        catch (Exception exception) when (exception is CryptographicException or InvalidOperationException && context.TryRecordUnreadableRow(entity))
+        {
+            // Only inside NodeChatDbContext.ListSkippingUnreadableAsync: that list drops this row, every other read still throws.
+        }
+
+        return entity;
+    }
+
+    private static void DecryptColumns(NodeChatDbContext context, object entity)
+    {
         switch (entity)
         {
             case NodeConversation conversation:
@@ -538,8 +560,6 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     "transcript_segment_text");
                 break;
         }
-
-        return entity;
     }
 
     private static byte[]? DecryptIfPresent(byte[]? payload, ReadOnlySpan<byte> key, Guid conversationId, Guid recordId, string columnName)

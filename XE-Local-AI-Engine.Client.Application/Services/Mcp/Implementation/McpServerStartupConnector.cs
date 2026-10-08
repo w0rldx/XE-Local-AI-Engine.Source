@@ -2,13 +2,14 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
 /// <summary>
 ///     Connects the enabled MCP servers once at startup by calling
-///     <see cref="IMcpServerConnectionManager.RefreshAsync(CancellationToken)" /> off the hot path.
+///     <see cref="IMcpServerConnectionManager.RefreshAsync(CancellationToken)" /> off the host start path.
 /// </summary>
 /// <remarks>
-///     A connect failure at startup is logged and swallowed, never fatal, since the manager already isolates a single
-///     bad server. The manager owns client disposal, so <see cref="StopAsync" /> is a no-op.
+///     Host start never waits on a connect, so a server that accepts but never answers cannot hold the UI down. A
+///     failure is logged and swallowed, never fatal: a node must start even if no MCP server connects. The manager
+///     owns client disposal.
 /// </remarks>
-internal sealed class McpServerStartupConnector : IHostedService
+internal sealed class McpServerStartupConnector : BackgroundService
 {
     private readonly IMcpServerConnectionManager _connectionManager;
     private readonly ILogger<McpServerStartupConnector> _logger;
@@ -20,26 +21,22 @@ internal sealed class McpServerStartupConnector : IHostedService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Yield first so host startup is never blocked on a connect.
+        await Task.Yield();
+
         try
         {
-            await _connectionManager.RefreshAsync(cancellationToken);
+            await _connectionManager.RefreshAsync(stoppingToken);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            // Host is shutting down before startup finished; nothing to connect.
+            // Host is shutting down before the connect finished; nothing to report.
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or TimeoutException)
+        catch (Exception ex)
         {
-            // Startup MCP connection is best-effort: a node must start even if no MCP server connects. The manager
-            // already isolates per-server failures, so reaching here means a refresh-wide fault — log and continue.
             _logger.LogWarning(ex, "Initial MCP server connection refresh failed at startup; MCP tools will be unavailable until the next refresh.");
         }
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken)
-    {
-        return Task.CompletedTask;
     }
 }

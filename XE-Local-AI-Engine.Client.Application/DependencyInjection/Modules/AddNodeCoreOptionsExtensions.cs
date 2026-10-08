@@ -34,7 +34,6 @@ internal static class AddNodeCoreOptionsExtensions
                .ValidateOnStart();
         builder.Services.AddOptions<NodeChatMigrationRecoveryOptions>()
                .Bind(configuration.GetSection(NodeChatMigrationRecoveryOptions.SectionName))
-               .Validate(static options => options.MigrationAttemptTimeout > TimeSpan.Zero, "Migration attempt timeout must be greater than zero.")
                .Validate(static options => options.StartupLockTimeout > TimeSpan.Zero, "Startup lock timeout must be greater than zero.")
                .Validate(static options => options.StartupLockPollInterval > TimeSpan.Zero, "Startup lock poll interval must be greater than zero.")
                .ValidateOnStart();

@@ -64,6 +64,37 @@ public sealed class SetAppUpdateChannelRequest
     public required string Channel { get; init; }
 }
 
+/// <summary>Request body for <c>POST app-update/apply</c>.</summary>
+public sealed class ApplyAppUpdateRequest
+{
+    /// <summary>True to apply even while running work would be stopped; false answers 409 with that work instead.</summary>
+    public bool Force { get; init; }
+}
+
+/// <summary>The 409 body of <c>POST app-update/apply</c>: the running work the update restart would stop.</summary>
+public sealed class ApplyAppUpdateBlockedResponse
+{
+    /// <summary>Each running item, in a stable order: GPU work, downloads, source builds, invocations, work sessions.</summary>
+    public required IReadOnlyList<AppUpdateBusyItemResponse> BusyItems { get; init; }
+
+    /// <summary>A user-safe explanation of why the update was held back.</summary>
+    public required string Message { get; init; }
+}
+
+/// <summary>One running item an update restart would stop.</summary>
+public sealed class AppUpdateBusyItemResponse
+{
+    /// <summary>
+    ///     <c>trainingRun</c>, <c>evaluationRun</c>, <c>trainingExport</c>, <c>modelDownload</c>,
+    ///     <c>imageModelDownload</c>, <c>transcriptionModelDownload</c>, a <c>*SourceBuild</c>, <c>invocation</c> or
+    ///     <c>workSession</c>.
+    /// </summary>
+    public required string Kind { get; init; }
+
+    /// <summary>The model, session or build name when known; null for kinds that carry none.</summary>
+    public string? DisplayName { get; init; }
+}
+
 /// <summary>
 ///     Response for <c>POST app-update/apply</c>.
 /// </summary>
@@ -77,4 +108,10 @@ public sealed class ApplyAppUpdateResponse
 {
     /// <summary>True when an update was actually found and apply was initiated (the app will relaunch); false when none was available.</summary>
     public required bool Applying { get; init; }
+
+    /// <summary>
+    ///     The version being installed when <see cref="Applying" /> is true. The live re-check can find a newer release
+    ///     than the one the browser was offered, so restart polling waits for this one.
+    /// </summary>
+    public string? TargetVersion { get; init; }
 }

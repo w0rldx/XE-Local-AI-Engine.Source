@@ -387,8 +387,9 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             var streamingMessage = await _persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken);
             if (!string.Equals(streamingMessage.Status, NodeChatMessageStatusValues.Streaming, StringComparison.Ordinal))
             {
-                // The row was finalized (cancelled) before streaming could start. Do not stream into a terminal message or
-                // run the model: return so the finally completes the state channel and the pump terminalizes from the row.
+                // The row was finalized before streaming could start: never run the model. The slot is ours, so report the terminal, or the
+                // Assigned state stays live and a reload resumes into a stream that never ends; the pump then terminalizes from the row.
+                await _eventDispatcher.ReportInvocationFailedAsync(requestId, PreRunCancelledMessage, FailureCategory.Cancelled);
                 return;
             }
 

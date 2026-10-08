@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Hubs;
 
 using System.Runtime.CompilerServices;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
@@ -70,28 +71,36 @@ public sealed class LocalChatHubAttachmentTests
             "a disconnected client must be recorded as detached immediately, not when the run finally ends");
         AssertEx.False(runFinished.Task.IsCompleted, "the run is deliberately still going — that is the whole point");
 
+        // Disposing the source waits for the run, so the hub's own finally (and its Forget) cannot have run yet: the reaper sees the entry.
+        await AssertEx.StaysIncompleteAsync(pump, "the hub stream only ends once the source, and with it the run, has ended");
+        AssertEx.ContainsSingle(tracker.ListDetached(), entry => entry.InvocationId == invocationId, "a disconnected, still-running turn is reapable");
+
         runFinished.SetResult();
         await pump.WaitAsync(TimeSpan.FromSeconds(10));
         AssertEx.True(streamFaultedOnDisconnect, "the disconnect ends the client's stream");
-        AssertEx.True(tracker.IsDetached(invocationId), "and it stays detached once the enumerable finally returns");
+
+        // This fake publishes no terminal, like a turn cancelled while queued: the entry must still go once the run is over,
+        // or it sits in ListDetached and the detached gauge for the process lifetime.
+        AssertEx.False(tracker.IsDetached(invocationId), "the send stream returning means the run is over, so its entry is dropped");
+        AssertEx.Equal(expected: 0, tracker.ListDetached().Count);
     }
 
     [Test]
-    public async Task SendMessage_WhenTheStreamEndsNormally_ReleasesExactlyOnce()
+    public async Task ResumeMessage_WhenTheStreamEndsNormally_ReleasesExactlyOnce()
     {
-        // The idempotent-handle guarantee: the token callback and the finally can both fire, and a double release
-        // would drop the count below the live consumers and report an attached run as abandoned.
+        // The idempotent-handle guarantee: the token callback and the finally can both fire, and a double release would
+        // report an attached run as abandoned. A resume ends while the run goes on, so its entry survives to be counted.
         var invocationId = Guid.NewGuid();
         var tracker = CreateTracker();
         using var clientGone = new CancellationTokenSource();
 
-        var streamService = Substitute.For<INodeChatStreamService>();
-        streamService.SendMessageAsync(Arg.Any<NodeChatStreamRequest>(), Arg.Any<CancellationToken>())
-                     .Returns(_ => OneEventThenEnd(invocationId));
+        var resumeRegistry = Substitute.For<IInvocationResumeRegistry>();
+        resumeRegistry.ResumeAsync(invocationId, Arg.Any<CancellationToken>())
+                      .Returns(_ => OneEventThenEnd(invocationId));
 
-        using var hub = CreateHub(streamService, tracker);
+        using var hub = CreateHub(Substitute.For<INodeChatStreamService>(), tracker, resumeRegistry);
         var delivered = 0;
-        await foreach (var _ in hub.SendMessage(new NodeChatStreamRequest(Guid.NewGuid(), "hi"), clientGone.Token))
+        await foreach (var _ in hub.ResumeMessage(invocationId, clientGone.Token))
         {
             delivered++;
         }
@@ -107,11 +116,47 @@ public sealed class LocalChatHubAttachmentTests
         AssertEx.False(tracker.IsDetached(invocationId), "one attach must be enough to clear the detachment");
     }
 
-    private static LocalChatHub CreateHub(INodeChatStreamService streamService, IInvocationAttachmentTracker tracker)
+    [Test]
+    public void ResumeMessage_ForAnInvocationThatIsNotLive_ThrowsAHubException()
+    {
+        var invocationId = Guid.NewGuid();
+        var resumeRegistry = Substitute.For<IInvocationResumeRegistry>();
+        resumeRegistry.ResumeAsync(invocationId, Arg.Any<CancellationToken>())
+                      .Returns<IAsyncEnumerable<ChatStreamEvent>>(_ => throw new InvalidOperationException($"Invocation {invocationId} is not resumable."));
+        using var hub = CreateHub(Substitute.For<INodeChatStreamService>(), CreateTracker(), resumeRegistry);
+
+        var exception = AssertEx.Throws<HubException>(() => hub.ResumeMessage(invocationId, CancellationToken.None));
+
+        AssertEx.Contains(exception.Message, "not resumable");
+    }
+
+    [Test]
+    public async Task ResumeConversation_WhenTheTurnEndsBetweenLookupAndResume_ReturnsAnEmptyStream()
+    {
+        var conversationId = Guid.NewGuid();
+        var invocationId = Guid.NewGuid();
+        var resumeRegistry = Substitute.For<IInvocationResumeRegistry>();
+        resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId).Returns(invocationId);
+        resumeRegistry.ResumeAsync(invocationId, Arg.Any<CancellationToken>())
+                      .Returns<IAsyncEnumerable<ChatStreamEvent>>(_ => throw new InvalidOperationException("already terminal"));
+        using var hub = CreateHub(Substitute.For<INodeChatStreamService>(), CreateTracker(), resumeRegistry);
+
+        var delivered = 0;
+        await foreach (var _ in hub.ResumeConversation(conversationId, CancellationToken.None))
+        {
+            delivered++;
+        }
+
+        AssertEx.Equal(expected: 0, delivered, "nothing is live, which is the documented empty-stream answer.");
+    }
+
+    private static LocalChatHub CreateHub(INodeChatStreamService streamService,
+        IInvocationAttachmentTracker tracker,
+        IInvocationResumeRegistry? resumeRegistry = null)
     {
         return new LocalChatHub(streamService,
             Substitute.For<INodeChatRegenerationService>(),
-            Substitute.For<IInvocationResumeRegistry>(),
+            resumeRegistry ?? Substitute.For<IInvocationResumeRegistry>(),
             tracker,
             Options.Create(new SecurityOptions()));
     }

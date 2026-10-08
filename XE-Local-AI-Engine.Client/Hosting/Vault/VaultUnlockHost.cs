@@ -111,7 +111,7 @@ internal static class VaultUnlockHost
     {
         app.UseNodeResponseHeaders();
         app.UseMiddleware<NativeDesktopDocumentPolicy>();
-        app.UseStaticFiles();
+        app.UseStaticFiles(SpaStaticFileOptions.Create());
         app.UseMiddleware<LocalApiSecurityMiddleware>();
         app.UseRouting();
 
@@ -140,7 +140,7 @@ internal static class VaultUnlockHost
             detail: "The node is locked. Unlock it with the admin password first.",
             statusCode: StatusCodes.Status503ServiceUnavailable));
 
-        app.MapFallbackToFile("index.html");
+        app.MapFallbackToFile("index.html", SpaStaticFileOptions.Create());
     }
 
     private static async Task<IResult> UnlockAsync(VaultUnlockRequest request,

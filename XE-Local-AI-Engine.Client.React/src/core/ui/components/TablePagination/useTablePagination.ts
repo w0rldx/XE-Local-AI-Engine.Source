@@ -59,7 +59,11 @@ export function useTablePagination<T>(items: readonly T[], options: UseTablePagi
 
 	const [requestedPage, setRequestedPage] = useState(1);
 
-	const pageSize = storageKey === undefined ? localPageSize : (persistedPageSize ?? fallbackPageSize);
+	// Storage is untrusted: a 0 emptied the table, a string made `start + pageSize` concatenate, and a size no longer
+	// offered left the selector blank. Only a size the selector offers is used.
+	const validPersistedPageSize =
+		persistedPageSize !== undefined && pageSizeOptions.includes(persistedPageSize) ? persistedPageSize : undefined;
+	const pageSize = storageKey === undefined ? localPageSize : (validPersistedPageSize ?? fallbackPageSize);
 
 	const totalItems = items.length;
 	const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));

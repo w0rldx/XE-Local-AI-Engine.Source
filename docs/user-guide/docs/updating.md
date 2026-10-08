@@ -84,6 +84,23 @@ managed runtimes carry forward.
 
 Keep backups of data you care about. A binary update does not replace a backup policy.
 
+### Restoring the automatic pre-update snapshot
+
+When an update brings database changes, the app first copies `node.sqlite` to
+`<data-directory>/backups/node-chat-<timestamp>.sqlite` and keeps the newest few copies. The copy is skipped, with a
+warning in the log, when the disk has too little free space or the copy takes too long. If the app then refuses to start
+because its database could not be updated, or because the database is damaged, the error names the newest snapshot. To
+restore it:
+
+1. Close the app completely, including the tray icon.
+2. Rename `node.sqlite` in the data directory to `node.sqlite.broken`. Delete `node.sqlite-wal` and `node.sqlite-shm`
+   if they exist.
+3. Copy the newest `backups/node-chat-<timestamp>.sqlite` to the data directory and rename it to `node.sqlite`.
+4. Start the app again. Keep `node.key` where it is: the snapshot needs the same key.
+
+Anything you did after the snapshot was taken is not in it. If the update itself is the problem, the restored database
+is migrated again on the next start, so report the failure before retrying.
+
 ## Going back to an older version
 
 Back up the complete data directory first. Database migrations are normally forward-only, and an older binary may not

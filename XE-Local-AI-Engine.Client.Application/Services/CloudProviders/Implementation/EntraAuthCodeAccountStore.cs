@@ -56,8 +56,8 @@ public sealed class EntraAuthCodeAccountStore : IEntraAuthCodeAccountStore, IDis
             }
             catch (CryptographicException exception)
             {
-                _logger.LogWarning(exception, "Entra ID authorization-code account record decryption failed. Clearing the stored record.");
-                ClearRecordFileBestEffort();
+                _logger.LogWarning(exception, "Entra ID authorization-code account record decryption failed. Moving the stored record aside.");
+                MoveRecordFileAsideBestEffort();
                 return null;
             }
             catch (IOException exception)
@@ -110,22 +110,20 @@ public sealed class EntraAuthCodeAccountStore : IEntraAuthCodeAccountStore, IDis
         _lock.Dispose();
     }
 
-    private void ClearRecordFileBestEffort()
+    private void MoveRecordFileAsideBestEffort()
     {
         try
         {
-            if (File.Exists(_recordPath))
-            {
-                File.Delete(_recordPath);
-            }
+            var movedTo = SecureFilePermissions.MoveAsideUnreadable(_recordPath);
+            _logger.LogWarning("The unreadable Entra ID authorization-code account record was kept as {QuarantinePath}.", movedTo);
         }
         catch (IOException exception)
         {
-            _logger.LogWarning(exception, "Failed to delete the Entra ID authorization-code account record file.");
+            _logger.LogWarning(exception, "Failed to move the unreadable Entra ID authorization-code account record aside.");
         }
         catch (UnauthorizedAccessException exception)
         {
-            _logger.LogWarning(exception, "Failed to delete the Entra ID authorization-code account record file.");
+            _logger.LogWarning(exception, "Failed to move the unreadable Entra ID authorization-code account record aside.");
         }
     }
 }

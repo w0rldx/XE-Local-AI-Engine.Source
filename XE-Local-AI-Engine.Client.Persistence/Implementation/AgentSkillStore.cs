@@ -142,10 +142,7 @@ public sealed partial class AgentSkillStore : IAgentSkillStore
 
     public async Task<IReadOnlyList<AgentSkillRecord>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var entities = await _dbContext.AgentSkills
-                                       .AsNoTracking()
-                                       .OrderBy(skill => skill.Name)
-                                       .ToListAsync(cancellationToken);
+        var entities = await _dbContext.ListSkippingUnreadableAsync(_dbContext.AgentSkills.OrderBy(skill => skill.Name), cancellationToken);
 
         // The library list does not carry resources: decrypting every bundled file of every skill to render a list of
         // names would be pure waste. Callers that need them ask per skill.

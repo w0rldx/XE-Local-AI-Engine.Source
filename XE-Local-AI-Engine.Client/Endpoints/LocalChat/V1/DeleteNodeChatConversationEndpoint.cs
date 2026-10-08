@@ -28,8 +28,8 @@ public sealed class DeleteNodeChatConversationEndpoint : Endpoint<DeleteNodeChat
 
     public override async Task HandleAsync(DeleteNodeChatConversationRequest req, CancellationToken ct)
     {
-        var existing = await _chatPersistence.GetConversationAsync(req.ConversationId, ct);
-        if (existing is null)
+        // Existence only, never a decrypting read: a conversation whose title no longer decrypts is the one the user most needs to delete.
+        if (await _chatPersistence.GetConversationKindAsync(req.ConversationId, ct) is null)
         {
             await Send.NotFoundAsync(ct);
             return;

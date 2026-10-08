@@ -47,6 +47,14 @@ internal sealed class HtmlDocumentReader : IngestionDocumentReader
                 continue;
             }
 
+            // The HTML tokenizer rule: '<' opens markup only before a letter, '/', '!' or '?'; otherwise ("a < b", "<3") it is text.
+            if (position + 1 >= html.Length || !(char.IsAsciiLetter(html[position + 1]) || html[position + 1] is '/' or '!' or '?'))
+            {
+                _ = text.Append('<');
+                position++;
+                continue;
+            }
+
             if (html.AsSpan(position).StartsWith("<!--", StringComparison.Ordinal))
             {
                 var commentEnd = html.IndexOf("-->", position + 4, StringComparison.Ordinal);
@@ -178,7 +186,9 @@ internal sealed class HtmlDocumentReader : IngestionDocumentReader
 
     private static int FindTagEnd(string html, int start)
     {
+        // A quote opens an attribute value only right after '=', so a stray apostrophe inside a tag cannot swallow the text that follows.
         var quote = '\0';
+        var afterEquals = false;
         for (var index = start; index < html.Length; index++)
         {
             var character = html[index];
@@ -189,13 +199,22 @@ internal sealed class HtmlDocumentReader : IngestionDocumentReader
                     quote = '\0';
                 }
             }
-            else if (character is '\'' or '"')
-            {
-                quote = character;
-            }
             else if (character == '>')
             {
                 return index;
+            }
+            else if (character == '=')
+            {
+                afterEquals = true;
+            }
+            else if (afterEquals && character is '\'' or '"')
+            {
+                quote = character;
+                afterEquals = false;
+            }
+            else if (!char.IsWhiteSpace(character))
+            {
+                afterEquals = false;
             }
         }
 
@@ -225,6 +244,7 @@ internal sealed class HtmlDocumentReader : IngestionDocumentReader
         var closingStart = html.IndexOf("</" + tagName, position, StringComparison.OrdinalIgnoreCase);
         if (closingStart < 0)
         {
+            // Unclosed: as in the HTML tokenizer, the raw element runs to end of input, so its body never reads as prose.
             return html.Length;
         }
 

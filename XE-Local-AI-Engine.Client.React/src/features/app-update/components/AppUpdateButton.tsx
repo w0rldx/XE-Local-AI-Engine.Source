@@ -3,12 +3,9 @@ import { IconRefresh } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import {
-	noBodyOptions,
-	useApplyAppUpdate,
-	useAppUpdateStatus,
-	useProbeAppUpdateStatus,
-} from "@/features/app-update/queries/useAppUpdate";
+import { AppUpdateBusyDialog } from "@/features/app-update/components/AppUpdateBusyDialog";
+import { type AppUpdateBusyItem, parseAppUpdateBusy } from "@/features/app-update/models/AppUpdateBusy";
+import { useApplyAppUpdate, useAppUpdateStatus, useProbeAppUpdateStatus } from "@/features/app-update/queries/useAppUpdate";
 
 // Interval (ms) between health-live polls while waiting for the server to come back.
 const HEALTH_POLL_INTERVAL_MS = 2000;
@@ -29,6 +26,8 @@ export function AppUpdateButton() {
 	const probeStatusMutation = useProbeAppUpdateStatus();
 
 	const [applyState, setApplyState] = useState<ApplyState>("idle");
+	// The running work a refused apply listed; non-null opens the confirm dialog that re-sends with force.
+	const [busyItems, setBusyItems] = useState<AppUpdateBusyItem[] | null>(null);
 	const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const pollStartRef = useRef<number>(0);
 	const expectedVersionRef = useRef<string | null>(null);
@@ -95,23 +94,32 @@ export function AppUpdateButton() {
 		scheduleHealthPoll();
 	}
 
-	async function handleApply() {
+	async function handleApply(force: boolean) {
 		if (!availableVersion) {
 			setApplyState("error");
 			return;
 		}
 		setApplyState("applying");
 		try {
-			const result = await applyMutation.mutateAsync(noBodyOptions);
+			const result = await applyMutation.mutateAsync({ body: { force } });
+			setBusyItems(null);
 			if (!result.applying) {
 				setApplyState("idle");
 				return;
 			}
-			expectedVersionRef.current = availableVersion;
+			// The apply's live re-check can install a newer release than the cached offer; wait for what it installs.
+			expectedVersionRef.current = result.targetVersion ?? availableVersion;
 			setApplyState("restarting");
 			pollStartRef.current = Date.now();
 			scheduleHealthPoll();
-		} catch {
+		} catch (error: unknown) {
+			const busy = parseAppUpdateBusy(error);
+			if (busy !== null) {
+				setBusyItems(busy);
+				setApplyState("idle");
+				return;
+			}
+			setBusyItems(null);
 			setApplyState("error");
 		}
 	}
@@ -144,15 +152,25 @@ export function AppUpdateButton() {
 	}
 
 	return (
-		<Button
-			variant="filled"
-			leftSection={<IconRefresh size={16} />}
-			loading={applyState === "applying"}
-			onClick={() => {
-				handleApply().catch((error: unknown) => console.error("apply failed", error));
-			}}
-		>
-			{t("pages.about.appUpdate.updateNow")}
-		</Button>
+		<>
+			<Button
+				variant="filled"
+				leftSection={<IconRefresh size={16} />}
+				loading={applyState === "applying" && busyItems === null}
+				onClick={() => {
+					handleApply(false).catch((error: unknown) => console.error("apply failed", error));
+				}}
+			>
+				{t("pages.about.appUpdate.updateNow")}
+			</Button>
+			<AppUpdateBusyDialog
+				busyItems={busyItems}
+				isPending={applyState === "applying"}
+				onClose={() => setBusyItems(null)}
+				onConfirm={() => {
+					handleApply(true).catch((error: unknown) => console.error("apply failed", error));
+				}}
+			/>
+		</>
 	);
 }

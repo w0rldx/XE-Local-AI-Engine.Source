@@ -486,6 +486,7 @@ import type {
 	ApplyAgentHomePatchError,
 	ApplyAgentHomePatchResponse,
 	ApplyAppUpdateData,
+	ApplyAppUpdateError,
 	ApplyAppUpdateResponse,
 	ApplyDevelopmentPatchData,
 	ApplyDevelopmentPatchError,
@@ -2568,8 +2569,12 @@ export const updateSuggestedPlaybookActionMutation = (
 
 export const applyAppUpdateMutation = (
 	options?: Partial<Options<ApplyAppUpdateData>>,
-): UseMutationOptions<ApplyAppUpdateResponse, AxiosError<DefaultError>, Options<ApplyAppUpdateData>> => {
-	const mutationOptions: UseMutationOptions<ApplyAppUpdateResponse, AxiosError<DefaultError>, Options<ApplyAppUpdateData>> = {
+): UseMutationOptions<ApplyAppUpdateResponse, AxiosError<ApplyAppUpdateError>, Options<ApplyAppUpdateData>> => {
+	const mutationOptions: UseMutationOptions<
+		ApplyAppUpdateResponse,
+		AxiosError<ApplyAppUpdateError>,
+		Options<ApplyAppUpdateData>
+	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await applyAppUpdate({
 				...options,

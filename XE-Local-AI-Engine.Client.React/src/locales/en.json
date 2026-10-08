@@ -789,7 +789,26 @@
 				"channelChangeError": "Couldn't change the update channel. Please try again.",
 				"offline": "Couldn't reach the update service. Check your connection and try again.",
 				"checkFailed": "Couldn't process the update information. Please try again later.",
-				"notConfigured": "Automatic updates aren't available in this build. To move to a newer version, install it manually."
+				"notConfigured": "Automatic updates aren't available in this build. To move to a newer version, install it manually.",
+				"busy": {
+					"title": "Update and stop running work?",
+					"description": "Updating restarts XE. This work is running now and will be stopped:",
+					"confirm": "Update anyway",
+					"kinds": {
+						"trainingRun": "Training run",
+						"evaluationRun": "Evaluation run",
+						"trainingExport": "Model export",
+						"modelDownload": "Model download",
+						"imageModelDownload": "Image model download",
+						"transcriptionModelDownload": "Transcription model download",
+						"llamaCppSourceBuild": "llama.cpp source build",
+						"whisperCppSourceBuild": "whisper.cpp source build",
+						"stableDiffusionCppSourceBuild": "stable-diffusion.cpp source build",
+						"invocation": "AI response being generated",
+						"workSession": "Work session",
+						"unknown": "Running task"
+					}
+				}
 			},
 			"runtimeTerms": "Platform .NET component terms",
 			"bundledDataTerms": "Bundled data terms"
@@ -8795,6 +8814,8 @@
 			"description": "Try again to re-render the current route.",
 			"unknownError": "Unknown error",
 			"retry": "Try again",
+			"goHome": "Go to home",
+			"reload": "Reload",
 			"exportDiagnostics": "Export diagnostics",
 			"exportUnavailable": "No diagnostics snapshot is stored yet, so there is nothing to export.",
 			"openIssue": "Open GitHub issue"

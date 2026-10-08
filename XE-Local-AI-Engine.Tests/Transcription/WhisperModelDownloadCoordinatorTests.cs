@@ -95,6 +95,24 @@ public sealed class WhisperModelDownloadCoordinatorTests
     }
 
     [Test]
+    public async Task Run_UnwritableModelsDirectory_LandsInFailedInsteadOfStayingRunning()
+    {
+        // UnauthorizedAccessException was outside every catch filter: the detached task faulted unobserved and the status
+        // stayed Running until the node restarted.
+        var store = new FakeWhisperWeightFileStore
+        {
+            Failure = new UnauthorizedAccessException("Access to the path '/models/whisper/base.bin.part' is denied.")
+        };
+        using var fixture = new Fixture(store);
+
+        fixture.Coordinator.Start("base");
+
+        await AssertEx.EventuallyAsync(() => fixture.Phase("base") == WhisperModelDownloadPhase.Failed, TestBudgets.Contended);
+        var status = AssertEx.NotNull(fixture.Coordinator.GetStatus("base"));
+        AssertEx.Equal("Download failed.", AssertEx.NotNull(status.SanitizedError));
+    }
+
+    [Test]
     public async Task Run_UnexpectedTransportFailure_ReportsAGenericReason()
     {
         // A raw transport message can carry a URL or a path, so it is collapsed rather than surfaced.

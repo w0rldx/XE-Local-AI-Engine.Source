@@ -553,6 +553,7 @@ namespace XE_Local_AI_Engine.Client
                 // Fail-loud is unchanged (the migration services already run transactionally and rethrow); this only adds a
                 // targeted error line with the cause before the top-level catch logs the generic fatal + rethrows.
                 Log.Error(migrationException, "Database migrations failed to apply.");
+                await ReportDatabaseRecoveryAsync(app, migrationException, standardError);
                 throw;
             }
 
@@ -650,7 +651,7 @@ namespace XE_Local_AI_Engine.Client
             app.UseAntiforgery();
 
             app.UseMiddleware<NativeDesktopDocumentPolicy>();
-            app.UseStaticFiles();
+            app.UseStaticFiles(SpaStaticFileOptions.Create());
             // AllowAnonymous is load-bearing, not decorative: under the FallbackPolicy an endpoint with no auth
             // metadata is challenged, and Aspire's WithHttpHealthCheck poll carries no token.
             app.MapHealthChecks("/health/live", new HealthCheckOptions
@@ -867,7 +868,7 @@ namespace XE_Local_AI_Engine.Client
 
             // The login page has to load before anyone can hold a token, so the SPA shell opts out of the FallbackPolicy explicitly; static assets are served by
             // UseStaticFiles ahead of routing and are unaffected. The marker is what the middleware just after UseRouting matches on to keep the shell off the API prefix.
-            app.MapFallbackToFile("index.html").AllowAnonymous().WithMetadata(new SpaFallbackMarker());
+            app.MapFallbackToFile("index.html", SpaStaticFileOptions.Create()).AllowAnonymous().WithMetadata(new SpaFallbackMarker());
 
             // Desktop mode only: install the console-close graceful-stop triggers and the on-started browser launch. Off the flag this is never reached, so no signal
             // handler or P/Invoke is installed. The lifecycle is rooted for the app's lifetime through the lifetime token registration and disposes with the host.

@@ -98,7 +98,7 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
             var reQueued = 0;
             foreach (var documentId in interrupted)
             {
-                var admission = await _dispatcher.EnqueueAsync(documentId, cancellationToken);
+                var admission = await _dispatcher.EnqueueStrandedAsync(documentId, cancellationToken);
                 if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
                 {
                     // The bounded queue filled while re-dispatching a backlog; the rest are already Pending and recover on
@@ -166,8 +166,8 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
     /// <remarks>
     ///     Those are documents a full queue rejected at upload or during startup recovery. Gating on an empty queue makes
     ///     this run only as capacity frees and prevents a busy loop: a sweep that finds no stranded work enqueues nothing,
-    ///     so no further completion fires it again. Admission is idempotent, so a document already queued or in flight is
-    ///     never re-enqueued, and enqueueing stops the moment the queue fills, leaving the rest to a later sweep.
+    ///     so no further completion fires it again. A document already queued or in flight is skipped, never given a
+    ///     follow-up run, and enqueueing stops the moment the queue fills, leaving the rest to a later sweep.
     /// </remarks>
     private async Task SweepStrandedPendingAsync()
     {
@@ -183,7 +183,7 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
             var pending = await catalog.ListPendingDocumentIdsAsync(_drainDeadline.Token);
             foreach (var documentId in pending)
             {
-                var admission = await _dispatcher.EnqueueAsync(documentId, _drainDeadline.Token);
+                var admission = await _dispatcher.EnqueueStrandedAsync(documentId, _drainDeadline.Token);
                 if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
                 {
                     break;

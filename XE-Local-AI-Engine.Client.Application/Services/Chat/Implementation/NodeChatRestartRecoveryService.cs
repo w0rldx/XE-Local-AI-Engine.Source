@@ -2,23 +2,35 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 public sealed class NodeChatRestartRecoveryService
 {
     public const string RestartInterruptedError = "Interrupted by application restart before terminal status.";
 
     private const string AssistantRole = "assistant";
+    private const long MillisecondsPerDay = 86_400_000L;
 
+    private readonly INodeSettingsStore _settingsStore;
     private readonly NodeChatPersistenceWriter _writer;
 
-    public NodeChatRestartRecoveryService(NodeChatPersistenceWriter writer)
+    public NodeChatRestartRecoveryService(NodeChatPersistenceWriter writer, INodeSettingsStore settingsStore)
     {
         ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(settingsStore);
         _writer = writer;
+        _settingsStore = settingsStore;
     }
 
     public async Task<int> RecoverInterruptedMessagesAsync(long recoveredAtUtc, CancellationToken cancellationToken = default)
     {
+        // The envelope backfill reaches back only as far as execution-log retention keeps envelopes; an older row's envelope was swept on purpose.
+        // One settings read covers both values.
+        var settings = await _settingsStore.LoadAsync(cancellationToken);
+        var backfillSinceUtc = settings.AgentExecutionLogRetentionEnabled ?? StoredNodeSettings.DefaultAgentExecutionLogRetentionEnabled
+            ? recoveredAtUtc - ((settings.AgentExecutionLogRetentionDays ?? StoredNodeSettings.DefaultAgentExecutionLogRetentionDays) * MillisecondsPerDay)
+            : long.MinValue;
+
         // Startup-only reconciliation across every conversation; runs before the app serves traffic. Uses the shared
         // Guid.Empty gate exclusively, mirroring the list read model that keys global queries on the same id.
         return await _writer.ExecuteConversationExclusiveAsync(Guid.Empty,
@@ -59,6 +71,7 @@ public sealed class NodeChatRestartRecoveryService
                                                                      FROM messages m
                                                                      WHERE m.role = {5}
                                                                        AND m.status IN ({3}, {6}, {7}, {8})
+                                                                       AND m.updated_at_utc >= {9}
                                                                        AND NOT EXISTS (
                                                                            SELECT 1 FROM agent_execution_logs e
                                                                            WHERE e.record_kind = {0} AND e.message_id = m.message_id);
@@ -72,7 +85,8 @@ public sealed class NodeChatRestartRecoveryService
                         AssistantRole,
                         NodeChatMessageStatusValues.Failed,
                         NodeChatMessageStatusValues.Cancelled,
-                        NodeChatMessageStatusValues.Interrupted
+                        NodeChatMessageStatusValues.Interrupted,
+                        backfillSinceUtc
                     ],
                     token);
 

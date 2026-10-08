@@ -302,6 +302,45 @@ public sealed class SchedulerDispatchExecutorTests
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-cancel", scheduledFireTimeUtc: null, Now, cts.Token));
     }
 
+    [Test]
+    public async Task Dispatch_WhenTheSuccessWriteThrowsOnce_RecordsSucceededNotFailed()
+    {
+        // A transient store fault (SQLite busy) on the success write: the work ran, so it must not be recorded as the job failing.
+        var handler = new TestEchoScheduledJobHandler();
+        var store = Substitute.For<IScheduledJobDefinitionStore>();
+        store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
+             .Returns(BuildRecord(enabled: true, deleted: false));
+        var runStore = CreateRunStoreSubstitute();
+        var statuses = new List<ScheduledRunStatus>();
+        var succeededWrites = 0;
+        runStore.UpdateLifecycleAsync(Arg.Any<Guid>(),
+                    Arg.Any<ScheduledRunStatus>(),
+                    Arg.Any<long?>(),
+                    Arg.Any<long?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
+                {
+                    var status = callInfo.ArgAt<ScheduledRunStatus>(1);
+                    statuses.Add(status);
+                    if (status == ScheduledRunStatus.Succeeded && ++succeededWrites == 1)
+                    {
+                        throw new InvalidOperationException("database is locked");
+                    }
+
+                    return Task.FromResult<ScheduledJobRunRecord?>(null);
+                });
+        var executor = CreateExecutor(store, new ScheduledJobTemplateRegistry([handler]), runStore);
+
+        await executor.DispatchAsync(JobId, "fire-success-write-retry", scheduledFireTimeUtc: null, Now, CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, handler.InvocationCount);
+        AssertEx.Equal("Succeeded,Succeeded", string.Join(',', statuses), "one failed write, one retry, and never Failed.");
+    }
+
     private static SchedulerDispatchExecutor CreateExecutor(IScheduledJobDefinitionStore store,
         IScheduledJobTemplateRegistry registry,
         IScheduledJobRunStore? runStore = null,

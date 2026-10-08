@@ -36,49 +36,15 @@ public sealed class NodeChatMigrationRecoveryService
 
         await using var startupLock = await AcquireStartupLockAsync(connectionString, cancellationToken);
 
-        if (await TryMigrateOnceAsync(cancellationToken))
-        {
-            return;
-        }
-
-        _logger.LogWarning("Node SQLite migration attempt timed out after {Timeout}. Recovering possible stale {LockTable} table before one retry.",
-            _options.MigrationAttemptTimeout,
-            EfMigrationsLockTableName);
-
-        await DropEfMigrationsLockTableAsync(cancellationToken);
-
-        if (!await TryMigrateOnceAsync(cancellationToken))
-        {
-            throw new TimeoutException($"Node SQLite migration still did not complete within {_options.MigrationAttemptTimeout} after clearing {EfMigrationsLockTableName}.");
-        }
-    }
-
-    private async Task<bool> TryMigrateOnceAsync(CancellationToken cancellationToken)
-    {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(ValidatePositive(_options.MigrationAttemptTimeout, nameof(NodeChatMigrationRecoveryOptions.MigrationAttemptTimeout)));
-
-        try
-        {
-            await using var scope = _scopeFactory.CreateAsyncScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-
-            await dbContext.Database.MigrateAsync(timeout.Token);
-            return true;
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
-        {
-            return false;
-        }
-    }
-
-    private async Task DropEfMigrationsLockTableAsync(CancellationToken cancellationToken)
-    {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
-        await dbContext.Database.ExecuteSqlRawAsync($"DROP TABLE IF EXISTS \"{EfMigrationsLockTableName}\";",
-            cancellationToken);
+        // Holding the startup lock (inside the single-instance lease) means no live process is migrating, so any EF lock row is a dead one. Clearing it
+        // up front replaces a wall-clock budget that also cancelled a slow migration mid-apply; the migration itself now runs unbounded.
+        await dbContext.Database.ExecuteSqlRawAsync($"DROP TABLE IF EXISTS \"{EfMigrationsLockTableName}\";", cancellationToken);
+        _logger.LogDebug("Cleared any abandoned {LockTable} table before applying node SQLite migrations.", EfMigrationsLockTableName);
+
+        await dbContext.Database.MigrateAsync(cancellationToken);
     }
 
     private async Task<FileStream?> AcquireStartupLockAsync(string connectionString, CancellationToken cancellationToken)

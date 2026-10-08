@@ -176,6 +176,47 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
     }
 
     [Test]
+    public async Task Admit_AtTombstoneCap_RecoversAfterPrune()
+    {
+        // Without a prune the tombstone and identity charges only grow, so a node at the cap refused every later start for good.
+        var databasePath = GetDatabasePath("tombstone-prune.sqlite");
+        await InitializeDatabaseAsync(databasePath);
+        await using var fixture = CreateFixture(databasePath);
+        var requestId = Guid.NewGuid();
+        var admitted = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, requestId, "old work"));
+        var claimed = await fixture.Store.TryClaimAsync(requestId, admitted.Run!.Version, claimedAtUtc: 2);
+        _ = await fixture.Store.TryFinalizeAsync(new McpAgentRunFinalization
+        {
+            RequestId = requestId,
+            ExpectedVersion = claimed.Run!.Version,
+            ClaimToken = claimed.Run.ClaimToken!.Value,
+            Status = McpAgentRunStatus.Succeeded,
+            ExpectedStopReason = McpAgentRunStopReason.None,
+            FailureCode = null,
+            Result = "answer",
+            DisplayMessage = "done",
+            CompletedAtUtc = 3
+        });
+        const long compactedAtUtc = 3 + McpAgentRunStore.PayloadRetentionMilliseconds;
+        _ = await fixture.Store.CompactExpiredPayloadsAsync(compactedAtUtc);
+        await SeedTerminalCountersAsync(databasePath, requestId, activePayloadBytes: 0, McpAgentRunStore.MaxTombstoneLogicalBytes);
+        var refused = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "new work"));
+        AssertEx.Equal(McpAgentRunCapacityKind.TombstoneBytes, refused.CapacityKind, "the seeded ledger sits at the tombstone cap");
+
+        AssertEx.Equal(expected: 0, await fixture.Store.PruneExpiredTombstonesAsync(compactedAtUtc + McpAgentRunStore.TombstoneRetentionMilliseconds - 1));
+        var pruned = await fixture.Store.PruneExpiredTombstonesAsync(compactedAtUtc + McpAgentRunStore.TombstoneRetentionMilliseconds);
+        var result = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "new work"));
+
+        AssertEx.Equal(expected: 1, pruned);
+        AssertEx.Equal(McpAgentRunAdmissionKind.Accepted, result.Kind);
+        AssertEx.Null(await fixture.Store.GetAsync(requestId));
+        var ledger = await fixture.Store.VerifyLedgerAsync();
+        AssertEx.True(ledger.IsConsistent, "The prune must release identity and tombstone charges in the same transaction.");
+        AssertEx.Equal(expected: 1L, ledger.Persisted.IdentityCount);
+        AssertEx.Equal((long)McpAgentRunStore.TombstoneReservationBytesV1, ledger.Persisted.TombstoneLogicalBytes);
+    }
+
+    [Test]
     public async Task CompactExpiredPayloadsAsync_ReleasesAllActivePayloadAccounting()
     {
         var databasePath = GetDatabasePath("compact-accounting.sqlite");

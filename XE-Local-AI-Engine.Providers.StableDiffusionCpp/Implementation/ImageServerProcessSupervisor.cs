@@ -30,6 +30,13 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     private const string ExitedWhileLoadingMessage =
         "The image runtime exited while loading the model. The model may be incompatible with this runtime or too large for the available memory.";
 
+    /// <summary>User-facing reason when the child could not bind the port it was given (another process took it).</summary>
+    private const string PortTakenMessage =
+        "The image runtime could not bind its local port because another process took it. Try again; the next attempt uses a different port.";
+
+    /// <summary>Bind-failure wording in the child's stderr; sd-server's exact text is unverified, so the common forms are matched.</summary>
+    private static readonly string[] PortBindFailureMarkers = ["address already in use", "couldn't bind", "could not bind", "failed to bind", "bind failed"];
+
     /// <summary>Poll cadence for observing that a freshly spawned process exited during its readiness wait.</summary>
     private static readonly TimeSpan ProcessExitPollInterval = TimeSpan.FromMilliseconds(250);
 
@@ -517,7 +524,9 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             // a missing GPU device is indistinguishable from an out-of-memory kill.
             var detail = DescribeExit(handle);
             _logger.LogWarning("sd-server exited while loading the model (pid {ProcessId}).{Detail}", handle.ProcessId, detail);
-            throw new StableDiffusionRuntimeException(ExitedWhileLoadingMessage + detail);
+
+            // A lost probe-then-bind port race is not the model's fault, and the next attempt allocates a fresh port.
+            throw new StableDiffusionRuntimeException((IsPortBindFailure(handle.StderrTail) ? PortTakenMessage : ExitedWhileLoadingMessage) + detail);
         }
 
         await linkedCts.CancelAsync().ConfigureAwait(false);
@@ -533,6 +542,10 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     ///     The exit code and sanitized stderr tail of a child that died during load, appended to the user-facing
     ///     sentence. Empty when the OS reported neither.
     /// </summary>
+    private static bool IsPortBindFailure(string? stderrTail) =>
+        stderrTail is not null
+        && Array.Exists(PortBindFailureMarkers, marker => stderrTail.Contains(marker, StringComparison.OrdinalIgnoreCase));
+
     private static string DescribeExit(IProcessTreeHandle handle)
     {
         var code = handle.ExitCode is { } exitCode

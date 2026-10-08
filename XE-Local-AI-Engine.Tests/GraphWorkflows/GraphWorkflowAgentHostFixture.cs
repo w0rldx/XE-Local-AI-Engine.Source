@@ -166,6 +166,9 @@ internal static class GraphWorkflowModels
 
     /// <summary>A name carrying this cannot call tools.</summary>
     public const string NoToolsMarker = "notools";
+
+    /// <summary>A name carrying this hands out a reservation whose release throws: a fault outside the turn's own catch.</summary>
+    public const string FaultyReleaseMarker = "faultyrelease";
 }
 
 /// <summary>The node's local default, which a unit-test host has no installed GGUF to resolve.</summary>
@@ -248,7 +251,10 @@ internal sealed class FakeGraphWorkflowCapacity : ICapacityService
 
         // One per CALL, not one per model: a test asserting that a path released its reservation is asking about the
         // turn it ran, and a shared instance would answer about somebody else's.
-        var reservation = new GraphWorkflowReservation();
+        var reservation = new GraphWorkflowReservation
+        {
+            ThrowsOnDispose = (modelName ?? string.Empty).Contains(GraphWorkflowModels.FaultyReleaseMarker, StringComparison.Ordinal)
+        };
         _reservations.GetOrAdd(modelName!, static _ => new ConcurrentQueue<GraphWorkflowReservation>()).Enqueue(reservation);
         return Task.FromResult(new CapacityDecision
         {
@@ -269,8 +275,19 @@ internal sealed class GraphWorkflowReservation : IDisposable
 
     public bool Disposed => Disposals > 0;
 
-    public void Dispose() =>
+    public bool ThrowsOnDispose { get; init; }
+
+    [SuppressMessage("Major Code Smell",
+        "S3877:Exceptions should not be thrown from unexpected methods",
+        Justification = "The throwing release IS the fault under test: it lands in the turn's finally, outside its catch.")]
+    public void Dispose()
+    {
         _ = Interlocked.Increment(ref _disposals);
+        if (ThrowsOnDispose)
+        {
+            throw new InvalidOperationException("The reservation could not be released.");
+        }
+    }
 }
 
 /// <summary>

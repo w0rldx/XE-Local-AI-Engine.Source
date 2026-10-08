@@ -114,6 +114,26 @@ public sealed class HardwareProfilerTests
     }
 
     [Test]
+    public async Task HardwareProfiler_Nvidia_FreeVramZero_ReportsZeroNotUnknown()
+    {
+        // A GPU whose VRAM is fully held by another process reads memory.free = 0. Treating that as "unknown" let the
+        // capacity gate fall back to total VRAM exactly when the card is full.
+        var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 5090, 32768, 0\n");
+        var environment = new FakeEnvironment
+        {
+            IsLinux = true,
+            ProcMemInfo = "MemTotal: 8 kB\nMemAvailable: 4 kB\n",
+            ProcessorCount = 8
+        };
+
+        var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
+        var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.Equal(32768L * Mib, profile.VramBytes!.Value);
+        AssertEx.Equal(expected: 0L, profile.AvailableVramBytes);
+    }
+
+    [Test]
     public async Task HardwareProfiler_Nvidia_TwoGpus_FirstGpuWins()
     {
         // Multi-GPU emits one csv line per device; the first GPU's figures win (matching the former per-field probes'
@@ -450,6 +470,31 @@ public sealed class HardwareProfilerTests
     }
 
     [Test]
+    public async Task HardwareProfiler_FirstProbeTimeout_IsNotCached_NextReadProbesAgain()
+    {
+        // A first nvidia-smi overrun (cold boot) degrades to CPU mode. Caching that degrade pinned every
+        // forceRefresh:false reader (image/whisper backend selection) to CPU for the session.
+        var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\n").TimeoutOnFirstCall();
+        var environment = new FakeEnvironment
+        {
+            IsLinux = true,
+            ProcMemInfo = "MemTotal: 8 kB\nMemAvailable: 4 kB\n",
+            ProcessorCount = 8
+        };
+
+        var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
+
+        var first = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+        AssertEx.False(first.VramKnown);
+
+        var second = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, probe.NvidiaCallCount);
+        AssertEx.True(second.VramKnown, "the timeout-only degrade must not be served from the cache.");
+        AssertEx.Equal(24564L * Mib, second.VramBytes!.Value);
+    }
+
+    [Test]
     public async Task HardwareProfiler_ProbeTimeout_DegradesToLastCachedProfile()
     {
         // First probe succeeds (real GPU), a later forced refresh times out → the profiler reuses the cached GPU profile
@@ -495,6 +540,7 @@ public sealed class HardwareProfilerTests
         private string? _nvidiaCsv;
         private bool _timeout;
         private bool _timeoutAfterFirstCall;
+        private bool _timeoutOnFirstCall;
 
         public int NvidiaCallCount { get; private set; }
 
@@ -513,7 +559,7 @@ public sealed class HardwareProfilerTests
             LastTimeout = timeout;
             LastArguments = arguments;
 
-            if (_timeout || (_timeoutAfterFirstCall && NvidiaCallCount > 1))
+            if (_timeout || (_timeoutAfterFirstCall && NvidiaCallCount > 1) || (_timeoutOnFirstCall && NvidiaCallCount == 1))
             {
                 return Task.FromResult<ProcessProbeResult?>(new ProcessProbeResult
                 {
@@ -547,6 +593,12 @@ public sealed class HardwareProfilerTests
         public FakeProcessProbe TimeoutAfterFirstCall()
         {
             _timeoutAfterFirstCall = true;
+            return this;
+        }
+
+        public FakeProcessProbe TimeoutOnFirstCall()
+        {
+            _timeoutOnFirstCall = true;
             return this;
         }
     }

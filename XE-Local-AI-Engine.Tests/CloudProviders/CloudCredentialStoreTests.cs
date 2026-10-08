@@ -142,7 +142,7 @@ public sealed class CloudCredentialStoreTests : IDisposable
     }
 
     [Test]
-    public async Task LoadAsync_WhenCredentialFileIsCorrupted_ReturnsNullAndClearsFile()
+    public async Task LoadAsync_WhenCredentialFileIsCorrupted_ReturnsNullAndMovesTheFileAside()
     {
         Directory.CreateDirectory(_contentRootPath);
         await File.WriteAllBytesAsync(GetCredentialsPath(), [1, 2, 3]);
@@ -153,8 +153,32 @@ public sealed class CloudCredentialStoreTests : IDisposable
 
         var loaded = await store.LoadAsync();
 
+        // Kept, not deleted: restoring the key ring that wrote it must still be able to recover it.
         AssertEx.Null(loaded);
         AssertEx.False(File.Exists(GetCredentialsPath()));
+        var kept = Directory.GetFiles(_contentRootPath, Path.GetFileName(GetCredentialsPath()) + ".unreadable-*");
+        AssertEx.Equal(expected: 1, kept.Length);
+        AssertEx.Equal("010203", Convert.ToHexString(await File.ReadAllBytesAsync(kept[0])));
+    }
+
+    [Test]
+    public async Task LoadConfigAsync_WhenTheKeyRingChanged_MovesTheFileAsideInsteadOfDeletingIt()
+    {
+        using (var writer = CreateStore(new EphemeralDataProtectionProvider()))
+        {
+            await writer.SaveConfigAsync(CreateEntraIdConfig());
+        }
+
+        var original = await File.ReadAllBytesAsync(GetCredentialsPath());
+        using var reader = CreateStore(new EphemeralDataProtectionProvider());
+
+        var loaded = await reader.LoadConfigAsync();
+
+        AssertEx.Null(loaded);
+        AssertEx.False(File.Exists(GetCredentialsPath()));
+        var kept = Directory.GetFiles(_contentRootPath, Path.GetFileName(GetCredentialsPath()) + ".unreadable-*");
+        AssertEx.Equal(expected: 1, kept.Length);
+        AssertEx.Equal(Convert.ToHexString(original), Convert.ToHexString(await File.ReadAllBytesAsync(kept[0])));
     }
 
     [Test]

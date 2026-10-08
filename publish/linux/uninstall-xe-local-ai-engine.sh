@@ -2,8 +2,9 @@
 # uninstall-xe-local-ai-engine.sh — remove XE Local AI Engine (Linux).
 #
 # What this does, in order:
-#   1. Stops any running XE Local AI Engine process and the llama-server / sd-server
-#      child runtimes THIS app spawned (matched strictly by executable path under the
+#   1. Stops the desktop shell first, then any running XE Local AI Engine process and the
+#      llama-server / sd-server / whisper-server child runtimes and trainer Python
+#      interpreter THIS app spawned (matched strictly by executable path under the
 #      app's own per-user data directory — an unrelated llama-server/Ollama is never
 #      touched, mirroring the app's own StaleProcessReaper).
 #   2. If a Velopack-managed install is detected, notes that the OS/Velopack uninstall
@@ -32,6 +33,7 @@ set -eu
 
 APP_NAME="XE Local AI Engine"
 BINARY_NAME="XE-Local-AI-Engine.Client"   # running-process / binary name (NOT the data dir)
+SHELL_BINARY_NAME="XE-Local-AI-Engine.Desktop"  # the native desktop shell
 DATA_DIR_NAME="XE-Local-AI-Engine"        # per-user data directory name (no ".Client")
 
 ASSUME_YES=0
@@ -77,10 +79,13 @@ echo
 
 # 1. Stop running processes
 
+# The process table root; overridable only so the contract test can point it at a fake tree.
+PROC_ROOT="${XE_UNINSTALL_PROC_ROOT:-/proc}"
+
 # Resolve a pid's executable path, or empty on failure.
 exe_path() {
-  # /proc/<pid>/exe is a symlink to the running binary.
-  readlink "/proc/$1/exe" 2>/dev/null || true
+  # <proc>/<pid>/exe is a symlink to the running binary.
+  readlink "${PROC_ROOT}/$1/exe" 2>/dev/null || true
 }
 
 # True when path "$1" is the dir "$2" or lives strictly under it (trailing-separator
@@ -92,19 +97,38 @@ is_under_dir() {
   esac
 }
 
-# Collect target PIDs: the app process (exe basename == BINARY_NAME) plus any
-# llama-server / sd-server whose exe lives under our data dir.
+# True when pid "$1" has file "$2" open. The shell and the app are matched by the lease file they hold in
+# THIS data dir, never by name alone: a same-named host of another data dir (a second checkout, another
+# install) holds its own lease and is left running. A pid whose fd table is unreadable is not ours.
+holds_file() {
+  for fd in "${PROC_ROOT}/$1/fd/"*; do
+    [ "$(readlink "${fd}" 2>/dev/null || true)" = "$2" ] && return 0
+  done
+  return 1
+}
+
+# Collect target PIDs for one stop phase:
+#   shell — the desktop shell holding this data dir's desktop-shell.lock (it relaunches/re-owns the engine);
+#   app   — the app process holding this data dir's instance.lock, plus any llama-server / sd-server /
+#           whisper-server or trainer Python interpreter whose exe lives under our data dir.
 collect_pids() {
-  [ -d /proc ] || return 0
-  for pid_dir in /proc/[0-9]*; do
-    pid="${pid_dir#/proc/}"
+  [ -d "${PROC_ROOT}" ] || return 0
+  for pid_dir in "${PROC_ROOT}"/[0-9]*; do
+    [ -e "${pid_dir}" ] || continue
+    pid="${pid_dir#"${PROC_ROOT}"/}"
     exe="$(exe_path "${pid}")"
     [ -n "${exe}" ] || continue
     base="${exe##*/}"
-    case "${base}" in
-      "${BINARY_NAME}")
-        echo "${pid} ${exe}" ;;
-      llama-server|sd-server|llama-server.*|sd-server.*)
+    case "$1:${base}" in
+      shell:"${SHELL_BINARY_NAME}")
+        if holds_file "${pid}" "${DATA_DIR}/desktop-shell.lock"; then
+          echo "${pid} ${exe}"
+        fi ;;
+      app:"${BINARY_NAME}")
+        if holds_file "${pid}" "${DATA_DIR}/instance.lock"; then
+          echo "${pid} ${exe}"
+        fi ;;
+      app:llama-server|app:sd-server|app:whisper-server|app:llama-server.*|app:sd-server.*|app:whisper-server.*|app:python|app:python3*)
         if is_under_dir "${exe}" "${DATA_DIR}"; then
           echo "${pid} ${exe}"
         fi ;;
@@ -112,7 +136,10 @@ collect_pids() {
   done
 }
 
-PIDS_INFO="$(collect_pids || true)"
+# Stop the shell first: a live shell would restart the engine while it is being stopped.
+PIDS_INFO="$(collect_pids shell || true)
+$(collect_pids app || true)"
+PIDS_INFO="$(printf '%s\n' "${PIDS_INFO}" | sed '/^$/d')"
 
 if [ -n "${PIDS_INFO}" ]; then
   echo ">> Running ${APP_NAME} processes to stop:"
@@ -120,7 +147,8 @@ if [ -n "${PIDS_INFO}" ]; then
     [ -n "${line}" ] && echo "     pid ${line}"
   done
   if [ "${DRY_RUN}" -eq 0 ]; then
-    # Graceful first (SIGTERM → the host reaps its own child runtimes), then force.
+    # Graceful first (SIGTERM → the host reaps its own child runtimes), then force. The list is
+    # already in stop order, shell first.
     PIDS="$(echo "${PIDS_INFO}" | awk '{print $1}')"
     for pid in ${PIDS}; do kill -TERM "${pid}" 2>/dev/null || true; done
     # Wait up to ~5s for graceful exit.

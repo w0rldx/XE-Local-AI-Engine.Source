@@ -56,7 +56,7 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     private readonly HttpClient _offlineRuntimeHttpClient = new(new OfflineRuntimeHandler(), disposeHandler: true);
 
     // Process-wide: see the comment in EnsureApp.
-    private static readonly SemaphoreSlim HostStartupLock = new(initialCount: 1, maxCount: 1);
+    internal static readonly SemaphoreSlim HostStartupLock = new(initialCount: 1, maxCount: 1);
 
     private const string NodeSqliteConnectionStringKey = "ConnectionStrings:node-sqlite";
 

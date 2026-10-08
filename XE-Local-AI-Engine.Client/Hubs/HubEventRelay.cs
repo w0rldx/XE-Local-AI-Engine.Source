@@ -82,7 +82,15 @@ internal abstract class HubEventRelay<TEvent, THub> : BackgroundService
         {
             await foreach (var published in _channel.Reader.ReadAllAsync(stoppingToken))
             {
-                await _hubContext.Clients.Group(_group(published)).SendAsync(_method, published, stoppingToken);
+                try
+                {
+                    await _hubContext.Clients.Group(_group(published)).SendAsync(_method, published, stoppingToken);
+                }
+                catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
+                {
+                    // One failed send must not end the relay; the sequence gap makes the client replay the lost copy.
+                    _logger.LogWarning("Could not relay a {Method} live event ({ErrorClass}); the client must replay.", _method, exception.GetType().Name);
+                }
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

@@ -1,8 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using System.Data.Common;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
@@ -53,17 +55,102 @@ public sealed class NodeDbBackupServiceTests : IDisposable
 
         await using var serviceProvider = BuildServiceProvider(databasePath);
 
-        // Apply every migration first so the node database is fully up to date — nothing pending, so nothing to back up.
+        // Apply every migration of both contexts first so the node database is fully up to date — nothing pending, so nothing to back up.
         await using (var scope = serviceProvider.CreateAsyncScope())
         {
-            var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-            await dbContext.Database.MigrateAsync();
+            await scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.MigrateAsync();
+            await scope.ServiceProvider.GetRequiredService<NodeIdentityDbContext>().Database.MigrateAsync();
         }
 
         var backupService = serviceProvider.GetRequiredService<INodeDbBackupService>();
         await backupService.BackupBeforeMigrationAsync();
 
         AssertEx.Empty(ListSnapshots(), "No snapshot should be written when there are no pending migrations.");
+    }
+
+    [Test]
+    public async Task BackupBeforeMigrationAsync_WhenOnlyIdentityMigrationsPending_CreatesSnapshot()
+    {
+        var databasePath = GetDatabasePath("identity-pending.sqlite");
+
+        await using var serviceProvider = BuildServiceProvider(databasePath);
+        await using (var scope = serviceProvider.CreateAsyncScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.MigrateAsync();
+        }
+
+        await serviceProvider.GetRequiredService<INodeDbBackupService>().BackupBeforeMigrationAsync();
+
+        AssertEx.Equal(1, ListSnapshots().Length, "Identity migrations share the SQLite file, so they must be snapshotted too.");
+    }
+
+    [Test]
+    public async Task BackupBeforeMigrationAsync_SweepsKilledSnapshotLeftoversWithoutCountingThem()
+    {
+        var databasePath = GetDatabasePath("leftovers.sqlite");
+        await SeedRawDataAsync(databasePath);
+
+        var backupDirectory = Path.Combine(_rootPath, "backups");
+        Directory.CreateDirectory(backupDirectory);
+        foreach (var stamp in new[] { "20250102T000000000Z", "20250103T000000000Z", "20250104T000000000Z" })
+        {
+            await File.WriteAllTextAsync(Path.Combine(backupDirectory, $"{BackupFilePrefix}{stamp}{BackupFileExtension}"), "good");
+        }
+
+        // What a killed or disk-full VACUUM INTO leaves behind: both sort newer than every good snapshot.
+        var emptySnapshot = Path.Combine(backupDirectory, $"{BackupFilePrefix}20270101T000000000Z{BackupFileExtension}");
+        await File.WriteAllBytesAsync(emptySnapshot, []);
+        var partialTemp = Path.Combine(backupDirectory, $"{BackupFilePrefix}20270102T000000000Z{BackupFileExtension}.tmp");
+        await File.WriteAllTextAsync(partialTemp, "partial");
+
+        var clock = new FixedTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        await using var serviceProvider = BuildServiceProvider(databasePath, retainCount: 3, timeProvider: clock);
+        var backupService = serviceProvider.GetRequiredService<INodeDbBackupService>();
+
+        await backupService.BackupBeforeMigrationAsync();
+
+        var remaining = Directory.GetFiles(backupDirectory).Select(Path.GetFileName).OrderDescending(StringComparer.Ordinal).ToArray();
+        AssertEx.Equal(3, remaining.Length, "Only complete snapshots remain after the prune.");
+        AssertEx.Equal($"{BackupFilePrefix}20260101T000000000Z{BackupFileExtension}", remaining[0], "The fresh snapshot is kept under its final name.");
+        AssertEx.Equal($"{BackupFilePrefix}20250103T000000000Z{BackupFileExtension}", remaining[2], "A leftover must not evict a good snapshot.");
+        AssertEx.Equal(Path.Combine(backupDirectory, remaining[0]!), backupService.FindNewestSnapshot(), "The newest complete snapshot is the one a restore names.");
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task BackupBeforeMigrationAsync_WhenBudgetRunsOut_SkipsAndLeavesNoFile(bool afterTheCopy)
+    {
+        var databasePath = GetDatabasePath(afterTheCopy ? "budget-after.sqlite" : "budget-before.sqlite");
+        await SeedRawDataAsync(databasePath);
+
+        // The budget timer fires at a point the test picks: as the snapshot connection opens (before VACUUM INTO runs) or as it
+        // closes (the copy is complete and only the rename is left). Both must end with no snapshot and no temporary file.
+        var clock = new TriggerableTimeProvider();
+        var trigger = new BudgetTrigger(clock, afterTheCopy);
+        await using var serviceProvider = BuildServiceProvider(databasePath, timeProvider: clock, chatInterceptor: trigger);
+
+        await serviceProvider.GetRequiredService<INodeDbBackupService>().BackupBeforeMigrationAsync();
+
+        AssertEx.Equal(expected: 1, clock.FiredCount, "The budget timer must have been armed and fired inside the snapshot.");
+        var backupDirectory = Path.Combine(_rootPath, "backups");
+        AssertEx.Empty(Directory.GetFiles(backupDirectory), "A snapshot over its budget is skipped and leaves no file.");
+    }
+
+    [Test]
+    public async Task BackupBeforeMigrationAsync_WhenFreeSpaceTooLow_SkipsSnapshot()
+    {
+        var databasePath = GetDatabasePath("low-space.sqlite");
+        await SeedRawDataAsync(databasePath);
+
+        // One free byte: far below the database size, so the free-space guard must skip instead of half-writing a copy.
+        var freeSpace = Substitute.For<IFreeSpaceProbe>();
+        freeSpace.GetAvailableFreeBytes(Arg.Any<string>()).Returns(1L);
+        await using var serviceProvider = BuildServiceProvider(databasePath, freeSpaceProbe: freeSpace);
+
+        await serviceProvider.GetRequiredService<INodeDbBackupService>().BackupBeforeMigrationAsync();
+
+        AssertEx.Empty(Directory.GetFiles(Path.Combine(_rootPath, "backups")), "Too little free space skips the snapshot instead of filling the disk.");
     }
 
     [Test]
@@ -126,7 +213,10 @@ public sealed class NodeDbBackupServiceTests : IDisposable
     private ServiceProvider BuildServiceProvider(string databasePath,
         int retainCount = 3,
         string? backupDirectoryOverride = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        Action<NodeDbBackupOptions>? configure = null,
+        IFreeSpaceProbe? freeSpaceProbe = null,
+        IInterceptor? chatInterceptor = null)
     {
         var connectionString = $"Data Source={databasePath}";
         var configuration = new ConfigurationBuilder()
@@ -142,13 +232,27 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
         services.AddSingleton<INodeDataDirectory>(new FixedNodeDataDirectory(_rootPath));
         services.AddSingleton(timeProvider ?? TimeProvider.System);
-        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite(connectionString));
+        services.AddDbContext<NodeChatDbContext>(options =>
+        {
+            options.UseSqlite(connectionString);
+            if (chatInterceptor is not null)
+            {
+                options.AddInterceptors(chatInterceptor);
+            }
+        });
+        services.AddDbContext<NodeIdentityDbContext>(options => options.UseSqlite(connectionString,
+            static sqlite => sqlite.MigrationsHistoryTable(NodeIdentityDbContext.IdentityMigrationsHistoryTable)));
         services.AddOptions<NodeDbBackupOptions>()
-                .Configure(options => options.BackupDirectory = backupDirectoryOverride);
+                .Configure(options =>
+                {
+                    options.BackupDirectory = backupDirectoryOverride;
+                    configure?.Invoke(options);
+                });
         // The retain count is a node setting now, read per backup.
         var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
         runtimeSettings.GetNodeDbBackupRetainCountAsync(Arg.Any<CancellationToken>()).Returns(retainCount);
         services.AddSingleton(runtimeSettings);
+        services.AddSingleton(freeSpaceProbe ?? new DriveInfoFreeSpaceProbe());
         services.AddSingleton<INodeDbBackupService, NodeDbBackupService>();
 
         return services.BuildServiceProvider(true);
@@ -216,6 +320,103 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         public override DateTimeOffset GetUtcNow()
         {
             return _now;
+        }
+    }
+
+    /// <summary>A fixed clock whose timers fire only when <see cref="FireAll" /> is called, so the snapshot budget runs out on cue.</summary>
+    private sealed class TriggerableTimeProvider : TimeProvider
+    {
+        private readonly List<TriggerableTimer> _timers = [];
+
+        public int FiredCount { get; private set; }
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            return new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        }
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new TriggerableTimer(callback, state);
+            _timers.Add(timer);
+            return timer;
+        }
+
+        public void FireAll()
+        {
+            foreach (var timer in _timers.Where(static timer => !timer.IsDisposed).ToList())
+            {
+                FiredCount++;
+                timer.Fire();
+            }
+        }
+
+        private sealed class TriggerableTimer : ITimer
+        {
+            private readonly TimerCallback _callback;
+            private readonly object? _state;
+
+            public TriggerableTimer(TimerCallback callback, object? state)
+            {
+                _callback = callback;
+                _state = state;
+            }
+
+            public bool IsDisposed { get; private set; }
+
+            public void Fire()
+            {
+                _callback(_state);
+            }
+
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+            {
+                return true;
+            }
+
+            public void Dispose()
+            {
+                IsDisposed = true;
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                Dispose();
+                return ValueTask.CompletedTask;
+            }
+        }
+    }
+
+    /// <summary>Runs the budget out as a node-chat connection opens (before the copy) or closes (after it), the only connections the budget covers.</summary>
+    private sealed class BudgetTrigger : DbConnectionInterceptor
+    {
+        private readonly TriggerableTimeProvider _clock;
+        private readonly bool _afterTheCopy;
+
+        public BudgetTrigger(TriggerableTimeProvider clock, bool afterTheCopy)
+        {
+            _clock = clock;
+            _afterTheCopy = afterTheCopy;
+        }
+
+        public override Task ConnectionOpenedAsync(DbConnection connection, ConnectionEndEventData eventData, CancellationToken cancellationToken = default)
+        {
+            if (!_afterTheCopy)
+            {
+                _clock.FireAll();
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public override ValueTask<InterceptionResult> ConnectionClosingAsync(DbConnection connection, ConnectionEventData eventData, InterceptionResult result)
+        {
+            if (_afterTheCopy)
+            {
+                _clock.FireAll();
+            }
+
+            return ValueTask.FromResult(result);
         }
     }
 }

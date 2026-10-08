@@ -18,17 +18,16 @@ function readPersistedState(): PersistedShape {
 		return {};
 	}
 
-	const persistedStateRaw = localStorage.getItem(STORAGE_KEY);
-
-	if (!persistedStateRaw) {
-		return {};
-	}
-
 	try {
+		// Inside the try: a browser that blocks site data throws on access, and this runs while the Layout chunk evaluates.
+		const persistedStateRaw = localStorage.getItem(STORAGE_KEY);
+		if (!persistedStateRaw) {
+			return {};
+		}
 		const parsed = JSON.parse(persistedStateRaw) as { state?: PersistedShape };
 		return parsed.state ?? {};
 	} catch {
-		// Ignore malformed persisted state and use defaults.
+		// Ignore blocked storage or malformed persisted state and use defaults.
 		return {};
 	}
 }

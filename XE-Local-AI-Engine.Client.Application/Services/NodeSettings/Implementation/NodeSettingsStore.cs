@@ -87,8 +87,9 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
                 _logger.LogWarning(exception, "Node settings could not be deserialized. Falling back to defaults.");
                 return new StoredNodeSettings();
             }
-            catch (IOException exception)
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
+                // A permission fault (a root-owned file) is as unreadable as an IO one and must not crash startup.
                 _logger.LogWarning(exception, "Node settings could not be read. Falling back to defaults.");
                 return new StoredNodeSettings();
             }
@@ -183,7 +184,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             _logger.LogWarning(exception, "Node settings could not be deserialized.");
             return null;
         }
-        catch (IOException exception)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             _logger.LogWarning(exception, "Node settings could not be read.");
             return null;

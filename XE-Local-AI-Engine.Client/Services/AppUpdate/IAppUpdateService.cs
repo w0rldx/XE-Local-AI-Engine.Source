@@ -27,12 +27,12 @@ public interface IAppUpdateService
     /// </summary>
     /// <remarks>
     ///     No-op when not desktop, not configured, or no update is available, including when a live re-check finds
-    ///     nothing. The endpoint completes a successful response before it stops the host, so the browser can enter
-    ///     restart polling reliably.
+    ///     nothing. Without <paramref name="force" />, running work the restart would stop refuses the apply and is
+    ///     listed in the result. The endpoint completes a successful response before it stops the host.
     /// </remarks>
-    /// <returns><see langword="true" /> when an apply was actually initiated; <see langword="false" /> when nothing was applied.</returns>
+    /// <param name="force">True to apply even while training, downloads, builds or invocations are running.</param>
     /// <exception cref="AppUpdateException">The apply failed (sanitized message — no path or feed URL).</exception>
-    Task<bool> ApplyAsync(CancellationToken ct);
+    Task<AppUpdateApplyResult> ApplyAsync(bool force, CancellationToken ct);
 
     /// <summary>The stored snapshot with the operator's CURRENT channel choice re-stamped. No network call.</summary>
     /// <remarks>

@@ -62,7 +62,58 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
             "The persisted failure reason must never contain document text.");
     }
 
-    private static KnowledgeIngestionService CreateService(NodeChatDbContext context)
+    [Test]
+    public async Task IngestionRerun_FailingEmbedder_DoesNotFlipIndexedToFailed()
+    {
+        // A duplicate run of an already indexed document used to drop it out of search and, when the run failed, mark it Failed.
+        var databasePath = GetDatabasePath("ingestion-indexed-rerun.sqlite");
+        var documentId = Guid.NewGuid();
+        await MigrateAsync(databasePath);
+        await SeedPendingDocumentAsync(databasePath, documentId, KnowledgeDocumentStatus.Indexed);
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await CreateService(context).RunAsync(documentId, CancellationToken.None);
+        }
+
+        var (status, failureReason) = await ReadStatusAsync(databasePath, documentId);
+        AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), status);
+        AssertEx.Null(failureReason);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenExtractionOutlivesTheDocumentBudget_MarksTheDocumentFailedAndReturns()
+    {
+        // The extractor never completes and ignores its token, like a looping parser: only the budget can end the run.
+        var databasePath = GetDatabasePath("ingestion-budget.sqlite");
+        var documentId = Guid.NewGuid();
+        await MigrateAsync(databasePath);
+        await SeedPendingDocumentAsync(databasePath, documentId);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var never = new TaskCompletionSource<DocumentStructuredExtractionResult>();
+        var extractor = Substitute.For<IDocumentTextExtractor>();
+        extractor.ExtractStructuredAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                 .Returns(_ =>
+                 {
+                     entered.TrySetResult();
+                     return never.Task;
+                 });
+        var clock = new ManualDeadlineTimeProvider();
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            var run = CreateService(context, extractor, clock).RunAsync(documentId, CancellationToken.None);
+            await entered.Task;
+            clock.FireDeadlines();
+            await run.WaitAsync(TimeSpan.FromSeconds(30));
+        }
+
+        var (status, failureReason) = await ReadStatusAsync(databasePath, documentId);
+        AssertEx.Equal(KnowledgeDocumentStatus.Failed.ToString(), status);
+        AssertEx.True(AssertEx.NotNull(failureReason).Contains("took too long", StringComparison.Ordinal), failureReason);
+    }
+
+    private static KnowledgeIngestionService CreateService(NodeChatDbContext context, IDocumentTextExtractor? extractor = null, TimeProvider? timeProvider = null)
     {
         var options = Options.Create(new KnowledgeBaseOptions());
 
@@ -75,14 +126,17 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
                      3
                  }));
 
-        var extractor = Substitute.For<IDocumentTextExtractor>();
-        extractor.ExtractStructuredAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult(new DocumentStructuredExtractionResult
-                 {
-                     Status = DocumentExtractionStatus.Extracted,
-                     Document = BuildExtractedDocument(),
-                     Error = null
-                 }));
+        if (extractor is null)
+        {
+            extractor = Substitute.For<IDocumentTextExtractor>();
+            extractor.ExtractStructuredAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult(new DocumentStructuredExtractionResult
+                     {
+                         Status = DocumentExtractionStatus.Extracted,
+                         Document = BuildExtractedDocument(),
+                         Error = null
+                     }));
+        }
 
         var embedder = new KnowledgeChunkEmbedder(new ThrowingProviderResolver(),
             new EmbeddingModelResolver(options),
@@ -96,8 +150,9 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
             embedder,
             Substitute.For<IKnowledgeIndexWriter>(),
             Substitute.For<IKnowledgeIndexingNotifier>(),
-            TimeProvider.System,
-            NullLogger<KnowledgeIngestionService>.Instance);
+            timeProvider ?? TimeProvider.System,
+            NullLogger<KnowledgeIngestionService>.Instance,
+            options: options);
     }
 
     private static IngestionDocument BuildExtractedDocument()
@@ -124,7 +179,7 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
         await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
     }
 
-    private static async Task SeedPendingDocumentAsync(string databasePath, Guid documentId)
+    private static async Task SeedPendingDocumentAsync(string databasePath, Guid documentId, KnowledgeDocumentStatus status = KnowledgeDocumentStatus.Pending)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
@@ -132,9 +187,10 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
         command.CommandText =
             """
             INSERT INTO knowledge_documents (document_id, original_file_name, mime_type, extension, size_bytes, content_hash, storage_path, status, chunk_count, embedding_model, created_at_utc, updated_at_utc)
-            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, 'Pending', 0, 'nomic-embed-text', 1, 1);
+            VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, $status, 0, 'nomic-embed-text', 1, 1);
             """;
         command.Parameters.AddWithValue("$id", documentId);
+        command.Parameters.AddWithValue("$status", status.ToString());
         command.Parameters.AddWithValue("$name", new byte[]
         {
             1,
@@ -163,6 +219,49 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         return Path.Combine(_rootPath, fileName);
+    }
+
+    /// <summary>Hands out timers that fire only when the test says so, so a deadline elapses without waiting for it.</summary>
+    private sealed class ManualDeadlineTimeProvider : TimeProvider
+    {
+        private readonly Lock _gate = new();
+        private readonly List<Action> _timers = [];
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            lock (_gate)
+            {
+                _timers.Add(() => callback(state));
+            }
+
+            return new InertTimer();
+        }
+
+        public void FireDeadlines()
+        {
+            List<Action> timers;
+            lock (_gate)
+            {
+                timers = [.. _timers];
+            }
+
+            foreach (var fire in timers)
+            {
+                fire();
+            }
+        }
+
+        private sealed class InertTimer : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+
+            public void Dispose()
+            {
+                // Nothing scheduled to stop.
+            }
+
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 
     /// <summary>A provider resolver that always fails to resolve, standing in for "no embedding model available".</summary>

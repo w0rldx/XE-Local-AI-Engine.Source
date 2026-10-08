@@ -256,6 +256,38 @@ public sealed class NodeChatHubTests
     }
 
     [Test]
+    public async Task SendMessage_WhenTheOperatorRaisesTheCapAboveTheOldTransportCeiling_StillRejectsLegibly()
+    {
+        // 700 KB passes the validator. With a fixed 512 KB transport ceiling the paste tripped SignalR's frame-size error
+        // first, which closes the whole connection; the ceiling now follows the cap, so the app-level refusal wins.
+        var recorder = new RecordingNodeChatStreamService();
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<INodeChatStreamService>();
+                services.AddSingleton<INodeChatStreamService>(recorder);
+                services.Configure<SecurityOptions>(options => options.MaxMessageSizeKb = 700);
+            }
+        };
+        await using var connection = CreateHubConnection(factory);
+        await connection.StartAsync();
+
+        var exception = await AssertEx.ThrowsAsync<HubException>(async () =>
+        {
+            await foreach (var _ in connection.StreamAsync<ChatStreamEvent>("SendMessage",
+                               new NodeChatStreamRequest(Guid.NewGuid(), new string(c: 'a', count: 701 * 1024))))
+            {
+                // The stream must fault before it yields anything.
+            }
+        });
+
+        AssertEx.Contains(exception.Message, "limit 700 KB");
+        AssertEx.Equal(HubConnectionState.Connected, connection.State, "the refusal ends one stream, not the connection.");
+        AssertEx.False(recorder.Invoked);
+    }
+
+    [Test]
     public async Task SendMessage_WhenContentIsExactlyAtTheCap_IsAccepted()
     {
         var recorder = new RecordingNodeChatStreamService();
@@ -278,6 +310,34 @@ public sealed class NodeChatHubTests
         }
 
         AssertEx.True(recorder.Invoked, "a message exactly at the cap must reach the stream service");
+    }
+
+    [Test]
+    public async Task SendMessage_AtARaisedCapMadeOfEscapedCharacters_StillFitsTheTransport()
+    {
+        // Every backslash doubles on the wire, so a paste exactly at a 700 KB cap is a ~1.4 MB frame: the derived ceiling must
+        // carry that escaping headroom, or the transport closes the connection on a message the cap itself allows.
+        var recorder = new RecordingNodeChatStreamService();
+        await using var factory = new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<INodeChatStreamService>();
+                services.AddSingleton<INodeChatStreamService>(recorder);
+                services.Configure<SecurityOptions>(options => options.MaxMessageSizeKb = 700);
+            }
+        };
+        await using var connection = CreateHubConnection(factory);
+        await connection.StartAsync();
+
+        await foreach (var _ in connection.StreamAsync<ChatStreamEvent>("SendMessage",
+                           new NodeChatStreamRequest(Guid.NewGuid(), new string(c: '\\', count: 700 * 1024))))
+        {
+            // Drained; the assertion below is that the send reached the service at all.
+        }
+
+        AssertEx.True(recorder.Invoked, "a fully escaped message exactly at the cap must reach the stream service");
+        AssertEx.True(global::XE_Local_AI_Engine.Client.ConfigureServices.HubReceiveCeilingBytes(700) >= 2L * 700 * 1024, "the ceiling covers every content byte escaping to two.");
     }
 
     private static HubConnection CreateHubConnection(TestServerWebAppFactory factory)

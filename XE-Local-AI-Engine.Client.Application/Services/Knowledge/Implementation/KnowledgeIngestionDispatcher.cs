@@ -53,6 +53,20 @@ public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
 
     public ValueTask<KnowledgeIngestionEnqueueResult> EnqueueAsync(Guid documentId, CancellationToken cancellationToken)
     {
+        return AdmitAsync(documentId, coalesce: true, cancellationToken);
+    }
+
+    /// <summary>
+    ///     Re-admits a stranded Pending document, skipping one already queued or in flight instead of scheduling a
+    ///     follow-up run: the row is Pending only because that run has not started yet, not because it changed.
+    /// </summary>
+    internal ValueTask<KnowledgeIngestionEnqueueResult> EnqueueStrandedAsync(Guid documentId, CancellationToken cancellationToken)
+    {
+        return AdmitAsync(documentId, coalesce: false, cancellationToken);
+    }
+
+    private ValueTask<KnowledgeIngestionEnqueueResult> AdmitAsync(Guid documentId, bool coalesce, CancellationToken cancellationToken)
+    {
         if (documentId == Guid.Empty)
         {
             throw new ArgumentException("A document id is required to enqueue ingestion.", nameof(documentId));
@@ -66,7 +80,7 @@ public sealed class KnowledgeIngestionDispatcher : IKnowledgeIngestionDispatcher
             // reuses the id, so permanently collapsing that admission would leave the newly Pending revision unindexed.
             if (_admitted.TryGetValue(documentId, out var existing))
             {
-                existing.RequeueRequested = true;
+                existing.RequeueRequested |= coalesce;
                 return ValueTask.FromResult(KnowledgeIngestionEnqueueResult.Accepted);
             }
 

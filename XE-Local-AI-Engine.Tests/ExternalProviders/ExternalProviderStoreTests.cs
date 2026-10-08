@@ -448,10 +448,13 @@ public sealed class ExternalProviderStoreTests : IDisposable
 
         var config = await store.LoadAsync();
 
-        // A node whose external store will not decrypt has no connections, not unknown ones — and the unusable file is
-        // removed so the next save is not stuck failing its read-modify-write forever.
+        // A node whose external store will not decrypt has no connections, not unknown ones; the file is moved aside, not
+        // deleted, so the next save is not stuck failing forever and restoring the key ring can still recover it.
         AssertEx.Empty(config.Connections);
         AssertEx.False(File.Exists(StorePath));
+        var kept = Directory.GetFiles(Path.GetDirectoryName(StorePath)!, Path.GetFileName(StorePath) + ".unreadable-*");
+        AssertEx.Equal(expected: 1, kept.Length);
+        AssertEx.Equal("not a protected payload", await File.ReadAllTextAsync(kept[0]));
     }
 
     [Test]

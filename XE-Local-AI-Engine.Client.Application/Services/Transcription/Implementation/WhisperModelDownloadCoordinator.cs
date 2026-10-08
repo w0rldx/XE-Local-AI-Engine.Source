@@ -174,9 +174,10 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
             SetTerminal(entry.Id, WhisperModelDownloadPhase.Failed, exception.Message);
             _logger.LogWarning("Transcription model download failed for {ModelId}: insufficient disk space.", entry.Id);
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or TimeoutException or InvalidOperationException or ArgumentException)
+        catch (Exception exception)
         {
-            // Never surface a raw transport or argument message: it can carry a URL or a path.
+            // Every other fault (an UnauthorizedAccessException on an unwritable models dir included) must still end
+            // the status, or the UI spins until restart. Never surface a raw message: it can carry a URL or a path.
             SetTerminal(entry.Id, WhisperModelDownloadPhase.Failed, "Download failed.");
             _logger.LogWarning(exception, "Transcription model download failed for {ModelId}.", entry.Id);
         }

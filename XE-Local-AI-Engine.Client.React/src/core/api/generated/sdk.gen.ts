@@ -1410,6 +1410,7 @@ import {
 	zApplyAgentHomePatchBody,
 	zApplyAgentHomePatchPath,
 	zApplyAgentHomePatchResponse,
+	zApplyAppUpdateBody,
 	zApplyAppUpdateResponse,
 	zApplyDevelopmentPatchBody,
 	zApplyDevelopmentPatchPath,
@@ -3443,13 +3444,13 @@ export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 	});
 
 export const applyAppUpdate = <ThrowOnError extends boolean = false>(
-	options?: Options<ApplyAppUpdateData, ThrowOnError>,
+	options: Options<ApplyAppUpdateData, ThrowOnError>,
 ): RequestResult<ApplyAppUpdateResponses, ApplyAppUpdateErrors, ThrowOnError> =>
-	(options?.client ?? client).post<ApplyAppUpdateResponses, ApplyAppUpdateErrors, ThrowOnError>({
+	(options.client ?? client).post<ApplyAppUpdateResponses, ApplyAppUpdateErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
 				.object({
-					body: z.never().optional(),
+					body: zApplyAppUpdateBody,
 					path: z.never().optional(),
 					query: z.never().optional(),
 				})
@@ -3470,6 +3471,10 @@ export const applyAppUpdate = <ThrowOnError extends boolean = false>(
 		],
 		url: "/api/local/v1/app-update/apply",
 		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const setAppUpdateChannel = <ThrowOnError extends boolean = false>(

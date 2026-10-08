@@ -47,6 +47,44 @@ public sealed class ImageModelRegistryTests
         AssertEx.Empty(await registry.ListAsync(CancellationToken.None));
     }
 
+    [Test]
+    public async Task ImageModelRegistry_UpsertOverAnUnreadableManifest_RefusesAndLeavesItUntouched()
+    {
+        using var dir = new TempDir();
+        using var registry = new ImageModelRegistry(Options(dir.Path), NullLogger<ImageModelRegistry>.Instance);
+        await registry.UpsertAsync(WriteSinglePartModel(dir.Path, "a"), CancellationToken.None);
+        var manifestPath = Path.Combine(dir.Path, ImageModelRegistry.ManifestFileName);
+        var corrupt = (await File.ReadAllTextAsync(manifestPath))[..20];
+        await File.WriteAllTextAsync(manifestPath, corrupt);
+
+        await AssertEx.ThrowsAsync<IOException>(() =>
+            registry.UpsertAsync(WriteSinglePartModel(dir.Path, "c"), CancellationToken.None));
+
+        // Writing the tolerant empty read back would have dropped model "a" for good; the damaged file stays for repair.
+        AssertEx.Equal(corrupt, await File.ReadAllTextAsync(manifestPath));
+        AssertEx.Empty(await registry.ListAsync(CancellationToken.None));
+    }
+
+    [Test]
+    public async Task ImageModelRegistry_UpsertWhileAnotherModelsPartIsMissing_KeepsThatModelRegistered()
+    {
+        using var dir = new TempDir();
+        using var registry = new ImageModelRegistry(Options(dir.Path), NullLogger<ImageModelRegistry>.Instance);
+        var a = WriteSinglePartModel(dir.Path, "a");
+        await registry.UpsertAsync(a, CancellationToken.None);
+        var aBytes = await File.ReadAllBytesAsync(a.Parts[0].LocalPath);
+
+        // The drive holding "a" is briefly unavailable while "b" downloads.
+        File.Delete(a.Parts[0].LocalPath);
+        await registry.UpsertAsync(WriteSinglePartModel(dir.Path, "b"), CancellationToken.None);
+        AssertEx.Null(await registry.FindAsync("a", CancellationToken.None), "The read view still hides an incomplete model.");
+
+        await File.WriteAllBytesAsync(a.Parts[0].LocalPath, aBytes);
+
+        AssertEx.NotNull(await registry.FindAsync("a", CancellationToken.None), "The write while its part was missing dropped model a.");
+        AssertEx.NotNull(await registry.FindAsync("b", CancellationToken.None));
+    }
+
     private static ImageModelRegistryEntry WriteFileSet(string root, params (string FileName, ImageModelPartRole Role)[] files)
     {
         var parts = new List<ImageModelPart>(files.Length);
@@ -74,6 +112,34 @@ public sealed class ImageModelRegistryTests
             Kind = ImageModelKind.Txt2Img,
             Parts = parts,
             SizeBytes = total,
+            SourceRevision = "main",
+            DownloadedAtUtc = DateTimeOffset.UtcNow
+        };
+    }
+
+    private static ImageModelRegistryEntry WriteSinglePartModel(string root, string modelName)
+    {
+        var fileName = modelName + ".gguf";
+        var localPath = Path.Combine(root, fileName);
+        File.WriteAllText(localPath, $"weights-of-{fileName}");
+        var size = new FileInfo(localPath).Length;
+        return new ImageModelRegistryEntry
+        {
+            ModelName = modelName,
+            RepoId = "test/" + modelName,
+            Family = ImageModelFamily.Flux,
+            Kind = ImageModelKind.Txt2Img,
+            Parts =
+            [
+                new ImageModelPart
+                {
+                    Role = ImageModelPartRole.Diffusion,
+                    FileName = fileName,
+                    LocalPath = localPath,
+                    SizeBytes = size
+                }
+            ],
+            SizeBytes = size,
             SourceRevision = "main",
             DownloadedAtUtc = DateTimeOffset.UtcNow
         };

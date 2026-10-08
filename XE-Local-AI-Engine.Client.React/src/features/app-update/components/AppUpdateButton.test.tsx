@@ -7,31 +7,21 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/app-update/queries/useAppUpdate", () => ({
-	noBodyOptions: {},
 	useAppUpdateStatus: vi.fn(),
 	useApplyAppUpdate: vi.fn(),
 	useProbeAppUpdateStatus: vi.fn(),
 }));
 
+import { ApiError } from "@/core/api/errors/ApiError";
+import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import { useApplyAppUpdate, useAppUpdateStatus, useProbeAppUpdateStatus } from "@/features/app-update/queries/useAppUpdate";
 import { AppUpdateButton } from "./AppUpdateButton";
-import { testMantineTheme } from "@/test/MantineTestRender";
+import { installJsdomEnvironmentMocks, testMantineTheme } from "@/test/MantineTestRender";
 
 describe("AppUpdateButton", () => {
 	beforeEach(() => {
-		Object.defineProperty(window, "matchMedia", {
-			writable: true,
-			value: vi.fn().mockImplementation((query: string) => ({
-				matches: false,
-				media: query,
-				onchange: null,
-				addListener: vi.fn(),
-				removeListener: vi.fn(),
-				addEventListener: vi.fn(),
-				removeEventListener: vi.fn(),
-				dispatchEvent: vi.fn(),
-			})),
-		});
+		// The busy confirm dialog is a Mantine modal, whose scroll area needs ResizeObserver.
+		installJsdomEnvironmentMocks();
 		vi.mocked(useAppUpdateStatus).mockReturnValue({
 			data: {
 				isDesktop: true,
@@ -64,6 +54,36 @@ describe("AppUpdateButton", () => {
 		await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce());
 		expect(screen.queryByText(/restarting/i)).toBeNull();
 		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
+	it("lists the running work a refused apply reports and re-sends with force only after the operator confirms", async () => {
+		const busyBody = {
+			busyItems: [
+				{ kind: "trainingRun", displayName: null },
+				{ kind: "modelDownload", displayName: "qwen3-8b.gguf" },
+			],
+			message: "Updating restarts XE and stops the work that is running now.",
+		} as unknown as ProblemDetails;
+		const mutateAsync = vi.fn().mockRejectedValueOnce(new ApiError(409, busyBody)).mockResolvedValueOnce({ applying: false });
+		vi.mocked(useApplyAppUpdate).mockReturnValue({ mutateAsync } as never);
+		render(
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<AppUpdateButton />
+			</MantineProvider>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: /update now/i }));
+
+		await waitFor(() => expect(screen.getByText("Model download: qwen3-8b.gguf")).toBeTruthy());
+		expect(screen.getByText("Training run")).toBeTruthy();
+		expect(mutateAsync).toHaveBeenCalledOnce();
+		expect(mutateAsync).toHaveBeenLastCalledWith({ body: { force: false } });
+
+		fireEvent.click(screen.getByTestId("app-update-busy-confirm"));
+
+		await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+		expect(mutateAsync).toHaveBeenLastCalledWith({ body: { force: true } });
+		await waitFor(() => expect(screen.queryByText("Model download: qwen3-8b.gguf")).toBeNull());
 	});
 
 	it("renders the up-to-date state while idle without removing the restart-state owner", () => {

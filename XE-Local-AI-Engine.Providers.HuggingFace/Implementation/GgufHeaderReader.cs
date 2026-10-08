@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
@@ -80,6 +81,11 @@ internal sealed class GgufHeaderReader
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        if (!HuggingFaceRepoId.IsValid(repoId))
+        {
+            // Header metadata is best-effort: a malformed id reads as "nothing known" and never reaches a token-carrying URL.
+            return GgufHeaderMetadata.Empty;
+        }
 
         var rev = string.IsNullOrWhiteSpace(revision) ? "main" : revision;
         var cacheKey = $"{repoId}::{fileName}::{rev}::{mode}";
@@ -98,7 +104,8 @@ internal sealed class GgufHeaderReader
 
     private async Task<GgufHeaderMetadata> FetchHeaderAsync(string repoId, string fileName, string rev, Func<ParsedHeader, bool> isSufficient, CancellationToken ct)
     {
-        var url = $"{_options.DownloadBaseUrl.TrimEnd('/')}/{repoId}/resolve/{rev}/{fileName}";
+        var encodedFile = string.Join(separator: '/', fileName.Split('/').Select(Uri.EscapeDataString));
+        var url = $"{_options.DownloadBaseUrl.TrimEnd('/')}/{HuggingFaceRepoId.EscapePath(repoId)}/resolve/{Uri.EscapeDataString(rev)}/{encodedFile}";
 
         var probe = _options.HeaderProbeBytes > 0 ? _options.HeaderProbeBytes : 4L * 1024 * 1024;
         const long hardCap = 64L * 1024 * 1024; // never range-request more than this to read a header.

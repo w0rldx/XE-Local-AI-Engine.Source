@@ -2,9 +2,12 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
 using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
@@ -160,6 +163,35 @@ public sealed class NodeChatEndpointTests
         AssertEx.False(deleted.Purged);
         AssertEx.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
         AssertEx.False(listed.Items.Any(item => item.ConversationId == conversation.ConversationId));
+    }
+
+    [Test]
+    public async Task ConversationDelete_WhenTheTitleNoLongerDecrypts_StillDeletesIt()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        var persistence = factory.Services.GetRequiredService<INodeChatPersistenceService>();
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Bit-rotted",
+            UserId = null,
+            CreatedAtUtc = 21
+        });
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+            AssertEx.Equal(expected: 1,
+                await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET title = zeroblob(48) WHERE conversation_id = {0};", conversation.ConversationId));
+        }
+
+        await AssertEx.ThrowsAsync<CryptographicException>(() => persistence.GetConversationAsync(conversation.ConversationId));
+
+        using var deleteRequest = CreateRequest(factory, HttpMethod.Delete, $"/api/local/v1/chat/conversations/{conversation.ConversationId}");
+        using var deleteResponse = await client.SendAsync(deleteRequest);
+
+        // The one row the user most needs to remove must not answer 500 because its title cannot be read.
+        AssertEx.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
+        AssertEx.Null(await persistence.GetConversationKindAsync(conversation.ConversationId), "The conversation must be gone after the delete.");
     }
 
     [Test]

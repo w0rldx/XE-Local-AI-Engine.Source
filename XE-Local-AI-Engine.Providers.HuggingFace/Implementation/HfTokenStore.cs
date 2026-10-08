@@ -63,9 +63,10 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
             }
             catch (CryptographicException exception)
             {
-                // Self-heal: an unreadable token (key-ring rotation/corruption) clears to anonymous, never crashes.
-                _logger.LogWarning(exception, "Hugging Face token decryption failed. Clearing the stored token.");
-                ClearTokenFileBestEffort();
+                // Self-heal: an unreadable token (key-ring rotation/corruption) reads as anonymous, never crashes, and is
+                // kept aside so restoring the key ring can still recover it.
+                _logger.LogWarning(exception, "Hugging Face token decryption failed. Moving the stored token aside.");
+                MoveTokenFileAsideBestEffort();
                 return null;
             }
             catch (IOException exception)
@@ -122,18 +123,16 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
         return token is not null;
     }
 
-    private void ClearTokenFileBestEffort()
+    private void MoveTokenFileAsideBestEffort()
     {
         try
         {
-            if (File.Exists(_tokenPath))
-            {
-                File.Delete(_tokenPath);
-            }
+            var movedTo = SecureFilePermissions.MoveAsideUnreadable(_tokenPath);
+            _logger.LogWarning("The unreadable Hugging Face token file was kept as {QuarantinePath}.", movedTo);
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Failed to delete the Hugging Face token file.");
+            _logger.LogWarning(exception, "Failed to move the unreadable Hugging Face token file aside.");
         }
     }
 }

@@ -5,6 +5,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
@@ -17,8 +18,10 @@ public sealed class DetachedInvocationReaperTests
     private static readonly DateTimeOffset Start = DateTimeOffset.UnixEpoch;
 
     [Test]
-    public async Task Reap_PastTheGrace_CancelsTheRunExactlyOnce()
+    public async Task Reap_WhileTheTurnStaysDetached_ReissuesTheCancelEveryTickButReportsItOnce()
     {
+        // A cancel sent while the turn still waits behind another one for the node's slot is a no-op in the runner.
+        // Re-issued every tick, it lands on the first tick after the turn takes the slot instead of never.
         var invocationId = Guid.NewGuid();
         var time = new ManualTimeProvider(Start);
         var tracker = new StubTracker([
@@ -29,13 +32,19 @@ public sealed class DetachedInvocationReaperTests
             }
         ]);
         var runner = Substitute.For<IInvocationRunner>();
-        using var reaper = CreateReaper(tracker, runner, time, graceSeconds: 300);
+        var logger = new RecordingLogger<DetachedInvocationReaper>();
+        using var reaper = new DetachedInvocationReaper(tracker,
+            runner,
+            StubNodeRuntimeSettings.Create().WithDetachedGraceSeconds(300).Build(),
+            time,
+            logger);
 
         time.Advance(TimeSpan.FromSeconds(301));
         await reaper.ReapAsync(CancellationToken.None);
         await reaper.ReapAsync(CancellationToken.None);
 
-        runner.Received(requiredNumberOfCalls: 1).CancelDetached(invocationId);
+        runner.Received(requiredNumberOfCalls: 2).CancelDetached(invocationId);
+        AssertEx.Equal(expected: 1, logger.Entries.Count(static entry => entry.Message.StartsWith("Cancelling invocation", StringComparison.Ordinal)));
     }
 
     [Test]
@@ -231,6 +240,10 @@ public sealed class DetachedInvocationReaperTests
         public IReadOnlyCollection<DetachedInvocation> ListDetached()
         {
             return Detached;
+        }
+
+        public void Forget(Guid invocationId)
+        {
         }
 
         private sealed class NoopDisposable : IDisposable

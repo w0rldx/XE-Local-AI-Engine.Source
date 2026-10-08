@@ -51,8 +51,8 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
             }
             catch (CryptographicException exception)
             {
-                _logger.LogWarning(exception, "Cloud credential decryption failed. Clearing stored cloud credentials.");
-                ClearCredentialsFileBestEffort();
+                _logger.LogWarning(exception, "Cloud credential decryption failed. Moving the stored cloud credentials aside.");
+                MoveCredentialsFileAsideBestEffort();
                 return null;
             }
             catch (IOException exception)
@@ -68,8 +68,8 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
             }
             catch (JsonException exception)
             {
-                _logger.LogWarning(exception, "Cloud credentials could not be deserialized. Clearing stored cloud credentials.");
-                ClearCredentialsFileBestEffort();
+                _logger.LogWarning(exception, "Cloud credentials could not be deserialized. Moving the stored cloud credentials aside.");
+                MoveCredentialsFileAsideBestEffort();
                 return null;
             }
         }
@@ -399,18 +399,16 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         }
     }
 
-    private void ClearCredentialsFileBestEffort()
+    private void MoveCredentialsFileAsideBestEffort()
     {
         try
         {
-            if (File.Exists(_credentialsPath))
-            {
-                File.Delete(_credentialsPath);
-            }
+            var movedTo = SecureFilePermissions.MoveAsideUnreadable(_credentialsPath);
+            _logger.LogWarning("The unreadable cloud credentials file was kept as {QuarantinePath}.", movedTo);
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Failed to delete cloud credentials file.");
+            _logger.LogWarning(exception, "Failed to move the unreadable cloud credentials file aside.");
         }
     }
 }

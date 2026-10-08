@@ -10,6 +10,7 @@ import ReactDOM from "react-dom/client";
 
 import { App } from "@/App";
 import { installCollectors, rootErrorHandlers } from "@/core/diagnostics/Diagnostics";
+import { installPreloadErrorReload } from "@/core/integrations/vite/PreloadErrorReload";
 import { installAutoCapture } from "@/features/diagnostics/BuildSnapshot";
 
 import { i18nReady } from "./i18n";
@@ -18,6 +19,7 @@ import { i18nReady } from "./i18n";
 // then subscribe auto-capture so a recorded error assembles + persists a snapshot.
 installCollectors();
 installAutoCapture();
+installPreloadErrorReload();
 if (import.meta.env.DEV) {
 	import("@/core/accessibility/DevelopmentAccessibilityAudit")
 		.then((accessibility) => accessibility.installDevelopmentAccessibilityAudit())

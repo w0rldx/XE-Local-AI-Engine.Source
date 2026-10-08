@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1.Validators;
 
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 
 /// <summary>Validates and normalizes the V1 download wire contract before it crosses into image services.</summary>
@@ -16,6 +17,11 @@ internal static class StartImageModelDownloadWireValidator
         if (string.IsNullOrWhiteSpace(request.RepoId))
         {
             return Invalid("A repository id is required.");
+        }
+
+        if (!HuggingFaceRepoId.IsValid(request.RepoId.Trim()))
+        {
+            return Invalid(HuggingFaceRepoId.InvalidMessage);
         }
 
         if (!Enum.TryParse<ImageModelFamily>(request.Family, ignoreCase: true, out var family) || family == ImageModelFamily.Unknown)
@@ -45,6 +51,11 @@ internal static class StartImageModelDownloadWireValidator
             if (string.IsNullOrWhiteSpace(part.FileName))
             {
                 return Invalid("Each weight part requires a file name.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(part.RepoId) && !HuggingFaceRepoId.IsValid(part.RepoId.Trim()))
+            {
+                return Invalid(HuggingFaceRepoId.InvalidMessage);
             }
 
             parts.Add(new StartImageModelDownloadPartWireValues

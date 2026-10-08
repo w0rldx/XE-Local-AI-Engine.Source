@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Knowledge.V1;
 
 using System.Security.Cryptography;
 using FastEndpoints;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
@@ -23,6 +24,7 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDocumentRequest, UploadKnowledgeDocumentResponse>
 {
     private const string DefaultMimeType = "application/octet-stream";
+    private const long MultipartEnvelopeBytes = 64 * 1024;
 
     private readonly IKnowledgeDocumentBlobStore _blobStore;
     private readonly IKnowledgeIngestionAdmissionService _ingestionAdmission;
@@ -50,6 +52,9 @@ public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDo
     {
         Post(LocalApiRoutes.KnowledgeBase.Documents);
         AllowFileUploads();
+        // Without both, Kestrel's ~28.6 MiB body limit or the form reader's 128 MiB multipart limit, not the configured cap, rejects a large upload.
+        Options(builder => builder.WithMetadata(new RequestSizeLimitAttribute(_maxUploadBytes + MultipartEnvelopeBytes),
+            new RequestFormLimitsAttribute { MultipartBodyLengthLimit = _maxUploadBytes + MultipartEnvelopeBytes }));
         // Declare the multipart body so FastEndpoints documents it in OpenAPI (and the request is not rejected with a 415
         // for lacking a JSON body). Mirrors the typed-IFormFile + AllowFileUploads pattern of the conversation upload.
         Description(builder => builder.Accepts<UploadKnowledgeDocumentRequest>("multipart/form-data"));

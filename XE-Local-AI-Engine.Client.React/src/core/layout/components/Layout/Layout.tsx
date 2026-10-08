@@ -1,11 +1,12 @@
 import "./Layout.css";
 
-import { Outlet } from "@tanstack/react-router";
+import { CatchBoundary, Outlet, useRouterState } from "@tanstack/react-router";
 import { m } from "framer-motion";
 import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { RootErrorComponent } from "@/core/integrations/tanstack-router/RootErrorComponent";
 import { DesktopNavigationBar } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar";
 import { HeaderBar } from "@/core/layout/components/HeaderBar/HeaderBar";
 import {
@@ -23,6 +24,19 @@ import { RuntimeAcquisitionBanner } from "@/features/node-settings/components/Ru
 const DevelopmentUi = import.meta.env.DEV
 	? lazy(() => import("@/core/dev-tools/components/DevelopmentUi/DevelopmentUi").then((m) => ({ default: m.DevelopmentUi })))
 	: null;
+
+// A page crash must not take the navigation with it: without this boundary the root route's error component replaces
+// the whole shell, and on the desktop WebView (no back button, no URL bar) Retry re-renders the same crash. It sits
+// around the Outlet, not on the `/_layout` route, because a route's error boundary wraps that route's own component.
+// Keyed on the pathname so navigating away clears the error; only this small component re-renders on navigation.
+function RoutedPage() {
+	const pathname = useRouterState({ select: (state) => state.location.pathname });
+	return (
+		<CatchBoundary getResetKey={() => pathname} errorComponent={RootErrorComponent}>
+			<Outlet />
+		</CatchBoundary>
+	);
+}
 
 export function Layout() {
 	const { t } = useTranslation();
@@ -86,7 +100,7 @@ export function Layout() {
 					    programmatically focusable so the jump moves the caret, not just the scroll position; it also
 					    keeps this the element that scrolls, so page scrolling is unchanged. */}
 					<main id="main-content" tabIndex={-1} className="flex-1 min-h-0 overflow-y-auto md:px-8 px-2 pt-2">
-						<Outlet />
+						<RoutedPage />
 					</main>
 				</m.div>
 			</div>

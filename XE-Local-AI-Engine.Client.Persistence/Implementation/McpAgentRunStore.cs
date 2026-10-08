@@ -14,6 +14,9 @@ public sealed partial class McpAgentRunStore : IMcpAgentRunStore
     public const int MaxDisplayUtf8Bytes = 2 * 1024;
     public const long PayloadRetentionMilliseconds = 24L * 60 * 60 * 1000;
 
+    /// <summary>How long a compacted request-identity tombstone is kept before the prune frees its ledger charge.</summary>
+    public const long TombstoneRetentionMilliseconds = 30L * 24 * 60 * 60 * 1000;
+
     public const int TombstoneReservationBytesV1 = McpAgentRunPayloadProtector.FixedRecordOverheadBytes
                                                    + 16 // request id
                                                    + 32 // keyed request fingerprint

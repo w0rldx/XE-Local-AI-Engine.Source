@@ -550,6 +550,35 @@ public sealed class SupervisorEvictionTests
     }
 
     [Test]
+    public async Task IdleReap_WhenOneTeardownThrows_StillReapsTheOthers()
+    {
+        // A throwing TreeKill (e.g. a Win32Exception from a plain handle) used to escape ReapIdleOnceAsync, faulting the
+        // reaper loop for the rest of the session and skipping every other idle process in that pass.
+        var nextPid = 5000;
+        var launcher = new FakeProcessLauncher(spec =>
+        {
+            Action? onTreeKill = string.Equals(spec.ModelName, "model-a", StringComparison.Ordinal)
+                ? static () => throw new InvalidOperationException("teardown failed")
+                : null;
+#pragma warning disable CA2000 // Ownership transfers to the supervisor through the launcher fake.
+            return new FakeProcessHandle(Interlocked.Increment(ref nextPid), onTreeKill: onTreeKill);
+#pragma warning restore CA2000
+        });
+        var time = new AdvanceableTimeProvider();
+        var ttl = TimeSpan.FromMinutes(15);
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 2, ttl), timeProvider: time);
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        await supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, CancellationToken.None);
+
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+        await supervisor.ReapIdleOnceAsync();
+
+        AssertEx.Equal(expected: 0, (await supervisor.CheckHealthAsync(CancellationToken.None)).Count);
+        AssertEx.True(launcher.Handles.All(static handle => handle.WasTreeKilled || handle.WasDisposed),
+            "every idle process must be torn down even when one teardown throws.");
+    }
+
+    [Test]
     public async Task Residency_TicksWhenAProcessDiesOnItsOwn()
     {
         var launcher = new FakeProcessLauncher();

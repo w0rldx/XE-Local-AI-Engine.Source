@@ -413,7 +413,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
 
         AssertEx.Equal(expected: "new", await File.ReadAllTextAsync(Path.Combine(variantDir, "new.dll")));
         AssertEx.False(File.Exists(Path.Combine(variantDir, "old.dll")), "The old contents must be fully replaced.");
-        AssertEx.Empty(Directory.EnumerateDirectories(Path.GetDirectoryName(variantDir)!, "cuda.*.tmp"));
+        AssertEx.Empty(Directory.EnumerateDirectories(Path.GetDirectoryName(variantDir)!, "cuda*").Where(IsVariantSibling));
     }
 
     [Test]
@@ -430,8 +430,12 @@ public sealed class BinaryManagerCudartAtomicPublishTests
 
         AssertEx.Equal(expected: "old-server", await File.ReadAllTextAsync(Path.Combine(variantDir, "build", "bin", "llama-server.exe")));
         AssertEx.Equal(expected: "old-cudart", await File.ReadAllTextAsync(Path.Combine(variantDir, "build", "bin", "cudart64_12.dll")));
-        AssertEx.Empty(Directory.EnumerateDirectories(Path.GetDirectoryName(variantDir)!, "cuda.*.tmp"));
+        AssertEx.Empty(Directory.EnumerateDirectories(Path.GetDirectoryName(variantDir)!, "cuda*").Where(IsVariantSibling));
     }
+
+    // A staging (.tmp) or publish-aside (.aside) sibling of the cuda variant dir, never the variant dir itself.
+    private static bool IsVariantSibling(string directory) =>
+        Path.GetFileName(directory).StartsWith("cuda.", StringComparison.Ordinal);
 
     private static void AssertCompleteCompanionSet(string serverPath)
     {
@@ -553,7 +557,7 @@ public sealed class BinaryManagerCudartAtomicPublishTests
         public IEnumerable<string> StagingLeftovers()
         {
             var parent = Path.GetDirectoryName(VariantDir)!;
-            return Directory.Exists(parent) ? Directory.EnumerateDirectories(parent, "cuda.*.tmp") : [];
+            return Directory.Exists(parent) ? Directory.EnumerateDirectories(parent, "cuda*").Where(IsVariantSibling) : [];
         }
 
         private static byte[] BuildZip((string Path, string Content, bool Executable)[] entries)

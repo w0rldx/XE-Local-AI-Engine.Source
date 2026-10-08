@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -32,8 +33,8 @@ public sealed partial class LlamaCppBinaryManager
     /// </summary>
     /// <remarks>
     ///     Re-validates the full path chain and the recorded SHA256; there is no smoke or device check on the serve hot
-    ///     path, since those run once at adoption. On an invalid build the record and cached signal are cleared so the
-    ///     caller falls through to the normal path — a graceful self-heal, never a silent CPU serve.
+    ///     path, since those run once at adoption. Only a missing server or a SHA mismatch clears the record and cached
+    ///     signal; a perms or I/O failure refuses the serve but keeps the record. Never a silent CPU serve.
     /// </remarks>
     /// <param name="discardInvalidRecord">
     ///     <see langword="false" /> suppresses that self-heal write for the read-only
@@ -78,9 +79,9 @@ public sealed partial class LlamaCppBinaryManager
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Any validation or I/O failure invalidates the recorded source runtime. The caller surfaces one sanitized
-            // source-build failure and must not fall through to a prebuilt acquisition.
-            await DiscardManagedSourceRecordIfAllowedAsync(discardInvalidRecord, ct).ConfigureAwait(false);
+            // A perms or I/O failure is not evidence the build is foreign, so the record stays (discarding it lost a
+            // 20-40 min build to a transient read error). The caller still refuses this serve and never falls through.
+            _logger.LogWarning(exception, "Validating the recorded source-built llama.cpp runtime failed; the record is kept and this serve is refused.");
             return null;
         }
     }

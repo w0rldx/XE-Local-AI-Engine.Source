@@ -388,6 +388,9 @@ public interface IAgentWorkSessionStore
 
     Task<IReadOnlyList<WorkSessionEventSnapshot>> ListEventsAsync(Guid sessionId, long sinceSequence = 0, CancellationToken cancellationToken = default);
 
+    /// <summary>At most <paramref name="limit" /> events after <paramref name="sinceSequence" />, the bound applied in SQL so a long history is never read whole.</summary>
+    Task<IReadOnlyList<WorkSessionEventSnapshot>> ListEventsAsync(Guid sessionId, long sinceSequence, int limit, CancellationToken cancellationToken = default);
+
     /// <summary>
     ///     The newest event of one type, or <see langword="null" /> when the session recorded none.
     /// </summary>

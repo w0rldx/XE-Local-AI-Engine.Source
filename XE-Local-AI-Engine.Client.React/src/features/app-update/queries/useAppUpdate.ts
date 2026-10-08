@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { ApplyAppUpdateData, GetAppUpdateStatusResponse } from "@/core/api/generated";
+import type { GetAppUpdateStatusResponse } from "@/core/api/generated";
 import { getAppUpdateStatus } from "@/core/api/generated/sdk.gen";
 import {
 	applyAppUpdateMutation,
@@ -8,10 +8,7 @@ import {
 	getAppUpdateStatusQueryKey,
 	setAppUpdateChannelMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import type { Options } from "@/core/api/generated/sdk.gen";
 import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
-
-const emptyOptions = {} as Options<ApplyAppUpdateData>;
 
 export function useAppUpdateStatus(refresh?: boolean) {
 	return useQuery({
@@ -89,5 +86,3 @@ export function useSetAppUpdateChannel() {
 		},
 	});
 }
-
-export { emptyOptions as noBodyOptions };

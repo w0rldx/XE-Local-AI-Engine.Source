@@ -171,6 +171,31 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
         AssertEx.Empty(sandbox.Executed);
     }
 
+    /// <summary>
+    ///     A hard stop during the first clone leaves a manifest-less workspace or a partial clone. Neither may block the
+    ///     task: both go, and the prepare clones afresh instead of refusing every later attempt.
+    /// </summary>
+    [Test]
+    public async Task Prepare_LeftoverDirWithoutManifest_RecreatesWorkspace()
+    {
+        var sandbox = new RecordingSandbox();
+        var (repository, data, snapshot, baseCommit) = await SeedAsync(GenericProfile);
+        sandbox.BaseCommit = baseCommit;
+        var worktree = Path.Combine(data, "development", "workspaces", snapshot.ProjectId.ToString("N"), snapshot.TaskId.ToString("N"));
+        Directory.CreateDirectory(Path.Combine(worktree, ".git"));
+        await File.WriteAllTextAsync(Path.Combine(worktree, "half-cloned.txt"), "interrupted\n");
+        var partial = worktree + ".partial-" + Guid.NewGuid().ToString("N");
+        Directory.CreateDirectory(partial);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink());
+
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository));
+
+        AssertEx.Equal(worktree, session.HostWorktreePath);
+        AssertEx.True(File.Exists(Path.Combine(worktree, "README.md")), "the workspace must be a fresh clone of the base commit");
+        AssertEx.False(File.Exists(Path.Combine(worktree, "half-cloned.txt")), "the untrusted leftover must not survive");
+        AssertEx.False(Directory.Exists(partial), "a partial clone left by an interrupted prepare must be removed");
+    }
+
     private async Task<(DevelopmentWorkspaceSession Session, Func<Task<DevelopmentWorkspaceSession>> Prepare)> PrepareAsync(RecordingSandbox sandbox,
         DevelopmentCommandProfile profile)
     {

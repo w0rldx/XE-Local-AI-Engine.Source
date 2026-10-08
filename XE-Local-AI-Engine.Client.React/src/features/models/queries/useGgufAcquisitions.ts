@@ -7,6 +7,7 @@ import {
 	getGgufImportsOptions,
 	getGgufImportsQueryKey,
 	getGgufDownloadsOptions,
+	getGgufDownloadsQueryKey,
 	listLocalModelsQueryKey,
 	previewGgufImportMutation,
 	startGgufImportMutation,
@@ -22,6 +23,7 @@ import {
 const ACQUISITION_STATUS_CHANGED = "ggufDownload.statusChanged";
 export const ACQUISITION_TERMINAL_RETENTION_LIMIT = 256;
 const ACQUISITION_TERMINAL_RETENTION_MS = 24 * 60 * 60 * 1000;
+const ACQUISITION_CLOSED_HUB_POLL_MS = 5_000;
 
 export interface StartGgufImportVariables {
 	readonly sourcePath: string;
@@ -158,8 +160,18 @@ export function useActiveGgufAcquisitions({
 	const queryClient = useQueryClient();
 	const completedHandled = useRef<ReadonlyMap<string, number>>(new Map());
 	const [statuses, setStatuses] = useState<ReadonlyMap<string, GgufAcquisitionStatus>>(() => new Map());
-	const downloads = useQuery({ ...withResponseValidation(getGgufDownloadsOptions()), enabled, staleTime: 30_000 });
-	const imports = useQuery({ ...withResponseValidation(getGgufImportsOptions()), enabled, staleTime: 30_000 });
+	const [hubClosed, setHubClosed] = useState(false);
+	// Hub's own fallback: while the hub is closed (until the shared manager's restart reports back) poll the lists so
+	// an active row does not freeze on its last percentage. Idle rows need no polling.
+	const hasActiveAcquisition = [...statuses.values()].some((status) => !isTerminalAcquisitionPhase(status.phase));
+	const refetchInterval = hubClosed && hasActiveAcquisition ? ACQUISITION_CLOSED_HUB_POLL_MS : false;
+	const downloads = useQuery({
+		...withResponseValidation(getGgufDownloadsOptions()),
+		enabled,
+		staleTime: 30_000,
+		refetchInterval,
+	});
+	const imports = useQuery({ ...withResponseValidation(getGgufImportsOptions()), enabled, staleTime: 30_000, refetchInterval });
 
 	useEffect(() => {
 		const items = [...(downloads.data?.items ?? []), ...(imports.data?.items ?? [])];
@@ -180,11 +192,18 @@ export function useActiveGgufAcquisitions({
 			}
 		};
 		hub.connection.on(ACQUISITION_STATUS_CHANGED, onStatus);
+		// The hub has no replay: a Completed push lost in a reconnect gap is read back over REST. release() drops these.
+		hub.onReconnected(() => {
+			setHubClosed(false);
+			queryClient.invalidateQueries({ queryKey: getGgufDownloadsQueryKey() }).catch(() => undefined);
+			queryClient.invalidateQueries({ queryKey: getGgufImportsQueryKey() }).catch(() => undefined);
+		});
+		hub.onClosed(() => setHubClosed(true));
 		return () => {
 			hub.connection.off(ACQUISITION_STATUS_CHANGED, onStatus);
 			hub.release();
 		};
-	}, [enabled]);
+	}, [enabled, queryClient]);
 
 	useEffect(() => {
 		const now = Date.now();

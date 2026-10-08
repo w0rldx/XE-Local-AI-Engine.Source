@@ -88,7 +88,7 @@ internal sealed class ImageModelRegistry : IImageModelRegistry, IDisposable
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var entries = (await LoadEntriesAsync(ct).ConfigureAwait(false)).ToList();
+            var entries = await LoadEntriesForWriteAsync(ct).ConfigureAwait(false);
             entries.RemoveAll(existing => string.Equals(existing.ModelName, entry.ModelName, StringComparison.Ordinal));
             entries.Add(entry);
             await WriteManifestAsync(entries, ct).ConfigureAwait(false);
@@ -107,7 +107,7 @@ internal sealed class ImageModelRegistry : IImageModelRegistry, IDisposable
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var entries = (await LoadEntriesAsync(ct).ConfigureAwait(false)).ToList();
+            var entries = await LoadEntriesForWriteAsync(ct).ConfigureAwait(false);
             var removed = entries.RemoveAll(existing => string.Equals(existing.ModelName, modelName, StringComparison.Ordinal));
             if (removed > 0)
             {
@@ -124,6 +124,29 @@ internal sealed class ImageModelRegistry : IImageModelRegistry, IDisposable
     // GGUF registry's directory rescan — a lost manifest yields no entries and the store re-materializes them on the next ensure. Caller holds the lock.
     private async Task<IReadOnlyList<ImageModelRegistryEntry>> LoadEntriesAsync(CancellationToken ct)
     {
+        var entries = await ReadManifestAsync(ct).ConfigureAwait(false);
+        if (entries is null)
+        {
+            return [];
+        }
+
+        // Drop any entry whose backing part files are missing right now (manual deletion, an unmounted drive). The read view only:
+        // the write path keeps them, so a drive that comes back finds its models still registered.
+        return entries.Where(static entry => entry.Parts.Count > 0 && entry.Parts.All(part => File.Exists(part.LocalPath)))
+                      .ToList();
+    }
+
+    // STRICT, unlike LoadEntriesAsync: writing back a tolerant read would persist the empty fallback over every other model's entry,
+    // orphaning their files with no UI path to see or delete them. Caller holds the lock.
+    private async Task<List<ImageModelRegistryEntry>> LoadEntriesForWriteAsync(CancellationToken ct)
+    {
+        return await ReadManifestAsync(ct).ConfigureAwait(false)
+               ?? throw new IOException($"The image model registry manifest '{_manifestPath}' is unreadable; refusing to overwrite it. Repair or move it aside to recover.");
+    }
+
+    // The manifest's entries: empty when it is missing, null when it is present but unreadable. Caller holds the lock.
+    private async Task<List<ImageModelRegistryEntry>?> ReadManifestAsync(CancellationToken ct)
+    {
         if (!File.Exists(_manifestPath))
         {
             return [];
@@ -136,25 +159,17 @@ internal sealed class ImageModelRegistry : IImageModelRegistry, IDisposable
                                  .DeserializeAsync<ManifestDocument>(stream, SerializerOptions, ct)
                                  .ConfigureAwait(false);
 
-            if (manifest?.Models is null)
-            {
-                return [];
-            }
-
-            // Drop any entry whose backing part files disappeared since the manifest was written (manual deletion).
-            return manifest.Models
-                           .Where(static entry => entry.Parts.Count > 0 && entry.Parts.All(part => File.Exists(part.LocalPath)))
-                           .ToList();
+            return manifest?.Models ?? [];
         }
         catch (JsonException exception)
         {
-            _logger.LogWarning(exception, "Image model registry manifest is corrupt. Treating the image-model set as empty until the next download.");
-            return [];
+            _logger.LogWarning(exception, "Image model registry manifest is corrupt. Treating the image-model set as empty until it is repaired.");
+            return null;
         }
         catch (IOException exception)
         {
-            _logger.LogWarning(exception, "Image model registry manifest could not be read. Treating the image-model set as empty until the next download.");
-            return [];
+            _logger.LogWarning(exception, "Image model registry manifest could not be read. Treating the image-model set as empty until it is readable.");
+            return null;
         }
     }
 

@@ -2,8 +2,10 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Data.Common;
 using System.Globalization;
+using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using static NodeChatMetadataSerializer;
@@ -276,15 +278,30 @@ internal static class NodeChatPersistenceSql
                 : await reader.GetFieldValueAsync<byte[]>(ordinal: 1, cancellationToken);
             // The preview content column (ordinal 5) is decrypted read-both against the previewed message's id
             // (ordinal 10); a LEFT JOIN with no message leaves both NULL.
-            var content = await reader.IsDBNullAsync(ordinal: 5, cancellationToken)
+            var contentBytes = await reader.IsDBNullAsync(ordinal: 5, cancellationToken)
                 ? null
-                : dbContext.DecryptMessageContent(await reader.GetFieldValueAsync<byte[]>(ordinal: 5, cancellationToken),
-                    convId,
-                    Guid.Parse(reader.GetString(10)));
+                : await reader.GetFieldValueAsync<byte[]>(ordinal: 5, cancellationToken);
+            string? title;
+            string? content;
+            try
+            {
+                title = DecryptTitle(titleBytes, dbContext, convId);
+                content = contentBytes is null ? null : dbContext.DecryptMessageContent(contentBytes, convId, Guid.Parse(reader.GetString(10)));
+            }
+            catch (Exception exception) when (exception is CryptographicException or InvalidOperationException)
+            {
+                // One undecryptable row must not fail the whole list: it stays listed, untitled, so the user can still open or delete it.
+                dbContext.GetService<ILoggerFactory>()
+                         .CreateLogger(typeof(NodeChatPersistenceSql))
+                         .LogWarning(exception, "Conversation {ConversationId} has a title or preview that could not be decrypted; listing it untitled.", convId);
+                title = null;
+                content = null;
+            }
+
             conversations.Add(new NodeChatConversationSummaryDto
             {
                 ConversationId = convId,
-                Title = DecryptTitle(titleBytes, dbContext, convId),
+                Title = title,
                 CreatedAtUtc = reader.GetInt64(2),
                 LastSeenUtc = reader.GetInt64(3),
                 LastMessagePreview = Preview(content),

@@ -212,6 +212,89 @@ public sealed class KnowledgeIngestionWorkerTests
             PollTimeout,
             "The drain-sweep should have admitted and ingested both stranded Pending documents.");
 
+        // FIFO with one slot: a follow-up run the sweep scheduled for any of them would run before this barrier does.
+        var barrier = Guid.NewGuid();
+        _ = await dispatcher.EnqueueAsync(barrier, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => ingestion.Completed.Contains(barrier), PollTimeout, "the barrier document ran");
+        foreach (var documentId in new[] { trigger, strandedA, strandedB })
+        {
+            AssertEx.Equal(expected: 1, ingestion.Started.Count(id => id == documentId), "each document is ingested exactly once");
+        }
+
+        await worker.StopAsync(CancellationToken.None);
+    }
+
+    [Test]
+    public async Task IngestionWorker_TwoQueuedDocs_EachStartedExactlyOnce()
+    {
+        // The sweep merged into a document already dequeued and waiting for the slot, so that document ran a second time.
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var listed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var leftPending = new ConcurrentBag<Guid>();
+        // A row leaves Pending only once its run writes Extracting; the second run waits until the sweep has listed it, the
+        // window in which the real sweep reads the row while that document is dequeued but not yet started.
+        var ingestion = new FakeIngestionService(async (id, _) =>
+        {
+            if (id == first)
+            {
+                await release.Task;
+            }
+            else if (id == second)
+            {
+                await listed.Task;
+            }
+
+            leftPending.Add(id);
+        });
+        // The sweep's scope is disposed only after its admit loop, so releasing the second run there (not at the listing)
+        // means the admit always sees that document still in flight, as production does.
+        var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();
+        var sweptSecond = 0;
+        catalog.ResetNonTerminalToPendingAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Guid>)[]);
+        catalog.ListPendingDocumentIdsAsync(Arg.Any<CancellationToken>())
+               .Returns(_ =>
+               {
+                   IReadOnlyList<Guid> pending = [.. new[] { first, second }.Where(id => !leftPending.Contains(id))];
+                   if (pending.Contains(second))
+                   {
+                       Volatile.Write(ref sweptSecond, 1);
+                   }
+
+                   return pending;
+               });
+        var dispatcher = new KnowledgeIngestionDispatcher();
+        var services = new ServiceCollection();
+        services.AddScoped<IKnowledgeIngestionService>(_ => ingestion);
+        services.AddScoped(_ => new ScopeEndProbe(() =>
+        {
+            if (Volatile.Read(ref sweptSecond) == 1)
+            {
+                listed.TrySetResult();
+            }
+        }));
+        services.AddScoped(scoped =>
+        {
+            _ = scoped.GetRequiredService<ScopeEndProbe>();
+            return catalog;
+        });
+        await using var provider = services.BuildServiceProvider();
+        using var worker = CreateWorker(provider, dispatcher);
+        await worker.StartAsync(CancellationToken.None);
+
+        _ = await dispatcher.EnqueueAsync(first, CancellationToken.None);
+        _ = await dispatcher.EnqueueAsync(second, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => ingestion.Started.Contains(first) && dispatcher.PendingCount == 0, PollTimeout,
+            "the second document is dequeued and waiting for the slot, still Pending");
+        release.SetResult();
+        await AssertEx.EventuallyAsync(() => ingestion.Completed.Contains(second), PollTimeout, "the second document ran");
+        var barrier = Guid.NewGuid();
+        _ = await dispatcher.EnqueueAsync(barrier, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => ingestion.Completed.Contains(barrier), PollTimeout, "the barrier document ran");
+
+        AssertEx.Equal(expected: 1, ingestion.Started.Count(id => id == first));
+        AssertEx.Equal(expected: 1, ingestion.Started.Count(id => id == second), "a sweep must not schedule a second run of a dequeued document");
         await worker.StopAsync(CancellationToken.None);
     }
 
@@ -244,6 +327,22 @@ public sealed class KnowledgeIngestionWorkerTests
             dispatcher,
             options,
             NullLogger<KnowledgeIngestionWorker>.Instance);
+    }
+
+    /// <summary>Runs its callback when the DI scope that resolved it is disposed.</summary>
+    private sealed class ScopeEndProbe : IDisposable
+    {
+        private readonly Action _onDispose;
+
+        public ScopeEndProbe(Action onDispose)
+        {
+            _onDispose = onDispose;
+        }
+
+        public void Dispose()
+        {
+            _onDispose();
+        }
     }
 
     private sealed class FakeIngestionService : IKnowledgeIngestionService

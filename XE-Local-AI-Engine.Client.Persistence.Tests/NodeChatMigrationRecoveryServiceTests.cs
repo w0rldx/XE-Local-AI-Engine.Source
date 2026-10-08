@@ -1,8 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using System.Data.Common;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -11,37 +13,13 @@ using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
 /// <summary>
-///     Serialized against the rest of the module. Every test here applies the WHOLE migration set against a real
-///     SQLite file under a wall-clock attempt budget, so it is starved by the dozens of other database tests this
-///     module runs beside it — and starvation here does not read as a slow test: the attempt is cancelled MID-APPLY,
-///     which leaves a half-rebuilt <c>ef_temp_*</c> table behind and the retry then dies on "table already exists".
-///     Different tests of this class failing on different runs is the signature. Raising the budget instead would
-///     have cost the abandoned-lock test the same increase in dead wall clock, because its first attempt is MEANT to
-///     exhaust it.
+///     Serialized against the rest of the module: every test applies the whole migration set against a real SQLite
+///     file, and a starved run used to be cancelled mid-apply by the old wall-clock attempt budget.
 /// </summary>
 [NotInParallel]
 [Category(TestCategories.Integration)]
 public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
 {
-    /// <summary>
-    ///     How long a single migration attempt gets before the recovery path treats it as stuck.
-    ///     <para>
-    ///         This must cover the slowest honest run of the whole migration set, not the fastest. At five seconds it
-    ///         covered Linux and nothing else: once the set reached 43 migrations, a Windows run — where the SQLite
-    ///         file sits in a Defender-scanned %TEMP% rather than on ext4 — exceeded it and was cancelled MID-APPLY.
-    ///         That is worse than a slow test. Three of these migrations carry <c>PRAGMA foreign_keys = 0</c> and
-    ///         therefore cannot run in a transaction, so an attempt cut short part-way leaves its schema change
-    ///         applied with no history row: the retry then re-runs it and dies on
-    ///         <c>duplicate column name: selected_folder_id</c>, and the database is unusable.
-    ///     </para>
-    ///     <para>
-    ///         So this value is not test-tuning trivia — it is the margin that keeps the recovery path in the
-    ///         situation it was designed for (an attempt that never started applying) rather than the one it cannot
-    ///         survive.
-    ///     </para>
-    /// </summary>
-    private static readonly TimeSpan DefaultMigrationAttemptTimeout = TimeSpan.FromSeconds(20);
-
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -70,15 +48,11 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
     }
 
     [Test]
-    public async Task MigrateAsync_WhenEfMigrationsLockIsAbandoned_DropsLockAndRetriesMigrations()
+    public async Task MigrateAsync_WhenEfMigrationsLockIsAbandoned_DropsLockAndAppliesMigrations()
     {
         var databasePath = GetDatabasePath("abandoned-lock.sqlite");
         await CreateAbandonedEfMigrationLockAsync(databasePath);
 
-        // Here the budget is spent TWICE and the two spends are not alike: the first attempt is meant to exhaust it —
-        // that is the abandoned lock doing its job — and the retry then has to apply the whole migration set inside
-        // the same budget. So the first attempt necessarily burns the full DefaultMigrationAttemptTimeout before
-        // recovery starts, which is inherent to what this test asserts.
         await using var serviceProvider = BuildServiceProvider(databasePath);
         var migrationService = serviceProvider.GetRequiredService<NodeChatMigrationRecoveryService>();
 
@@ -109,9 +83,25 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
         AssertEx.True(await TableExistsAsync(connection, "__EFMigrationsLock"), "EF lock table should remain untouched when startup ownership is not acquired.");
     }
 
+    [Test]
+    public async Task MigrateAsync_RunsTheMigrationWithoutAWallClockBudget()
+    {
+        var databasePath = GetDatabasePath("unbounded.sqlite");
+        var recorder = new MigrationCancellationRecorder();
+
+        await using var serviceProvider = BuildServiceProvider(databasePath, interceptor: recorder);
+        var migrationService = serviceProvider.GetRequiredService<NodeChatMigrationRecoveryService>();
+
+        await migrationService.MigrateAsync();
+
+        // A slow but healthy migration (a table rebuild on a large database) must never be cancelled mid-apply; only the caller may stop it.
+        AssertEx.True(recorder.MigrationCommandCount > 0, "The probe must observe the migration's own commands.");
+        AssertEx.False(recorder.AnyMigrationCommandCancelable, "Migration commands must run under the caller's token, not a timeout.");
+    }
+
     private static ServiceProvider BuildServiceProvider(string databasePath,
-        TimeSpan? migrationAttemptTimeout = null,
-        TimeSpan? startupLockTimeout = null)
+        TimeSpan? startupLockTimeout = null,
+        IInterceptor? interceptor = null)
     {
         var connectionString = $"Data Source={databasePath}";
         var configuration = new ConfigurationBuilder()
@@ -125,11 +115,17 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
         services.AddSingleton<IConfiguration>(configuration);
         services.AddLogging();
         services.AddSingleton<INodeSqliteKeyHolder, NullNodeSqliteKeyHolder>();
-        services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite(connectionString));
+        services.AddDbContext<NodeChatDbContext>(options =>
+        {
+            options.UseSqlite(connectionString);
+            if (interceptor is not null)
+            {
+                options.AddInterceptors(interceptor);
+            }
+        });
         services.AddOptions<NodeChatMigrationRecoveryOptions>()
                 .Configure(options =>
                 {
-                    options.MigrationAttemptTimeout = migrationAttemptTimeout ?? DefaultMigrationAttemptTimeout;
                     options.StartupLockTimeout = startupLockTimeout ?? TimeSpan.FromSeconds(1);
                     options.StartupLockPollInterval = TimeSpan.FromMilliseconds(5);
                 });
@@ -209,5 +205,26 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
         }
 
         throw new AssertionException($"Expected exception of type {typeof(TException).Name} but no exception was thrown.");
+    }
+
+    private sealed class MigrationCancellationRecorder : DbCommandInterceptor
+    {
+        public int MigrationCommandCount { get; private set; }
+
+        public bool AnyMigrationCommandCancelable { get; private set; }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("CREATE TABLE \"conversations\"", StringComparison.Ordinal))
+            {
+                MigrationCommandCount++;
+                AnyMigrationCommandCancelable |= cancellationToken.CanBeCanceled;
+            }
+
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
     }
 }

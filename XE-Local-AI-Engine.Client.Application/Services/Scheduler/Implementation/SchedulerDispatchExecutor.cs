@@ -156,21 +156,6 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         try
         {
             await handler.ExecuteAsync(context, cancellationToken);
-
-            var completedMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-
-            // The handler's own summary is what makes the run list worth reading — "3/4 cell(s) enqueued" rather than a constant
-            // that reads identically for a real fire and a no-op. A handler that sets nothing keeps the generic constant.
-            var summary = string.IsNullOrWhiteSpace(context.Summary) ? "Completed." : context.Summary.Trim();
-
-            var updated = await _runStore.UpdateLifecycleAsync(run.Id,
-                ScheduledRunStatus.Succeeded,
-                completedMs,
-                completedMs - actualFireMs,
-                summary,
-                cancellationToken: CancellationToken.None);
-
-            await SafePublishRunAsync(updated ?? run, SchedulerRunEventKind.Completed);
         }
         catch (OperationCanceledException)
         {
@@ -224,7 +209,36 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
                 cancellationToken: CancellationToken.None);
 
             await SafePublishRunAsync(updated ?? run, SchedulerRunEventKind.Failed);
+            return;
         }
+
+        var succeededAtMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
+        // The handler's own summary is what makes the run list worth reading — "3/4 cell(s) enqueued" rather than a constant
+        // that reads identically for a real fire and a no-op. A handler that sets nothing keeps the generic constant.
+        var summary = string.IsNullOrWhiteSpace(context.Summary) ? "Completed." : context.Summary.Trim();
+
+        Task<ScheduledJobRunRecord?> RecordSucceededAsync() =>
+            _runStore.UpdateLifecycleAsync(run.Id,
+                ScheduledRunStatus.Succeeded,
+                succeededAtMs,
+                succeededAtMs - actualFireMs,
+                summary,
+                cancellationToken: CancellationToken.None);
+
+        // Outside the handler's try: the work ran, so a failed status write must never be recorded as the job failing.
+        ScheduledJobRunRecord? succeeded;
+        try
+        {
+            succeeded = await RecordSucceededAsync();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(exception, "Recording the success of scheduled job run {RunId} failed; retrying once.", run.Id);
+            succeeded = await RecordSucceededAsync();
+        }
+
+        await SafePublishRunAsync(succeeded ?? run, SchedulerRunEventKind.Completed);
     }
 
     /// <summary>

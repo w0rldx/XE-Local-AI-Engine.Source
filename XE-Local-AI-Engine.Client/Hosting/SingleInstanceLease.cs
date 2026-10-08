@@ -26,6 +26,8 @@ internal sealed class SingleInstanceLease : IDisposable
     // these (on Windows) mean "another instance holds the lease"; other IOExceptions are genuine faults.
     private const int HResultSharingViolation = unchecked((int)0x80070020); // ERROR_SHARING_VIOLATION
     private const int HResultLockViolation = unchecked((int)0x80070021); // ERROR_LOCK_VIOLATION
+    private const int ErrnoWouldBlockLinux = 11; // EWOULDBLOCK == EAGAIN on Linux
+    private const int ErrnoWouldBlockBsd = 35; // EWOULDBLOCK == EAGAIN on macOS
 
     /// <summary>
     ///     Attempts to acquire the exclusive lease for <paramref name="dataDirectory" />, returning the held lease or
@@ -65,25 +67,37 @@ internal sealed class SingleInstanceLease : IDisposable
             // A misconfigured, over-long data path. Also a broken data root, not contention — surface it.
             throw;
         }
-        catch (IOException exception) when (OperatingSystem.IsWindows() && !IsWindowsSharingOrLockViolation(exception))
+        catch (UnauthorizedAccessException exception)
         {
-            // On Windows a non-sharing IOException (e.g. disk full, ERROR_DISK_FULL) is a real fault, not another
-            // instance holding the lease — surface it. Sharing/lock violations fall through to the contention path below.
+            throw new UnauthorizedAccessException(
+                $"The data directory '{dataDirectory}' is not writable by this user, so '{LeaseFileName}' could not be opened. Check the ownership and permissions of that directory.",
+                exception);
+        }
+        catch (IOException exception) when (!IsContention(exception))
+        {
+            // A real fault (disk full, a read-only mount, an I/O error), not another instance holding the lease: surface it.
+            // Only a Windows sharing/lock violation or a Unix flock EWOULDBLOCK falls through to the contention path below.
             throw;
         }
         catch (IOException)
         {
-            // A Windows sharing/lock violation, or a Unix flock conflict (a plain IOException, no portable HResult): the lock
-            // is held by another live instance, or a crashed one the OS is still cleaning up. Do not touch the shared key/DB.
+            // The lock is held by another live instance, or a crashed one the OS is still cleaning up. Do not touch the shared key/DB.
             return null;
         }
 
         return new SingleInstanceLease(handle);
     }
 
-    private static bool IsWindowsSharingOrLockViolation(IOException exception)
+    private static bool IsContention(IOException exception)
     {
-        return exception.HResult is HResultSharingViolation or HResultLockViolation;
+        if (OperatingSystem.IsWindows())
+        {
+            return exception.HResult is HResultSharingViolation or HResultLockViolation;
+        }
+
+        // .NET reports a failed flock(LOCK_EX|LOCK_NB) with the raw errno as the HResult: EWOULDBLOCK/EAGAIN is 11 on
+        // Linux and 35 on macOS/BSD.
+        return exception.HResult == (OperatingSystem.IsLinux() ? ErrnoWouldBlockLinux : ErrnoWouldBlockBsd);
     }
 
     public void Dispose()

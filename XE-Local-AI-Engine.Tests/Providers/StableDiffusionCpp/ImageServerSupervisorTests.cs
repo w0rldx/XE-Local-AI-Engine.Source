@@ -39,6 +39,21 @@ public sealed class ImageServerSupervisorTests
     }
 
     [Test]
+    public async Task EnsureRunning_ChildLosesThePortRace_SaysThePortWasTakenNotThatTheModelIsBroken()
+    {
+        // Two nodes on one box can probe the same free port at once; the loser used to be told its model was
+        // incompatible or too large.
+        var launcher = new FakeImageProcessLauncher(bornDeadExitCode: 1, bornDeadStderrTail: "bind failed: Address already in use");
+        var probe = new FakeImageReadinessProbe(hangsUntilCancelled: true);
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, probe);
+
+        var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => supervisor.EnsureRunningAsync("sd15", CancellationToken.None));
+
+        AssertEx.True(exception.Message.StartsWith("The image runtime could not bind its local port", StringComparison.Ordinal));
+        AssertEx.False(exception.Message.Contains("incompatible", StringComparison.Ordinal));
+    }
+
+    [Test]
     public async Task EnsureRunning_ReusesRunningDaemon_NoSecondSpawn()
     {
         var launcher = new FakeImageProcessLauncher();

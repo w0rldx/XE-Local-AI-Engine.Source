@@ -16,7 +16,7 @@ public sealed class SecurityOptions
     ///     hard-failing a turn on an already-stored message poisons the conversation permanently, so merely LOWERING this value would brick
     ///     every conversation holding a larger one. Larger documents belong on the upload path (<see cref="MaxUploadFileSizeMb" />).
     /// </remarks>
-    /// <value>Anchored to the transport's own 512 KB hub-invocation cap; why 256: docs/wiki/01-architecture-overview.md ("The local surface").</value>
+    /// <value>The SignalR receive ceiling is derived from it (ConfigureServices.HubReceiveCeilingBytes); why 256: docs/wiki/01-architecture-overview.md.</value>
     [Range(minimum: 1, maximum: 1024)]
     public int MaxMessageSizeKb { get; set; } = 256;
 

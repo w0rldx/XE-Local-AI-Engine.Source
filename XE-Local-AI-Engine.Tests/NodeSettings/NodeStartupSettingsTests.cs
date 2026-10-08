@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.NodeSettings;
 
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     The pre-host read of the structural switches: stored beats the appsettings seed, the seed beats the code default,
@@ -99,6 +101,38 @@ public sealed class NodeStartupSettingsTests : IDisposable
         AssertEx.True(sut.SchedulerEnabled);
         AssertEx.True(logger.HasEntry(LogLevel.Warning, "could not be deserialized"),
             string.Join(" | ", logger.Entries.Select(static entry => entry.Message)));
+    }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public void Read_WhenTheFileIsUnreadableByPermission_ReturnsTheSeedsAndLogsAWarning()
+    {
+        if (Environment.IsPrivilegedProcess)
+        {
+            Skip.Test("BLOCKED: a privileged process bypasses the file mode this test denies the read with.");
+        }
+
+        var content = Dir("content");
+        Write(content, """{ "developmentEnabled": true }""");
+        var path = Path.Combine(content, "node-settings.json");
+        File.SetUnixFileMode(path, UnixFileMode.None);
+        var logger = new RecordingLogger<NodeSettingsStore>();
+        try
+        {
+            var sut = Read(contentRoot: content, seeds: new()
+            {
+                ["Development:Enabled"] = "false"
+            }, logger: logger);
+
+            AssertEx.False(sut.DevelopmentEnabled, "An unreadable file must fall back to the seed, not crash startup.");
+            AssertEx.True(logger.HasEntry(LogLevel.Warning, "could not be read"),
+                string.Join(" | ", logger.Entries.Select(static entry => entry.Message)));
+        }
+        finally
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
     }
 
     [Test]

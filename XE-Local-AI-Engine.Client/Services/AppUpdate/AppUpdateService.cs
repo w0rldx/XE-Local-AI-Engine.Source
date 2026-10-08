@@ -14,6 +14,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AppUpdateService> _logger;
     private readonly INodeSettingsStore _settingsStore;
+    private readonly AppUpdateBusyProbe _busyProbe;
     internal const string DesktopShellLeaseFileName = "desktop-shell.lock";
     private IVelopackUpdateManager? _primedUpdateManager;
     private AppUpdateFeed? _primedFeed;
@@ -28,8 +29,9 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         AppUpdateHostContext hostContext,
         ILogger<AppUpdateService> logger,
         TimeProvider timeProvider,
-        INodeSettingsStore settingsStore)
-        : this(updateManagerFactory, state, channelOptions, hostContext, logger, timeProvider, settingsStore,
+        INodeSettingsStore settingsStore,
+        AppUpdateBusyProbe busyProbe)
+        : this(updateManagerFactory, state, channelOptions, hostContext, logger, timeProvider, settingsStore, busyProbe,
             retainAcceptedLease: null)
     {
     }
@@ -41,9 +43,11 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         ILogger<AppUpdateService> logger,
         TimeProvider timeProvider,
         INodeSettingsStore settingsStore,
+        AppUpdateBusyProbe busyProbe,
         Action<FileStream>? retainAcceptedLease)
     {
         _retainAcceptedLease = retainAcceptedLease;
+        _busyProbe = busyProbe ?? throw new ArgumentNullException(nameof(busyProbe));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         _updateManagerFactory = updateManagerFactory ?? throw new ArgumentNullException(nameof(updateManagerFactory));
         _state = state ?? throw new ArgumentNullException(nameof(state));
@@ -283,11 +287,12 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
     private static bool IsStale(DateTimeOffset? checkedAtUtc, TimeSpan minInterval, DateTimeOffset now) =>
         checkedAtUtc is not { } checkedAt || now - checkedAt >= minInterval;
 
-    public async Task<bool> ApplyAsync(CancellationToken ct)
+    public async Task<AppUpdateApplyResult> ApplyAsync(bool force, CancellationToken ct)
     {
+        var nothingApplied = new AppUpdateApplyResult { Applying = false };
         if (!_hostContext.IsLocalMode || !_channelOptions.IsConfigured)
         {
-            return false;
+            return nothingApplied;
         }
 
         await _operationGate.WaitAsync(ct);
@@ -296,7 +301,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         {
             if (!_state.Current.UpdateAvailable || _applyScheduled)
             {
-                return false;
+                return nothingApplied;
             }
 
             // Re-check under the CURRENT policy so the apply uses the manager that found the winner: a dev-feed
@@ -304,7 +309,22 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             await CheckForUpdatesCoreAsync(ct);
             if (!_state.Current.UpdateAvailable || _winningUpdateManager is null)
             {
-                return false;
+                return nothingApplied;
+            }
+
+            // The re-check can resolve a newer release than the one the browser was offered; this is what installs.
+            var targetVersion = _state.Current.AvailableVersion;
+            if (!force)
+            {
+                var busyItems = await _busyProbe.CollectAsync(ct);
+                if (busyItems.Count > 0)
+                {
+                    return new AppUpdateApplyResult
+                    {
+                        Applying = false,
+                        BusyItems = busyItems
+                    };
+                }
             }
 
 #pragma warning disable CA2000 // The async finally disposes this lease unless accepted update ownership transfers to the service or process-exit holder.
@@ -332,7 +352,11 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
                     isConfigured: true,
                     checkStatus: AppUpdateCheckStatus.Ready,
                     recommendedVersion: applied.RecommendedVersion));
-                return applying;
+                return new AppUpdateApplyResult
+                {
+                    Applying = applying,
+                    TargetVersion = applying ? targetVersion : null
+                };
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

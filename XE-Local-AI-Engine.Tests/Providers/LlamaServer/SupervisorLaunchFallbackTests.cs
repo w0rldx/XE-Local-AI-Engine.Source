@@ -118,6 +118,42 @@ public sealed class SupervisorLaunchFallbackTests
     }
 
     [Test]
+    public async Task EnsureRunning_WhenChildLosesThePortRace_RetriesOnAnotherPortWithoutBlamingTheConfig()
+    {
+        // The port is probed free, released, then bound by the child; another node can take it in between. That exit used
+        // to read as "model incompatible or too large", and on GPU it also recorded a false optimized-config failure.
+        var launches = 0;
+        var launcher = new FakeProcessLauncher(spec =>
+        {
+#pragma warning disable CA2000 // Ownership transfers to the supervisor through the launcher fake.
+            var handle = new FakeProcessHandle(Interlocked.Increment(ref launches));
+#pragma warning restore CA2000
+            if (launches == 1)
+            {
+                spec.StartupCapture?.Invoke($"main: couldn't bind HTTP server socket, hostname: 127.0.0.1, port: {spec.Port}");
+                handle.SimulateExit(exitCode: 1);
+            }
+
+            return handle;
+        });
+        var fallbackStore = new FakeLaunchFallbackStore();
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            healthProbe: new FirstLoadBlocksThenReadyHealthProbe(),
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            launchFallbackStore: fallbackStore);
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.True(launcher.Launches.TryDequeue(out _));
+        AssertEx.True(launcher.Launches.TryDequeue(out var retried));
+        // The retry is the restart loop re-running the SAME optimized candidate, not the one-shot safe fallback.
+        AssertEx.Contains(retried!.Arguments, "-ctk");
+        AssertEx.False(await fallbackStore.IsOptimizedConfigDisabledAsync(GpuVariant.Cuda, LlamaServerKvCacheTypes.Q8_0, CancellationToken.None),
+            "a lost port race says nothing about the optimized config.");
+    }
+
+    [Test]
     public async Task EnsureRunning_WhenOptimizedChildExitsDuringLoad_StillRetriesSafeConfig()
     {
         var launches = 0;

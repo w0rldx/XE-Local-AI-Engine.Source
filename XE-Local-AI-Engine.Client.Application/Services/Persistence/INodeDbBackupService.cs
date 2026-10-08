@@ -16,4 +16,7 @@ public interface INodeDbBackupService
     ///     hiccup can never block migration or brick startup. </para>
     /// </remarks>
     Task BackupBeforeMigrationAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The full path of the newest complete snapshot, or null when none exists; named in fatal startup messages.</summary>
+    string? FindNewestSnapshot();
 }

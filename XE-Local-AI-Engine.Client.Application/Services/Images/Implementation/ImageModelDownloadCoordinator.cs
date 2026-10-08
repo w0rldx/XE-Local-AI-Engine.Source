@@ -143,9 +143,10 @@ public sealed class ImageModelDownloadCoordinator : IImageModelDownloadCoordinat
             SetTerminal(modelName, ImageModelDownloadPhase.Failed, exception.Message);
             _logger.LogWarning("Image model download failed for {ModelName}: insufficient disk space.", modelName);
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or TimeoutException or InvalidOperationException or ArgumentException)
+        catch (Exception exception)
         {
-            // Never surface a raw transport/argument message (it can carry a URL or path): collapse to a generic reason.
+            // Every other fault (an UnauthorizedAccessException on an unwritable models dir included) must still end
+            // the status, or the UI spins until restart. Never surface a raw message (URL or path): collapse it.
             SetTerminal(modelName, ImageModelDownloadPhase.Failed, "Download failed.");
             _logger.LogWarning(exception, "Image model download failed for {ModelName}.", modelName);
         }

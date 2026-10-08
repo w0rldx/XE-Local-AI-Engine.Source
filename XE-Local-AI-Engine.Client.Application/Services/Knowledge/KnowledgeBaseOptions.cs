@@ -115,6 +115,12 @@ public sealed class KnowledgeBaseOptions
     public int ShutdownDrainTimeoutSeconds { get; set; } = 30;
 
     /// <summary>
+    ///     Maximum time, in minutes, one document may spend in ingestion before it is marked Failed, so a slow or looping
+    ///     file cannot hold the ingestion slot. Default 10, clamped to at least 1.
+    /// </summary>
+    public int IngestionDocumentTimeoutMinutes { get; set; } = 10;
+
+    /// <summary>
     ///     Maximum number of chunk texts sent to the embedding generator in a single <c>GenerateAsync</c> call. A large
     ///     document yields thousands of chunks; batching bounds each round-trip instead of one unbounded call.
     /// </summary>

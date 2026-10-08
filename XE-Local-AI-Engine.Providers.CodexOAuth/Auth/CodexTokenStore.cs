@@ -57,14 +57,14 @@ public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
             }
             catch (CryptographicException exception)
             {
-                _logger.LogWarning(exception, "Codex token decryption failed. Clearing stored Codex tokens.");
-                ClearTokensFileBestEffort();
+                _logger.LogWarning(exception, "Codex token decryption failed. Moving the stored Codex tokens aside.");
+                MoveTokensFileAsideBestEffort();
                 return null;
             }
             catch (JsonException exception)
             {
-                _logger.LogWarning(exception, "Codex tokens could not be deserialized. Clearing stored Codex tokens.");
-                ClearTokensFileBestEffort();
+                _logger.LogWarning(exception, "Codex tokens could not be deserialized. Moving the stored Codex tokens aside.");
+                MoveTokensFileAsideBestEffort();
                 return null;
             }
             catch (IOException exception)
@@ -143,22 +143,20 @@ public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
         }
     }
 
-    private void ClearTokensFileBestEffort()
+    private void MoveTokensFileAsideBestEffort()
     {
         try
         {
-            if (File.Exists(_tokensPath))
-            {
-                File.Delete(_tokensPath);
-            }
+            var movedTo = SecureFilePermissions.MoveAsideUnreadable(_tokensPath);
+            _logger.LogWarning("The unreadable Codex tokens file was kept as {QuarantinePath}.", movedTo);
         }
         catch (IOException exception)
         {
-            _logger.LogWarning(exception, "Failed to delete Codex tokens file.");
+            _logger.LogWarning(exception, "Failed to move the unreadable Codex tokens file aside.");
         }
         catch (UnauthorizedAccessException exception)
         {
-            _logger.LogWarning(exception, "Failed to delete Codex tokens file.");
+            _logger.LogWarning(exception, "Failed to move the unreadable Codex tokens file aside.");
         }
     }
 }

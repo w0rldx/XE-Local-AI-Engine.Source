@@ -94,7 +94,12 @@ public sealed class CodexTokenStoreTests : IDisposable
 
         var loaded = await store.LoadAsync();
 
+        // Kept, not deleted: restoring the key ring that wrote it must still be able to recover the grant.
         AssertEx.Null(loaded);
+        AssertEx.False(File.Exists(GetTokensPath()));
+        var kept = Directory.GetFiles(_contentRootPath, Path.GetFileName(GetTokensPath()) + ".unreadable-*");
+        AssertEx.Equal(expected: 1, kept.Length);
+        AssertEx.Equal("09080706", Convert.ToHexString(await File.ReadAllBytesAsync(kept[0])));
     }
 
     private CodexTokenStore CreateStore(IDataProtectionProvider? dataProtectionProvider = null)

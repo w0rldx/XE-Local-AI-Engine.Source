@@ -137,6 +137,10 @@ public static class ConfigureServices
         // banned (BannedSymbols.txt, RS0030). A test overrides it through TestServerWebAppFactory.ConfigureAdditionalTestServices.
         builder.Services.TryAddSingleton(TimeProvider.System);
 
+        // FIRST hosted service on purpose: hosted services start in registration order, and none may read or write an encrypted row
+        // before the node key is proven to match the database (a seeder or backfill would otherwise write under the wrong key).
+        builder.Services.AddHostedService<NodeKeyCheckStartupService>();
+
         // The application layer (services, options, persistence, runtime) lives in XE-Local-AI-Engine.Client.Application; the host wires
         // only web-framework concerns below — FastEndpoints, auth, SignalR, rate limiting, health checks, hosted services.
         builder.AddNodeApplication(configuration, startupSettings);
@@ -255,14 +259,16 @@ public static class ConfigureServices
                    options.ClientTimeoutInterval = TimeSpan.FromMinutes(2);
                    options.HandshakeTimeout = TimeSpan.FromSeconds(15);
                    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-                   // Transport ceiling for ONE hub-invocation payload, kept deliberately above Security:MaxMessageSizeKb so an oversized paste is
-                   // refused by that app-level check with a legible message rather than by SignalR's opaque frame-size error. Raise the two together.
-                   options.MaximumReceiveMessageSize = 512 * 1024;
                    options.StreamBufferCapacity = 1;
                })
                // Hub frames carry the SAME JSON policy as the REST surface. On SignalR's own defaults a CLR enum member reaches the browser as a NUMBER while
                // the generated TS type for that field is a string union, so a handler comparing names matches nothing, silently. See docs/wiki/09-api-and-hubs.md.
                .AddJsonProtocol(options => ConfigureJsonSerializerOptions(options.PayloadSerializerOptions));
+        // Transport ceiling for ONE hub-invocation payload, derived from Security:MaxMessageSizeKb so an oversized paste is refused by that legible
+        // app-level check rather than by SignalR's opaque frame-size error, which drops every stream on the connection.
+        builder.Services.AddOptions<HubOptions>()
+               .Configure<IOptions<Configuration.SecurityOptions>>(static (hubOptions, security) =>
+                   hubOptions.MaximumReceiveMessageSize = HubReceiveCeilingBytes(security.Value.MaxMessageSizeKb));
         // Seed the FastEndpoints serializer global HERE, at registration time, or the OpenAPI generator snapshots a PascalCase copy. The global is
         // process-wide, so a read-only one has been served with already. See docs/wiki/09-api-and-hubs.md ("Why the FastEndpoints serializer global is seeded at registration time").
         var fastEndpointsSerializerOptions = new Config().Serializer.Options;
@@ -523,6 +529,12 @@ public static class ConfigureServices
         builder.Services.AddHealthChecks()
                .AddCheck<NodeSqliteHealthCheck>("node_sqlite", tags: ["ready"]);
     }
+
+    /// <summary>
+    ///     The SignalR receive ceiling for a message cap: twice the content for JSON escaping plus 64 KB of envelope, never below 512 KB.
+    /// </summary>
+    public static long HubReceiveCeilingBytes(int maxMessageSizeKb) =>
+        Math.Max(512L * 1024, (maxMessageSizeKb * 2048L) + (64 * 1024));
 
     public static void ConfigureJsonSerializerOptions(JsonSerializerOptions options)
     {

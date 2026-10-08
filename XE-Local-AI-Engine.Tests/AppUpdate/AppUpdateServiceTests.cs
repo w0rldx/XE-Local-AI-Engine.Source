@@ -258,9 +258,9 @@ public sealed class AppUpdateServiceTests
         });
         using var service = CreateService(factory, isDesktop: true, state: state);
 
-        var applying = await service.ApplyAsync(CancellationToken.None);
+        var result = await service.ApplyAsync(force: false, CancellationToken.None);
 
-        AssertEx.False(applying);
+        AssertEx.False(result.Applying);
         AssertEx.False(state.Current.UpdateAvailable);
         AssertEx.Null(state.Current.AvailableVersion);
         AssertEx.Equal(AppUpdateCheckStatus.Ready, state.Current.CheckStatus);
@@ -284,9 +284,77 @@ public sealed class AppUpdateServiceTests
             port: 41234);
         using var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(), restartArgs: restartArgs);
 
-        AssertEx.True(await service.ApplyAsync(CancellationToken.None));
+        AssertEx.True((await service.ApplyAsync(force: false, CancellationToken.None)).Applying);
         AssertEx.True(captured.SequenceEqual(["--mcp-only", "--no-browser", "--port", "41234"], StringComparer.Ordinal));
         AssertEx.False(captured.Any(static value => value.Contains("secret", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task Apply_WhileWorkIsRunning_WithoutForce_ListsTheWorkAndAppliesNothing()
+    {
+        var manager = NewManager();
+        manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(true);
+        var state = AvailableUpdateState();
+        var busy = new AppUpdateBusySources().WithTrainingDownloadAndSession();
+        busy.SetLlamaCppSourceBuildRunning(true);
+        busy.InvocationRunner.ActiveInvocationCount.Returns(2);
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true, state: state, busySources: busy);
+
+        var result = await service.ApplyAsync(force: false, CancellationToken.None);
+
+        AssertEx.False(result.Applying);
+        AssertEx.Equal("TrainingRun:,ModelDownload:qwen3-8b.gguf,LlamaCppSourceBuild:,Invocation:,WorkSession:Refactor the parser",
+            string.Join(',', result.BusyItems.Select(static item => $"{item.Kind}:{item.DisplayName}")));
+        await manager.DidNotReceive().PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        // The offer stays, so the operator can confirm and re-send with force.
+        AssertEx.True(state.Current.UpdateAvailable);
+    }
+
+    [Test]
+    public async Task Apply_WhileWorkIsRunning_WithForce_Applies()
+    {
+        var manager = NewManager();
+        manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(true);
+        var busy = new AppUpdateBusySources().WithTrainingDownloadAndSession();
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(), busySources: busy);
+
+        var result = await service.ApplyAsync(force: true, CancellationToken.None);
+
+        AssertEx.True(result.Applying);
+        AssertEx.Empty(result.BusyItems);
+        await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Apply_WhenIdle_AppliesWithoutForce()
+    {
+        var manager = NewManager();
+        manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(true);
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState());
+
+        var result = await service.ApplyAsync(force: false, CancellationToken.None);
+
+        AssertEx.True(result.Applying);
+        AssertEx.Empty(result.BusyItems);
+        await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Apply_WhenTheReCheckFindsANewerRelease_ReportsTheVersionItInstalls()
+    {
+        // The browser's cached offer is 0.2.0; 0.3.0 was published before the click, and the re-check installs it.
+        var manager = ManagerReturning(new VelopackCheckResult
+        {
+            Outcome = VelopackCheckOutcome.UpdateAvailable,
+            AvailableVersion = "0.3.0"
+        });
+        manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(true);
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState());
+
+        var result = await service.ApplyAsync(force: false, CancellationToken.None);
+
+        AssertEx.True(result.Applying);
+        AssertEx.Equal("0.3.0", result.TargetVersion);
     }
 
     [Test]
@@ -300,7 +368,7 @@ public sealed class AppUpdateServiceTests
         var state = AvailableUpdateState();
         using var service = CreateService(FactoryReturning(manager), isDesktop: true, logger: logger, state: state);
 
-        var exception = await AssertEx.ThrowsAsync<AppUpdateException>(() => service.ApplyAsync(CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<AppUpdateException>(() => service.ApplyAsync(force: false, CancellationToken.None));
 
         AssertEx.False(exception.Message.Contains("token", StringComparison.Ordinal));
         AssertEx.False(exception.Message.Contains("/home/secret/path", StringComparison.Ordinal));
@@ -324,15 +392,15 @@ public sealed class AppUpdateServiceTests
         var factory = FactoryReturning(manager);
         using var service = CreateService(factory, isDesktop: true, state: AvailableUpdateState());
 
-        var first = service.ApplyAsync(CancellationToken.None);
+        var first = service.ApplyAsync(force: false, CancellationToken.None);
         await applyEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        var second = service.ApplyAsync(CancellationToken.None);
+        var second = service.ApplyAsync(force: false, CancellationToken.None);
         factory.Received(1).Create(Arg.Any<AppUpdateFeed>());
         await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
         releaseApply.SetResult(true);
 
-        AssertEx.True(await first);
-        AssertEx.False(await second);
+        AssertEx.True((await first).Applying);
+        AssertEx.False((await second).Applying);
         factory.Received(1).Create(Arg.Any<AppUpdateFeed>());
         await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
     }
@@ -353,7 +421,7 @@ public sealed class AppUpdateServiceTests
         var factory = FactoryReturning(manager);
         using var service = CreateService(factory, isDesktop: true, state: AvailableUpdateState());
 
-        var apply = service.ApplyAsync(CancellationToken.None);
+        var apply = service.ApplyAsync(force: false, CancellationToken.None);
         await applyEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
         var check = service.CheckForUpdatesAsync(CancellationToken.None);
 
@@ -362,7 +430,7 @@ public sealed class AppUpdateServiceTests
         await manager.Received(1).CheckForUpdateAsync(Arg.Any<CancellationToken>());
         releaseApply.SetResult(false);
 
-        AssertEx.False(await apply);
+        AssertEx.False((await apply).Applying);
         AssertEx.Equal(AppUpdateCheckStatus.Ready, (await check).CheckStatus);
         await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
         await manager.Received(2).CheckForUpdateAsync(Arg.Any<CancellationToken>());
@@ -396,12 +464,12 @@ public sealed class AppUpdateServiceTests
 
         if (shellOwned)
         {
-            AssertEx.True(await service.ApplyAsync(CancellationToken.None));
+            AssertEx.True((await service.ApplyAsync(force: false, CancellationToken.None)).Applying);
             await manager.Received(1).PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
         }
         else
         {
-            var exception = await AssertEx.ThrowsAsync<AppUpdateException>(() => service.ApplyAsync(CancellationToken.None));
+            var exception = await AssertEx.ThrowsAsync<AppUpdateException>(() => service.ApplyAsync(force: false, CancellationToken.None));
             AssertEx.Equal("Close the native XE window, then apply this update from your browser.", exception.Message);
             await manager.DidNotReceive().PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
         }
@@ -416,9 +484,9 @@ public sealed class AppUpdateServiceTests
         using (var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(),
                    shellOwned: false, dataDirectory: directory.Path))
         {
-            AssertEx.True(await service.ApplyAsync(CancellationToken.None));
+            AssertEx.True((await service.ApplyAsync(force: false, CancellationToken.None)).Applying);
             AssertShellLeaseHeld(directory.Path);
-            AssertEx.False(await service.ApplyAsync(CancellationToken.None));
+            AssertEx.False((await service.ApplyAsync(force: false, CancellationToken.None)).Applying);
         }
 
         using var released = OpenShellLease(directory.Path);
@@ -443,7 +511,7 @@ public sealed class AppUpdateServiceTests
                            transferCount++;
                        }))
             {
-                AssertEx.True(await service.ApplyAsync(CancellationToken.None));
+                AssertEx.True((await service.ApplyAsync(force: false, CancellationToken.None)).Applying);
                 AssertEx.Equal(directory.FilePath(AppUpdateService.DesktopShellLeaseFileName), AssertEx.NotNull(retained).Name);
             }
 
@@ -494,16 +562,16 @@ public sealed class AppUpdateServiceTests
 
         if (outcome == 1)
         {
-            var exception = await AssertEx.ThrowsAsync<AppUpdateException>(() => service.ApplyAsync(cancellation.Token));
+            var exception = await AssertEx.ThrowsAsync<AppUpdateException>(() => service.ApplyAsync(force: false, cancellation.Token));
             AssertEx.Equal("The update could not be applied. Please try again later.", exception.Message);
         }
         else if (outcome == 2)
         {
-            await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.ApplyAsync(cancellation.Token));
+            await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.ApplyAsync(force: false, cancellation.Token));
         }
         else
         {
-            AssertEx.False(await service.ApplyAsync(cancellation.Token));
+            AssertEx.False((await service.ApplyAsync(force: false, cancellation.Token)).Applying);
         }
 
         using var released = OpenShellLease(directory.Path);
@@ -516,7 +584,7 @@ public sealed class AppUpdateServiceTests
     {
         var manager = NewManager();
         using var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(), shellOwned: false);
-        var exception = await AssertEx.ThrowsAsync<AppUpdateException>(() => service.ApplyAsync(CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<AppUpdateException>(() => service.ApplyAsync(force: false, CancellationToken.None));
         AssertEx.Equal("The update could not verify the desktop lifetime. Restart XE and try again.", exception.Message);
         await manager.DidNotReceive().PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
     }
@@ -528,7 +596,7 @@ public sealed class AppUpdateServiceTests
         var manager = NewManager();
         using var service = CreateService(FactoryReturning(manager), isDesktop: true,
             shellOwned: false, dataDirectory: directory.Path);
-        AssertEx.False(await service.ApplyAsync(CancellationToken.None));
+        AssertEx.False((await service.ApplyAsync(force: false, CancellationToken.None)).Applying);
         AssertEx.False(File.Exists(directory.FilePath(AppUpdateService.DesktopShellLeaseFileName)));
     }
 
@@ -645,7 +713,7 @@ public sealed class AppUpdateServiceTests
             state: AvailableUpdateState(),
             settingsStore: StoreWith(AppUpdateChannelNames.Development));
 
-        AssertEx.True(await service.ApplyAsync(CancellationToken.None));
+        AssertEx.True((await service.ApplyAsync(force: false, CancellationToken.None)).Applying);
 
         var winner = devFeedWins ? dev : main;
         var loser = devFeedWins ? main : dev;
@@ -1057,7 +1125,8 @@ public sealed class AppUpdateServiceTests
         string? dataDirectory = null,
         Action<FileStream>? retainAcceptedLease = null,
         INodeSettingsStore? settingsStore = null,
-        AppUpdateChannel defaultChannel = AppUpdateChannel.Stable)
+        AppUpdateChannel defaultChannel = AppUpdateChannel.Stable,
+        AppUpdateBusySources? busySources = null)
     {
         var options = Options.Create(new AppUpdateChannelOptions
         {
@@ -1078,6 +1147,7 @@ public sealed class AppUpdateServiceTests
             logger ?? NullLogger<AppUpdateService>.Instance,
             TimeProvider.System,
             settingsStore ?? new FakeNodeSettingsStore(new StoredNodeSettings()),
+            (busySources ?? new AppUpdateBusySources()).Probe(),
             retainAcceptedLease);
     }
 }

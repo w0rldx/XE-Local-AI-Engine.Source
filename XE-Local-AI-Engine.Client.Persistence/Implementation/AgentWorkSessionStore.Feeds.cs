@@ -85,15 +85,24 @@ public sealed partial class AgentWorkSessionStore
         return [.. checkpoints.Select(CheckpointSnapshot)];
     }
 
-    public async Task<IReadOnlyList<WorkSessionEventSnapshot>> ListEventsAsync(Guid sessionId, long sinceSequence = 0, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<WorkSessionEventSnapshot>> ListEventsAsync(Guid sessionId, long sinceSequence = 0, CancellationToken cancellationToken = default) =>
+        ListEventsCoreAsync(sessionId, sinceSequence, limit: null, cancellationToken);
+
+    public Task<IReadOnlyList<WorkSessionEventSnapshot>> ListEventsAsync(Guid sessionId, long sinceSequence, int limit, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+        return ListEventsCoreAsync(sessionId, sinceSequence, limit, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<WorkSessionEventSnapshot>> ListEventsCoreAsync(Guid sessionId, long sinceSequence, int? limit, CancellationToken cancellationToken)
     {
         await EnsureSessionExistsAsync(sessionId, cancellationToken);
 
         // Events are the one append-only feed — never re-stamped — so their watermark is also their order.
-        var events = await _dbContext.AgentWorkSessionEvents.AsNoTracking()
-                                     .Where(entity => entity.SessionId == sessionId && entity.Sequence > sinceSequence)
-                                     .OrderBy(entity => entity.Sequence)
-                                     .ToListAsync(cancellationToken);
+        var query = _dbContext.AgentWorkSessionEvents.AsNoTracking()
+                              .Where(entity => entity.SessionId == sessionId && entity.Sequence > sinceSequence)
+                              .OrderBy(entity => entity.Sequence);
+        var events = await (limit is { } take ? query.Take(take) : query).ToListAsync(cancellationToken);
         return
         [
             .. events.Select(entity => new WorkSessionEventSnapshot

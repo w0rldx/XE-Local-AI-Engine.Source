@@ -295,6 +295,34 @@ public sealed class AgentWorkSessionStoreTests
     }
 
     [Test]
+    public async Task ListEventsAsync_WithALimit_ReturnsTheOldestEventsAfterTheWatermarkOnly()
+    {
+        // The hub's subscribe replays a capped window on every reconnect; the cap belongs in SQL, not after reading the whole history.
+        using var fixture = new WorkSessionTestFixture();
+        await using var context = await fixture.CreateSchemaAsync();
+        var store = WorkSessionTestFixture.StoreFor(context);
+        var sessionId = Guid.NewGuid();
+        _ = await WorkSessionTestFixture.SeedAsync(store, sessionId, "Capped");
+        for (var index = 0; index < 4; index++)
+        {
+            _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand
+            {
+                SessionId = sessionId,
+                ExpectedVersion = WorkSessionVersions.Any,
+                EventType = $"probe.{index}"
+            });
+        }
+
+        var all = await store.ListEventsAsync(sessionId);
+        var window = await store.ListEventsAsync(sessionId, all[0].Sequence, limit: 2);
+
+        AssertEx.Equal(expected: 5, all.Count);
+        AssertEx.Equal(expected: 2, window.Count);
+        AssertEx.Equal(all[1].Sequence, window[0].Sequence, "the window starts after the watermark, in sequence order.");
+        AssertEx.Equal(all[2].Sequence, window[1].Sequence);
+    }
+
+    [Test]
     public async Task GetAsync_ThrowsForAnUnknownSession()
     {
         using var fixture = new WorkSessionTestFixture();

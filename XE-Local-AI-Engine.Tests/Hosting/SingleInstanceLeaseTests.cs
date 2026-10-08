@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
+using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Coverage for the per-data-root single-instance lease. The lease serializes process instances that share
@@ -53,6 +55,51 @@ public sealed class SingleInstanceLeaseTests
             SingleInstanceLease.TryAcquire(missingDirectory);
             return Task.CompletedTask;
         });
+    }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    public async Task TryAcquire_WhenUnixOpenFailsForAnotherReason_ThrowsRatherThanReportingAnotherInstance()
+    {
+        // ELOOP stands in for EROFS/EIO: a genuine open fault that is not a flock conflict and must not read as contention.
+        using var temp = new TempDataDirectory();
+        var leasePath = Path.Combine(temp.Path, SingleInstanceLease.LeaseFileName);
+        File.CreateSymbolicLink(leasePath, leasePath);
+
+        await AssertEx.ThrowsAsync<IOException>(() =>
+        {
+            SingleInstanceLease.TryAcquire(temp.Path);
+            return Task.CompletedTask;
+        });
+    }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task TryAcquire_WhenDataDirectoryIsNotWritable_ThrowsWithAnOwnershipHint()
+    {
+        if (Environment.IsPrivilegedProcess)
+        {
+            Skip.Test("BLOCKED: a privileged process bypasses the directory mode this test denies the creation with.");
+        }
+
+        using var temp = new TempDataDirectory();
+        File.SetUnixFileMode(temp.Path, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            var exception = await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() =>
+            {
+                SingleInstanceLease.TryAcquire(temp.Path);
+                return Task.CompletedTask;
+            });
+
+            AssertEx.Contains(exception.Message, "ownership", StringComparison.OrdinalIgnoreCase);
+            AssertEx.Contains(exception.Message, temp.Path);
+        }
+        finally
+        {
+            File.SetUnixFileMode(temp.Path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     [Test]

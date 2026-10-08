@@ -114,11 +114,12 @@ Distinct from the platform link, the React SPA talks to the host over a **loopba
   (`ConfigureServices.cs`, `Program.cs`).
 - The SPA itself is served as static files with `MapFallbackToFile("index.html")`.
 
-**Message size on this surface is anchored to the transport.** `AddSignalR` sets
-`MaximumReceiveMessageSize = 512 KB` for the whole hub-invocation payload (`ConfigureServices`), and
-`Security:MaxMessageSizeKb` defaults to 256 KB of message content — half of it. That leaves ample room for the
-JSON envelope around the content *and* guarantees the app-level check fires first, with a legible "your message
-is too large", instead of the transport tearing the connection down with an opaque frame-size error. 256 KB of
+**Message size on this surface is anchored to the transport.** `ConfigureServices` derives SignalR's
+`MaximumReceiveMessageSize` for the whole hub-invocation payload from `Security:MaxMessageSizeKb`
+(`HubReceiveCeilingBytes`: twice the content cap plus 64 KB, never below 512 KB); the cap defaults to 256 KB of
+message content. That leaves room for JSON escaping and the envelope around the content *and* guarantees the
+app-level check fires first, with a legible "your message is too large", instead of the transport tearing the
+connection down with an opaque frame-size error, also when an operator raises the cap. 256 KB of
 text is also roughly the byte size of the ~65k-token context window the budgeter trims against, so a paste that
 gets through is a paste the rest of the pipeline can actually work with; larger documents belong on the
 attachment upload path (`Security:MaxUploadFileSizeMb`), which extracts and inlines them under its own budget.

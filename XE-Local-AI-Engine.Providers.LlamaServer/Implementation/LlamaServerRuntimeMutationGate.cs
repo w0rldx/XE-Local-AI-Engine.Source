@@ -158,7 +158,19 @@ internal sealed class LlamaServerRuntimeMutationGate : IDisposable
             // quiet supervisor — every in-flight ensure decision has finished and no new one can start.
             await EnterExclusiveAsync(ct).ConfigureAwait(false);
 
-            if (mutationBlocked())
+            bool blocked;
+            try
+            {
+                blocked = mutationBlocked();
+            }
+            catch
+            {
+                // A throwing predicate must not leave the exclusive gate held: every later model load would block until restart.
+                ExitExclusive();
+                throw;
+            }
+
+            if (blocked)
             {
                 ExitExclusive();
                 return null;

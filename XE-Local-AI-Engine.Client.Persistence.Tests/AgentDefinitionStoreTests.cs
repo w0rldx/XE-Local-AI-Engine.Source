@@ -457,6 +457,42 @@ public sealed class AgentDefinitionStoreTests : IDisposable
             "Tampered instructions ciphertext should fail authenticated decryption.");
     }
 
+    [Test]
+    public async Task ListAsync_WithOneTamperedDefinition_ListsTheOthersAndKeepsTheDetailReadStrict()
+    {
+        var databasePath = GetDatabasePath("tamper-list.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        Guid goodId;
+        Guid badId;
+        await using (var context = CreateContext(databasePath, keyHolder))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+            var store = new AgentDefinitionStore(context, TimeProvider.System);
+            goodId = (await store.AddAsync(CreateInput())).Id;
+            badId = (await store.AddAsync(CreateInput() with { Name = "Rotted" })).Id;
+        }
+
+        await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+        {
+            await connection.OpenAsync();
+            await using var write = connection.CreateCommand();
+            write.CommandText = "UPDATE agent_definitions SET instructions = zeroblob(64) WHERE name = 'Rotted';";
+            AssertEx.Equal(expected: 1, await write.ExecuteNonQueryAsync());
+        }
+
+        await using var readContext = CreateContext(databasePath, keyHolder);
+        var readStore = new AgentDefinitionStore(readContext, TimeProvider.System);
+
+        var list = await readStore.ListAsync();
+
+        AssertEx.Equal(expected: 1, list.Count);
+        AssertEx.Equal(goodId, list[0].Id);
+        _ = AssertEx.Throws<CryptographicException>(() => readStore.GetByIdAsync(badId).GetAwaiter().GetResult(),
+            "Only the list is tolerant; the detail read must still fail loudly.");
+    }
+
     private static AgentDefinitionInput CreateInput()
     {
         return new AgentDefinitionInput

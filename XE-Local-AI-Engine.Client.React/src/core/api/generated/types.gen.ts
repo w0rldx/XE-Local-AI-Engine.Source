@@ -621,6 +621,11 @@ export type XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeR
 	name: string;
 };
 
+export type XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateBusyItemResponse = {
+	kind: string;
+	displayName?: string | null;
+};
+
 export type XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse = {
 	currentVersion: string;
 	availableVersion?: string | null;
@@ -636,8 +641,18 @@ export type XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse = {
 	availableChannel?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateBlockedResponse = {
+	busyItems: Array<XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateBusyItemResponse>;
+	message: string;
+};
+
+export type XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateRequest = {
+	force?: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = {
 	applying: boolean;
+	targetVersion?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = {
@@ -8125,13 +8140,17 @@ export type UpdateSuggestedPlaybookActionResponse =
 	UpdateSuggestedPlaybookActionResponses[keyof UpdateSuggestedPlaybookActionResponses];
 
 export type ApplyAppUpdateData = {
-	body?: never;
+	body: XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateRequest;
 	path?: never;
 	query?: never;
 	url: "/api/local/v1/app-update/apply";
 };
 
 export type ApplyAppUpdateErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
 	/**
 	 * Unauthorized
 	 */
@@ -8140,7 +8159,10 @@ export type ApplyAppUpdateErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
+	409: XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateBlockedResponse;
 };
+
+export type ApplyAppUpdateError = ApplyAppUpdateErrors[keyof ApplyAppUpdateErrors];
 
 export type ApplyAppUpdateResponses = {
 	/**

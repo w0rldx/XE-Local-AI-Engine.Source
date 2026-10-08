@@ -54,7 +54,9 @@ internal static class AddAppUpdateExtensions
             services.GetRequiredService<ILogger<AppUpdateService>>(),
             services.GetRequiredService<TimeProvider>(),
             services.GetRequiredService<INodeSettingsStore>(),
+            services.GetRequiredService<AppUpdateBusyProbe>(),
             AppUpdateService.RetainLeaseUntilProcessExit));
+        builder.Services.AddSingleton<AppUpdateBusyProbe>();
         builder.Services.AddSingleton<AppUpdateShutdownCoordinator>();
 
         // The one-shot startup update check is the only desktop-gated registration: off the flag no check is ever

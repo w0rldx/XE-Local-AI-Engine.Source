@@ -98,6 +98,61 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_WhenRowTerminalAfterLease_ReportsTerminalAndClearsResume()
+    {
+        // A cancel that finalizes the row between the lease grant and the streaming mark: the Assigned state the lease
+        // published must still reach a terminal, or a reload keeps resuming into a stream that never ends.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, static _ => { });
+        persistence.MarkAssistantStreamingAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+                   .Returns(CreateAssistantMessage(conversationId, assistantMessageId, requestId, NodeChatMessageStatusValues.Cancelled, string.Empty, reasoning: null));
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var resumeRegistry = new InvocationResumeRegistry(dispatcher, TimeProvider.System, NullLogger<InvocationResumeRegistry>.Instance);
+        var runner = new CompletingInvocationRunner(dispatcher);
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            CreateTurnContextBuilder(),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.False(events.Exists(static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantStreaming), "the model never ran.");
+        AssertEx.Equal(InvocationStatus.Cancelled, AssertEx.NotNull(dispatcher.CurrentInvocation).Status, "the lease's Assigned state reached a terminal.");
+        AssertEx.Null(resumeRegistry.TryGetLiveInvocation(requestId), "nothing is left to resume into.");
+        AssertEx.Null(resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId));
+    }
+
+    [Test]
     public async Task SendMessageAsync_EmitsQueuedBeforeStreaming()
     {
         var conversationId = Guid.NewGuid();

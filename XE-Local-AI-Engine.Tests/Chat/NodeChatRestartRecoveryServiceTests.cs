@@ -2,11 +2,13 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Integration)]
@@ -247,6 +249,50 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
         AssertEx.False(EnvelopeFor(envelopes, cancelledCorrelation).Success);
         // Correlation carried through from the message row.
         AssertEx.Equal(pendingCorrelation.RequestId, EnvelopeFor(envelopes, pendingCorrelation).RequestId);
+    }
+
+    [Test]
+    public async Task RecoverInterruptedMessagesAsync_DoesNotResurrectEnvelopesRetentionSwept()
+    {
+        const long Day = 86_400_000L;
+        var recoveredAtUtc = 400 * Day;
+        await using var provider = await BuildProviderAsync("restart-recovery-envelope-retention.sqlite");
+        var persistence = CreatePersistenceService(provider);
+        var recovery = new NodeChatRestartRecoveryService(provider.GetRequiredService<NodeChatPersistenceWriter>(), SettingsStore(new StoredNodeSettings
+        {
+            AgentExecutionLogRetentionEnabled = true,
+            AgentExecutionLogRetentionDays = 30
+        }));
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Retention",
+            UserId = "node",
+            CreatedAtUtc = 10
+        });
+
+        // An old completed run whose envelope the 30-day sweep removed, and a run that crashed between its terminal commit and its envelope yesterday.
+        var sweptCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: recoveredAtUtc - (60 * Day));
+        var crashedCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: recoveredAtUtc - (2 * Day));
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = sweptCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = recoveredAtUtc - (60 * Day),
+            Content = "done"
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = crashedCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = recoveredAtUtc - Day,
+            Content = "done"
+        });
+
+        _ = await recovery.RecoverInterruptedMessagesAsync(recoveredAtUtc);
+
+        var envelopes = await ReadEnvelopesAsync(provider, conversation.ConversationId);
+        AssertEx.Equal(expected: 1, envelopes.Count);
+        AssertEx.Equal(NodeChatMessageStatusValues.Completed, EnvelopeFor(envelopes, crashedCorrelation).TerminalStatus);
     }
 
     [Test]
@@ -759,7 +805,14 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
 
     private static NodeChatRestartRecoveryService CreateRecoveryService(ServiceProvider provider)
     {
-        return new NodeChatRestartRecoveryService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        return new NodeChatRestartRecoveryService(provider.GetRequiredService<NodeChatPersistenceWriter>(), SettingsStore(new StoredNodeSettings()));
+    }
+
+    private static INodeSettingsStore SettingsStore(StoredNodeSettings settings)
+    {
+        var store = Substitute.For<INodeSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(settings);
+        return store;
     }
 
     private static async Task<NodeChatMessageCorrelation> CreateAssistantPlaceholderAsync(NodeChatPersistenceService persistence,

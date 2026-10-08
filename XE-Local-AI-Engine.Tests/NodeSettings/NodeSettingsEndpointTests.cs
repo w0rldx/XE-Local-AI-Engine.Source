@@ -38,6 +38,8 @@ public sealed class NodeSettingsEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        // Startup consumers read the store too; the count below pins the GET alone.
+        nodeSettingsStore.ClearReceivedCalls();
         using var response = await client.SendAsync(request);
         var settings = await ReadJsonAsync<NodeSettingsResponse>(response);
 

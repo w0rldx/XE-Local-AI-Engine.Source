@@ -217,6 +217,16 @@ def main():
         device=torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
     )
 
+    # The dataset is read and shape-checked before the base model loads: that load takes minutes and gigabytes of
+    # VRAM, and a corrupt dataset must not cost either. DatasetError and a decode error are both ValueErrors.
+    try:
+        records = load_samples(config["datasetPath"], config.get("holdoutSequences"))
+    except (OSError, ValueError) as error:
+        fail("dataset", str(error)[:1000] or type(error).__name__)
+    if not records:
+        fail("dataset", "Every sample in the frozen dataset was excluded; there is nothing to train on.")
+    tools = collect_tools(records)
+
     cancelled = threading.Event()
 
     def handle_sigterm(_signum, _frame):
@@ -263,10 +273,6 @@ def main():
         )
 
         heartbeat.phase("tokenizing")
-        records = load_samples(config["datasetPath"], config.get("holdoutSequences"))
-        if not records:
-            fail("dataset", "Every sample in the frozen dataset was excluded; there is nothing to train on.")
-        tools = collect_tools(records)
         # Only meaningful once the dataset is known to contain calls: a template with no tool branch is only a
         # problem for a dataset that needs one.
         if has_tool_calls(records):

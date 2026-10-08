@@ -9,11 +9,13 @@ import os
 import tempfile
 
 from trainlib import (
+    DatasetError,
     assert_safe_chat_template_names,
     collect_tools,
     delimiter_before,
     filter_samples,
     has_tool_calls,
+    load_samples,
     to_messages,
 )
 
@@ -156,6 +158,32 @@ def test_unsafe_additional_chat_template_files_are_rejected():
             handle.write("attacker content")
 
         assert _is_rejected(_Tokenizer(), source_dir)
+
+
+def _load_error(*lines):
+    """The DatasetError message load_samples raises for a JSONL file made of ``lines``, or None when it loads."""
+    with tempfile.TemporaryDirectory() as directory:
+        path = os.path.join(directory, "dataset.jsonl")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(lines) + "\n")
+        try:
+            load_samples(path, None)
+        except DatasetError as error:
+            return str(error)
+    return None
+
+
+def test_malformed_dataset_lines_are_dataset_errors_naming_the_line():
+    good = json.dumps(SAMPLE)
+    assert _load_error(good) is None
+    assert _load_error(good, '{"truncated": ') == "line 2 is not valid JSON (Expecting value)."
+    assert _load_error(good, "", "[1, 2]") == "line 3 is not a JSON object."
+    assert _load_error(json.dumps({**SAMPLE, "parts": {"kind": "user"}})) == (
+        "line 1 has a 'parts' value that is not a list of objects."
+    )
+    assert _load_error(json.dumps({**SAMPLE, "parts": ["text"]})) == (
+        "line 1 has a 'parts' value that is not a list of objects."
+    )
 
 
 def main():

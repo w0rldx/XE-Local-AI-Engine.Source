@@ -19,9 +19,27 @@ const hubMock = vi.hoisted(() => {
 		off: vi.fn((event: string) => handlers.delete(event)),
 		invoke: vi.fn(async (): Promise<unknown> => undefined),
 	};
-	const handle = { connection, whenStarted: Promise.resolve(), onReconnected: vi.fn(), release: vi.fn() };
-	return { acquire: vi.fn(() => handle), connection, handlers };
+	const handle = {
+		connection,
+		whenStarted: Promise.resolve(),
+		onReconnected: vi.fn<(callback: () => void) => () => void>(() => () => undefined),
+		onClosed: vi.fn<(callback: () => void) => () => void>(() => () => undefined),
+		release: vi.fn(),
+	};
+	return { acquire: vi.fn(() => handle), connection, handle, handlers };
 });
+
+function lastCallback(registration: { mock: { calls: [() => void][] } }): () => void {
+	const callback = registration.mock.calls.at(-1)?.[0];
+	if (!callback) {
+		throw new Error("the hook registered no lifecycle callback");
+	}
+	return callback;
+}
+
+function invalidatedIds(spy: { mock: { calls: unknown[][] } }): unknown[] {
+	return spy.mock.calls.map(([filter]) => (filter as { queryKey?: unknown })?.queryKey);
+}
 
 vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 	acquireHubConnection: hubMock.acquire,
@@ -81,6 +99,39 @@ describe("useKnowledgeBaseHub", () => {
 		emit({ documentId, status: 4 });
 
 		expect(cachedStatus(queryClient)).toBe("Extracting");
+	});
+
+	it("re-reads the document list and details when the hub reconnects", () => {
+		const { queryClient, wrapper } = harness();
+		renderHook(() => useKnowledgeBaseHub(), { wrapper });
+		const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+
+		act(() => lastCallback(hubMock.handle.onReconnected)());
+
+		expect(invalidatedIds(invalidateSpy)).toEqual(
+			expect.arrayContaining([listKey, knowledgeInvalidationKey(knowledgeQueryIds.getDocument)]),
+		);
+	});
+
+	it("polls while the hub is closed and a row is still indexing, and stops once every row is terminal", async () => {
+		vi.useFakeTimers();
+		try {
+			const { queryClient, wrapper } = harness();
+			const view = renderHook(() => useKnowledgeBaseHub(), { wrapper });
+			const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+
+			act(() => lastCallback(hubMock.handle.onClosed)());
+			await vi.advanceTimersByTimeAsync(10_000);
+			expect(invalidatedIds(invalidateSpy)).toContainEqual(listKey);
+
+			invalidateSpy.mockClear();
+			queryClient.setQueryData(listKey, cachedRow("Indexed"));
+			await vi.advanceTimersByTimeAsync(10_000);
+			expect(invalidateSpy).not.toHaveBeenCalled();
+			view.unmount();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("subscribes to the knowledge-base hub and releases its lease on unmount", () => {

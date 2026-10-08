@@ -724,6 +724,33 @@ public sealed class GraphWorkflowAgentExecutorTests
     }
 
     /// <summary>
+    ///     A turn whose task FAULTS, here from a reservation release outside the turn's own catch, fails the node once
+    ///     instead of rethrowing on every poll and leaving the row Running where a Cancel could never finish it.
+    /// </summary>
+    [Test]
+    public async Task ATurnThatFaultsInsteadOfAnswering_FailsTheNodeOnceRatherThanRethrowingForever()
+    {
+        const string instructions = "turn-faults-on-release";
+        const string model = "graph-local-faultyrelease";
+        await using var harness = new GraphWorkflowHarness(Host);
+        harness.Invocations.Script(instructions, new GraphWorkflowScriptedTurn
+        {
+            Text = "an answer the release then loses"
+        });
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, $$"""
+                                                                              , "model": "{{model}}"
+                                                                              """, SingleAttempt));
+
+        // AdvanceAsync does not swallow: without the faulted branch, the first poll after the turn lands throws here.
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, analyze.Status);
+        AssertEx.Contains(analyze.Error, "did not complete");
+        AssertEx.False(Executor(harness).IsInFlight(analyze.Id), "the entry was consumed, so no later poll re-reads the fault.");
+        _ = await harness.AdvanceAsync(runId);
+    }
+
+    /// <summary>
     ///     The runner's own watchdog reports a timed-out turn as a FAILED terminal carrying the timeout category, so
     ///     the category is the only place that difference survives. A node that ran out of time is classed
     ///     <c>Timeout</c> rather than as a plain provider failure — both retry, but only one of them tells an operator

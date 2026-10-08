@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Globalization;
 using System.Net;
@@ -229,7 +230,21 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             _ = Interlocked.Increment(ref session.ActiveCalls);
             try
             {
-                return await tool.InvokeAsync(arguments, cancellationToken);
+                var result = await tool.InvokeAsync(arguments, cancellationToken);
+                Volatile.Write(ref session.ConsecutiveTimeouts, 0);
+                return result;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Remembered against THIS session, so a per-call timeout is charged to the session the call ran on. A caller
+                // cancellation is never claimed, so the set is capped; a cleared entry only leaves one timeout uncounted.
+                if (session.CancelledCalls.Count >= MaxRememberedCancelledCalls)
+                {
+                    session.CancelledCalls.Clear();
+                }
+
+                _ = session.CancelledCalls.TryAdd(cancellationToken, 0);
+                throw;
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsTransportFault(exception))
             {
@@ -252,6 +267,42 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
     /// <summary>Failure code carried by a not-connected result; see <see cref="ToolFailureText" />.</summary>
     internal const string ServerUnavailableCode = "server_unavailable";
+
+    /// <summary>Consecutive per-call timeouts on one session after which it is treated as wedged and abandoned.</summary>
+    internal const int ConsecutiveTimeoutsBeforeAbandon = 2;
+
+    private const int MaxRememberedCancelledCalls = 64;
+
+    /// <summary>
+    ///     Counts a per-call timeout against the current session the timed-out call ran on, found by its call token, and
+    ///     abandons that session at <see cref="ConsecutiveTimeoutsBeforeAbandon" /> so the next call reconnects.
+    /// </summary>
+    /// <remarks>
+    ///     A timeout whose session is no longer current matches nothing and is ignored, so a late timeout from a retired
+    ///     session can never evict its replacement.
+    /// </remarks>
+    internal async ValueTask OnToolCallTimedOutAsync(Guid serverId, CancellationToken callToken)
+    {
+        ClientSession? session;
+        lock (_stateLock)
+        {
+            if (!_servers.TryGetValue(serverId, out var entry))
+            {
+                return;
+            }
+
+            session = new[] { entry.Primary }.Concat(entry.Conversations.Values)
+                                             .FirstOrDefault(candidate => candidate is not null && candidate.CancelledCalls.TryRemove(callToken, out _));
+        }
+
+        if (session is not { IsAlive: true } || Interlocked.Increment(ref session.ConsecutiveTimeouts) < ConsecutiveTimeoutsBeforeAbandon)
+        {
+            return;
+        }
+
+        _ = await AbandonSessionAsync(serverId, session,
+            new TimeoutException($"{ConsecutiveTimeoutsBeforeAbandon} consecutive tool calls timed out; the session is treated as wedged."));
+    }
 
     /// <summary>Test seam: the number of live per-conversation sessions a server holds.</summary>
     internal int CountConversationSessions(Guid serverId)
@@ -540,6 +591,19 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         if (entry is null)
         {
             throw new McpServerUnavailableException("This MCP server is no longer enabled on this node, so its tools cannot be called.");
+        }
+
+        // A live session needs no gate: only a connect is serialized, so a call never queues behind another conversation's connect.
+        lock (_stateLock)
+        {
+            var live = conversationId is not null && entry.Record.SessionScope == McpSessionScope.PerConversation
+                ? entry.Conversations.GetValueOrDefault(conversationId.Value)
+                : entry.Primary;
+            if (!entry.Removed && live is { IsAlive: true })
+            {
+                live.LastUsedUtc = _timeProvider.GetUtcNow();
+                return live;
+            }
         }
 
         await entry.Gate.WaitAsync(cancellationToken);
@@ -942,7 +1006,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
             // Bound the server round-trip with the per-call timeout INNERMOST, below arg-repair and the result budget, so only the SDK
             // call is timed: a stall returns a typed tool-failure result and the run continues, never a retry.
-            AIFunction timed = new McpToolCallTimeoutAIFunction(named, toolCallTimeout);
+            AIFunction timed = new McpToolCallTimeoutAIFunction(named, toolCallTimeout, callToken => OnToolCallTimedOutAsync(serverId, callToken));
 
             // Validate the model's arguments against the tool's schema and run the repair loop before the server sees them, the guard
             // the ClientLocal registry applies. Unknown-property rejection is OFF: an under-declared server schema must not bounce a needed key.
@@ -1119,6 +1183,12 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
         /// <summary>Calls running on this session right now; the idle sweep never retires a session with one in flight.</summary>
         public int ActiveCalls;
+
+        /// <summary>Per-call timeouts since the last call that answered; reaching the limit abandons the session.</summary>
+        public int ConsecutiveTimeouts;
+
+        /// <summary>Tokens of calls this session saw cancelled, so a timeout is charged to the session that ran it.</summary>
+        public ConcurrentDictionary<CancellationToken, byte> CancelledCalls { get; } = new();
 
         /// <summary>Set when this node retires the session, so its completion is not reported as a server failure.</summary>
         public bool Closing { get; set; }

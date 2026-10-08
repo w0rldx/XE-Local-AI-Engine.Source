@@ -58,6 +58,15 @@ export function AppErrorFallback({ error, onRetry }: AppErrorFallbackProps) {
 					</Text>
 					<Group gap="sm">
 						<Button onClick={onRetry}>{t("app.errorFallback.retry")}</Button>
+						{/* Retry re-renders the same route, which crashes again on a deterministic error, and the desktop
+						    WebView has no back button or URL bar. Both exits are full page loads, so they also work from
+						    the App-level boundary outside the router and clear a rejected lazy import. */}
+						<Button variant="default" onClick={() => window.location.assign(import.meta.env.BASE_URL)}>
+							{t("app.errorFallback.goHome")}
+						</Button>
+						<Button variant="default" onClick={() => window.location.reload()}>
+							{t("app.errorFallback.reload")}
+						</Button>
 						<Button
 							variant="default"
 							leftSection={<IconDownload size={16} />}

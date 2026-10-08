@@ -344,12 +344,11 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
 
     public async Task<IReadOnlyList<WorkSessionEventDto>> ListEventsAsync(Guid sessionId, long sinceSequence, int limit, CancellationToken cancellationToken = default)
     {
-        var events = await _store.ListEventsAsync(sessionId, sinceSequence, cancellationToken);
         var clamped = limit <= 0 ? MaxEventPageSize : Math.Min(limit, MaxEventPageSize);
+        var events = await _store.ListEventsAsync(sessionId, sinceSequence, clamped, cancellationToken);
         return
         [
-            .. events.Take(clamped)
-                     .Select(static entry => new WorkSessionEventDto
+            .. events.Select(static entry => new WorkSessionEventDto
                      {
                          Id = entry.Id,
                          Sequence = entry.Sequence,

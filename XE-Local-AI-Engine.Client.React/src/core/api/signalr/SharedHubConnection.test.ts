@@ -26,16 +26,25 @@ interface FakeConnection {
 
 const hoisted = vi.hoisted(() => {
 	const builtConnections: FakeConnection[] = [];
-	let lastWithUrl: { url: string; options: { accessTokenFactory?: () => string } } | undefined;
+	let lastWithUrl: { url: string; options: { accessTokenFactory?: () => Promise<string> } } | undefined;
+
+	let rejectFirstStart = false;
 
 	const makeConnection = (): FakeConnection => {
 		let resolveStart!: () => void;
 		const startPromise = new Promise<void>((resolve) => {
 			resolveStart = resolve;
 		});
+		const failFirst = rejectFirstStart;
+		rejectFirstStart = false;
 		const connection: FakeConnection = {
 			state: "Disconnected",
-			start: vi.fn(() => startPromise),
+			start: failFirst
+				? vi
+						.fn()
+						.mockRejectedValueOnce(new Error("negotiate failed"))
+						.mockImplementation(() => startPromise)
+				: vi.fn(() => startPromise),
 			stop: vi.fn(() => {
 				connection.state = "Disconnected";
 				return Promise.resolve();
@@ -63,8 +72,12 @@ const hoisted = vi.hoisted(() => {
 	return {
 		builtConnections,
 		makeConnection,
+		/** The next built connection's first start() rejects (a failed negotiate); later starts behave normally. */
+		rejectNextStart: () => {
+			rejectFirstStart = true;
+		},
 		getLastWithUrl: () => lastWithUrl,
-		setLastWithUrl: (value: { url: string; options: { accessTokenFactory?: () => string } }) => {
+		setLastWithUrl: (value: { url: string; options: { accessTokenFactory?: () => Promise<string> } }) => {
 			lastWithUrl = value;
 		},
 	};
@@ -72,7 +85,7 @@ const hoisted = vi.hoisted(() => {
 
 vi.mock("@microsoft/signalr", () => ({
 	HubConnectionBuilder: class HubConnectionBuilder {
-		withUrl(url: string, options: { accessTokenFactory?: () => string }) {
+		withUrl(url: string, options: { accessTokenFactory?: () => Promise<string> }) {
 			hoisted.setLastWithUrl({ url, options });
 			return this;
 		}
@@ -95,9 +108,30 @@ vi.mock("@microsoft/signalr", () => ({
 	LogLevel: { Warning: 3 },
 }));
 
+const auth = vi.hoisted(() => {
+	const state: {
+		accessToken: string | null;
+		expiresAtUtc: string | undefined;
+		actions: { setToken: (token: { accessToken: string; expiresAtUtc: string }) => void };
+	} = {
+		accessToken: "test-token",
+		expiresAtUtc: undefined,
+		actions: {
+			setToken: (token) => {
+				state.accessToken = token.accessToken;
+				state.expiresAtUtc = token.expiresAtUtc;
+			},
+		},
+	};
+	return { state };
+});
+
 vi.mock("@/core/auth/stores/NodeAuthStore", () => ({
-	useNodeAuthStore: { getState: () => ({ accessToken: "test-token" }) },
+	useNodeAuthStore: { getState: () => auth.state },
 }));
+
+const refreshNodeAuthToken = vi.hoisted(() => vi.fn());
+vi.mock("@/core/auth/api/NodeAuthApi", () => ({ refreshNodeAuthToken }));
 
 import { acquireHubConnection, resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 
@@ -120,6 +154,9 @@ describe("acquireHubConnection", () => {
 		vi.useFakeTimers();
 		resetSharedHubConnectionsForTest();
 		hoisted.builtConnections.length = 0;
+		auth.state.accessToken = "test-token";
+		auth.state.expiresAtUtc = new Date(Date.now() + 10 * 60_000).toISOString();
+		refreshNodeAuthToken.mockReset();
 	});
 
 	afterEach(() => {
@@ -135,12 +172,26 @@ describe("acquireHubConnection", () => {
 		expect(handle.connection).toBe(hoisted.builtConnections[0]);
 	});
 
-	it("configures the connection with the node access-token factory", () => {
+	it("configures the connection with the node access-token factory", async () => {
 		acquireHubConnection(HUB);
 
 		const withUrl = hoisted.getLastWithUrl();
 		expect(withUrl?.url).toContain("test/hub");
-		expect(withUrl?.options.accessTokenFactory?.()).toBe("test-token");
+		await expect(withUrl?.options.accessTokenFactory?.()).resolves.toBe("test-token");
+		expect(refreshNodeAuthToken).not.toHaveBeenCalled();
+	});
+
+	it("token factory refreshes an expired store token before the negotiate", async () => {
+		// An idle tab's token has lapsed: a reconnect that sent it would get a 401 and the retry policy would give up.
+		auth.state.expiresAtUtc = new Date(Date.now() - 60_000).toISOString();
+		refreshNodeAuthToken.mockResolvedValue({
+			accessToken: "fresh-token",
+			expiresAtUtc: new Date(Date.now() + 15 * 60_000).toISOString(),
+		});
+		acquireHubConnection(HUB);
+
+		await expect(hoisted.getLastWithUrl()?.options.accessTokenFactory?.()).resolves.toBe("fresh-token");
+		expect(refreshNodeAuthToken).toHaveBeenCalledTimes(1);
 	});
 
 	it("reuses the same connection for a second acquire while the first is still open", () => {
@@ -323,6 +374,66 @@ describe("acquireHubConnection", () => {
 		hoisted.builtConnections[0]?.reconnectedFanout?.();
 		expect(cb1).not.toHaveBeenCalled();
 		expect(cb2).toHaveBeenCalledTimes(1);
+	});
+
+	it("acquire after the connection closed for good starts it again", async () => {
+		const first = acquireHubConnection(HUB);
+		const connection = hoisted.builtConnections[0];
+		connection?.resolveStart();
+		await flushMicrotasks();
+
+		// withAutomaticReconnect gave up (node restart, long sleep): the connection is Disconnected and fires onclose.
+		if (connection) {
+			connection.state = "Disconnected";
+		}
+		connection?.closedFanout?.(new Error("reconnect gave up"));
+		const second = acquireHubConnection(HUB);
+
+		expect(connection?.start).toHaveBeenCalledTimes(2);
+		expect(second.connection).toBe(first.connection);
+	});
+
+	it("restarts a closed connection on backoff while a lease is held and fans the restart out as a reconnect", async () => {
+		const handle = acquireHubConnection(HUB);
+		const connection = hoisted.builtConnections[0];
+		connection?.resolveStart();
+		await flushMicrotasks();
+		const reconnected = vi.fn();
+		handle.onReconnected(reconnected);
+
+		if (connection) {
+			connection.state = "Disconnected";
+		}
+		connection?.closedFanout?.(new Error("reconnect gave up"));
+		expect(connection?.start).toHaveBeenCalledTimes(1);
+
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(connection?.start).toHaveBeenCalledTimes(2);
+		expect(reconnected).toHaveBeenCalledTimes(1);
+	});
+
+	it("retries a failed initial start on backoff", async () => {
+		hoisted.rejectNextStart();
+		acquireHubConnection(HUB);
+		const connection = hoisted.builtConnections[0];
+		await flushMicrotasks();
+		expect(connection?.start).toHaveBeenCalledTimes(1);
+
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(connection?.start).toHaveBeenCalledTimes(2);
+	});
+
+	it("does not restart a connection whose last lease was released", async () => {
+		const handle = acquireHubConnection(HUB);
+		const connection = hoisted.builtConnections[0];
+		connection?.resolveStart();
+		await flushMicrotasks();
+
+		handle.release();
+		await advancePastLinger();
+		connection?.closedFanout?.();
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(connection?.start).toHaveBeenCalledTimes(1);
 	});
 
 	it("ignores a double release (idempotent) so refcount cannot go negative", async () => {

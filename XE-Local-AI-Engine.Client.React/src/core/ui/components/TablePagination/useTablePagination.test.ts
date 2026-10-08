@@ -32,6 +32,21 @@ describe("useTablePagination", () => {
 		expect(result.current.lastItemIndex).toBe(25);
 	});
 
+	it.each([
+		["zero", 0],
+		["a string", "25"],
+		["a size the selector no longer offers", 7],
+	])("falls back to the default when storage holds %s", (_label, stored) => {
+		// localStorage is untrusted: a 0 emptied the table behind a nonzero total, and "25" made page 2 concatenate
+		// `25 + "25"` into a slice end of "2525".
+		useTablePaginationStore.setState({ pageSizeByKey: { k: stored as number } });
+		const { result } = renderHook(() => useTablePagination(range(60), { storageKey: "k" }));
+
+		expect(result.current.pageSize).toBe(DEFAULT_PAGE_SIZE);
+		act(() => result.current.setPage(2));
+		expect(result.current.pageItems).toHaveLength(DEFAULT_PAGE_SIZE);
+	});
+
 	it("slices the requested page and reports a partial last page", () => {
 		const items = range(60);
 		const { result } = renderHook(() => useTablePagination(items));

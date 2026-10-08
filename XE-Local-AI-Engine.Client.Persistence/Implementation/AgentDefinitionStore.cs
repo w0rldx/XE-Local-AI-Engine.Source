@@ -200,10 +200,8 @@ public sealed class AgentDefinitionStore : IAgentDefinitionStore
 
     public async Task<IReadOnlyList<AgentDefinitionRecord>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var entities = await _dbContext.AgentDefinitions
-                                       .AsNoTracking()
-                                       .OrderBy(definition => definition.CreatedAtUtc)
-                                       .ToListAsync(cancellationToken);
+        var entities = await _dbContext.ListSkippingUnreadableAsync(_dbContext.AgentDefinitions.OrderBy(definition => definition.CreatedAtUtc),
+            cancellationToken);
 
         return entities.Select(ToRecord).ToArray();
     }

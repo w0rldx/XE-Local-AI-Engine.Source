@@ -603,6 +603,90 @@ public sealed class McpServerConnectionManagerTests
     }
 
     [Test]
+    public async Task Invoke_AfterTwoCallTimeouts_AbandonsAndReconnects()
+    {
+        // A wedged-but-alive server never faults the transport, so only the per-call timeouts can tell the node to recycle it.
+        var wedged = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var pool = new ServerPool();
+        var record = StdioRecord("Counter");
+        var factory = new FakeMcpClientFactory();
+        factory.AddClient(record.Id, await pool.StartCounterAsync(wedged));
+        factory.AddClient(record.Id, await pool.StartCounterAsync());
+        var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
+        await using var manager = CreateManager(registry, factory, new FakeMcpServerStore(record), mcpOptions: new McpOptions
+        {
+            ConnectTimeoutSeconds = 30,
+            // real-timer: the per-call deadline is a CancellationTokenSource.CancelAfter with no TimeProvider seam.
+            ToolCallTimeoutSeconds = 1
+        });
+        await manager.RefreshAsync();
+        var executable = Resolve(registry, "mcp__counter__next");
+
+        try
+        {
+            for (var call = 0; call < McpServerConnectionManager.ConsecutiveTimeoutsBeforeAbandon; call++)
+            {
+                var timedOut = ResultText(await executable.InvokeAsync(new AIFunctionArguments()));
+                AssertEx.True(timedOut.Contains(ToolFailureText.TimeoutCode, StringComparison.Ordinal), $"call {call + 1} must time out (got: {timedOut})");
+            }
+
+            AssertEx.Equal(expected: 1, factory.CreateCount(record.Id), "the timeouts alone never reconnect");
+            var result = ResultText(await executable.InvokeAsync(new AIFunctionArguments()));
+
+            AssertEx.True(result.Contains("count=1", StringComparison.Ordinal), $"the next call must reach a fresh session (got: {result})");
+            AssertEx.Equal(expected: 2, factory.CreateCount(record.Id));
+        }
+        finally
+        {
+            wedged.TrySetResult();
+        }
+    }
+
+    [Test]
+    public async Task Invoke_LateTimeoutFromARetiredSession_DoesNotEvictTheCurrentOne()
+    {
+        // The current session has one real timeout on it; a late timeout from a call that ran on a session since retired
+        // (its token is unknown to every current session) must not count as the second strike.
+        var wedged = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var pool = new ServerPool();
+        var record = StdioRecord("Counter");
+        var factory = new FakeMcpClientFactory();
+        factory.AddClient(record.Id, await pool.StartCounterAsync(wedged));
+        factory.AddClient(record.Id, await pool.StartCounterAsync());
+        var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
+        await using var manager = CreateManager(registry, factory, new FakeMcpServerStore(record), mcpOptions: new McpOptions
+        {
+            ConnectTimeoutSeconds = 30,
+            // real-timer: the per-call deadline is a CancellationTokenSource.CancelAfter with no TimeProvider seam.
+            ToolCallTimeoutSeconds = 1
+        });
+        await manager.RefreshAsync();
+        var executable = Resolve(registry, "mcp__counter__next");
+
+        try
+        {
+            var first = ResultText(await executable.InvokeAsync(new AIFunctionArguments()));
+            AssertEx.True(first.Contains(ToolFailureText.TimeoutCode, StringComparison.Ordinal), $"the first call must time out (got: {first})");
+            using var retiredCall = new CancellationTokenSource();
+            await retiredCall.CancelAsync();
+
+            await manager.OnToolCallTimedOutAsync(record.Id, retiredCall.Token);
+
+            AssertEx.True(manager.GetStatuses().Single().Connected, "a late timeout from another session must not abandon this one");
+            AssertEx.Equal(expected: 1, factory.CreateCount(record.Id));
+            var second = ResultText(await executable.InvokeAsync(new AIFunctionArguments()));
+            AssertEx.True(second.Contains(ToolFailureText.TimeoutCode, StringComparison.Ordinal), $"the call still reaches the wedged session (got: {second})");
+            AssertEx.Equal(expected: 1, factory.CreateCount(record.Id), "its own second timeout is what abandons it, on the next call");
+            var third = ResultText(await executable.InvokeAsync(new AIFunctionArguments()));
+            AssertEx.True(third.Contains("count=1", StringComparison.Ordinal), $"the next call must reach a fresh session (got: {third})");
+        }
+        finally
+        {
+            wedged.TrySetResult();
+        }
+    }
+
+    [Test]
     public async Task ToolListChanged_RelistsAndRepublishesAfterTheDebounce()
     {
         // O-D9: a server that adds a tool announces it with tools/list_changed; the offer must follow without a toggle.
@@ -1046,9 +1130,10 @@ public sealed class McpServerConnectionManagerTests
     }
 
     private static McpServerConnectionManager CreateManager(McpToolRegistry registry, FakeMcpClientFactory factory, IMcpServerStore store, IAgentSandboxRuntimeProvider? sandboxProvider = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null, McpOptions? mcpOptions = null)
     {
-        return new McpServerConnectionManager(BuildScopeFactory(store), registry, factory, sandboxProvider ?? new FakeSandboxRuntimeProvider(TimeProvider.System), Options(),
+        return new McpServerConnectionManager(BuildScopeFactory(store), registry, factory, sandboxProvider ?? new FakeSandboxRuntimeProvider(TimeProvider.System),
+            mcpOptions is null ? Options() : Microsoft.Extensions.Options.Options.Create(mcpOptions),
             Microsoft.Extensions.Options.Options.Create(new AgentToolPipelineOptions()), timeProvider ?? TimeProvider.System, NullLogger<McpServerConnectionManager>.Instance);
     }
 

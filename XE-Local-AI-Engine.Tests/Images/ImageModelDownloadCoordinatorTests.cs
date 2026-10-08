@@ -80,6 +80,20 @@ public sealed class ImageModelDownloadCoordinatorTests
     }
 
     [Test]
+    public async Task Start_WhenTheModelsDirectoryIsUnwritable_ReachesFailedInsteadOfStayingRunning()
+    {
+        // UnauthorizedAccessException was outside every catch filter, so the status stayed Running until restart.
+        var store = new ThrowingImageModelStore(new UnauthorizedAccessException("Access to the path '/models/images/x.part' is denied."));
+        var coordinator = Coordinator(store);
+
+        var ticket = coordinator.Start(Request());
+
+        var status = await WaitForTerminalAsync(coordinator, ticket.ModelName);
+        AssertEx.Equal(ImageModelDownloadPhase.Failed, status.Phase);
+        AssertEx.Equal("Download failed.", AssertEx.NotNull(status.SanitizedError));
+    }
+
+    [Test]
     public async Task Start_WhenTheDownloadSucceeds_ReachesCompletedAndIsListed()
     {
         var coordinator = Coordinator(new CompletingImageModelStore());

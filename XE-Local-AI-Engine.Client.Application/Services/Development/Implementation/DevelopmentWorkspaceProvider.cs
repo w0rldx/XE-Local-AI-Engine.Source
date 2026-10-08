@@ -34,6 +34,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     /// </remarks>
     private const string RuntimeMountRoot = "/xe-runtime";
 
+    private const string PartialCloneMarker = ".partial-";
+
     /// <summary><c>.git/config</c> named in the sandbox-path namespace, whose root IS the workspace.</summary>
     /// <remarks>
     ///     A provider with a mount layer derives the real target from the host path, which is inside the trusted
@@ -183,6 +185,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             "The trusted repository Git directory could not be resolved.",
             cancellationToken);
         string baseCommit;
+        DeleteUntrustedLeftovers(worktreePath, workspaceManifestPath);
         if (!Directory.Exists(worktreePath))
         {
             var resolve = await git.RunAsync(canonicalRepositoryRoot,
@@ -191,9 +194,12 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             EnsureGitSuccess(resolve, "The configured base branch could not be resolved.");
             baseCommit = resolve.StandardOutput.Trim();
 
+            // Cloned beside the final path and moved in only once complete and covered by its manifest, so a hard stop
+            // at any point leaves either no workspace or a trusted one, never a half clone at the preserved path.
+            var partialPath = worktreePath + PartialCloneMarker + Guid.NewGuid().ToString("N");
             await CreateStandaloneWorkspaceAsync(git,
                 canonicalRepositoryRoot,
-                worktreePath,
+                partialPath,
                 snapshot.BaseBranch,
                 baseCommit,
                 cancellationToken);
@@ -203,6 +209,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
                     repository.SelectedFolderId,
                     baseCommit),
                 cancellationToken);
+            Directory.Move(partialPath, worktreePath);
         }
         else
         {
@@ -695,10 +702,27 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         }
         catch
         {
-            // Only reachable when the workspace directory did not exist before this call, so removing it cannot
-            // destroy a preserved one — and the next attempt would take the preserved branch and trust a half clone.
+            // The clone target is a fresh partial path, so removing it cannot destroy a preserved workspace.
             StandaloneGitClone.TryDelete(worktreePath);
             throw;
+        }
+    }
+
+    /// <summary>
+    ///     Removes what an interrupted first clone can leave under this provider's own root: partial clones beside the
+    ///     workspace, and a workspace with no manifest, which no completed preparation ever produces.
+    /// </summary>
+    private static void DeleteUntrustedLeftovers(string worktreePath, string workspaceManifestPath)
+    {
+        var parent = Path.GetDirectoryName(worktreePath)!;
+        foreach (var partial in Directory.EnumerateDirectories(parent, Path.GetFileName(worktreePath) + PartialCloneMarker + "*"))
+        {
+            StandaloneGitClone.Delete(partial);
+        }
+
+        if (Directory.Exists(worktreePath) && !File.Exists(workspaceManifestPath))
+        {
+            StandaloneGitClone.Delete(worktreePath);
         }
     }
 

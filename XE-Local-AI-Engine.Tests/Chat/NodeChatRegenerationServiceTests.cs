@@ -225,6 +225,48 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.False(dispatcher.HasApprovalSubscribers, "The approval handler must be detached even when the turn throws before its tasks exist.");
     }
 
+    [Test]
+    public async Task RegenerateAsync_WhenVariantTerminalAfterLease_ReportsTerminalAndClearsResume()
+    {
+        // The variant is finalized between the lease grant and the streaming mark. The Assigned state the lease
+        // published must still reach a terminal, or a reload keeps resuming into a stream that never ends.
+        await using var provider = await BuildProviderAsync("regeneration-terminal-after-lease.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var (conversationId, originalId) = await SeedRegeneratableTurnAsync(persistence);
+        var events = new List<ChatStreamEvent>();
+        var dispatcher = new RegenRecordingDispatcher
+        {
+            OnAssigned = async () =>
+            {
+                var queued = events.Single(static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantQueued);
+                await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+                {
+                    Correlation = new NodeChatMessageCorrelation
+                    {
+                        ConversationId = conversationId,
+                        MessageId = queued.MessageId,
+                        RequestId = queued.RequestId
+                    },
+                    Status = NodeChatMessageStatusValues.Cancelled,
+                    UpdatedAtUtc = 20,
+                    Content = string.Empty,
+                    Model = "model-x"
+                });
+            }
+        };
+        var resumeRegistry = new InvocationResumeRegistry(dispatcher, TimeProvider.System, NullLogger<InvocationResumeRegistry>.Instance);
+        var service = CreateService(persistence, dispatcher, new RegenCompletingRunner(dispatcher));
+
+        await foreach (var streamEvent in service.RegenerateAsync(conversationId, originalId))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.False(events.Exists(static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantStreaming), "the model never ran.");
+        AssertEx.Equal(InvocationStatus.Cancelled, AssertEx.NotNull(dispatcher.CurrentInvocation).Status, "the lease's Assigned state reached a terminal.");
+        AssertEx.Null(resumeRegistry.TryGetLiveInvocationIdForConversation(conversationId), "nothing is left to resume into.");
+    }
+
     // Seeds a completed user + assistant turn and returns the ids needed to regenerate that assistant answer.
     private static async Task<(Guid ConversationId, Guid OriginalMessageId)> SeedRegeneratableTurnAsync(NodeChatPersistenceService persistence)
     {
@@ -3700,12 +3742,15 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         public InvocationState? CurrentInvocation { get; private set; }
 
+        /// <summary>Runs once the lease is granted, before the service marks the row streaming: the race window under test.</summary>
+        public Func<Task>? OnAssigned { get; init; }
+
         public Task DispatchApprovalResolvedAsync(ApprovalResolvedEvent evt, ApprovalScope scope = ApprovalScope.Once)
         {
             return Task.CompletedTask;
         }
 
-        public Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default)
+        public async Task<IAsyncDisposable> ReportInvocationAssignedAsync(RuntimePackage package, CancellationToken cancellationToken = default)
         {
             CurrentInvocation = new InvocationState
             {
@@ -3716,7 +3761,12 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                 LastUpdatedAt = DateTimeOffset.UtcNow
             };
             RaiseChanged();
-            return Task.FromResult<IAsyncDisposable>(NoopLease.Instance);
+            if (OnAssigned is not null)
+            {
+                await OnAssigned();
+            }
+
+            return NoopLease.Instance;
         }
 
         public Task ReportInvocationStreamChunkAsync(Guid invocationId, string chunk)

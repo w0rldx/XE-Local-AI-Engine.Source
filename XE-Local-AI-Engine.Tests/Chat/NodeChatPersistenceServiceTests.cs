@@ -1588,6 +1588,34 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task ListConversationsAsync_WithOneUndecryptableTitle_ListsEveryConversation()
+    {
+        await using var provider = await BuildProviderAsync("unreadable-title.sqlite");
+        var service = CreateService(provider);
+        var good = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Readable",
+            UserId = null,
+            CreatedAtUtc = 10
+        });
+        var bad = await service.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Bit-rotted",
+            UserId = null,
+            CreatedAtUtc = 11
+        });
+        await FlipLastTitleByteAsync(provider, bad.ConversationId);
+
+        var summaries = await service.ListConversationsAsync(new NodeChatListConversationsRequest());
+
+        // The bad row stays listed, untitled, so it can still be reached and deleted; the detail read stays strict.
+        AssertEx.Equal(expected: 2, summaries.Count);
+        AssertEx.Equal("Readable", summaries.Single(summary => summary.ConversationId == good.ConversationId).Title);
+        AssertEx.Null(summaries.Single(summary => summary.ConversationId == bad.ConversationId).Title);
+        await AssertEx.ThrowsAsync<CryptographicException>(() => service.GetConversationAsync(bad.ConversationId));
+    }
+
+    [Test]
     public async Task DeleteConversationAsync_CancelsActiveMessagesBeforeHidingConversation()
     {
         await using var provider = await BuildProviderAsync("delete.sqlite");
@@ -3713,6 +3741,28 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         command.Parameters.Add(parameter);
         var content = await command.ExecuteScalarAsync();
         return (byte[])content!;
+    }
+
+    private static async Task FlipLastTitleByteAsync(ServiceProvider provider, Guid conversationId)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync();
+        byte[] title;
+        await using (var read = connection.CreateCommand())
+        {
+            read.CommandText = "SELECT title FROM conversations WHERE conversation_id = $conversation_id;";
+            read.Parameters.Add(new SqliteParameter("$conversation_id", conversationId));
+            title = (byte[])(await read.ExecuteScalarAsync())!;
+        }
+
+        title[^1] ^= 0x01;
+        await using var write = connection.CreateCommand();
+        write.CommandText = "UPDATE conversations SET title = $title WHERE conversation_id = $conversation_id;";
+        write.Parameters.Add(new SqliteParameter("$title", title));
+        write.Parameters.Add(new SqliteParameter("$conversation_id", conversationId));
+        AssertEx.Equal(expected: 1, await write.ExecuteNonQueryAsync());
     }
 
     private static async Task WriteRawMessageContentAsync(ServiceProvider provider, Guid messageId, byte[] content)

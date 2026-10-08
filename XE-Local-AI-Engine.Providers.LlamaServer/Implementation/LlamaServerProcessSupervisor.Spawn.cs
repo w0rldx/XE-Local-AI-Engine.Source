@@ -542,6 +542,15 @@ public sealed partial class LlamaServerProcessSupervisor
                 handle?.Dispose();
                 await _reaper.ReleaseReservedPortAsync(port).ConfigureAwait(false);
 
+                // The probe-then-bind port race (another node or service took the port in between) is neither the model's fault nor
+                // the optimized config's: throw a RETRYABLE error so the restart loop re-allocates, and the probe skips the taken port.
+                if (automaticCapture is not null && IsPortBindFailure(automaticCapture.Snapshot()))
+                {
+                    _logger.LogWarning("llama-server for model {ModelName} role {Role} could not bind port {Port}, which another process took; retrying on another port.",
+                        key.ModelName, key.Role, port);
+                    throw new LlamaRuntimeException("The local model runtime could not bind its local port because another process took it.", ex);
+                }
+
                 // A capability rejection is known before process launch, so retrying an optimized or safe candidate cannot change the outcome. Other non-retryable
                 // errors can still come from the optimized child exiting during load, so the paid-for one-shot safe KV/FA fallback is preserved for that case.
                 if (ex.Data.Contains(CapabilityIncompatibleMarker))
@@ -916,6 +925,11 @@ public sealed partial class LlamaServerProcessSupervisor
             throw ReadinessTimedOut("The local model runtime did not become ready in time.");
         }
     }
+
+    /// <summary>Whether startup output reports the listen socket could not be bound (llama.cpp's "couldn't bind HTTP server socket").</summary>
+    internal static bool IsPortBindFailure(IEnumerable<string> lines) =>
+        lines.Any(static line => line.Contains("couldn't bind", StringComparison.OrdinalIgnoreCase)
+                                 || line.Contains("address already in use", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Polls the process's exit flag until it exits or the wait is cancelled (readiness won the race).</summary>
     private async Task WatchForExitAsync(IProcessTreeHandle handle, CancellationToken ct)

@@ -4,8 +4,9 @@
 
 .DESCRIPTION
     What this does, in order:
-      1. Stops any running XE Local AI Engine process and the llama-server / sd-server
-         child runtimes THIS app spawned (matched strictly by executable path under the
+      1. Stops the desktop shell and launcher first, then any running XE Local AI Engine
+         process, then the llama-server / sd-server / whisper-server child runtimes and
+         the trainer's Python interpreter THIS app spawned (matched strictly by executable path under the
          app's own per-user data directory - an unrelated llama-server/Ollama is never
          touched, mirroring the app's own StaleProcessReaper).
       2. If a Velopack-managed install is detected, notes that Velopack/the OS uninstall
@@ -58,9 +59,7 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
 $AppName     = 'XE Local AI Engine'
-$BinaryName  = 'XE-Local-AI-Engine.Client'   # running-process base name (no .exe)
 $DataDirName = 'XE-Local-AI-Engine'          # per-user data directory name (no ".Client")
-$ChildNames  = @('llama-server', 'sd-server')
 
 # Per-user uninstall: an elevated session can resolve a different profile's LOCALAPPDATA.
 if (-not $AllowAdmin) {
@@ -98,20 +97,42 @@ function Test-UnderDirectory {
     return $full.StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase)
 }
 
-$targets = New-Object System.Collections.Generic.List[object]
+# Every process to stop, in stop order. The desktop shell and the launcher come first: the shell holds
+# desktop-shell.lock and its WebView2 profile inside the data dir, so a live shell makes the delete abort
+# half-way. Then the app process, then the child runtimes and the trainer's Python interpreter. Nothing is
+# matched by name alone: the shell, launcher and app only when their executable lives in this install
+# (the data dir, the folder this script ships in, or the Velopack root), so a same-named host of another
+# install or checkout keeps running; the runtimes and Python only when they live under our own data dir.
+function Get-XEUninstallTarget {
+    param([Parameter(Mandatory)][string] $DataDirectory, [string[]] $InstallDirectory = @())
+    $appNames = @('XE-Local-AI-Engine.Desktop', 'XE-Local-AI-Engine.WindowsLauncher', 'XE-Local-AI-Engine.Client')
+    $ownedNames = @('llama-server', 'sd-server', 'whisper-server', 'python', 'pythonw')
+    $appRoots = @($DataDirectory) + @($InstallDirectory | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 
-# The app process itself (matched by name - a single, specific binary name).
-foreach ($p in @(Get-Process -Name $BinaryName -ErrorAction SilentlyContinue)) {
-    $targets.Add($p)
-}
-# Child runtimes: only those whose executable lives under our own data dir.
-foreach ($p in @(Get-Process -Name $ChildNames -ErrorAction SilentlyContinue)) {
-    $path = $null
-    try { $path = $p.Path } catch { $path = $null }
-    if (Test-UnderDirectory -Path $path -Root $dataDir) {
-        $targets.Add($p)
+    $found = New-Object System.Collections.Generic.List[object]
+    # One name at a time keeps the stop order: shell, launcher, then the app.
+    foreach ($name in $appNames) {
+        foreach ($p in @(Get-Process -Name $name -ErrorAction SilentlyContinue)) {
+            $path = $null
+            try { $path = $p.Path } catch { $path = $null }
+            if (@($appRoots | Where-Object { Test-UnderDirectory -Path $path -Root $_ }).Count -gt 0) {
+                $found.Add($p)
+            }
+        }
     }
+    foreach ($p in @(Get-Process -Name $ownedNames -ErrorAction SilentlyContinue)) {
+        $path = $null
+        try { $path = $p.Path } catch { $path = $null }
+        if (Test-UnderDirectory -Path $path -Root $DataDirectory) {
+            $found.Add($p)
+        }
+    }
+    return $found.ToArray()
 }
+
+# The portable zip ships this script beside the app; a Velopack install lives in the "-app" root.
+$installDirs = @($PSScriptRoot, (Join-Path $localAppData "$DataDirName-app"))
+$targets = @(Get-XEUninstallTarget -DataDirectory $dataDir -InstallDirectory $installDirs)
 
 if ($targets.Count -gt 0) {
     Write-Host ">> Running $AppName processes to stop:"
@@ -121,19 +142,15 @@ if ($targets.Count -gt 0) {
         Write-Host ("     pid {0}  {1}" -f $p.Id, $path)
     }
     if (-not $DryRun) {
-        # Stop the app first: terminating it closes its Job Object (KILL_ON_JOB_CLOSE),
-        # which reaps its own llama-server/sd-server children.
+        # In list order: the shell first, then the app, whose Job Object (KILL_ON_JOB_CLOSE)
+        # reaps its own child runtimes as it goes.
         foreach ($p in $targets) {
             try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { $null = $_ }
         }
         Start-Sleep -Seconds 1
-        # Sweep any child-runtime stragglers still resident under our data dir.
-        foreach ($p in @(Get-Process -Name $ChildNames -ErrorAction SilentlyContinue)) {
-            $path = $null
-            try { $path = $p.Path } catch { $path = $null }
-            if (Test-UnderDirectory -Path $path -Root $dataDir) {
-                try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { $null = $_ }
-            }
+        # Sweep any stragglers (a relaunched app, a child that outlived its job).
+        foreach ($p in @(Get-XEUninstallTarget -DataDirectory $dataDir -InstallDirectory $installDirs)) {
+            try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { $null = $_ }
         }
         Write-Host ">> Processes stopped."
     }

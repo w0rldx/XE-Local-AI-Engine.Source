@@ -603,6 +603,58 @@ public sealed partial class McpAgentRunStore
         return count;
     }
 
+    public async Task<int> PruneExpiredTombstonesAsync(long nowUtc, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var transaction = BeginImmediateTransaction(connection);
+        var ledger = await LoadRequiredLedgerAsync(connection, transaction, cancellationToken);
+        const string expired = """
+                               FROM mcp_agent_runs
+                               WHERE status IN ($succeeded, $failed, $cancelled, $interrupted)
+                                   AND active_payload_bytes = 0 AND compacted_at_utc IS NOT NULL AND compacted_at_utc <= $cutoff
+                               """;
+
+        long released;
+        int count;
+        await using (var totals = CreateCommand(connection, transaction, "SELECT COUNT(*), COALESCE(SUM(tombstone_logical_bytes), 0) " + expired + ";"))
+        {
+            AddTombstoneFilter(totals, nowUtc);
+            await using var reader = await totals.ExecuteReaderAsync(cancellationToken);
+            _ = await reader.ReadAsync(cancellationToken);
+            count = checked((int)reader.GetInt64(0));
+            released = reader.GetInt64(1);
+        }
+
+        if (count > 0)
+        {
+            await using var prune = CreateCommand(connection, transaction, "DELETE " + expired + ";");
+            AddTombstoneFilter(prune, nowUtc);
+            _ = await prune.ExecuteNonQueryAsync(cancellationToken);
+
+            await UpdateLedgerAsync(connection,
+                transaction,
+                ledger with
+                {
+                    IdentityCount = ledger.IdentityCount - count,
+                    TombstoneLogicalBytes = ledger.TombstoneLogicalBytes - released,
+                    UpdatedAtUtc = nowUtc
+                },
+                cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return count;
+    }
+
+    private static void AddTombstoneFilter(SqliteCommand command, long nowUtc)
+    {
+        Add(command, "$succeeded", (int)McpAgentRunStatus.Succeeded);
+        Add(command, "$failed", (int)McpAgentRunStatus.Failed);
+        Add(command, "$cancelled", (int)McpAgentRunStatus.Cancelled);
+        Add(command, "$interrupted", (int)McpAgentRunStatus.Interrupted);
+        Add(command, "$cutoff", nowUtc - TombstoneRetentionMilliseconds);
+    }
+
     public async Task<McpAgentRunLedgerVerification> VerifyLedgerAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);

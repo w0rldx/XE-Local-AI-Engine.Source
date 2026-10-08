@@ -1286,8 +1286,9 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     resolve never observes a partial install (a missing server, or a CUDA build without its cudart DLLs).
     /// </summary>
     /// <remarks>
-    ///     The old dir is renamed aside (named like a staging dir), not deleted first: a delete that stops at a locked file, or a move that fails after it,
+    ///     The old dir is renamed aside, not deleted first: a delete that stops at a locked file, or a move that fails after it,
     ///     would leave a half-deleted or no runtime. A failed move renames it back; a failed rename aside has touched nothing. Either way it rethrows.
+    ///     The aside is <c>.aside</c>, never <c>.tmp</c>: a rename keeps the old mtime, so the staging sweep's age bound could not protect it.
     /// </remarks>
     internal static void PublishStagedVariant(string stagingDir, string variantDir)
     {
@@ -1295,7 +1296,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         string? aside = null;
         if (Directory.Exists(variantDir))
         {
-            aside = $"{variantDir}.{Guid.NewGuid():N}.tmp";
+            aside = $"{variantDir}.{Guid.NewGuid():N}.aside";
             Directory.Move(variantDir, aside);
         }
 
@@ -1323,6 +1324,40 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             TryDeleteDirectory(aside);
         }
+    }
+
+    /// <summary>
+    ///     Deletes <c>{cacheRoot}/llama.cpp/{tag}/{variant}.{guid}.tmp</c> extraction staging directories last written before
+    ///     <paramref name="olderThanUtc" />, and returns how many it removed.
+    /// </summary>
+    /// <remarks>
+    ///     Staging is normally removed in a <c>finally</c>, so a survivor is left by a kill or crash mid-acquisition. The age
+    ///     bound keeps another node's live extraction safe. Publish asides (<c>.aside</c>) are never matched: they may be a
+    ///     live rollback copy with an old mtime. Best-effort: a failed delete is skipped.
+    /// </remarks>
+    internal static int SweepStaleStagingDirectories(string cacheRoot, DateTimeOffset olderThanUtc)
+    {
+        var llamaCppRoot = Path.Combine(cacheRoot, "llama.cpp");
+        if (!Directory.Exists(llamaCppRoot))
+        {
+            return 0;
+        }
+
+        var swept = 0;
+        foreach (var tagDir in Directory.EnumerateDirectories(llamaCppRoot))
+        {
+            foreach (var candidate in Directory.EnumerateDirectories(tagDir, "*.*.tmp"))
+            {
+                if (candidate.EndsWith(".tmp", StringComparison.Ordinal)
+                    && Directory.GetLastWriteTimeUtc(candidate) < olderThanUtc.UtcDateTime)
+                {
+                    TryDeleteDirectory(candidate);
+                    swept += Directory.Exists(candidate) ? 0 : 1;
+                }
+            }
+        }
+
+        return swept;
     }
 
     private static async Task ExtractTarGzAsync(string archivePath, string destination, CancellationToken ct)

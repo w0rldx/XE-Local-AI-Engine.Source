@@ -7,7 +7,12 @@ const getInitialLanguage = () => {
 		return "en";
 	}
 
-	return localStorage.getItem("i18nextLng") || "en";
+	try {
+		return localStorage.getItem("i18nextLng") || "en";
+	} catch {
+		// A browser that blocks site data throws on access, and this runs while the module evaluates.
+		return "en";
+	}
 };
 
 export const useUserLanguageStore = create<HeaderBarTitleState>()((set) => ({

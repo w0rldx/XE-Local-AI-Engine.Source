@@ -570,6 +570,11 @@ export const zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProb
 	name: z.string(),
 });
 
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateBusyItemResponse = z.object({
+	kind: z.string(),
+	displayName: z.string().nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse = z.object({
 	currentVersion: z.string(),
 	availableVersion: z.string().nullish(),
@@ -585,8 +590,18 @@ export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse =
 	availableChannel: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateBlockedResponse = z.object({
+	busyItems: z.array(zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateBusyItemResponse),
+	message: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateRequest = z.object({
+	force: z.boolean().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = z.object({
 	applying: z.boolean(),
+	targetVersion: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = z.record(z.string(), z.never());
@@ -9470,6 +9485,8 @@ export const zUpdateSuggestedPlaybookActionPath = z.object({
  * Success
  */
 export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+export const zApplyAppUpdateBody = zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateRequest;
 
 /**
  * Success

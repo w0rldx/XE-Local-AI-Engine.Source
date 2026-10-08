@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.Abstractions;
 
+using System.Globalization;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -67,6 +68,12 @@ public static class SecureFilePermissions
             await using (stream.ConfigureAwait(false))
             {
                 await stream.WriteAsync(content, cancellationToken).ConfigureAwait(false);
+
+                // fsync before the rename: otherwise a power loss can persist the rename ahead of the data, leaving a
+                // zero-length file where the vault or a credential used to be.
+#pragma warning disable CA1849 // FlushAsync never reaches the disk; only Flush(flushToDisk: true) issues the fsync this needs.
+                stream.Flush(flushToDisk: true);
+#pragma warning restore CA1849
             }
 
             Apply(tempPath);
@@ -77,6 +84,29 @@ public static class SecureFilePermissions
             DeleteBestEffort(tempPath);
             throw;
         }
+    }
+
+    /// <summary>
+    ///     Renames an unreadable secret file to <c>{path}.unreadable-{utc}</c> instead of deleting it, so restoring the
+    ///     key ring that wrote it can still recover it. Returns the new path, or <see langword="null" /> when absent.
+    /// </summary>
+    /// <remarks>
+    ///     A store that cannot decrypt or parse its file cannot tell a lost key ring from a corrupt file, so the bytes
+    ///     are kept and the store reads as empty. Throws on a failed rename; callers treat it as best-effort.
+    /// </remarks>
+    public static string? MoveAsideUnreadable(string path, TimeProvider? timeProvider = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var stamp = (timeProvider ?? TimeProvider.System).GetUtcNow().ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
+        var quarantinePath = string.Concat(path, ".unreadable-", stamp);
+        File.Move(path, quarantinePath, overwrite: false);
+        return quarantinePath;
     }
 
     /// <summary>
