@@ -29,11 +29,12 @@ internal sealed partial class LlamaServerProcessLauncher : ILlamaServerProcessLa
     private readonly ILogger<LlamaServerProcessLauncher> _logger;
     private readonly ChildProcessOutputTailRegistry _outputTails;
 
-    public LlamaServerProcessLauncher(ILogger<LlamaServerProcessLauncher> logger, ChildProcessOutputTailRegistry? outputTails = null)
+    public LlamaServerProcessLauncher(ILogger<LlamaServerProcessLauncher> logger, ChildProcessOutputTailRegistry outputTails)
     {
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(outputTails);
         _logger = logger;
-        _outputTails = outputTails ?? new ChildProcessOutputTailRegistry();
+        _outputTails = outputTails;
     }
 
     /// <inheritdoc />

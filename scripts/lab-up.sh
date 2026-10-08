@@ -31,8 +31,16 @@
 #   --snapshot       After settings: stop the host, save the node state to .tmp/lab/<profile>/snapshot, restart.
 #   --download       Install a missing model through the node from the profile's `modelSource`.
 #   --no-build       Pass --no-build to dev-start.sh.
+#   --plan NAME      The plan that owns this lab (default: env XE_LAB_PLAN, else `unassigned`).
+#   --note TEXT      Free-text session note stored in the lab's OWNER file.
+#   --take-over      Re-assign a lab owned by another plan to --plan (keeps `created`, adds `taken_over`).
 #   --json           Print only the manifest JSON on stdout.
 #   --help           Show this message.
+#
+# Ownership: .tmp/lab/<profile>/OWNER is a key=value file (plan, created, delete_after = created + 14 days,
+# worktree, session_note, and taken_over or adopted when that happened). A lab owned by another plan is refused
+# (exit 2) unless --take-over; a lab without OWNER is adopted by the requested plan. delete_after is informational:
+# nothing here deletes a lab.
 #
 # Environment: LAB_EMAIL / LAB_PASSWORD (default admin@localhost.test / !Demo1234567), LAB_READY_TIMEOUT_SECONDS
 # (default 240). Every driver call is appended to .tmp/lab/<profile>/evidence/lab-up.log, password and token redacted.
@@ -42,7 +50,8 @@
 # Exit codes:
 #   0   — the requested phases are in place; the manifest was written
 #   1   — an interaction failed (transport, auth, contract, settings not verified, download)
-#   2   — prerequisite missing / usage error (profile missing, model absent without --download, XE_ASPIRE_APPHOST
+#   2   — prerequisite missing / usage error (profile missing, model absent without --download, lab owned by
+#         another plan without --take-over, XE_ASPIRE_APPHOST
 #         naming another checkout's AppHost, XE_NODE_OPERATOR_SECRET_FILE outside this checkout's .data)
 #   3   — this checkout's host is running but not for this lab (its environment differs), or --fresh while it runs
 #   4   — could not establish whether this checkout's host is running
@@ -94,8 +103,14 @@ SNAPSHOT_REQ="false"
 DOWNLOAD="false"
 NO_BUILD="false"
 JSON="false"
+PLAN="${XE_LAB_PLAN:-unassigned}"
+NOTE=""
+TAKE_OVER="false"
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --plan)      PLAN="${2:-}"; [[ -n "${PLAN}" ]] || die 2 "--plan needs a value"; shift 2 ;;
+    --note)      NOTE="${2:-}"; [[ -n "${NOTE}" ]] || die 2 "--note needs a value"; shift 2 ;;
+    --take-over) TAKE_OVER="true"; shift ;;
     --profile)  PROFILE="${2:-}"; [[ -n "${PROFILE}" ]] || die 2 "--profile needs a value"; shift 2 ;;
     --model)    MODEL_OVERRIDE="${2:-}"; [[ -n "${MODEL_OVERRIDE}" ]] || die 2 "--model needs a value"; shift 2 ;;
     --until)    UNTIL="${2:-}"; [[ -n "${UNTIL}" ]] || die 2 "--until needs a value"; shift 2 ;;
@@ -122,6 +137,44 @@ EVIDENCE="${LAB}/evidence"
 DRIVER_LOG="${EVIDENCE}/lab-up.log"
 TOKEN_FILE="${LAB}/token"
 DESIRED="${LAB}/desired-settings.json"
+OWNER_FILE="${LAB}/OWNER"
+[[ "${PLAN}" =~ ^[A-Za-z0-9._-]+$ ]] || die 2 "invalid plan name '${PLAN}' (letters, digits, . _ - only)"
+
+owner_value() { sed -n "s/^$1=//p" "${OWNER_FILE}" | head -n 1; }
+
+# Writes OWNER before anything else touches the lab, so a lab is never left without one. A lab owned by another plan
+# is refused unless --take-over; an existing lab without OWNER predates ownership and is adopted.
+ensure_lab_owner() {
+  local now created extra owner_plan
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  created="${now}"
+  extra=""
+  if [[ -f "${OWNER_FILE}" ]]; then
+    owner_plan="$(owner_value plan)"
+    owner_plan="${owner_plan:-unassigned}"
+    [[ "${owner_plan}" != "${PLAN}" ]] || return 0
+    [[ "${TAKE_OVER}" == "true" ]] \
+      || die 2 "lab ${LAB} is owned by plan '${owner_plan}', this run asks for plan '${PLAN}'. Use --plan ${owner_plan}, or --take-over to re-assign it."
+    created="$(owner_value created)"
+    created="${created:-${now}}"
+    extra="taken_over=${now}"
+    log "lab ${LAB} taken over from plan '${owner_plan}' by plan '${PLAN}'"
+  elif [[ -d "${LAB}" ]]; then
+    extra="adopted=${now}"
+    log "lab ${LAB} had no OWNER; adopted by plan '${PLAN}'"
+  fi
+  mkdir -p "${LAB}"
+  {
+    echo "plan=${PLAN}"
+    echo "created=${created}"
+    echo "delete_after=$(date -u -d "${created} + 14 days" +%Y-%m-%d)"
+    echo "worktree=$(realpath "${ROOT}")"
+    echo "session_note=${NOTE//$'\n'/ }"
+    [[ -z "${extra}" ]] || echo "${extra}"
+  } >"${OWNER_FILE}.tmp"
+  mv -f -- "${OWNER_FILE}.tmp" "${OWNER_FILE}"
+}
+ensure_lab_owner
 mkdir -p "${EVIDENCE}" "${LAB}/xdg"
 
 # The profile is read once: scalar records, `env<TAB>KEY<TAB>VALUE` records, and the desired settings with <model>
@@ -323,7 +376,8 @@ start_host() {
 # Reads the base URL, Vite URL and host pid from dev-status.sh --json, then waits for auth/status to answer.
 discover_host() {
   local status_json urls
-  status_json="$("${SCRIPT_DIR}/dev-status.sh" --json 2>/dev/null)" || die 5 "dev-status.sh --json failed."
+  status_json="$(XE_DEV_STATUS_SKIP_LAB_SCAN=1 "${SCRIPT_DIR}/dev-status.sh" --json 2>/dev/null)" \
+    || die 5 "dev-status.sh --json failed."
   BASE_URL="$(python3 "${MATRIX_DRIVER}" base-url <<<"${status_json}")" \
     || die 5 "could not discover the app base URL from dev-status.sh --json."
   urls="$(python3 -c '

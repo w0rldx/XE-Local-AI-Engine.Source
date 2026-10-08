@@ -28,12 +28,27 @@ Slugs follow GitHub: lowercase, inline markers dropped, every character that is 
 hyphen or underscore removed, spaces become hyphens without collapsing, and duplicates get `-1`, `-2`, ...
 Moved or renamed pages are the failure it catches; external URLs are not fetched.
 
+Four hygiene checks scan tracked files for rules AGENTS.md states: `file-line-citations` (no `file.cs:123` citation
+outside fences in the instruction and wiki docs), `tracked-secrets` (no node.key, SQLite file, .env, dp-keys/ or
+*.enc tracked), `tool-names` (no per-user agent or editor tool config named in product, gate, test or instruction
+files) and `host-phrasing` (no home path, uid, subuid range or "this box" in docs; no RAM/CPU inventory unless the
+line is dated). Their git calls drop the repository-selection variables (GIT_DIR, GIT_INDEX_FILE, ...), so an
+exported private index cannot answer for the work tree. Their scope is narrowed by path, never by word:
+- tool-names denylists config and marker forms (`.claude/`, `CLAUDE.md`, `.codex/`, `ponytail`, ...), not the product
+  name of a third-party MCP client, which the inbound MCP surface legitimately names. The installers and their tests
+  are exempt: they place the shipped skill into the user's agent skill directories.
+- host-phrasing allows the bare word `subuid` (rootless-Docker product vocabulary) and bans a concrete
+  `user:start:count` range entry. `docs/user-guide/` (end-user system requirements) and `docs/audits/` (dated
+  reports) are exempt, and a quoted "this box" is the rule being stated, not used.
+
 Exit codes: 0 clean, 1 something is missing from a page or over a cap, 2 a check could not run at all.
 """
 
 from __future__ import annotations
 
 import argparse
+import codecs
+import os
 import re
 import subprocess
 import sys
@@ -83,7 +98,9 @@ BUILD_OUTPUT_DIRS = frozenset({"bin", "obj"})
 # Vendored, generated or corpus Markdown whose links point into trees that are not part of this repository.
 MARKDOWN_LINK_EXCLUDED_PREFIXES = ("XE-Local-AI-Engine.Client.Application/Services/Agents/Templates/",)
 MARKDOWN_LINK_EXCLUDED_SEGMENTS = ("/LiveCorpus/", "third-party/")
-FENCE_RE = re.compile(r"^ {0,3}(?P<fence>`{3,}|~{3,})")
+# CommonMark: a backtick fence's info string holds no backtick (so ```x``` is inline code); a closing fence is a
+# bare marker at least as long as the opener.
+FENCE_RE = re.compile(r"^ {0,3}(?P<fence>`{3,}(?=[^`]*$)|~{3,})(?P<info>.*)$")
 ATX_HEADING_RE = re.compile(r"^ {0,3}#{1,6}[ \t]+(?P<text>.*?)(?:[ \t]+#+)?[ \t]*$")
 HTML_ANCHOR_RE = re.compile(r"\b(?:id|name)\s*=\s*[\"'](?P<anchor>[^\"']+)[\"']")
 CODE_SPAN_RE = re.compile(r"(`+)(?:.+?)\1")
@@ -94,6 +111,134 @@ SKIPPED_LINK_SCHEMES = ("http://", "https://", "mailto:")
 # `_` vanishes only as an emphasis marker (not between two letters/digits, as in `gen_aitool`).
 HEADING_MARKUP_RE = re.compile(
     r"`+(?P<code>[^`]*)`+|!?\[(?P<label>[^\]]*)\]\([^)]*\)|<[^>]+>|\*+|(?<![^\W_])_+|_+(?![^\W_])"
+)
+
+# `file-line-citations`: the instruction and architecture docs cite code as file + symbol (AGENTS.md); git's `*`
+# crosses `/`, so these pathspecs cover docs/agent-knowledge/ and every wiki subdirectory.
+CITATION_DOC_PATHSPECS = (
+    "docs/agent-knowledge*.md",
+    "docs/wiki/*.md",
+    "AGENTS.md",
+    "XE-Local-AI-Engine.Client.React/AGENTS.md",
+)
+FILE_LINE_CITATION_RE = re.compile(
+    r"\b[\w./-]+\.(?:cs|csproj|slnx|props|targets|ts|tsx|js|jsx|mjs|cjs|py|sh|ps1|psm1|json|ya?ml|toml|md)#?:\d+\b"
+)
+
+# `tracked-secrets`: the runtime secret and state files AGENTS.md forbids committing. `.env` is the exact basename,
+# so the tracked `.env.template` / `.env.tests` stay allowed.
+TRACKED_SECRET_RE = re.compile(r"(?:^|/)(?:node\.key|\.env|[^/]*\.sqlite(?:-wal|-shm)?|[^/]*\.enc)$|(?:^|/)dp-keys/")
+
+# `tool-names`: the repo never depends on optional per-user agent or editor tooling. The denylist is the config and
+# marker forms from .gitignore's per-user tool entries plus well-known agent configs; the product name of a
+# third-party MCP client is not on it (the inbound MCP surface names its clients). CHANGELOG.md, docs/audits/,
+# docs/adr/ and the MCP-client runbooks are outside the pathspecs.
+TOOL_NAME_PATHSPECS = (
+    "*.cs",
+    "*.ts",
+    "*.tsx",
+    "*.js",
+    "*.jsx",
+    "*.mjs",
+    "*.cjs",
+    "*.sh",
+    "*.py",
+    "*.ps1",
+    "*.psm1",
+    "*.psd1",
+    "*.yml",
+    "*.yaml",
+    "*.toml",
+    "*.props",
+    "*.targets",
+    "*.csproj",
+    "package.json",
+    "*/package.json",
+    "AGENTS.md",
+    "*/AGENTS.md",
+    "docs/wiki/*",
+    "docs/agent-knowledge*",
+)
+TOOL_NAME_EXEMPT_PATHS = frozenset(
+    {
+        # Shipped product surface: the installers place the engine's skill into the user's agent skill directories.
+        "install.sh",
+        "install.ps1",
+        "publish/tests/install.Tests.ps1",
+        "scripts/tests/install.test.sh",
+        # Shipped product surface: the workspace copy skips an end user's IDE metadata directories (`.vs`, `.idea`).
+        "XE-Local-AI-Engine.Client.Application/Services/Workspace/Implementation/SensitiveFileExclusionService.cs",
+        "XE-Local-AI-Engine.Tests/Workspace/SensitiveFileExclusionServiceTests.cs",
+        # This guard and its tests spell the denylist.
+        "scripts/docs-inventory-check.py",
+        "scripts/tests/test_docs_inventory_check.py",
+    }
+)
+# A directory token (trailing `/`) ends at either separator, a quote, a backtick, whitespace or the line end, so
+# `Path.Combine(home, ".codex", ...)` and a bare `".claude"` literal match as well as `.claude/settings.json`. It
+# never follows a word character: `this.cursor = 0` and `"navigation.agents"` are member access and i18n keys.
+TOOL_NAME_DIRECTORY_END = r"""(?:[\\/"'`\s]|$)"""
+TOOL_NAME_DENYLIST = tuple(
+    re.compile(r"(?<!\w)" + pattern[:-1] + TOOL_NAME_DIRECTORY_END if pattern.endswith("/") else pattern)
+    for pattern in (
+        r"\.claude/",
+        r"\bCLAUDE(?:\.local)?\.md\b",
+        r"\.codex/",
+        r"\.cursor/",
+        r"\.cursorrules\b",
+        r"\.omc/",
+        r"\.omx/",
+        r"\boh-my-claudecode\b",
+        r"\.junie/",
+        r"\.agents/",
+        r"\.testagent/",
+        r"\.codegraph/",
+        r"\.mcp\.json\b",
+        r"\brepomix\b",
+        r"\.windsurf",
+        r"\.aider",
+        r"\.serena/",
+        r"copilot-instructions\.md",
+        r"\bponytail\b",
+        r"\.idea/",
+        r"""(?<!\w)\.vscode(?:[\\/](?!extensions\.json)|["'`\s]|$)""",
+    )
+)
+
+# `host-phrasing`: this is a public repository; docs describe the environment generically. Hardware is allowed as
+# metadata of a dated measurement, so a line carrying an ISO date is exempt from the RAM/CPU patterns only. The user
+# guide states end-user system requirements and docs/audits/ holds dated reports. `subuid` alone is product
+# vocabulary (rootless Docker); a concrete `user:start:count` range entry is the leak.
+HOST_PHRASING_PATHSPECS = ("docs/*.md", "AGENTS.md", "*/AGENTS.md")
+HOST_PHRASING_EXEMPT_PREFIXES = ("docs/user-guide/", "docs/audits/")
+HOST_PHRASING_HARDWARE_PATTERNS = frozenset(re.compile(pattern) for pattern in (r"\b\d+ ?GB RAM\b", r"\b\d+-core\b"))
+HOST_PHRASING_PATTERNS = (
+    *(
+        re.compile(pattern)
+        for pattern in (
+            r"(?<![\w.-])/home/[a-z_][\w-]*",
+            r"/run/user/\d+",
+            r"\buid=",
+            r"\b[a-z_][\w-]*:\d{5,}:\d+\b",
+            r"(?<![\"'])\b[Tt]his box\b",
+        )
+    ),
+    *sorted(HOST_PHRASING_HARDWARE_PATTERNS, key=lambda pattern: pattern.pattern),
+)
+# A date excuses only the hardware inventory above; a home path, uid, subuid range or "this box" is never metadata.
+ISO_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+
+# Variables that make git select another repository, work tree, index or object store than `cwd` (the same list as
+# scripts/lib/git-env.sh). An agent's exported private GIT_INDEX_FILE would otherwise answer `git ls-files` from a
+# stale index and hide a newly tracked secret. Discovery bounds (GIT_CEILING_DIRECTORIES, ...) and GIT_CONFIG* stay.
+GIT_REPO_ENV_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
 )
 
 
@@ -326,7 +471,12 @@ def markdown_lines_outside_fences(text: str) -> Iterable[str]:
     for line in text.splitlines():
         match = FENCE_RE.match(line)
         if fence:
-            if match and match.group("fence")[0] == fence[0] and len(match.group("fence")) >= len(fence):
+            if (
+                match
+                and match.group("fence")[0] == fence[0]
+                and len(match.group("fence")) >= len(fence)
+                and not match.group("info").strip()
+            ):
                 fence = ""
         elif match:
             fence = match.group("fence")
@@ -361,17 +511,23 @@ def markdown_link_targets(text: str) -> Iterable[str]:
             yield match.group("target").strip("<>")
 
 
-def tracked_markdown_files(root: Path) -> list[Path]:
+def git_ls_files(root: Path, check: str, *pathspecs: str) -> list[str]:
+    """Tracked paths (posix, repo-relative) matching `pathspecs`; git's `*` also matches `/`."""
+    env = {key: value for key, value in os.environ.items() if key not in GIT_REPO_ENV_VARS}
     try:
         listed = subprocess.run(
-            ["git", "ls-files", "-z", "--", "*.md"], cwd=root, capture_output=True, check=True, text=True
+            ["git", "ls-files", "-z", "--", *pathspecs], cwd=root, env=env, capture_output=True, check=True, text=True
         ).stdout
     except (OSError, subprocess.CalledProcessError) as error:
-        raise InventoryError(f"markdown-links: git ls-files failed under {root}: {error}") from error
+        raise InventoryError(f"{check}: git ls-files failed under {root}: {error}") from error
+    return [name for name in listed.split("\0") if name]
+
+
+def tracked_markdown_files(root: Path) -> list[Path]:
     return [
         root / name
-        for name in listed.split("\0")
-        if name
+        for name in git_ls_files(root, "markdown-links", "*.md")
+        if (root / name).is_file()  # a tracked file deleted in the working tree is not a link source
         and not name.startswith(MARKDOWN_LINK_EXCLUDED_PREFIXES)
         and not any(segment in f"/{name}" for segment in MARKDOWN_LINK_EXCLUDED_SEGMENTS)
     ]
@@ -410,6 +566,96 @@ def check_markdown_links(root: Path, files: Iterable[Path] | None = None) -> Che
     return CheckResult(check=check, doc=Path("."), inventory=inventory, missing=tuple(missing))
 
 
+def decode_text(data: bytes) -> str | None:
+    """UTF-8 (BOM stripped), or UTF-16 when the file starts with a UTF-16 BOM; None when neither decodes."""
+    encoding = "utf-16" if data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)) else "utf-8-sig"
+    try:
+        return data.decode(encoding)
+    except UnicodeDecodeError:
+        return None
+
+
+def scan_lines(
+    root: Path,
+    check: str,
+    names: Iterable[str],
+    patterns: Iterable[re.Pattern[str]],
+    label: str,
+    lines_of: Callable[[str], Iterable[str]] = str.splitlines,
+    line_exempt: re.Pattern[str] | None = None,
+    exempt_patterns: frozenset[re.Pattern[str]] = frozenset(),
+) -> CheckResult:
+    """Report every match of `patterns` in the given tracked files, one row per file line and pattern.
+
+    A line matching `line_exempt` skips only the patterns in `exempt_patterns`; every other pattern still applies.
+    """
+    inventory = require_non_empty(check, "tracked files in scope", names)
+    missing: list[Missing] = []
+    for name in inventory:
+        path = root / name
+        if not path.is_file():  # a tracked symlink to a directory, or a deletion not yet staged
+            continue
+        text = decode_text(path.read_bytes())
+        if text is None:  # never skipped: a file this scan cannot read is a file it cannot clear
+            missing.append(Missing(check, name, Path(name), f"undecodable: {name}", label))
+            continue
+        for number, line in enumerate(lines_of(text), start=1):
+            exempt = line_exempt is not None and line_exempt.search(line) is not None
+            for pattern in patterns:
+                if exempt and pattern in exempt_patterns:
+                    continue
+                for hit in pattern.finditer(line):
+                    excerpt = line[max(0, hit.start() - 80) : hit.end() + 80].strip()
+                    problem = f"line {number}: {hit.group(0)!r} in: {excerpt}"
+                    missing.append(Missing(check, hit.group(0), Path(name), problem, label))
+    return CheckResult(check=check, doc=Path("."), inventory=inventory, missing=tuple(missing))
+
+
+def check_file_line_citations(root: Path) -> CheckResult:
+    """Instruction and architecture docs cite code as file + symbol, never `file:line` (lines drift)."""
+    check = "file-line-citations"
+    names = git_ls_files(root, check, *CITATION_DOC_PATHSPECS)
+    return scan_lines(root, check, names, (FILE_LINE_CITATION_RE,), "CITATION", markdown_lines_outside_fences)
+
+
+def check_tracked_secrets(root: Path) -> CheckResult:
+    """No runtime secret or state file is tracked: node.key, SQLite databases, .env, dp-keys/, *.enc."""
+    check = "tracked-secrets"
+    inventory = require_non_empty(check, "git ls-files", git_ls_files(root, check))
+    missing = tuple(
+        Missing(check, name, Path(name), "runtime secret or state file is tracked; git rm --cached it", "TRACKED")
+        for name in inventory
+        if TRACKED_SECRET_RE.search(name)
+    )
+    return CheckResult(check=check, doc=Path("."), inventory=inventory, missing=missing)
+
+
+def check_tool_names(root: Path) -> CheckResult:
+    """Product, gate, test and instruction files name no optional per-user agent or editor tooling."""
+    check = "tool-names"
+    names = [name for name in git_ls_files(root, check, *TOOL_NAME_PATHSPECS) if name not in TOOL_NAME_EXEMPT_PATHS]
+    return scan_lines(root, check, names, TOOL_NAME_DENYLIST, "TOOL-NAME")
+
+
+def check_host_phrasing(root: Path) -> CheckResult:
+    """Docs describe the environment generically: no home paths, uids, subuid ranges, RAM/CPU inventory."""
+    check = "host-phrasing"
+    names = [
+        name
+        for name in git_ls_files(root, check, *HOST_PHRASING_PATHSPECS)
+        if not name.startswith(HOST_PHRASING_EXEMPT_PREFIXES)
+    ]
+    return scan_lines(
+        root,
+        check,
+        names,
+        HOST_PHRASING_PATTERNS,
+        "HOST",
+        line_exempt=ISO_DATE_RE,
+        exempt_patterns=HOST_PHRASING_HARDWARE_PATTERNS,
+    )
+
+
 CHECKS: tuple[Callable[[Path], CheckResult], ...] = (
     check_signalr_hubs,
     check_local_api_route_families,
@@ -419,6 +665,10 @@ CHECKS: tuple[Callable[[Path], CheckResult], ...] = (
     check_agent_knowledge_index,
     check_agent_knowledge_entries,
     check_markdown_links,
+    check_file_line_citations,
+    check_tracked_secrets,
+    check_tool_names,
+    check_host_phrasing,
 )
 
 

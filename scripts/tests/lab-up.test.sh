@@ -197,7 +197,7 @@ exit "$(cat "${LAB_TEST_CTL}/curl-exit" 2>/dev/null || echo 0)"
 SH
 chmod 755 "${REPO}/scripts/"*.sh "${REPO}/scripts/"*.py "${BIN}/"*
 
-TEST_ENV=(env -u GIT_DIR -u GIT_WORK_TREE -u XE_ASPIRE_APPHOST -u XE_NODE_OPERATOR_SECRET_FILE -u XE_LLAMACPP_VARIANT -u XE_LLAMACPP_SERVER_PATH -u LAB_TEST_PROFILE_ONLY
+TEST_ENV=(env -u GIT_DIR -u GIT_WORK_TREE -u XE_LAB_PLAN -u XE_ASPIRE_APPHOST -u XE_NODE_OPERATOR_SECRET_FILE -u XE_LLAMACPP_VARIANT -u XE_LLAMACPP_SERVER_PATH -u LAB_TEST_PROFILE_ONLY
   -u XDG_DATA_HOME HOME="${FAKE_HOME}" PATH="${BIN}:${PATH}" LAB_TEST_CTL="${CTL}" LAB_TEST_REAL="${REAL}"
   LAB_READY_TIMEOUT_SECONDS=5 LAB_PASSWORD="${PASSWORD}")
 
@@ -557,6 +557,65 @@ check "--fresh with a foreign secret file kept dp-keys" "present" "$([[ -d "${CL
 check "a relative secret path naming this checkout's node.key is accepted" "0" "$?"
 check "the accepted secret path reaches dev-status as the absolute path" "dev-status ${OWN_APPHOST} ${OWN_KEY}" \
   "$(sort -u "${CTL}/apphost.log")"
+
+echo "== 16. lab ownership (OWNER file) =="
+# A second profile gets its own lab dir, so the `test` lab's manifest (read by section 10) stays as it is.
+cp "${REPO}/scripts/lab/profiles/test.json" "${REPO}/scripts/lab/profiles/owner.json"
+OWNED_LAB="${REPO}/.tmp/lab/owner"
+OWNER="${OWNED_LAB}/OWNER"
+# run_owner [VAR=value ...] -- lab-up args, like run_lab, on the `owner` profile up to the data phase.
+run_owner() {
+  local extra=()
+  while [[ $# -gt 0 && "$1" != "--" ]]; do extra+=("$1"); shift; done
+  shift
+  "${TEST_ENV[@]}" ${extra[@]+"${extra[@]}"} "${REPO}/scripts/lab-up.sh" --profile owner --until data "$@" \
+    >/dev/null 2>"${CTL}/stderr"
+  STATUS=$?
+  ERR="$(cat "${CTL}/stderr")"
+}
+owner_key() { sed -n "s/^$1=//p" "${OWNER}" 2>/dev/null; }
+run_owner -- --plan plan-a --note "first round"
+check "first bring-up exits 0" "0" "${STATUS}"
+check "OWNER plan" "plan-a" "$(owner_key plan)"
+check "OWNER session_note" "first round" "$(owner_key session_note)"
+check "OWNER worktree is the checkout that ran lab-up" "${REPO}" "$(owner_key worktree)"
+CREATED="$(owner_key created)"
+check "OWNER created is ISO-8601 UTC" "ok" "$([[ "${CREATED}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] && echo ok)"
+check "OWNER delete_after is created + 14 days" "$(date -u -d "${CREATED} + 14 days" +%Y-%m-%d)" "$(owner_key delete_after)"
+check "a new lab is neither adopted nor taken over" "0" "$(grep -c '^adopted=\|^taken_over=' "${OWNER}")"
+check "OWNER keys in order" "plan created delete_after worktree session_note" "$(cut -d= -f1 "${OWNER}" | paste -sd' ' -)"
+
+run_owner -- --plan plan-b
+check "another plan on an owned lab => exit 2" "2" "${STATUS}"
+check_contains "the refusal names the owning plan" "owned by plan 'plan-a'" "${ERR}"
+check_contains "the refusal names the requested plan" "asks for plan 'plan-b'" "${ERR}"
+check "the refusal leaves OWNER alone" "plan-a" "$(owner_key plan)"
+run_owner -- --note "default plan"
+check "no --plan means plan 'unassigned', refused on a plan-a lab" "2" "${STATUS}"
+run_owner XE_LAB_PLAN=plan-a --
+check "XE_LAB_PLAN names the plan" "0" "${STATUS}"
+check "the owning plan's rerun keeps OWNER" "first round" "$(owner_key session_note)"
+
+printf 'plan=plan-a\ncreated=2026-01-01T00:00:00Z\ndelete_after=2026-01-15\nworktree=/old\nsession_note=\n' >"${OWNER}"
+run_owner -- --plan plan-b --take-over --note "second round"
+check "--take-over exits 0" "0" "${STATUS}"
+check "--take-over: new plan" "plan-b" "$(owner_key plan)"
+check "--take-over keeps created" "2026-01-01T00:00:00Z" "$(owner_key created)"
+check "--take-over keeps delete_after = created + 14 days" "2026-01-15" "$(owner_key delete_after)"
+check "--take-over: worktree rewritten" "${REPO}" "$(owner_key worktree)"
+check "--take-over: note rewritten" "second round" "$(owner_key session_note)"
+check "--take-over records taken_over" "ok" "$([[ "$(owner_key taken_over)" =~ ^[0-9]{4}-.*Z$ ]] && echo ok)"
+
+rm -f -- "${OWNER}"
+run_owner -- --plan plan-c
+check "a lab without OWNER is adopted, not refused" "0" "${STATUS}"
+check "adoption: plan" "plan-c" "$(owner_key plan)"
+check "adoption records adopted" "ok" "$([[ "$(owner_key adopted)" =~ ^[0-9]{4}-.*Z$ ]] && echo ok)"
+check_contains "adoption is logged" "adopted by plan 'plan-c'" "${ERR}"
+
+run_owner -- --plan 'bad plan'
+check "an invalid plan name => exit 2" "2" "${STATUS}"
+check "an invalid plan name leaves OWNER alone" "plan-c" "$(owner_key plan)"
 
 echo "== 11. redaction =="
 LOG="$(cat "${LAB}/evidence/lab-up.log")"

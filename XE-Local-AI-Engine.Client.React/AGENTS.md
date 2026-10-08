@@ -11,13 +11,13 @@ Run from this directory; `dotnet tool restore --tool-manifest ../dotnet-tools.js
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm run acceptance          # validate + coverage thresholds + tooling tests + production bundle
+../scripts/with-build-lock.sh -- pnpm run acceptance   # validate + coverage + tooling tests + production bundle
 pnpm audit --prod --audit-level=high
 ```
 
-- `acceptance` first runs `node:check` (`scripts/CheckNodeMajor.mjs`): it fails on a Node major other than CI's
-  `client-react` job (22); `engines` in `package.json` is only the floor. `XE_ALLOW_NODE_DRIFT=1` continues with a
-  warning that the run is not CI evidence.
+- Run `acceptance` under the build lock: vitest's timing assertions fail when a backend gate runs beside it.
+  Its first step, `node:check` (`scripts/CheckNodeMajor.mjs`, whose header documents the override), fails on a Node
+  major other than CI's `client-react` job.
 - `pnpm run build` remains a checked standalone build (lint + production bundle). The acceptance gate runs lint
   once through `validate`; `build:bundle` is its already-validated bundling step, including licenses and size checks.
 - Use `pnpm run validate`, `pnpm run test:coverage:check` and `pnpm run test:tooling` independently while iterating.
@@ -42,6 +42,7 @@ pnpm audit --prod --audit-level=high
   no-hub view at 5 s or slower); beside a live hub at most a floor of 60 s or slower, and app-wide only for a
   sampled value or a hub's own fallback and floor.
 - Forms are manual: Mantine + `useState` + Zod on submit. No form library.
+- UnoCSS stays on `presetWind3()`, never wind4; the comment in `uno.config.ts` says why.
 - User-facing strings go through react-i18next keys. Adding a language: [`docs/translating.md`](../docs/translating.md).
 - Some lint suppressions are load-bearing (the SignalR hub hooks and chat adapters; listed in wiki 16). Do not "fix" them.
 - An `await import()` inside `it()` counts against `testTimeout`; hoist imports.
@@ -49,7 +50,7 @@ pnpm audit --prod --audit-level=high
   wrapper or not — resolves `t()` against the shipped `en` bundle. Assert the bundle string the operator sees, never the
   in-code `defaultValue`; `scripts/CheckI18nDefaults.mjs` fails lint on a drifted or missing default.
   The `"New conversation"` literal in `Chat.tsx` stays untranslated (persisted, compared by exact string).
-- Dependency decisions that look like dead weight but are not: `recharts` is a required peer of `@mantine/charts`;
-  UnoCSS runs `presetWind3()` (never wind4); `@types/node` stays at 22.3.0 behind pnpm's trust-downgrade gate;
-  `jsdom` stays at 30.0.1 until vitest-dev/vitest#11336 ships (30.1 hides the Blob impl symbol, so Vitest's jsdom
-  `Request` shim throws on Blob/FormData bodies).
+- Dependency decisions that look like dead weight but are not: `recharts` is a required peer of `@mantine/charts`.
+  The exact `@types/node` and `jsdom` versions in `package.json` are deliberate: the first sits behind pnpm's
+  trust-downgrade gate, the second waits for vitest-dev/vitest#11336 (a newer jsdom hides the Blob impl symbol, so
+  Vitest's jsdom `Request` shim throws on Blob/FormData bodies). Bump either only with that reason resolved.

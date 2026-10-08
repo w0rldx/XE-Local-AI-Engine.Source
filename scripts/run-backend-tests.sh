@@ -39,6 +39,45 @@
 #   Measured on a 32-core dev box (2026-10-05): about 1.5 min of wall on its own, concurrent with the
 #   test lanes, so it rarely lengthens the gate.
 #
+# Fail-fast: Architecture conventions first
+#   After the build and before any lane, the Architecture namespace of XE-Local-AI-Engine.Tests runs
+#   alone (`--list-tests` first, so a filter that matches nothing is a failure, then the run under the
+#   assembly guard). Red: the failing tests and their classes are printed with
+#   "FAIL-FAST: Architecture conventions red; long lanes not run" and the gate exits 1 without starting
+#   a lane. The pre-lane is not a row of the summary table or of the history line; the batched lane
+#   still runs that namespace as one of its batches, because run-tests-memory-safe.sh has no exclusion
+#   knob (one short batch among the module's ~100). Skipped with --siblings-only (no batched module) and
+#   with XE_GATE_FAIL_FAST=0.
+#
+# Gate history
+#   Every run that got past argument parsing appends ONE tab-separated line to the MAIN checkout's
+#   .tmp/gate-history.log (resolved like the build lock, so all worktrees share one file; never truncated):
+#     <ISO time> <worktree real path or -> <tip> Tests=p/f/s Persistence=p/f/s Agent=p/f/s
+#     Contracts=p/f/s|skipped scope=<scope> wall=<seconds> exit=<code>
+#   tip is HEAD when the lock was taken, before the build ("-" outside git), suffixed "+dirty" when the
+#   tree had changes (untracked included) then and "+moved" when HEAD differed at exit; a suffixed tip
+#   certifies nothing. scope is full only when this invocation built and ran every lane unsharded;
+#   otherwise the first of no-build (NO_BUILD, or the build never ran), shard (TEST_SHARD/TEST_GROUPS),
+#   siblings-only, contracts-skipped (the release contract lane was needed, by the diff or because it
+#   could not be ruled out, but XE_GATE_CONTRACT_TESTS=skip or GITHUB_ACTIONS=true suppressed it;
+#   Contracts= says skipped whether the lane was bypassed or simply not needed). The worktree is "-" (with a WARN) when its path holds a tab or newline.
+#   A lane that did not run has an empty value (exit 69: all of them). wall counts from this process's
+#   start under the lock; for 69 it is the time spent waiting. Ownership of the line: the unlocked
+#   instance creates the acknowledgment file with mktemp, passes it as XE_GATE_HISTORY_ACK and is the only
+#   process that ever removes it. The locked instance APPENDS "owned <pid>" to it and never removes or
+#   truncates it, so an inherited XE_GATE_HISTORY_ACK naming someone else's file loses nothing. On exit,
+#   signals included, the unlocked instance writes the line only when the file lacks that token (69, a
+#   wrapper setup error, a cancel while waiting for the lock: exit=143 or 130, empty lanes). A locked
+#   instance that cannot append the token says WARN and leaves the line to the unlocked one, which then
+#   sees no token: one line either way, never two.
+#   scripts/squash-guard.sh reads it.
+#
+# Known flakes
+#   For every failing test name a red lane printed ("failed <name> (<duration>)"), the gate prints
+#   "FAILED TEST: <name>", plus " [KNOWN FLAKE: <note>]" when scripts/known-flakes.txt lists it
+#   (`name|date|note`, parameters ignored). The verdict is unchanged: nothing is skipped or retried.
+#   The batched lane's log carries at most three failure lines per namespace (the runner's own cut).
+#
 # Locking — ONE lock for the whole gate, taken here
 #   scripts/with-build-lock.sh cannot subdivide a critical section (see its "Re-entrancy" note), and
 #   run-tests-memory-safe.sh takes the lock for its ENTIRE run, not just its build. So the siblings
@@ -71,8 +110,10 @@
 #
 #     kill -TERM -- -"$(ps -o pgid= -p <pid> | tr -d ' ')"
 #
-#   A TERM to the PID alone hits scripts/with-build-lock.sh, which has no trap: it dies, releases the
-#   lock, and leaves this script and its lanes running unsupervised. The wrapper is deliberately left
+#   A TERM to the PID alone hits the unlocked first instance of this script (it waits on the wrapper
+#   only to record the line the locked one never owned; its TERM/INT/HUP trap runs only once the
+#   foreground wrapper returns) or scripts/with-build-lock.sh, which has no trap: the wrapper dies, the lock
+#   is released, and the locked instance and its lanes run on unsupervised. The wrapper is deliberately left
 #   that way — it runs its command in the FOREGROUND, and six other scripts depend on that shape;
 #   making it asynchronous so it could forward signals would silently set SIGINT and SIGQUIT to
 #   ignored in every command it wraps, which is the POSIX rule for asynchronous commands.
@@ -111,7 +152,8 @@
 #                     only when that lane fails.
 #   JOBS, PAR         passed through to scripts/run-tests-memory-safe.sh
 #   XE_GATE_CONTRACT_TESTS  run: always run the release contract tests; skip: never run them (one line
-#                     says so); unset or auto: decide from the diff against develop, skip when GITHUB_ACTIONS=true.
+#                     says so; history records scope=contracts-skipped when the diff needed them); unset or auto: decide from the diff against develop, skip when GITHUB_ACTIONS=true.
+#   XE_GATE_FAIL_FAST  0: skip the Architecture pre-lane (see "Fail-fast"); unset or anything else runs it.
 #   XE_GATE_CANCEL_GRACE  seconds a lane may take to wind down after TERM before it is killed
 #                     outright (default 15; a whole number, 0 to skip straight to KILL)
 #   XE_TEST_WIDTH_DEFAULT             --maximum-parallel-tests for a sibling (default 8)
@@ -123,7 +165,8 @@
 #
 # Exit codes:
 #   0    — every project green
-#   1    — one or more projects failed, produced no MTP run summary, or succeeded nothing (HOLLOW: all skipped)
+#   1    — one or more projects failed, produced no MTP run summary, or succeeded nothing (HOLLOW: all skipped),
+#          or the Architecture pre-lane was red (FAIL-FAST) or matched nothing
 #   2    — usage error / nothing enrolled
 #   69   — could not acquire the build lock (from with-build-lock.sh); nothing was run
 #   75   — CONTAMINATED: assemblies changed under a run; the result is void, re-run it. Never a
@@ -155,6 +198,75 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Gate history (see the header). The lock library resolves the MAIN checkout's .tmp from any worktree.
+# shellcheck source=scripts/lib/build-lock-common.sh
+source "$REPO/scripts/lib/build-lock-common.sh" || exit 2
+GATE_T0=$EPOCHSECONDS
+# Cleared while the locked child instance owns the line; set again when the child never acknowledged it.
+GATE_HISTORY_OWNER=1
+# Initialised before the trap: an inherited LANE_DIR must never be the directory the trap deletes. Only
+# the mktemp below sets it. GATE_TIP and GATE_BUILT are set by the locked instance; GATE_ACK by the
+# unlocked one while it waits on the wrapper.
+LANE_DIR=""
+GATE_TIP=""
+GATE_BUILT=""
+GATE_ACK=""
+CONTRACT_BYPASSED=""
+# "p/f/s" of a finished lane, empty when it did not run. CONTRACT_* exist only once the locked instance
+# has reached them, hence the defaults.
+history_lane() {
+  local p f rc dur s
+  [[ -n "${LANE_DIR:-}" && -f "$LANE_DIR/$1.result" ]] || return 0
+  read -r p f rc dur s <"$LANE_DIR/$1.result"
+  printf '%s/%s/%s' "$p" "$f" "$s"
+}
+gate_history_on_exit() {
+  local rc=$? file sha now contracts scope worktree="$REPO"
+  # The unlocked instance owns the line unless the locked one appended its token (see "Gate history").
+  if [[ -n "$GATE_ACK" ]] && ! grep -q '^owned ' "$GATE_ACK" 2>/dev/null; then GATE_HISTORY_OWNER=1; fi
+  if [[ -n "$GATE_HISTORY_OWNER" ]]; then
+    file="$(dirname "$(build_lock_shared_path "$REPO/scripts")")/gate-history.log"
+    now="$(git -C "$REPO" rev-parse HEAD 2>/dev/null)" || now=""
+    # The unlocked instance never captured a tip (nothing ran under it): HEAD now, for information only.
+    sha="${GATE_TIP:-${now:--}}"
+    [[ -n "$GATE_TIP" && "${GATE_TIP%%+*}" != - && "${GATE_TIP%%+*}" != "$now" ]] && sha+="+moved"
+    if [[ -n "${NO_BUILD:-}" || -z "$GATE_BUILT" ]]; then scope=no-build
+    elif [[ -n "${TEST_SHARD:-}${TEST_GROUPS:-}" ]]; then scope=shard
+    elif [[ -n "$SIBLINGS_ONLY" ]]; then scope=siblings-only
+    elif [[ -n "$CONTRACT_BYPASSED" ]]; then scope="contracts-skipped"
+    else scope=full; fi
+    if [[ "$worktree" == *[$'\t\n']* ]]; then
+      echo "WARN: worktree path holds a tab or newline; gate history records it as '-'." >&2
+      worktree="-"
+    fi
+    contracts="$(history_lane release-contract-tests)"
+    [[ -n "${CONTRACT_WHY:-}" && -z "${CONTRACT_LANE:-}" ]] && contracts=skipped
+    mkdir -p "$(dirname "$file")" && printf '%s\t%s\t%s\tTests=%s\tPersistence=%s\tAgent=%s\tContracts=%s\tscope=%s\twall=%s\texit=%s\n' \
+      "$(date -Iseconds)" "$worktree" "$sha" "$(history_lane XE-Local-AI-Engine.Tests)" \
+      "$(history_lane XE-Local-AI-Engine.Client.Persistence.Tests)" "$(history_lane XE-Local-AI-Engine.AI.Agent.Tests)" \
+      "$contracts" "$scope" "$((EPOCHSECONDS - GATE_T0))" "$rc" >>"$file" \
+      || echo "WARN: could not append to $file" >&2
+  fi
+  [[ -z "$LANE_DIR" ]] || rm -rf "$LANE_DIR"
+  [[ -z "$GATE_ACK" ]] || rm -f "$GATE_ACK"
+}
+trap gate_history_on_exit EXIT
+# A signal must run the EXIT trap, or a cancel while waiting for the lock records nothing. The locked
+# instance replaces these with its lane-cancelling handlers once it has lanes (see "Cancellation").
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+# The locked instance owns the line from here on: acknowledge it to the unlocked one by APPENDING a
+# token, never by removing the file (it may be inherited), and keep the variable from what it starts.
+if [[ -n "${XE_BACKEND_GATE_LOCKED:-}" && -n "${XE_GATE_HISTORY_ACK:-}" ]]; then
+  if [[ -f "$XE_GATE_HISTORY_ACK" && -w "$XE_GATE_HISTORY_ACK" ]] \
+    && printf 'owned %s\n' "$$" >>"$XE_GATE_HISTORY_ACK" 2>/dev/null; then :
+  else
+    echo "WARN: cannot write the gate-history acknowledgment $XE_GATE_HISTORY_ACK; the unlocked instance records this run." >&2
+    GATE_HISTORY_OWNER=""
+  fi
+fi
+unset XE_GATE_HISTORY_ACK
+
 # Resolve a caller-relative COVERAGE_DIR while the caller's directory is still current, then work
 # from THIS checkout: `dotnet test` is handed a solution-relative project path and assembly-guard
 # derives its roots from the current directory, so running this script from another checkout would
@@ -184,9 +296,27 @@ esac
 # and deciding whether it is the lock we want is the wrapper's job — it exec's straight through for
 # the same file and acquires properly for a different one. Reading it here would skip a lock the
 # wrapper would have taken, and a marker inherited from a dead holder would skip locking entirely.
+# Run, not exec: only this instance can record a run the locked one never started (69, or a wrapper
+# setup error), which it knows from the acknowledgment file still being there.
 if [[ -z "${XE_BACKEND_GATE_LOCKED:-}" && -z "${NO_BUILD_LOCK:-}" ]]; then
-  export XE_BACKEND_GATE_LOCKED=1
-  exec "$REPO/scripts/with-build-lock.sh" -- "$SELF" ${SIBLINGS_ONLY:+--siblings-only}
+  GATE_ACK="$(mktemp)" || { echo "ERROR: cannot create the gate-history acknowledgment file." >&2; exit 2; }
+  export XE_BACKEND_GATE_LOCKED=1 XE_GATE_HISTORY_ACK="$GATE_ACK"
+  GATE_HISTORY_OWNER=""
+  "$REPO/scripts/with-build-lock.sh" -- "$SELF" ${SIBLINGS_ONLY:+--siblings-only}
+  exit
+fi
+
+# The tip this run certifies: taken under the lock, before the build. See "Gate history". A status that
+# fails (corrupt index, unreadable tree) proves nothing clean, so it marks the tip dirty.
+if GATE_TIP="$(git -C "$REPO" rev-parse HEAD 2>/dev/null)"; then
+  if ! gate_status="$(git -C "$REPO" status --porcelain --untracked-files=all 2>/dev/null)"; then
+    echo "WARN: git status failed; gate history records the tip as +dirty." >&2
+    GATE_TIP+="+dirty"
+  elif [[ -n "$gate_status" ]]; then
+    GATE_TIP+="+dirty"
+  fi
+else
+  GATE_TIP="-"
 fi
 
 SLN="$REPO/XE-Local-AI-Engine.slnx"
@@ -275,17 +405,20 @@ CONTRACT_LANE=""
 # here would hide a test that is not. scripts/tests/run-backend-tests.test.sh reads both lists from here.
 CONTRACT_LANE_SCRUB=(
   JOBS PAR AVAIL_FLOOR TEST_GROUPS TEST_SHARD XE_TEST_PROFILE NO_BUILD NO_BUILD_LOCK NO_GUARD COVERAGE_DIR
-  BUILD_LOCK_TIMEOUT XE_GATE_CANCEL_GRACE XE_GATE_CONTRACT_TESTS XE_BACKEND_GATE_LOCKED XE_OPENAPI_LIVE_LOCKED
+  BUILD_LOCK_TIMEOUT XE_GATE_CANCEL_GRACE XE_GATE_CONTRACT_TESTS XE_GATE_FAIL_FAST XE_BACKEND_GATE_LOCKED
+  XE_OPENAPI_LIVE_LOCKED
 )
 CONTRACT_LANE_SCRUB_PREFIXES=(XE_TEST_WIDTH_ XE_SIZING_ OPENAPI_LIVE_)
 # Reads THIS checkout: the repository-selection variables were dropped at the top, and the gate has
 # already cd'd to its repository root.
 contract_paths_touched() {
-  local ref base changed untracked
+  local full ref base changed untracked
   local -a contract_dirs=(scripts publish .github/workflows)
-  for ref in develop origin/develop; do
-    git rev-parse --verify -q "$ref^{commit}" >/dev/null 2>&1 || continue
-    if ! base="$(git merge-base HEAD "$ref" 2>/dev/null)"; then
+  # Full refnames: a bare `develop` resolves a TAG named develop before the branch.
+  for full in refs/heads/develop refs/remotes/origin/develop; do
+    git rev-parse --verify -q "$full^{commit}" >/dev/null 2>&1 || continue
+    ref="${full#refs/heads/}"; ref="${ref#refs/remotes/}"
+    if ! base="$(git merge-base HEAD "$full" 2>/dev/null)"; then
       CONTRACT_WHY="no merge-base of HEAD with $ref (shallow clone?), so a script change cannot be ruled out"
       return 0
     fi
@@ -307,11 +440,16 @@ contract_paths_touched() {
   CONTRACT_WHY="no develop or origin/develop ref, so a script change cannot be ruled out"
   return 0
 }
+# A skip that the diff (or not knowing it) says was needed is a bypass: history records it as
+# scope=contracts-skipped, so the squash guard cannot read it as full.
 case "${XE_GATE_CONTRACT_TESTS:-auto}" in
   run)  CONTRACT_LANE=release-contract-tests; CONTRACT_WHY="forced by XE_GATE_CONTRACT_TESTS=run" ;;
-  skip) CONTRACT_WHY="XE_GATE_CONTRACT_TESTS=skip" ;;
+  skip)
+    contract_paths_touched && CONTRACT_BYPASSED=1
+    CONTRACT_WHY="XE_GATE_CONTRACT_TESTS=skip" ;;
   auto)
     if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+      contract_paths_touched && CONTRACT_BYPASSED=1
       CONTRACT_WHY="GITHUB_ACTIONS=true; that workflow runs them in its own release-contracts job"
     elif contract_paths_touched; then
       CONTRACT_LANE=release-contract-tests
@@ -322,6 +460,8 @@ if [[ -n "$CONTRACT_LANE" ]]; then
   progress ">> Release contract tests: will run ($CONTRACT_WHY)"
 else
   progress ">> Release contract tests: skipped ($CONTRACT_WHY; XE_GATE_CONTRACT_TESTS=run forces them)"
+  [[ -z "$CONTRACT_BYPASSED" ]] \
+    || progress ">> Release contract tests were needed by this diff: history records scope=contracts-skipped"
 fi
 
 if [[ -z "${NO_BUILD:-}" ]]; then
@@ -331,11 +471,72 @@ if [[ -z "${NO_BUILD:-}" ]]; then
     echo "BUILD FAILED — nothing was run." >&2
     exit 1
   fi
+  GATE_BUILT=1
 fi
 
-# Lanes are background processes, so results travel through files, not shell globals.
+# "FAILED TEST: <name>" per MTP failure line in <log>, annotated from scripts/known-flakes.txt. Report
+# only: the caller's verdict stands.
+FLAKES_FILE="$REPO/scripts/known-flakes.txt"
+print_failed_tests() {
+  local name line entry note
+  while IFS= read -r name; do
+    line="FAILED TEST: $name"
+    if [[ -r "$FLAKES_FILE" ]]; then
+      while IFS='|' read -r entry _ note; do
+        [[ -n "$entry" && "$entry" != \#* && "${name%%(*}" == "$entry" ]] || continue
+        line+=" [KNOWN FLAKE: $note]"
+        break
+      done <"$FLAKES_FILE"
+    fi
+    echo "$line" >&2
+  done < <(sed -nE 's/^(.*\] )?[[:space:]]*failed (.+) \([0-9][^()]*\)[[:space:]]*$/\2/p' "$1" | sort -u)
+}
+
+# The Architecture pre-lane — see "Fail-fast" in the header. The filter is the batched runner's own
+# per-namespace form, so it selects exactly the tests of that namespace's batch.
+ARCH_FILTER="/*/XE_Local_AI_Engine.Tests.Architecture/*/*"
+run_architecture_fail_fast() {
+  local exe="$REPO/$BATCHED_MODULE/bin/Release/net10.0/$BATCHED_MODULE" log="$RESULTS_ROOT/architecture-fail-fast.log"
+  local rc p name class
+  progress ">> Fail-fast: Architecture conventions ($ARCH_FILTER; XE_GATE_FAIL_FAST=0 skips)"
+  [[ -x "$exe" ]] || { echo "ERROR: test host not found at $exe (build first)." >&2; exit 1; }
+  TUNIT_DISABLE_HTML_REPORTER=1 "$exe" --list-tests --treenode-filter "$ARCH_FILTER" >"$log" 2>&1
+  rc=$?
+  if (( rc != 0 )); then
+    sed 's/^/[architecture] /' "$log" >&2
+    echo "ERROR: --list-tests for $ARCH_FILTER exited $rc (8 = the filter matched no test)." >&2
+    echo "FAIL-FAST: Architecture conventions red; long lanes not run" >&2
+    exit 1
+  fi
+  env -u XE_BUILD_LOCK_HELD TUNIT_DISABLE_HTML_REPORTER=1 "$REPO/scripts/assembly-guard.sh" guard --test-bins -- \
+    "$exe" --treenode-filter "$ARCH_FILTER" --maximum-parallel-tests "${PAR:-1}" >>"$log" 2>&1
+  rc=$?
+  if (( rc == 75 )); then
+    sed 's/^/[architecture] /' "$log" >&2
+    echo "RESULT VOID: assemblies changed under the Architecture pre-lane (assembly-guard exit 75). Re-run the gate." >&2
+    exit 75
+  fi
+  p="$(grep -oE 'succeeded: *[0-9]+' "$log" | grep -oE '[0-9]+' | tail -1)"
+  if (( rc == 0 && ${p:-0} > 0 )) && grep -qE 'Passed!' "$log"; then
+    progress ">> Fail-fast: Architecture green ($p passed)"
+    return 0
+  fi
+  sed 's/^/[architecture] /' "$log" >&2
+  print_failed_tests "$log"
+  while IFS= read -r name; do
+    class="$(grep -rlw -- "${name%%(*}" "$REPO/$BATCHED_MODULE/Architecture" --include='*.cs' 2>/dev/null | head -1)"
+    echo "FAILED CLASS: ${class:+$(basename "$class" .cs)}${class:-? (no source matched $name)}" >&2
+  done < <(sed -nE 's/^[[:space:]]*failed (.+) \([0-9][^()]*\)[[:space:]]*$/\1/p' "$log" | sort -u)
+  echo "FAIL-FAST: Architecture conventions red; long lanes not run" >&2
+  exit 1
+}
+if [[ -z "$SIBLINGS_ONLY" && "${XE_GATE_FAIL_FAST:-1}" != 0 ]]; then
+  run_architecture_fail_fast
+fi
+
+# Lanes are background processes, so results travel through files, not shell globals. Removed by
+# gate_history_on_exit, after the history line has read the results.
 LANE_DIR="$(mktemp -d)"
-trap 'rm -rf "$LANE_DIR"' EXIT
 declare -A LANE_PIDS=()
 LANES=()
 # Non-zero once a signal has asked for cancellation; 1 while a lane launch is mid-flight.
@@ -392,7 +593,6 @@ finish_cancel() {
     read -r _ _ rc _ <"$LANE_DIR/$module.result"
     [[ "$rc" == 75 ]] && status=75
   done
-  rm -rf "$LANE_DIR"
   exit "$status"
 }
 
@@ -586,6 +786,10 @@ if [[ "${#FAILED[@]}" -gt 0 ]]; then
     echo "FAILED: $module" >&2
     lane_log="$RESULTS_ROOT/${module%%(*}/gate.log"
     [[ -f "$lane_log" ]] && sed "s/^/[${module%%(*}] /" "$lane_log" >&2
+  done
+  for module in "${FAILED[@]}"; do
+    lane_log="$RESULTS_ROOT/${module%%(*}/gate.log"
+    [[ -f "$lane_log" ]] && print_failed_tests "$lane_log"
   done
   exit 1
 fi

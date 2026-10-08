@@ -1,0 +1,13 @@
+# Test files that wait on a real timer without saying why — the allowlist for RealTimerCommentConventionTests.
+#
+# Format: <repository-relative file>, one line per file, sorted.
+#
+# A test never sleeps to wait for, or to rule out, an event (AGENTS.md): it uses a gate it controls, a
+# FakeTimeProvider or AssertEx.EventuallyAsync. A real timer that has to stay carries a '// real-timer: <reason>'
+# comment in its file. These files predate the rule; each fix converts the wait or adds the reason.
+#
+# The list is SHRINK-ONLY: an unlisted unmarked file fails, and a listed file that now carries the comment, no
+# longer waits on a real timer, or no longer exists fails as stale, so the commit that fixes a file deletes its line.
+
+XE-Local-AI-Engine.Tests/Testing/AssertEx.cs
+

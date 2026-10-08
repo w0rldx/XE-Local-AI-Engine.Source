@@ -126,10 +126,6 @@ Sandbox, compute and AgentHome containment: [sandbox-and-compute](sandbox-and-co
 
 **Rule:** a change to either comparison ladder is a change to both: edit both files and run `GraphWorkflowConditionTests` and `DevWorkflowConditionTests`. There is no shared evaluator by decision (graph-core extraction shelved), not debt. **Prevents:** fixing one engine and shipping the other wrong with both suites green. **Authority:** operator ruling R7-1; the "Mirrored in GraphWorkflowCondition.Order … change both" comment in `DevWorkflowCondition`.
 
-### Dev Workflows has a runtime reference and a separate divergence register
-
-**Rule:** the runtime reference is `docs/wiki/25-dev-workflows.md`; differences from Graph Workflows are in `docs/wiki/22-workflow-engines-divergence-register.md`; implementation contracts are the XML docs on `DevWorkflowGraph`, `DevWorkflowStateMachine`, `DevWorkflowOptions`. **Prevents:** acting on the superseded no-wiki-page restriction, or treating the register as the runtime reference. **Authority:** `docs/wiki/Home.md`.
-
 ### A fix in one workflow engine is not automatically engine-local
 
 **Rule:** before changing behaviour in `Services/DevWorkflows/` or `Services/GraphWorkflows/`, read `docs/wiki/22-workflow-engines-divergence-register.md` for the sibling engine's equivalent. The engines were copy-adapted, not shared; most differences are deliberate, but the register also tracks unexamined gaps, and it, not assumption, says which is which. **Prevents:** fixing a restart-recovery, approval or retry defect in one engine and leaving it in the other. **Authority:** the register; operator ruling D10 (write the register, defer convergence).
@@ -147,18 +143,6 @@ Sandbox, compute and AgentHome containment: [sandbox-and-compute](sandbox-and-co
 ### MCP reference is executable documentation
 
 **Rule:** `McpToolsReferenceDriftTests` reflects tool sets, counts and scopes and compares them with the first columns of `skills/xe-local-ai-engine/references/mcp-tools.md`: a tool rename or scope move updates code and table in one change. `skills/xe-local-ai-engine/` is the one skill source; never duplicate or symlink it into a per-user agent skill directory (installers copy the versioned tree; copies break Windows archives and drift). **Authority:** `McpToolsReferenceDriftTests`.
-
-## Covered elsewhere
-
-- `pythonTests`: the process computing the verdict must never execute the graded code — `docs/wiki/20-benchmarks.md` ("5.2.3 `pythonTests` — execution scoring"; a child-named exception re-raises only as a builtin `Exception` subclass, never via `BaseException`, `sys.modules` or `eval`); run-python refusal, venv binds and egress in `docs/wiki/19-compute-tools.md` and `docs/wiki/12-security-and-privacy.md`
-- Graph Workflows: `Parallel` and `Join` are labels, not semantics — `docs/wiki/21-graph-workflows.md` ("2.3 `joinPolicy` is on every node")
-- Graph Workflows: an edge condition reads the SOURCE node's output, never the target's input — `docs/wiki/21-graph-workflows.md` ("2.2 Edges and conditions", "4.4 `Condition`")
-- Graph Workflows: `Pause` parks a node run in `WaitingForApproval`, and there is no `Blocked` state in v1 — `docs/wiki/21-graph-workflows.md` ("3.3 Node-run statuses and admission", "4.6 `Pause`")
-- Graph Workflows: a PARKED run holds no concurrency slot, and a resuming run does not re-pass admission — `docs/wiki/21-graph-workflows.md` ("3.4 The tick")
-- Graph Workflows: a steer is intent the service commits and the TICK applies; same-node only — `docs/wiki/21-graph-workflows.md` ("3.7 Steer")
-- Graph Workflows: a `Tool` node passes TWO gates, and the run-start check is the one that wins — `docs/wiki/21-graph-workflows.md` ("4.3 `Tool`")
-- Graph Workflows: a node's `input` is its ONE satisfied predecessor's output, so a node inserted mid-chain REPLACES the content — `docs/wiki/21-graph-workflows.md` ("4.6 `Pause`", "9.2 The mapping")
-- an endpoint constructor may only take `Client.Application` / `AI.Contracts` / `Providers.Abstractions` / host / BCL types — enforced by `XE-Local-AI-Engine.Tests/Architecture/EndpointDependencyTests.cs`; service shape in `docs/wiki/16-code-conventions.md`. When moving an endpoint body into a service, register it at the lifetime of what it wraps and move `HandleAsync` verbatim: a rewrite changes behaviour the untouched endpoint tests miss
 
 ## Stale beliefs
 

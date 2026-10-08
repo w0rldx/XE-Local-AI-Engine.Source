@@ -54,8 +54,7 @@ and `scripts/tests/test_test_durations.py`. [evidence](../agent-knowledge-eviden
 
 ### Add a hub, a route family, a React feature or a project — and name it in the wiki, or `python-quality` goes red
 
-**Rule:** the trigger and command are in `AGENTS.md`. Beyond that: the checker parses canonical definitions, not
-comments, so keep examples out of production enum/route declarations; `--verbose` exits 2 when an inventory cannot run and
+**Rule:** the checker parses canonical definitions, not comments, so keep examples out of production enum/route declarations; `--verbose` exits 2 when an inventory cannot run and
 every inventory must be non-empty. Its tests stay `unittest`: `scripts/run-release-contract-tests.sh` runs each
 `scripts/tests/test_*.py` directly and expects `Ran N tests`/`OK`, so bare pytest functions do nothing there.
 **Prevents:** a vacuous inventory or test pass. **Authority:** `scripts/docs-inventory-check.py`,
@@ -138,8 +137,7 @@ incorrect review base when checkout remote names differ. **Authority:** `AGENTS.
 ### a path-scoped `git commit -- <paths>` silently skips an UNTRACKED file among those paths
 
 **Rule:** `git commit -- <path>...` commits only tracked changes and ignores a named untracked file without warning. In a
-shared worktree commit new files through the `AGENTS.md` private-index recipe (`GIT_INDEX_FILE` + `read-tree` /
-`update-ref`), or check `git status --short -- <paths>` for `??` before and after. **Prevents:** a "complete" commit missing
+shared worktree commit new files through the private-index recipe (wiki 13, "Committing in a shared worktree"), or check `git status --short -- <paths>` for `??` before and after. **Prevents:** a "complete" commit missing
 its new test or source file, and the fix-up commit that follows. **Authority:** `git help commit` ("only from the named
 paths ... already known to Git").
 
@@ -150,6 +148,6 @@ Superseded claims; the entries above are the active rules.
 | Stale belief | Current correction |
 |---|---|
 | CI runs test projects sequentially. | Projects run concurrently with separate result directories; the main Tests module uses grouped batch runner (§1). |
-| Coverage should use one process per namespace. | Coverage instrumentation makes that prohibitively expensive; group instead. A local run uses `TEST_GROUPS=$(nproc)`; CI uses `TEST_GROUPS=16` split across 4 `TEST_SHARD` legs (§1). |
+| Coverage should use one process per namespace. | Coverage instrumentation makes that prohibitively expensive; group instead (`TEST_GROUPS`; CI splits the groups across `TEST_SHARD` legs) (§1). |
 | Both build-and-test and E2E are blocking PR gates. | Main CI targets develop; E2E is manual/label-triggered (§1). |
 | `release.yml` passes `--pre` to `vpk pack`. | `--pre` is only for upload; packing uses SemVer suffix (§1). |

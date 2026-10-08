@@ -25,10 +25,11 @@ public sealed class ChildProcessOutputTailRegistry : IChildProcessOutputTails
     private readonly List<Entry> _entries = [];
     private readonly TimeProvider _timeProvider;
 
-    /// <summary>Creates the registry; <paramref name="timeProvider" /> defaults to the system clock.</summary>
-    public ChildProcessOutputTailRegistry(TimeProvider? timeProvider = null)
+    /// <summary>Creates the registry, stamping entries with the node's registered <paramref name="timeProvider" />.</summary>
+    public ChildProcessOutputTailRegistry(TimeProvider timeProvider)
     {
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
     }
 
     /// <summary>Creates and tracks a new 200-line / 32 KB tail for a freshly spawned process.</summary>

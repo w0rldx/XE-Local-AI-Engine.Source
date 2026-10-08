@@ -23,11 +23,12 @@ internal sealed class WhisperServerProcessLauncher : IWhisperServerProcessLaunch
     private readonly ILogger<WhisperServerProcessLauncher> _logger;
     private readonly ChildProcessOutputTailRegistry _outputTails;
 
-    public WhisperServerProcessLauncher(ILogger<WhisperServerProcessLauncher> logger, ChildProcessOutputTailRegistry? outputTails = null)
+    public WhisperServerProcessLauncher(ILogger<WhisperServerProcessLauncher> logger, ChildProcessOutputTailRegistry outputTails)
     {
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(outputTails);
         _logger = logger;
-        _outputTails = outputTails ?? new ChildProcessOutputTailRegistry();
+        _outputTails = outputTails;
     }
 
     /// <inheritdoc />

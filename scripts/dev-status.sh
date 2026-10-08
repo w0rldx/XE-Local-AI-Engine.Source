@@ -17,7 +17,92 @@ case "${1:-}" in
   *) echo "dev-status: unknown argument: $1" >&2; exit 2 ;;
 esac
 
+# Lab data under the MAIN checkout's .tmp/ (shared by every worktree, located like the build lock): every direct
+# subdirectory over 1 GiB, with its owner from <dir>/OWNER (written by scripts/lab-up.sh) or UNOWNED. lab/ holds
+# one lab per profile, so its children are listed instead. One `du` walk per directory gives size and newest
+# change, each bounded by XE_DEV_STATUS_LAB_SCAN_TIMEOUT_SECONDS. Skipped with XE_DEV_STATUS_SKIP_LAB_SCAN=1 and
+# when stdout is /dev/null (a caller that only wants the exit code). scripts/lab-up.sh creates a lab under the
+# checkout it runs from, so each linked worktree's .tmp/lab/<profile> is listed too, with the worktree as checkout.
+# shellcheck source=scripts/lib/build-lock-common.sh
+source "${DEV_SCRIPT_DIR}/lib/build-lock-common.sh"
+LAB_TMP="$(dirname "$(build_lock_shared_path "${DEV_SCRIPT_DIR}")")"
+lab_scan_row() {  # lab_scan_row DIR NAME CHECKOUT TODAY
+  local dir="$1" size newest plan="" delete_after="" state=UNOWNED
+  # A walk that times out reports nothing: the directory is listed with an unknown size rather than hidden.
+  IFS=$'\t' read -r size newest _ < <(timeout "${XE_DEV_STATUS_LAB_SCAN_TIMEOUT_SECONDS:-10}s" \
+    du -s --time --time-style=+%Y-%m-%d --block-size=1G -- "${dir}" 2>/dev/null) || true
+  [[ "${size:-}" =~ ^[0-9]+$ ]] || size="?"
+  [[ "${size}" == "?" || "${size}" -gt 1 ]] || return 0
+  if [[ -f "${dir}/OWNER" ]]; then
+    plan="$(sed -n 's/^plan=//p' "${dir}/OWNER" | head -n 1)"
+    delete_after="$(sed -n 's/^delete_after=//p' "${dir}/OWNER" | head -n 1)"
+    state=owned
+    [[ -z "${delete_after}" || ! "${delete_after}" < "$4" ]] || state=EXPIRED
+  fi
+  # Unit-separated: a tab is IFS whitespace, so `read` would collapse the empty plan fields of an unowned row.
+  printf '%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n' "$2" "${size}" "${newest:-?}" "${plan}" "${delete_after}" "${state}" "$3"
+}
+lab_scan_tsv() {
+  local dir name today main worktree
+  today="$(date -u +%Y-%m-%d)"
+  main="$(dirname "${LAB_TMP}")"
+  shopt -s nullglob
+  for dir in "${LAB_TMP}"/*/ "${LAB_TMP}"/lab/*/; do
+    dir="${dir%/}"
+    name="${dir#"${LAB_TMP}/"}"
+    case "${name}" in lab|worktrees|backend-test-results|logs|build.lock*) continue ;; esac
+    lab_scan_row "${dir}" "${name}" main "${today}"
+  done
+  # The first porcelain entry is the main checkout, scanned above. NUL-separated records carry paths unquoted; a
+  # tab or newline cannot ride in a row, so that worktree is named on stderr instead of silently hidden.
+  while IFS= read -r -d '' worktree; do
+    [[ "${worktree}" == "worktree "* ]] || continue
+    worktree="${worktree#worktree }"
+    if [[ "${worktree}" == *[$'\t\n']* ]]; then
+      printf 'WARN: worktree path needs quoting, skipped: %q\n' "${worktree}" >&2
+      continue
+    fi
+    [[ "$(realpath -- "${worktree}" 2>/dev/null)" != "$(realpath -- "${main}")" ]] || continue
+    for dir in "${worktree}"/.tmp/lab/*/; do
+      dir="${dir%/}"
+      lab_scan_row "${dir}" "lab/${dir##*/}" "$(basename "${worktree}")" "${today}"
+    done
+  done < <(xe_git -C "${main}" worktree list --porcelain -z 2>/dev/null)
+  shopt -u nullglob
+}
+print_lab_table() {
+  [[ "${LAB_SCANNED}" == true ]] || return 0
+  echo "[dev-status] Lab data under ${LAB_TMP}/ and linked worktrees' .tmp/lab/ (over 1 GB):"
+  [[ -n "${LAB_TSV}" ]] || { echo "  (none)"; return 0; }
+  local name size newest plan delete_after state checkout owner
+  while IFS=$'\x1f' read -r name size newest plan delete_after state checkout; do
+    [[ "${checkout}" == main ]] || name="${checkout}/${name}"
+    if [[ "${state}" == UNOWNED ]]; then owner=UNOWNED; else owner="plan=${plan} delete_after=${delete_after:-?}"; fi
+    [[ "${state}" != EXPIRED ]] || owner+=" EXPIRED"
+    printf '  %-28s %5sG  newest=%s  %s\n' "${name}" "${size}" "${newest}" "${owner}"
+  done <<<"${LAB_TSV}"
+}
+
 dev_require_tools
+LAB_TSV=""
+LAB_SCANNED=false
+if [[ "${XE_DEV_STATUS_SKIP_LAB_SCAN:-0}" != 1 && "$(readlink "/proc/$$/fd/1" 2>/dev/null)" != /dev/null ]]; then
+  LAB_TSV="$(lab_scan_tsv)"
+  LAB_SCANNED=true
+fi
+LAB_JSON="$(LAB_SCANNED="${LAB_SCANNED}" python3 -c '
+import json, os, sys
+if os.environ["LAB_SCANNED"] != "true":
+    print("null")
+    raise SystemExit
+rows = []
+for line in filter(None, sys.stdin.read().splitlines()):
+    name, size, newest, plan, delete_after, state, checkout = line.split("\x1f")
+    rows.append({"checkout": checkout, "name": name, "sizeGb": int(size) if size.isdigit() else None,
+                 "newest": None if newest == "?" else newest, "plan": plan or None,
+                 "deleteAfter": delete_after or None, "status": state.lower()})
+print(json.dumps(rows))
+' <<<"${LAB_TSV}")"
 if app_json="$(dev_matching_app_json)"; then
   :
 else
@@ -27,9 +112,10 @@ else
     exit 4
   fi
   if [[ "${FORMAT}" == json ]]; then
-    printf '{"appHostPath":"%s","status":"stopped","resources":[]}\n' "${DEV_APPHOST}"
+    printf '{"appHostPath":"%s","status":"stopped","resources":[],"labData":%s}\n' "${DEV_APPHOST}" "${LAB_JSON}"
   else
     echo "[dev-status] stopped  ${DEV_APPHOST}"
+    print_lab_table
   fi
   exit 3
 fi
@@ -61,7 +147,7 @@ if [[ "${newest_spa_source}" =~ ^[0-9]+ ]]; then
   fi
 fi
 
-SPA_WARNING="${spa_warning}" DEV_APPHOST="${DEV_APPHOST}" STATUS_FORMAT="${FORMAT}" APP_JSON="${app_json}" python3 -c '
+SPA_WARNING="${spa_warning}" LAB_JSON="${LAB_JSON}" DEV_APPHOST="${DEV_APPHOST}" STATUS_FORMAT="${FORMAT}" APP_JSON="${app_json}" python3 -c '
 import json, os, sys
 from urllib.parse import urlsplit, urlunsplit
 
@@ -103,6 +189,7 @@ result = {
     "dashboardUrl": safe_url(app.get("dashboardUrl", "")),
     "resources": resources,
     "spaBundleWarning": os.environ["SPA_WARNING"] or None,
+    "labData": json.loads(os.environ["LAB_JSON"]),
 }
 if os.environ["STATUS_FORMAT"] == "json":
     json.dump(result, sys.stdout, indent=2)
@@ -118,3 +205,4 @@ else:
     if result["spaBundleWarning"]:
         print("[dev-status] WARNING: " + result["spaBundleWarning"])
 ' <<<"${describe_json}"
+[[ "${FORMAT}" == json ]] || print_lab_table

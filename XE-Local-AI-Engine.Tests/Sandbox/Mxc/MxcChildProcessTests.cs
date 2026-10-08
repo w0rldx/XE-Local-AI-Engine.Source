@@ -26,7 +26,7 @@ public sealed class MxcChildProcessTests
         {
             ExitCode = -1
         }));
-        using var child = new MxcChildProcess(process);
+        using var child = new MxcChildProcess(process, TimeProvider.System);
         using var cancellation = new CancellationTokenSource();
 
         var wait = child.WaitForExitAsync(cancellation.Token);
@@ -55,7 +55,7 @@ public sealed class MxcChildProcessTests
             ExitCode = 137
         });
         process.TryGetExitCode(out Arg.Any<int>()).Returns(false);
-        using var child = new MxcChildProcess(process);
+        using var child = new MxcChildProcess(process, TimeProvider.System);
 
         var exitCode = await child.WaitForExitAsync(CancellationToken.None);
 
@@ -73,7 +73,7 @@ public sealed class MxcChildProcessTests
             ExitCode = 3
         });
 
-        using var child = new MxcChildProcess(process);
+        using var child = new MxcChildProcess(process, TimeProvider.System);
 
         AssertEx.Equal(3, await child.WaitForExitAsync(CancellationToken.None));
         AssertEx.False(child.TimedOut);
@@ -95,7 +95,7 @@ public sealed class MxcChildProcessTests
         var stdout = new List<string>();
         var stderr = new List<string>();
 
-        using var child = new MxcChildProcess(process, stdout.Add, stderr.Add);
+        using var child = new MxcChildProcess(process, TimeProvider.System, stdout.Add, stderr.Add);
         await child.WaitForExitAsync(CancellationToken.None);
 
         AssertEx.Null(child.StandardOutput);
@@ -120,7 +120,7 @@ public sealed class MxcChildProcessTests
             ExitCode = 4
         });
         var time = new ManualTimeProvider();
-        using var child = new MxcChildProcess(process, static _ => { }, timeProvider: time);
+        using var child = new MxcChildProcess(process, time, static _ => { });
 
         var wait = child.WaitForExitAsync(CancellationToken.None);
         await AssertEx.StaysIncompleteAsync(wait, "the wait gives the pump its drain budget before closing the stream");
@@ -140,7 +140,7 @@ public sealed class MxcChildProcessTests
         process.StandardOutput.Returns(output);
         process.Id.Returns(4242u);
 
-        using var child = new MxcChildProcess(process);
+        using var child = new MxcChildProcess(process, TimeProvider.System);
 
         AssertEx.True(child.StandardOutput is MxcCancellableStdoutStream);
         using (var reader = new StreamReader(child.StandardOutput!, Encoding.UTF8, leaveOpen: true))
@@ -156,7 +156,7 @@ public sealed class MxcChildProcessTests
     {
         var process = Substitute.For<IMxcProcess>();
 
-        new MxcChildProcess(process).Dispose();
+        new MxcChildProcess(process, TimeProvider.System).Dispose();
 
         process.Received(1).Dispose();
         await Task.CompletedTask;

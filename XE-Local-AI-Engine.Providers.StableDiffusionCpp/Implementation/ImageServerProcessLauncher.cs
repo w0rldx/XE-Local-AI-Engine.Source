@@ -29,13 +29,14 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
     private readonly ChildProcessOutputTailRegistry _outputTails;
 
     public ImageServerProcessLauncher(ILogger<ImageServerProcessLauncher> logger, IImageServerProgressBroker progressBroker,
-        ChildProcessOutputTailRegistry? outputTails = null)
+        ChildProcessOutputTailRegistry outputTails)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(progressBroker);
+        ArgumentNullException.ThrowIfNull(outputTails);
         _logger = logger;
         _progressBroker = progressBroker;
-        _outputTails = outputTails ?? new ChildProcessOutputTailRegistry();
+        _outputTails = outputTails;
     }
 
     /// <inheritdoc />

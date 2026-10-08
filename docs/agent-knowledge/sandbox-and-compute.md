@@ -54,6 +54,13 @@ containment check (jail paths, symlink guards, path containment, patch apply).
 
 **Rule:** `AgentHomePatchService.ExportPatchAsync` runs `add -A` (never `--force`; `.gitignore` still decides) then diffs `--cached … HEAD`. `NodePatchApplyService` parsing refuses a symlink (`120000`) or gitlink (`160000`) entry by name in both the mode-line and index-line arm. A test that asserts a brand-new path in the export fails against a working-tree diff; modify a copied file to exercise the old shape. **Prevents:** an export that reports "no file changes" for runs that created files, and apply planting a model-named host link. **Authority:** `AgentHomePatchServiceTests.ExportPatchAsync_StagesTheWorkspaceBeforeItDiffs`; `NodePatchApplyService.Parsing` (`SymlinkMode`/`GitlinkMode`), `NodePatchApplyServiceTests`.
 
+### Modern `git apply` applies `--binary` patches; the node's own parser is the binary gate
+
+**Rule:** never depend on `git apply` rejecting a binary block for security: current git applies `--binary` patches.
+The node rejects binary blocks itself, by default, before anything reaches git. **Prevents:** a binary payload landing
+on the host because a check assumed git would refuse it. **Authority:** `NodePatchApplyService` ("binary-rejected by
+default" in `INodePatchApplyService`), `NodePatchApplyServiceTests`.
+
 ### The `run_in_agent_home` result's first line is node-authored, and it is the ONLY place a run id may be read from
 
 **Rule:** `AgentHomeToolGateway.BuildHeader` writes `[agent-home run=… outcome=… patch=…]` as line one, before any model-influenced byte; every reader parses it start-anchored, no multiline flag, no body fallback (no header = no run). The outcome token is spelled per status, never `ToString()`'d, so a new status throws. **Prevents:** the model's echoed `run_command` text, which sits above the real patch path, steering "review and apply" at another run's patch. **Authority:** `AgentHomeToolGateway.BuildHeader`/`OutcomeToken`, SPA `agentHomeRunIdWithPatch` in `AgentHomePatchToolResult.ts`; `AgentHomeToolResultContainmentTests`, `AgentHomePatchToolResult.test.ts`.
@@ -65,7 +72,6 @@ Superseded claims; the entries above are the active rules.
 | Stale belief | Current correction |
 |---|---|
 | TOCTOU guards live in a Docker provider. | They live in `ProcessSandboxRuntimeProvider` and apply to provider operations (§4). |
-| Modern `git apply` rejects `--binary` patches. | It applies them; never depend on rejection for security. |
 | `run_python` can see the host filesystem. | It requires a filesystem boundary and refuses otherwise: bubblewrap on Linux, the MXC AppContainer boundary (Preview, operator-enabled) on Windows (ADR 0019); other sandboxes are unchanged (§4). |
 | MXC is TypeScript-only, has no NuGet package, is "not a security boundary", and needs build 26100. | MXC 1.0.0 ships `Microsoft.Mxc.Sdk` on NuGet, the README caveat is gone, and the floor is whatever `GetPlatformSupport` + `Probe` report on the host; it is a Preview launch mechanism here (ADR 0019). |
 | Compute venv chmod can undo read-only mode. | Inside the namespace the read-only bind makes chmod/write fail. |

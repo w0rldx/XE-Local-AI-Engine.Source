@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.ProcessSupervision;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
@@ -23,7 +24,8 @@ public sealed class ProviderLauncherSharedHandleTests
     public void LlamaServerLauncher_ReturnsTheSharedHandleForThisOs()
     {
         var (executable, arguments) = LongRunningCommand();
-        var launcher = new LlamaServerProcessLauncher(NullLogger<LlamaServerProcessLauncher>.Instance);
+        var launcher = new LlamaServerProcessLauncher(NullLogger<LlamaServerProcessLauncher>.Instance,
+            new ChildProcessOutputTailRegistry(TimeProvider.System));
 
         using var handle = launcher.Launch(new LlamaServerLaunchSpec
         {
@@ -42,7 +44,8 @@ public sealed class ProviderLauncherSharedHandleTests
     public void ImageServerLauncher_ReturnsTheSharedHandleForThisOs()
     {
         var (executable, arguments) = LongRunningCommand();
-        var launcher = new ImageServerProcessLauncher(NullLogger<ImageServerProcessLauncher>.Instance, new ImageServerProgressBroker());
+        var launcher = new ImageServerProcessLauncher(NullLogger<ImageServerProcessLauncher>.Instance, new ImageServerProgressBroker(),
+            new ChildProcessOutputTailRegistry(TimeProvider.System));
 
         using var handle = launcher.Launch(new ImageServerLaunchSpec
         {
@@ -60,7 +63,8 @@ public sealed class ProviderLauncherSharedHandleTests
     public void WhisperServerLauncher_ReturnsTheSharedHandleForThisOs()
     {
         var (executable, arguments) = LongRunningCommand();
-        var launcher = new WhisperServerProcessLauncher(NullLogger<WhisperServerProcessLauncher>.Instance);
+        var launcher = new WhisperServerProcessLauncher(NullLogger<WhisperServerProcessLauncher>.Instance,
+            new ChildProcessOutputTailRegistry(TimeProvider.System));
 
         using var handle = launcher.Launch(new WhisperServerLaunchSpec
         {

@@ -1,0 +1,11 @@
+# Production files that still default the clock — the allowlist for TimeProviderDefaultConventionTests.
+#
+# Format: <repository-relative file>|<reason>, one line per file, sorted.
+#
+# Production code takes the registered TimeProvider; '?? TimeProvider.System' and GetService<TimeProvider>() let a
+# composition that forgot the clock run on wall time. An entry is a site whose fix cascades beyond its own change.
+#
+# The list is SHRINK-ONLY: an unlisted file fails, and a listed file that no longer defaults the clock (or is gone)
+# fails as stale, so the commit that fixes a site deletes its line.
+
+XE-Local-AI-Engine.Providers.Abstractions/SecureFilePermissions.cs|Static helper; MoveAsideUnreadable only stamps a quarantine file name. Its six secret-store callers (cloud credentials, Entra account and token cache, external providers, Codex tokens, Hugging Face token) inject no TimeProvider, so a required clock cascades into six constructors and their DI.

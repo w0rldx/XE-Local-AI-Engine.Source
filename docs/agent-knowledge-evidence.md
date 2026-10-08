@@ -1083,8 +1083,16 @@ The full cycle: `AxiosInstance` -> `Interceptors` -> `Router` -> the route tree 
 that mocked `NodeChatAdapter` (changing which module loaded first); the app's own entry order happened to avoid it.
 A lazy router `import()` re-split the bundle by about +60 kB, over budget (S1 frontend report).
 
+## Maintenance
+
+Each numbered area section stays at or under 32 KB, the cap a topic file has. When a section grows past it, move its
+oldest closed incidents into a dated archive file linked from that section; never delete evidence a live rule cites.
+No script enforces this cap: check it with `wc -c` on the section when you append.
+
 ## Change history of this ledger
 
 - **2026-08-25:** split evidence from the mandatory rulebook. No rule should rely on this file alone for current versions or external state.
 - **2026-09-27:** the rulebook became an index plus topic files under `agent-knowledge/`; narrative removed from condensed rules was appended here under the matching area heading, existing headings unchanged.
 - **2026-10-07:** `AGENTS.md` trimmed to one-line rules; the background-process anecdote moved here under §2.
+- **2026-10-08:** the models topic file split in two (model fit and discovery; benchmarks, knowledge base, training
+  and transcription); §3 headings here unchanged. Per-section size discipline added under Maintenance.

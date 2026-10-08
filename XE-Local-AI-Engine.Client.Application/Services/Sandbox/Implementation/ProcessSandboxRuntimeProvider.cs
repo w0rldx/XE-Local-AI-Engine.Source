@@ -771,9 +771,9 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
             var spawned = await _mxcRuntime.SpawnAsync(mxcRequest, cancellationToken);
             return new MxcSandboxChildProcess(new MxcChildProcess(spawned,
+                _timeProvider,
                 onStandardOutputLine is null ? null : line => onStandardOutputLine(line),
-                line => onStandardErrorLine(line),
-                _timeProvider));
+                line => onStandardErrorLine(line)));
         }
 
         var process = new Process

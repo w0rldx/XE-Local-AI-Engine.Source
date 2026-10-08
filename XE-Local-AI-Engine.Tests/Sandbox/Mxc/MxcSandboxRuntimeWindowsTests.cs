@@ -145,7 +145,7 @@ public sealed class MxcSandboxRuntimeWindowsTests
         }
 
         using var cancellation = new CancellationTokenSource(RunBudget);
-        using var child = new MxcChildProcess(await runtime.SpawnAsync(request, cancellation.Token), Capture, Capture);
+        using var child = new MxcChildProcess(await runtime.SpawnAsync(request, cancellation.Token), TimeProvider.System, Capture, Capture);
         var exitCode = await child.WaitForExitAsync(cancellation.Token);
         lock (gate)
         {

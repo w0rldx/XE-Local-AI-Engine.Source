@@ -273,15 +273,6 @@ are not edges. The `**/*Worklet.js` `javascript.globals` override in `biome.json
 globals silently undeclared. **Authority:** `evaluateDependencyBaseline` in
 `scripts/CheckDependencyBaseline.mjs`; `biome.json`.
 
-## Covered elsewhere
-
-- React Testing Library's `cleanup` is not automatic under Vitest — `docs/wiki/17-writing-tests.md` ("React components")
-- A date goes through `formatTimestamp` or `formatTime`, never through a bare `toLocaleString()` — `docs/wiki/10-react-client.md` ("i18n")
-- A `DialogShell` opened over another `DialogShell` needs `raised`, never a z-index literal — `docs/wiki/10-react-client.md` ("Unified dialog system")
-- A global FastEndpoints `Configurator` that sets a policy makes Swagger add a 403 to the ANONYMOUS routes too — `docs/wiki/09-api-and-hubs.md` ("Security middleware & auth ordering"); `pnpm run openapi:check` cannot catch it, `ConfiguratorCanaryProbeEndpoint` and `EndpointAuthorizationPolicyTests` do
-- A workflow hub's `kind` is LOWERCASE on the wire and is asserted literally on both sides — `docs/wiki/21-graph-workflows.md` ("The hub")
-- a worklet node needs a path to the destination, and a pre-gesture context starts suspended — `docs/wiki/24-audio-transcription.md` ("The chain")
-
 ## Stale beliefs
 
 Superseded claims; the entries above are the active rules.

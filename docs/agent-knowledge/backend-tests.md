@@ -10,7 +10,7 @@ debugging a backend test, or changing `TestServerWebAppFactory`, `scripts/run-te
 
 ### Running backend tests
 
-**Rule:** filters, `--list-tests` and exit 8 are in `AGENTS.md` ("Validation"). When batching in bash, never name a variable `GROUPS` (reserved: bash's group-id array); the runner's knob is `TEST_GROUPS`. **Prevents:** a batch loop silently reading the shell's group ids. **Authority:** `scripts/run-tests-memory-safe.sh` (`TEST_GROUPS`).
+**Rule:** when batching in bash, never name a variable `GROUPS` (reserved: bash's group-id array); the runner's knob is `TEST_GROUPS`. **Prevents:** a batch loop silently reading the shell's group ids. **Authority:** `scripts/run-tests-memory-safe.sh` (`TEST_GROUPS`).
 
 ### `--list-tests` prints METHOD names only, so a union filter is confirmed one class at a time
 
@@ -26,7 +26,7 @@ debugging a backend test, or changing `TestServerWebAppFactory`, `scripts/run-te
 
 ### Verify against the whole module, not just the class you touched
 
-**Rule:** the whole-project run (`AGENTS.md` "Validation") is the only local check that unrelated host construction still works. A composition factory reading optional store or config state null-guards it (`Load()?.X`): test substitutes return null. **Prevents:** static caches, host state or order failing outside the edited class, unseen until a gate. **Authority:** `AGENTS.md` "Validation". [evidence](../agent-knowledge-evidence.md#verify-against-the-whole-module-not-just-the-class-you-touched)
+**Rule:** before hand-off, run the whole test project you changed: it is the only local check that unrelated host construction still works. A composition factory reading optional store or config state null-guards it (`Load()?.X`): test substitutes return null. **Prevents:** static caches, host state or order failing outside the edited class, unseen until a gate. **Authority:** the incidents in the evidence ledger. [evidence](../agent-knowledge-evidence.md#verify-against-the-whole-module-not-just-the-class-you-touched)
 
 ### A relative test-project name in a worktree can resolve to a SIBLING worktree's binary
 
@@ -52,7 +52,7 @@ debugging a backend test, or changing `TestServerWebAppFactory`, `scripts/run-te
 
 ### A concurrent `dotnet build` corrupts a test run — and the result is then neither pass nor fail
 
-**Rule:** the lock, the guard and exits 69/75 are in `docs/wiki/13-testing-and-validation.md`. Beyond them: wrap a direct `dotnet test` or treat its result as provisional; rerun after an IDE background build; never wrap a whole validator in one outer lock; a lock helper marks its descriptor close-on-exec before MSBuild; never wait on `pgrep -f "dotnet (build|test)"`: match `dotnet-root/dotnet (build|test)`, or use the lock. **Prevents:** phantom reds and greens. **Authority:** `scripts/with-build-lock.sh`, `scripts/assembly-guard.sh`. [evidence](../agent-knowledge-evidence.md#buildtest-contamination-incident)
+**Rule:** wrap a direct `dotnet test` or treat its result as provisional; rerun after an IDE background build; never wrap a whole validator in one outer lock; a lock helper marks its descriptor close-on-exec before MSBuild; never wait on `pgrep -f "dotnet (build|test)"`: match `dotnet-root/dotnet (build|test)`, or use the lock. **Prevents:** phantom reds and greens. **Authority:** `scripts/with-build-lock.sh`, `scripts/assembly-guard.sh`. [evidence](../agent-knowledge-evidence.md#buildtest-contamination-incident)
 
 ### Leftover build daemons starve the timing-sensitive tests — and the packaging gate is where you notice
 
@@ -162,6 +162,10 @@ debugging a backend test, or changing `TestServerWebAppFactory`, `scripts/run-te
 
 **Rule:** a test that needs a feature off sets it on the stub (`With…Enabled(false)`) or in the stored settings: the stub's switch getters return `true` by default and consumers read the accessor, never `IOptions<T>.Enabled`. Bound any loop the test drives with a `CancellationToken` that fires. **Prevents:** an options-only disable running the enabled path, and a timer loop under `CancellationToken.None` with an unadvanced `FakeTimeProvider` hanging the gate batch silently. **Authority:** `AgentHomeRunRetentionServiceTests`, `SchedulerHistoryRetentionServiceTests`.
 
+### Development Mode is ON by default in the test host, so a Development-gated surface IS mapped there
+
+**Rule:** a test asserting that a Development-gated endpoint or hub is ABSENT builds its own factory with `EnableDevelopmentMode = false`, never the shared host, where the surface is mapped. **Prevents:** an absence test that fails against the shared host, or is "fixed" by weakening its assertion. **Authority:** `TestServerWebAppFactory.EnableDevelopmentMode`; `docs/wiki/17-writing-tests.md` ("Per-host knobs").
+
 ## Browser E2E host
 
 ### a solution build overwrites the E2E test host, so the flagged build must be the LAST one before a `--no-build` E2E run
@@ -176,26 +180,12 @@ debugging a backend test, or changing `TestServerWebAppFactory`, `scripts/run-te
 
 **Rule:** a test of an `IDesktopOnlyEndpoint` asserts the endpoint's ABSENCE. `Program.CreateAppCoreAsync` resolves `launchMode` only when `customization is null`, and every `TestServerWebAppFactory` host passes one and runs `Headless`; separately, `VelopackInstall.IsManaged()` throws until `VelopackApp.SetLocator` runs, never in a fixture. **Prevents:** opting a test into desktop mode through args or env. **Authority:** `Program.CreateAppCoreAsync`, `VelopackInstall.IsManaged`, `ValidateExecutableEndpointTests`.
 
-## Covered elsewhere
-
-- Development Mode is ON by default in the test host, so a Development-gated surface IS mapped there — `docs/wiki/17-writing-tests.md` ("Per-host knobs (there is no `WithWebHostBuilder`)"); `docs/wiki/09-api-and-hubs.md` (hub table); an absence test builds a factory with `EnableDevelopmentMode = false`, never the shared one
-- A silent `return` on the wrong OS reports a green pass, not a skip — `docs/wiki/17-writing-tests.md` ("Self-validating", "A test that only runs on one OS")
-- No analyzer in this stack detects an assertion-less TUnit test — `docs/wiki/17-writing-tests.md` ("Self-validating"); Sonar `S2699` recognises only MSTest, NUnit and xUnit test attributes, so it cannot fire on TUnit
-- Sleep-then-assert-the-negative can only fail when the code gets slower — `docs/wiki/17-writing-tests.md` ("4. Never wait with `Task.Delay`")
-- size a gate from free RAM and check the lock's status before waiting on it — `AGENTS.md` ("Validation")
-
 ## Stale beliefs
 
 Superseded claims; the entries above are the active rules.
 
 | Stale belief | Current correction |
 |---|---|
-| Bash variable `GROUPS` is available. | Bash owns it; use `TEST_GROUPS` (§1). |
-| Memory-safe runner defaults to `JOBS=4`; increase in-process width. | The default tracks the host — `JOBS=16` on a host with at least 32 CPUs, `JOBS=10` below that — and process batches, not in-process width, provide the useful concurrency (§1). |
-| `dotnet test` cannot discover MTP tests. | `global.json` pins MTP; `dotnet test` works (§1). |
-| `if (!OperatingSystem.IsX()) return;` is an acceptable platform guard. | It reports a green pass on every platform that cannot run the test; use TUnit's `[RunOn(OS.Linux)]` / `[ExcludeOn(OS.Windows)]` or `Skip.Test` (§1). |
-| Green E2E proves frontend typecheck. | E2E uses Vite-only `build:e2e`; run `pnpm run lint` (§1). |
 | Browser E2E is entirely sequential. | It uses disjoint serial and pooled phases (§1). |
-| TUnit alternation silently matches zero. | `(A|B)` returns the union; verify with `--list-tests` (§1). |
 | SQLite foreign keys are OFF on the node connection, so cascades never fire and a store's delete order IS the referential integrity. | The node enforces them — it always did, through the bundled native default, and now says so in the connection string and in a pragma on every open. Declared cascades fire; an ordered delete is still required for `Restrict` parents, for links with no foreign key at all, and where order itself matters (§1). |
 | A test fixture with foreign keys ON diverges from production and can hide a missing child delete. | Inverted: a fixture pinned to `Foreign Keys=False` is the one testing a database the node never has (§1, wiki 17). |

@@ -19,6 +19,7 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
+import os
 import shutil
 import subprocess
 import sys
@@ -26,6 +27,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = REPO_ROOT / "scripts" / "docs-inventory-check.py"
@@ -136,6 +138,12 @@ PROPOSED_TOPIC_MD = """# Proposed
 """ + ("narrative " * 200)
 
 
+def git(root: Path, *args: str) -> None:
+    """Run git on the fixture repository, never on an index or repository the caller exported."""
+    env = {key: value for key, value in os.environ.items() if key not in MODULE.GIT_REPO_ENV_VARS}
+    subprocess.run(["git", *args], cwd=root, env=env, check=True)
+
+
 class DocsInventoryCheckTests(unittest.TestCase):
     def make_repo(self) -> Path:
         """Build a miniature repository that every check passes on."""
@@ -173,8 +181,8 @@ class DocsInventoryCheckTests(unittest.TestCase):
         # main() runs check_markdown_links over `git ls-files`, so the miniature repository is a git repository.
         if shutil.which("git") is None:
             self.skipTest("git is not on PATH; main() needs it for the markdown-links inventory")
-        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-        subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+        git(root, "init", "-q")
+        git(root, "add", "-A")
 
         return root
 
@@ -527,7 +535,7 @@ class DocsInventoryCheckTests(unittest.TestCase):
             path.parent.mkdir(parents=True)
             path.write_text(broken, encoding="utf-8")
         (root / "docs" / "kept.md").write_text(broken, encoding="utf-8")
-        subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+        git(root, "add", "-A")
 
         result = MODULE.check_markdown_links(root)
 
@@ -541,13 +549,269 @@ class DocsInventoryCheckTests(unittest.TestCase):
         with self.assertRaises(MODULE.InventoryError):
             MODULE.check_markdown_links(root, [])
 
+    @staticmethod
+    def track(root: Path, files: dict[str, str]) -> None:
+        """Write files into the miniature repository and stage them, so `git ls-files` lists them."""
+        for relative, text in files.items():
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        git(root, "add", "-A")
+
+    def test_hygiene_checks_pass_on_a_clean_repository(self) -> None:
+        root = self.make_repo()
+        for check in (
+            MODULE.check_file_line_citations,
+            MODULE.check_tracked_secrets,
+            MODULE.check_tool_names,
+            MODULE.check_host_phrasing,
+        ):
+            with self.subTest(check=check.__name__):
+                result = check(root)
+                self.assertNotEqual((), result.inventory)
+                self.assertEqual((), result.missing)
+
+    def test_file_line_citations_report_a_line_citation_outside_fences_in_scoped_docs(self) -> None:
+        root = self.make_repo()
+        self.track(
+            root,
+            {
+                "docs/wiki/20-new.md": "See `Foo/Bar.cs:120` and scripts/x.sh#:4.\n\n```text\nBaz.ts:9\n```\n",
+                "docs/agent-knowledge/build.md": BUILD_TOPIC_MD + "\nCited by `Startup.cs` and `Startup.Map`.\n",
+                "docs/other/notes.md": "Unscoped: Foo.cs:1\n",
+            },
+        )
+
+        result = MODULE.check_file_line_citations(root)
+
+        self.assertEqual(["Foo/Bar.cs:120", "scripts/x.sh#:4"], [item.name for item in result.missing])
+        self.assertEqual({"docs/wiki/20-new.md"}, {item.doc.as_posix() for item in result.missing})
+        self.assertTrue(result.missing[0].render().startswith("CITATION file-line-citations: docs/wiki/20-new.md: "))
+
+    def test_file_line_citations_cover_script_and_configuration_extensions(self) -> None:
+        root = self.make_repo()
+        cited = [
+            "a.js:1",
+            "b.jsx:2",
+            "c.cjs:3",
+            "package.json:4",
+            "ci.yml:5",
+            "compose.yaml:6",
+            "pyproject.toml:7",
+            "App.csproj:8",
+            "Directory.Build.props:9",
+            "Directory.Build.targets:10",
+            "docs/wiki/01-x.md:11",
+        ]
+        self.track(root, {"docs/wiki/20-new.md": "".join(f"See {name} here.\n" for name in cited)})
+
+        result = MODULE.check_file_line_citations(root)
+
+        self.assertEqual(cited, [item.name for item in result.missing])
+
+    def test_inline_code_with_three_backticks_does_not_open_a_fence(self) -> None:
+        root = self.make_repo()
+        self.track(root, {"docs/wiki/20-new.md": "```example``` is inline code.\nSee Program.cs:12.\n"})
+
+        result = MODULE.check_file_line_citations(root)
+
+        self.assertEqual(["Program.cs:12"], [item.name for item in result.missing])
+
+    def test_fence_closes_only_on_a_bare_marker_and_tilde_info_may_hold_backticks(self) -> None:
+        text = "```bash\n```not-a-close\nA.cs:1\n```\nB.cs:2\n~~~ info `x`\nC.cs:3\n~~~\nD.cs:4\n"
+
+        self.assertEqual(["B.cs:2", "D.cs:4"], list(MODULE.markdown_lines_outside_fences(text)))
+
+    def test_tracked_secrets_report_runtime_state_but_allow_env_templates(self) -> None:
+        root = self.make_repo()
+        planted = ["node.key", "data/app.sqlite", "data/app.sqlite-wal", ".env", "dp-keys/key.xml", "x/creds.enc"]
+        self.track(root, {name: "" for name in [*planted, ".env.template", ".env.tests", "docs/sqlite.md"]})
+
+        result = MODULE.check_tracked_secrets(root)
+
+        self.assertEqual(sorted(planted), sorted(item.name for item in result.missing))
+
+    def test_tool_names_report_tool_config_in_product_code_but_not_in_exempt_installers(self) -> None:
+        root = self.make_repo()
+        self.track(
+            root,
+            {
+                "src/A.cs": "// settings live in ~/.claude/settings.json\nclass A {}\n",
+                "src/B.ts": "// ponytail: shortcut\n",
+                "src/C.cs": "// An external MCP client such as Claude Code connects here.\n",
+                "install.sh": 'skills="$HOME/.claude/skills"\n',
+                "docs/other/runbook.md": "Put it in .claude/settings.json\n",
+            },
+        )
+
+        result = MODULE.check_tool_names(root)
+
+        self.assertEqual(
+            [("src/A.cs", ".claude/"), ("src/B.ts", "ponytail")],
+            [(item.doc.as_posix(), item.name) for item in result.missing],
+        )
+        self.assertTrue(result.missing[0].render().startswith("TOOL-NAME tool-names: src/A.cs: line 1: "))
+
+    def test_host_phrasing_reports_host_details_unless_dated_quoted_or_user_guide(self) -> None:
+        root = self.make_repo()
+        self.track(
+            root,
+            {
+                "docs/wiki/20-new.md": (
+                    "Logs land in /home/alice/logs.\n"
+                    "Measured on this box.\n"
+                    "The host has 64 GB RAM and a 32-core CPU.\n"
+                    "Mapping alice:100000:65536 in /etc/subuid.\n"
+                    "A rootless daemon maps the uid into the operator's subuid range.\n"
+                    'Rule: no "this box" phrasing.\n'
+                    "On 2026-01-02, measured with 64 GB RAM on a 16-core host.\n"
+                    "chmod jail/home/tmp to 0700.\n"
+                ),
+                "docs/user-guide/docs/faq.md": "Windows with 8 GB RAM works.\n",
+            },
+        )
+
+        result = MODULE.check_host_phrasing(root)
+
+        self.assertEqual(
+            ["/home/alice", "this box", "64 GB RAM", "32-core", "alice:100000:65536"],
+            [item.name for item in result.missing],
+        )
+        self.assertEqual({"docs/wiki/20-new.md"}, {item.doc.as_posix() for item in result.missing})
+
+    def test_host_phrasing_date_excuses_only_hardware_inventory(self) -> None:
+        root = self.make_repo()
+        self.track(
+            root,
+            {
+                "docs/agent-knowledge-evidence.md": (
+                    "2026-10-08: logs in /home/alice, uid=1000\n"
+                    "2026-10-08: mapped alice:100000:65536 on this box\n"
+                    "2026-10-08: measured with 64 GB RAM on a 16-core host\n"
+                ),
+            },
+        )
+
+        result = MODULE.check_host_phrasing(root)
+
+        self.assertEqual(
+            ["/home/alice", "uid=", "alice:100000:65536", "this box"],
+            [item.name for item in result.missing],
+        )
+
+    def test_tool_names_scan_javascript_sources(self) -> None:
+        root = self.make_repo()
+        planted = {
+            "XE-Local-AI-Engine.Client.React/scripts/gate.mjs": "// reads .claude/settings.json\n",
+            "src/a.js": "// ponytail: shortcut\n",
+            "src/b.cjs": "module.exports = '.codex/';\n",
+            "src/C.jsx": "// see CLAUDE.md\n",
+        }
+        self.track(root, {**planted, "src/clean.mjs": "export const ok = 1;\n"})
+
+        result = MODULE.check_tool_names(root)
+
+        self.assertEqual(sorted(planted), sorted(item.doc.as_posix() for item in result.missing))
+
+    def test_tool_names_match_directory_patterns_with_a_backslash_separator(self) -> None:
+        root = self.make_repo()
+        planted = {
+            "publish/a.ps1": '$cfg = Join-Path $HOME ".codex\\config.toml"\n',
+            "publish/b.ps1": '$dir = "$env:USERPROFILE\\.claude\\skills"\n',
+        }
+        self.track(root, {**planted, "publish/clean.ps1": '$p = "C:\\Program Files\\x"\n'})
+
+        result = MODULE.check_tool_names(root)
+
+        self.assertEqual(sorted(planted), sorted(item.doc.as_posix() for item in result.missing))
+
+    def test_tool_names_match_directory_tokens_ending_at_a_quote_whitespace_or_line_end(self) -> None:
+        root = self.make_repo()
+        planted = {
+            "src/A.cs": 'var cfg = Path.Combine(home, ".codex", "config.toml");\n',
+            "src/B.ts": 'const dir = ".claude";\n',
+            "src/c.sh": "ls ~/.omc\n",
+            "src/d.py": "skip = {'.serena', 'x'}\n",
+        }
+        clean = {
+            "src/E.cs": "// An external MCP client such as Claude Code connects here.\n",
+            "src/f.js": 'this.cursor = 0;\nt("navigation.agents");\n',
+            "src/G.ts": 'const p = ".vscode/extensions.json";\n',
+        }
+        self.track(root, {**planted, **clean})
+
+        result = MODULE.check_tool_names(root)
+
+        self.assertEqual(sorted(planted), sorted(item.doc.as_posix() for item in result.missing))
+
+    def test_tool_names_scan_gate_configuration_files(self) -> None:
+        root = self.make_repo()
+        planted = {
+            "package.json": '{"scripts": {"lint": "node .claude/hooks/lint.mjs"}}\n',
+            "XE-Local-AI-Engine.Client.React/package.json": '{"scripts": {"x": "repomix ."}}\n',
+            ".github/workflows/x.yaml": "steps:\n  - run: cat CLAUDE.md\n",
+            "pnpm-workspace.yaml": "packages: ['.codex/*']\n",
+            "pyproject.toml": 'exclude = [".omc/"]\n',
+            "Directory.Build.props": '<Compile Remove=".cursor/**" />\n',
+            "build/x.targets": '<Exec Command="ponytail" />\n',
+            "publish/m.psm1": "$d = Join-Path $HOME '.claude'\n",
+            "publish/m.psd1": "@{ Path = '.junie/' }\n",
+        }
+        self.track(root, {**planted, "XE-Local-AI-Engine.Client.React/tsconfig.json": '{"x": ".claude/"}\n'})
+
+        result = MODULE.check_tool_names(root)
+
+        self.assertEqual(sorted(planted), sorted(item.doc.as_posix() for item in result.missing))
+
+    def test_tool_names_scan_project_files(self) -> None:
+        root = self.make_repo()
+        planted = {"src/App/App.csproj": '<Import Project="../.codex/gate.targets" Condition="Exists(\'x\')" />\n'}
+        self.track(root, {**planted, "src/Clean/Clean.csproj": '<Project Sdk="Microsoft.NET.Sdk" />\n'})
+
+        result = MODULE.check_tool_names(root)
+
+        self.assertEqual(sorted(planted), sorted(item.doc.as_posix() for item in result.missing))
+
+    def test_tool_names_decode_a_utf16_file_and_report_an_undecodable_one(self) -> None:
+        root = self.make_repo()
+        self.track(root, {"publish/clean.ps1": "$p = 1\n"})
+        (root / "publish" / "wide.ps1").write_bytes('Join-Path $HOME ".codex"\n'.encode("utf-16"))
+        (root / "publish" / "bom.ps1").write_bytes('Join-Path $HOME ".claude"\n'.encode("utf-8-sig"))
+        (root / "publish" / "blob.ps1").write_bytes(b"\x80\x81\xfe not text\n")
+        git(root, "add", "-A")
+
+        result = MODULE.check_tool_names(root)
+
+        found = {(item.doc.as_posix(), item.problem.split(":")[0]) for item in result.missing}
+        self.assertEqual(
+            {("publish/wide.ps1", "line 1"), ("publish/bom.ps1", "line 1"), ("publish/blob.ps1", "undecodable")},
+            found,
+        )
+
+    def test_git_queries_ignore_an_exported_private_index(self) -> None:
+        root = self.make_repo()
+        stale_index = root.parent / "stale-index"
+        shutil.copyfile(root / ".git" / "index", stale_index)
+        self.track(root, {"node.key": ""})
+        # Without the scrub, `git ls-files` answers from the stale index, which predates node.key.
+        stale_env = {"GIT_INDEX_FILE": str(stale_index), "GIT_DIR": str(root / ".git")}
+        stale_listing = subprocess.run(
+            ["git", "ls-files"], cwd=root, env={**os.environ, **stale_env}, capture_output=True, text=True, check=True
+        ).stdout
+        self.assertNotIn("node.key", stale_listing.split())
+
+        with mock.patch.dict(os.environ, stale_env):
+            result = MODULE.check_tracked_secrets(root)
+
+        self.assertEqual(["node.key"], [item.name for item in result.missing])
+
     def test_the_script_exits_zero_on_the_real_repository(self) -> None:
         completed = subprocess.run(
             [sys.executable, str(MODULE_PATH)], cwd=REPO_ROOT, capture_output=True, text=True, check=False
         )
 
         self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
-        self.assertIn("8 checks", completed.stdout)
+        self.assertIn("12 checks", completed.stdout)
 
     def test_main_is_clean_on_the_real_repository(self) -> None:
         stdout = io.StringIO()

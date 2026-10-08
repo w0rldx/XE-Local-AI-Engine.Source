@@ -72,8 +72,8 @@ A test ends in an explicit assertion and is binary green/red with no human step 
 
 - Assert with `AssertEx.*` (C#), `expect(…)` (Vitest), `assert`/`pytest.raises` (Python), `Should` (Pester). A test
   that only exercises code has verified nothing. `pnpm run validate` runs `CheckTestsHaveAssertions.mjs` over the
-  frontend suite; no analyzer in this stack detects an assertion-less TUnit test at all, so on the backend the
-  rule is enforced in review only.
+  frontend suite; no analyzer in this stack detects an assertion-less TUnit test at all (Sonar `S2699` recognises
+  only MSTest, NUnit and xUnit test attributes), so on the backend the rule is enforced in review only.
 - Never read a log line, console output or a report to decide pass/fail. The assertion is the result.
 - Never `return` early because the OS, GPU or tool is missing — that reports a green pass. Skip visibly: TUnit's
   own `[RunOn(OS.Linux)]` / `[ExcludeOn(OS.Windows)]` (`using OS = TUnit.Core.Enums.OS;` — that namespace's
@@ -431,10 +431,7 @@ scripts/run-e2e-local.sh --filter '/*/*/AgentsPageE2ETests/*'      # --list enum
   A filter that matches nothing exits **8**; a zero-test run is not a pass.
 - Wrap every build and every test run in `scripts/with-build-lock.sh`, and **never** build while a test run is in
   flight — the host is shared. Exit `75` means the result is void; rerun.
-- Iterate in Debug if you like, but **finish with a Release build** of the solution. Debug skips the analyzers
-  entirely, so a green Debug build has verified none of the static-analysis wall.
-- A bare `TODO`/`FIXME` in a C# comment **fails the Release build** (Sonar S1135 + warnings-as-errors). Describe
-  the present limitation or rationale directly without `TODO`/`FIXME` or task markers.
+- Finish with a Release build of the solution: only Release runs the analyzers (`AGENTS.md`, "Validation").
 
 ## Related pages
 

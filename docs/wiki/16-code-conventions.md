@@ -90,7 +90,9 @@ violation is fixed by moving the dependency into a `Client.Application` service 
 a service is a concrete `sealed class` with no interface, registered as itself; add an interface only when a
 specific test must substitute it, and move the displaced behavioural assertions to a service-level test when you
 do. The last such site was the tool-catalog endpoint's `AI.Agent` approval policy, which went behind
-`ToolCatalogService`; `AI.Agent` is deliberately not in the rule's allowed set.
+`ToolCatalogService`; `AI.Agent` is deliberately not in the rule's allowed set. When you move an endpoint body into
+such a service, register the service at the lifetime of what it wraps and move `HandleAsync` verbatim: a rewrite
+changes behaviour that the untouched endpoint tests miss.
 
 ### A service's own model types live in `*ServiceModels.cs`
 
@@ -554,8 +556,7 @@ Reach for a substitute only after the real thing and the repo's fake seam (`Fake
 to verify — [17-writing-tests.md §1a](17-writing-tests.md#1a-test-principles). Every test class carries exactly
 one `[Category(TestCategories.…)]`, enforced by `TestCategoryConventionTests` —
 [17-writing-tests.md §1b](17-writing-tests.md#1b-test-categories).
-Scope a run with `--treenode-filter` (not `--filter`). See
-[13-testing-and-validation.md](13-testing-and-validation.md).
+Running and scoping tests: [17-writing-tests.md §6](17-writing-tests.md#6-running-what-you-changed).
 
 ---
 
@@ -778,5 +779,5 @@ hook (`core/formatting/TimeFormatting.ts`).
 - [09-api-and-hubs.md](09-api-and-hubs.md) — FastEndpoints route families, hubs, OpenAPI→hey-api.
 - [10-react-client.md](10-react-client.md) — React client architecture.
 - [13-testing-and-validation.md](13-testing-and-validation.md) — the gates these conventions ride on.
-- `docs/agent-knowledge.md` — the hard-won traps (Release-only analyzers).
+- `docs/agent-knowledge.md` — the hard-won traps.
 - `.editorconfig`, `Directory.Build.props`, `doctor.config.jsonc` — where the auto-enforced rules live.

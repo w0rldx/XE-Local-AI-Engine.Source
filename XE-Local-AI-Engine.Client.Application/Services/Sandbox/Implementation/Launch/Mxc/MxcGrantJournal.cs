@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     application's legitimate AppContainer ACEs, which the sweep cannot tell apart from residue. Best-effort: an unwritable journal is logged and the launch proceeds, since <c>ClearPolicyOnExit</c> still removes the grants on a
 ///     normal exit.
 /// </remarks>
-// ponytail: one in-process lock; two engine processes appending at once can lose a line. Per-process journal files if that ever matters.
+// One in-process lock; two engine processes appending at once can lose a line. Per-process journal files if that ever matters.
 public static class MxcGrantJournal
 {
     private static readonly Lock Gate = new();

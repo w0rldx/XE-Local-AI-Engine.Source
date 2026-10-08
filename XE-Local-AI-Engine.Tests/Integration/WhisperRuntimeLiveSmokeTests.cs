@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
@@ -114,7 +115,8 @@ public sealed class WhisperRuntimeLiveSmokeTests
         };
 
         var binaryManager = new WhisperCppBinaryManager(httpClient, cacheRoot: null, activeTag: null, overrideOptions);
-        var launcher = new WhisperServerProcessLauncher(NullLogger<WhisperServerProcessLauncher>.Instance);
+        var launcher = new WhisperServerProcessLauncher(NullLogger<WhisperServerProcessLauncher>.Instance,
+            new ChildProcessOutputTailRegistry(TimeProvider.System));
         var readinessProbe = new WhisperServerReadinessProbe(httpClient, options);
         var backendSelector = new StaticBackendSelector(overrideOptions.Backend);
 

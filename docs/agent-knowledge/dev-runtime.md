@@ -34,7 +34,7 @@ change and reset revoke all. **Prevents:** reviving a logged-out cookie, or a lo
 
 ## Dev host lifecycle
 
-### The dev environment has a CUDA GPU — probe it, never infer it
+### Probe the GPU; never assume one
 
 **Rule:** never infer hardware or toolkit from docs; run `nvidia-smi`, `nvcc --version` and check the compiled
 architecture. Under WDDM/WSL, VRAM pressure pages to host RAM instead of OOMing (slow but correct: useless for OOM tests or
@@ -52,7 +52,7 @@ are memory-only and do not survive restart. **Prevents:** a cache failure surfac
 
 ### `dev-stop.sh` is the sanctioned stop path — but the leak it guards against no longer reproduces
 
-**Rule:** the stop rule itself is in `AGENTS.md`. Do not remove `dev-stop.sh`'s owned-graph fallback cleanup (bound to
+**Rule:** do not remove `dev-stop.sh`'s owned-graph fallback cleanup (bound to
 the exact AppHost/DCP graph, start-time checked against PID reuse, fail-closed on malformed Aspire output) and never restore
 a global `llama-server` kill: plain `aspire stop` cleaned later retests, but the original orphan trigger is still unknown.
 **Prevents:** removing live cleanup before a reproducer exists. **Authority:** `scripts/dev-stop.sh`,
@@ -230,8 +230,7 @@ and assert the chain. **Prevents:** replayed POSTs, `invalid_grant`, escaping `T
 ### Other silent-failure traps
 
 **Rule:** native probes need a per-call timeout plus an outer deadline that degrades safely; desktop mode treats absent
-Ollama as expected. Port persistence, SIGHUP/`CTRL_CLOSE_EVENT` shutdown, the publish shapes (Windows needs x64 ASP.NET Core
-Runtime 10.0.12+) and the off-flag invariant are in wiki 11 §5-§6. **Prevents:** hangs and unexpected desktop behavior.
+Ollama as expected. **Prevents:** hangs and unexpected desktop behavior.
 **Authority:** `docs/wiki/11-hosting-and-deployment.md` §5.
 
 ### Measure free disk through `IFreeSpaceProbe`, never on `Path.GetPathRoot` of a path
@@ -249,6 +248,12 @@ unmeasurable means. Test against a real second mount (`SeparateMountScratch`). *
 ### Never open the node database on a shared cache: busy_timeout does not cover its table locks
 
 **Rule:** the node database runs on a private cache; `AddNodeModelRuntime` strips Aspire's `Cache=Shared` through `NodeSqlitePragmas.WithPrivateCache`. Read extended code 262 as SQLITE_LOCKED_SHAREDCACHE: on a shared cache one connection's uncommitted DDL blocks every other connection's next prepare. The buffer address decides the form: an `ArgumentOutOfRangeException` from SQLitePCL, or SQLite error 6 once the driver's retry hits its command timeout. A test of it accepts both and sets a short `DefaultTimeout`. **Prevents:** the readiness probe's rolled-back `CREATE TABLE` failing an identity lookup with 500 and dropping a SignalR long-poll stream; a repro test that flakes on the 60 s form. **Authority:** `NodeSqlitePragmasTests` (`SharedCache_*`, `WithPrivateCache_*`); model-matrix F16, 2026-10-03.
+
+### A stable-diffusion.cpp source build closes stdin on every child
+
+**Rule:** every git and CMake child of a managed stable-diffusion.cpp source build redirects stdin and closes it at once
+(the rest of the hardening: wiki 14, "Binary provisioning and managed source builds"). **Prevents:** a build step
+blocking forever on an interactive prompt. **Authority:** `StableDiffusionSourceProcessHardening.CloseStandardInput`.
 
 ## Windows
 
@@ -272,18 +277,6 @@ Developer Mode); a junction cannot prove a file-swap guard.
 **Prevents:** instant timeout-test failures and false greens. **Authority:** Windows RC runbook.
 [evidence](../agent-knowledge-evidence.md#windows-live-verification)
 
-## Covered elsewhere
-
-- Host filtering runs from an `IStartupFilter`, ahead of every middleware the composition root registers —
-  `docs/wiki/11-hosting-and-deployment.md` ("The container bridge listener"): any new non-loopback listener adds its host
-  names to `AllowedHosts` where it is opened (`ContainerBridgePipeline.AllowBridgeHost`).
-- `FallbackPolicy` challenges every routed endpoint without auth metadata, and every request that matches no endpoint —
-  `docs/wiki/09-api-and-hubs.md` ("Security middleware & auth ordering").
-- The backend serves the SPA — `docs/wiki/09-api-and-hubs.md` ("Static SPA fallback"),
-  `docs/wiki/11-hosting-and-deployment.md` (§3). Do not add a second Node/static server.
-- stable-diffusion.cpp managed source builds — `docs/wiki/14-image-generation.md` ("Binary provisioning and managed source
-  builds", "Invariants a maintainer must respect"); source builds also close stdin and never rely on a default-branch checkout.
-
 ## Stale beliefs
 
 Superseded claims; the entries above are the active rules.
@@ -291,9 +284,7 @@ Superseded claims; the entries above are the active rules.
 | Stale belief | Current correction |
 |---|---|
 | Development Mode must be unrestricted because restore needs network. | A short warm sandbox restores, then the agent-facing sandbox requests deny-egress where supported |
-| WSL has no GPU (or a specific older card). | Hardware changes between verifications; always query live |
 | Ollama was removed. | Only Aspire auto-orchestration was removed; Ollama remains opt-in |
-| `aspire stop` necessarily leaks and only 13.5+ fixes it. | Not reproduced on tested versions; `dev-stop.sh` stays sanctioned until the trigger is known |
 | Inbound MCP key is recoverable. | Only a SHA-256 digest is stored; plaintext is returned once on generation |
 | Development Docker is unbuilt / now required. | It is shipped opt-in and not the default; the container status record is canonical |
 | Development Mode always fails closed without isolation. | It degrades per served capability/platform; report actual posture |

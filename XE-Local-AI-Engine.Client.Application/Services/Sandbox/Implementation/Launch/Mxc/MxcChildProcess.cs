@@ -25,12 +25,13 @@ public sealed class MxcChildProcess : IDisposable
     private readonly TimeProvider _timeProvider;
 
     public MxcChildProcess(IMxcProcess process,
+        TimeProvider timeProvider,
         Action<string>? onStandardOutputLine = null,
-        Action<string>? onStandardErrorLine = null,
-        TimeProvider? timeProvider = null)
+        Action<string>? onStandardErrorLine = null)
     {
         _process = process ?? throw new ArgumentNullException(nameof(process));
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         var pumps = new List<Task>(2);
         if (onStandardOutputLine is not null && process.StandardOutput is { } standardOutput)
         {

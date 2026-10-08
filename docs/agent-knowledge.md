@@ -15,12 +15,6 @@ as a floor, not proof that no other invariant exists.
   another checkout. **Authority:** the current Git configuration; `AGENTS.md` (branch from and target `develop`).
 - Old `C0re.*` solution, project and Docker-context names are gone; current names: `docs/wiki/02-project-layout.md`.
 
-### Cite symbols, not `file:line`, for anything under active development
-
-**Rule:** cite a file plus a symbol or quoted phrase; never a line inside a file your change edits. Symbols are cited by
-name, never by line number. **Prevents:** line citations that stay in range after edits while pointing at the wrong
-code. **Authority:** `AGENTS.md`; ADR 0004 anchor-maintenance note. [evidence](agent-knowledge-evidence.md#why-symbol-citations-replaced-line-citations)
-
 ### Describe the environment generically — this is a public repository
 
 **Rule:** docs, comments and fixtures describe the environment in general terms: no installed-tool patch versions, no
@@ -45,14 +39,16 @@ resolving the conflict, re-read every `<remarks>` and comment run in each confli
 | `.github/workflows/**`, `HEAVY`/sharding, coverage merge, `publish/**`, `scripts/release/**`, `cliff.toml`, Velopack bootstrap; committing in a shared worktree | [ci-and-release](agent-knowledge/ci-and-release.md) |
 | Running or scripting a dev host or live round; `Program.cs`/Kestrel/auth, HTTP clients, sandbox host side, Windows-only branches | [dev-runtime](agent-knowledge/dev-runtime.md) |
 | `Providers.LlamaServer`, the llama.cpp pin or binaries, launch fallback, tool offering or a tool schema, chat-template capability detection | [inference-runtime](agent-knowledge/inference-runtime.md) |
-| Model fit / HF discovery, `CapacityService`, llama-server supervisor, `Benchmark*`, knowledge base, `Services/Training`, `Services/Transcription` | [models-and-inference](agent-knowledge/models-and-inference.md) |
+| Model fit / HF discovery, `CapacityService`, llama-server supervisor | [model-fit-and-discovery](agent-knowledge/model-fit-and-discovery.md) |
+| `Benchmark*`, knowledge base, `Services/Training`, `Services/Transcription` | [benchmarks-kb-training-transcription](agent-knowledge/benchmarks-kb-training-transcription.md) |
 | `AI.Agent`, tool invocation or approval, cloud/MCP providers, Graph/Dev Workflows, `LaunchMode.McpOnly`, MAF/MEAI/`OpenAI` bumps | [agents-and-sandbox](agent-knowledge/agents-and-sandbox.md) |
 | `Services/Sandbox`/`Compute`/`AgentHome`, bubblewrap, any path-containment or patch-apply check | [sandbox-and-compute](agent-knowledge/sandbox-and-compute.md) |
 | `XE-Local-AI-Engine.Client.React/`, an endpoint's request/response/error declaration, hub payloads, `openapi/v1.json` | [frontend-and-api](agent-knowledge/frontend-and-api.md) |
 
 ## 1. Build, test, CI, packaging
 
-`AGENTS.md` ("Validation") is authoritative for commands and CI shape; the traps behind it are in
+`AGENTS.md` ("Validation") names the gates; flags and exit codes are in each script's header, CI shape in wiki 13.
+The traps behind them are in
 [build-and-analyzers](agent-knowledge/build-and-analyzers.md), [backend-tests](agent-knowledge/backend-tests.md) and
 [ci-and-release](agent-knowledge/ci-and-release.md).
 
@@ -64,8 +60,9 @@ Dev host lifecycle, node secret and data dirs, the shared model store, live roun
 
 ## 3. Models, inference, retrieval
 
-Discovery, capacity and spawn, benchmarks, knowledge base, training, transcription:
-[models-and-inference](agent-knowledge/models-and-inference.md). The tool-grammar repetition ceiling and the arithmetic/time
+Discovery, capacity and spawn: [model-fit-and-discovery](agent-knowledge/model-fit-and-discovery.md). Benchmarks,
+knowledge base, training, transcription:
+[benchmarks-kb-training-transcription](agent-knowledge/benchmarks-kb-training-transcription.md). The tool-grammar repetition ceiling and the arithmetic/time
 tools left by a partial offer (the partial-failure residue), cited in code as §3, live in
 [inference-runtime](agent-knowledge/inference-runtime.md) ("Passing all five gates ..." and "Capability detection ...").
 
@@ -128,6 +125,8 @@ you touch.
   test | script>.`, optionally an evidence link. Body <= 900 chars. Keep an existing heading verbatim: code comments
   quote headings and cite `docs/agent-knowledge.md §N`. Narrative, measurements and incident history go to the
   [evidence ledger](agent-knowledge-evidence.md) under the matching area heading.
+- **One home per rule:** an entry that only points at the wiki, `AGENTS.md` or a script header is not written; a rule
+  the wiki, an analyzer or a gate already states lives there.
 - **New proposals** go to [proposed](agent-knowledge/proposed.md), which is not required reading. Promotion needs
   operator approval; the entry then moves to its topic file.
 - `scripts/docs-inventory-check.py` (CI `python-quality`) enforces the caps: index <= 12 KB with `## 0.`…`## 7.`,

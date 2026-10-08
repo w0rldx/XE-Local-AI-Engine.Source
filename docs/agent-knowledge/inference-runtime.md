@@ -141,11 +141,12 @@ tools are filtered. **Prevents:** unsupported kwargs and unrecoverable sessions.
 
 **Rule:** llama-server parses the request, so the body's JSON whitespace never reaches the tokens; the templates measured render a schema single-line with `", "` / `": "` separators. Budget tools through `TokenEstimatorCalibrationStore.RenderToolSchema`, the same helper the calibration probe uses, and judge any change by `usage.prompt_tokens` with and without the tools on at least two template families. **Prevents:** counting the indented source text, which under-counted an uncalibrated Qwen turn and over-charged a calibrated one by 150 to 200 tokens at a 4,096 window. **Authority:** `TokenEstimatorCalibrationStore` (`RenderToolSchema`, `DefaultToolTemplatePreambleTokens`); model-matrix follow-ups B1, 2026-10-05 (pinned pair: 769 / 683 / 569 real tokens on Qwen3.5, Granite 4.1, LFM2.5).
 
-## Covered elsewhere
+### A second patch onto `ChatOptions.RawRepresentationFactory` must compose the first
 
-- A second patch onto `ChatOptions.RawRepresentationFactory` must compose the first — `docs/wiki/03-local-runtime-and-providers.md`
-  ("Request-body patches on the llama.cpp path"); always `OpenAICompatibleRequestBody.Chain` (assigning discards the previous
-  patch; pinned by `DeferredLlamaServerStructuredOutputTests.ResponseFormatAndThinkingSwitch_BothReachWire`).
+**Rule:** add a request-body patch only through `OpenAICompatibleRequestBody.Chain` (wiki 03, "Request-body patches on
+the llama.cpp path"); assigning `RawRepresentationFactory` directly discards the patch already there. **Prevents:** one
+llama.cpp request field silently vanishing from the wire when a second feature patches the body. **Authority:**
+`DeferredLlamaServerStructuredOutputTests.ResponseFormatAndThinkingSwitch_BothReachWire`.
 
 ## Stale beliefs
 

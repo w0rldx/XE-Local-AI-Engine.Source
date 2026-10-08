@@ -38,6 +38,13 @@ write_solution "${ALL_PROJECTS[@]}"
 cat >"$FAKE/scripts/with-build-lock.sh" <<'EOF'
 #!/usr/bin/env bash
 shift
+[[ -n "${FAKE_LOCK_EXIT:-}" ]] && exit "$FAKE_LOCK_EXIT"
+# "Waiting for the lock": register, then block until signalled, as the real wrapper's flock does.
+if [[ -n "${FAKE_LOCK_WAIT:-}" ]]; then
+  echo "$$" >>"$FAKE_PIDS"
+  sleep "$FAKE_LOCK_WAIT"
+  exit 69
+fi
 export XE_BUILD_LOCK_HELD=1
 exec "$@"
 EOF
@@ -92,6 +99,10 @@ while (($#)); do
   esac
 done
 echo "test project=$project max=$max results=$results coverage=$coverage" >>"$FAKE_LOG"
+# Lands a commit mid-run in a real-git fixture: one lane only, so two lanes never race on its index.
+if [[ -n "${FAKE_COMMIT_IN:-}" && "$project" == *AI.Agent.Tests* ]]; then
+  git -C "$FAKE_COMMIT_IN" commit -q --allow-empty -m "moved during the gate"
+fi
 if [[ -n "${FAKE_RECORD_ORDER:-}" ]]; then
   echo "test-start $project" >>"$FAKE_LOG"
   echo "test-end $project" >>"$FAKE_LOG"
@@ -108,6 +119,12 @@ fi
 if [[ -n "${FAKE_ALL_SKIPPED:-}" ]]; then
   printf 'Test run summary: Passed!\n  total: 3\n  failed: 0\n  succeeded: 0\n  skipped: 3\n'
   exit 0
+fi
+# MTP's failure line shape: "failed <display name> (<duration>)".
+if [[ -n "${FAKE_FAILED_TEST:-}" ]]; then
+  printf 'failed %s (1s 20ms)\n  boom\nTest run summary: Failed!\n  total: 3\n  failed: 1\n  succeeded: 2\n  skipped: 0\n' \
+    "$FAKE_FAILED_TEST"
+  exit 2
 fi
 cat <<'SUMMARY'
 Test run summary: Passed!
@@ -154,16 +171,46 @@ list_paths() {
 }
 case "$1" in
   rev-parse)  [[ "$2 $3" == "--verify -q" ]] || exec "$REAL_GIT" "$@"
-              [[ "$4" == "${FAKE_GIT_REF:-develop}^{commit}" ]] ;;
+              case "${FAKE_GIT_REF:-develop}" in
+                develop)        [[ "$4" == "refs/heads/develop^{commit}" ]] ;;
+                origin/develop) [[ "$4" == "refs/remotes/origin/develop^{commit}" ]] ;;
+                *)              false ;;
+              esac ;;
   merge-base) [[ -z "${FAKE_GIT_NO_MERGE_BASE:-}" ]] && echo 0123abc ;;
   diff)       list_paths "${FAKE_GIT_DIFF:-}" "$@" ;;
   ls-files)   list_paths "${FAKE_GIT_UNTRACKED:-}" "$@" ;;
   *)          exec "$REAL_GIT" "$@" ;;
 esac
 EOF
+# The batched module's test host, as the Architecture fail-fast pre-lane calls it: `--list-tests` then the
+# run. FAKE_ARCH_NO_MATCH makes the listing exit 8 (MTP's zero-match), FAKE_ARCH_FAIL fails one test
+# whose method lives in a fake Architecture source file, so the class lookup has something to find.
+ARCH_HOST="$FAKE/XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests"
+mkdir -p "$(dirname "$ARCH_HOST")" "$FAKE/XE-Local-AI-Engine.Tests/Architecture"
+cat >"$ARCH_HOST" <<'EOF'
+#!/usr/bin/env bash
+if [[ " $* " == *" --list-tests "* ]]; then
+  echo "arch-list $*" >>"$FAKE_LOG"
+  [[ -n "${FAKE_ARCH_NO_MATCH:-}" ]] && exit 8
+  echo "Layers_NeverReferenceUp"
+  exit 0
+fi
+echo "arch-run $*" >>"$FAKE_LOG"
+if [[ -n "${FAKE_ARCH_FAIL:-}" ]]; then
+  printf 'failed Layers_NeverReferenceUp (12ms)\n  boom\nTest run summary: Failed!\n  total: 2\n  failed: 1\n  succeeded: 1\n  skipped: 0\n'
+  exit 2
+fi
+printf 'Test run summary: Passed!\n  total: 2\n  failed: 0\n  succeeded: 2\n  skipped: 0\n'
+EOF
+printf 'public sealed class LayerDependencyTests { public void Layers_NeverReferenceUp() { } }\n' \
+  >"$FAKE/XE-Local-AI-Engine.Tests/Architecture/LayerDependencyTests.cs"
+# A fixture list, so the annotation cases do not depend on what the shipped list currently names.
+printf '# comment|x|y\nFlaky_Method|2026-10-08|fixture flake note\n' >"$FAKE/scripts/known-flakes.txt"
+HISTORY="$FAKE/.tmp/gate-history.log"
+FAKE_REAL="$(cd "$FAKE" && pwd -P)"
 chmod +x "$FAKE/scripts/with-build-lock.sh" "$FAKE/scripts/assembly-guard.sh" \
   "$FAKE/scripts/run-tests-memory-safe.sh" "$FAKE/scripts/run-release-contract-tests.sh" \
-  "$FAKE/bin/dotnet" "$FAKE/bin/git"
+  "$FAKE/bin/dotnet" "$FAKE/bin/git" "$ARCH_HOST"
 export PATH="$FAKE/bin:$PATH"
 
 # Runs the gate with NO_BUILD=1 (the stub dotnet builds nothing) and captures output + status.
@@ -203,8 +250,8 @@ grep -Fq 'runner NO_BUILD=1 COVERAGE_DIR=' "$TMP/enrol.log"
 # One `dotnet test` per sibling, none for the batched module.
 [[ "$(grep -c '^test project=' "$TMP/enrol.log")" -eq 2 ]]
 refute_grep '^test project=XE-Local-AI-Engine.Tests/' "$TMP/enrol.log"
-# Siblings are guarded and each gets its own results directory.
-[[ "$(grep -c '^guard guard --test-bins --' "$TMP/enrol.log")" -eq 2 ]]
+# Siblings are guarded and each gets its own results directory; the third guard is the Architecture pre-lane.
+[[ "$(grep -c '^guard guard --test-bins --' "$TMP/enrol.log")" -eq 3 ]]
 grep -q 'results=.*/XE-Local-AI-Engine.AI.Agent.Tests ' "$TMP/enrol.log"
 grep -q 'results=.*/XE-Local-AI-Engine.Client.Persistence.Tests ' "$TMP/enrol.log"
 
@@ -216,6 +263,214 @@ run_gate clean-exit env
 last_line="$(printf '%s\n' "$output" | grep -v '^[[:space:]]*$' | tail -1)"
 [[ "$last_line" == "BACKEND GATE GREEN" ]] || { echo "last line was '$last_line'" >&2; exit 1; }
 refute_grep -E 'unbound variable|command not found|: line [0-9]+:' <<<"$output"
+
+# --- Architecture fail-fast pre-lane ---
+# Green: listed first, then run with the batched runner's own namespace filter, all before any lane.
+grep -Fq 'arch-list --list-tests --treenode-filter /*/XE_Local_AI_Engine.Tests.Architecture/*/*' "$TMP/enrol.log"
+grep -Fq 'arch-run --treenode-filter /*/XE_Local_AI_Engine.Tests.Architecture/*/* --maximum-parallel-tests 1' "$TMP/enrol.log"
+grep -Fq '>> Fail-fast: Architecture green (2 passed)' <<<"$output"
+first_lane="$(grep -nE '^(runner |test project=)' "$TMP/enrol.log" | head -1 | cut -d: -f1)"
+arch_line="$(grep -n '^arch-run ' "$TMP/enrol.log" | cut -d: -f1)"
+(( arch_line < first_lane )) || { echo "pre-lane ran after a lane started" >&2; cat "$TMP/enrol.log" >&2; exit 1; }
+# Not a row of the summary table: the totals are the lanes' alone.
+refute_grep -iE '^architecture' <<<"$output"
+
+# Red: exit 1 with the marker and the failing class, and no lane ever starts.
+run_gate arch-red env FAKE_ARCH_FAIL=1
+[[ "$status" -eq 1 ]] || { echo "arch-red exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq 'FAIL-FAST: Architecture conventions red; long lanes not run' <<<"$output"
+grep -Fq 'FAILED CLASS: LayerDependencyTests' <<<"$output"
+grep -Fq 'FAILED TEST: Layers_NeverReferenceUp' <<<"$output"
+refute_grep -E '^(runner |test project=|contract )' "$TMP/arch-red.log"
+refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
+
+# A filter that matches nothing is a failure, never a pass, and nothing runs after the listing.
+run_gate arch-no-match env FAKE_ARCH_NO_MATCH=1
+[[ "$status" -eq 1 ]] || { echo "arch-no-match exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq '(8 = the filter matched no test)' <<<"$output"
+grep -Fq 'FAIL-FAST: Architecture conventions red; long lanes not run' <<<"$output"
+refute_grep -E '^(arch-run |runner |test project=)' "$TMP/arch-no-match.log"
+
+# Contaminated pre-lane: void (75), and still no lane.
+run_gate arch-contaminated env FAKE_GUARD_EXIT=75
+[[ "$status" -eq 75 ]] || { echo "arch-contaminated exited $status" >&2; exit 1; }
+grep -Fq 'RESULT VOID: assemblies changed under the Architecture pre-lane' <<<"$output"
+refute_grep -E '^(runner |test project=)' "$TMP/arch-contaminated.log"
+
+# The escape hatch skips the pre-lane; a red Architecture host is then never even called.
+run_gate arch-off env XE_GATE_FAIL_FAST=0 FAKE_ARCH_FAIL=1
+[[ "$status" -eq 0 ]] || { echo "arch-off exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+refute_grep '^arch-' "$TMP/arch-off.log"
+grep -Fq 'BACKEND GATE GREEN' <<<"$output"
+
+# --- gate history: one tab-separated line per run, appended, on every exit path ---
+# Arguments: the line count expected now, then the ten expected fields; "*" skips a field, "~re" is a regex.
+# HISTORY_FILE overrides the log read (the real-git fixture keeps its own).
+assert_history() {
+  local want_lines="$1" i want got file="${HISTORY_FILE:-$HISTORY}"; shift
+  [[ "$(wc -l <"$file")" -eq "$want_lines" ]] \
+    || { echo "history has $(wc -l <"$file") lines, wanted $want_lines" >&2; cat "$file" >&2; exit 1; }
+  local -a f
+  IFS=$'\t' read -r -a f < <(tail -1 "$file")
+  [[ "$(tail -1 "$file" | awk -F'\t' '{print NF}')" -eq 10 ]] || { echo "history line is not 10 fields: $(tail -1 "$file")" >&2; exit 1; }
+  for ((i = 0; i < 10; i++)); do
+    want="${*:i+1:1}"; got="${f[i]:-}"
+    [[ "$want" == "*" ]] && continue
+    if [[ "$want" == ~* ]]; then [[ "$got" =~ ${want#\~} ]] && continue
+    elif [[ "$got" == "$want" ]]; then continue; fi
+    echo "history field $i is '$got', wanted '$want': $(tail -1 "$file")" >&2; exit 1
+  done
+}
+history_lines() { if [[ -f "$HISTORY" ]]; then wc -l <"$HISTORY"; else echo 0; fi; }
+n="$(history_lines)"
+run_gate history-green env
+[[ "$status" -eq 0 ]]
+# Exactly one line although two instances ran (the unlocked one and the one under the lock). The fake
+# repository is not a git checkout, so the tip is "-"; NO_BUILD makes the scope no-build.
+assert_history $((n + 1)) '~^20[0-9]{2}-[0-9]{2}-[0-9]{2}T' "$FAKE_REAL" - Tests=7/0/0 Persistence=3/0/0 \
+  Agent=3/0/0 Contracts=skipped scope=no-build '~^wall=[0-9]+$' exit=0
+run_gate history-fail-fast env FAKE_ARCH_FAIL=1
+[[ "$status" -eq 1 ]]
+assert_history $((n + 2)) '*' "$FAKE_REAL" '*' Tests= Persistence= Agent= Contracts=skipped '*' '*' exit=1
+run_gate history-lock env FAKE_LOCK_EXIT=69
+[[ "$status" -eq 69 ]] || { echo "history-lock exited $status" >&2; exit 1; }
+assert_history $((n + 3)) '*' "$FAKE_REAL" '*' Tests= Persistence= Agent= Contracts= scope=no-build '*' exit=69
+run_gate history-contract env FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
+assert_history $((n + 4)) '*' '*' '*' Tests=7/0/0 '*' '*' Contracts=5/0/0 '*' '*' exit=0
+run_gate history-void env XE_GATE_FAIL_FAST=0 FAKE_GUARD_EXIT=75
+[[ "$status" -eq 75 ]]
+assert_history $((n + 5)) '*' '*' '*' Tests=7/0/0 Persistence=3/0/0 Agent=3/0/0 '*' '*' '*' exit=75
+# A wrapper that fails before it runs the gate (a usage error, exit 2) still leaves exactly one line.
+run_gate history-wrapper-usage env FAKE_LOCK_EXIT=2
+[[ "$status" -eq 2 ]] || { echo "history-wrapper-usage exited $status" >&2; exit 1; }
+assert_history $((n + 6)) '*' "$FAKE_REAL" '*' Tests= Persistence= Agent= Contracts= '*' '*' exit=2
+# scope: full only for a run that built and ran every lane unsharded; otherwise the first that applies.
+run_gate history-scope-full env NO_BUILD=
+[[ "$status" -eq 0 ]] || { echo "history-scope-full exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+assert_history $((n + 7)) '*' '*' '*' Tests=7/0/0 '*' '*' '*' scope=full '*' exit=0
+run_gate history-scope-coverage env NO_BUILD= COVERAGE_DIR="$TMP/scope-cov" XE_GATE_FAIL_FAST=0
+assert_history $((n + 8)) '*' '*' '*' '*' '*' '*' '*' scope=full '*' exit=0
+run_gate history-scope-shard env NO_BUILD= TEST_SHARD=1/4
+assert_history $((n + 9)) '*' '*' '*' '*' '*' '*' '*' scope=shard '*' exit=0
+run_gate history-scope-groups env NO_BUILD= TEST_GROUPS=16
+assert_history $((n + 10)) '*' '*' '*' '*' '*' '*' '*' scope=shard '*' exit=0
+GATE_ARGS=(--siblings-only)
+run_gate history-scope-siblings env NO_BUILD=
+assert_history $((n + 11)) '*' '*' '*' Tests= '*' '*' '*' scope=siblings-only '*' exit=0
+run_gate history-scope-siblings-nobuild env
+GATE_ARGS=()
+assert_history $((n + 12)) '*' '*' '*' '*' '*' '*' '*' scope=no-build '*' exit=0
+# A build that failed never ran: no-build, whatever was asked for.
+run_gate history-scope-build-red env NO_BUILD= FAKE_BUILD_EXIT=1
+assert_history $((n + 13)) '*' '*' '*' '*' '*' '*' '*' scope=no-build '*' exit=1
+# A contract lane the diff needed but an override or a runner suppressed is a bypass, not a full run;
+# Contracts= reads skipped either way, so only scope tells them apart.
+run_gate history-scope-contracts-skip env NO_BUILD= XE_GATE_CONTRACT_TESTS=skip FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
+[[ "$status" -eq 0 ]] || { echo "history-scope-contracts-skip exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+assert_history $((n + 14)) '*' '*' '*' Tests=7/0/0 '*' '*' Contracts=skipped scope=contracts-skipped '*' exit=0
+grep -Fq 'history records scope=contracts-skipped' <<<"$output"
+run_gate history-scope-contracts-gha env NO_BUILD= GITHUB_ACTIONS=true FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
+assert_history $((n + 15)) '*' '*' '*' '*' '*' '*' Contracts=skipped scope=contracts-skipped '*' exit=0
+run_gate history-scope-contracts-run env NO_BUILD= XE_GATE_CONTRACT_TESTS=run FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
+assert_history $((n + 16)) '*' '*' '*' '*' '*' '*' Contracts=5/0/0 scope=full '*' exit=0
+run_gate history-scope-contracts-auto env NO_BUILD= FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
+assert_history $((n + 17)) '*' '*' '*' '*' '*' '*' Contracts=5/0/0 scope=full '*' exit=0
+# Nothing relevant changed: skipping the lane bypassed nothing, by override or not.
+run_gate history-scope-contracts-unneeded env NO_BUILD= FAKE_GIT_DIFF=$'README.md\n'
+assert_history $((n + 18)) '*' '*' '*' '*' '*' '*' Contracts=skipped scope=full '*' exit=0
+run_gate history-scope-contracts-skip-unneeded env NO_BUILD= XE_GATE_CONTRACT_TESTS=skip FAKE_GIT_DIFF=$'README.md\n'
+assert_history $((n + 19)) '*' '*' '*' '*' '*' '*' Contracts=skipped scope=full '*' exit=0
+refute_grep -F 'contracts-skipped' <<<"$output"
+# Precedence: an earlier partial scope still wins over contracts-skipped.
+GATE_ARGS=(--siblings-only)
+run_gate history-scope-contracts-siblings env NO_BUILD= XE_GATE_CONTRACT_TESTS=skip FAKE_GIT_DIFF=$'scripts/dev-start.sh\n'
+GATE_ARGS=()
+assert_history $((n + 20)) '*' '*' '*' '*' '*' '*' Contracts=skipped scope=siblings-only '*' exit=0
+
+# --- the acknowledgment file: nothing ever removes or rewrites an inherited one ---
+printf 'keep me\n' >"$TMP/inherited-ack"
+n="$(history_lines)"
+run_gate ack-inherited env XE_BACKEND_GATE_LOCKED=1 XE_GATE_HISTORY_ACK="$TMP/inherited-ack"
+[[ "$status" -eq 0 ]] || { echo "ack-inherited exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+[[ -f "$TMP/inherited-ack" && "$(head -1 "$TMP/inherited-ack")" == "keep me" ]] \
+  || { echo "the locked instance removed or rewrote an inherited acknowledgment file" >&2; exit 1; }
+assert_history $((n + 1)) '*' "$FAKE_REAL" '*' Tests=7/0/0 '*' '*' '*' '*' '*' exit=0
+# One it cannot write: a WARN, nothing created, and the line left to the unlocked instance (absent here).
+run_gate ack-unwritable env XE_BACKEND_GATE_LOCKED=1 XE_GATE_HISTORY_ACK="$TMP/no-such-dir/ack"
+[[ "$status" -eq 0 ]] || { echo "ack-unwritable exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq 'WARN: cannot write the gate-history acknowledgment' <<<"$output" \
+  || { echo "ack-unwritable printed no WARN:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+[[ ! -e "$TMP/no-such-dir" ]] || { echo "ack-unwritable created the acknowledgment path" >&2; exit 1; }
+assert_history $((n + 1)) '*' "$FAKE_REAL" '*' Tests=7/0/0 '*' '*' '*' '*' '*' exit=0
+
+# --- a cancel while waiting for the lock still records exactly one line, exit=143, no lanes ---
+: >"$TMP/lock-wait-pids"
+n="$(history_lines)"
+set -m
+FAKE_LOCK_WAIT=120 FAKE_PIDS="$TMP/lock-wait-pids" NO_BUILD=1 GITHUB_ACTIONS='' CI='' XE_GATE_CONTRACT_TESTS='' \
+  "$FAKE/scripts/run-backend-tests.sh" >"$TMP/lock-wait.out" 2>&1 &
+WAITING=$!
+set +m
+deadline=$((SECONDS + 60))
+until [[ -s "$TMP/lock-wait-pids" ]]; do
+  (( SECONDS <= deadline )) || { echo "fake lock wait never started" >&2; kill -KILL -- "-$WAITING" 2>/dev/null || true; exit 1; }
+  # real-timer: the subject is a real process group reaching the fake wrapper's wait.
+  sleep 0.2
+done
+kill -TERM -- "-$WAITING"
+set +e
+wait "$WAITING"
+wait_status=$?
+set -e
+[[ "$wait_status" -eq 143 ]] || { echo "cancel while waiting exited $wait_status" >&2; cat "$TMP/lock-wait.out" >&2; exit 1; }
+assert_history $((n + 1)) '*' "$FAKE_REAL" '*' Tests= Persistence= Agent= Contracts= '*' '*' exit=143
+
+# --- an inherited LANE_DIR is never the directory the exit trap deletes ---
+mkdir -p "$TMP/inherited-lane-dir"
+: >"$TMP/inherited-lane-dir/keep"
+# Unlocked instance, usage error before the lock; then the locked instance, usage error before mktemp.
+run_gate lane-dir-parent env LANE_DIR="$TMP/inherited-lane-dir" XE_TEST_PROFILE=small
+[[ "$status" -eq 2 && -f "$TMP/inherited-lane-dir/keep" ]] \
+  || { echo "lane-dir-parent (exit $status) deleted the inherited LANE_DIR" >&2; exit 1; }
+run_gate lane-dir-child env LANE_DIR="$TMP/inherited-lane-dir" XE_GATE_CONTRACT_TESTS=yes
+[[ "$status" -eq 2 && -f "$TMP/inherited-lane-dir/keep" ]] \
+  || { echo "lane-dir-child (exit $status) deleted the inherited LANE_DIR" >&2; exit 1; }
+
+# --- a worktree path holding a tab is recorded as "-", with a warning ---
+TABBED="$TMP/tab"$'\t'"repo"
+cp -r "$FAKE" "$TABBED"
+: >"$TMP/tabbed.log"
+set +e
+output="$(FAKE_LOG="$TMP/tabbed.log" NO_BUILD=1 GITHUB_ACTIONS='' CI='' XE_GATE_CONTRACT_TESTS='' \
+  "$TABBED/scripts/run-backend-tests.sh" 2>&1)"
+status=$?
+set -e
+[[ "$status" -eq 0 ]] || { echo "tabbed run exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fq 'WARN: worktree path holds a tab or newline' <<<"$output"
+HISTORY_FILE="$TABBED/.tmp/gate-history.log" assert_history "$(wc -l <"$TABBED/.tmp/gate-history.log")" \
+  '*' - '*' '*' '*' '*' '*' '*' '*' exit=0
+rm -rf "$TABBED"
+
+# --- known flakes: annotated, still red; an unknown failure is not annotated ---
+run_gate flake-known env FAKE_FAILED_TEST='Flaky_Method(True)'
+[[ "$status" -eq 1 ]] || { echo "flake-known exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fxq 'FAILED TEST: Flaky_Method(True) [KNOWN FLAKE: fixture flake note]' <<<"$output" \
+  || { echo "known flake not annotated:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
+run_gate flake-unknown env FAKE_FAILED_TEST=Real_Failure
+[[ "$status" -eq 1 ]]
+grep -Fxq 'FAILED TEST: Real_Failure' <<<"$output"
+refute_grep -F 'KNOWN FLAKE' <<<"$output"
+# A prefix of a listed name is a different test.
+run_gate flake-prefix env FAKE_FAILED_TEST=Flaky_Method_Other
+grep -Fxq 'FAILED TEST: Flaky_Method_Other' <<<"$output"
+refute_grep -F 'KNOWN FLAKE' <<<"$output"
+# The shipped list parses: every entry is "<method name>|<YYYY-MM-DD>|<note>".
+while IFS= read -r line; do
+  [[ -z "$line" || "$line" == \#* ]] && continue
+  [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*\|[0-9]{4}-[0-9]{2}-[0-9]{2}\|[^|]+$ ]] \
+    || { echo "malformed scripts/known-flakes.txt line: $line" >&2; exit 1; }
+done <"$ROOT/scripts/known-flakes.txt"
 
 # --- width map: defaults, then per-project and global overrides ---
 grep -q '^test project=XE-Local-AI-Engine.Client.Persistence.Tests/.* max=4 ' "$TMP/enrol.log"
@@ -287,7 +542,9 @@ run_gate coverage env COVERAGE_DIR="$TMP/cov"
 grep -q 'results=.*/cov/XE-Local-AI-Engine.AI.Agent.Tests coverage=1' "$TMP/coverage.log"
 grep -Fq 'COVERAGE_DIR=' "$TMP/coverage.log"
 grep -Fq "COVERAGE_DIR=$TMP/cov/XE-Local-AI-Engine.Tests" "$TMP/coverage.log"
-refute_grep '^guard ' "$TMP/coverage.log"
+refute_grep '^guard .* -- dotnet test ' "$TMP/coverage.log"
+# The pre-lane stays guarded: it runs before any lane instruments anything.
+grep -q '^guard guard --test-bins -- .*/XE-Local-AI-Engine.Tests --treenode-filter' "$TMP/coverage.log"
 
 # --- --siblings-only: the CI leg shape, no runner lane ---
 GATE_ARGS=(--siblings-only)
@@ -295,6 +552,8 @@ run_gate siblings-only env
 GATE_ARGS=()
 [[ "$status" -eq 0 ]]
 refute_grep '^runner ' "$TMP/siblings-only.log"
+# No batched module, so no Architecture pre-lane either.
+refute_grep '^arch-' "$TMP/siblings-only.log"
 [[ "$(grep -c '^test project=' "$TMP/siblings-only.log")" -eq 2 ]]
 
 # --- release contract tests: a lane when scripts/, publish/ or .github/workflows/ changed ---
@@ -426,6 +685,7 @@ GITFAKE="$TMP/gitrepo"
 mkdir -p "$GITFAKE/bin"
 cp -r "$FAKE/scripts" "$GITFAKE/"
 cp "$FAKE/XE-Local-AI-Engine.slnx" "$GITFAKE/"
+cp -r "$FAKE/XE-Local-AI-Engine.Tests" "$GITFAKE/"
 cp "$FAKE/bin/dotnet" "$GITFAKE/bin/"
 printf '.tmp/\n' >"$GITFAKE/.gitignore"
 # The REAL contract runner here, and one contract test that records which checkout it ran from: proof
@@ -472,9 +732,22 @@ real_git_gate() {
 real_git_gate real-git-clean
 [[ "$status" -eq 0 ]] || { echo "real-git-clean exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
 grep -Fq '>> Release contract tests: skipped (nothing under scripts/' <<<"$output"
+# History tip: HEAD as the lock was taken, bare on a clean tree.
+GIT_HISTORY="$GITFAKE/.tmp/gate-history.log"
+HISTORY_FILE="$GIT_HISTORY" assert_history "$(wc -l <"$GIT_HISTORY")" '*' "$gitfake_real" \
+  "$(fixture_git rev-parse HEAD)" '*' '*' '*' '*' '*' '*' exit=0
+# A commit landing while the lanes run: the start tip is recorded, marked +moved.
+tip_before="$(fixture_git rev-parse HEAD)"
+real_git_gate real-git-moved FAKE_COMMIT_IN="$GITFAKE"
+[[ "$status" -eq 0 ]] || { echo "real-git-moved exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+[[ "$(fixture_git rev-parse HEAD)" != "$tip_before" ]] || { echo "real-git-moved: the hook landed no commit" >&2; exit 1; }
+HISTORY_FILE="$GIT_HISTORY" assert_history "$(wc -l <"$GIT_HISTORY")" '*' '*' "$tip_before+moved" '*' '*' '*' '*' '*' '*' exit=0
 printf 'echo\n' >"$GITFAKE/scripts/"$'caf\xc3\xa9.sh'
 real_git_gate real-git-quoted
 [[ "$status" -eq 0 ]] || { echo "real-git-quoted exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
+# An untracked file at the start: +dirty.
+HISTORY_FILE="$GIT_HISTORY" assert_history "$(wc -l <"$GIT_HISTORY")" '*' '*' "$(fixture_git rev-parse HEAD)+dirty" \
+  '*' '*' '*' '*' '*' '*' exit=0
 grep -Fq '>> Release contract tests: will run (' <<<"$output" \
   || { echo "untracked non-ASCII script did not run the lane:" >&2; printf '%s\n' "$output" >&2; exit 1; }
 grep -Fxq "contract-marker $gitfake_real" "$TMP/real-git-quoted.log"
@@ -496,6 +769,31 @@ grep -Fq '>> Release contract tests: will run (' <<<"$output" \
 grep -Fxq "contract-marker $gitfake_real" "$TMP/real-git-inherited.log" \
   || { echo "the lane ran another checkout's contract tests: $(grep contract-marker "$TMP/real-git-inherited.log")" >&2; exit 1; }
 refute_grep -F "contract-marker $decoy_real" "$TMP/real-git-inherited.log"
+# A git status that fails proves nothing clean: +dirty with a WARN. Control first, on a committed tree.
+fixture_git commit -q -m staged
+real_git_gate real-git-committed
+HISTORY_FILE="$GIT_HISTORY" assert_history "$(wc -l <"$GIT_HISTORY")" '*' '*' "$(fixture_git rev-parse HEAD)" \
+  '*' '*' '*' '*' '*' '*' '*'
+mkdir -p "$TMP/failing-status-bin"
+cat >"$TMP/failing-status-bin/git" <<'EOF'
+#!/usr/bin/env bash
+for a; do [[ "$a" == status ]] && exit 128; done
+exec "$REAL_GIT" "$@"
+EOF
+chmod +x "$TMP/failing-status-bin/git"
+real_git_gate real-git-status-fails PATH="$TMP/failing-status-bin:$GITFAKE/bin:$REAL_PATH"
+grep -Fq 'WARN: git status failed' <<<"$output" \
+  || { echo "a failing git status printed no WARN:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+HISTORY_FILE="$GIT_HISTORY" assert_history "$(wc -l <"$GIT_HISTORY")" '*' '*' "$(fixture_git rev-parse HEAD)+dirty" \
+  '*' '*' '*' '*' '*' '*' '*'
+# A TAG named develop at HEAD: a bare `develop` resolves the tag before the branch, the diff comes back
+# empty and a committed scripts/ change would skip the lane. The branch is what the gate compares against.
+fixture_git tag develop HEAD
+real_git_gate real-git-develop-tag
+fixture_git tag -d develop >/dev/null
+grep -Fq '>> Release contract tests: will run (' <<<"$output" \
+  || { echo "a tag named develop hid the scripts/ change:" >&2; printf '%s\n' "$output" >&2; exit 1; }
+grep -Fxq "contract-marker $gitfake_real" "$TMP/real-git-develop-tag.log"
 
 # --- hollow-gate guard: a suite that prints no MTP summary is never green ---
 run_gate hollow env FAKE_NO_SUMMARY=1
@@ -516,7 +814,7 @@ run_gate build-fails env NO_BUILD= FAKE_BUILD_EXIT=1
 [[ "$status" -eq 1 ]] || { echo "build-failure run exited $status" >&2; printf '%s\n' "$output" >&2; exit 1; }
 grep -Fq 'BUILD FAILED' <<<"$output"
 grep -q '^build .*XE-Local-AI-Engine.slnx$' "$TMP/build-fails.log"
-refute_grep -E '^(test project=|runner )' "$TMP/build-fails.log"
+refute_grep -E '^(test project=|runner |arch-)' "$TMP/build-fails.log"
 refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
 
 # --- exit codes: a failing suite is red, contamination (75) outranks it and is neither ---
@@ -524,13 +822,14 @@ run_gate failing env FAKE_TEST_EXIT=1
 [[ "$status" -eq 1 ]]
 grep -Fq 'FAILED: XE-Local-AI-Engine.AI.Agent.Tests(exit=1)' <<<"$output"
 
-run_gate contaminated env FAKE_GUARD_EXIT=75
+# XE_GATE_FAIL_FAST=0: the fake guard would void the pre-lane first, and these cases are about the lanes.
+run_gate contaminated env XE_GATE_FAIL_FAST=0 FAKE_GUARD_EXIT=75
 [[ "$status" -eq 75 ]]
-grep -Fq 'RESULT VOID' <<<"$output"
+grep -Fq 'RESULT VOID: assemblies changed under a run' <<<"$output"
 refute_grep -F 'BACKEND GATE GREEN' <<<"$output"
 
 # Contamination outranks a red in the same run.
-run_gate contaminated-and-red env FAKE_GUARD_EXIT=75 FAKE_RUNNER_EXIT=1
+run_gate contaminated-and-red env XE_GATE_FAIL_FAST=0 FAKE_GUARD_EXIT=75 FAKE_RUNNER_EXIT=1
 [[ "$status" -eq 75 ]]
 
 # --- the batched module must be enrolled, or the gate refuses to run ---
@@ -593,10 +892,23 @@ cancel_case_cleanup() {
   return 0
 }
 
+# Exactly one history line per cancelled run, the locked instance's: its exit trap may still be
+# writing after the unlocked one has returned, so wait for the line (bounded), then require it alone.
+await_cancel_history_line() {
+  local before="$1" deadline=$((SECONDS + 30))
+  until [[ "$(history_lines)" -gt "$before" ]]; do
+    (( SECONDS <= deadline )) || { echo "cancelled run wrote no history line" >&2; exit 1; }
+    # real-timer: the writer is the locked instance's exit trap, a separate real process.
+    sleep 0.2
+  done
+  assert_history $((before + 1)) '*' "$FAKE_REAL" '*' '*' '*' '*' '*' '*' '*' exit=143
+}
+
 # The serialized profile waits inside the launch loop. Cancellation must terminate that active
 # lane and exit without launching either later sibling.
 : >"$PIDS_FILE"
 : >"$TMP/low-cancel.log"
+n="$(history_lines)"
 set -m
 FAKE_LOG="$TMP/low-cancel.log" FAKE_PIDS="$PIDS_FILE" FAKE_RUNNER_SLEEP=120 NO_BUILD=1 \
   XE_TEST_PROFILE=low-memory BUILD_LOCK_FILE="$LOCK" XE_GATE_CANCEL_GRACE=2 \
@@ -626,10 +938,12 @@ while :; do
   # real-timer: the assertion waits for real OS processes to disappear after KILL escalation.
   sleep 0.5
 done
+await_cancel_history_line "$n"
 
 # The parallel case below owns a fresh receipt set. Keeping the serialized case's two dead PIDs
 # would let its six-PID readiness check pass after only four of the six new processes registered.
 : >"$PIDS_FILE"
+n="$(history_lines)"
 
 set -m
 FAKE_LOG="$TMP/cancel.log" FAKE_PIDS="$PIDS_FILE" FAKE_SLEEP=120 FAKE_RUNNER_SLEEP=120 NO_BUILD=1 \
@@ -678,6 +992,7 @@ while :; do
 done
 # Nothing may still hold the lock once the run is over.
 flock -n "$LOCK" -c true || { echo "build lock still held after cancellation" >&2; exit 1; }
+await_cancel_history_line "$n"
 
 # --- a lane that had already finished CONTAMINATED outranks the cancellation status ---
 # NO_BUILD_LOCK=1 so the gate itself is the process we signal: through the wrapper, a group signal

@@ -32,8 +32,6 @@ available to an auditor. Operational evidence must be identified separately rath
 
 Test stack at a glance: **TUnit** on **Microsoft.Testing.Platform (MTP)** for the three unit-test projects, **NSubstitute** for mocks, **Microsoft.Playwright + TUnit.Playwright** for browser E2E, and **Vitest (v8 coverage)** for the React client. `global.json` pins `10.0.401` with `rollForward: latestPatch` (only the patch digit may move, so the SDK stays inside the `10.0.4xx` feature band; CI's `actions/setup-dotnet` reads the same file and honours `rollForward`, so local and CI resolve the same band) and `"test": { "runner": "Microsoft.Testing.Platform" }`, so the whole repo runs under MTP, not VSTest.
 
-> ⚠️ MTP gotcha (repo-wide): filter by `--treenode-filter`, NOT the legacy VSTest `--filter`. The repository's TUnit/MTP runners and examples support only the tree-node form.
-
 ## Test topology
 
 | Project | Kind | Framework | What it covers | Subsystem page |
@@ -188,6 +186,20 @@ the lane is skipped, because the `release-contracts` job runs the same tests. `X
 overrides the detection (default `auto`). The lane is independent of `NO_BUILD` and `--siblings-only`, because it
 tests scripts rather than assemblies, and it runs unguarded.
 
+After its Release build, `scripts/run-backend-tests.sh` runs the Architecture namespace of `XE-Local-AI-Engine.Tests`
+alone with the batched runner's own filter (`--list-tests` first, so a filter that matches nothing fails). A red result
+stops the gate with exit 1 and a `FAIL-FAST` line before any lane starts. `XE_GATE_FAIL_FAST=0` skips the pre-lane;
+`--siblings-only` never runs it. The namespace still runs inside the batched lane, and the pre-lane is never counted
+in the totals. Every run (green, red, void 75, lock 69) appends one tab-separated line to the main checkout's
+`.tmp/gate-history.log`: time, worktree, the tip HEAD had when the lock was taken (suffixed `+dirty` when the tree had
+changes then and `+moved` when HEAD changed during the run; a suffixed tip certifies nothing), per-lane pass/fail/skip,
+`scope` (`full` only when this invocation built and ran every lane unsharded; otherwise the first of `no-build`, `shard`,
+`siblings-only` or `contracts-skipped`, the last meaning the diff needed the release contract tests but
+`XE_GATE_CONTRACT_TESTS=skip` or `GITHUB_ACTIONS=true` suppressed them; `Contracts=skipped` alone does not tell a
+bypass from a lane that was not needed), wall seconds and exit code. A failing test
+named in [`scripts/known-flakes.txt`](../../scripts/known-flakes.txt) is printed with `[KNOWN FLAKE: <note>]`, and
+the run stays red.
+
 For a memory-constrained development machine, use
 `XE_TEST_PROFILE=low-memory scripts/run-backend-tests.sh`. The same gate runs project lanes serially and
 defaults `JOBS`, `PAR` and `XE_TEST_WIDTH_DEFAULT` to 1. Explicit overrides still win, including per-project
@@ -208,9 +220,9 @@ log is the evidence for what ran. Explicit `JOBS`, `PAR`, `XE_TEST_WIDTH_*` and 
 still win over the computed value; unknown memory (no `/proc/meminfo`, e.g. macOS) falls back to the measured
 default unchanged.
 
-Two operating rules for that script are stated once, in [AGENTS.md](../../AGENTS.md) §Validation, and not repeated
-here: what `COVERAGE_DIR` costs you in contamination detection, and how to cancel a non-interactive run without
-orphaning its lanes.
+Two operating rules for that script are stated once, in the script header and the backend-tests topic of
+[agent knowledge](../agent-knowledge.md), and not repeated here: what `COVERAGE_DIR` costs you in contamination
+detection, and how to cancel a non-interactive run without orphaning its lanes.
 
 Each sibling runs at a pinned `--maximum-parallel-tests`, not at TUnit's default: TUnit runs tests in parallel with
 no formula and no ceiling, and `XE-Local-AI-Engine.Client.Persistence.Tests` at that default measured 6:08 of wall
@@ -275,10 +287,9 @@ pnpm run acceptance  # validate + coverage thresholds + tooling tests + producti
 
 `acceptance` runs static checks once and then tests and `build:bundle` on the same unchanged source tree.
 Its first step, `node:check`
-([`scripts/CheckNodeMajor.mjs`](../../XE-Local-AI-Engine.Client.React/scripts/CheckNodeMajor.mjs)), reads the Node
-major from the `client-react` job of `build-and-test.yml` and fails on any other major, because a green run on another
-major is not CI evidence. `XE_ALLOW_NODE_DRIFT=1` runs anyway, with a warning that the run is not CI evidence.
-Standalone `build` still runs the full lint chain before `build:bundle`; the latter alone is not a gate.
+([`scripts/CheckNodeMajor.mjs`](../../XE-Local-AI-Engine.Client.React/scripts/CheckNodeMajor.mjs)), fails on a Node
+major other than CI's; its header documents the override. Run `acceptance` through `scripts/with-build-lock.sh`:
+vitest's timing assertions fail when a backend gate runs beside it. Standalone `build` still runs the full lint chain before `build:bundle`; the latter alone is not a gate.
 Use `pnpm run lint` and `pnpm test` for the focused inner loop.
 
 ```bash
@@ -300,6 +311,39 @@ the frontend coverage gate described below.
 comparison: it runs an incremental Release build of the host under the build lock, starts the host from that output
 and runs `openapi:check:live`. `OPENAPI_LIVE_SKIP_BUILD=1` skips the build with a warning, and the host then runs
 whatever Release binaries are already there.
+
+### Committing in a shared worktree
+
+Agents that share one worktree share one git index, so `git add` there stages for everyone, and a path-scoped
+`git commit -- <paths>` silently skips untracked files. Commit through a private index instead, from the worktree
+root, naming exactly the paths the commit owns:
+
+```bash
+git diff --cached --quiet || { echo "shared index has staged changes: stop and report"; exit 1; }
+idx="$(git rev-parse --git-path index).private.$$"
+parent="$(git rev-parse HEAD)"
+GIT_INDEX_FILE="$idx" git read-tree "$parent"          # immediately before write-tree
+GIT_INDEX_FILE="$idx" git add -- <paths>
+tree="$(GIT_INDEX_FILE="$idx" git write-tree)"
+commit="$(git commit-tree "$tree" -p "$parent" -F <message-file>)"
+git update-ref -m "commit: private index" HEAD "$commit" "$parent"   # three-argument form: refuses if HEAD moved
+rm -f "$idx"
+git read-tree HEAD                                     # resync the shared index to the new HEAD
+```
+
+The three-argument `update-ref` is the guard: if another agent committed after `read-tree`, it fails instead of
+writing a tree that silently reverts their commit; start again from the first line. The message follows the commit
+rules in `AGENTS.md`, and `commit-tree` takes the identity from the repository config like a plain `git commit`.
+
+### Landing a branch on develop
+
+[`scripts/squash-guard.sh`](../../scripts/squash-guard.sh) `<branch>` is the last step before `git merge --squash` on
+`develop`, and it never merges. It checks, each with its own exit code: the main checkout is clean (untracked files
+included) and on `develop`; the branch exists and `develop` is its ancestor; the branch worktree is clean; and the
+newest `exit=0` line for that worktree in the main checkout's `.tmp/gate-history.log` (written by
+`scripts/run-backend-tests.sh`) recorded the branch's current tip (no `+dirty`/`+moved` suffix) with zero failed tests and `scope=full` (so `contracts-skipped` is refused). A missing log
+means no gated run, not a pass. Repository-selection variables (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`) are dropped first.
+Contract test: `scripts/tests/squash-guard.test.sh`.
 
 ### The four standalone runners
 
@@ -345,6 +389,14 @@ These standalone runners exercise additional target-specific checks locally.
 
 **Two facts for every reader:** selecting a model writes the node default and does not load it, so `modelResident` is reported honestly and is normally `false` until the first turn; and the host is left running, so stop it with `scripts/dev-stop.sh`. Contract tests without a node or model: `scripts/tests/lab-up.test.sh`.
 
+**Ownership:** every lab is owned. On first bring-up `lab-up.sh` writes `.tmp/lab/<profile>/OWNER` (plan from
+`--plan`, `XE_LAB_PLAN` or `unassigned`; keys `plan`, `created`, `delete_after` = created + 14 days, `worktree`,
+`session_note`). A later run for a different plan exits `2` and names both plans unless `--take-over` is given; a lab
+that predates OWNER is adopted. `delete_after` is informational: nothing deletes a lab. `scripts/dev-status.sh` lists
+every directory over 1 GB under the main checkout's `.tmp/` and every linked worktree's `.tmp/lab/<profile>` (where
+`lab-up.sh` run from that worktree puts its lab) with size, newest change and owner, marked UNOWNED or EXPIRED, also as
+`labData` in `--json` (each row carries `checkout`: `main` or the worktree name); `XE_DEV_STATUS_SKIP_LAB_SCAN=1` skips the scan.
+
 > **A zero-test or missing-control run is a failure, not a pass.** The test runners enforce non-vacuity directly; the GPU smoke requires a verdict for every step, and the tool-grammar smoke requires its negative control. The E2E project sets `IsTestProject=false`/`OutputType=Library` unless `-p:RunE2ETests=true` is passed, so without it `dotnet test` discovers nothing and exits **0**. Never read a green E2E run without checking that a non-zero number of tests actually ran.
 
 > **The frontend prerequisite is explicit.** The standalone runner executes `pnpm run lint` before
@@ -385,7 +437,7 @@ more than a local Release build.
 
 - **`python-quality` (ubuntu-latest)** — sets up `uv` with a pinned version and Python 3.13, then runs [`scripts/python-validation.sh`](../../scripts/python-validation.sh) `--scope full --serial`: `uv sync --locked --all-groups` followed by ruff (`format --check` + `check`), pyrefly, pytest with coverage, and bandit over `tools/training` and `scripts/**`. The pytest leg includes `scripts/tests/test_docs_inventory_check.py`, and the job then runs `scripts/docs-inventory-check.py`, which fails on an inventory member no wiki page names, an agent-knowledge cap, or a broken relative Markdown link or `#anchor` in any tracked `.md`. The tooling config is the **root** `pyproject.toml` + its own small `uv.lock` — deliberately *not* `tools/training/pyproject.toml`, which with its lockfile is the shipped training-runtime manifest (see [ADR 0005](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md) and [Training](18-training.md)). Locally: `scripts/python-validation.sh --scope full`, or `--scope changed` to auto-detect from the diff. The same job then runs [`scripts/docs-inventory-check.py`](../../scripts/docs-inventory-check.py), which re-derives five inventories from the code — SignalR hubs, `LocalApiRoutes` route families, React `features/` directories, numbered wiki pages, solution projects — and fails when one of them is missing from the wiki page that claims to enumerate it.
 - **`release-contracts` (ubuntu-latest)** — runs [`scripts/run-release-contract-tests.sh`](../../scripts/run-release-contract-tests.sh) plus `scripts/lint-release-scripts.sh --no-behavior --bootstrap`. Contract discovery is **auto-enrolling** across `scripts/tests`, `scripts/compliance/tests`, and `scripts/performance/tests`, matching `*.test.sh`, `*.test.py`, and `test_*.py` — a new script test needs no workflow edit. The Pester leg of `lint-release-scripts.sh` covers `publish/tests` and `scripts/performance/tests`; **zero discovered Pester tests is a failure, not a pass**.
-- **`backend-tests` (ubuntu-latest, five-leg matrix)** — the backend gate, one runner per leg: `siblings` runs every enrolled test project except `XE-Local-AI-Engine.Tests`, and `tests-0`…`tests-3` each run one `TEST_SHARD` quarter of that module through [`scripts/run-tests-memory-safe.sh`](../../scripts/run-tests-memory-safe.sh) at `TEST_GROUPS=16`. Every leg does its own checkout, restore and `build -c Release --no-restore`; the built test output tree is over 1 GB, so it is rebuilt per leg rather than passed between them. The live OpenAPI comparison ([`scripts/openapi-live-check.sh`](../../scripts/openapi-live-check.sh)) runs only on `siblings`. No leg pulls an image or sets `XE_REQUIRE_DOCKER_TESTS`: the real-daemon suites are opt-in and skip here, and their wire-shape half runs daemon-free against the fake Docker server. Every project emits **Cobertura** coverage into its own `--results-directory`, because MTP resolves `--coverage-output` relative to it and a shared directory would let concurrent modules overwrite each other's report. The `siblings` leg runs [`scripts/run-backend-tests.sh`](../../scripts/run-backend-tests.sh) `--siblings-only` — the same script as the local gate, so the enrolment rule, the per-project results directory, the concurrency and the **hollow-gate guard** (a `Passed!`/`Failed!` summary must appear, catching a silent green where zero suites enrolled) are one implementation with two callers rather than two copies that drift. The `--maximum-parallel-tests` cap stays at **2** here, passed as `XE_TEST_WIDTH_DEFAULT`, because TUnit otherwise runs every test in parallel and leaves the concurrency level to the .NET thread pool — its docs state no formula and no ceiling — which is what made concurrent modules time out on shared runners. The script's local defaults are higher because they were measured on a 32-core box; raising CI's is a separate, measured change. `fail-fast: false`, so one red leg does not cancel the evidence from the others. Each leg uploads its reports as **`backend-test-results-<leg>`**.
+- **`backend-tests` (ubuntu-latest, five-leg matrix)** — the backend gate, one runner per leg: `siblings` runs every enrolled test project except `XE-Local-AI-Engine.Tests`, and `tests-0`…`tests-3` each run one `TEST_SHARD` quarter of that module through [`scripts/run-tests-memory-safe.sh`](../../scripts/run-tests-memory-safe.sh) at `TEST_GROUPS=16`. Every leg does its own checkout, restore and `build -c Release --no-restore`; the built test output tree is over 1 GB, so it is rebuilt per leg rather than passed between them. The live OpenAPI comparison ([`scripts/openapi-live-check.sh`](../../scripts/openapi-live-check.sh)) runs only on `siblings`. No leg pulls an image or sets `XE_REQUIRE_DOCKER_TESTS`: the real-daemon suites are opt-in and skip here, and their wire-shape half runs daemon-free against the fake Docker server. Every project emits **Cobertura** coverage into its own `--results-directory`, because MTP resolves `--coverage-output` relative to it and a shared directory would let concurrent modules overwrite each other's report. The `siblings` leg runs [`scripts/run-backend-tests.sh`](../../scripts/run-backend-tests.sh) `--siblings-only` — the same script as the local gate, so the enrolment rule, the per-project results directory, the concurrency and the **hollow-gate guard** (a `Passed!`/`Failed!` summary must appear, catching a silent green where zero suites enrolled) are one implementation with two callers rather than two copies that drift. The `--maximum-parallel-tests` cap stays at **2** here, passed as `XE_TEST_WIDTH_DEFAULT`, because TUnit otherwise runs every test in parallel and leaves the concurrency level to the .NET thread pool — its docs state no formula and no ceiling — which is what made concurrent modules time out on shared runners. The script's local defaults are higher because they were measured on a many-core developer machine; raising CI's is a separate, measured change. `fail-fast: false`, so one red leg does not cancel the evidence from the others. Each leg uploads its reports as **`backend-test-results-<leg>`**.
 - **`build-and-test` (ubuntu-latest)** — the merge gate over every `backend-tests` leg, and the job that must keep this exact id: `build-and-test` is the required status check configured on `develop`'s branch protection, and a matrix job reports as `backend-tests (siblings)`, which can never satisfy it. It downloads every leg's artifact unmerged, then cross-checks before merging — the sibling reports number one per enrolled project minus the batched module (re-derived from the solution, not hard-coded), each shard leg produced one Cobertura report per line of its `units.txt`, and the group indices parsed from every leg's unit names, sorted, equal `0`…`GROUPS-1` exactly. That last check is the one that proves the shards **partition** the module — every group run, and run once. Checking only for duplicates would pass a run that silently *skipped* groups (three legs dividing by four leave four groups unrun), and [`scripts/merge-cobertura.py`](../../scripts/merge-cobertura.py) can see neither failure: it unions by `(filename, line)`, so a gap and an overlap both merge to a perfectly plausible percentage. It then merges the reports without double-counting shared source lines and enforces the floor in [`scripts/backend-coverage-baseline.txt`](../../scripts/backend-coverage-baseline.txt) — currently **90.50**.
 - **`client-react` (ubuntu-latest)** — pnpm + Node 22, the `global.json` SDK, a .NET 8 runtime, and the restored pinned repository tools; then `install --frozen-lockfile`, `openapi:check`, `licenses:check`, **`pnpm run acceptance`** (`node:check` → `validate` → `test:coverage:check` → `test:tooling` → `build:bundle`), and `pnpm audit --prod --audit-level=high` in order. `validate` includes `lint`, `knip`, `signalr:check` and `depcruise`; the combined gate runs those static checks once. `spellCheck` exists as a script but is **not** a gate. A clean local clone must run `dotnet tool restore --tool-manifest dotnet-tools.json` before `licenses:check`.
 

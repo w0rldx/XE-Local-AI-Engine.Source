@@ -1,0 +1,30 @@
+# Known flaky backend tests, read by scripts/run-backend-tests.sh ("Known flakes" in its header).
+# One test METHOD name per line: <name>|<date added>|<note>. MTP prints only the method name, so a
+# flaky class is listed method by method. A match only annotates the failure line; the gate stays
+# red, nothing is skipped or retried. Remove a line when its root cause is fixed.
+WaitForReady_PortRefusedThenHealthy_ReportsReady|2026-10-08|WhisperServerReadinessProbeTests: real 5 s clock under load
+WaitForReady_HealthReturns503UntilDeadline_ReportsNotReady|2026-10-08|WhisperServerReadinessProbeTests: real 5 s clock under load
+WaitForReady_HealthReturns503ThenHealthy_ReportsReady|2026-10-08|WhisperServerReadinessProbeTests: real 5 s clock under load
+WaitForReady_NeverAnswers_ReturnsFalseAtDeadline|2026-10-08|WhisperServerReadinessProbeTests: real 5 s clock under load
+CheckResponsive_NonSuccess_ReturnsFalse|2026-10-08|WhisperServerReadinessProbeTests: real 5 s clock under load
+CheckResponsive_Healthy_ReturnsTrue|2026-10-08|WhisperServerReadinessProbeTests: real 5 s clock under load
+WaitForReady_WhenTheCallerCancels_PropagatesTheCancellation|2026-10-08|WhisperServerReadinessProbeTests: real 5 s clock under load
+AddServices_RegistersNodeChatPersistenceServicesWithValidateScopes|2026-10-08|load flake, not a defect (freeze 2026-10-06)
+StartAsync_WhenNoEntraConnectionIsStored_ThrowsConnectionNotConfigured|2026-10-08|EntraAuthCodeSignInCoordinatorTests: load flake (freeze 2026-10-06)
+StartAsync_WhenSignInMethodIsNotAuthorizationCode_ThrowsConnectionNotConfigured|2026-10-08|EntraAuthCodeSignInCoordinatorTests: load flake (freeze 2026-10-06)
+StartAsync_WhenNoClientSecretIsStored_ThrowsConnectionNotConfigured|2026-10-08|EntraAuthCodeSignInCoordinatorTests: load flake (freeze 2026-10-06)
+StartAsync_WhenRedirectUriIsNotLoopback_ThrowsInvalidOperationException_WithoutBindingAListener|2026-10-08|EntraAuthCodeSignInCoordinatorTests: load flake (freeze 2026-10-06)
+StartAsync_WhenCallbackStateDoesNotMatch_SetsStatusToFailed_WithoutRedeeming|2026-10-08|EntraAuthCodeSignInCoordinatorTests: load flake (freeze 2026-10-06)
+StartAsync_WhenCallbackCarriesAnAadError_SetsStatusToFailed_WithoutRedeeming|2026-10-08|EntraAuthCodeSignInCoordinatorTests: load flake (freeze 2026-10-06)
+StartAsync_WhenTheAadErrorCarriesLineTerminators_LogsThemEscaped|2026-10-08|EntraAuthCodeSignInCoordinatorTests: load flake (freeze 2026-10-06)
+StartAsync_WhenCallbackCarriesNoCode_SetsStatusToFailed_WithoutRedeeming|2026-10-08|EntraAuthCodeSignInCoordinatorTests: load flake (freeze 2026-10-06)
+StartAsync_WhenCalledAgainWhilePending_SupersedesAndFailsThePreviousAttempt|2026-10-08|EntraAuthCodeSignInCoordinatorTests: load flake (freeze 2026-10-06)
+StartAsync_WhenTheRedirectPortIsAlreadyBound_ThrowsInvalidOperationException_AndCleansUpPendingState|2026-10-08|EntraAuthCodeSignInCoordinatorTests: load flake (freeze 2026-10-06)
+StartAsync_WhenRedemptionThrowsAnUnexpectedExceptionType_SetsStatusToFailed_InsteadOfEscaping|2026-10-08|EntraAuthCodeSignInCoordinatorTests: load flake (freeze 2026-10-06)
+GetStatus_BeforeAnyStartAsync_ReturnsNone|2026-10-08|EntraAuthCodeSignInCoordinatorTests: load flake (freeze 2026-10-06)
+RunAsync_WhenARoundPrefillsLongerThanTheIdleTimeout_TheTurnCompletes|2026-10-08|InvocationRunnerTests: gates on ArmedTimerCount, kept CI red
+RunAsync_WhenAnApprovedCallIsNeverResulted_AStallAfterProviderTextStillTimesOut|2026-10-08|InvocationRunnerTests: stall/300 s timeout case
+McpOnlyPrimaryServe_EmitsCanonicalReadinessSupportsStatusAndEnforcesPortAndLeaseExits|2026-10-08|EngineCliProcessTests: socket error, green 3/3 alone, cause not found
+End_WithPersistFalse_DoesNotCallCompleteLive|2026-10-08|LiveTranscriptionSessionRegistryTests: an End_ case flaked (test-perf), which one was not recorded
+End_FlushesEveryLaneAndMarksTheSessionCompleted|2026-10-08|LiveTranscriptionSessionRegistryTests: an End_ case flaked (test-perf), which one was not recorded
+StoppingATurn_AsksTheRunnerOnceAndSettlesTheRowCancelled|2026-10-08|GraphWorkflowAgentExecutorTests (chat-workflows)

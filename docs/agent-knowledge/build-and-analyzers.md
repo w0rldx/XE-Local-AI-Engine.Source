@@ -44,7 +44,7 @@ where Debug was green.
 
 ### `global.json` pins an SDK feature band, and CI resolves from the same file
 
-**Rule:** the pin and CI resolution are described in `docs/wiki/02-project-layout.md` ("Build & package conventions"); install a `10.0.4xx` SDK (`dotnet --list-sdks`). **Prevents:** misreading an unmatched band, whose tell is every `dotnet` command failing with "A compatible .NET SDK was not found", naming the requested version and the `global.json`. **Authority:** `global.json`.
+**Rule:** install an SDK in the band `global.json` pins (`dotnet --list-sdks`); pin and CI resolution: wiki 02. **Prevents:** misreading an unmatched band, whose tell is every `dotnet` command failing with "A compatible .NET SDK was not found", naming the requested version and the `global.json`. **Authority:** `global.json`.
 
 ### `RunAnalyzersDuringBuild=false` keeps IDE squiggles; `RunAnalyzers=false` kills them too
 
@@ -126,17 +126,10 @@ where Debug was green.
 
 **Rule:** run `dotnet jb cleanupcode XE-Local-AI-Engine.slnx --profile="BuildSafe" --exclude="**/*.props;**/*.targets;**/*.csproj"`, then a Release build. `BuildSafe` (in `XE-Local-AI-Engine.slnx.DotSettings`) never reorders members; a new profile must keep "Reorder type members" off. **Prevents:** a reordered static field initializing from a not-yet-initialized sibling (C# runs static initializers in textual order), and the XML formatter wrapping an MSBuild property value in whitespace so a `== 'true'` condition silently flips. A Debug build under-reports the `IDExxxx` rewrites the cleanup makes. **Authority:** `dotnet-tools.json` (`jetbrains.resharper.globaltools`); `XE-Local-AI-Engine.slnx.DotSettings`.
 
-## Covered elsewhere
-
-- A bare `TODO` in a C# comment fails the build — in **Release** — `AGENTS.md` ("Conventions that bite"); `docs/wiki/16-code-conventions.md` ("Comments and XML documentation")
-- Layering is mechanically frozen — `docs/wiki/16-code-conventions.md` ("Subfolders under `V1/` must nest their namespace — IDE0130 is a build error", "Providers depend only on `Providers.Abstractions`")
-
 ## Stale beliefs
 
 Superseded claims; the entries above are the active rules.
 
 | Stale belief | Current correction |
 |---|---|
-| Any build runs analyzers. | Analyzer wall is Release-only locally (§1). |
 | `RunAnalyzers=false` disables generators, and is the Debug gate. | The gate is `RunAnalyzersDuringBuild=false` (since 2026-09-16). It skips diagnostic analyzers only: source generators still run, and IDE live analysis stays on (§1). |
-| CUDA/TUnit remembered minor versions are pins. | They are volatile; query tools and `Directory.Packages.props`. |
