@@ -267,6 +267,7 @@
 			"stoppedWhileThinkingText": "Das Modell hat beim Nachdenken aufgehört, bevor es antworten konnte; seine Gedanken bleiben oben erhalten.",
 			"toolHistoryWithheld": "Tool-Verlauf zurückgehalten",
 			"toolsWithheld": "Keine Tools angeboten",
+			"cloudToolsWithheld": "Tools für Cloud-Modell zurückgehalten",
 			"outputLimitReached": "Antwort abgeschnitten",
 			"knowledgeUnavailable": "Wissensdatenbank nicht verfügbar",
 			"attachmentShortened": "Anhang gekürzt",

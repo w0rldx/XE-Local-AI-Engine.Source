@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
@@ -886,6 +887,64 @@ public sealed class LocalToolOfferProviderTests
 
         AssertEx.Equal("-,-,-,-,-", GatedClasses(offer));
     }
+
+    [Test]
+    public async Task GetCloudWithheldToolsAsync_WhenTheModelIsLocal_ReturnsNothing()
+    {
+        var provider = CreateSwitchProvider(static settings => settings);
+
+        AssertEx.Empty(await provider.GetCloudWithheldToolsAsync("qwen3:8b", isCloudModel: false));
+    }
+
+    [Test]
+    public async Task GetCloudWithheldToolsAsync_WhenACloudModelHasEverySwitchOff_NamesMcpWebFetchAndSpawnWithTheirSwitch()
+    {
+        // The Command custom tool is withheld unconditionally, not by a switch, so it is never named here.
+        var provider = CreateSwitchProvider(static settings => settings);
+
+        var withheld = await provider.GetCloudWithheldToolsAsync("qwen3:8b", isCloudModel: true);
+
+        string[] expected =
+        [
+            $"McpTools:{McpForecastToolName}",
+            .. WebAccessToolCatalog.Descriptors.Select(static descriptor => $"WebTools:{descriptor.Name}"),
+            $"WebTools:{CustomWeatherDescriptor.Name}",
+            $"SubAgents:{SpawnSubAgentToolDefinition.ToolName}"
+        ];
+        AssertEx.Equal(string.Join(",", expected.Order(StringComparer.Ordinal)), FormatWithheld(withheld));
+    }
+
+    [Test]
+    public async Task GetCloudWithheldToolsAsync_WhenWebAccessIsOff_NamesNoWebTool()
+    {
+        // The node's own switch withheld them, not the cloud one, so the cloud notice must not blame it.
+        var provider = CreateSwitchProvider(static settings => settings.WithWebAccessEnabled(false));
+
+        var withheld = await provider.GetCloudWithheldToolsAsync("qwen3:8b", isCloudModel: true);
+
+        AssertEx.Equal($"McpTools:{McpForecastToolName},SubAgents:{SpawnSubAgentToolDefinition.ToolName}", FormatWithheld(withheld));
+    }
+
+    [Test]
+    public async Task GetCloudWithheldToolsAsync_WhenEveryCloudSwitchIsOn_ReturnsNothing()
+    {
+        var provider = CreateSwitchProvider(static settings => settings.WithAllowCloudModelWebTools(true)
+                                                                       .WithAllowCloudModelMcpTools(true)
+                                                                       .WithAllowCloudModelSubAgents(true));
+
+        AssertEx.Empty(await provider.GetCloudWithheldToolsAsync("qwen3:8b", isCloudModel: true));
+    }
+
+    [Test]
+    public async Task GetCloudWithheldToolsAsync_WhenTheModelIsNotToolCapable_ReturnsNothing()
+    {
+        var provider = CreateSwitchProvider(static settings => settings);
+
+        AssertEx.Empty(await provider.GetCloudWithheldToolsAsync("not-capable:7b", isCloudModel: true));
+    }
+
+    private static string FormatWithheld(IReadOnlyList<CloudWithheldTool> withheld) =>
+        string.Join(",", withheld.Select(static tool => $"{tool.Switch}:{tool.Name}").Order(StringComparer.Ordinal));
 
     private static LocalToolOfferProvider CreateSwitchProvider(Func<StubNodeRuntimeSettings, StubNodeRuntimeSettings> configure)
     {

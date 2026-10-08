@@ -193,6 +193,7 @@ describe("ChatNoticeRow", () => {
 		["EmptyAnswer", "No answer", ".tabler-icon-message-off"],
 		["ToolHistoryWithheld", "Tool history withheld", ".tabler-icon-history-off"],
 		["ToolsWithheld", "Tools not offered", ".tabler-icon-tools-off"],
+		["CloudToolsWithheld", "Tools withheld from cloud model", ".tabler-icon-cloud-off"],
 		["OutputLimitReached", "Answer cut off", ".tabler-icon-cut"],
 		["KnowledgeUnavailable", "Knowledge base unavailable", ".tabler-icon-book-off"],
 		["AttachmentShortened", "Attachment shortened", ".tabler-icon-file-text"],
@@ -204,6 +205,21 @@ describe("ChatNoticeRow", () => {
 
 		expect(screen.getByLabelText(label)).toBeTruthy();
 		expect(container.querySelector(iconClass)).toBeTruthy();
+	});
+
+	it("renders the cloud-tools-withheld notice with the withheld switch codes as its detail", () => {
+		renderWithProviders(
+			<ChatNoticeRow
+				part={noticePart({
+					noticeKind: "CloudToolsWithheld",
+					text: "a server-owned sentence",
+					detail: "mcp-tools, web-tools",
+				})}
+			/>,
+		);
+
+		expect(screen.getByText("a server-owned sentence")).toBeTruthy();
+		expect(screen.getByTestId("chat-notice-detail").textContent).toBe("mcp-tools, web-tools");
 	});
 
 	it("renders the attachments-not-sent notice with its localized sentence and every unsent file name", () => {

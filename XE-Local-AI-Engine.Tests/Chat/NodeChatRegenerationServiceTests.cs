@@ -975,6 +975,110 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     }
 
     [Test]
+    public async Task RegenerateAsync_WhenOrchestrationParticipantsLostToolsToTheCloudSwitches_EmitsOneNoticeEvenWithoutAToolRequest()
+    {
+        // Send/regenerate parity for the orchestration case: participants' list, not the orchestrator's, and no tool request needed.
+        await using var provider = await BuildProviderAsync("regeneration-orchestration-cloud-tools-withheld.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var agentDefinitionId = Guid.NewGuid();
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Orchestrated cloud tools regen",
+            UserId = "node",
+            CreatedAtUtc = 10,
+            AgentDefinitionId = agentDefinitionId
+        });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "what is 2+2?",
+            CreatedAtUtc = 11
+        });
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = Guid.NewGuid()
+        };
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = originalCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 13,
+            Content = "four",
+            Model = "model-x"
+        });
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var store = Substitute.For<IAgentDefinitionStore>();
+        store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
+        var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
+        agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                               .Returns(new ResolvedAgentRuntime("Orchestrator persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 4,
+                                   agentDefinitionId, "Orchestrator", Kind: AgentDefinitionKind.Orchestrator,
+                                   CloudWithheldTools: [new CloudWithheldTool { Name = "spawn_subagent", Switch = CloudToolSwitch.SubAgents }]));
+        var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
+        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                             .Returns(OrchestrationResolution.Compiled(new ResolvedOrchestration
+                             {
+                                 Spec = CreateSampleSpec(),
+                                 ResolvedSystemPrompt = "Orchestrator prompt.",
+                                 ModelProfile = "qwen3:8b",
+                                 ReasoningEffort = null,
+                                 AgentDefinitionVersion = 4,
+                                 AnyParticipantIsCloud = true,
+                                 FirstCloudParticipantModel = "azure-specialist-deploy",
+                                 CloudWithheldTools = [new CloudWithheldTool { Name = "mcp__weather__get_forecast", Switch = CloudToolSwitch.McpTools }]
+                             }));
+
+        var service = new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(agentDefinitionResolver, store, orchestrationResolver, CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            CreateTurnContextBuilder(),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: false))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.NotNull(runner.LastOrchestrationSpec);
+        // One entry per notice, so this pins both "exactly one" and its Detail.
+        var noticeDetails = events.Where(static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                               && streamEvent.NoticeKind == nameof(TurnNoticeKind.CloudToolsWithheld))
+                                  .Select(static streamEvent => $"[{streamEvent.NoticeDetail}]");
+        AssertEx.Equal("[mcp-tools]", string.Concat(noticeDetails));
+    }
+
+    [Test]
     public async Task RegenerateAsync_WhenOrchestrationDegrades_EmitsNoticeNamingTheReason()
     {
         // Send/regenerate parity: a rerun whose orchestration does not compile must tell the operator why, exactly as
@@ -1336,6 +1440,108 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.Empty(runner.LastAllowedTools);
         AssertEx.Equal(expectNotice ? 1 : 0,
             events.Count(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice && streamEvent.NoticeKind == nameof(TurnNoticeKind.ToolsWithheld)));
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task RegenerateAsync_WhenAToolTurnLostToolsToTheCloudSwitches_SaysSoOnceWithTheSwitchCodes(bool providerReportsWithheld)
+    {
+        // Send/regenerate parity for CloudToolsWithheld: the same notice, from the same ChatTurnResolution helper.
+        await using var provider = await BuildProviderAsync($"regeneration-cloud-tools-withheld-{providerReportsWithheld}.sqlite");
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
+        {
+            Title = "Cloud tools withheld regen",
+            UserId = "node",
+            CreatedAtUtc = 10
+        });
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = Guid.NewGuid(),
+            Content = "what is 2+2?",
+            CreatedAtUtc = 11
+        });
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = Guid.NewGuid()
+        };
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest
+        {
+            ConversationId = conversation.ConversationId,
+            MessageId = originalId,
+            RequestId = originalCorrelation.RequestId,
+            CreatedAtUtc = 12,
+            Model = "model-x"
+        });
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
+        {
+            Correlation = originalCorrelation,
+            Status = NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc = 13,
+            Content = "four",
+            Model = "model-x"
+        });
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("llamacpp");
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
+        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>(providerReportsWithheld
+                         ?
+                         [
+                             new CloudWithheldTool { Name = "spawn_subagent", Switch = CloudToolSwitch.SubAgents },
+                             new CloudWithheldTool { Name = "web_fetch", Switch = CloudToolSwitch.WebTools },
+                             new CloudWithheldTool { Name = "mcp__weather__get_forecast", Switch = CloudToolSwitch.McpTools }
+                         ]
+                         : []));
+
+        var service = new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(providerResolver: providerResolver,
+                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: true, SupportsVision: false))),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            CreateTurnContextBuilder(),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, useLocalTools: true))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.NotEmpty(runner.LastAllowedTools);
+        // One entry per notice, so this pins both "exactly one" and its Detail.
+        var noticeDetails = events.Where(static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                               && streamEvent.NoticeKind == nameof(TurnNoticeKind.CloudToolsWithheld))
+                                  .Select(static streamEvent => $"[{streamEvent.NoticeDetail}]");
+        AssertEx.Equal(providerReportsWithheld ? "[mcp-tools, web-tools]" : "", string.Concat(noticeDetails));
     }
 
     [Test]
@@ -3145,6 +3351,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>()).Returns(tools);
         provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
         provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
+        provider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>([]));
         return provider;
     }
 

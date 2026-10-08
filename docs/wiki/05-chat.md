@@ -212,6 +212,16 @@ the turn runs without tools and a `ToolsWithheld` turn notice names the model, o
 support is Unknown reads as unsupported here. Unlike `ToolsFiltered`, nothing is callable through `list_tools`. The
 notice stays silent when the client did not ask or node tools are off.
 
+When a turn offers tools to a model that leaves the node and one of the cloud-model switches `AllowCloudModelMcpTools`,
+`AllowCloudModelWebTools` or `AllowCloudModelSubAgents` removed tools from it, one `CloudToolsWithheld` turn notice says
+so, on send and on regenerate alike (`ILocalToolOfferProvider.GetCloudWithheldToolsAsync`,
+`ChatTurnResolution.CloudToolsWithheldNoticeAsync`). A bound agent counts only tools in its `AllowedToolNames`, and plain
+chat never counts `spawn_subagent`. A compiled orchestration aggregates its participants instead
+(`ResolvedOrchestration.CloudWithheldTools`): each participant's own effective model and `AllowedToolNames`, without
+`spawn_subagent` and the built-in web tools, which a participant is never offered. It fires whether or not the client asked
+for tools, because participants carry their own. `Detail` lists the switch codes `mcp-tools`, `web-tools`, `sub-agents`,
+never a tool name.
+
 When a turn's last model round (the one after its last tool result, or the only round) produces neither text nor a
 tool call, the runner ends the turn with an `EmptyAnswer` notice ("The model stopped without an answer.") carrying
 the provider's finish reason as detail, instead of completing as an empty answer. A cancelled turn gets no such

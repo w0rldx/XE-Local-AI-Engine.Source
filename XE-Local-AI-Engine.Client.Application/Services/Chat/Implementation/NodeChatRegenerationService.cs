@@ -249,6 +249,13 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                 await _eventDispatcher.ReportTurnNoticeAsync(resolution.ToolsWithheldNotice(requestId));
             }
 
+            // A compiled orchestration's participants carry their own tools whatever the client asked.
+            if ((offerTools || resolution.Orchestration is not null)
+                && await resolution.CloudToolsWithheldNoticeAsync(requestId, _localToolOfferProvider, cancellationToken) is { } cloudToolsWithheldNotice)
+            {
+                await _eventDispatcher.ReportTurnNoticeAsync(cloudToolsWithheldNotice);
+            }
+
             // A regenerated plain-chat turn honors the same opt-in grounding and cloud-egress gate as a send, so a
             // rerun does not lose its sources strip. Agent mode grounds through the gated tool instead, never inline.
             var knowledge = useKnowledgeBase && !offerTools

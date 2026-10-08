@@ -148,5 +148,15 @@ public enum TurnNoticeKind
     ///     Not a privacy withhold (that is <see cref="AttachmentsWithheld" />). <see cref="TurnNoticePayload.Detail" />
     ///     lists the affected file names.
     /// </remarks>
-    AttachmentsNotSent = 15
+    AttachmentsNotSent = 15,
+
+    /// <summary>
+    ///     Some tools were not offered to a model that leaves the node because their cloud-model switch is off.
+    /// </summary>
+    /// <remarks>
+    ///     Covers <c>AllowCloudModelMcpTools</c>, <c>AllowCloudModelWebTools</c> and <c>AllowCloudModelSubAgents</c>.
+    ///     <see cref="TurnNoticePayload.Detail" /> carries the switch codes (<c>mcp-tools</c>, <c>web-tools</c>,
+    ///     <c>sub-agents</c>), never a tool name.
+    /// </remarks>
+    CloudToolsWithheld = 16
 }

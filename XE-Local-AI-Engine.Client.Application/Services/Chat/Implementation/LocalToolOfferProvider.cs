@@ -455,6 +455,47 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         ];
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<CloudWithheldTool>> GetCloudWithheldToolsAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default)
+    {
+        if (!IsToolCapable(activeModelId) || !LeavesNode(activeModelId, isCloudModel))
+        {
+            return [];
+        }
+
+        // The same switch reads, in the same order of precedence, as the offer methods above.
+        var withheld = new List<CloudWithheldTool>();
+        if (!await _runtimeSettings.GetAllowCloudModelMcpToolsAsync(cancellationToken))
+        {
+            withheld.AddRange(_mcpToolRegistry.GetDescriptors().Select(static descriptor => Withheld(descriptor.Name, CloudToolSwitch.McpTools)));
+        }
+
+        if (await _runtimeSettings.GetWebAccessEnabledAsync(cancellationToken) && !await _runtimeSettings.GetAllowCloudModelWebToolsAsync(cancellationToken))
+        {
+            withheld.AddRange(_webAccessOfferDtos.Select(static tool => Withheld(tool.Name, CloudToolSwitch.WebTools)));
+            if (await _runtimeSettings.GetCustomToolsEnabledAsync(cancellationToken))
+            {
+                var customDescriptors = await GetEnabledCustomDescriptorsAsync(cancellationToken);
+                withheld.AddRange(customDescriptors.Where(static descriptor => descriptor.Category == ToolCategory.Network)
+                                                   .Select(static descriptor => Withheld(descriptor.Name, CloudToolSwitch.WebTools)));
+            }
+        }
+
+        if (!await _runtimeSettings.GetAllowCloudModelSubAgentsAsync(cancellationToken))
+        {
+            withheld.Add(Withheld(SpawnSubAgentToolDefinition.ToolName, CloudToolSwitch.SubAgents));
+        }
+
+        return withheld;
+    }
+
+    private static CloudWithheldTool Withheld(string name, CloudToolSwitch toolSwitch) =>
+        new()
+        {
+            Name = name,
+            Switch = toolSwitch
+        };
+
     /// <summary>
     ///     <c>spawn_subagent</c> for the profile pool, or nothing for a model outside the trust boundary unless allowed.
     /// </summary>

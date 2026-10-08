@@ -138,6 +138,14 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             specParticipants.Add(await ToSpecParticipantAsync(participant, activeModelId, cancellationToken));
         }
 
+        // Ordered by definition id, then name, so the aggregate is deterministic before the distinct-by-name pass.
+        var cloudWithheldTools = new List<CloudWithheldTool>();
+        foreach (var participant in participants.Values.OrderBy(static participant => participant.Definition.Id))
+        {
+            cloudWithheldTools.AddRange((await ParticipantCloudWithheldToolsAsync(participant, activeModelId, cancellationToken))
+                .OrderBy(static tool => tool.Name, StringComparer.Ordinal));
+        }
+
         specParticipants.Sort(static (left, right) => string.CompareOrdinal(left.Key, right.Key));
 
         var spec = new OrchestrationSpec
@@ -174,8 +182,25 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
                                .Where(static participant => participant.PlaybookWithheld)
                                .OrderBy(static participant => participant.Definition.Id)
                                .Select(static participant => participant.Definition.Name)
-            ]
+            ],
+            CloudWithheldTools = [.. cloudWithheldTools.DistinctBy(static tool => tool.Name, StringComparer.Ordinal)]
         });
+    }
+
+    // What the cloud switches withheld from THIS participant's own offer. Participants never get spawn_subagent or a
+    // built-in web tool, so neither switch withheld those; an HttpFetch custom tool under the web switch does count.
+    private async Task<IReadOnlyList<CloudWithheldTool>> ParticipantCloudWithheldToolsAsync(ResolvedParticipant participant, string? activeModelId,
+        CancellationToken cancellationToken)
+    {
+        var definition = participant.Definition;
+        var withheld = await _localToolOfferProvider.GetCloudWithheldToolsAsync(definition.ModelProfile ?? activeModelId, participant.IsCloud, cancellationToken);
+        var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
+        return
+        [
+            .. withheld.Where(tool => tool.Switch != CloudToolSwitch.SubAgents
+                                      && !WebAccessToolCatalog.IsWebTool(tool.Name)
+                                      && allowedNames.Contains(tool.Name))
+        ];
     }
 
     /// <summary>

@@ -2291,6 +2291,80 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task SendMessageAsync_WhenAToolTurnLostToolsToTheCloudSwitches_SaysSoOnceWithTheSwitchCodes(bool providerReportsWithheld)
+    {
+        // Send/regenerate parity for CloudToolsWithheld. An unbound turn is plain chat, which never offers spawn_subagent,
+        // so its switch drops out of Detail.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
+        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>(providerReportsWithheld
+                         ?
+                         [
+                             new CloudWithheldTool { Name = "spawn_subagent", Switch = CloudToolSwitch.SubAgents },
+                             new CloudWithheldTool { Name = "web_fetch", Switch = CloudToolSwitch.WebTools },
+                             new CloudWithheldTool { Name = "mcp__weather__get_forecast", Switch = CloudToolSwitch.McpTools }
+                         ]
+                         : []));
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns("llamacpp");
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(providerResolver: providerResolver,
+                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: true, SupportsVision: false))),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            CreateTurnContextBuilder(),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.NotEmpty(runner.LastAllowedTools);
+        // One entry per notice, so this pins both "exactly one" and its Detail.
+        var noticeDetails = events.Where(static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                               && streamEvent.NoticeKind == nameof(TurnNoticeKind.CloudToolsWithheld))
+                                  .Select(static streamEvent => $"[{streamEvent.NoticeDetail}]");
+        AssertEx.Equal(providerReportsWithheld ? "[mcp-tools, web-tools]" : "", string.Concat(noticeDetails));
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenUserCancelsThroughRegistry_TerminalizesAssistantAsCancelled()
     {
         var conversationId = Guid.NewGuid();
@@ -2974,11 +3048,38 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Equal("Researcher, Writer", events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.PlaybookWithheld)).NoticeDetail);
     }
 
+    [Test]
+    public async Task SendMessageAsync_WhenOrchestrationParticipantsLostToolsToTheCloudSwitches_EmitsOneNoticeEvenWithoutAToolRequest()
+    {
+        // The participants carry their own tools whatever the client asked (this send asks for none), and the
+        // orchestrator's own list is ignored: its persona never runs in a compiled orchestration.
+        var events = await RunOrchestrationDegradeAsync(AgentDefinitionKind.Orchestrator,
+            OrchestrationResolution.Compiled(new ResolvedOrchestration
+            {
+                Spec = CreateSampleSpec(),
+                ResolvedSystemPrompt = "Orchestrator prompt.",
+                ModelProfile = null,
+                ReasoningEffort = null,
+                AgentDefinitionVersion = 4,
+                AnyParticipantIsCloud = true,
+                FirstCloudParticipantModel = "azure-specialist-deploy",
+                CloudWithheldTools = [new CloudWithheldTool { Name = "mcp__weather__get_forecast", Switch = CloudToolSwitch.McpTools }]
+            }),
+            resolvedCloudWithheldTools: [new CloudWithheldTool { Name = "spawn_subagent", Switch = CloudToolSwitch.SubAgents }]);
+
+        // One entry per notice, so this pins both "exactly one" and its Detail.
+        var noticeDetails = events.Where(static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                               && streamEvent.NoticeKind == nameof(TurnNoticeKind.CloudToolsWithheld))
+                                  .Select(static streamEvent => $"[{streamEvent.NoticeDetail}]");
+        AssertEx.Equal("[mcp-tools]", string.Concat(noticeDetails));
+    }
+
     // Runs one bound-agent send whose orchestration resolver returns the given resolution, and returns the streamed events.
     private static async Task<List<ChatStreamEvent>> RunOrchestrationDegradeAsync(AgentDefinitionKind kind,
         OrchestrationResolution resolution,
         bool playbookWithheld = false,
-        string? modelProfile = null)
+        string? modelProfile = null,
+        IReadOnlyList<CloudWithheldTool>? resolvedCloudWithheldTools = null)
     {
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
@@ -2993,7 +3094,7 @@ public sealed class NodeChatStreamServiceTests
         var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
         agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                                .Returns(new ResolvedAgentRuntime("Agent persona.", [], modelProfile, ReasoningEffort: null, AgentDefinitionVersion: 4, agentDefinitionId, "Agent", Kind: kind,
-                                   PlaybookWithheld: playbookWithheld));
+                                   PlaybookWithheld: playbookWithheld, CloudWithheldTools: resolvedCloudWithheldTools));
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(resolution);
 
@@ -4259,6 +4360,8 @@ public sealed class NodeChatStreamServiceTests
         provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>()).Returns(tools);
         provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
         provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
+        provider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>([]));
         return provider;
     }
 

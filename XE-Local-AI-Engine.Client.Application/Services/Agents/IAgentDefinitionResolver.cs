@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
 ///     Compiles a node-local agent definition into the loopback runtime-package inputs.
@@ -83,4 +84,7 @@ public sealed record ResolvedAgentRuntime(
     bool DisableToolRelevanceFilter = false,
     // Enabled playbook memory was withheld from a cloud effective model; drives the PlaybookWithheld turn notice.
     [property: JsonIgnore]
-    bool PlaybookWithheld = false);
+    bool PlaybookWithheld = false,
+    // The cloud-model switches withheld these tools from this agent's offer; drives the CloudToolsWithheld turn notice.
+    [property: JsonIgnore]
+    IReadOnlyList<CloudWithheldTool>? CloudWithheldTools = null);

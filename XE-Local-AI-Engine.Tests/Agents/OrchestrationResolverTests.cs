@@ -271,6 +271,56 @@ public sealed class OrchestrationResolverTests
     }
 
     [Test]
+    [Arguments(true, "McpTools:mcp__weather__get_forecast")]
+    [Arguments(false, "")]
+    public async Task ResolveAsync_CloudWithheldTools_AreTheParticipantsOwnMinusWebAndSpawn(bool specialistIsCloud, string expected)
+    {
+        // Participants are never offered spawn_subagent or a built-in web tool, so those switches withheld nothing from
+        // them; the orchestrator's own allowed names never reach a participant. A local participant loses nothing.
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["mcp__weather__get_forecast"]);
+        var specialist = CreateDefinition("Specialist", modelProfile: CloudParticipantModel,
+            allowedTools: ["mcp__weather__get_forecast", WebFetchToolDefinition.ToolName, "spawn_subagent"]);
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]) with { AllowedToolNames = ["mcp__files__read"] };
+
+        var store = Substitute.For<IAgentDefinitionStore>();
+        var playbookStore = Substitute.For<IPlaybookActionStore>();
+        playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        var offerProvider = Substitute.For<ILocalToolOfferProvider>();
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([OfferTool("GetCurrentTime")]);
+        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                     .Returns(callInfo => Task.FromResult<IReadOnlyList<CloudWithheldTool>>(callInfo.ArgAt<bool>(1)
+                         ?
+                         [
+                             new CloudWithheldTool { Name = "mcp__weather__get_forecast", Switch = CloudToolSwitch.McpTools },
+                             new CloudWithheldTool { Name = "mcp__files__read", Switch = CloudToolSwitch.McpTools },
+                             new CloudWithheldTool { Name = WebFetchToolDefinition.ToolName, Switch = CloudToolSwitch.WebTools },
+                             new CloudWithheldTool { Name = "spawn_subagent", Switch = CloudToolSwitch.SubAgents }
+                         ]
+                         : []));
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(ToolCapableModel, Arg.Any<CancellationToken>())
+                          .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: false)));
+        capabilityResolver.ResolveAsync(CloudParticipantModel, Arg.Any<CancellationToken>())
+                          .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: specialistIsCloud)));
+        var resolver = new OrchestrationResolver(store,
+            playbookStore,
+            offerProvider,
+            new LexicalPlaybookRetrievalRanker(),
+            Options.Create(new PlaybookRetrievalOptions()),
+            StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).Build(),
+            capabilityResolver,
+            new FakeAgentInstructionProvider(),
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<OrchestrationResolver>.Instance);
+        SeedParticipants(store, triage, specialist);
+
+        var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
+
+        AssertEx.Equal(expected, string.Join(",", AssertEx.NotNull(resolved).CloudWithheldTools.Select(static tool => $"{tool.Switch}:{tool.Name}")));
+    }
+
+    [Test]
     public async Task ResolveAsync_WhenAllParticipantsLocal_AggregateIsNotCloud()
     {
         var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);

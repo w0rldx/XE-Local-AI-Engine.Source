@@ -100,6 +100,9 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         var (resolvedPrompt, playbookWithheld) = await ComposePromptAsync(definition, retrievalQuery, effectiveModelIsCloud, cancellationToken);
         var skills = await ResolveSkillsAsync(definition, cancellationToken);
         var customTools = await ResolveCustomToolsAsync(allowedTools, cancellationToken);
+        var cloudWithheldTools = supportsTools
+            ? await ResolveCloudWithheldToolsAsync(definition, effectiveModel, effectiveModelIsCloud, cancellationToken)
+            : null;
 
         return new ResolvedAgentRuntime(resolvedPrompt,
             allowedTools,
@@ -115,7 +118,23 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             definition.Kind,
             customTools,
             definition.DisableToolRelevanceFilter,
-            playbookWithheld);
+            playbookWithheld,
+            cloudWithheldTools);
+    }
+
+    // Narrowed to what THIS agent would have been offered: the Default Assistant reproduces plain chat, which never
+    // offers spawn_subagent, and every other definition only ever gets its AllowedToolNames.
+    private async Task<IReadOnlyList<CloudWithheldTool>> ResolveCloudWithheldToolsAsync(AgentDefinitionRecord definition, string? effectiveModelId, bool effectiveModelIsCloud,
+        CancellationToken cancellationToken)
+    {
+        var withheld = await _localToolOfferProvider.GetCloudWithheldToolsAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken);
+        if (AgentDefaults.IsDefaultAssistant(definition))
+        {
+            return [.. withheld.Where(static tool => tool.Switch != CloudToolSwitch.SubAgents)];
+        }
+
+        var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
+        return [.. withheld.Where(tool => allowedNames.Contains(tool.Name))];
     }
 
     /// <summary>

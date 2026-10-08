@@ -267,6 +267,7 @@
 			"stoppedWhileThinkingText": "The model stopped while thinking before it could answer; its thoughts are kept above.",
 			"toolHistoryWithheld": "Tool history withheld",
 			"toolsWithheld": "Tools not offered",
+			"cloudToolsWithheld": "Tools withheld from cloud model",
 			"outputLimitReached": "Answer cut off",
 			"knowledgeUnavailable": "Knowledge base unavailable",
 			"attachmentShortened": "Attachment shortened",

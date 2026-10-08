@@ -626,8 +626,8 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         return !turnReachesCloud || await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken);
     }
 
-    // The pre-run notices, in wire order: orchestration-degraded, playbook and tools withheld, then either the cloud-egress
-    // withhold notices or knowledge-unavailable and attachments-not-sent. All ride the runner's turn-notice fan-out.
+    // The pre-run notices, in wire order: orchestration-degraded, playbook, tools and cloud-tools withheld, then either the
+    // cloud-egress withhold notices or knowledge-unavailable and attachments-not-sent. All ride the runner's turn-notice fan-out.
     private async Task ReportPreRunNoticesAsync(NodeChatStreamRequest request,
         ChatTurnResolution resolution,
         ChatToolOffer toolOffer,
@@ -656,6 +656,13 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         if (toolOffer.WithheldForCapability)
         {
             await _eventDispatcher.ReportTurnNoticeAsync(resolution.ToolsWithheldNotice(requestId));
+        }
+
+        // A compiled orchestration's participants carry their own tools whatever the client asked.
+        if ((toolOffer.OfferTools || resolution.Orchestration is not null)
+            && await resolution.CloudToolsWithheldNoticeAsync(requestId, _localToolOfferProvider, cancellationToken) is { } cloudToolsWithheldNotice)
+        {
+            await _eventDispatcher.ReportTurnNoticeAsync(cloudToolsWithheldNotice);
         }
 
         if (attachmentsAllowed)

@@ -96,4 +96,56 @@ internal sealed class ChatTurnResolution
             Detail = EffectiveModel
         };
     }
+
+    /// <summary>
+    ///     The CloudToolsWithheld notice for this turn, or <see langword="null" /> when no cloud-model switch withheld a
+    ///     tool. Shared by the send and regenerate paths so the two cannot drift.
+    /// </summary>
+    /// <remarks>
+    ///     A compiled orchestration aggregates its participants' own lists, never the orchestrator's. A bound definition
+    ///     carries its narrowed list; an unbound turn is plain chat, which never offers <c>spawn_subagent</c>. Detail
+    ///     lists switch codes in a fixed order, never a tool name.
+    /// </remarks>
+    public async Task<TurnNoticePayload?> CloudToolsWithheldNoticeAsync(Guid invocationId, ILocalToolOfferProvider localToolOfferProvider, CancellationToken cancellationToken)
+    {
+        if (Orchestration is { } orchestration)
+        {
+            return CloudToolsWithheldNotice(invocationId,
+                orchestration.CloudWithheldTools,
+                "Some tools were not offered to agents in this orchestration that run on a cloud model because their cloud-model switches are off. Turn them on under Node Settings, Privacy & updates, to let a cloud model use them.");
+        }
+
+        var withheld = Resolved is { } resolved
+            ? resolved.CloudWithheldTools ?? []
+            : [.. (await localToolOfferProvider.GetCloudWithheldToolsAsync(ActiveModel, EffectiveModelIsCloud, cancellationToken))
+                  .Where(static tool => tool.Switch != CloudToolSwitch.SubAgents)];
+        return CloudToolsWithheldNotice(invocationId,
+            withheld,
+            "Some tools were not offered to the cloud model handling this message because their cloud-model switches are off. Turn them on under Node Settings, Privacy & updates, to let a cloud model use them.");
+    }
+
+    private static TurnNoticePayload? CloudToolsWithheldNotice(Guid invocationId, IReadOnlyList<CloudWithheldTool> withheld, string message)
+    {
+        if (withheld.Count == 0)
+        {
+            return null;
+        }
+
+        // The enum's declaration order is the fixed Detail order.
+        var codes = Enum.GetValues<CloudToolSwitch>()
+                        .Where(toolSwitch => withheld.Any(tool => tool.Switch == toolSwitch))
+                        .Select(static toolSwitch => toolSwitch switch
+                        {
+                            CloudToolSwitch.McpTools => "mcp-tools",
+                            CloudToolSwitch.WebTools => "web-tools",
+                            _ => "sub-agents"
+                        });
+        return new TurnNoticePayload
+        {
+            InvocationId = invocationId,
+            Kind = TurnNoticeKind.CloudToolsWithheld,
+            Message = message,
+            Detail = string.Join(", ", codes)
+        };
+    }
 }

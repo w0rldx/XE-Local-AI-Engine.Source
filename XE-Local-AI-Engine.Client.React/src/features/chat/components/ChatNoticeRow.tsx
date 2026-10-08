@@ -3,6 +3,7 @@ import {
 	IconArrowsExchange,
 	IconBolt,
 	IconBookOff,
+	IconCloudOff,
 	IconCut,
 	IconFileOff,
 	IconFileText,
@@ -48,6 +49,8 @@ function noticeIcon(noticeKind: string) {
 			return IconHistoryOff;
 		case "ToolsWithheld":
 			return IconToolsOff;
+		case "CloudToolsWithheld":
+			return IconCloudOff;
 		case "OutputLimitReached":
 			return IconCut;
 		case "KnowledgeUnavailable":
@@ -84,6 +87,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.toolHistoryWithheld";
 		case "ToolsWithheld":
 			return "chat.notices.toolsWithheld";
+		case "CloudToolsWithheld":
+			return "chat.notices.cloudToolsWithheld";
 		case "OutputLimitReached":
 			return "chat.notices.outputLimitReached";
 		case "KnowledgeUnavailable":

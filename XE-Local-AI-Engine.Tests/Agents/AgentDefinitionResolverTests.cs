@@ -1536,6 +1536,52 @@ public sealed class AgentDefinitionResolverTests
         return BuildResolver(out store, out playbookStore, onGetOffered: null, offeredTools);
     }
 
+    // The provider reports these as withheld by the cloud switches; the resolver must narrow them per definition.
+    private static readonly CloudWithheldTool[] ProviderCloudWithheld =
+    [
+        new() { Name = "mcp__weather__get_forecast", Switch = CloudToolSwitch.McpTools },
+        new() { Name = "mcp__files__read", Switch = CloudToolSwitch.McpTools },
+        new() { Name = "web_fetch", Switch = CloudToolSwitch.WebTools },
+        new() { Name = SpawnToolName, Switch = CloudToolSwitch.SubAgents }
+    ];
+
+    private static AgentDefinitionResolver CreateResolverWithCloudWithheld(out IAgentDefinitionStore store)
+    {
+        return BuildResolver(out store, out _, onGetOffered: null, [OfferTool("GetCurrentTime")], cloudWithheldTools: ProviderCloudWithheld);
+    }
+
+    [Test]
+    [Arguments("mcp__weather__get_forecast", "mcp__weather__get_forecast")]
+    [Arguments("GetCurrentTime", "")]
+    public async Task ResolveAsync_ForABoundAgent_CloudWithheldToolsAreOnlyItsAllowedOnes(string allowedTool, string expected)
+    {
+        var resolver = CreateResolverWithCloudWithheld(out var store);
+        var definition = CreateDefinition(allowedTools: [allowedTool]);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, activeModelIsCloud: true);
+
+        AssertEx.Equal(expected, string.Join(",", AssertEx.NotNull(resolved).CloudWithheldTools!.Select(static tool => tool.Name)));
+    }
+
+    [Test]
+    public async Task ResolveAsync_ForTheDefaultAssistant_CloudWithheldToolsAreTheProviderListWithoutSpawn()
+    {
+        // Plain chat never offers spawn_subagent, so its switch withheld nothing from the Default Assistant.
+        var resolver = CreateResolverWithCloudWithheld(out var store);
+        var defaultAssistant = CreateDefinition(AgentDefaults.DefaultAgentName, allowedTools: []) with
+        {
+            Source = AgentDefinitionSource.Seeded,
+            SeedSlug = AgentDefaults.DefaultAgentSeedSlug
+        };
+        store.GetByIdAsync(defaultAssistant.Id, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
+
+        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, ToolCapableModel, activeModelIsCloud: true);
+
+        AssertEx.Equal("mcp__weather__get_forecast,mcp__files__read,web_fetch",
+            string.Join(",", AssertEx.NotNull(resolved).CloudWithheldTools!.Select(static tool => tool.Name)));
+    }
+
     // The playbook egress-gate tests: CloudPinnedModel classifies as cloud, every other model as local.
     private static AgentDefinitionResolver CreateResolverWithPlaybookEgressGate(out IAgentDefinitionStore store,
         out IPlaybookActionStore playbookStore,
@@ -1662,7 +1708,8 @@ public sealed class AgentDefinitionResolverTests
         IAgentInstructionProvider? instructionProvider = null,
         IToolApprovalPolicy? toolApprovalPolicy = null,
         IModelCapabilityResolver? capabilityResolver = null,
-        bool allowCloudModelAccess = false)
+        bool allowCloudModelAccess = false,
+        IReadOnlyList<CloudWithheldTool>? cloudWithheldTools = null)
     {
         store = Substitute.For<IAgentDefinitionStore>();
         playbookStore = Substitute.For<IPlaybookActionStore>();
@@ -1686,6 +1733,8 @@ public sealed class AgentDefinitionResolverTests
             return GateProfilePool(offeredTools, modelId);
         });
         offerProvider.GetKnownToolNames().Returns([.. offeredTools.Select(static tool => tool.Name)]);
+        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult(cloudWithheldTools ?? []));
         return new AgentDefinitionResolver(store,
             playbookStore,
             CreateEmptySkillStore(),

@@ -69,6 +69,17 @@ public interface ILocalToolOfferProvider
     Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsForProfileAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     The tools the three cloud-model switches removed from the PROFILE pool for this model, each tagged with its
+    ///     switch; empty for a model that stays on the node or is not tool-capable.
+    /// </summary>
+    /// <remarks>
+    ///     Web tools count only while <c>WebAccessEnabled</c> is on (otherwise the node switch, not the cloud one,
+    ///     withheld them), and HttpFetch custom tools only while <c>CustomToolsEnabled</c> is on too. Drives the
+    ///     <c>CloudToolsWithheld</c> turn notice.
+    /// </remarks>
+    Task<IReadOnlyList<CloudWithheldTool>> GetCloudWithheldToolsAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     The ONE built-in tool an integration execution is additionally offered, and the only way to reach it.
     /// </summary>
     /// <remarks>

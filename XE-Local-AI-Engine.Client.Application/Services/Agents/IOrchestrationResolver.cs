@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Agents;
 
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
 ///     Compiles an orchestrator definition and its <c>OrchestrationTopologyJson</c> into the loopback orchestration
@@ -155,4 +156,10 @@ public sealed class ResolvedOrchestration
     ///     definition id; empty when none was. Names only, never memory content: the PlaybookWithheld notice lists them.
     /// </summary>
     public IReadOnlyList<string> PlaybookWithheldParticipantNames { get; init; } = [];
+
+    /// <summary>
+    ///     The tools the cloud-model switches withheld from the participants' own offers, distinct by name, ordered by
+    ///     definition id; empty when none was. Names and switches only, never tool content: drives CloudToolsWithheld.
+    /// </summary>
+    public IReadOnlyList<CloudWithheldTool> CloudWithheldTools { get; init; } = [];
 }
