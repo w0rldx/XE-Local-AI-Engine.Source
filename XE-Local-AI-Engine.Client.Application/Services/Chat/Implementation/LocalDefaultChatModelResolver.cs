@@ -65,7 +65,11 @@ public sealed class LocalDefaultChatModelResolver : ILocalDefaultChatModelResolv
         // tie-broken by name. Only installed chat models count, so an embedding server or a deleted GGUF never does.
         var resident = _supervisor.ListRunningProcesses()
                                   .Where(static process => process.Role == ModelRole.Chat)
-                                  .Select(process => new { Process = process, Model = FindByName(chatModels, process.ModelName) })
+                                  .Select(process => new
+                                  {
+                                      Process = process,
+                                      Model = FindByName(chatModels, process.ModelName)
+                                  })
                                   .Where(static pair => pair.Model is not null)
                                   .ToArray();
         if (resident.Length > 0)

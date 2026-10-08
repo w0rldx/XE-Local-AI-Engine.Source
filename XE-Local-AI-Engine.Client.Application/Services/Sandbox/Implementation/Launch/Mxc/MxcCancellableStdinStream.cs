@@ -31,9 +31,11 @@ internal sealed class MxcCancellableStdinStream : Stream
 
     public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
 
-    public override void Write(byte[] buffer, int offset, int count) => _inner.Write(buffer, offset, count);
+    public override void Write(byte[] buffer, int offset, int count) =>
+        _inner.Write(buffer, offset, count);
 
-    public override void Write(ReadOnlySpan<byte> buffer) => _inner.Write(buffer);
+    public override void Write(ReadOnlySpan<byte> buffer) =>
+        _inner.Write(buffer);
 
     public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
         WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
@@ -44,15 +46,20 @@ internal sealed class MxcCancellableStdinStream : Stream
         return new(RunAsync(stream => stream.Write(owned), cancellationToken));
     }
 
-    public override void Flush() => _inner.Flush();
+    public override void Flush() =>
+        _inner.Flush();
 
-    public override Task FlushAsync(CancellationToken cancellationToken) => RunAsync(FlushInner, cancellationToken);
+    public override Task FlushAsync(CancellationToken cancellationToken) =>
+        RunAsync(FlushInner, cancellationToken);
 
-    public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    public override int Read(byte[] buffer, int offset, int count) =>
+        throw new NotSupportedException();
 
-    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) =>
+        throw new NotSupportedException();
 
-    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void SetLength(long value) =>
+        throw new NotSupportedException();
 
     protected override void Dispose(bool disposing)
     {
@@ -85,8 +92,10 @@ internal sealed class MxcCancellableStdinStream : Stream
     }
 
 #pragma warning disable MA0045 // deliberately synchronous: the SDK's async stdin members ignore the token, so these run on the thread pool instead.
-    private static void FlushInner(Stream stream) => stream.Flush();
+    private static void FlushInner(Stream stream) =>
+        stream.Flush();
 
-    private static void DisposeInner(Task write, object? inner) => ((Stream)inner!).Dispose();
+    private static void DisposeInner(Task write, object? inner) =>
+        ((Stream)inner!).Dispose();
 #pragma warning restore MA0045
 }

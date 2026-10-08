@@ -13,12 +13,12 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using NSwag;
-using Microsoft.AspNetCore.SignalR;
 using Serilog;
 using Serilog.Events;
 using Serilog.Filters;
@@ -62,6 +62,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using LoggerExtensions = XE_Local_AI_Engine.Client.Common.Extensions.LoggerExtensions;
+using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
 /// <summary>
 ///     Represents configure services.
@@ -267,7 +268,7 @@ public static class ConfigureServices
         // Transport ceiling for ONE hub-invocation payload, derived from Security:MaxMessageSizeKb so an oversized paste is refused by that legible
         // app-level check rather than by SignalR's opaque frame-size error, which drops every stream on the connection.
         builder.Services.AddOptions<HubOptions>()
-               .Configure<IOptions<Configuration.SecurityOptions>>(static (hubOptions, security) =>
+               .Configure<IOptions<SecurityOptions>>(static (hubOptions, security) =>
                    hubOptions.MaximumReceiveMessageSize = HubReceiveCeilingBytes(security.Value.MaxMessageSizeKb));
         // Seed the FastEndpoints serializer global HERE, at registration time, or the OpenAPI generator snapshots a PascalCase copy. The global is
         // process-wide, so a read-only one has been served with already. See docs/wiki/09-api-and-hubs.md ("Why the FastEndpoints serializer global is seeded at registration time").

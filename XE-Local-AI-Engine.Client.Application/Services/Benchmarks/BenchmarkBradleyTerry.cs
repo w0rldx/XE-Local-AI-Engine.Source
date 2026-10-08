@@ -139,7 +139,11 @@ public static class BenchmarkBradleyTerry
             };
         }
 
-        var indexByRun = runs.Select(static (run, index) => new { run, index }).ToDictionary(static entry => entry.run, static entry => entry.index);
+        var indexByRun = runs.Select(static (run, index) => new
+        {
+            run,
+            index
+        }).ToDictionary(static entry => entry.run, static entry => entry.index);
         var pairs = Aggregate(verdicts, indexByRun);
         var component = LargestComponent(pairs, runs.Length);
         var fitted = pairs.Where(pair => component.Contains(pair.IndexA)).ToArray();

@@ -831,12 +831,12 @@ public sealed class BenchmarkRunFreezeServiceTests
             _primaryModel = primaryModel;
             AgentId = Guid.NewGuid();
             _project = Project(Guid.NewGuid(), AgentId, judgeModel is not null, judgeModel, maxOutputTokens, invocationTimeoutSeconds,
-                reasoningBudgetTokens, taskItemSetHash) with
-            {
-                FidelityEnabled = kldBaseModel is not null,
-                FidelityKldEnabled = kldBaseModel is not null,
-                FidelityKldBaseModelName = kldBaseModel
-            };
+                    reasoningBudgetTokens, taskItemSetHash) with
+                {
+                    FidelityEnabled = kldBaseModel is not null,
+                    FidelityKldEnabled = kldBaseModel is not null,
+                    FidelityKldBaseModelName = kldBaseModel
+                };
             var ggufModels = Substitute.For<IGgufModelStore>();
             ggufModels.ResolveModelFootprintFactsAsync(primaryModel, Arg.Any<CancellationToken>()).Returns(primaryFacts);
             if (kldBaseModel is not null)

@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox.Mxc;
 
+using System.Globalization;
 using System.IO.Pipelines;
 using System.Text;
 using Microsoft.Mxc.Sdk.V1;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
-using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -22,7 +22,10 @@ public sealed class MxcChildProcessTests
         var process = Substitute.For<IMxcProcess>();
         process.WaitAsync(Arg.Any<CancellationToken>()).Returns(call => exit.Task.WaitAsync(call.Arg<CancellationToken>()));
         process.TryGetExitCode(out Arg.Any<int>()).Returns(false);
-        process.When(p => p.Kill()).Do(_ => exit.TrySetResult(new WaitResult { ExitCode = -1 }));
+        process.When(p => p.Kill()).Do(_ => exit.TrySetResult(new WaitResult
+        {
+            ExitCode = -1
+        }));
         using var child = new MxcChildProcess(process);
         using var cancellation = new CancellationTokenSource();
 
@@ -43,7 +46,14 @@ public sealed class MxcChildProcessTests
     public async Task WaitForExitAsync_WhenMxcReportsTimedOut_KillsAndFlagsIt()
     {
         var process = Substitute.For<IMxcProcess>();
-        process.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult { ExitCode = 0, TimedOut = true }, new WaitResult { ExitCode = 137 });
+        process.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult
+        {
+            ExitCode = 0,
+            TimedOut = true
+        }, new WaitResult
+        {
+            ExitCode = 137
+        });
         process.TryGetExitCode(out Arg.Any<int>()).Returns(false);
         using var child = new MxcChildProcess(process);
 
@@ -58,7 +68,10 @@ public sealed class MxcChildProcessTests
     public async Task WaitForExitAsync_OnNormalExit_ReturnsTheCodeWithoutKilling()
     {
         var process = Substitute.For<IMxcProcess>();
-        process.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult { ExitCode = 3 });
+        process.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult
+        {
+            ExitCode = 3
+        });
 
         using var child = new MxcChildProcess(process);
 
@@ -71,11 +84,14 @@ public sealed class MxcChildProcessTests
     public async Task PumpedStreams_DeliverEveryLineBeforeTheWaitReturns_AndAreNotExposedRaw()
     {
         // Far larger than any pipe buffer: a child writing this much blocks unless both streams are drained concurrently.
-        var stdoutText = string.Join('\n', Enumerable.Range(0, 20_000).Select(i => "out-" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        var stdoutText = string.Join('\n', Enumerable.Range(0, 20_000).Select(i => "out-" + i.ToString(CultureInfo.InvariantCulture)));
         var process = Substitute.For<IMxcProcess>();
         process.StandardOutput.Returns(new MemoryStream(Encoding.UTF8.GetBytes(stdoutText)));
         process.StandardError.Returns(new MemoryStream(Encoding.UTF8.GetBytes("err-1\nerr-2\n")));
-        process.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult { ExitCode = 0 });
+        process.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult
+        {
+            ExitCode = 0
+        });
         var stdout = new List<string>();
         var stderr = new List<string>();
 
@@ -99,7 +115,10 @@ public sealed class MxcChildProcessTests
         var process = Substitute.For<IMxcProcess>();
         process.StandardOutput.Returns(stdout.Reader.AsStream());
         process.StandardOutputCloser.Returns(closer);
-        process.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult { ExitCode = 4 });
+        process.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult
+        {
+            ExitCode = 4
+        });
         var time = new ManualTimeProvider();
         using var child = new MxcChildProcess(process, static _ => { }, timeProvider: time);
 

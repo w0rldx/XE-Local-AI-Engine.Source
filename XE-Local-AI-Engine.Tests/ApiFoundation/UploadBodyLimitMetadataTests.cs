@@ -29,7 +29,11 @@ public sealed class UploadBodyLimitMetadataTests
 
         // The test server never enforces Kestrel's body limit, so the metadata the host reads is asserted directly.
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>().ToList();
-        foreach (var routeSuffix in new[] { "chat/conversations/{conversationId}/uploads", "knowledge-base/documents" })
+        foreach (var routeSuffix in new[]
+                 {
+                     "chat/conversations/{conversationId}/uploads",
+                     "knowledge-base/documents"
+                 })
         {
             var routes = endpoints.Where(endpoint => endpoint.RoutePattern.RawText?.EndsWith(routeSuffix, StringComparison.Ordinal) == true
                                                      && endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.Contains("POST") == true)

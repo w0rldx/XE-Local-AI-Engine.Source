@@ -82,10 +82,22 @@ public static class MxcPolicyMapper
             },
             Network = new NetworkPolicy
             {
-                Egress = new NetworkEgressPolicy { Default = NetworkAction.Deny },
-                Ingress = new NetworkIngressPolicy { Default = NetworkAction.Deny, HostLoopback = NetworkAction.Deny },
+                Egress = new NetworkEgressPolicy
+                {
+                    Default = NetworkAction.Deny
+                },
+                Ingress = new NetworkIngressPolicy
+                {
+                    Default = NetworkAction.Deny,
+                    HostLoopback = NetworkAction.Deny
+                },
             },
-            Ui = new UiPolicy { Disable = true, Clipboard = ClipboardPolicy.None, AllowInputInjection = false },
+            Ui = new UiPolicy
+            {
+                Disable = true,
+                Clipboard = ClipboardPolicy.None,
+                AllowInputInjection = false
+            },
         };
 
     /// <summary>MXC reads 0 as "no timeout", so a sub-millisecond timeout rounds up to 1 ms rather than silently removing the bound.</summary>
@@ -100,6 +112,7 @@ public static class MxcPolicyMapper
         {
             throw new ArgumentOutOfRangeException(nameof(timeout), value, "An MXC timeout must be positive; null means none.");
         }
+
         var milliseconds = Math.Ceiling(value.TotalMilliseconds);
         return milliseconds >= uint.MaxValue ? uint.MaxValue : Math.Max(1u, (uint)milliseconds);
     }

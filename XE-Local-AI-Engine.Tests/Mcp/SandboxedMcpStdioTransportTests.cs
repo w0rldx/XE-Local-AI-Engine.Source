@@ -933,7 +933,10 @@ public sealed class SandboxedMcpStdioTransportTests
             _ = CreateExecutable(withBoth, "server.exe");
             var record = StdioRecord(McpTrustTier.Sandboxed) with
             {
-                Environment = new Dictionary<string, string>(StringComparer.Ordinal) { ["PATHEXT"] = ".COM; .exe" }
+                Environment = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["PATHEXT"] = ".COM; .exe"
+                }
             };
             var windows = SandboxedMcpStdioTransport.ExecutableExtensions(record, windowsHost: true);
             var linux = SandboxedMcpStdioTransport.ExecutableExtensions(record, windowsHost: false);

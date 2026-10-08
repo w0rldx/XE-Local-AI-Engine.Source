@@ -31,9 +31,11 @@ internal sealed class MxcCancellableStdoutStream : Stream
 
     public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
 
-    public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
+    public override int Read(byte[] buffer, int offset, int count) =>
+        _inner.Read(buffer, offset, count);
 
-    public override int Read(Span<byte> buffer) => _inner.Read(buffer);
+    public override int Read(Span<byte> buffer) =>
+        _inner.Read(buffer);
 
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
         ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
@@ -46,11 +48,14 @@ internal sealed class MxcCancellableStdoutStream : Stream
         // Read-only: nothing is buffered on this side.
     }
 
-    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) =>
+        throw new NotSupportedException();
 
-    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) =>
+        throw new NotSupportedException();
 
-    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void SetLength(long value) =>
+        throw new NotSupportedException();
 
     protected override void Dispose(bool disposing)
     {
@@ -98,8 +103,10 @@ internal sealed class MxcCancellableStdoutStream : Stream
     }
 
 #pragma warning disable MA0045 // deliberately synchronous: the SDK's async stdout members ignore the token, so these run on the thread pool instead.
-    private static int ReadInner(Stream stream, byte[] buffer) => stream.Read(buffer, 0, buffer.Length);
+    private static int ReadInner(Stream stream, byte[] buffer) =>
+        stream.Read(buffer, 0, buffer.Length);
 
-    private static void DisposeInner(Task read, object? inner) => ((Stream)inner!).Dispose();
+    private static void DisposeInner(Task read, object? inner) =>
+        ((Stream)inner!).Dispose();
 #pragma warning restore MA0045
 }

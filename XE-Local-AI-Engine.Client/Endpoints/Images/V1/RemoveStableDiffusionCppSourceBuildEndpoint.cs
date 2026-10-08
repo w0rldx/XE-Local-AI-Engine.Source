@@ -32,7 +32,8 @@ public sealed class RemoveStableDiffusionCppSourceBuildEndpoint : Endpoint<Image
         var result = await _imageRuntime.RemoveAsync(ct);
         if (result.Outcome == StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy)
         {
-            await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy("Wait for active image jobs and image-runtime processes to finish before removing the managed runtime, or eject idle image processes.",
+            await Send.ResultAsync(ImageRuntimeBlockedEndpointSupport.RuntimeBusy(
+                "Wait for active image jobs and image-runtime processes to finish before removing the managed runtime, or eject idle image processes.",
                 result.Activity ?? _imageRuntime.GetActivitySnapshot()));
             return;
         }

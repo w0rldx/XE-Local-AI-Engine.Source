@@ -225,7 +225,9 @@ public sealed class SandboxLauncher : ISandboxLauncher
         int threadLimit)
     {
         var requested = commandEnvironment ?? new Dictionary<string, string>(StringComparer.Ordinal);
-        bool Requested(string name) => requested.Keys.Any(key => string.Equals(key, name, StringComparison.OrdinalIgnoreCase));
+
+        bool Requested(string name) =>
+            requested.Keys.Any(key => string.Equals(key, name, StringComparison.OrdinalIgnoreCase));
 
         // Windows variable names are case-insensitive; the start info already holds allow-list + caller variables.
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -295,13 +297,18 @@ public sealed class SandboxLauncher : ISandboxLauncher
 
         return denied;
 
-        static string Normalize(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        static string Normalize(string path) =>
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
     }
 
     /// <summary>The user profile, the node data root and the engine directory: what the AppContainer boundary must never reach.</summary>
     private static IReadOnlyList<string> DefaultDeniedRootCandidates(INodeDataDirectory? nodeDataDirectory)
     {
-        var candidates = new List<string> { Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), AppContext.BaseDirectory };
+        var candidates = new List<string>
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            AppContext.BaseDirectory
+        };
         if (nodeDataDirectory?.Root is { Length: > 0 } dataRoot)
         {
             candidates.Insert(1, dataRoot);

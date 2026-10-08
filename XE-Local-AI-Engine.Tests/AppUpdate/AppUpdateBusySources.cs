@@ -72,8 +72,7 @@ internal sealed class AppUpdateBusySources
     public AppUpdateBusySources WithTrainingDownloadAndSession()
     {
         GpuWorkGate.ExclusiveKind.Returns(GpuWorkKind.TrainingRun);
-        GgufDownloads.ListStatuses().Returns(
-        [
+        GgufDownloads.ListStatuses().Returns([
             new GgufDownloadStatus
             {
                 ModelName = "qwen3-8b.gguf",
@@ -91,8 +90,7 @@ internal sealed class AppUpdateBusySources
                 SanitizedError = null
             }
         ]);
-        WorkSessions.ListAsync(Arg.Any<CancellationToken>()).Returns(
-        [
+        WorkSessions.ListAsync(Arg.Any<CancellationToken>()).Returns([
             Session("Refactor the parser", AgentWorkSessionStatus.Running),
             Session("Old research", AgentWorkSessionStatus.Completed)
         ]);

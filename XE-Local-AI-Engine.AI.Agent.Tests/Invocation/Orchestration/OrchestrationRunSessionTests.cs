@@ -217,5 +217,8 @@ public sealed class OrchestrationRunSessionTests
     }
 
     private static AgentResponseUpdateEvent UpdateEvent(AIContent content) =>
-        new("executor", new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent> { content }));
+        new("executor", new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            content
+        }));
 }

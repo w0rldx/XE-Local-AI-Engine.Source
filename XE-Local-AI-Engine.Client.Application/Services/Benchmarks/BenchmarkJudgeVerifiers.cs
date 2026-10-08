@@ -111,9 +111,11 @@ public static class BenchmarkJudgeVerifiers
 
     private readonly record struct VerifierOutcome(bool Passed, string Detail);
 
-    private static VerifierOutcome Pass(string detail) => new(true, detail);
+    private static VerifierOutcome Pass(string detail) =>
+        new(true, detail);
 
-    private static VerifierOutcome Fail(string detail) => new(false, detail);
+    private static VerifierOutcome Fail(string detail) =>
+        new(false, detail);
 
     private static VerifierOutcome VerifyExact(BenchmarkVerifierSpec spec, string answer)
     {

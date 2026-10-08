@@ -1,10 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.Configuration;
 
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Serilog.Core;
 using Serilog.Events;

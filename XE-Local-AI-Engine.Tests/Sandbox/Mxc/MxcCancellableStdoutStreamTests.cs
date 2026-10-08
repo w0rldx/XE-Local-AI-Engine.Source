@@ -35,7 +35,10 @@ public sealed class MxcCancellableStdoutStreamTests
     public async Task ReadAsync_WhenCancelled_TheAbandonedReadNeverWritesTheCallersBuffer()
     {
         // The MCP SDK rents its read buffers: once a read was cancelled the buffer is back in the pool and someone else's.
-        using var inner = new IdleStdout { LateBytes = [0xEE, 0xEE, 0xEE, 0xEE] };
+        using var inner = new IdleStdout
+        {
+            LateBytes = [0xEE, 0xEE, 0xEE, 0xEE]
+        };
         using var stream = new MxcCancellableStdoutStream(inner, Substitute.For<IMxcStreamCloser>());
         using var reader = new CancellationTokenSource();
         var buffer = new byte[4];

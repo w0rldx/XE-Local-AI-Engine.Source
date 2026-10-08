@@ -330,8 +330,16 @@ internal sealed class InstalledGgufSnapshotStore : IInstalledGgufSnapshotStore
     private static bool CandidateMatches(InstalledGgufCandidate expected, InstalledGgufCandidate current)
     {
         return string.Equals(expected.ModelName, current.ModelName, StringComparison.Ordinal)
-               && expected.RegistryAliases.Select(static alias => new { alias.ModelName, alias.RegistryRevision })
-                          .SequenceEqual(current.RegistryAliases.Select(static alias => new { alias.ModelName, alias.RegistryRevision }))
+               && expected.RegistryAliases.Select(static alias => new
+                          {
+                              alias.ModelName,
+                              alias.RegistryRevision
+                          })
+                          .SequenceEqual(current.RegistryAliases.Select(static alias => new
+                          {
+                              alias.ModelName,
+                              alias.RegistryRevision
+                          }))
                && expected.MemberRelativePaths.SequenceEqual(current.MemberRelativePaths, StringComparer.Ordinal);
     }
 

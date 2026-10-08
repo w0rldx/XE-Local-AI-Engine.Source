@@ -54,7 +54,10 @@ public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDo
         AllowFileUploads();
         // Without both, Kestrel's ~28.6 MiB body limit or the form reader's 128 MiB multipart limit, not the configured cap, rejects a large upload.
         Options(builder => builder.WithMetadata(new RequestSizeLimitAttribute(_maxUploadBytes + MultipartEnvelopeBytes),
-            new RequestFormLimitsAttribute { MultipartBodyLengthLimit = _maxUploadBytes + MultipartEnvelopeBytes }));
+            new RequestFormLimitsAttribute
+            {
+                MultipartBodyLengthLimit = _maxUploadBytes + MultipartEnvelopeBytes
+            }));
         // Declare the multipart body so FastEndpoints documents it in OpenAPI (and the request is not rejected with a 415
         // for lacking a JSON body). Mirrors the typed-IFormFile + AllowFileUploads pattern of the conversation upload.
         Description(builder => builder.Accepts<UploadKnowledgeDocumentRequest>("multipart/form-data"));

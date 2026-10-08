@@ -76,33 +76,104 @@ public sealed class MxcPolicyGuardTests
         var container = (Containment.ProcessContainer)request.Containment;
         switch (property)
         {
-            case "NotProcessContainer": request.Containment = new Containment.Process(); break;
-            case "LearningMode": container.LearningMode = true; break;
-            case "Capabilities": container.Capabilities.Add("internetClient"); break;
-            case "CaptureDenials": container.CaptureDenials = new CaptureDenialsPolicy(); break;
-            case "CaptureDenialsAllow": container.CaptureDenials = new CaptureDenialsPolicy { Mode = CaptureDenialsMode.Allow }; break;
-            case "ContainerUiMissing": container.Ui = null; break;
-            case "ContainerUiIsolation": container.Ui!.Isolation = ProcessContainerUiIsolation.Desktop; break;
-            case "ContainerUiDesktopSystemControl": container.Ui!.DesktopSystemControl = true; break;
-            case "ContainerUiIme": container.Ui!.Ime = true; break;
-            case "ContainerUiSystemSettings": container.Ui!.SystemSettings = ProcessContainerSystemSettings.All; break;
-            case "EnumeratePaths": container.Filesystem = new ProcessContainerFilesystemPolicy { EnumeratePaths = [@"C:\"] }; break;
-            case "AllowedProxyPeer": container.Network = new ProcessContainerNetworkPolicy { AllowedProxyPeer = "127.0.0.1:8080" }; break;
-            case "ClearPolicyOnExitFalse": request.Filesystem!.ClearPolicyOnExit = false; break;
-            case "NetworkMissing": request.Network = null; break;
-            case "EgressDefaultAllow": request.Network!.Egress!.Default = NetworkAction.Allow; break;
-            case "EgressDefaultUnset": request.Network!.Egress!.Default = null; break;
-            case "EgressAllowRule": request.Network!.Egress!.Allow = [new NetworkRulePolicy { To = [new NetworkPeerPolicy("0.0.0.0/0")] }]; break;
-            case "IngressDefaultAllow": request.Network!.Ingress!.Default = NetworkAction.Allow; break;
-            case "HostLoopbackAllow": request.Network!.Ingress!.HostLoopback = NetworkAction.Allow; break;
-            case "NetworkProxy": request.Network!.RuntimeConfig = new NetworkRuntimeConfig { NetworkProxy = "http://127.0.0.1:3128" }; break;
-            case "UiMissing": request.Ui = null; break;
-            case "UiEnabled": request.Ui!.Disable = false; break;
-            case "Clipboard": request.Ui!.Clipboard = ClipboardPolicy.Read; break;
-            case "InputInjection": request.Ui!.AllowInputInjection = true; break;
-            case "EnvironmentNull": request.Environment = null; break;
-            case "InheritDefaultEnvironment": request.InheritDefaultEnvironment = true; break;
-            default: throw new ArgumentOutOfRangeException(nameof(property), property, "unknown weakening case");
+            case "NotProcessContainer":
+                request.Containment = new Containment.Process();
+                break;
+            case "LearningMode":
+                container.LearningMode = true;
+                break;
+            case "Capabilities":
+                container.Capabilities.Add("internetClient");
+                break;
+            case "CaptureDenials":
+                container.CaptureDenials = new CaptureDenialsPolicy();
+                break;
+            case "CaptureDenialsAllow":
+                container.CaptureDenials = new CaptureDenialsPolicy
+                {
+                    Mode = CaptureDenialsMode.Allow
+                };
+                break;
+            case "ContainerUiMissing":
+                container.Ui = null;
+                break;
+            case "ContainerUiIsolation":
+                container.Ui!.Isolation = ProcessContainerUiIsolation.Desktop;
+                break;
+            case "ContainerUiDesktopSystemControl":
+                container.Ui!.DesktopSystemControl = true;
+                break;
+            case "ContainerUiIme":
+                container.Ui!.Ime = true;
+                break;
+            case "ContainerUiSystemSettings":
+                container.Ui!.SystemSettings = ProcessContainerSystemSettings.All;
+                break;
+            case "EnumeratePaths":
+                container.Filesystem = new ProcessContainerFilesystemPolicy
+                {
+                    EnumeratePaths = [@"C:\"]
+                };
+                break;
+            case "AllowedProxyPeer":
+                container.Network = new ProcessContainerNetworkPolicy
+                {
+                    AllowedProxyPeer = "127.0.0.1:8080"
+                };
+                break;
+            case "ClearPolicyOnExitFalse":
+                request.Filesystem!.ClearPolicyOnExit = false;
+                break;
+            case "NetworkMissing":
+                request.Network = null;
+                break;
+            case "EgressDefaultAllow":
+                request.Network!.Egress!.Default = NetworkAction.Allow;
+                break;
+            case "EgressDefaultUnset":
+                request.Network!.Egress!.Default = null;
+                break;
+            case "EgressAllowRule":
+                request.Network!.Egress!.Allow =
+                [
+                    new NetworkRulePolicy
+                    {
+                        To = [new NetworkPeerPolicy("0.0.0.0/0")]
+                    }
+                ];
+                break;
+            case "IngressDefaultAllow":
+                request.Network!.Ingress!.Default = NetworkAction.Allow;
+                break;
+            case "HostLoopbackAllow":
+                request.Network!.Ingress!.HostLoopback = NetworkAction.Allow;
+                break;
+            case "NetworkProxy":
+                request.Network!.RuntimeConfig = new NetworkRuntimeConfig
+                {
+                    NetworkProxy = "http://127.0.0.1:3128"
+                };
+                break;
+            case "UiMissing":
+                request.Ui = null;
+                break;
+            case "UiEnabled":
+                request.Ui!.Disable = false;
+                break;
+            case "Clipboard":
+                request.Ui!.Clipboard = ClipboardPolicy.Read;
+                break;
+            case "InputInjection":
+                request.Ui!.AllowInputInjection = true;
+                break;
+            case "EnvironmentNull":
+                request.Environment = null;
+                break;
+            case "InheritDefaultEnvironment":
+                request.InheritDefaultEnvironment = true;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(property), property, "unknown weakening case");
         }
     }
 }

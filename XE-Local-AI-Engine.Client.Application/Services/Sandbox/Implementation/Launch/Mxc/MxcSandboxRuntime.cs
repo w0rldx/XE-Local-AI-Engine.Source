@@ -11,9 +11,11 @@ using Microsoft.Mxc.Sdk.V1;
 [SupportedOSPlatform("windows")]
 public sealed class MxcSandboxRuntime : IMxcSandboxRuntime
 {
-    public PlatformSupport GetPlatformSupport() => MxcPlatform.GetPlatformSupport();
+    public PlatformSupport GetPlatformSupport() =>
+        MxcPlatform.GetPlatformSupport();
 
-    public ProbeOutput Probe(ContainerRequest? request) => MxcContainer.Probe(request);
+    public ProbeOutput Probe(ContainerRequest? request) =>
+        MxcContainer.Probe(request);
 
     public async Task<IMxcProcess> SpawnAsync(ContainerRequest request, CancellationToken cancellationToken)
     {

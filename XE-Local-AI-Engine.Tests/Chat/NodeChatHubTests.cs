@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
+using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Models;
@@ -337,7 +338,7 @@ public sealed class NodeChatHubTests
         }
 
         AssertEx.True(recorder.Invoked, "a fully escaped message exactly at the cap must reach the stream service");
-        AssertEx.True(global::XE_Local_AI_Engine.Client.ConfigureServices.HubReceiveCeilingBytes(700) >= 2L * 700 * 1024, "the ceiling covers every content byte escaping to two.");
+        AssertEx.True(ConfigureServices.HubReceiveCeilingBytes(700) >= 2L * 700 * 1024, "the ceiling covers every content byte escaping to two.");
     }
 
     private static HubConnection CreateHubConnection(TestServerWebAppFactory factory)

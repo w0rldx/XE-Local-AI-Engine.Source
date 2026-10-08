@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
@@ -24,8 +23,7 @@ public static class MxcGrantJournal
     public static string DefaultPath => Path.Combine(SandboxPaths.ContainerRoot, "mxc-grants.journal");
 
     /// <summary>The roots the engine creates and owns: the jails under the container root and the compute venv directory.</summary>
-    public static IReadOnlyList<string> EngineOwnedRoots =>
-        [SandboxPaths.ContainerRoot, Path.Combine(ComputeRuntimeDirectory.DefaultCacheRoot(), "venv")];
+    public static IReadOnlyList<string> EngineOwnedRoots => [SandboxPaths.ContainerRoot, Path.Combine(ComputeRuntimeDirectory.DefaultCacheRoot(), "venv")];
 
     /// <summary>Appends the <paramref name="paths" /> under one of <paramref name="ownedRoots" />; every other path is dropped.</summary>
     public static void Record(string journalPath, IEnumerable<string> paths, IReadOnlyList<string> ownedRoots, ILogger logger)

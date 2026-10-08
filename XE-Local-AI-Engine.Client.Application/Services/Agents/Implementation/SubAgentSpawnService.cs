@@ -48,7 +48,9 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     private const string ReasonInvalidArguments = "Cannot spawn: provide a non-empty task and exactly one of subAgentKey or modelId.";
     private const string ReasonQueueBusy = "Cannot spawn right now: the target model is busy. Try again shortly.";
     private const string ReasonDepthExceeded = "Cannot spawn: a sub-agent may not spawn further sub-agents.";
-    private const string ReasonParentOutsideTrustBoundary = "Cannot spawn: a model outside this node's trust boundary may not delegate to a sub-agent unless the operator allows it in Node Settings → Privacy & updates.";
+
+    private const string ReasonParentOutsideTrustBoundary =
+        "Cannot spawn: a model outside this node's trust boundary may not delegate to a sub-agent unless the operator allows it in Node Settings → Privacy & updates.";
 
     private readonly IAgentDefinitionResolver _agentDefinitionResolver;
     private readonly ICapacityService _capacityService;

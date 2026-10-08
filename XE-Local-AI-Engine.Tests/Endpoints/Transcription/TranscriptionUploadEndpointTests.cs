@@ -288,11 +288,11 @@ public sealed class TranscriptionUploadEndpointTests
         AssertEx.Equal(expected: 0, transcriber.CallCount, "A refused upload must never reach the runtime.");
         AssertEmptyUploadDirectory(factory);
         using (var read = Authorized(factory, HttpMethod.Get, $"{ApiPrefix}/transcription/sessions/{sessionId}"))
-        using (var session = await client.SendAsync(read))
-        {
-            var detail = await ReadJsonAsync(session);
-            AssertEx.Equal("Created", detail.GetProperty("session").GetProperty("status").GetString());
-        }
+            using (var session = await client.SendAsync(read))
+            {
+                var detail = await ReadJsonAsync(session);
+                AssertEx.Equal("Created", detail.GetProperty("session").GetProperty("status").GetString());
+            }
 
         // Once the build lets go, the same session transcribes, and the request's own lease is released on the way out.
         using var accepted = await UploadAsync(factory, client, sessionId, "clip.wav", ReadFixtureWav());

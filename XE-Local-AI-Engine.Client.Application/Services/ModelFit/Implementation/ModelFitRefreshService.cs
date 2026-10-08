@@ -282,8 +282,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     ///     A catalog-lane failure never fails the whole refresh — the explore lane still succeeds on its own (see
     ///     <see cref="BuildCatalogRecommendationsAsync" />).
     /// </remarks>
-    private async Task<RecommendationSet> BuildRecommendationsAsync(
-        ModelFitRefreshRequest request,
+    private async Task<RecommendationSet> BuildRecommendationsAsync(ModelFitRefreshRequest request,
         string quant,
         int ctxTarget,
         HardwareProfile profile,
@@ -320,8 +319,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     ///     empty must never fail the run, since the explore lane alone is still a useful recommendation set. A failed
     ///     lane reports no skipped entries.
     /// </remarks>
-    private async Task<RecommendationSet> BuildCatalogRecommendationsAsync(
-        ModelFitRefreshRequest request,
+    private async Task<RecommendationSet> BuildCatalogRecommendationsAsync(ModelFitRefreshRequest request,
         string quant,
         int ctxTarget,
         HardwareProfile profile,

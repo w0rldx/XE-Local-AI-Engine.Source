@@ -296,7 +296,11 @@ public sealed class AgentToolPipelinePolicyTests
         AssertEx.Equal(expected: Ceiling, inner.ReceivedMessages[1].SelectMany(static message => message.Contents).OfType<FunctionCallContent>().Count(),
             "the follow-up round must carry only the kept calls");
 
-        static FunctionCallContent Call(string callId, int n) => new(callId, ToolName, new Dictionary<string, object?> { ["n"] = n });
+        static FunctionCallContent Call(string callId, int n) =>
+            new(callId, ToolName, new Dictionary<string, object?>
+            {
+                ["n"] = n
+            });
     }
 
     [Test]

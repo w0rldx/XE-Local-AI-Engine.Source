@@ -387,7 +387,11 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
     {
         var outcomes = validation.Commands
                                  .Where(static command => command.TestOutcome is not null)
-                                 .Select(static command => new { command.CommandId, Outcome = command.TestOutcome! })
+                                 .Select(static command => new
+                                 {
+                                     command.CommandId,
+                                     Outcome = command.TestOutcome!
+                                 })
                                  .ToArray();
         if (outcomes.Length == 0)
         {

@@ -19,7 +19,12 @@ public sealed class MxcCancellableStdinStreamTests
         var kills = 0;
         using var stream = new MxcCancellableStdinStream(inner, () => Interlocked.Increment(ref kills));
         using var caller = new CancellationTokenSource();
-        var bytes = new byte[] { 1, 2, 3 };
+        var bytes = new byte[]
+        {
+            1,
+            2,
+            3
+        };
 
         var write = stream.WriteAsync(bytes, caller.Token).AsTask();
         await inner.Writing;
@@ -36,11 +41,17 @@ public sealed class MxcCancellableStdinStreamTests
     public async Task WriteAsync_WhenANativeWriteFaultRacesTheCancel_TheCallerSeesTheCancellation()
     {
         // MXC throws MxcException, not IOException, for a native write error on a pipe that closed as the caller cancelled.
-        using var inner = new StalledStdin { Failure = new MxcException(ErrorCode.BackendError, "the pipe is closed") };
+        using var inner = new StalledStdin
+        {
+            Failure = new MxcException(ErrorCode.BackendError, "the pipe is closed")
+        };
         var kills = 0;
         using var stream = new MxcCancellableStdinStream(inner, () => Interlocked.Increment(ref kills));
         using var caller = new CancellationTokenSource();
-        var write = stream.WriteAsync(new byte[] { 1 }, caller.Token).AsTask();
+        var write = stream.WriteAsync(new byte[]
+        {
+            1
+        }, caller.Token).AsTask();
         await inner.Writing;
         // Registered after the wrapper's wait, so it runs first: the fault reaches the wrapper before the cancellation does.
         using var fault = caller.Token.Register(() =>

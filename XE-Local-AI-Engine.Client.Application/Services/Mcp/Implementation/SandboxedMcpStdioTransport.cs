@@ -510,6 +510,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     internal static string? ResolveExecutablePath(string command, string searchPath, IReadOnlyList<string>? extensions = null)
     {
         string[] suffixes = extensions is { Count: > 0 } && !Path.HasExtension(command) ? ["", .. extensions] : [""];
+
         string? Probe(string candidate) =>
             suffixes.Select(suffix => candidate + suffix).FirstOrDefault(File.Exists) is { } found ? Path.GetFullPath(found) : null;
 

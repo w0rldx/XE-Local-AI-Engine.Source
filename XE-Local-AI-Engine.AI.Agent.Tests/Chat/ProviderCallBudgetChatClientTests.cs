@@ -983,7 +983,11 @@ public sealed class ProviderCallBudgetChatClientTests
         AssertEx.Empty(yielded[1].Contents.OfType<FunctionCallContent>(), "c repeats a's name and arguments, d is over the ceiling of 2");
         AssertEx.Equal(expected: 2, trimmedSource.Contents.OfType<FunctionCallContent>().Count(), "the provider's update must not be mutated");
 
-        static FunctionCallContent Call(string callId, int n) => new(callId, "tool", new Dictionary<string, object?> { ["n"] = n });
+        static FunctionCallContent Call(string callId, int n) =>
+            new(callId, "tool", new Dictionary<string, object?>
+            {
+                ["n"] = n
+            });
     }
 
     private sealed class FixedUpdatesChatClient : IChatClient

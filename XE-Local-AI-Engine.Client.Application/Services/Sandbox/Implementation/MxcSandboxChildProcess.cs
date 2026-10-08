@@ -21,9 +21,9 @@ internal sealed class MxcSandboxChildProcess : ISandboxChildProcess
     public int Id => _child.Id;
 
     /// <summary>The child's stdin as a <see cref="MxcCancellableStdinStream" />: a cancelled async write kills the child instead of hanging.</summary>
-    public Stream StandardInput => _standardInput ??= new MxcCancellableStdinStream(
-        _child.StandardInput ?? throw new InvalidOperationException("The MXC child's stdin is not piped."),
-        Kill);
+    public Stream StandardInput =>
+        _standardInput ??= new MxcCancellableStdinStream(_child.StandardInput ?? throw new InvalidOperationException("The MXC child's stdin is not piped."),
+            Kill);
 
     public Stream StandardOutput => _child.StandardOutput ?? throw new InvalidOperationException("The MXC child's stdout is pumped or not piped.");
 
@@ -35,9 +35,11 @@ internal sealed class MxcSandboxChildProcess : ISandboxChildProcess
         await stream.WriteAsync(new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(text), cancellationToken);
     }
 
-    public Task<int> WaitForExitAsync(CancellationToken cancellationToken) => _child.WaitForExitAsync(cancellationToken);
+    public Task<int> WaitForExitAsync(CancellationToken cancellationToken) =>
+        _child.WaitForExitAsync(cancellationToken);
 
-    public Task<bool> TryWaitForExitAsync(CancellationToken cancellationToken) => _child.TryWaitForExitAsync(cancellationToken);
+    public Task<bool> TryWaitForExitAsync(CancellationToken cancellationToken) =>
+        _child.TryWaitForExitAsync(cancellationToken);
 
     public void Kill()
     {
@@ -51,5 +53,6 @@ internal sealed class MxcSandboxChildProcess : ISandboxChildProcess
         }
     }
 
-    public void Dispose() => _child.Dispose();
+    public void Dispose() =>
+        _child.Dispose();
 }

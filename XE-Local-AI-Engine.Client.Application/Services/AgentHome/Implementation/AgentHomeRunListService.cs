@@ -411,11 +411,10 @@ internal sealed class AgentHomeRunListService : IAgentHomeRunListService
 
         // Each window drops the edge line it cannot have in full: the head ends mid-line when it hit its cap, and a
         // tail taken at all starts mid-line.
-        return new BoundedLines(
-            [
-                .. SplitLines(head, dropFirst: false, dropLast: tail.Length > 0),
-                .. SplitLines(tail, dropFirst: true, dropLast: false)
-            ], tail.Length > 0);
+        return new BoundedLines([
+            .. SplitLines(head, dropFirst: false, dropLast: tail.Length > 0),
+            .. SplitLines(tail, dropFirst: true, dropLast: false)
+        ], tail.Length > 0);
     }
 
     private readonly record struct BoundedLines(IReadOnlyList<string> Lines, bool Truncated);

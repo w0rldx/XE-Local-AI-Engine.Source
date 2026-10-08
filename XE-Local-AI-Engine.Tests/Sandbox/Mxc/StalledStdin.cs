@@ -29,7 +29,8 @@ internal sealed class StalledStdin : Stream
 
     public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
 
-    public void Release() => _released.Set();
+    public void Release() =>
+        _released.Set();
 
     public override void Write(ReadOnlySpan<byte> buffer)
     {
@@ -40,7 +41,8 @@ internal sealed class StalledStdin : Stream
         throw Failure;
     }
 
-    public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+    public override void Write(byte[] buffer, int offset, int count) =>
+        Write(buffer.AsSpan(offset, count));
 
     public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
@@ -52,11 +54,14 @@ internal sealed class StalledStdin : Stream
     {
     }
 
-    public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    public override int Read(byte[] buffer, int offset, int count) =>
+        throw new NotSupportedException();
 
-    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) =>
+        throw new NotSupportedException();
 
-    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void SetLength(long value) =>
+        throw new NotSupportedException();
 
     protected override void Dispose(bool disposing)
     {

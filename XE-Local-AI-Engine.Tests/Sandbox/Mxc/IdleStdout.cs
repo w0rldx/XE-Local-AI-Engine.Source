@@ -29,9 +29,11 @@ internal sealed class IdleStdout : Stream
 
     public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
 
-    public void Release() => _closed.Set();
+    public void Release() =>
+        _closed.Set();
 
-    public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+    public override int Read(byte[] buffer, int offset, int count) =>
+        Read(buffer.AsSpan(offset, count));
 
     public override int Read(Span<byte> buffer)
     {
@@ -48,11 +50,14 @@ internal sealed class IdleStdout : Stream
     {
     }
 
-    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) =>
+        throw new NotSupportedException();
 
-    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void SetLength(long value) =>
+        throw new NotSupportedException();
 
-    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) =>
+        throw new NotSupportedException();
 
     protected override void Dispose(bool disposing)
     {

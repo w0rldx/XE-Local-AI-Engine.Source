@@ -152,11 +152,11 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         using var stream = new MemoryStream(bytes, writable: false);
         // On the pool and awaited with the token, so a parser that never checks it still frees the slot when the budget fires.
         var extraction = await Task.Run(() => _extractor.ExtractStructuredAsync(stream,
-                    revision.SourcePath ?? documentId.ToString("D"),
-                    revision.Extension,
-                    cancellationToken),
-                cancellationToken)
-            .WaitAsync(cancellationToken);
+                                           revision.SourcePath ?? documentId.ToString("D"),
+                                           revision.Extension,
+                                           cancellationToken),
+                                       cancellationToken)
+                                   .WaitAsync(cancellationToken);
         switch (extraction.Status)
         {
             case DocumentExtractionStatus.Unsupported:

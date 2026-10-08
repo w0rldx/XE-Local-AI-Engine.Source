@@ -465,14 +465,44 @@ public sealed class LocalModelDeletionCoordinator : ILocalModelDeletionCoordinat
         {
             return string.Equals(expected.RequestedModelName, actual.RequestedModelName, StringComparison.Ordinal)
                    && string.Equals(expected.PhysicalMemberSetHash, actual.PhysicalMemberSetHash, StringComparison.Ordinal)
-                   && expected.RemovalAliases.Select(static alias => new { alias.ModelName, alias.RegistryRevision })
-                              .SequenceEqual(actual.RemovalAliases.Select(static alias => new { alias.ModelName, alias.RegistryRevision }))
-                   && expected.RetainedMembers.Select(static member => new { member.RelativePath, member.Sha256, member.SizeBytes })
-                              .SequenceEqual(actual.RetainedMembers.Select(static member => new { member.RelativePath, member.Sha256, member.SizeBytes }))
+                   && expected.RemovalAliases.Select(static alias => new
+                              {
+                                  alias.ModelName,
+                                  alias.RegistryRevision
+                              })
+                              .SequenceEqual(actual.RemovalAliases.Select(static alias => new
+                              {
+                                  alias.ModelName,
+                                  alias.RegistryRevision
+                              }))
+                   && expected.RetainedMembers.Select(static member => new
+                              {
+                                  member.RelativePath,
+                                  member.Sha256,
+                                  member.SizeBytes
+                              })
+                              .SequenceEqual(actual.RetainedMembers.Select(static member => new
+                              {
+                                  member.RelativePath,
+                                  member.Sha256,
+                                  member.SizeBytes
+                              }))
                    && expected.StagedMembers.Select(static member =>
-                                  new { member.OriginalRelativePath, member.QuarantineRelativePath, member.Member.Sha256, member.Member.SizeBytes })
+                                  new
+                                  {
+                                      member.OriginalRelativePath,
+                                      member.QuarantineRelativePath,
+                                      member.Member.Sha256,
+                                      member.Member.SizeBytes
+                                  })
                               .SequenceEqual(actual.StagedMembers.Select(static member =>
-                                  new { member.OriginalRelativePath, member.QuarantineRelativePath, member.Member.Sha256, member.Member.SizeBytes }));
+                                  new
+                                  {
+                                      member.OriginalRelativePath,
+                                      member.QuarantineRelativePath,
+                                      member.Member.Sha256,
+                                      member.Member.SizeBytes
+                                  }));
         }
     }
 }

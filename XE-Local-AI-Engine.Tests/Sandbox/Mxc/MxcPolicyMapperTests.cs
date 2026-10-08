@@ -8,7 +8,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class MxcPolicyMapperTests
 {
-    private static MxcLaunchRequest Request() => Request(TimeSpan.FromSeconds(30), environment: null);
+    private static MxcLaunchRequest Request() =>
+        Request(TimeSpan.FromSeconds(30), environment: null);
 
     private static MxcLaunchRequest Request(TimeSpan? timeout, IReadOnlyDictionary<string, string>? environment) =>
         new()
@@ -16,7 +17,11 @@ public sealed class MxcPolicyMapperTests
             Executable = @"C:\py\python.exe",
             Arguments = ["-c", "print('hi there')"],
             WorkingDirectory = @"C:\data\jails\j1\work",
-            Environment = environment ?? new Dictionary<string, string>(StringComparer.Ordinal) { ["SystemRoot"] = @"C:\Windows", ["PATH"] = @"C:\py" },
+            Environment = environment ?? new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["SystemRoot"] = @"C:\Windows",
+                ["PATH"] = @"C:\py"
+            },
             JailRoot = @"C:\data\jails\j1",
             ReadOnlyTrees = [@"C:\data\runtime\python", @"C:\data\mcp"],
             DeniedRoots = [@"C:\Users\me", @"C:\data", @"C:\engine"],
@@ -116,7 +121,10 @@ public sealed class MxcPolicyMapperTests
     [Arguments("A=B")]
     public async Task Build_WhenAnEnvironmentNameIsInvalid_Throws(string name)
     {
-        var request = Request(TimeSpan.FromSeconds(1), new Dictionary<string, string>(StringComparer.Ordinal) { [name] = "x" });
+        var request = Request(TimeSpan.FromSeconds(1), new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [name] = "x"
+        });
 
         AssertEx.Throws<ArgumentException>(() => MxcPolicyMapper.Build(request));
         await Task.CompletedTask;

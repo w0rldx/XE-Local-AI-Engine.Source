@@ -54,7 +54,11 @@ public sealed class LexicalToolRelevanceSelector : IToolRelevanceSelector
         var rankedSlots = Math.Max(threshold - coreCount, _minimumRankedSlots);
 
         var selectedNonCore = candidates
-                              .Select(static (candidate, index) => new { Candidate = candidate, Index = index })
+                              .Select(static (candidate, index) => new
+                              {
+                                  Candidate = candidate,
+                                  Index = index
+                              })
                               .Where(static entry => !entry.Candidate.IsCore)
                               .Select(entry => new
                               {

@@ -188,7 +188,11 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
             throw new TrainingValidationException($"A dataset definition may target at most {MaxTargetSampleCount} samples.");
         }
 
-        if (body.SampleKinds.Select(kind => new { kind.Kind, kind.Label }).Distinct().Count() != body.SampleKinds.Count)
+        if (body.SampleKinds.Select(kind => new
+            {
+                kind.Kind,
+                kind.Label
+            }).Distinct().Count() != body.SampleKinds.Count)
         {
             throw new TrainingValidationException("Sample kinds must be unique per label.");
         }

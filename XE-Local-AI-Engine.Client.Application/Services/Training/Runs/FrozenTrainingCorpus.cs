@@ -31,7 +31,11 @@ internal static class FrozenTrainingCorpus
     {
         ArgumentNullException.ThrowIfNull(freeze);
         var legacyIdsBySequence = freeze.HoldoutSampleIds.Count == freeze.HoldoutSequences.Count
-            ? freeze.HoldoutSequences.Select((sequence, index) => new { sequence, id = freeze.HoldoutSampleIds[index] }).ToDictionary(item => item.sequence, item => item.id)
+            ? freeze.HoldoutSequences.Select((sequence, index) => new
+            {
+                sequence,
+                id = freeze.HoldoutSampleIds[index]
+            }).ToDictionary(item => item.sequence, item => item.id)
             : new Dictionary<int, Guid>();
         var records = new List<TrainingSampleRecord>();
         foreach (var line in Encoding.UTF8.GetString(plaintext).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))

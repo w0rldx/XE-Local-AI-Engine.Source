@@ -471,7 +471,10 @@ public sealed class AgentDefinitionStoreTests : IDisposable
             await context.Database.EnsureCreatedAsync();
             var store = new AgentDefinitionStore(context, TimeProvider.System);
             goodId = (await store.AddAsync(CreateInput())).Id;
-            badId = (await store.AddAsync(CreateInput() with { Name = "Rotted" })).Id;
+            badId = (await store.AddAsync(CreateInput() with
+            {
+                Name = "Rotted"
+            })).Id;
         }
 
         await using (var connection = new SqliteConnection($"Data Source={databasePath}"))

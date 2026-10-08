@@ -53,7 +53,11 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
     public async Task UnsupportedPlatform_IsUnavailable_WithMxcsReason()
     {
         var runtime = Substitute.For<IMxcSandboxRuntime>();
-        runtime.GetPlatformSupport().Returns(new PlatformSupport { IsSupported = false, Reason = "requires 26100" });
+        runtime.GetPlatformSupport().Returns(new PlatformSupport
+        {
+            IsSupported = false,
+            Reason = "requires 26100"
+        });
 
         var containment = Measure(runtime);
 
@@ -107,7 +111,11 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
     private static IMxcSandboxRuntime Runtime(ProbeOutput probe)
     {
         var runtime = Substitute.For<IMxcSandboxRuntime>();
-        runtime.GetPlatformSupport().Returns(new PlatformSupport { IsSupported = true, AvailableMethods = [ContainmentBackend.ProcessContainer] });
+        runtime.GetPlatformSupport().Returns(new PlatformSupport
+        {
+            IsSupported = true,
+            AvailableMethods = [ContainmentBackend.ProcessContainer]
+        });
         runtime.Probe(Arg.Any<ContainerRequest?>()).Returns(probe);
         return runtime;
     }
@@ -117,6 +125,9 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
         {
             Tier = tier,
             Warnings = warnings ?? [],
-            Probes = new ProbeFacts { UiCapabilities = new UiCapabilitySupport() }
+            Probes = new ProbeFacts
+            {
+                UiCapabilities = new UiCapabilitySupport()
+            }
         };
 }

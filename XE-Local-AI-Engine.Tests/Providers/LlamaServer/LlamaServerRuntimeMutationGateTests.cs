@@ -11,8 +11,7 @@ public sealed class LlamaServerRuntimeMutationGateTests
     {
         using var gate = new LlamaServerRuntimeMutationGate(typeof(LlamaServerRuntimeMutationGateTests), CancellationToken.None);
 
-        await AssertEx.ThrowsAsync<InvalidOperationException>(
-            () => gate.TryAcquireLeaseAsync(() => throw new InvalidOperationException("probe failed"), CancellationToken.None));
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => gate.TryAcquireLeaseAsync(() => throw new InvalidOperationException("probe failed"), CancellationToken.None));
 
         AssertEx.False(gate.IsMutationActive, "A failed acquisition must not leave a mutation counted as active.");
         await AssertEx.CompletesAsync(gate.EnterSharedAsync(CancellationToken.None),

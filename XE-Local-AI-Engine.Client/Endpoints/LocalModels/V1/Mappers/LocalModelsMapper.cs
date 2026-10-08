@@ -302,7 +302,11 @@ internal static class LocalModelsMapper
             IsAvailable = true,
             OllamaConfigured = ollamaConfigured,
             Items = runningModels
-                    .Select(static snapshot => new { Name = ReadRunningModelName(snapshot), Snapshot = snapshot })
+                    .Select(static snapshot => new
+                    {
+                        Name = ReadRunningModelName(snapshot),
+                        Snapshot = snapshot
+                    })
                     .Where(static entry => !string.IsNullOrWhiteSpace(entry.Name))
 
                     // "Running" means resident in this node's RAM/VRAM, and an external model is served by someone else's process, so it can never legitimately appear here:

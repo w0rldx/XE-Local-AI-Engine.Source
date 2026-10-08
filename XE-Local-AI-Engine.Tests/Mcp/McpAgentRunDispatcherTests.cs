@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
-using SharedClock = XE_Local_AI_Engine.Client.Testing.Fakes.ManualTimeProvider;
+using SharedClock = ManualTimeProvider;
 
 [Category(TestCategories.Unit)]
 public sealed class McpAgentRunDispatcherTests

@@ -253,14 +253,16 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
 
         private sealed class InertTimer : ITimer
         {
-            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+            public bool Change(TimeSpan dueTime, TimeSpan period) =>
+                true;
 
             public void Dispose()
             {
                 // Nothing scheduled to stop.
             }
 
-            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+            public ValueTask DisposeAsync() =>
+                ValueTask.CompletedTask;
         }
     }
 

@@ -289,7 +289,10 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
 
     public async Task<AppUpdateApplyResult> ApplyAsync(bool force, CancellationToken ct)
     {
-        var nothingApplied = new AppUpdateApplyResult { Applying = false };
+        var nothingApplied = new AppUpdateApplyResult
+        {
+            Applying = false
+        };
         if (!_hostContext.IsLocalMode || !_channelOptions.IsConfigured)
         {
             return nothingApplied;

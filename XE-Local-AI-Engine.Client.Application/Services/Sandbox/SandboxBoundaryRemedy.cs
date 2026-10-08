@@ -7,7 +7,8 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 public static class SandboxBoundaryRemedy
 {
     /// <summary>The remedy for the current host, as one clause that a refusal message continues with ", or …".</summary>
-    public static string ForThisHost() => ForHost(OperatingSystem.IsWindows());
+    public static string ForThisHost() =>
+        ForHost(OperatingSystem.IsWindows());
 
     // The platform is a parameter so both wordings are asserted on every host.
     internal static string ForHost(bool windowsHost) =>

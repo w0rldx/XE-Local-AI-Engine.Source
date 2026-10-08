@@ -37,7 +37,12 @@ public static class MxcProbe
                 };
             }
 
-            return new MxcProbeResult { Supported = true, Tier = tier.ToString(), Warnings = warnings };
+            return new MxcProbeResult
+            {
+                Supported = true,
+                Tier = tier.ToString(),
+                Warnings = warnings
+            };
         }
         catch (MxcException exception)
         {
@@ -54,5 +59,11 @@ public static class MxcProbe
         }
     }
 
-    private static MxcProbeResult Unavailable(string reason) => new() { Supported = false, Warnings = [], Reason = reason };
+    private static MxcProbeResult Unavailable(string reason) =>
+        new()
+        {
+            Supported = false,
+            Warnings = [],
+            Reason = reason
+        };
 }

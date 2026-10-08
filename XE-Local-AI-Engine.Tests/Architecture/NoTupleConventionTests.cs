@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Architecture;
 
+using System.Globalization;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -96,11 +97,10 @@ public sealed class NoTupleConventionTests
                        .OrderBy(file => file.Key, StringComparer.Ordinal)
                        .ToList();
 
-        var message = new StringBuilder(
-            "Tuples are not used in this project: give the shape a named type (docs/wiki/16-code-conventions.md). "
-            + "Deconstruction, tuple switches and positional patterns stay allowed. Convert the node(s) below. "
-            + "Production code holds none; the allowlist only grandfathers test projects. "
-            + "The file|count lines for Architecture/TupleAllowlist.txt are:");
+        var message = new StringBuilder("Tuples are not used in this project: give the shape a named type (docs/wiki/16-code-conventions.md). "
+                                        + "Deconstruction, tuple switches and positional patterns stay allowed. Convert the node(s) below. "
+                                        + "Production code holds none; the allowlist only grandfathers test projects. "
+                                        + "The file|count lines for Architecture/TupleAllowlist.txt are:");
 
         foreach (var (file, hits) in over)
         {
@@ -191,7 +191,7 @@ public sealed class NoTupleConventionTests
             }
 
             var separator = line.LastIndexOf('|');
-            entries[line[..separator]] = int.Parse(line[(separator + 1)..], System.Globalization.CultureInfo.InvariantCulture);
+            entries[line[..separator]] = int.Parse(line[(separator + 1)..], CultureInfo.InvariantCulture);
         }
 
         return entries;
@@ -215,7 +215,11 @@ public sealed class NoTupleConventionTests
             }
         }
 
-        return new Scan { Files = files, Hits = hits };
+        return new Scan
+        {
+            Files = files,
+            Hits = hits
+        };
     }
 
     private static List<Hit> Banned(string source) =>
@@ -223,29 +227,30 @@ public sealed class NoTupleConventionTests
                         .GetRoot()
                         .DescendantNodes()
                         .Where(IsBanned)
-                        .Select(node => new Hit(
-                            node.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
+                        .Select(node => new Hit(node.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
                             node.Kind().ToString(),
                             ExcerptOf(node)))
                         .ToList();
 
-    private static bool IsBanned(SyntaxNode node) => node switch
-    {
-        TupleTypeSyntax => true,
-        GenericNameSyntax generic => IsTupleName(generic.Identifier),
-        IdentifierNameSyntax name when IsTupleName(name.Identifier) => name.Parent switch
+    private static bool IsBanned(SyntaxNode node) =>
+        node switch
         {
-            MemberAccessExpressionSyntax access when access.Expression == name => true,
-            MemberAccessExpressionSyntax access => access.Parent is MemberAccessExpressionSyntax outer
-                                                   && outer.Expression == access,
-            QualifiedNameSyntax qualified => qualified.Right == name,
+            TupleTypeSyntax => true,
+            GenericNameSyntax generic => IsTupleName(generic.Identifier),
+            IdentifierNameSyntax name when IsTupleName(name.Identifier) => name.Parent switch
+            {
+                MemberAccessExpressionSyntax access when access.Expression == name => true,
+                MemberAccessExpressionSyntax access => access.Parent is MemberAccessExpressionSyntax outer
+                                                       && outer.Expression == access,
+                QualifiedNameSyntax qualified => qualified.Right == name,
+                _ => false
+            },
+            TupleExpressionSyntax tuple => !IsAllowedTupleExpression(tuple),
             _ => false
-        },
-        TupleExpressionSyntax tuple => !IsAllowedTupleExpression(tuple),
-        _ => false
-    };
+        };
 
-    private static bool IsTupleName(SyntaxToken identifier) => identifier.ValueText is "Tuple" or "ValueTuple";
+    private static bool IsTupleName(SyntaxToken identifier) =>
+        identifier.ValueText is "Tuple" or "ValueTuple";
 
     /// <summary>A tuple nested in another is judged by the outermost one, so a whole deconstruction target stays allowed.</summary>
     private static bool IsAllowedTupleExpression(TupleExpressionSyntax tuple)

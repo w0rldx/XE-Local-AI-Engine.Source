@@ -190,7 +190,12 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     private SandboxContainment MeasureWindows()
     {
         var result = _mxcRuntime is null
-            ? new MxcProbeResult { Supported = false, Warnings = [], Reason = "the MXC runtime is not available in this process" }
+            ? new MxcProbeResult
+            {
+                Supported = false,
+                Warnings = [],
+                Reason = "the MXC runtime is not available in this process"
+            }
             : MxcProbe.Measure(_mxcRuntime);
 
         SandboxAppContainerBoundary? boundary = null;
@@ -222,8 +227,7 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
                 : "the Windows filesystem boundary is the MXC AppContainer boundary (Preview); it serves a role only while execution previews are enabled"
         };
 
-        _logger.LogInformation(
-            "Sandbox containment probe (Windows): AppContainer boundary {Available}{Detail}; resource limits unavailable; separate network isolation unavailable.",
+        _logger.LogInformation("Sandbox containment probe (Windows): AppContainer boundary {Available}{Detail}; resource limits unavailable; separate network isolation unavailable.",
             boundary is not null,
             boundary is null ? $" ({reason})" : $" (mechanism {boundary.Mechanism}, tier {boundary.Tier}, maturity {boundary.Maturity}, {boundary.Warnings.Count} warning(s))");
 
@@ -247,7 +251,8 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
         var action = commands.Count == 0
             ? "run the wxc-host-prep step MXC names below"
             : "run " + string.Join(" and ", commands);
-        return $"MXC needs one-time administrator host preparation before an AppContainer child can start: as an administrator, {action} (wxc-host-prep.exe ships in the MXC 1.0.0 release assets, not in the NuGet package). MXC reported: {string.Join(" | ", warnings)}";
+        return
+            $"MXC needs one-time administrator host preparation before an AppContainer child can start: as an administrator, {action} (wxc-host-prep.exe ships in the MXC 1.0.0 release assets, not in the NuGet package). MXC reported: {string.Join(" | ", warnings)}";
     }
 
     /// <summary>Runs the filesystem-isolation measurement inside its OWN guard.</summary>

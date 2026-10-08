@@ -189,7 +189,13 @@ public sealed class SourceBuildRecoveryTests
         // A publish renames the OLD runtime aside, and a rename keeps its old mtime: mid-publish on another node it is the
         // only rollback copy, so no age bound may delete it.
         var aside = Path.Combine(tagDir, "cuda." + Guid.NewGuid().ToString("N") + ".aside");
-        foreach (var path in new[] { stale, fresh, published, aside })
+        foreach (var path in new[]
+                 {
+                     stale,
+                     fresh,
+                     published,
+                     aside
+                 })
         {
             Directory.CreateDirectory(path);
         }
@@ -556,6 +562,7 @@ public sealed class SourceBuildRecoveryTests
         {
             device = "no devices";
         }
+
         var path = Path.Combine(bin, "llama-server");
         var workingDirectoryCheck = requireBinaryWorkingDirectory
             ? "[ -f \"$PWD/runtime.sentinel\" ] || exit 42; "

@@ -46,7 +46,11 @@ public sealed class MxcProbeTests
     public async Task Measure_WhenPlatformIsUnsupported_ReportsMxcsReasonWithoutProbing()
     {
         var runtime = Substitute.For<IMxcSandboxRuntime>();
-        runtime.GetPlatformSupport().Returns(new PlatformSupport { IsSupported = false, Reason = "requires Windows 11 24H2" });
+        runtime.GetPlatformSupport().Returns(new PlatformSupport
+        {
+            IsSupported = false,
+            Reason = "requires Windows 11 24H2"
+        });
 
         var result = MxcProbe.Measure(runtime);
 
@@ -60,7 +64,11 @@ public sealed class MxcProbeTests
     public async Task Measure_WhenProcessContainerIsNotAnAvailableMethod_IsUnsupported()
     {
         var runtime = Substitute.For<IMxcSandboxRuntime>();
-        runtime.GetPlatformSupport().Returns(new PlatformSupport { IsSupported = true, AvailableMethods = [ContainmentBackend.Bubblewrap] });
+        runtime.GetPlatformSupport().Returns(new PlatformSupport
+        {
+            IsSupported = true,
+            AvailableMethods = [ContainmentBackend.Bubblewrap]
+        });
 
         var result = MxcProbe.Measure(runtime);
 
@@ -109,7 +117,11 @@ public sealed class MxcProbeTests
     private static IMxcSandboxRuntime Runtime(ProbeOutput probe)
     {
         var runtime = Substitute.For<IMxcSandboxRuntime>();
-        runtime.GetPlatformSupport().Returns(new PlatformSupport { IsSupported = true, AvailableMethods = [ContainmentBackend.ProcessContainer] });
+        runtime.GetPlatformSupport().Returns(new PlatformSupport
+        {
+            IsSupported = true,
+            AvailableMethods = [ContainmentBackend.ProcessContainer]
+        });
         runtime.Probe(Arg.Any<ContainerRequest?>()).Returns(probe);
         return runtime;
     }
@@ -120,6 +132,9 @@ public sealed class MxcProbeTests
             Tier = tier,
             Error = error,
             Warnings = warnings ?? [],
-            Probes = new ProbeFacts { UiCapabilities = new UiCapabilitySupport() },
+            Probes = new ProbeFacts
+            {
+                UiCapabilities = new UiCapabilitySupport()
+            },
         };
 }

@@ -134,8 +134,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
         if (effectiveModelIsCloud && !await nodeRuntimeSettings.GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
         {
-            _logger.LogInformation(
-                "Scheduled agent run for definition {AgentDefinitionId} was rejected: its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
+            _logger.LogInformation("Scheduled agent run for definition {AgentDefinitionId} was rejected: its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
                 definition.Id);
             throw new ScheduledJobExecutionException(
                 "Scheduled agent runs are restricted to node-local models. This agent is configured to use a cloud model, so it will not run unattended. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates to allow it.");

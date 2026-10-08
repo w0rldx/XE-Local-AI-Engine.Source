@@ -970,7 +970,11 @@ internal sealed class GraphWorkflowGraph
 
         // Parallel edges over one pair are legal and are how an author says "either of these"; two UNCONDITIONAL ones
         // are not, because the second could only ever repeat the first.
-        foreach (var pair in Edges.GroupBy(static edge => new { edge.From, edge.To }))
+        foreach (var pair in Edges.GroupBy(static edge => new
+                 {
+                     edge.From,
+                     edge.To
+                 }))
         {
             var unconditional = pair.Where(static edge => edge.Condition is null).ToList();
             if (unconditional.Count > 1)

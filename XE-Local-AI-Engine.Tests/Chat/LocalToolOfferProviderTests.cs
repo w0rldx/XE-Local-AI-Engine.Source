@@ -300,10 +300,10 @@ public sealed class LocalToolOfferProviderTests
         // model and receive what it read. That is a bypass of the direct gates, so it needs its own opt-in.
         var provider = CreateProvider("qwen3:8b");
         var allSwitchesOn = CreateSwitchProvider(static settings => settings.WithAllowCloudModelAccess(true)
-                                                                           .WithAllowCloudModelUnattendedRuns(true)
-                                                                           .WithAllowCloudModelWebTools(true)
-                                                                           .WithAllowCloudModelMcpTools(true)
-                                                                           .WithAllowCloudModelSubAgents(true));
+                                                                            .WithAllowCloudModelUnattendedRuns(true)
+                                                                            .WithAllowCloudModelWebTools(true)
+                                                                            .WithAllowCloudModelMcpTools(true)
+                                                                            .WithAllowCloudModelSubAgents(true));
 
         var pool = provider.GetOfferedToolsForProfile("qwen3:8b", isCloudModel: true);
 
@@ -863,10 +863,10 @@ public sealed class LocalToolOfferProviderTests
     {
         // The execution invariants sit behind no switch: a remote model never directs execution on the operator's machine.
         var provider = CreateSwitchProvider(static settings => settings.WithAllowCloudModelAccess(true)
-                                                                      .WithAllowCloudModelUnattendedRuns(true)
-                                                                      .WithAllowCloudModelWebTools(true)
-                                                                      .WithAllowCloudModelMcpTools(true)
-                                                                      .WithAllowCloudModelSubAgents(true));
+                                                                       .WithAllowCloudModelUnattendedRuns(true)
+                                                                       .WithAllowCloudModelWebTools(true)
+                                                                       .WithAllowCloudModelMcpTools(true)
+                                                                       .WithAllowCloudModelSubAgents(true));
 
         var pool = await provider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: true);
 

@@ -531,7 +531,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                         services.GetRequiredService<ILocalModelProviderResolver>(),
                         cancellationToken))
                 {
-                    return Invalid($"Graph workflow {callName} nodes on a local model require an installed node-managed GGUF chat model; node '{node.NodeKey}' would run '{effectiveModel}', which is not one.");
+                    return Invalid(
+                        $"Graph workflow {callName} nodes on a local model require an installed node-managed GGUF chat model; node '{node.NodeKey}' would run '{effectiveModel}', which is not one.");
                 }
 
                 var classification = await services.GetRequiredService<IModelClassificationStore>().GetByNameAsync(effectiveModel, cancellationToken);
@@ -545,10 +546,9 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                 _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
                     runId,
                     node.NodeKey);
-                return Invalid(
-                    locality == ModelTrustLocality.Cloud
-                        ? $"Node '{node.NodeKey}' would run this {callName} on the cloud model '{effectiveModel}', and a cloud model runs unattended only while 'Let cloud models run unattended' is on in Node Settings → Privacy & updates."
-                        : $"Node '{node.NodeKey}' would run this {callName} on '{effectiveModel}', which is not a node-local model; a model outside the trust boundary runs unattended only while 'Let cloud models run unattended' is on in Node Settings → Privacy & updates.");
+                return Invalid(locality == ModelTrustLocality.Cloud
+                    ? $"Node '{node.NodeKey}' would run this {callName} on the cloud model '{effectiveModel}', and a cloud model runs unattended only while 'Let cloud models run unattended' is on in Node Settings → Privacy & updates."
+                    : $"Node '{node.NodeKey}' would run this {callName} on '{effectiveModel}', which is not a node-local model; a model outside the trust boundary runs unattended only while 'Let cloud models run unattended' is on in Node Settings → Privacy & updates.");
             }
 
             var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, cancellationToken);

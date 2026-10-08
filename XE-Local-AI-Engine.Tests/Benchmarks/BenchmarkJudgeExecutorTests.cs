@@ -451,7 +451,7 @@ public sealed class BenchmarkJudgeExecutorTests
         var capacity = new JudgeCapacityService(CapacityVerdict.RejectInsufficient)
         {
             Reason = ReasonHead + string.Join(", ", Enumerable.Range(0, 100).Select(static index => $"'model-{index}.gguf' (Chat)"))
-                     + ". Eject one of them or pick a loaded model."
+                                + ". Eject one of them or pick a loaded model."
         };
         var runner = Substitute.For<IInvocationRunner>();
         await using var lease = new FakeLease(installed);

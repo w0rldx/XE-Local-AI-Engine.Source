@@ -179,7 +179,11 @@ internal static class DevelopmentWorkspaceGitConfig
     private static string Render(List<PreservedEntry> entries)
     {
         var builder = new StringBuilder();
-        foreach (var group in entries.GroupBy(static entry => new { entry.Section, entry.Subsection }))
+        foreach (var group in entries.GroupBy(static entry => new
+                 {
+                     entry.Section,
+                     entry.Subsection
+                 }))
         {
             builder.Append(CultureInfo.InvariantCulture, $"[{group.Key.Section}");
             if (group.Key.Subsection is { } subsection)

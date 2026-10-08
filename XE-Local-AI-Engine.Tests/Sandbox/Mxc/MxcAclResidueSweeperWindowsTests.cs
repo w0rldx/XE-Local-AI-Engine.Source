@@ -34,7 +34,8 @@ public sealed class MxcAclResidueSweeperWindowsTests
             var user = WindowsIdentity.GetCurrent().User!;
 
             var jailSecurity = jail.GetAccessControl();
-            jailSecurity.AddAccessRule(new FileSystemAccessRule(ContainerPackage, FileSystemRights.Modify, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
+            jailSecurity.AddAccessRule(new FileSystemAccessRule(ContainerPackage, FileSystemRights.Modify, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None,
+                AccessControlType.Allow));
             jailSecurity.AddAccessRule(new FileSystemAccessRule(AllApplicationPackages, FileSystemRights.ReadData, AccessControlType.Allow));
             jailSecurity.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.ReadData, AccessControlType.Allow));
             jail.SetAccessControl(jailSecurity);
@@ -83,6 +84,6 @@ public sealed class MxcAclResidueSweeperWindowsTests
 
     private static int ExplicitAppContainerAces(FileSystemSecurity security) =>
         security.GetAccessRules(includeExplicit: true, includeInherited: false, typeof(SecurityIdentifier))
-            .OfType<FileSystemAccessRule>()
-            .Count(rule => rule.IdentityReference is SecurityIdentifier sid && MxcAclResidueSweeper.IsAppContainerSid(sid));
+                .OfType<FileSystemAccessRule>()
+                .Count(rule => rule.IdentityReference is SecurityIdentifier sid && MxcAclResidueSweeper.IsAppContainerSid(sid));
 }

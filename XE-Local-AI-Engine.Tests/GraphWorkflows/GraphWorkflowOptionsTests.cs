@@ -28,20 +28,20 @@ public sealed class GraphWorkflowOptionsTests
     ///     </para>
     /// </summary>
     [Test]
-    [Arguments(200, 200, 50, 600, 262_144, 5000,4, 65_536, 200, true, "the documented defaults")]
+    [Arguments(200, 200, 50, 600, 262_144, 5000, 4, 65_536, 200, true, "the documented defaults")]
     [Arguments(2, 2, 1, 1, 1024, 100, 1, 1024, 1, true, "every budget exactly at its floor")]
-    [Arguments(200, 200, 50, 600, 262_144, 5000,4, 65_536, 1000, true, "the replay window exactly at its ceiling")]
-    [Arguments(1, 200, 50, 600, 262_144, 5000,4, 65_536, 200, false, "a definition cap that admits no graph at all")]
-    [Arguments(2, 1, 50, 600, 262_144, 5000,4, 65_536, 200, false, "a run cap under its own floor")]
-    [Arguments(200, 200, 0, 600, 262_144, 5000,4, 65_536, 200, false, "an attempt budget that permits no attempt")]
-    [Arguments(200, 200, 50, 0, 262_144, 5000,4, 65_536, 200, false, "a default node timeout of no time at all")]
+    [Arguments(200, 200, 50, 600, 262_144, 5000, 4, 65_536, 1000, true, "the replay window exactly at its ceiling")]
+    [Arguments(1, 200, 50, 600, 262_144, 5000, 4, 65_536, 200, false, "a definition cap that admits no graph at all")]
+    [Arguments(2, 1, 50, 600, 262_144, 5000, 4, 65_536, 200, false, "a run cap under its own floor")]
+    [Arguments(200, 200, 0, 600, 262_144, 5000, 4, 65_536, 200, false, "an attempt budget that permits no attempt")]
+    [Arguments(200, 200, 50, 0, 262_144, 5000, 4, 65_536, 200, false, "a default node timeout of no time at all")]
     [Arguments(200, 200, 50, 600, 1023, 500, 4, 65_536, 200, false, "an output cap under a kilobyte")]
     [Arguments(200, 200, 50, 600, 262_144, 99, 4, 65_536, 200, false, "a dispatch interval under 100 ms")]
-    [Arguments(200, 200, 50, 600, 262_144, 5000,0, 65_536, 200, false, "a concurrency cap that would run nothing")]
-    [Arguments(200, 200, 50, 600, 262_144, 5000,4, 1023, 200, false, "a run-input cap under a kilobyte")]
-    [Arguments(200, 200, 50, 600, 262_144, 5000,4, 65_536, 0, false, "a replay window that would return nothing")]
-    [Arguments(200, 100, 50, 600, 262_144, 5000,4, 65_536, 200, false, "fewer node runs per run than nodes per definition")]
-    [Arguments(200, 200, 50, 600, 262_144, 5000,4, 65_536, 1001, false, "a replay window above 1000")]
+    [Arguments(200, 200, 50, 600, 262_144, 5000, 0, 65_536, 200, false, "a concurrency cap that would run nothing")]
+    [Arguments(200, 200, 50, 600, 262_144, 5000, 4, 1023, 200, false, "a run-input cap under a kilobyte")]
+    [Arguments(200, 200, 50, 600, 262_144, 5000, 4, 65_536, 0, false, "a replay window that would return nothing")]
+    [Arguments(200, 100, 50, 600, 262_144, 5000, 4, 65_536, 200, false, "fewer node runs per run than nodes per definition")]
+    [Arguments(200, 200, 50, 600, 262_144, 5000, 4, 65_536, 1001, false, "a replay window above 1000")]
     public void Validator_RefusesTheCombinationsThatCannotWork(int maxNodesPerDefinition,
         int maxNodeRunsPerRun,
         int maxTotalAttempts,

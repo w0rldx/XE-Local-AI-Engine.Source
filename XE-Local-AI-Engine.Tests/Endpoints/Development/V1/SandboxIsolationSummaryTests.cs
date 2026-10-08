@@ -441,7 +441,11 @@ public sealed class SandboxIsolationSummaryTests
         var mcp = DevelopmentContractMapper.ToIsolationSummary("mcp-stdio", SandboxWorkloads.McpStdio, provider, containment);
         var agentHome = DevelopmentContractMapper.ToIsolationSummary("agent-home", SandboxWorkloads.AgentHome, provider, containment);
 
-        foreach (var served in new[] { runPython, mcp })
+        foreach (var served in new[]
+                 {
+                     runPython,
+                     mcp
+                 })
         {
             AssertEx.True(served.NetworkIsolation);
             AssertEx.Equal("PreviewIsolated", served.Level);

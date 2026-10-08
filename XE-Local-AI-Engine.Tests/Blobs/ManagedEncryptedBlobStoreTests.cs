@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Blobs;
 using System.Security.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Blobs;
-using XE_Local_AI_Engine.Client.Testing.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>

@@ -38,7 +38,10 @@ public sealed class UploadConversationFileEndpoint : Endpoint<UploadConversation
         AllowFileUploads();
         // Without both, Kestrel's ~28.6 MiB body limit or the form reader's 128 MiB multipart limit, not the configured cap, rejects a large upload.
         Options(builder => builder.WithMetadata(new RequestSizeLimitAttribute(_maxUploadBytes + MultipartEnvelopeBytes),
-            new RequestFormLimitsAttribute { MultipartBodyLengthLimit = _maxUploadBytes + MultipartEnvelopeBytes }));
+            new RequestFormLimitsAttribute
+            {
+                MultipartBodyLengthLimit = _maxUploadBytes + MultipartEnvelopeBytes
+            }));
         Policies(NodeAuthorizationPolicies.Operator);
         Description(static x => x.ProducesConflictProblemDetails());
     }

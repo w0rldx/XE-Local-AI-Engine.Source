@@ -64,7 +64,10 @@ public sealed class AppUpdateBusyProbe
         };
         if (gpuKind is { } kind)
         {
-            items.Add(new AppUpdateBusyItem { Kind = kind });
+            items.Add(new AppUpdateBusyItem
+            {
+                Kind = kind
+            });
         }
 
         items.AddRange(_ggufDownloads.ListStatuses()
@@ -79,23 +82,35 @@ public sealed class AppUpdateBusyProbe
 
         if (_llamaCppSourceBuild.GetStatus().IsRunning)
         {
-            items.Add(new AppUpdateBusyItem { Kind = AppUpdateBusyKind.LlamaCppSourceBuild });
+            items.Add(new AppUpdateBusyItem
+            {
+                Kind = AppUpdateBusyKind.LlamaCppSourceBuild
+            });
         }
 
         if (_whisperCppSourceBuild.GetStatus().IsRunning)
         {
-            items.Add(new AppUpdateBusyItem { Kind = AppUpdateBusyKind.WhisperCppSourceBuild });
+            items.Add(new AppUpdateBusyItem
+            {
+                Kind = AppUpdateBusyKind.WhisperCppSourceBuild
+            });
         }
 
         if (_stableDiffusionCppSourceBuild.GetStatus().IsRunning)
         {
-            items.Add(new AppUpdateBusyItem { Kind = AppUpdateBusyKind.StableDiffusionCppSourceBuild });
+            items.Add(new AppUpdateBusyItem
+            {
+                Kind = AppUpdateBusyKind.StableDiffusionCppSourceBuild
+            });
         }
 
         // Chat turns, agent runs, graph-workflow and integration calls all run through the invocation runner.
         if (_invocationRunner.ActiveInvocationCount > 0)
         {
-            items.Add(new AppUpdateBusyItem { Kind = AppUpdateBusyKind.Invocation });
+            items.Add(new AppUpdateBusyItem
+            {
+                Kind = AppUpdateBusyKind.Invocation
+            });
         }
 
         await using var scope = _scopeFactory.CreateAsyncScope();

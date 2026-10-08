@@ -953,7 +953,11 @@ public sealed class AgentHomePatchExportGitHardeningTests : IDisposable
         return ("run_command", new Dictionary<string, object?>
         {
             ["executable"] = "/bin/sh",
-            ["arguments"] = new[] { "-c", script }
+            ["arguments"] = new[]
+            {
+                "-c",
+                script
+            }
         });
     }
 

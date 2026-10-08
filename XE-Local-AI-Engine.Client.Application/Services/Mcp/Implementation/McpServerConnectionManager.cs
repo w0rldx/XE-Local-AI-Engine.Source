@@ -291,8 +291,11 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                 return;
             }
 
-            session = new[] { entry.Primary }.Concat(entry.Conversations.Values)
-                                             .FirstOrDefault(candidate => candidate is not null && candidate.CancelledCalls.TryRemove(callToken, out _));
+            session = new[]
+                {
+                    entry.Primary
+                }.Concat(entry.Conversations.Values)
+                 .FirstOrDefault(candidate => candidate is not null && candidate.CancelledCalls.TryRemove(callToken, out _));
         }
 
         if (session is not { IsAlive: true } || Interlocked.Increment(ref session.ConsecutiveTimeouts) < ConsecutiveTimeoutsBeforeAbandon)
@@ -937,7 +940,12 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         lock (_stateLock)
         {
             var idle = _servers.Values
-                               .SelectMany(static entry => entry.Conversations.Select(pair => new { Entry = entry, ConversationId = pair.Key, Session = pair.Value }))
+                               .SelectMany(static entry => entry.Conversations.Select(pair => new
+                               {
+                                   Entry = entry,
+                                   ConversationId = pair.Key,
+                                   Session = pair.Value
+                               }))
                                .Where(item => item.Session.LastUsedUtc <= cutoff && Volatile.Read(ref item.Session.ActiveCalls) == 0)
                                .ToList();
             foreach (var item in idle)

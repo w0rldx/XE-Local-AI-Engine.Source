@@ -86,8 +86,7 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
         await using var runtimeLease = _whisperRuntime.TryAcquireTranscriptionLease();
         if (runtimeLease is null)
         {
-            await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.RuntimeBusy(
-                "The transcription runtime is being built, removed or ejected. Upload the file again once that finishes.",
+            await Send.ResultAsync(TranscriptionRuntimeBlockedEndpointSupport.RuntimeBusy("The transcription runtime is being built, removed or ejected. Upload the file again once that finishes.",
                 _whisperRuntime.GetActivitySnapshot()));
             return;
         }

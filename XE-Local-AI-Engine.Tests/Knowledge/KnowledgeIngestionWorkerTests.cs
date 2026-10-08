@@ -216,7 +216,12 @@ public sealed class KnowledgeIngestionWorkerTests
         var barrier = Guid.NewGuid();
         _ = await dispatcher.EnqueueAsync(barrier, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => ingestion.Completed.Contains(barrier), PollTimeout, "the barrier document ran");
-        foreach (var documentId in new[] { trigger, strandedA, strandedB })
+        foreach (var documentId in new[]
+                 {
+                     trigger,
+                     strandedA,
+                     strandedB
+                 })
         {
             AssertEx.Equal(expected: 1, ingestion.Started.Count(id => id == documentId), "each document is ingested exactly once");
         }
@@ -256,7 +261,14 @@ public sealed class KnowledgeIngestionWorkerTests
         catalog.ListPendingDocumentIdsAsync(Arg.Any<CancellationToken>())
                .Returns(_ =>
                {
-                   IReadOnlyList<Guid> pending = [.. new[] { first, second }.Where(id => !leftPending.Contains(id))];
+                   IReadOnlyList<Guid> pending =
+                   [
+                       .. new[]
+                       {
+                           first,
+                           second
+                       }.Where(id => !leftPending.Contains(id))
+                   ];
                    if (pending.Contains(second))
                    {
                        Volatile.Write(ref sweptSecond, 1);

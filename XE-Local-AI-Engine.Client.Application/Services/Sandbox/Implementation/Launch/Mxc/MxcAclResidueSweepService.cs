@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 
 using System.Runtime.Versioning;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 
 /// <summary>
@@ -47,7 +45,8 @@ public sealed class MxcAclResidueSweepService : IHostedService
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 
     [SupportedOSPlatform("windows")]
     private void Sweep()

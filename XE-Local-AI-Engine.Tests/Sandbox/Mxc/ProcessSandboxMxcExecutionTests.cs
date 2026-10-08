@@ -23,7 +23,10 @@ public sealed class ProcessSandboxMxcExecutionTests
     public async Task Execute_SpawnsTheLockedPolicy_AndReturnsTheExitCodeAndCapturedOutput()
     {
         var child = Child(stdout: "hello\nworld\n");
-        child.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult { ExitCode = 7 });
+        child.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult
+        {
+            ExitCode = 7
+        });
         var runtime = Runtime(child);
         using var provider = Provider(runtime);
         var handle = await provider.CreateOrAttachAsync(IsolatedRequest());
@@ -46,11 +49,21 @@ public sealed class ProcessSandboxMxcExecutionTests
     public async Task Execute_WhenMxcReportsItsOwnTimeout_ReturnsTheTimedOutShape_AfterKilling()
     {
         var child = Child();
-        child.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult { ExitCode = 0, TimedOut = true }, new WaitResult { ExitCode = 1 });
+        child.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult
+        {
+            ExitCode = 0,
+            TimedOut = true
+        }, new WaitResult
+        {
+            ExitCode = 1
+        });
         using var provider = Provider(Runtime(child));
         var handle = await provider.CreateOrAttachAsync(IsolatedRequest());
 
-        var result = await provider.ExecuteAsync(handle, Command("cmd.exe") with { Timeout = TimeSpan.FromMinutes(5) });
+        var result = await provider.ExecuteAsync(handle, Command("cmd.exe") with
+        {
+            Timeout = TimeSpan.FromMinutes(5)
+        });
 
         AssertEx.False(result.Completed);
         AssertEx.Equal(-1, result.ExitCode);
@@ -110,7 +123,10 @@ public sealed class ProcessSandboxMxcExecutionTests
         using var caller = new CancellationTokenSource();
 
         // Far larger than a pipe buffer; Task.Run because an unfixed write blocks the calling thread itself.
-        var execution = Task.Run(() => provider.ExecuteAsync(handle, Command("python.exe") with { StandardInput = new string('x', 1 << 20) }, caller.Token));
+        var execution = Task.Run(() => provider.ExecuteAsync(handle, Command("python.exe") with
+        {
+            StandardInput = new string('x', 1 << 20)
+        }, caller.Token));
         await stdin.Writing;
         await caller.CancelAsync();
 
@@ -126,7 +142,13 @@ public sealed class ProcessSandboxMxcExecutionTests
         using var provider = Provider(Runtime(Child()));
 
         var refusal = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() =>
-            provider.CreateOrAttachAsync(IsolatedRequest() with { ResourceLimits = new SandboxResourceLimits { MemoryMb = 512 } }));
+            provider.CreateOrAttachAsync(IsolatedRequest() with
+            {
+                ResourceLimits = new SandboxResourceLimits
+                {
+                    MemoryMb = 512
+                }
+            }));
 
         AssertEx.Contains(refusal.Message, "mxc-processcontainer AppContainer boundary");
         AssertEx.Contains(refusal.Message, "enforces no CPU, memory or process ceiling; omit SandboxResourceLimits for a timeout-only run");
@@ -137,7 +159,10 @@ public sealed class ProcessSandboxMxcExecutionTests
     {
         using var provider = Provider(Runtime(Child()));
 
-        var handle = await provider.CreateOrAttachAsync(IsolatedRequest() with { ResourceLimits = null });
+        var handle = await provider.CreateOrAttachAsync(IsolatedRequest() with
+        {
+            ResourceLimits = null
+        });
 
         AssertEx.NotNull(handle.IsolatedPaths);
         await provider.KillAsync(handle);
@@ -224,7 +249,10 @@ public sealed class ProcessSandboxMxcExecutionTests
         child.StandardInput.Returns(new MemoryStream());
         var exit = new TaskCompletionSource<WaitResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         child.WaitAsync(Arg.Any<CancellationToken>()).Returns(call => exit.Task.WaitAsync(call.Arg<CancellationToken>()));
-        child.When(process => process.Kill()).Do(_ => exit.TrySetResult(new WaitResult { ExitCode = 1 }));
+        child.When(process => process.Kill()).Do(_ => exit.TrySetResult(new WaitResult
+        {
+            ExitCode = 1
+        }));
         using var provider = Provider(Runtime(child));
         var handle = await provider.CreateOrAttachAsync(IsolatedRequest());
 
@@ -253,7 +281,12 @@ public sealed class ProcessSandboxMxcExecutionTests
         var interactive = await provider.StartInteractiveAsync(handle, Command("server.exe"));
         using var caller = new CancellationTokenSource();
 
-        var write = Task.Run(async () => await interactive.StandardInput.WriteAsync(new byte[] { 1, 2, 3 }, caller.Token));
+        var write = Task.Run(async () => await interactive.StandardInput.WriteAsync(new byte[]
+        {
+            1,
+            2,
+            3
+        }, caller.Token));
         await stdin.Writing;
         await caller.CancelAsync();
 
@@ -356,12 +389,20 @@ public sealed class ProcessSandboxMxcExecutionTests
         var child = Child();
         var exit = new TaskCompletionSource<WaitResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         child.WaitAsync(Arg.Any<CancellationToken>()).Returns(call => exit.Task.WaitAsync(call.Arg<CancellationToken>()));
-        child.When(process => process.Kill()).Do(_ => exit.TrySetResult(new WaitResult { ExitCode = -1 }));
+        child.When(process => process.Kill()).Do(_ => exit.TrySetResult(new WaitResult
+        {
+            ExitCode = -1
+        }));
         return child;
     }
 
     private static SandboxCommandRequest Command(string executable, params string[] arguments) =>
-        new() { ExecutionId = "mxc-command", Executable = executable, Arguments = arguments };
+        new()
+        {
+            ExecutionId = "mxc-command",
+            Executable = executable,
+            Arguments = arguments
+        };
 
     private static SandboxCreateRequest IsolatedRequest() =>
         new()

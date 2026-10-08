@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
-using Microsoft.Extensions.Logging;
 
 /// <summary>
 ///     Removes AppContainer ACEs that an MXC run left on engine-owned trees. MXC grants ProcessContainer filesystem access as host
@@ -25,7 +24,11 @@ public static class MxcAclResidueSweeper
         AttributesToSkip = FileAttributes.ReparsePoint,
     };
 
-    private static readonly HashSet<string> WellKnownPackageGroups = new(StringComparer.Ordinal) { "S-1-15-2-1", "S-1-15-2-2" };
+    private static readonly HashSet<string> WellKnownPackageGroups = new(StringComparer.Ordinal)
+    {
+        "S-1-15-2-1",
+        "S-1-15-2-2"
+    };
 
     /// <returns>The number of ACEs removed.</returns>
     public static int Sweep(IEnumerable<string> roots, ILogger logger)
@@ -88,9 +91,9 @@ public static class MxcAclResidueSweeper
         where TSecurity : FileSystemSecurity
     {
         var residue = security.GetAccessRules(includeExplicit: true, includeInherited: false, typeof(SecurityIdentifier))
-            .OfType<FileSystemAccessRule>()
-            .Where(rule => rule.IdentityReference is SecurityIdentifier sid && IsAppContainerSid(sid))
-            .ToList();
+                              .OfType<FileSystemAccessRule>()
+                              .Where(rule => rule.IdentityReference is SecurityIdentifier sid && IsAppContainerSid(sid))
+                              .ToList();
         if (residue.Count == 0)
         {
             return 0;

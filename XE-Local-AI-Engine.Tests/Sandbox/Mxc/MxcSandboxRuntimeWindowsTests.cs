@@ -80,7 +80,11 @@ public sealed class MxcSandboxRuntimeWindowsTests
             AssertEx.Equal("inside", (await File.ReadAllTextAsync(Path.Combine(jail, "out.txt"))).Trim());
 
             // A denied root and a merely ungranted path are both unreadable.
-            foreach (var canary in new[] { deniedCanary, ungrantedCanary })
+            foreach (var canary in new[]
+                     {
+                         deniedCanary,
+                         ungrantedCanary
+                     })
             {
                 var read = await RunAsync(runtime, jail, deniedRoot, "cmd.exe", ["/c", "type", canary]);
                 AssertEx.NotEqual(0, read.ExitCode, read.Describe());
@@ -92,7 +96,10 @@ public sealed class MxcSandboxRuntimeWindowsTests
             var url = string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/");
 
             // Negative control: the same curl outside the container DOES reach the listener, so "no connection" below means the policy.
-            using (var hostCurl = Process.Start(new ProcessStartInfo(curl, ["-s", "-m", "3", url]) { UseShellExecute = false })!)
+            using (var hostCurl = Process.Start(new ProcessStartInfo(curl, ["-s", "-m", "3", url])
+                   {
+                       UseShellExecute = false
+                   })!)
             {
                 using var acceptBudget = new CancellationTokenSource(RunBudget);
                 using var accepted = await listener.AcceptTcpClientAsync(acceptBudget.Token);
@@ -128,6 +135,7 @@ public sealed class MxcSandboxRuntimeWindowsTests
         });
         var lines = new List<string>();
         var gate = new object();
+
         void Capture(string line)
         {
             lock (gate)
@@ -141,7 +149,12 @@ public sealed class MxcSandboxRuntimeWindowsTests
         var exitCode = await child.WaitForExitAsync(cancellation.Token);
         lock (gate)
         {
-            return new RunResult { ExitCode = exitCode, Output = string.Join('\n', lines), Warnings = child.Warnings };
+            return new RunResult
+            {
+                ExitCode = exitCode,
+                Output = string.Join('\n', lines),
+                Warnings = child.Warnings
+            };
         }
     }
 
@@ -149,7 +162,15 @@ public sealed class MxcSandboxRuntimeWindowsTests
     private static Dictionary<string, string> ChildEnvironment(string jail)
     {
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var name in new[] { "SystemRoot", "windir", "ComSpec", "PATHEXT", "SystemDrive", "ProgramData" })
+        foreach (var name in new[]
+                 {
+                     "SystemRoot",
+                     "windir",
+                     "ComSpec",
+                     "PATHEXT",
+                     "SystemDrive",
+                     "ProgramData"
+                 })
         {
             if (Environment.GetEnvironmentVariable(name) is { } value)
             {
@@ -171,6 +192,7 @@ public sealed class MxcSandboxRuntimeWindowsTests
 
         public required IReadOnlyList<string> Warnings { get; init; }
 
-        public string Describe() => $"exit {ExitCode}; output: {Output}; MXC warnings: {string.Join(" | ", Warnings)}";
+        public string Describe() =>
+            $"exit {ExitCode}; output: {Output}; MXC warnings: {string.Join(" | ", Warnings)}";
     }
 }

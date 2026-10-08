@@ -16,7 +16,8 @@ public sealed class SandboxLauncherAppContainerTests : IDisposable
 {
     private readonly string _root = Directory.CreateTempSubdirectory("xe-mxc-launcher-").FullName;
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose() =>
+        Directory.Delete(_root, recursive: true);
 
     [Test]
     public async Task Apply_UnderTheAppContainerBoundary_BuildsTheMxcRequest_AndNoLinuxKillAuthority()
@@ -25,7 +26,11 @@ public sealed class SandboxLauncherAppContainerTests : IDisposable
         var tree = Directory.CreateDirectory(Path.Combine(_root, "venv")).FullName;
         var startInfo = StartInfo(jail, "python.exe", "-c", "print(1)");
 
-        var descriptor = Launcher([]).Apply(startInfo, Policy(tree), new SandboxLaunchContext { JailRoot = jail, CommandTimeout = TimeSpan.FromSeconds(30) });
+        var descriptor = Launcher([]).Apply(startInfo, Policy(tree), new SandboxLaunchContext
+        {
+            JailRoot = jail,
+            CommandTimeout = TimeSpan.FromSeconds(30)
+        });
 
         var request = AssertEx.NotNull(descriptor.MxcRequest);
         AssertEx.True(request.Containment is Containment.ProcessContainer);
@@ -59,10 +64,19 @@ public sealed class SandboxLauncherAppContainerTests : IDisposable
     public async Task Apply_WithResourceLimits_FailsRatherThanDroppingThem()
     {
         var jail = Directory.CreateDirectory(Path.Combine(_root, "jail")).FullName;
-        var policy = Policy() with { ResourceLimits = new SandboxResourceLimits { CpuCount = 1 } };
+        var policy = Policy() with
+        {
+            ResourceLimits = new SandboxResourceLimits
+            {
+                CpuCount = 1
+            }
+        };
 
         _ = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() =>
-            Launcher([]).Apply(StartInfo(jail, "cmd.exe"), policy, new SandboxLaunchContext { JailRoot = jail }));
+            Launcher([]).Apply(StartInfo(jail, "cmd.exe"), policy, new SandboxLaunchContext
+            {
+                JailRoot = jail
+            }));
         await Task.CompletedTask;
     }
 
@@ -95,7 +109,11 @@ public sealed class SandboxLauncherAppContainerTests : IDisposable
     public async Task Environment_TheCallersOwnVariablesWin()
     {
         var jail = Directory.CreateDirectory(Path.Combine(_root, "jail")).FullName;
-        var requested = new Dictionary<string, string>(StringComparer.Ordinal) { ["HOME"] = @"C:\elsewhere", ["PATH"] = @"C:\tools" };
+        var requested = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["HOME"] = @"C:\elsewhere",
+            ["PATH"] = @"C:\tools"
+        };
         var startInfo = StartInfo(jail, "cmd.exe");
         foreach (var (name, value) in requested)
         {
@@ -118,10 +136,16 @@ public sealed class SandboxLauncherAppContainerTests : IDisposable
         var context = new SandboxLaunchContext
         {
             JailRoot = jail,
-            CommandEnvironment = new Dictionary<string, string>(StringComparer.Ordinal) { ["OMP_NUM_THREADS"] = "8" }
+            CommandEnvironment = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["OMP_NUM_THREADS"] = "8"
+            }
         };
 
-        var descriptor = Launcher([]).Apply(startInfo, Policy() with { ThreadLimit = 3 }, context);
+        var descriptor = Launcher([]).Apply(startInfo, Policy() with
+        {
+            ThreadLimit = 3
+        }, context);
 
         var environment = AssertEx.NotNull(AssertEx.NotNull(descriptor.MxcRequest).Environment);
         foreach (var name in SandboxIsolatedChain.ThreadCountVariableNames.Where(name => name != "OMP_NUM_THREADS"))
@@ -144,7 +168,10 @@ public sealed class SandboxLauncherAppContainerTests : IDisposable
         var startInfo = StartInfo(jail, "cmd.exe");
 
         var descriptor = Launcher([profile, dataRoot, engine + Path.DirectorySeparatorChar])
-            .Apply(startInfo, Policy(venv), new SandboxLaunchContext { JailRoot = jail });
+            .Apply(startInfo, Policy(venv), new SandboxLaunchContext
+            {
+                JailRoot = jail
+            });
 
         // A DENY ACE on an ancestor could beat the grant beneath it; the default deny still covers both.
         AssertEx.Equal(engine, string.Join('|', descriptor.MxcRequest!.Filesystem!.DeniedPaths));
@@ -167,7 +194,10 @@ public sealed class SandboxLauncherAppContainerTests : IDisposable
     }
 
     private static SandboxLauncher Launcher(IReadOnlyList<string> deniedRootCandidates) =>
-        new(new StubProbe(SandboxContainment.None with { AppContainerBoundary = Boundary() }), deniedRootCandidates);
+        new(new StubProbe(SandboxContainment.None with
+        {
+            AppContainerBoundary = Boundary()
+        }), deniedRootCandidates);
 
     private static SandboxLaunchPolicy Policy(params string[] readOnlyTrees) =>
         new()
@@ -179,11 +209,21 @@ public sealed class SandboxLauncherAppContainerTests : IDisposable
         };
 
     private static SandboxAppContainerBoundary Boundary() =>
-        new() { Mechanism = "mxc-processcontainer", Tier = "AppContainerDacl", Maturity = SandboxMechanismMaturity.Preview };
+        new()
+        {
+            Mechanism = "mxc-processcontainer",
+            Tier = "AppContainerDacl",
+            Maturity = SandboxMechanismMaturity.Preview
+        };
 
     private static ProcessStartInfo StartInfo(string workingDirectory, string executable, params string[] arguments)
     {
-        var startInfo = new ProcessStartInfo { FileName = executable, WorkingDirectory = workingDirectory, UseShellExecute = false };
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = executable,
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false
+        };
         startInfo.Environment.Clear();
         foreach (var argument in arguments)
         {

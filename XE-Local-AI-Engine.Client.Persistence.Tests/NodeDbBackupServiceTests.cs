@@ -92,7 +92,12 @@ public sealed class NodeDbBackupServiceTests : IDisposable
 
         var backupDirectory = Path.Combine(_rootPath, "backups");
         Directory.CreateDirectory(backupDirectory);
-        foreach (var stamp in new[] { "20250102T000000000Z", "20250103T000000000Z", "20250104T000000000Z" })
+        foreach (var stamp in new[]
+                 {
+                     "20250102T000000000Z",
+                     "20250103T000000000Z",
+                     "20250104T000000000Z"
+                 })
         {
             await File.WriteAllTextAsync(Path.Combine(backupDirectory, $"{BackupFilePrefix}{stamp}{BackupFileExtension}"), "good");
         }

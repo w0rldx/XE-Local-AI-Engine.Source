@@ -229,13 +229,17 @@ public sealed class GgufDiscoveryPerfTests
         var nullableFields = typeof(GgufHeaderMetadata).GetProperties(BindingFlags.Public | BindingFlags.Instance)
                                                        .Where(static p => p.CanWrite && (p.PropertyType == typeof(string) || Nullable.GetUnderlyingType(p.PropertyType) is not null))
                                                        .ToList();
-        var complete = GgufHeaderMetadata.Empty with { };
+        var complete = GgufHeaderMetadata.Empty with
+        {
+        };
         foreach (var field in nullableFields)
         {
             field.SetValue(complete, field.PropertyType == typeof(string) ? "set" : Convert.ChangeType(1, Nullable.GetUnderlyingType(field.PropertyType)!, CultureInfo.InvariantCulture));
         }
 
-        var merged = HuggingFaceGgufDiscovery.FillMissing(GgufHeaderMetadata.Empty with { }, complete);
+        var merged = HuggingFaceGgufDiscovery.FillMissing(GgufHeaderMetadata.Empty with
+        {
+        }, complete);
 
         AssertEx.True(nullableFields.Count > 10, "the reflection must find the header fields.");
         AssertEx.Null(merged.QuantType, "the quant label is per file, never borrowed.");

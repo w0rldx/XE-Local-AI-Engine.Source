@@ -603,7 +603,11 @@ internal sealed partial class ExternalAppService
         var declared = manifest.Services
                                .SelectMany(service => service.Ports
                                                              .Where(port => string.Equals(port.Role, UiPortRole, StringComparison.Ordinal))
-                                                             .Select(port => new { ServiceName = service.Name, port.ContainerPort }))
+                                                             .Select(port => new
+                                                             {
+                                                                 ServiceName = service.Name,
+                                                                 port.ContainerPort
+                                                             }))
                                .ToList();
 
         if (declared.Count != stored.Count)

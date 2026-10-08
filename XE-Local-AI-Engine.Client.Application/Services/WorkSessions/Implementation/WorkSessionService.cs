@@ -349,16 +349,16 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         return
         [
             .. events.Select(static entry => new WorkSessionEventDto
-                     {
-                         Id = entry.Id,
-                         Sequence = entry.Sequence,
-                         Step = entry.Step,
-                         EventType = entry.EventType,
-                         DetailJson = entry.DetailJson,
-                         Outcome = entry.Outcome,
-                         OccurredUtc = entry.OccurredAtUtc,
-                         OperationId = entry.OperationId
-                     })
+            {
+                Id = entry.Id,
+                Sequence = entry.Sequence,
+                Step = entry.Step,
+                EventType = entry.EventType,
+                DetailJson = entry.DetailJson,
+                Outcome = entry.Outcome,
+                OccurredUtc = entry.OccurredAtUtc,
+                OperationId = entry.OperationId
+            })
         ];
     }
 

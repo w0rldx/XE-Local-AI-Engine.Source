@@ -190,7 +190,12 @@ public sealed class ComputeToolGatewayTests
         var windows = paths.ToEnvironment(includeWindowsProfile: true);
         var posix = paths.ToEnvironment(includeWindowsProfile: false);
 
-        foreach (var name in new[] { "USERPROFILE", "APPDATA", "LOCALAPPDATA" })
+        foreach (var name in new[]
+                 {
+                     "USERPROFILE",
+                     "APPDATA",
+                     "LOCALAPPDATA"
+                 })
         {
             AssertEx.Equal(paths.Home, windows[name]);
             AssertEx.False(posix.ContainsKey(name), $"{name} is a Windows variable and is not set elsewhere");
@@ -199,11 +204,11 @@ public sealed class ComputeToolGatewayTests
         AssertEx.Equal(Path.Combine(paths.Work, SandboxIsolatedPaths.HomeDirectoryName), paths.Home);
         AssertEx.Equal(Path.Combine(paths.Work, SandboxIsolatedPaths.TempDirectoryName), paths.Temp);
         AssertEx.Equal(new SandboxIsolatedPaths
-        {
-            Work = "/work",
-            Home = "/work/home",
-            Temp = "/tmp"
-        }, SandboxIsolatedPaths.Posix,
+            {
+                Work = "/work",
+                Home = "/work/home",
+                Temp = "/tmp"
+            }, SandboxIsolatedPaths.Posix,
             "the Linux view is unchanged by this round");
     }
 

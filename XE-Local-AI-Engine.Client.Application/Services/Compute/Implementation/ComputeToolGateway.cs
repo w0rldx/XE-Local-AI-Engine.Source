@@ -320,8 +320,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         // The create request asked for Filesystem fail-closed, so a handle without the boundary is a provider that ignored it: refused,
         // never served with a guessed HOME.
         var paths = SandboxIsolatedPaths.Of(handle)
-                    ?? throw new InvalidOperationException(
-                        $"The '{handle.ProviderName}' sandbox provider returned a sandbox without the filesystem isolation run_python requested.");
+                    ?? throw new InvalidOperationException($"The '{handle.ProviderName}' sandbox provider returned a sandbox without the filesystem isolation run_python requested.");
         return new Dictionary<string, string>(paths.ToEnvironment(), StringComparer.Ordinal)
         {
             // The venv is bound READ-ONLY, so a user-site directory could not be written even if one resolved; the

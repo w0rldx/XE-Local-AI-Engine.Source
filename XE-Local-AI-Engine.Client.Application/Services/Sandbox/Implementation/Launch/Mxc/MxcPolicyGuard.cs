@@ -58,11 +58,7 @@ public static class MxcPolicyGuard
             Reject("Filesystem.ClearPolicyOnExit is false (grants would outlive the run)");
         }
 
-        if (request.Network is not
-            {
-                Egress: { Default: NetworkAction.Deny },
-                Ingress: { Default: NetworkAction.Deny, HostLoopback: NetworkAction.Deny },
-            })
+        if (request.Network is not { Egress: { Default: NetworkAction.Deny }, Ingress: { Default: NetworkAction.Deny, HostLoopback: NetworkAction.Deny }, })
         {
             Reject("Network is missing or does not deny egress, ingress and host loopback");
         }

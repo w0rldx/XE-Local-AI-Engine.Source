@@ -435,23 +435,23 @@ public sealed class GraphWorkflowAgentExecutorTests
             Text = """{"choice":"coding"}"""
         });
         var runId = await harness.StartRunAsync($$"""
-                                                 {
-                                                   "schemaVersion": 1,
-                                                   "nodes": [
-                                                     { "key": "start", "kind": "Start" },
-                                                     { "key": "classify", "kind": "DecisionModel",
-                                                       "config": { "question": "{{question}}", "labels": ["coding", "other"], "provider": "llm", "model": "{{model}}",
-                                                                   "inputBindings": { "request": "run.input.message" } } },
-                                                     { "key": "coding", "kind": "End", "config": { "outcome": "coding" } },
-                                                     { "key": "other", "kind": "End", "config": { "outcome": "other" } }
-                                                   ],
-                                                   "edges": [
-                                                     { "key": "e1", "from": "start", "to": "classify" },
-                                                     { "key": "e2", "from": "classify", "to": "coding", "label": "coding", "condition": { "path": "output.choice", "op": "eq", "value": "coding" } },
-                                                     { "key": "e3", "from": "classify", "to": "other", "label": "other", "condition": { "path": "output.choice", "op": "ne", "value": "coding" } }
-                                                   ]
-                                                 }
-                                                 """, """{"message":"fix my build"}""");
+                                                  {
+                                                    "schemaVersion": 1,
+                                                    "nodes": [
+                                                      { "key": "start", "kind": "Start" },
+                                                      { "key": "classify", "kind": "DecisionModel",
+                                                        "config": { "question": "{{question}}", "labels": ["coding", "other"], "provider": "llm", "model": "{{model}}",
+                                                                    "inputBindings": { "request": "run.input.message" } } },
+                                                      { "key": "coding", "kind": "End", "config": { "outcome": "coding" } },
+                                                      { "key": "other", "kind": "End", "config": { "outcome": "other" } }
+                                                    ],
+                                                    "edges": [
+                                                      { "key": "e1", "from": "start", "to": "classify" },
+                                                      { "key": "e2", "from": "classify", "to": "coding", "label": "coding", "condition": { "path": "output.choice", "op": "eq", "value": "coding" } },
+                                                      { "key": "e3", "from": "classify", "to": "other", "label": "other", "condition": { "path": "output.choice", "op": "ne", "value": "coding" } }
+                                                    ]
+                                                  }
+                                                  """, """{"message":"fix my build"}""");
 
         await harness.AdvanceUntilAsync(runId,
             async () => GraphWorkflowStateMachine.IsTerminal((await harness.ReadRunAsync(runId)).Status),
@@ -501,8 +501,7 @@ public sealed class GraphWorkflowAgentExecutorTests
     }
 
     private static GraphWorkflowHarness CloudAllowedHost() =>
-        GraphWorkflowHarness.PrivateAgentHost(GraphWorkflowAgentHostFixture.WithRuntimeSettings(
-            StubNodeRuntimeSettings.Create().WithAllowCloudModelUnattendedRuns(true).Build()));
+        GraphWorkflowHarness.PrivateAgentHost(GraphWorkflowAgentHostFixture.WithRuntimeSettings(StubNodeRuntimeSettings.Create().WithAllowCloudModelUnattendedRuns(true).Build()));
 
     /// <summary>A bound agent that lists tools, on a model that cannot call them, is refused before capacity and before any invocation.</summary>
     [Test]

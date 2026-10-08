@@ -164,7 +164,11 @@ public static class QuantLadder
 
     private static readonly Dictionary<string, int> RankByQuant =
         Rungs
-            .Select(static (rung, index) => new { rung.Quant, Index = index })
+            .Select(static (rung, index) => new
+            {
+                rung.Quant,
+                Index = index
+            })
             .ToDictionary(static pair => pair.Quant, static pair => pair.Index, StringComparer.OrdinalIgnoreCase);
 
     // Rank assigned to an unknown label: immediately after Q4_K_M, matching the estimator's 4.5bpw fallback density.

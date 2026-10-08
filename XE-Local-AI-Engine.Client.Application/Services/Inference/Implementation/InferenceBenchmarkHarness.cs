@@ -380,7 +380,11 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             }
 
             allFinite &= scores.All(double.IsFinite);
-            var order = scores.Select((score, index) => new { score, index })
+            var order = scores.Select((score, index) => new
+                              {
+                                  score,
+                                  index
+                              })
                               .OrderByDescending(item => item.score)
                               .ThenBy(item => item.index)
                               .Select(item => item.index)

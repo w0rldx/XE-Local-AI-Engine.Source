@@ -40,21 +40,26 @@ internal static class GgufFileSelector
                       // A speculative-decoding drafter is not a candidate model: it is a companion loaded inside a chat
                       // process, and its tiny size would let it out-fit every real quant in the repo.
                       .Where(static file => !GgufDraftModel.IsDraftQuant(file.Quant))
-                      .Select(file => new { file, estimate = estimator.Estimate(file.Quant,
-                          file.ParamCount,
-                          file.SizeBytes,
-                          file.BlockCount ?? 0,
-                          file.AttentionHeadCountKV ?? 0,
-                          file.EmbeddingLength ?? 0,
-                          file.AttentionHeadCount ?? 0,
-                          ctxTarget,
-                          profile,
-                          kvCacheQuantized: false,
-                          moeFactsSelector?.Invoke(file),
-                          // Explicit key/value lengths and interleaved sliding-window facts correct the KV term, and
-                          // native-format detection prices a native MXFP4 quant at its own density.
-                          attention: BuildAttentionShape(file),
-                          nativeQuantFormat: QuantLadder.IsNativeFormat(file.Quant)), rank = QuantLadder.QualityRank(file.Quant) })
+                      .Select(file => new
+                      {
+                          file,
+                          estimate = estimator.Estimate(file.Quant,
+                              file.ParamCount,
+                              file.SizeBytes,
+                              file.BlockCount ?? 0,
+                              file.AttentionHeadCountKV ?? 0,
+                              file.EmbeddingLength ?? 0,
+                              file.AttentionHeadCount ?? 0,
+                              ctxTarget,
+                              profile,
+                              kvCacheQuantized: false,
+                              moeFactsSelector?.Invoke(file),
+                              // Explicit key/value lengths and interleaved sliding-window facts correct the KV term, and
+                              // native-format detection prices a native MXFP4 quant at its own density.
+                              attention: BuildAttentionShape(file),
+                              nativeQuantFormat: QuantLadder.IsNativeFormat(file.Quant)),
+                          rank = QuantLadder.QualityRank(file.Quant)
+                      })
                       // Drop insufficient-metadata files (no weights term), non-fitting files, and quants below the floor.
                       .Where(candidate => candidate.estimate.EstimatedBytes > estimator.OverheadBytes
                                           && candidate.estimate.Fits

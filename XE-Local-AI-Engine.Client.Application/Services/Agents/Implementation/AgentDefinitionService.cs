@@ -55,7 +55,10 @@ internal sealed class AgentDefinitionService : IAgentDefinitionService
 
     // Stores the canonical lowercase value (or null when blank), so every reader sees one spelling.
     private static AgentDefinitionInput WithNormalizedReasoningEffort(AgentDefinitionInput input) =>
-        input with { ReasoningEffort = ReasoningEffortNormalizer.Normalize(input.ReasoningEffort) };
+        input with
+        {
+            ReasoningEffort = ReasoningEffortNormalizer.Normalize(input.ReasoningEffort)
+        };
 
     public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {

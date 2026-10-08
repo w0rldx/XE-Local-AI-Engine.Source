@@ -25,8 +25,15 @@ public sealed class ApplyAppUpdateEndpointTests
             Applying = false,
             BusyItems =
             [
-                new AppUpdateBusyItem { Kind = AppUpdateBusyKind.TrainingRun },
-                new AppUpdateBusyItem { Kind = AppUpdateBusyKind.ModelDownload, DisplayName = "qwen3-8b.gguf" }
+                new AppUpdateBusyItem
+                {
+                    Kind = AppUpdateBusyKind.TrainingRun
+                },
+                new AppUpdateBusyItem
+                {
+                    Kind = AppUpdateBusyKind.ModelDownload,
+                    DisplayName = "qwen3-8b.gguf"
+                }
             ]
         });
 

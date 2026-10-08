@@ -124,10 +124,12 @@ public sealed class MxcChildProcess : IDisposable
     }
 
     /// <summary>Kills the whole contained process tree.</summary>
-    public void Kill() => _process.Kill();
+    public void Kill() =>
+        _process.Kill();
 
     /// <summary>Kills a still-running child and frees its handles (MXC semantics).</summary>
-    public void Dispose() => _process.Dispose();
+    public void Dispose() =>
+        _process.Dispose();
 
     private async Task<WaitResult?> KillAndReapAsync()
     {

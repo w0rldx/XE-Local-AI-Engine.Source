@@ -831,9 +831,19 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     private static void EnsureCompatibleMounts(SandboxState state, SandboxCreateRequest request, ContainerSandboxOptions options)
     {
         var requested = BuildBindMounts(request, options, state.WorkspaceRoot)
-                        .Select(static mount => new { mount.HostPath, Path = mount.ContainerPath, mount.ReadOnly })
+                        .Select(static mount => new
+                        {
+                            mount.HostPath,
+                            Path = mount.ContainerPath,
+                            mount.ReadOnly
+                        })
                         .ToArray();
-        var applied = state.Handle.Mounts.Select(static mount => new { mount.HostPath, Path = mount.SandboxPath, mount.ReadOnly }).ToArray();
+        var applied = state.Handle.Mounts.Select(static mount => new
+        {
+            mount.HostPath,
+            Path = mount.SandboxPath,
+            mount.ReadOnly
+        }).ToArray();
 
         if (!requested.SequenceEqual(applied))
         {

@@ -238,8 +238,8 @@ public sealed class DesktopBootstrapTests : IDisposable
         services.AddHuggingFaceImageModelStore(new ConfigurationBuilder().Build());
 
         var options = (ImageModelStoreOptions)AssertEx.NotNull(services
-                                                                 .Single(descriptor => descriptor.ServiceType == typeof(ImageModelStoreOptions))
-                                                                 .ImplementationInstance);
+                                                               .Single(descriptor => descriptor.ServiceType == typeof(ImageModelStoreOptions))
+                                                               .ImplementationInstance);
         AssertEx.Equal(Path.Combine(AppContext.BaseDirectory, DesktopBootstrap.ModelsFolderName, DesktopBootstrap.ImageModelsFolderName),
             options.ModelsDirectory);
     }

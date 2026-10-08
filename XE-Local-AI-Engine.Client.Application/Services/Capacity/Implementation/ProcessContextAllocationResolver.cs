@@ -96,7 +96,13 @@ public sealed class ProcessContextAllocationResolver : IProcessContextAllocation
         var key = BuildCacheKey(contentIdentity, role, variant, resolved, kvCacheQuant);
         var state = new
         {
-            Resolver = this, Key = key, ContentIdentity = contentIdentity, Role = role, Variant = variant, Resolved = resolved, Facts = facts,
+            Resolver = this,
+            Key = key,
+            ContentIdentity = contentIdentity,
+            Role = role,
+            Variant = variant,
+            Resolved = resolved,
+            Facts = facts,
             KvCacheQuant = kvCacheQuant
         };
         var lazy = _cache.GetOrAdd(key,

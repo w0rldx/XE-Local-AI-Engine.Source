@@ -77,8 +77,14 @@ public sealed class HubEventRelayTests
 
         using var relay = new BenchmarkRunHubEventRelay(buffer, hubContext, logger);
         await relay.StartAsync(CancellationToken.None);
-        _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "lost" });
-        var second = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload { Content = "kept" });
+        _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload
+        {
+            Content = "lost"
+        });
+        var second = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload
+        {
+            Content = "kept"
+        });
         await delivered.Task.WaitAsync(TimeSpan.FromSeconds(10));
         await relay.StopAsync(CancellationToken.None);
 

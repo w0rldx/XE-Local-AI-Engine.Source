@@ -181,4 +181,5 @@ public sealed class ServerPushHubTests
                })
                .WithNodeJsonProtocol()
                .Build();
-    }}
+    }
+}
