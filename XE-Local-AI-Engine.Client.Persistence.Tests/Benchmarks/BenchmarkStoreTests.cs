@@ -260,6 +260,48 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     [Test]
+    public async Task ListMissingFidelityModelNames_NamesOnlyTheModelsAMeasureExistingWriteWouldEnqueue()
+    {
+        // The KLD base check runs on these names: a model whose runs are already measured must not block measuring the rest.
+        var databasePath = GetDatabasePath("project-fidelity-candidate-models.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System, NullLogger<BenchmarkStore>.Instance);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var measured = await SucceedRunAsync("measured.gguf", fingerprint: 'c');
+        _ = await SucceedRunAsync("model.gguf", fingerprint: 'a');
+        _ = await store.EnqueueFidelityAsync(measured, "ppl");
+
+        var names = await store.ListMissingFidelityModelNamesAsync(project.Id);
+
+        AssertEx.Equal("model.gguf", string.Join(", ", names));
+
+        async Task<Guid> SucceedRunAsync(string model, char fingerprint)
+        {
+            var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+            var run = await store.StartRunAsync(CreateRun(current) with
+            {
+                PrimaryModelName = model,
+                ModelContentFingerprint = "v1:" + new string(fingerprint, 64)
+            });
+            var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+            _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand
+            {
+                RunId = run.Id,
+                ExpectedWorkVersion = claimed.Run.Version,
+                OutputPartsJson = Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"),
+                LastStreamSequence = 7,
+                EffectiveContextTokens = 4096,
+                DurationMs = 100,
+                TotalTokens = 12,
+                TokensPerSecond = 120
+            });
+            return run.Id;
+        }
+    }
+
+    [Test]
     public async Task UpdateProjectFidelity_WithMeasureExisting_LeavesEveryQueuedCellReadingQueued()
     {
         var databasePath = GetDatabasePath("project-fidelity-queued-projection.sqlite");

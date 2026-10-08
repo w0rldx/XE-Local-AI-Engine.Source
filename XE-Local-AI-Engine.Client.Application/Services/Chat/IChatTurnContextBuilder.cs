@@ -38,8 +38,8 @@ public interface IChatTurnContextBuilder
     Task<ConversationMessageDto?> BuildImageContextAsync(Guid conversationId, IReadOnlyList<Guid>? attachmentFileIds, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     The names of the requested attachments the builders above skip on this turn, from upload metadata alone: no
-    ///     extracted text, not readable, or an image the model cannot see.
+    ///     The names of the requested attachments the builders above skip on this turn: blank extracted text, not
+    ///     readable, or an image the model cannot see.
     /// </summary>
     /// <param name="imagesAccepted">Whether the effective model takes image parts; false lists every requested image.</param>
     /// <param name="textAccepted">Whether the turn delivers extracted text; false lists every extracted file.</param>

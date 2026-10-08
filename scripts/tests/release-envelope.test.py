@@ -40,7 +40,11 @@ class ReleaseEnvelopeTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
-        for name, payload in (("app.zip", b"application"), ("releases.win.json", b"feed")):
+        for name, payload in (
+            ("app.zip", b"application"),
+            ("openapi-v1.json", b"{}"),
+            ("releases.win.json", b"feed"),
+        ):
             (root / name).write_bytes(payload)
 
         spdx = {

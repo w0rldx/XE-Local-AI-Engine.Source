@@ -41,7 +41,7 @@ public sealed class MigrationChainTests
             $"Applied identity migrations must be exactly the declared set; missing [{string.Join(", ", declared.Except(applied, StringComparer.Ordinal))}].");
     }
 
-    private static IReadOnlyCollection<string> DeclaredChatMigrations()
+    internal static IReadOnlyCollection<string> DeclaredChatMigrations()
     {
         var rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(rootPath);
@@ -58,7 +58,7 @@ public sealed class MigrationChainTests
         }
     }
 
-    private static IReadOnlyCollection<string> DeclaredIdentityMigrations()
+    internal static IReadOnlyCollection<string> DeclaredIdentityMigrations()
     {
         var rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(rootPath);

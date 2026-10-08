@@ -18449,6 +18449,159 @@
         ]
       }
     },
+    "/api/local/v1/node/backups": {
+      "get": {
+        "tags": [
+          "Node"
+        ],
+        "operationId": "listNodeBackups",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsNodeBackupsV1NodeBackupListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Node"
+        ],
+        "operationId": "createNodeBackup",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsNodeBackupsV1NodeBackupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/node/backups/{name}/restore": {
+      "post": {
+        "tags": [
+          "Node"
+        ],
+        "operationId": "restoreNodeBackup",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsNodeBackupsV1RestoreNodeBackupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/proxy/key": {
       "delete": {
         "tags": [
@@ -42697,6 +42850,83 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsNodeBackupsV1NodeAutomaticBackupResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "outcome"
+        ],
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesPersistenceNodeDbAutomaticBackupOutcome"
+          },
+          "atUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsNodeBackupsV1NodeBackupListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "backups",
+          "lastAutomaticBackup"
+        ],
+        "properties": {
+          "backups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsNodeBackupsV1NodeBackupResponse"
+            }
+          },
+          "lastAutomaticBackup": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsNodeBackupsV1NodeAutomaticBackupResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsNodeBackupsV1NodeBackupResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "sizeBytes",
+          "createdUtc"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "createdUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsNodeBackupsV1RestoreNodeBackupRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsNodeBackupsV1RestoreNodeBackupResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nodeStopping"
+        ],
+        "properties": {
+          "nodeStopping": {
+            "type": "boolean"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsNodeSettingsV1NodeSettingsConflictResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -43884,15 +44114,11 @@
           "llamaMaxLoadedProcesses": {
             "type": "integer",
             "format": "int32",
-            "maximum": 16,
-            "minimum": 1,
             "nullable": true
           },
           "llamaIdleTimeToLiveSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 86400,
-            "minimum": 30,
             "nullable": true
           },
           "keepModelWarmEnabled": {
@@ -43906,15 +44132,11 @@
           "keepModelWarmIntervalSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 3600,
-            "minimum": 5,
             "nullable": true
           },
           "maxResponseSizeMb": {
             "type": "integer",
             "format": "int32",
-            "maximum": 100,
-            "minimum": 1,
             "nullable": true
           },
           "recommendedLlamaCppTag": {
@@ -43924,8 +44146,6 @@
           "chatCacheReuse": {
             "type": "integer",
             "format": "int32",
-            "maximum": 8192,
-            "minimum": 0,
             "nullable": true
           },
           "speculativeMode": {
@@ -43947,8 +44167,6 @@
           "speculativeDraftMaxTokens": {
             "type": "integer",
             "format": "int32",
-            "maximum": 16,
-            "minimum": 0,
             "nullable": true
           },
           "speculativeDraftGpuLayers": {
@@ -43968,55 +44186,39 @@
           },
           "huggingFaceDiskMarginBytes": {
             "type": "integer",
-            "maximum": 1099511627776,
-            "minimum": 1,
             "nullable": true
           },
           "orchestrationIdleTimeoutSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 3600,
-            "minimum": 1,
             "nullable": true
           },
           "agentHomePrepareTimeoutSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 86400,
-            "minimum": 1,
             "nullable": true
           },
           "agentHomeCommandTimeoutSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 86400,
-            "minimum": 1,
             "nullable": true
           },
           "agentHomeMaxSelectedFolderBytes": {
             "type": "integer",
-            "minimum": 0,
-            "nullable": true,
-            "exclusiveMinimum": true
+            "nullable": true
           },
           "agentHomeMaxPatchBytes": {
             "type": "integer",
-            "minimum": 0,
-            "nullable": true,
-            "exclusiveMinimum": true
+            "nullable": true
           },
           "maxPendingToolCallAgeMinutes": {
             "type": "integer",
             "format": "int32",
-            "maximum": 60,
-            "minimum": 1,
             "nullable": true
           },
           "detachedGraceSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 86400,
-            "minimum": 0,
             "nullable": true
           },
           "voiceFeatureEnabled": {
@@ -44037,29 +44239,21 @@
           "transcriptionIdleTimeoutMinutes": {
             "type": "integer",
             "format": "int32",
-            "maximum": 240,
-            "minimum": 1,
             "nullable": true
           },
           "llamaReadinessTimeoutCapSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 3600,
-            "minimum": 120,
             "nullable": true
           },
           "llamaChatHttpTimeoutSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 86400,
-            "minimum": 60,
             "nullable": true
           },
           "llamaEmbeddingHttpTimeoutSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 3600,
-            "minimum": 10,
             "nullable": true
           },
           "llamaChatCacheRamMiB": {
@@ -44072,78 +44266,56 @@
           "llamaCpuThreadReserve": {
             "type": "integer",
             "format": "int32",
-            "maximum": 64,
-            "minimum": 0,
             "nullable": true
           },
           "llamaGpuReservePercent": {
             "type": "integer",
             "format": "int32",
-            "maximum": 50,
-            "minimum": 0,
             "nullable": true
           },
           "llamaRamReservePercent": {
             "type": "integer",
             "format": "int32",
-            "maximum": 75,
-            "minimum": 0,
             "nullable": true
           },
           "imageIdleTimeToLiveSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 86400,
-            "minimum": 30,
             "nullable": true
           },
           "modelFitSafetyMarginPercent": {
             "type": "integer",
             "format": "int32",
-            "maximum": 50,
-            "minimum": 0,
             "nullable": true
           },
           "maxProviderCallsPerInvocation": {
             "type": "integer",
             "format": "int32",
-            "maximum": 2000,
-            "minimum": 10,
             "nullable": true
           },
           "customToolMaxTimeoutSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 3600,
-            "minimum": 30,
             "nullable": true
           },
           "webFetchTimeoutSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 120,
-            "minimum": 5,
             "nullable": true
           },
           "webFetchMaxContentChars": {
             "type": "integer",
             "format": "int32",
-            "maximum": 100000,
-            "minimum": 1000,
             "nullable": true
           },
           "knowledgeSearchDefaultResults": {
             "type": "integer",
             "format": "int32",
-            "maximum": 20,
-            "minimum": 1,
             "nullable": true
           },
           "knowledgeSearchMaxResults": {
             "type": "integer",
             "format": "int32",
-            "maximum": 20,
-            "minimum": 1,
             "nullable": true
           },
           "reasoningBudgetMinimalTokens": {
@@ -44182,134 +44354,96 @@
           "huggingFaceDownloadConnections": {
             "type": "integer",
             "format": "int32",
-            "maximum": 16,
-            "minimum": 1,
             "nullable": true
           },
           "transcriptionInferenceTimeoutMinutes": {
             "type": "integer",
             "format": "int32",
-            "maximum": 480,
-            "minimum": 1,
             "nullable": true
           },
           "agentHomeMaxRunSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 86400,
-            "minimum": 60,
             "nullable": true
           },
           "agentHomeRunRetentionDays": {
             "type": "integer",
             "format": "int32",
-            "maximum": 365,
-            "minimum": 1,
             "nullable": true
           },
           "toolPipelineMaxIterationsPerRequest": {
             "type": "integer",
             "format": "int32",
-            "maximum": 200,
-            "minimum": 1,
             "nullable": true
           },
           "toolPipelineMaxToolResultChars": {
             "type": "integer",
             "format": "int32",
-            "maximum": 1000000,
-            "minimum": 1024,
             "nullable": true
           },
           "toolPipelineMaxConsecutiveInvalidToolCalls": {
             "type": "integer",
             "format": "int32",
-            "maximum": 20,
-            "minimum": 1,
             "nullable": true
           },
           "defaultContextTokens": {
             "type": "integer",
             "format": "int32",
-            "maximum": 1048576,
-            "minimum": 1024,
             "nullable": true
           },
           "providerBudgetRecentMessagesToKeep": {
             "type": "integer",
             "format": "int32",
-            "maximum": 100,
-            "minimum": 2,
             "nullable": true
           },
           "providerBudgetMaxCumulativeInputTokens": {
             "type": "integer",
             "format": "int32",
-            "maximum": 100000000,
-            "minimum": 100000,
             "nullable": true
           },
           "contextBudgetRecentTurnKeepCount": {
             "type": "integer",
             "format": "int32",
-            "maximum": 50,
-            "minimum": 2,
             "nullable": true
           },
           "compactionAutoCompactPercent": {
             "type": "integer",
             "format": "int32",
-            "maximum": 95,
-            "minimum": 30,
             "nullable": true
           },
           "compactionRecentMessagesVerbatim": {
             "type": "integer",
             "format": "int32",
-            "maximum": 100,
-            "minimum": 2,
             "nullable": true
           },
           "maxInlinedAttachmentChars": {
             "type": "integer",
             "format": "int32",
-            "maximum": 2000000,
-            "minimum": 1000,
             "nullable": true
           },
           "knowledgeChatTopK": {
             "type": "integer",
             "format": "int32",
-            "maximum": 20,
-            "minimum": 1,
             "nullable": true
           },
           "providerMaxRetries": {
             "type": "integer",
             "format": "int32",
-            "maximum": 10,
-            "minimum": 0,
             "nullable": true
           },
           "spawnMaxConcurrent": {
             "type": "integer",
             "format": "int32",
-            "maximum": 32,
-            "minimum": 1,
             "nullable": true
           },
           "spawnMaxCloud": {
             "type": "integer",
             "format": "int32",
-            "maximum": 32,
-            "minimum": 0,
             "nullable": true
           },
           "spawnQueueWaitSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 3600,
-            "minimum": 0,
             "nullable": true
           },
           "compactionAutoEnabled": {
@@ -44331,8 +44465,6 @@
           "knowledgeRetrievalLatencyBudgetMs": {
             "type": "integer",
             "format": "int32",
-            "maximum": 60000,
-            "minimum": 50,
             "nullable": true
           },
           "knowledgeScheduledReindexEnabled": {
@@ -44342,8 +44474,6 @@
           "knowledgeScheduledReindexIntervalMinutes": {
             "type": "integer",
             "format": "int32",
-            "maximum": 10080,
-            "minimum": 5,
             "nullable": true
           },
           "knowledgeAgentToolsEnabled": {
@@ -44389,8 +44519,6 @@
           "chatRetentionDays": {
             "type": "integer",
             "format": "int32",
-            "maximum": 3650,
-            "minimum": 1,
             "nullable": true
           },
           "agentExecutionLogRetentionEnabled": {
@@ -44400,35 +44528,25 @@
           "agentExecutionLogRetentionDays": {
             "type": "integer",
             "format": "int32",
-            "maximum": 3650,
-            "minimum": 1,
             "nullable": true
           },
           "nodeDbBackupRetainCount": {
             "type": "integer",
             "format": "int32",
-            "maximum": 100,
-            "minimum": 1,
             "nullable": true
           },
           "benchmarkKldCacheMaxBytes": {
             "type": "integer",
-            "maximum": 4398046511104,
-            "minimum": 1073741824,
             "nullable": true
           },
           "schedulerHistoryRetentionDays": {
             "type": "integer",
             "format": "int32",
-            "maximum": 3650,
-            "minimum": 1,
             "nullable": true
           },
           "imageMaxLoadedProcesses": {
             "type": "integer",
             "format": "int32",
-            "maximum": 4,
-            "minimum": 1,
             "nullable": true
           },
           "imageTextEncoderOnGpu": {
@@ -44438,77 +44556,55 @@
           "graphWorkflowMaxConcurrentRuns": {
             "type": "integer",
             "format": "int32",
-            "maximum": 64,
-            "minimum": 1,
             "nullable": true
           },
           "graphWorkflowDefaultNodeTimeoutSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 86400,
-            "minimum": 30,
             "nullable": true
           },
           "workSessionMaxStepsPerRun": {
             "type": "integer",
             "format": "int32",
-            "maximum": 1000,
-            "minimum": 1,
             "nullable": true
           },
           "workSessionMaxConcurrentSessions": {
             "type": "integer",
             "format": "int32",
-            "maximum": 64,
-            "minimum": 1,
             "nullable": true
           },
           "developmentMaxAttemptDurationSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 86400,
-            "minimum": 60,
             "nullable": true
           },
           "developmentMaxToolCalls": {
             "type": "integer",
             "format": "int32",
-            "maximum": 1024,
-            "minimum": 1,
             "nullable": true
           },
           "developmentMaxOutputTokens": {
             "type": "integer",
             "format": "int32",
-            "maximum": 1000000,
-            "minimum": 256,
             "nullable": true
           },
           "agentHomeMaxInnerToolCalls": {
             "type": "integer",
             "format": "int32",
-            "maximum": 1000,
-            "minimum": 1,
             "nullable": true
           },
           "agentHomePatchApplyTimeoutSeconds": {
             "type": "integer",
             "format": "int32",
-            "maximum": 3600,
-            "minimum": 10,
             "nullable": true
           },
           "agentHomeRunRetentionMaxRuns": {
             "type": "integer",
             "format": "int32",
-            "maximum": 100000,
-            "minimum": 0,
             "nullable": true
           },
           "agentHomeRunRetentionMaxTotalBytes": {
             "type": "integer",
-            "maximum": 1099511627776,
-            "minimum": 0,
             "nullable": true
           },
           "developmentEnabled": {
@@ -50653,6 +50749,22 @@
             "format": "double"
           }
         }
+      },
+      "XE_Local_AI_EngineClientServicesPersistenceNodeDbAutomaticBackupOutcome": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "NotRun",
+          "Succeeded",
+          "Skipped",
+          "Failed"
+        ],
+        "enum": [
+          "NotRun",
+          "Succeeded",
+          "Skipped",
+          "Failed"
+        ]
       },
       "XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1": {
         "type": "object",

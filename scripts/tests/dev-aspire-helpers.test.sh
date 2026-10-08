@@ -107,6 +107,49 @@ assert_not_contains "${status_output}" "other-secret"
 [[ ! -f "${FAKE_ASPIRE_STATE}" ]]
 grep -Fq -- "stop --apphost ${APPHOST} --non-interactive --nologo" "${FAKE_ASPIRE_LOG}"
 
+# Survivor grace: the fake /proc anchors the AppHost PID (this shell) and links each survivor's stat and
+# cmdline to its real /proc entry, so a survivor drops out of the snapshot's identity check once it exits.
+mkdir -p "${XE_ASPIRE_PROC_ROOT}/$$"
+printf '%s (bash) S 1 %s %s 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1000\n' "$$" "$$" "$$" >"${XE_ASPIRE_PROC_ROOT}/$$/stat"
+printf 'bash' >"${XE_ASPIRE_PROC_ROOT}/$$/cmdline"
+link_survivor() {
+  local pid="$1"
+  for _ in $(seq 1 50); do
+    [[ "$(cat "/proc/${pid}/cmdline" 2>/dev/null | tr '\0' ' ')" == sleep* ]] && break
+    sleep 0.1
+  done
+  mkdir -p "${XE_ASPIRE_PROC_ROOT}/${pid}"
+  ln -s "/proc/${pid}/stat" "${XE_ASPIRE_PROC_ROOT}/${pid}/stat"
+  ln -s "/proc/${pid}/cmdline" "${XE_ASPIRE_PROC_ROOT}/${pid}/cmdline"
+}
+now_ms() { date +%s%3N; }
+
+sleep 60 &
+draining_pid=$!
+link_survivor "${draining_pid}"
+: >"${FAKE_ASPIRE_STATE}"
+started_ms="$(now_ms)"
+grace_output="$(XE_DEV_STOP_GRACE_SECONDS=20 "${SCRIPT_DIR}/dev-stop.sh")"
+elapsed_ms=$(( $(now_ms) - started_ms ))
+[[ "${grace_output}" == *"SIGTERM scoped survivors: ${draining_pid}"* ]]
+assert_not_contains "${grace_output}" "SIGKILL"
+# A survivor that exits on SIGTERM ends the wait early, well inside the 20 s budget.
+(( elapsed_ms < 4000 )) || { echo "FAIL: grace wait did not exit early (${elapsed_ms} ms)" >&2; exit 1; }
+assert_process_gone "${draining_pid}"
+rm -rf -- "${XE_ASPIRE_PROC_ROOT:?}/${draining_pid}"
+
+( trap '' TERM; exec sleep 60 ) &
+stubborn_pid=$!
+link_survivor "${stubborn_pid}"
+: >"${FAKE_ASPIRE_STATE}"
+started_ms="$(now_ms)"
+grace_output="$(XE_DEV_STOP_GRACE_SECONDS=1 "${SCRIPT_DIR}/dev-stop.sh")"
+elapsed_ms=$(( $(now_ms) - started_ms ))
+[[ "${grace_output}" == *"Grace period of 1s elapsed; SIGKILL scoped survivors: ${stubborn_pid}"* ]]
+(( elapsed_ms >= 1000 )) || { echo "FAIL: SIGKILL came before the grace budget (${elapsed_ms} ms)" >&2; exit 1; }
+assert_process_gone "${stubborn_pid}"
+rm -rf -- "${XE_ASPIRE_PROC_ROOT:?}/${stubborn_pid}" "${XE_ASPIRE_PROC_ROOT:?}/$$"
+
 export FAKE_PS_MODE=fail
 start_count_before="$(grep -c '^start ' "${FAKE_ASPIRE_LOG}" || true)"
 set +e

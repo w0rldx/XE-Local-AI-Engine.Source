@@ -458,6 +458,12 @@ public interface IBenchmarkStore
         bool measureExisting = false,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     The distinct primary model names of the runs a <c>measureExisting</c> fidelity write would enqueue now, so a
+    ///     caller can refuse a KL-divergence base that does not match them before the write.
+    /// </summary>
+    Task<IReadOnlyList<string>> ListMissingFidelityModelNamesAsync(Guid projectId, CancellationToken cancellationToken = default);
+
     /// <summary>One judge attempt by id, payloads included, or null when it is gone.</summary>
     Task<BenchmarkJudgeAttemptRecord?> GetJudgeAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default);
 

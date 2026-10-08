@@ -148,6 +148,21 @@ public static class NodeSettingsAgenticPatchValidation
             return Reject(NodeSettingsField.DefaultModelName, StoredNodeSettings.ImplausibleDefaultModelNameMessage);
         }
 
+        if (IsImplausibleModelName(patch.KeepModelWarmModelName))
+        {
+            return Reject(NodeSettingsField.KeepModelWarmModelName, StoredNodeSettings.ImplausibleModelNameMessage);
+        }
+
+        if (IsImplausibleModelName(patch.RerankerModelName))
+        {
+            return Reject(NodeSettingsField.RerankerModelName, StoredNodeSettings.ImplausibleModelNameMessage);
+        }
+
+        if (IsImplausibleModelName(patch.AutoEffortFastModelName))
+        {
+            return Reject(NodeSettingsField.AutoEffortFastModelName, StoredNodeSettings.ImplausibleModelNameMessage);
+        }
+
         if (!string.IsNullOrWhiteSpace(patch.HuggingFaceDefaultQuant) && !StoredNodeSettings.IsKnownQuant(patch.HuggingFaceDefaultQuant))
         {
             return Reject(NodeSettingsField.HuggingFaceDefaultQuant, StoredNodeSettings.UnknownHuggingFaceDefaultQuantMessage);
@@ -219,6 +234,10 @@ public static class NodeSettingsAgenticPatchValidation
 
     private static bool IsBetween(int value, int minimum, int maximum) =>
         value >= minimum && value <= maximum;
+
+    // Blank is not implausible: it clears the field, as on the REST save.
+    private static bool IsImplausibleModelName(string? name) =>
+        !string.IsNullOrWhiteSpace(name) && !StoredNodeSettings.IsPlausibleModelName(name);
 
     private static IReadOnlyList<NodeSettingsValidationError> Reject(NodeSettingsField field, string message) =>
     [

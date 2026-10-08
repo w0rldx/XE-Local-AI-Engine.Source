@@ -293,7 +293,7 @@ menu.
 
 ## Removing it
 
-There is no uninstaller to run. Removal is two manual deletions:
+There is no uninstaller to run. Stop the app, then delete two folders:
 
 1. **Stop the app** (**Quit XE** in the tray menu).
 2. **Delete the folder** you extracted, e.g. `C:\Apps\XE-Local-AI-Engine`.
@@ -303,8 +303,17 @@ There is no uninstaller to run. Removal is two manual deletions:
    ```
    %LOCALAPPDATA%\XE-Local-AI-Engine
    ```
-   Delete that folder. It holds your account, chats, settings, downloaded models and the AI engine —
-   often **several gigabytes**, so it is worth deleting if you want the space back.
+   Delete that folder. It is often **several gigabytes**, so it is worth deleting if you want the space
+   back. It holds:
+
+   - the database with your account, chats and settings (`node.sqlite` and its `-wal`/`-shm` files),
+   - `node.key`, the encryption key; without it the database cannot be read,
+   - `dp-keys\`, the app's data-protection keys,
+   - your saved credentials and API keys (`*.enc` files),
+   - `node-settings.json`, the node settings,
+   - `backups\`, your database backups,
+   - knowledge documents, uploaded files and generated images,
+   - `models\`, the downloaded models (large, but you can download them again), and the AI engine.
 
 > Deleting only the data folder is a **full reset**: the app stays installed and starts fresh, as if
 > you had just downloaded it.

@@ -8417,6 +8417,33 @@
 	"diagnostics": {
 		"title": "Diagnose",
 		"description": "In diesem Browser erfasste Fehler-Snapshots. Der Export holt zusätzlich bereinigte Logs und Systeminformationen von Ihrem lokalen Knoten; die App sendet nie etwas irgendwohin.",
+		"backups": {
+			"title": "Datenbank-Snapshots",
+			"description": "Kopien der Knoten-Datenbank im Ordner „backups“ des Datenverzeichnisses. Vor jedem Update, das die Datenbank ändert, wird automatisch eine erstellt.",
+			"automatic": {
+				"NotRun": "Automatische Sicherung bei diesem Start: nicht nötig, kein Datenbank-Update stand an.",
+				"Succeeded": "Automatische Sicherung bei diesem Start: erstellt {{time}}.",
+				"Skipped": "Automatische Sicherung bei diesem Start: übersprungen {{time}}. {{error}}",
+				"Failed": "Automatische Sicherung bei diesem Start: fehlgeschlagen {{time}}. {{error}}"
+			},
+			"take": "Snapshot erstellen",
+			"takeSuccess": "Datenbank-Snapshot erstellt.",
+			"takeError": "Der Datenbank-Snapshot konnte nicht erstellt werden.",
+			"loadError": "Die Datenbank-Snapshots konnten nicht geladen werden.",
+			"empty": "Noch keine Datenbank-Snapshots.",
+			"columns": {
+				"name": "Name",
+				"size": "Größe",
+				"created": "Erstellt"
+			},
+			"restore": "Wiederherstellen",
+			"restoreLabel": "{{name}} wiederherstellen",
+			"restoreConfirmTitle": "{{name}} wiederherstellen?",
+			"restoreConfirm": "Dies stellt nur die Datenbank wieder her: Schlüssel, Einstellungen und Dateien auf dem Datenträger sind nicht enthalten. Der Knoten wird nach der Wiederherstellung beendet und muss neu gestartet werden. Die aktuelle Datenbank bleibt als .prerestore-Kopie erhalten.",
+			"restoreConfirmAction": "Wiederherstellen und Knoten beenden",
+			"restoreError": "Der Datenbank-Snapshot konnte nicht wiederhergestellt werden.",
+			"stopping": "Der Knoten wird beendet, um den Snapshot wiederherzustellen. Starten Sie die App erneut."
+		},
 		"reportProblem": "Problem melden",
 		"reportProblemTooltip": "Einen Diagnose-Snapshot des aktuellen App-Zustands erstellen",
 		"reportSuccess": "Diagnose-Snapshot erstellt.",

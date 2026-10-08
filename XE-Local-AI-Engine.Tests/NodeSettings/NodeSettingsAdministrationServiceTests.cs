@@ -659,6 +659,30 @@ public sealed class NodeSettingsAdministrationServiceTests
     }
 
     [Test]
+    [Arguments(NodeSettingsField.KeepModelWarmModelName)]
+    [Arguments(NodeSettingsField.RerankerModelName)]
+    [Arguments(NodeSettingsField.AutoEffortFastModelName)]
+    public async Task ApplyAgenticPatchAsync_WhenARoleModelNameIsMalformed_RejectsItWithoutSaving(NodeSettingsField field)
+    {
+        const string malformed = "unsloth/model\u0001-GGUF:Q4_K_M";
+        var store = NewSubstituteStore(new StoredNodeSettings());
+        var service = CreateService(store);
+
+        var result = await service.ApplyAgenticPatchAsync(field switch
+        {
+            NodeSettingsField.KeepModelWarmModelName => new NodeSettingsAgenticPatch { KeepModelWarmModelName = malformed },
+            NodeSettingsField.RerankerModelName => new NodeSettingsAgenticPatch { RerankerModelName = malformed },
+            _ => new NodeSettingsAgenticPatch { AutoEffortFastModelName = malformed }
+        });
+
+        AssertEx.False(result.Updated);
+        AssertEx.Equal(1, result.ValidationErrors.Count);
+        AssertEx.Equal(field, result.ValidationErrors[0].Field);
+        AssertEx.Equal(StoredNodeSettings.ImplausibleModelNameMessage, result.ValidationErrors[0].Message);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task ApplyAgenticPatchAsync_WhenFieldRangeIsInvalid_DoesNotNormalizeSaveOrReport()
     {
         var store = NewSubstituteStore(new StoredNodeSettings());

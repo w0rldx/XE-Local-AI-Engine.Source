@@ -273,8 +273,8 @@ public sealed partial record StoredNodeSettings
     public const int MaxReasoningBudgetTokens = 131_072;
 
     /// <summary>
-    ///     The request-only sentinel that resets a reasoning budget or <see cref="ChatOutputCapMaxTokens" /> to its
-    ///     shipped default (stored <see langword="null" />), because a <see langword="null" /> request member means "keep".
+    ///     The request-only sentinel that resets a nullable numeric setting whose request member says "-1 resets to the
+    ///     default" (stored <see langword="null" />), because a <see langword="null" /> request member means "keep".
     /// </summary>
     public const int TokenSettingUnset = -1;
 
@@ -778,6 +778,8 @@ public sealed partial record StoredNodeSettings
     public const int MaxModelNameLength = 256;
 
     public const string ImplausibleDefaultModelNameMessage = "Default model name must be at most 256 characters and contain no control characters.";
+
+    public const string ImplausibleModelNameMessage = "Model name must be at most 256 characters and contain no control characters.";
 
     public const string UnknownHuggingFaceDefaultQuantMessage = "Unknown Hugging Face default quant. Use a GGUF quant label such as Q4_K_M or UD-Q4_K_XL.";
 

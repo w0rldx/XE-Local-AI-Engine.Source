@@ -556,6 +556,57 @@ public sealed class BinaryManagerInstallTagTests
     }
 
     [Test]
+    public async Task EnsureBinary_WhenInstalledNewerTagIsOnDisk_WinsOverTheLiveCatalogOnline()
+    {
+        // The live catalog only picks a tag to ACQUIRE: online, it answered with the pin and replaced the newer runtime
+        // the user installed, although that runtime's binary was still on disk.
+        var newerTag = $"b{LlamaCppRuntimeTag.TryParseTagNumber(LlamaCppReleasePins.PinnedTag)!.Value + 1}";
+
+        var binary = await EnsureWithInstalledTagOnDiskOnlineAsync(newerTag);
+
+        AssertEx.Equal(newerTag, binary.Version);
+        AssertEx.False(binary.IsPinnedFallback);
+    }
+
+    [Test]
+    public async Task EnsureBinary_WhenInstalledTagIsOlderThanThePin_ResolvesThePinOnline()
+    {
+        // The pin is the minimum tested version: a node keeping an older runtime on disk must still move up to it.
+        const string olderTag = "b9000";
+        AssertEx.True(LlamaCppRuntimeTag.IsUpdateAvailable(olderTag, LlamaCppReleasePins.PinnedTag), "The recorded tag must be older than the pin for this test.");
+
+        var binary = await EnsureWithInstalledTagOnDiskOnlineAsync(olderTag);
+
+        AssertEx.Equal(LlamaCppReleasePins.PinnedTag, binary.Version);
+        AssertEx.True(binary.IsPinnedFallback);
+    }
+
+    /// <summary>Records <paramref name="installedTag" />, puts its binary and the pin's on disk, and ensures CPU with an online catalog.</summary>
+    private static async Task<LlamaBinary> EnsureWithInstalledTagOnDiskOnlineAsync(string installedTag)
+    {
+        using var cache = new TempDir();
+        var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
+        foreach (var tag in new[] { LlamaCppReleasePins.PinnedTag, installedTag })
+        {
+            var server = Path.Combine(cache.Path, "llama.cpp", tag, "cpu", pin.ServerRelativePath.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(server)!);
+            await File.WriteAllTextAsync(server, tag);
+        }
+
+        using var store = new InstalledRuntimeStore(cache.Path);
+        await store.WriteAsync(new InstalledRuntimeState(installedTag, AssetName, new string('b', 64), GpuVariant.Cpu, DateTimeOffset.UtcNow), CancellationToken.None);
+
+        using var handler = new ScriptedHandler(() => throw new InvalidOperationException("Cached reuse must not download."));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, new ResolvesPinnedFloorCatalog(), store);
+
+        var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+        AssertEx.Equal(expected: 0, handler.CallCount);
+        return binary;
+    }
+
+    [Test]
     public async Task EnsureBinary_CrossVariantNonPinnedResolve_DoesNotOverwriteRecordAssetOrSha()
     {
         // MED-1 record integrity: an ensure for a DIFFERENT variant that resolves a non-pinned tier-2 tag (the recorded

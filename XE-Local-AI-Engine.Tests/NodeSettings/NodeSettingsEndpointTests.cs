@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.NodeSettings;
 
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
@@ -377,6 +378,32 @@ public sealed class NodeSettingsEndpointTests
         await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    [Arguments("keepModelWarmModelName")]
+    [Arguments("rerankerModelName")]
+    [Arguments("autoEffortFastModelName")]
+    public async Task SaveNodeSettings_WithAMalformedRoleModelName_IsRejectedUnderTheWireName(string wireName)
+    {
+        const string malformed = "unsloth/model\u0001-GGUF:Q4_K_M";
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(wireName switch
+        {
+            "keepModelWarmModelName" => new SaveNodeSettingsRequest { KeepModelWarmModelName = malformed },
+            "rerankerModelName" => new SaveNodeSettingsRequest { RerankerModelName = malformed },
+            _ => new SaveNodeSettingsRequest { AutoEffortFastModelName = malformed }
+        });
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        AssertEx.Equal(wireName, document.RootElement.GetProperty("errors")[0].GetProperty("name").GetString());
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
     /// <summary>
     ///     A default range message names the camelCase wire field the client sent, not FluentValidation's spaced
     ///     display name ('Max Message Request Timeout Seconds'); the error's name key stays the same wire name.
@@ -549,6 +576,104 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.False(budget.IsValid);
         AssertEx.False(ceiling.IsValid);
         AssertEx.True(sentinels.IsValid, string.Join("; ", sentinels.Errors.Select(static error => error.ErrorMessage)));
+    }
+
+    /// <summary>F-70: -1 clears a stored nullable numeric knob back to "unset, use the default"; a null member still keeps it.</summary>
+    [Test]
+    [Arguments(nameof(SaveNodeSettingsRequest.LlamaIdleTimeToLiveSeconds), 600L)]
+    [Arguments(nameof(SaveNodeSettingsRequest.DetachedGraceSeconds), 0L)]
+    [Arguments(nameof(SaveNodeSettingsRequest.MaxPendingToolCallAgeMinutes), 30L)]
+    [Arguments(nameof(SaveNodeSettingsRequest.SpawnMaxCloud), 0L)]
+    [Arguments(nameof(SaveNodeSettingsRequest.AgentHomeMaxPatchBytes), 1024L)]
+    [Arguments(nameof(SaveNodeSettingsRequest.BenchmarkKldCacheMaxBytes), StoredNodeSettings.MinBenchmarkKldCacheMaxBytes)]
+    public async Task SaveNodeSettings_MinusOne_ClearsAStoredKnobBackToTheDefault(string knob, long value)
+    {
+        var saved = new StoredNodeSettings();
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => saved);
+        nodeSettingsStore.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             saved = call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(saved);
+                             return Task.FromResult(saved);
+                         });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+        var requestProperty = typeof(SaveNodeSettingsRequest).GetProperty(knob)!;
+        var knobType = Nullable.GetUnderlyingType(requestProperty.PropertyType)!;
+        var responseProperty = typeof(NodeSettingsResponse).GetProperty(knob)!;
+
+        async Task<NodeSettingsResponse> PutAndGetAsync(SaveNodeSettingsRequest body)
+        {
+            using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+            putRequest.Content = JsonContent.Create(body);
+            using var putResponse = await client.SendAsync(putRequest);
+            AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode, await putResponse.Content.ReadAsStringAsync());
+            using var getRequest = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+            using var getResponse = await client.SendAsync(getRequest);
+            return await ReadJsonAsync<NodeSettingsResponse>(getResponse);
+        }
+
+        SaveNodeSettingsRequest RequestWith(long knobValue)
+        {
+            var body = new SaveNodeSettingsRequest();
+            requestProperty.SetValue(body, Convert.ChangeType(knobValue, knobType, CultureInfo.InvariantCulture));
+            return body;
+        }
+
+        var stored = await PutAndGetAsync(RequestWith(value));
+        AssertEx.Equal(Convert.ChangeType(value, knobType, CultureInfo.InvariantCulture), responseProperty.GetValue(stored));
+
+        // An unrelated save sends the knob as null, which keeps it.
+        var kept = await PutAndGetAsync(new SaveNodeSettingsRequest
+        {
+            WebFetchTimeoutSeconds = 30
+        });
+        AssertEx.Equal(Convert.ChangeType(value, knobType, CultureInfo.InvariantCulture), responseProperty.GetValue(kept));
+
+        var cleared = await PutAndGetAsync(RequestWith(StoredNodeSettings.TokenSettingUnset));
+        AssertEx.Null(responseProperty.GetValue(cleared));
+        AssertEx.Null(typeof(StoredNodeSettings).GetProperty(knob)!.GetValue(saved));
+    }
+
+    /// <summary>
+    ///     -1 is the only extra value a covered knob accepts; the draft GPU layer count, which takes no sentinel, still
+    ///     refuses it, and the range message still names the real range.
+    /// </summary>
+    [Test]
+    public void SaveNodeSettings_ClearSentinel_IsTheOnlyNewlyAcceptedValue()
+    {
+        var validator = new SaveNodeSettingsRequestValidator();
+
+        var sentinels = validator.Validate(new SaveNodeSettingsRequest
+        {
+            LlamaIdleTimeToLiveSeconds = StoredNodeSettings.TokenSettingUnset,
+            AgentHomeMaxPatchBytes = StoredNodeSettings.TokenSettingUnset,
+            BenchmarkKldCacheMaxBytes = StoredNodeSettings.TokenSettingUnset
+        });
+        var idleTtl = validator.Validate(new SaveNodeSettingsRequest
+        {
+            LlamaIdleTimeToLiveSeconds = -2
+        });
+        var patchBytes = validator.Validate(new SaveNodeSettingsRequest
+        {
+            AgentHomeMaxPatchBytes = 0
+        });
+        var detachedGrace = validator.Validate(new SaveNodeSettingsRequest
+        {
+            DetachedGraceSeconds = StoredNodeSettings.MaxDetachedGraceSeconds + 1
+        });
+        var draftLayers = validator.Validate(new SaveNodeSettingsRequest
+        {
+            SpeculativeDraftGpuLayers = StoredNodeSettings.TokenSettingUnset
+        });
+
+        AssertEx.True(sentinels.IsValid, string.Join("; ", sentinels.Errors.Select(static error => error.ErrorMessage)));
+        AssertEx.False(idleTtl.IsValid);
+        AssertEx.Contains(idleTtl.Errors.Single().ErrorMessage, "must be between 30 and 86400, or -1 for the default", StringComparison.Ordinal);
+        AssertEx.False(patchBytes.IsValid);
+        AssertEx.False(detachedGrace.IsValid);
+        AssertEx.False(draftLayers.IsValid);
     }
 
     [Test]
@@ -1698,7 +1823,8 @@ public sealed class NodeSettingsEndpointTests
             }
             : new SaveNodeSettingsRequest
             {
-                AgentHomeRunRetentionMaxTotalBytes = StoredNodeSettings.MinAgentHomeRunRetentionMaxTotalBytes - 1
+                // Min - 1 is -1, the "back to the default" sentinel, so the first refused value sits one below it.
+                AgentHomeRunRetentionMaxTotalBytes = StoredNodeSettings.MinAgentHomeRunRetentionMaxTotalBytes - 2
             });
         using var response = await client.SendAsync(request);
 

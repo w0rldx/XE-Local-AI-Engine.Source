@@ -4,6 +4,7 @@
 // verbose-logging switch, importing a previously exported bundle, clearing all snapshots and opening a prefilled GitHub
 // issue; each row can be viewed, exported or deleted. Export merges the node's scrubbed server bundle into the snapshot
 // zip. Nothing leaves the machine: the issue button only opens a link, and the operator attaches the zip themselves.
+// Below the list, the node's database snapshots (NodeBackupsCard) are taken and restored.
 
 import { Alert, Badge, Button, FileButton, Group, Loader, Switch, Table, Text, Tooltip } from "@mantine/core";
 import { useMutation } from "@tanstack/react-query";
@@ -29,6 +30,7 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
+import { NodeBackupsCard } from "@/features/diagnostics/components/NodeBackupsCard";
 import { ReportProblemButton } from "@/features/diagnostics/components/ReportProblemButton";
 import { SnapshotDetail } from "@/features/diagnostics/components/SnapshotDetail";
 import { buildIssueUrl } from "@/features/diagnostics/IssueUrl";
@@ -247,6 +249,8 @@ export function DiagnosticsPanel() {
 					</Table.ScrollContainer>
 				</SectionCard>
 			)}
+
+			<NodeBackupsCard />
 		</PageShell>
 	);
 }

@@ -263,6 +263,15 @@ class ReleaseWorkflowContractTests(unittest.TestCase):
         self.assertIn("scripts/compliance/verify_remote_velopack_assets.py", self.source)
         self.assertEqual(2, self.source.count("scripts/release/verify-release-envelope.py"))
 
+    def test_release_publishes_the_committed_openapi_contract_inside_the_envelope(self) -> None:
+        copy = "cp XE-Local-AI-Engine.Client.React/openapi/v1.json remote-primary/openapi-v1.json"
+        self.assertEqual(1, self.source.count(copy))
+        self.assertLess(self.source.index(copy), self.source.index("scripts/compliance/sbom-tool.sh Generate"))
+        upload = self.source[self.source.index('gh release upload "$TAG"') :]
+        self.assertLess(upload.index("remote-primary/openapi-v1.json"), upload.index("--repo"))
+        self.assertIn("test -f remote-final/openapi-v1.json", self.source)
+        self.assertIn("test -f protected-remote/openapi-v1.json", self.source)
+
     def test_each_rid_generates_its_exact_backend_legal_corpus_before_spdx(self) -> None:
         corpus_command = "scripts/compliance/generate_backend_license_corpus.py"
         sbom_command = "scripts/compliance/sbom-tool.sh Generate"

@@ -279,6 +279,8 @@ export function NewTranscriptionSessionDialog({
 						description={t("pages.transcription.dialog.fileDescription")}
 						placeholder={t("pages.transcription.dialog.filePlaceholder")}
 						data-testid="new-transcription-session-file"
+						// The hidden native file input is what the dev accessibility audit sees; the visible label belongs to the button.
+						fileInputProps={{ "aria-label": t("pages.transcription.dialog.fileLabel") }}
 					/>
 				) : null}
 				{usesMicrophone(sourceKind) ? (

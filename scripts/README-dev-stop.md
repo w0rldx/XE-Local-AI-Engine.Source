@@ -31,7 +31,10 @@ command line contains the exact `--monitor <AppHost PID>` token pair, and their 
 closure regardless of executable name. This preserves ownership across DCP children that use separate sessions/process groups
 without sweeping another worktree merely because it shares a login/session SID. Every selected PID
 is paired with its `/proc` start time and revalidated immediately before TERM/KILL, so PID reuse
-cannot redirect cleanup. Aspire 13.4 survivors are terminated only from that snapshot. A descendant `llama-server` is therefore
+cannot redirect cleanup. Aspire 13.4 survivors are terminated only from that snapshot: each gets
+SIGTERM, then up to `XE_DEV_STOP_GRACE_SECONDS` (default 35, whole seconds) to finish its shutdown
+drain (the app drains knowledge ingestion for up to 30 s); only a PID still alive after that budget
+gets SIGKILL, and the wait ends as soon as every survivor is gone. A descendant `llama-server` is therefore
 provably owned and cleaned. Processes outside the selected graph—including another worktree's DCP
 or a pre-existing managed `llama-server`—are untouched and do not make scoped teardown fail; success
 proves only that the selected graph and exact registration are gone. Query failures or malformed Aspire JSON are errors, never

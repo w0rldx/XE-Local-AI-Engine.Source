@@ -80,6 +80,7 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Services.Integrations;
     using XE_Local_AI_Engine.Client.Services.NodeSettings;
     using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
+    using XE_Local_AI_Engine.Client.Services.Persistence;
     using XE_Local_AI_Engine.Client.Services.Proxy;
     using XE_Local_AI_Engine.Client.Services.Vault;
 
@@ -295,6 +296,7 @@ namespace XE_Local_AI_Engine.Client
             string? desktopDataDirectory = null;
             string? bindUrl = null;
             var vaultState = VaultState.External;
+            var stagedRestore = NodeDbRestoreApplyResult.None;
             if (needsLocalData)
             {
                 // Resolve (and create) the per-user data dir up front so both the bind below and the config layer share it.
@@ -322,6 +324,24 @@ namespace XE_Local_AI_Engine.Client
                     {
                         App = null,
                         ExitCode = setupRequested || mcpKeyRequested ? 4 : 1
+                    };
+                }
+
+                // A staged restore swaps the database file while nothing holds it: the lease is ours, and the key and DB are read only below.
+                stagedRestore = await ApplyStagedDatabaseRestoreAsync(builder.Configuration, desktopDataDirectory);
+                if (stagedRestore.Error is not null)
+                {
+                    Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
+                    StartupLoggerReady = true;
+                    var hint = DescribeStagedRestoreFailure(stagedRestore);
+                    Log.Fatal("{DatabaseRecoveryHint}", hint);
+                    await standardError.WriteLineAsync(hint);
+                    await Log.CloseAndFlushAsync();
+                    instanceLease.Dispose();
+                    return new ProgramStartResult
+                    {
+                        App = null,
+                        ExitCode = DatabaseMigrationFailedExitCode
                     };
                 }
 
@@ -385,6 +405,17 @@ namespace XE_Local_AI_Engine.Client
 
             Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
             StartupLoggerReady = true;
+            if (stagedRestore.Applied)
+            {
+                Log.Information("Restored the node database from snapshot {SnapshotName}; the replaced database was kept at {SetAsidePath}.",
+                    stagedRestore.SnapshotName,
+                    stagedRestore.SetAsidePath);
+            }
+
+            if (stagedRestore.Warning is not null)
+            {
+                Log.Warning("{RestoreWarning} Marker: {MarkerPath}", stagedRestore.Warning, stagedRestore.MarkerPath);
+            }
 
             // Read once: stdin is consumed, and both the locked-vault unlock below and the reset after migrations need it.
             var resetRequested = DesktopLaunch.TryGetResetAdminPassword(args, out var resetPassword);
@@ -561,6 +592,11 @@ namespace XE_Local_AI_Engine.Client
                     {
                         bridgeEndpoint.ListenerUrl
                     });
+
+            if (!needsLocalData)
+            {
+                WarnIgnoredStagedRestore(app.Services);
+            }
 
             try
             {

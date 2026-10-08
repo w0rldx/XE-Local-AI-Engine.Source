@@ -167,8 +167,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             return await ResolveOverrideBinaryAsync(_overrideOptions, ct).ConfigureAwait(false);
         }
 
-        // Tier 1 is a live-resolvable recommended runtime; the installed-runtime state (tier 2) records which tag is actually on disk; the pinned floor (tier 3) is
-        // the offline last-resort and the asset-name template source. A catalog or state-store absence (test seam) collapses straight to the pinned floor.
+        // A recorded installed tag on disk and not older than the pin wins; else a live-resolvable recommended runtime picks what to acquire; the pinned floor is the offline
+        // last-resort and the asset-name template source. A catalog or state-store absence (test seam) collapses straight to the pinned floor.
         var installed = _installedRuntimeStore is null
             ? null
             : await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
@@ -452,12 +452,19 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     3-tier resolve of the tag to acquire, with the ctor's <c>_activeTag</c> (the pinned floor) as tier 3.
     /// </summary>
     /// <remarks>
-    ///     When a catalog is present a live-confirmed recommended tag wins; otherwise the on-disk installed tag (tier 2)
-    ///     is used when present. Offline or rate-limited live lookups fall through silently — acquisition never depends
-    ///     on the network.
+    ///     A recorded installed tag not older than the pin, whose variant directory still holds a server binary, wins; only
+    ///     otherwise does a live-confirmed recommended tag choose what to acquire, then the recorded tag, then the floor. Offline or
+    ///     rate-limited live lookups fall through silently — acquisition never depends on the network.
     /// </remarks>
     private async Task<string> ResolveActiveTagAsync(GpuVariant variant, InstalledRuntimeState? installed, CancellationToken ct)
     {
+        if (installed is { Tag.Length: > 0 } && IsValidTag(installed.Tag) && !LlamaCppRuntimeTag.IsUpdateAvailable(installed.Tag, _activeTag)
+            && _pinResolver(_os, _arch, variant) is { } installedPin
+            && ResolveServerPath(Path.Combine(_cacheRoot, "llama.cpp", installed.Tag, VariantSlug(variant)), installedPin) is not null)
+        {
+            return installed.Tag;
+        }
+
         if (_catalog is not null && IsValidTag(_activeTag))
         {
             var live = await _catalog.ResolveAssetAsync(_activeTag, _os, _arch, variant, ct).ConfigureAwait(false);

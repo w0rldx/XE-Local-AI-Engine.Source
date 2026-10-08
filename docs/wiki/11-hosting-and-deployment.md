@@ -213,6 +213,20 @@ Configuration resolves through several layers (later wins where noted):
 
 All per-node runtime artifacts (settings, encrypted credential stores, cert pins, the AgentHome workspace, the hardware-profile cache, the GGUF model cache) live under the **node data directory** (`INodeDataDirectory`), which defaults to `ContentRootPath` but is redirected to a per-user data dir in desktop mode (§5). See [Data & Persistence](08-data-and-persistence.md).
 
+These options are set only through configuration (`appsettings*.json`, environment variables or `--` arguments) and have no field in the Node Settings form. Each binds at startup, so a change needs a restart. The list is what was checked against the options class and the SPA's `node-settings` feature; it is not every configuration-only key.
+
+| Key | Default | What it governs | Read in |
+|---|---|---|---|
+| `AgentHome:Sandbox:RequireEgressDenial` | `false` | When set, the AgentHome, Coder and work-session sandboxes refuse to prepare on a backend that cannot deny egress, instead of running with the weaker posture. | `SandboxOptions`, decided in `SandboxEgressPolicy` |
+| `Development:Sandbox:RequireEgressDenial` | `false` | The same precondition for Development Mode's agent-facing sandbox. The warm-restore sandbox is exempt. | `DevelopmentSandboxOptions`, decided in `SandboxEgressPolicy` |
+| `Development:WorkspaceRetention:Enabled` / `RetentionAge` / `OrphanGrace` / `SweepInterval` | `true` / 7 days / 15 minutes / 6 hours | Whether and when finished Development Mode task workspaces and orphaned directories are deleted. | `DevelopmentWorkspaceRetentionOptions`, run by `DevelopmentWorkspaceRetentionService` |
+| `Transcription:SegmentReplayLimit` | `500` | Maximum transcript segments replayed to a subscriber of `TranscriptionHub`; a "there is more" flag covers the rest. | `TranscriptionOptions`, read in `TranscriptionHub` |
+| `Transcription:AbandonedSessionGraceSeconds` / `MaxBufferedAudioMb` | `60` / `512` | How long a session with no connection survives, and the cap on queued untranscribed audio. | `TranscriptionOptions` |
+| `Agent:ToolPipeline:MaxToolCallsPerResponse` | `32` | Ceiling on tool calls one model response may hand the invocation loop; identical calls collapse and the rest are dropped. | `AgentToolPipelineOptions`, applied in `ProviderCallBudgetChatClient` |
+| `Agent:ToolPipeline:MaximumToolIterationsPerRequest` / `MaxToolResultCharacters` / `MaxConsecutiveInvalidToolCallsPerTool` | `40` / `65536` / `3` | Round-trip cap per request, backstop size of one tool result, and consecutive invalid calls before a tool is disabled for the request. | `AgentToolPipelineOptions` |
+
+`KnowledgeBase:AllowCloudModelAccess` is deliberately not in this table: the SPA does expose it as a Node Settings field.
+
 ### Registration-time closures
 
 Two registrations in `ConfigureServices` are written the way they are purely so a disposed host can be collected, and both were measured at roughly 20 MB per test host (gcroot evidence in `docs/agent-knowledge.md` §1).
@@ -548,8 +562,9 @@ different tag form. That provenance, including the tag-form change mid-flight, i
 `.github/workflows/release.yml` is the canonical tag-triggered release path. It validates the exact tagged commit,
 binds SemVer/tag/source identity, and gives matrix jobs build-only responsibility. The serialized
 `prepare-release-draft` job receives write access only after approval through the `open-source-release` environment;
-it creates the Velopack draft, merges the Windows and Linux channels, verifies the remote bytes, uploads detached
-SPDX/release-manifest/checksum evidence, and re-verifies the complete draft. A separately approved `publish-release`
+it creates the Velopack draft, merges the Windows and Linux channels, verifies the remote bytes, uploads the tagged
+`openapi/v1.json` contract as `openapi-v1.json` with the detached SPDX/release-manifest/checksum evidence that covers
+it, and re-verifies the complete draft. A separately approved `publish-release`
 job re-downloads and verifies that same draft, then promotes it without rebuilding, repacking, re-uploading, or
 replacing any asset before anonymous public-feed verification. Windows packing is `--noInst`; Linux packing produces
 an AppImage. The workflow uses the built-in `GITHUB_TOKEN`, not a maintainer PAT.

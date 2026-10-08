@@ -114,17 +114,9 @@ public sealed partial class BenchmarkStore
     private async Task<IReadOnlyList<Guid>> EnqueueMissingFidelityAsync(BenchmarkProject project, long now, CancellationToken cancellationToken)
     {
         var kind = project.FidelityKldEnabled ? FidelityKindKld : FidelityKindPerplexity;
-        var candidates = await _dbContext.BenchmarkRuns
-                                         .Where(entity => entity.ProjectId == project.Id
-                                                          && entity.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
-                                                          && !entity.IsWarmup
-                                                          && (entity.RepeatIndex == null || entity.RepeatIndex == 1)
-                                                          && !_dbContext.BenchmarkRuns.Any(other => other.ProjectId == entity.ProjectId
-                                                                                                    && other.CellKey == entity.CellKey
-                                                                                                    && other.TaskItemIndex < entity.TaskItemIndex)
-                                                          && !_dbContext.BenchmarkFidelityAttempts.Any(attempt => attempt.RunId == entity.Id))
-                                         .OrderBy(entity => entity.CreatedAtUtc)
-                                         .ToListAsync(cancellationToken);
+        var candidates = await MissingFidelityCandidates(project.Id)
+                               .OrderBy(entity => entity.CreatedAtUtc)
+                               .ToListAsync(cancellationToken);
         foreach (var run in candidates)
         {
             // AppendFidelityWorkAsync already sets the projection to 'queued' and clears the error, which is exactly what an enqueued measurement is. Resetting it
@@ -136,6 +128,21 @@ public sealed partial class BenchmarkStore
 
         return [.. candidates.Select(static run => run.Id)];
     }
+
+    public async Task<IReadOnlyList<string>> ListMissingFidelityModelNamesAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        await MissingFidelityCandidates(projectId).Select(entity => entity.PrimaryModelName).Distinct().ToListAsync(cancellationToken);
+
+    /// <summary>The runs a <c>measureExisting</c> write enqueues, shared with the pre-write check so the two cannot drift.</summary>
+    private IQueryable<BenchmarkRun> MissingFidelityCandidates(Guid projectId) =>
+        _dbContext.BenchmarkRuns
+                  .Where(entity => entity.ProjectId == projectId
+                                   && entity.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
+                                   && !entity.IsWarmup
+                                   && (entity.RepeatIndex == null || entity.RepeatIndex == 1)
+                                   && !_dbContext.BenchmarkRuns.Any(other => other.ProjectId == entity.ProjectId
+                                                                             && other.CellKey == entity.CellKey
+                                                                             && other.TaskItemIndex < entity.TaskItemIndex)
+                                   && !_dbContext.BenchmarkFidelityAttempts.Any(attempt => attempt.RunId == entity.Id));
 
     public async Task<BenchmarkJudgeAttemptRecord?> GetJudgeAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default) =>
         await _dbContext.BenchmarkJudgeAttempts.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken) is { } attempt

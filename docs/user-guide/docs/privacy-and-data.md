@@ -143,6 +143,10 @@ data is transmitted to them.** Voice output uses the browser/operating-system We
 available voices and whether a selected system voice uses the network are controlled by that
 platform implementation, not this repository.
 
+The complete list is the [egress table](../../wiki/12-security-and-privacy.md#1-egress-invariant-the-node-has-no-control-plane-channel):
+model downloads, cloud chat providers, OpenAI-compatible providers, outbound MCP servers, update checks, and web
+search and page fetches.
+
 ### Only if you switch it on
 
 - **Web search and page fetching** — off by default. When you turn it on, searches go to DuckDuckGo, or

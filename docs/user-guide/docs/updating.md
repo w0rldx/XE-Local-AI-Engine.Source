@@ -106,6 +106,33 @@ is migrated again on the next start, so report the failure before retrying.
 Back up the complete data directory first. Database migrations are normally forward-only, and an older binary may not
 understand a database already migrated by a newer one.
 
+### Restoring a database snapshot
+
+The node keeps snapshots of its database in the `backups` folder of the data directory. One is taken automatically
+before an update changes the database, and you can take one at any time. Both live on the **Diagnostics** page, in the
+**Database snapshots** card. The card lists every snapshot with its size and time, and says whether this start took an
+automatic backup (and why not, when it was skipped or failed).
+
+- **Take a snapshot:** click **Take snapshot**. If another backup is running or the disk is too full, the card says so.
+- **Restore a snapshot:** click **Restore** on its row and confirm. The node checks the file first and refuses one that
+  is damaged or comes from a newer version of the app. While a backup is running, try again once it has finished.
+
+After you confirm, the node stops and does not start again by itself; on the desktop app the window closes. Start the
+app again: before it opens anything, it puts the snapshot in place of `node.sqlite` and keeps the database it replaced
+next to it as `node.sqlite.prerestore-<time>`.
+
+Keep in mind:
+
+- A snapshot holds the **database only**. `node.key`, `node-settings.json`, the encrypted credential files and files
+  stored on disk (images, uploads, models) are not part of it and are not changed by a restore.
+- A snapshot opens only with the **same `node.key`** that was in use when it was taken.
+- Everything written after the snapshot was taken is not in the restored database; it stays in the `prerestore` copy.
+- If the restore cannot be applied, the app does not start (exit code 9) and says why. Fix the cause and start it
+  again, or delete `backups/restore-pending.json` in the data directory to cancel the restore.
+
+For scripted use, an administrator can do the same through the node's local API: `GET` and `POST node/backups` list
+and take snapshots, and `POST node/backups/<name>/restore` restores one.
+
 ### Knowledge collection downgrade preflight
 
 Builds that include knowledge collections permit the same document content in different collections or repository
@@ -151,6 +178,20 @@ migrated data, stop it and restore the complete pre-update backup or return to t
 Builds from before the unlock page cannot read the password-protected `node.key` and refuse to start, reporting
 the key file as corrupt. **Do not delete `node.key` because of that message** — without it your encrypted data is
 lost. Restore the complete pre-update backup instead.
+
+### When the node refuses to start
+
+A node that cannot start safely stops with an exit code and logs why; codes 5, 8 and 9 also print a hint on standard
+error, which the desktop app shows. Take the next step for the code you see, and keep the complete data directory intact until
+the node runs again.
+
+| Exit code | Meaning | Next step |
+|---|---|---|
+| `5` | The password-protected node key needs a secret, and the one supplied is missing or wrong. | Start again with the correct admin password (environment variable or `--admin-password-stdin`), or pipe the recovery code shown at setup when you are resetting the password. |
+| `6` | The port you asked for with `--port` is already in use. The node does not fall back to another port. | Stop whatever holds the port, or start without `--port` or with a different one. |
+| `7` | The unlock page's port stayed taken after the unlock, so the node could not start on a new address. | Close the program that took the port and start the node again. |
+| `8` | The node key does not match the database, or the key file for the database is missing. | Do not delete `node.key` or the database. Restore the matching pair from your backup, as above. |
+| `9` | The database migration failed. | Follow the restore hint the node prints: it names the newest pre-migration snapshot and the files to delete and copy, or tells you to move a damaged database aside. Then report the failure before retrying. |
 
 ## Signing warnings after an update
 

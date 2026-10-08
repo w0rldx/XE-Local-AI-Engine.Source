@@ -117,6 +117,7 @@ public sealed class ChatTurnContextBuilderTests
         var photo = File(conversationId, "photo.png", "image/png", ".png", DocumentExtractionStatus.Image);
         var notRequested = File(conversationId, "other.pdf", "application/pdf", ".pdf", DocumentExtractionStatus.Failed);
         store.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns([withText, scanned, failed, photo, notRequested]);
+        store.ReadExtractedMarkdownAsync(conversationId, withText.FileId, Arg.Any<CancellationToken>()).Returns("restart the service");
         var builder = CreateBuilder(store);
 
         var withoutVision = await builder.ListUnsentAttachmentNamesAsync(conversationId, [withText.FileId, scanned.FileId, failed.FileId, photo.FileId], imagesAccepted: false, textAccepted: true);
@@ -134,11 +135,33 @@ public sealed class ChatTurnContextBuilderTests
         var withText = File(conversationId, "runbook.md", "text/markdown", ".md", DocumentExtractionStatus.Extracted, extractedChars: 120);
         var photo = File(conversationId, "photo.png", "image/png", ".png", DocumentExtractionStatus.Image);
         store.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns([withText, photo]);
+        store.ReadExtractedMarkdownAsync(conversationId, withText.FileId, Arg.Any<CancellationToken>()).Returns("restart the service");
         var builder = CreateBuilder(store);
 
         var unsent = await builder.ListUnsentAttachmentNamesAsync(conversationId, [withText.FileId, photo.FileId], imagesAccepted: true, textAccepted: true);
 
         AssertEx.Empty(unsent);
+    }
+
+    /// <summary>
+    ///     A row extracted before whitespace normalisation can count whitespace in ExtractedChars: it was sent as an empty
+    ///     block and named nowhere, so the user never learned the model did not see it.
+    /// </summary>
+    [Test]
+    public async Task WhitespaceOnlyLegacyExtraction_IsNotSentAndIsNamedAsUnsent()
+    {
+        var conversationId = Guid.NewGuid();
+        var store = Substitute.For<IConversationUploadedFileStore>();
+        var legacy = File(conversationId, "legacy.pdf", "application/pdf", ".pdf", DocumentExtractionStatus.Extracted, extractedChars: 3);
+        store.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns([legacy]);
+        store.ReadExtractedMarkdownAsync(conversationId, legacy.FileId, Arg.Any<CancellationToken>()).Returns(" \n\t");
+        var builder = CreateBuilder(store);
+
+        var message = await builder.BuildAttachmentContextAsync(conversationId, [legacy.FileId]);
+        var unsent = await builder.ListUnsentAttachmentNamesAsync(conversationId, [legacy.FileId], imagesAccepted: true, textAccepted: true);
+
+        AssertEx.Null(message);
+        AssertEx.Equal("legacy.pdf", string.Join(", ", unsent));
     }
 
     /// <summary>A tool turn without the file tools delivers no attachment text, so even a file with text is unsent.</summary>

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Validators;
 
 using System.Globalization;
+using System.Numerics;
 using FastEndpoints;
 using FluentValidation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -23,6 +24,9 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
     private static readonly string ChatOutputCapMaxTokensRangeMessage = string.Create(CultureInfo.InvariantCulture,
         $"The chat output cap ceiling must be from {StoredNodeSettings.MinChatOutputCapMaxTokens} to {StoredNodeSettings.MaxChatOutputCapMaxTokens} tokens, or {StoredNodeSettings.TokenSettingUnset} for the default.");
 
+    private static readonly string PositiveOrUnsetMessage = string.Create(CultureInfo.InvariantCulture,
+        $"'{{PropertyName}}' must be greater than '0', or {StoredNodeSettings.TokenSettingUnset} for the default. You entered {{PropertyValue}}.");
+
     public SaveNodeSettingsRequestValidator()
     {
         RuleFor(static request => request.MaxMessageRequestTimeoutSeconds)
@@ -43,6 +47,21 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .Must(StoredNodeSettings.IsPlausibleModelName)
             .When(static request => !string.IsNullOrWhiteSpace(request.DefaultModelName))
             .WithMessage(StoredNodeSettings.ImplausibleDefaultModelNameMessage);
+
+        RuleFor(static request => request.KeepModelWarmModelName!)
+            .Must(StoredNodeSettings.IsPlausibleModelName)
+            .When(static request => !string.IsNullOrWhiteSpace(request.KeepModelWarmModelName))
+            .WithMessage(StoredNodeSettings.ImplausibleModelNameMessage);
+
+        RuleFor(static request => request.RerankerModelName!)
+            .Must(StoredNodeSettings.IsPlausibleModelName)
+            .When(static request => !string.IsNullOrWhiteSpace(request.RerankerModelName))
+            .WithMessage(StoredNodeSettings.ImplausibleModelNameMessage);
+
+        RuleFor(static request => request.AutoEffortFastModelName!)
+            .Must(StoredNodeSettings.IsPlausibleModelName)
+            .When(static request => !string.IsNullOrWhiteSpace(request.AutoEffortFastModelName))
+            .WithMessage(StoredNodeSettings.ImplausibleModelNameMessage);
 
         RuleFor(static request => request.HuggingFaceDefaultQuant!)
             .Must(StoredNodeSettings.IsKnownQuant)
@@ -80,20 +99,20 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => request.UpdateChannel is not null)
             .WithMessage("Update channel must be stable, preview or development.");
 
-        RuleFor(static request => request.LlamaMaxLoadedProcesses)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaMaxLoadedProcesses, StoredNodeSettings.MaxLlamaMaxLoadedProcesses);
+        UnsetOrBetween(RuleFor(static request => request.LlamaMaxLoadedProcesses),
+            StoredNodeSettings.MinLlamaMaxLoadedProcesses, StoredNodeSettings.MaxLlamaMaxLoadedProcesses);
 
-        RuleFor(static request => request.LlamaIdleTimeToLiveSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaIdleTimeToLiveSeconds, StoredNodeSettings.MaxLlamaIdleTimeToLiveSeconds);
+        UnsetOrBetween(RuleFor(static request => request.LlamaIdleTimeToLiveSeconds),
+            StoredNodeSettings.MinLlamaIdleTimeToLiveSeconds, StoredNodeSettings.MaxLlamaIdleTimeToLiveSeconds);
 
-        RuleFor(static request => request.KeepModelWarmIntervalSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinKeepModelWarmIntervalSeconds, StoredNodeSettings.MaxKeepModelWarmIntervalSeconds);
+        UnsetOrBetween(RuleFor(static request => request.KeepModelWarmIntervalSeconds),
+            StoredNodeSettings.MinKeepModelWarmIntervalSeconds, StoredNodeSettings.MaxKeepModelWarmIntervalSeconds);
 
-        RuleFor(static request => request.MaxResponseSizeMb)
-            .InclusiveBetween(StoredNodeSettings.MinMaxResponseSizeMb, StoredNodeSettings.MaxMaxResponseSizeMb);
+        UnsetOrBetween(RuleFor(static request => request.MaxResponseSizeMb),
+            StoredNodeSettings.MinMaxResponseSizeMb, StoredNodeSettings.MaxMaxResponseSizeMb);
 
-        RuleFor(static request => request.ChatCacheReuse)
-            .InclusiveBetween(StoredNodeSettings.MinChatCacheReuse, StoredNodeSettings.MaxChatCacheReuse);
+        UnsetOrBetween(RuleFor(static request => request.ChatCacheReuse),
+            StoredNodeSettings.MinChatCacheReuse, StoredNodeSettings.MaxChatCacheReuse);
 
         RuleFor(static request => request.SpeculativeMode)
             .Must(StoredNodeSettings.IsValidSpeculativeMode)
@@ -112,8 +131,8 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => request.ContainerRuntimeSelection is not null)
             .WithMessage("Unknown container runtime selection. Use 'auto' or 'docker'.");
 
-        RuleFor(static request => request.SpeculativeDraftMaxTokens)
-            .InclusiveBetween(StoredNodeSettings.MinSpeculativeDraftMaxTokens, StoredNodeSettings.MaxSpeculativeDraftMaxTokens);
+        UnsetOrBetween(RuleFor(static request => request.SpeculativeDraftMaxTokens),
+            StoredNodeSettings.MinSpeculativeDraftMaxTokens, StoredNodeSettings.MaxSpeculativeDraftMaxTokens);
 
         RuleFor(static request => request.SpeculativeDraftGpuLayers)
             .InclusiveBetween(StoredNodeSettings.MinSpeculativeDraftGpuLayers, StoredNodeSettings.MaxSpeculativeDraftGpuLayers);
@@ -125,77 +144,79 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => StoredNodeSettings.SpeculativeModeRequiresDraftModel(request.SpeculativeMode))
             .WithMessage("Speculative decoding is set to a draft model mode, but no draft model was selected.");
 
-        RuleFor(static request => request.HuggingFaceDiskMarginBytes)
-            .InclusiveBetween(StoredNodeSettings.MinHuggingFaceDiskMarginBytes, StoredNodeSettings.MaxHuggingFaceDiskMarginBytes);
+        UnsetOrBetween(RuleFor(static request => request.HuggingFaceDiskMarginBytes),
+            StoredNodeSettings.MinHuggingFaceDiskMarginBytes, StoredNodeSettings.MaxHuggingFaceDiskMarginBytes);
 
-        RuleFor(static request => request.OrchestrationIdleTimeoutSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinOrchestrationIdleTimeoutSeconds, StoredNodeSettings.MaxOrchestrationIdleTimeoutSeconds);
+        UnsetOrBetween(RuleFor(static request => request.OrchestrationIdleTimeoutSeconds),
+            StoredNodeSettings.MinOrchestrationIdleTimeoutSeconds, StoredNodeSettings.MaxOrchestrationIdleTimeoutSeconds);
 
-        RuleFor(static request => request.AgentHomePrepareTimeoutSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinAgentHomeTimeoutSeconds, StoredNodeSettings.MaxAgentHomeTimeoutSeconds);
+        UnsetOrBetween(RuleFor(static request => request.AgentHomePrepareTimeoutSeconds),
+            StoredNodeSettings.MinAgentHomeTimeoutSeconds, StoredNodeSettings.MaxAgentHomeTimeoutSeconds);
 
-        RuleFor(static request => request.AgentHomeCommandTimeoutSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinAgentHomeTimeoutSeconds, StoredNodeSettings.MaxAgentHomeTimeoutSeconds);
+        UnsetOrBetween(RuleFor(static request => request.AgentHomeCommandTimeoutSeconds),
+            StoredNodeSettings.MinAgentHomeTimeoutSeconds, StoredNodeSettings.MaxAgentHomeTimeoutSeconds);
 
         RuleFor(static request => request.AgentHomeMaxSelectedFolderBytes)
-            .GreaterThan(0);
+            .Must(static bytes => bytes is null or StoredNodeSettings.TokenSettingUnset or > 0)
+            .WithMessage(PositiveOrUnsetMessage);
 
         RuleFor(static request => request.AgentHomeMaxPatchBytes)
-            .GreaterThan(0);
+            .Must(static bytes => bytes is null or StoredNodeSettings.TokenSettingUnset or > 0)
+            .WithMessage(PositiveOrUnsetMessage);
 
-        RuleFor(static request => request.MaxPendingToolCallAgeMinutes)
-            .InclusiveBetween(StoredNodeSettings.MinMaxPendingToolCallAgeMinutes, StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes);
+        UnsetOrBetween(RuleFor(static request => request.MaxPendingToolCallAgeMinutes),
+            StoredNodeSettings.MinMaxPendingToolCallAgeMinutes, StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes);
 
-        RuleFor(static request => request.DetachedGraceSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinDetachedGraceSeconds, StoredNodeSettings.MaxDetachedGraceSeconds);
+        UnsetOrBetween(RuleFor(static request => request.DetachedGraceSeconds),
+            StoredNodeSettings.MinDetachedGraceSeconds, StoredNodeSettings.MaxDetachedGraceSeconds);
 
-        RuleFor(static request => request.TranscriptionIdleTimeoutMinutes)
-            .InclusiveBetween(StoredNodeSettings.MinTranscriptionIdleTimeoutMinutes, StoredNodeSettings.MaxTranscriptionIdleTimeoutMinutes);
+        UnsetOrBetween(RuleFor(static request => request.TranscriptionIdleTimeoutMinutes),
+            StoredNodeSettings.MinTranscriptionIdleTimeoutMinutes, StoredNodeSettings.MaxTranscriptionIdleTimeoutMinutes);
 
-        RuleFor(static request => request.LlamaReadinessTimeoutCapSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaReadinessTimeoutCapSeconds, StoredNodeSettings.MaxLlamaReadinessTimeoutCapSeconds);
+        UnsetOrBetween(RuleFor(static request => request.LlamaReadinessTimeoutCapSeconds),
+            StoredNodeSettings.MinLlamaReadinessTimeoutCapSeconds, StoredNodeSettings.MaxLlamaReadinessTimeoutCapSeconds);
 
-        RuleFor(static request => request.LlamaChatHttpTimeoutSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaChatHttpTimeoutSeconds, StoredNodeSettings.MaxLlamaChatHttpTimeoutSeconds);
+        UnsetOrBetween(RuleFor(static request => request.LlamaChatHttpTimeoutSeconds),
+            StoredNodeSettings.MinLlamaChatHttpTimeoutSeconds, StoredNodeSettings.MaxLlamaChatHttpTimeoutSeconds);
 
-        RuleFor(static request => request.LlamaEmbeddingHttpTimeoutSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaEmbeddingHttpTimeoutSeconds, StoredNodeSettings.MaxLlamaEmbeddingHttpTimeoutSeconds);
+        UnsetOrBetween(RuleFor(static request => request.LlamaEmbeddingHttpTimeoutSeconds),
+            StoredNodeSettings.MinLlamaEmbeddingHttpTimeoutSeconds, StoredNodeSettings.MaxLlamaEmbeddingHttpTimeoutSeconds);
 
         RuleFor(static request => request.LlamaChatCacheRamMiB)
             .InclusiveBetween(StoredNodeSettings.LlamaChatCacheRamMiBAuto, StoredNodeSettings.MaxLlamaChatCacheRamMiB);
 
-        RuleFor(static request => request.LlamaCpuThreadReserve)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaCpuThreadReserve, StoredNodeSettings.MaxLlamaCpuThreadReserve);
+        UnsetOrBetween(RuleFor(static request => request.LlamaCpuThreadReserve),
+            StoredNodeSettings.MinLlamaCpuThreadReserve, StoredNodeSettings.MaxLlamaCpuThreadReserve);
 
-        RuleFor(static request => request.LlamaGpuReservePercent)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaGpuReservePercent, StoredNodeSettings.MaxLlamaGpuReservePercent);
+        UnsetOrBetween(RuleFor(static request => request.LlamaGpuReservePercent),
+            StoredNodeSettings.MinLlamaGpuReservePercent, StoredNodeSettings.MaxLlamaGpuReservePercent);
 
-        RuleFor(static request => request.LlamaRamReservePercent)
-            .InclusiveBetween(StoredNodeSettings.MinLlamaRamReservePercent, StoredNodeSettings.MaxLlamaRamReservePercent);
+        UnsetOrBetween(RuleFor(static request => request.LlamaRamReservePercent),
+            StoredNodeSettings.MinLlamaRamReservePercent, StoredNodeSettings.MaxLlamaRamReservePercent);
 
-        RuleFor(static request => request.ImageIdleTimeToLiveSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinImageIdleTimeToLiveSeconds, StoredNodeSettings.MaxImageIdleTimeToLiveSeconds);
+        UnsetOrBetween(RuleFor(static request => request.ImageIdleTimeToLiveSeconds),
+            StoredNodeSettings.MinImageIdleTimeToLiveSeconds, StoredNodeSettings.MaxImageIdleTimeToLiveSeconds);
 
-        RuleFor(static request => request.ModelFitSafetyMarginPercent)
-            .InclusiveBetween(StoredNodeSettings.MinModelFitSafetyMarginPercent, StoredNodeSettings.MaxModelFitSafetyMarginPercent);
+        UnsetOrBetween(RuleFor(static request => request.ModelFitSafetyMarginPercent),
+            StoredNodeSettings.MinModelFitSafetyMarginPercent, StoredNodeSettings.MaxModelFitSafetyMarginPercent);
 
-        RuleFor(static request => request.MaxProviderCallsPerInvocation)
-            .InclusiveBetween(StoredNodeSettings.MinMaxProviderCallsPerInvocation, StoredNodeSettings.MaxMaxProviderCallsPerInvocation);
+        UnsetOrBetween(RuleFor(static request => request.MaxProviderCallsPerInvocation),
+            StoredNodeSettings.MinMaxProviderCallsPerInvocation, StoredNodeSettings.MaxMaxProviderCallsPerInvocation);
 
-        RuleFor(static request => request.CustomToolMaxTimeoutSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinCustomToolMaxTimeoutSeconds, StoredNodeSettings.MaxCustomToolMaxTimeoutSeconds);
+        UnsetOrBetween(RuleFor(static request => request.CustomToolMaxTimeoutSeconds),
+            StoredNodeSettings.MinCustomToolMaxTimeoutSeconds, StoredNodeSettings.MaxCustomToolMaxTimeoutSeconds);
 
-        RuleFor(static request => request.WebFetchTimeoutSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinWebFetchTimeoutSeconds, StoredNodeSettings.MaxWebFetchTimeoutSeconds);
+        UnsetOrBetween(RuleFor(static request => request.WebFetchTimeoutSeconds),
+            StoredNodeSettings.MinWebFetchTimeoutSeconds, StoredNodeSettings.MaxWebFetchTimeoutSeconds);
 
-        RuleFor(static request => request.WebFetchMaxContentChars)
-            .InclusiveBetween(StoredNodeSettings.MinWebFetchMaxContentChars, StoredNodeSettings.MaxWebFetchMaxContentChars);
+        UnsetOrBetween(RuleFor(static request => request.WebFetchMaxContentChars),
+            StoredNodeSettings.MinWebFetchMaxContentChars, StoredNodeSettings.MaxWebFetchMaxContentChars);
 
-        RuleFor(static request => request.KnowledgeSearchDefaultResults)
-            .InclusiveBetween(StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults);
+        UnsetOrBetween(RuleFor(static request => request.KnowledgeSearchDefaultResults),
+            StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults);
 
-        RuleFor(static request => request.KnowledgeSearchMaxResults)
-            .InclusiveBetween(StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults);
+        UnsetOrBetween(RuleFor(static request => request.KnowledgeSearchMaxResults),
+            StoredNodeSettings.MinKnowledgeSearchResults, StoredNodeSettings.MaxKnowledgeSearchResults);
 
         // TokenSettingUnset (-1) and the empty string are the "back to default" sentinels; everything else is range-checked. Must, not
         // InclusiveBetween: the OpenAPI schema would publish the range as min/max and the generated client would refuse the sentinel.
@@ -229,119 +250,119 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .Must(static tokens => IsUnsetOrBetween(tokens, StoredNodeSettings.MinChatOutputCapMaxTokens, StoredNodeSettings.MaxChatOutputCapMaxTokens))
             .WithMessage(ChatOutputCapMaxTokensRangeMessage);
 
-        RuleFor(static request => request.HuggingFaceDownloadConnections)
-            .InclusiveBetween(StoredNodeSettings.MinHuggingFaceDownloadConnections, StoredNodeSettings.MaxHuggingFaceDownloadConnections);
+        UnsetOrBetween(RuleFor(static request => request.HuggingFaceDownloadConnections),
+            StoredNodeSettings.MinHuggingFaceDownloadConnections, StoredNodeSettings.MaxHuggingFaceDownloadConnections);
 
-        RuleFor(static request => request.TranscriptionInferenceTimeoutMinutes)
-            .InclusiveBetween(StoredNodeSettings.MinTranscriptionInferenceTimeoutMinutes, StoredNodeSettings.MaxTranscriptionInferenceTimeoutMinutes);
+        UnsetOrBetween(RuleFor(static request => request.TranscriptionInferenceTimeoutMinutes),
+            StoredNodeSettings.MinTranscriptionInferenceTimeoutMinutes, StoredNodeSettings.MaxTranscriptionInferenceTimeoutMinutes);
 
-        RuleFor(static request => request.AgentHomeMaxRunSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinAgentHomeMaxRunSeconds, StoredNodeSettings.MaxAgentHomeMaxRunSeconds);
+        UnsetOrBetween(RuleFor(static request => request.AgentHomeMaxRunSeconds),
+            StoredNodeSettings.MinAgentHomeMaxRunSeconds, StoredNodeSettings.MaxAgentHomeMaxRunSeconds);
 
-        RuleFor(static request => request.AgentHomeRunRetentionDays)
-            .InclusiveBetween(StoredNodeSettings.MinAgentHomeRunRetentionDays, StoredNodeSettings.MaxAgentHomeRunRetentionDays);
+        UnsetOrBetween(RuleFor(static request => request.AgentHomeRunRetentionDays),
+            StoredNodeSettings.MinAgentHomeRunRetentionDays, StoredNodeSettings.MaxAgentHomeRunRetentionDays);
 
-        RuleFor(static request => request.ToolPipelineMaxIterationsPerRequest)
-            .InclusiveBetween(StoredNodeSettings.MinToolPipelineMaxIterationsPerRequest, StoredNodeSettings.MaxToolPipelineMaxIterationsPerRequest);
+        UnsetOrBetween(RuleFor(static request => request.ToolPipelineMaxIterationsPerRequest),
+            StoredNodeSettings.MinToolPipelineMaxIterationsPerRequest, StoredNodeSettings.MaxToolPipelineMaxIterationsPerRequest);
 
-        RuleFor(static request => request.ToolPipelineMaxToolResultChars)
-            .InclusiveBetween(StoredNodeSettings.MinToolPipelineMaxToolResultChars, StoredNodeSettings.MaxToolPipelineMaxToolResultChars);
+        UnsetOrBetween(RuleFor(static request => request.ToolPipelineMaxToolResultChars),
+            StoredNodeSettings.MinToolPipelineMaxToolResultChars, StoredNodeSettings.MaxToolPipelineMaxToolResultChars);
 
-        RuleFor(static request => request.ToolPipelineMaxConsecutiveInvalidToolCalls)
-            .InclusiveBetween(StoredNodeSettings.MinToolPipelineMaxConsecutiveInvalidToolCalls, StoredNodeSettings.MaxToolPipelineMaxConsecutiveInvalidToolCalls);
+        UnsetOrBetween(RuleFor(static request => request.ToolPipelineMaxConsecutiveInvalidToolCalls),
+            StoredNodeSettings.MinToolPipelineMaxConsecutiveInvalidToolCalls, StoredNodeSettings.MaxToolPipelineMaxConsecutiveInvalidToolCalls);
 
-        RuleFor(static request => request.DefaultContextTokens)
-            .InclusiveBetween(StoredNodeSettings.MinDefaultContextTokens, StoredNodeSettings.MaxDefaultContextTokens);
+        UnsetOrBetween(RuleFor(static request => request.DefaultContextTokens),
+            StoredNodeSettings.MinDefaultContextTokens, StoredNodeSettings.MaxDefaultContextTokens);
 
-        RuleFor(static request => request.ProviderBudgetRecentMessagesToKeep)
-            .InclusiveBetween(StoredNodeSettings.MinProviderBudgetRecentMessagesToKeep, StoredNodeSettings.MaxProviderBudgetRecentMessagesToKeep);
+        UnsetOrBetween(RuleFor(static request => request.ProviderBudgetRecentMessagesToKeep),
+            StoredNodeSettings.MinProviderBudgetRecentMessagesToKeep, StoredNodeSettings.MaxProviderBudgetRecentMessagesToKeep);
 
-        RuleFor(static request => request.ProviderBudgetMaxCumulativeInputTokens)
-            .InclusiveBetween(StoredNodeSettings.MinProviderBudgetMaxCumulativeInputTokens, StoredNodeSettings.MaxProviderBudgetMaxCumulativeInputTokens);
+        UnsetOrBetween(RuleFor(static request => request.ProviderBudgetMaxCumulativeInputTokens),
+            StoredNodeSettings.MinProviderBudgetMaxCumulativeInputTokens, StoredNodeSettings.MaxProviderBudgetMaxCumulativeInputTokens);
 
-        RuleFor(static request => request.ContextBudgetRecentTurnKeepCount)
-            .InclusiveBetween(StoredNodeSettings.MinContextBudgetRecentTurnKeepCount, StoredNodeSettings.MaxContextBudgetRecentTurnKeepCount);
+        UnsetOrBetween(RuleFor(static request => request.ContextBudgetRecentTurnKeepCount),
+            StoredNodeSettings.MinContextBudgetRecentTurnKeepCount, StoredNodeSettings.MaxContextBudgetRecentTurnKeepCount);
 
-        RuleFor(static request => request.CompactionAutoCompactPercent)
-            .InclusiveBetween(StoredNodeSettings.MinCompactionAutoCompactPercent, StoredNodeSettings.MaxCompactionAutoCompactPercent);
+        UnsetOrBetween(RuleFor(static request => request.CompactionAutoCompactPercent),
+            StoredNodeSettings.MinCompactionAutoCompactPercent, StoredNodeSettings.MaxCompactionAutoCompactPercent);
 
-        RuleFor(static request => request.CompactionRecentMessagesVerbatim)
-            .InclusiveBetween(StoredNodeSettings.MinCompactionRecentMessagesVerbatim, StoredNodeSettings.MaxCompactionRecentMessagesVerbatim);
+        UnsetOrBetween(RuleFor(static request => request.CompactionRecentMessagesVerbatim),
+            StoredNodeSettings.MinCompactionRecentMessagesVerbatim, StoredNodeSettings.MaxCompactionRecentMessagesVerbatim);
 
-        RuleFor(static request => request.MaxInlinedAttachmentChars)
-            .InclusiveBetween(StoredNodeSettings.MinMaxInlinedAttachmentChars, StoredNodeSettings.MaxMaxInlinedAttachmentChars);
+        UnsetOrBetween(RuleFor(static request => request.MaxInlinedAttachmentChars),
+            StoredNodeSettings.MinMaxInlinedAttachmentChars, StoredNodeSettings.MaxMaxInlinedAttachmentChars);
 
-        RuleFor(static request => request.KnowledgeChatTopK)
-            .InclusiveBetween(StoredNodeSettings.MinKnowledgeChatTopK, StoredNodeSettings.MaxKnowledgeChatTopK);
+        UnsetOrBetween(RuleFor(static request => request.KnowledgeChatTopK),
+            StoredNodeSettings.MinKnowledgeChatTopK, StoredNodeSettings.MaxKnowledgeChatTopK);
 
-        RuleFor(static request => request.ProviderMaxRetries)
-            .InclusiveBetween(StoredNodeSettings.MinProviderMaxRetries, StoredNodeSettings.MaxProviderMaxRetries);
+        UnsetOrBetween(RuleFor(static request => request.ProviderMaxRetries),
+            StoredNodeSettings.MinProviderMaxRetries, StoredNodeSettings.MaxProviderMaxRetries);
 
-        RuleFor(static request => request.SpawnMaxConcurrent)
-            .InclusiveBetween(StoredNodeSettings.MinSpawnMaxConcurrent, StoredNodeSettings.MaxSpawnMaxConcurrent);
+        UnsetOrBetween(RuleFor(static request => request.SpawnMaxConcurrent),
+            StoredNodeSettings.MinSpawnMaxConcurrent, StoredNodeSettings.MaxSpawnMaxConcurrent);
 
-        RuleFor(static request => request.SpawnMaxCloud)
-            .InclusiveBetween(StoredNodeSettings.MinSpawnMaxCloud, StoredNodeSettings.MaxSpawnMaxCloud);
+        UnsetOrBetween(RuleFor(static request => request.SpawnMaxCloud),
+            StoredNodeSettings.MinSpawnMaxCloud, StoredNodeSettings.MaxSpawnMaxCloud);
 
-        RuleFor(static request => request.SpawnQueueWaitSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinSpawnQueueWaitSeconds, StoredNodeSettings.MaxSpawnQueueWaitSeconds);
+        UnsetOrBetween(RuleFor(static request => request.SpawnQueueWaitSeconds),
+            StoredNodeSettings.MinSpawnQueueWaitSeconds, StoredNodeSettings.MaxSpawnQueueWaitSeconds);
 
-        RuleFor(static request => request.KnowledgeRetrievalLatencyBudgetMs)
-            .InclusiveBetween(StoredNodeSettings.MinKnowledgeRetrievalLatencyBudgetMs, StoredNodeSettings.MaxKnowledgeRetrievalLatencyBudgetMs);
+        UnsetOrBetween(RuleFor(static request => request.KnowledgeRetrievalLatencyBudgetMs),
+            StoredNodeSettings.MinKnowledgeRetrievalLatencyBudgetMs, StoredNodeSettings.MaxKnowledgeRetrievalLatencyBudgetMs);
 
-        RuleFor(static request => request.KnowledgeScheduledReindexIntervalMinutes)
-            .InclusiveBetween(StoredNodeSettings.MinKnowledgeScheduledReindexIntervalMinutes, StoredNodeSettings.MaxKnowledgeScheduledReindexIntervalMinutes);
+        UnsetOrBetween(RuleFor(static request => request.KnowledgeScheduledReindexIntervalMinutes),
+            StoredNodeSettings.MinKnowledgeScheduledReindexIntervalMinutes, StoredNodeSettings.MaxKnowledgeScheduledReindexIntervalMinutes);
 
-        RuleFor(static request => request.ChatRetentionDays)
-            .InclusiveBetween(StoredNodeSettings.MinRetentionDays, StoredNodeSettings.MaxRetentionDays);
+        UnsetOrBetween(RuleFor(static request => request.ChatRetentionDays),
+            StoredNodeSettings.MinRetentionDays, StoredNodeSettings.MaxRetentionDays);
 
-        RuleFor(static request => request.AgentExecutionLogRetentionDays)
-            .InclusiveBetween(StoredNodeSettings.MinRetentionDays, StoredNodeSettings.MaxRetentionDays);
+        UnsetOrBetween(RuleFor(static request => request.AgentExecutionLogRetentionDays),
+            StoredNodeSettings.MinRetentionDays, StoredNodeSettings.MaxRetentionDays);
 
-        RuleFor(static request => request.NodeDbBackupRetainCount)
-            .InclusiveBetween(StoredNodeSettings.MinNodeDbBackupRetainCount, StoredNodeSettings.MaxNodeDbBackupRetainCount);
+        UnsetOrBetween(RuleFor(static request => request.NodeDbBackupRetainCount),
+            StoredNodeSettings.MinNodeDbBackupRetainCount, StoredNodeSettings.MaxNodeDbBackupRetainCount);
 
-        RuleFor(static request => request.BenchmarkKldCacheMaxBytes)
-            .InclusiveBetween(StoredNodeSettings.MinBenchmarkKldCacheMaxBytes, StoredNodeSettings.MaxBenchmarkKldCacheMaxBytes);
+        UnsetOrBetween(RuleFor(static request => request.BenchmarkKldCacheMaxBytes),
+            StoredNodeSettings.MinBenchmarkKldCacheMaxBytes, StoredNodeSettings.MaxBenchmarkKldCacheMaxBytes);
 
-        RuleFor(static request => request.SchedulerHistoryRetentionDays)
-            .InclusiveBetween(StoredNodeSettings.MinRetentionDays, StoredNodeSettings.MaxRetentionDays);
+        UnsetOrBetween(RuleFor(static request => request.SchedulerHistoryRetentionDays),
+            StoredNodeSettings.MinRetentionDays, StoredNodeSettings.MaxRetentionDays);
 
-        RuleFor(static request => request.ImageMaxLoadedProcesses)
-            .InclusiveBetween(StoredNodeSettings.MinImageMaxLoadedProcesses, StoredNodeSettings.MaxImageMaxLoadedProcesses);
+        UnsetOrBetween(RuleFor(static request => request.ImageMaxLoadedProcesses),
+            StoredNodeSettings.MinImageMaxLoadedProcesses, StoredNodeSettings.MaxImageMaxLoadedProcesses);
 
-        RuleFor(static request => request.GraphWorkflowMaxConcurrentRuns)
-            .InclusiveBetween(StoredNodeSettings.MinGraphWorkflowMaxConcurrentRuns, StoredNodeSettings.MaxGraphWorkflowMaxConcurrentRuns);
+        UnsetOrBetween(RuleFor(static request => request.GraphWorkflowMaxConcurrentRuns),
+            StoredNodeSettings.MinGraphWorkflowMaxConcurrentRuns, StoredNodeSettings.MaxGraphWorkflowMaxConcurrentRuns);
 
-        RuleFor(static request => request.GraphWorkflowDefaultNodeTimeoutSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinGraphWorkflowDefaultNodeTimeoutSeconds, StoredNodeSettings.MaxGraphWorkflowDefaultNodeTimeoutSeconds);
+        UnsetOrBetween(RuleFor(static request => request.GraphWorkflowDefaultNodeTimeoutSeconds),
+            StoredNodeSettings.MinGraphWorkflowDefaultNodeTimeoutSeconds, StoredNodeSettings.MaxGraphWorkflowDefaultNodeTimeoutSeconds);
 
-        RuleFor(static request => request.WorkSessionMaxStepsPerRun)
-            .InclusiveBetween(StoredNodeSettings.MinWorkSessionMaxStepsPerRun, StoredNodeSettings.MaxWorkSessionMaxStepsPerRun);
+        UnsetOrBetween(RuleFor(static request => request.WorkSessionMaxStepsPerRun),
+            StoredNodeSettings.MinWorkSessionMaxStepsPerRun, StoredNodeSettings.MaxWorkSessionMaxStepsPerRun);
 
-        RuleFor(static request => request.WorkSessionMaxConcurrentSessions)
-            .InclusiveBetween(StoredNodeSettings.MinWorkSessionMaxConcurrentSessions, StoredNodeSettings.MaxWorkSessionMaxConcurrentSessions);
+        UnsetOrBetween(RuleFor(static request => request.WorkSessionMaxConcurrentSessions),
+            StoredNodeSettings.MinWorkSessionMaxConcurrentSessions, StoredNodeSettings.MaxWorkSessionMaxConcurrentSessions);
 
-        RuleFor(static request => request.DevelopmentMaxAttemptDurationSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinDevelopmentMaxAttemptDurationSeconds, StoredNodeSettings.MaxDevelopmentMaxAttemptDurationSeconds);
+        UnsetOrBetween(RuleFor(static request => request.DevelopmentMaxAttemptDurationSeconds),
+            StoredNodeSettings.MinDevelopmentMaxAttemptDurationSeconds, StoredNodeSettings.MaxDevelopmentMaxAttemptDurationSeconds);
 
-        RuleFor(static request => request.DevelopmentMaxToolCalls)
-            .InclusiveBetween(StoredNodeSettings.MinDevelopmentMaxToolCalls, StoredNodeSettings.MaxDevelopmentMaxToolCalls);
+        UnsetOrBetween(RuleFor(static request => request.DevelopmentMaxToolCalls),
+            StoredNodeSettings.MinDevelopmentMaxToolCalls, StoredNodeSettings.MaxDevelopmentMaxToolCalls);
 
-        RuleFor(static request => request.DevelopmentMaxOutputTokens)
-            .InclusiveBetween(StoredNodeSettings.MinDevelopmentMaxOutputTokens, StoredNodeSettings.MaxDevelopmentMaxOutputTokens);
+        UnsetOrBetween(RuleFor(static request => request.DevelopmentMaxOutputTokens),
+            StoredNodeSettings.MinDevelopmentMaxOutputTokens, StoredNodeSettings.MaxDevelopmentMaxOutputTokens);
 
-        RuleFor(static request => request.AgentHomeMaxInnerToolCalls)
-            .InclusiveBetween(StoredNodeSettings.MinAgentHomeMaxInnerToolCalls, StoredNodeSettings.MaxAgentHomeMaxInnerToolCalls);
+        UnsetOrBetween(RuleFor(static request => request.AgentHomeMaxInnerToolCalls),
+            StoredNodeSettings.MinAgentHomeMaxInnerToolCalls, StoredNodeSettings.MaxAgentHomeMaxInnerToolCalls);
 
-        RuleFor(static request => request.AgentHomePatchApplyTimeoutSeconds)
-            .InclusiveBetween(StoredNodeSettings.MinAgentHomePatchApplyTimeoutSeconds, StoredNodeSettings.MaxAgentHomePatchApplyTimeoutSeconds);
+        UnsetOrBetween(RuleFor(static request => request.AgentHomePatchApplyTimeoutSeconds),
+            StoredNodeSettings.MinAgentHomePatchApplyTimeoutSeconds, StoredNodeSettings.MaxAgentHomePatchApplyTimeoutSeconds);
 
-        RuleFor(static request => request.AgentHomeRunRetentionMaxRuns)
-            .InclusiveBetween(StoredNodeSettings.MinAgentHomeRunRetentionMaxRuns, StoredNodeSettings.MaxAgentHomeRunRetentionMaxRuns);
+        UnsetOrBetween(RuleFor(static request => request.AgentHomeRunRetentionMaxRuns),
+            StoredNodeSettings.MinAgentHomeRunRetentionMaxRuns, StoredNodeSettings.MaxAgentHomeRunRetentionMaxRuns);
 
-        RuleFor(static request => request.AgentHomeRunRetentionMaxTotalBytes)
-            .InclusiveBetween(StoredNodeSettings.MinAgentHomeRunRetentionMaxTotalBytes, StoredNodeSettings.MaxAgentHomeRunRetentionMaxTotalBytes);
+        UnsetOrBetween(RuleFor(static request => request.AgentHomeRunRetentionMaxTotalBytes),
+            StoredNodeSettings.MinAgentHomeRunRetentionMaxTotalBytes, StoredNodeSettings.MaxAgentHomeRunRetentionMaxTotalBytes);
 
         // Every override entry must have a non-blank model name and finite, non-negative rates (HasValidRates is the one shared predicate with the store's Normalize). Junk is
         // rejected with an immediate 400; Normalize remains the defense-in-depth second pass that also drops any entry slipping through.
@@ -358,8 +379,19 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
-    private static bool IsUnsetOrBetween(int? tokens, int min, int max)
+    private static bool IsUnsetOrBetween<T>(T? value, T min, T max)
+        where T : struct, INumber<T>
     {
-        return tokens is null or StoredNodeSettings.TokenSettingUnset || (tokens >= min && tokens <= max);
+        return value is not { } supplied || supplied == T.CreateChecked(StoredNodeSettings.TokenSettingUnset) || (supplied >= min && supplied <= max);
+    }
+
+    // A nullable numeric knob: TokenSettingUnset (-1) resets it to the default, anything else must sit in [min, max]. Must, not
+    // InclusiveBetween, for the reason given at the reasoning budgets; the message keeps InclusiveBetween's wording.
+    private static void UnsetOrBetween<T>(IRuleBuilder<SaveNodeSettingsRequest, T?> rule, T min, T max)
+        where T : struct, INumber<T>
+    {
+        rule.Must(value => IsUnsetOrBetween(value, min, max))
+            .WithMessage(string.Create(CultureInfo.InvariantCulture,
+                $"'{{PropertyName}}' must be between {min} and {max}, or {StoredNodeSettings.TokenSettingUnset} for the default. You entered {{PropertyValue}}."));
     }
 }

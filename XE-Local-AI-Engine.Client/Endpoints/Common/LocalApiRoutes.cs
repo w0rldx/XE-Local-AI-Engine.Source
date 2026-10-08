@@ -1251,4 +1251,11 @@ public static class LocalApiRoutes
         public const string NodeInfo = "diagnostics/node-info";
         public const string SupportBundle = "diagnostics/support-bundle";
     }
+
+    /// <summary>Node database snapshots: list, take one now, and stage a restore applied at the next start.</summary>
+    public static class NodeBackups
+    {
+        public const string Backups = "node/backups";
+        public const string Restore = "node/backups/{name}/restore";
+    }
 }

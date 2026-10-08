@@ -32,7 +32,8 @@ Library License. The Linux AppImage remains self-contained. Trimming stays **off
 (`PublishTrimmed=false`, reasoning in the `.pubxml` comments): the application is reflection-heavy.
 
 Each release also contains the Velopack feeds and packages used by the updater and three detached evidence files
-(`CHECKSUMS.sha256`, `RELEASE-MANIFEST.json`, `RELEASE.spdx.json`). The complete asset list, the feed layout and the
+(`CHECKSUMS.sha256`, `RELEASE-MANIFEST.json`, `RELEASE.spdx.json`), plus the local API contract `openapi-v1.json`
+(the tagged `XE-Local-AI-Engine.Client.React/openapi/v1.json`). The complete asset list, the feed layout and the
 integrity contract are in the [Velopack release guide](../docs/velopack-release-install-guide.md). End-user install
 steps are in the [user guide](../docs/user-guide/README.md).
 

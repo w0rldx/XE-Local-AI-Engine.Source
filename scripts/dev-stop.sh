@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Stop only the Aspire instance registered for this checkout/worktree's AppHost.
+# XE_DEV_STOP_GRACE_SECONDS (default 35): how long SIGTERMed scoped survivors may drain before SIGKILL.
 
 set -euo pipefail
 
@@ -18,6 +19,10 @@ Stops only the Aspire instance whose canonical AppHost path belongs to the
 current checkout/worktree. XE_ASPIRE_APPHOST may select another explicit
 AppHost. It never uses `aspire stop --all` and never scans for another
 worktree's processes.
+
+Scoped processes still alive after `aspire stop` get SIGTERM and then up to
+XE_DEV_STOP_GRACE_SECONDS (default 35, whole seconds) to finish their shutdown
+drain before SIGKILL.
 EOF
     exit 0
     ;;
@@ -27,6 +32,11 @@ esac
 dev_require_tools
 PROC_ROOT="${XE_ASPIRE_PROC_ROOT:-/proc}"
 [[ -d "${PROC_ROOT}" ]] || { echo "[dev-stop] Process root not found: ${PROC_ROOT}" >&2; exit 2; }
+GRACE_SECONDS="${XE_DEV_STOP_GRACE_SECONDS:-35}"
+[[ "${GRACE_SECONDS}" =~ ^[0-9]+$ ]] || {
+  echo "[dev-stop] XE_DEV_STOP_GRACE_SECONDS must be a whole number of seconds: ${GRACE_SECONDS}" >&2
+  exit 2
+}
 
 if app_json="$(dev_matching_app_json)"; then
   :
@@ -110,11 +120,25 @@ if [[ ${#survivors[@]} -gt 0 ]]; then
   for pid in "${survivors[@]}"; do
     identity_matches "${pid}" && kill -TERM "${pid}" 2>/dev/null || true
   done
-  sleep 3
-  for pid in "${survivors[@]}"; do
-    identity_matches "${pid}" && kill -KILL "${pid}" 2>/dev/null || true
+  # A survivor may still be draining (knowledge ingestion drains for up to 30 s): wait for it to exit
+  # within the grace budget, and SIGKILL only what is still alive after that.
+  remaining=("${survivors[@]}")
+  for _ in $(seq 1 $((GRACE_SECONDS * 2))); do
+    alive=()
+    for pid in "${remaining[@]}"; do
+      identity_matches "${pid}" && alive+=("${pid}") || true
+    done
+    remaining=("${alive[@]}")
+    [[ ${#remaining[@]} -gt 0 ]] || break
+    sleep 0.5
   done
-  sleep 1
+  if [[ ${#remaining[@]} -gt 0 ]]; then
+    echo "[dev-stop] Grace period of ${GRACE_SECONDS}s elapsed; SIGKILL scoped survivors: ${remaining[*]}"
+    for pid in "${remaining[@]}"; do
+      identity_matches "${pid}" && kill -KILL "${pid}" 2>/dev/null || true
+    done
+    sleep 1
+  fi
   for pid in "${survivors[@]}"; do
     if identity_matches "${pid}"; then
       echo "[dev-stop] Scoped PID ${pid} survived SIGKILL; refusing to claim full teardown." >&2

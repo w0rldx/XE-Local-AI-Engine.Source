@@ -74,6 +74,7 @@ import {
 	createImageJob,
 	createIntegrationTrigger,
 	createMcpServer,
+	createNodeBackup,
 	createNodeChatConversation,
 	createNodeChatMessageRevision,
 	createPlaybookAction,
@@ -317,6 +318,7 @@ import {
 	listKnowledgeDocuments,
 	listLocalModels,
 	listMcpServers,
+	listNodeBackups,
 	listNodeChatConversations,
 	listNodeChatMessageRevisions,
 	listRunEnvelopes,
@@ -390,6 +392,7 @@ import {
 	resolveToolApproval,
 	resolveUserQuestion,
 	restartExternalApp,
+	restoreNodeBackup,
 	resumeDevWorkflowRun,
 	resumeEvaluation,
 	resumeWorkSession,
@@ -638,6 +641,9 @@ import type {
 	CreateIntegrationTriggerResponse,
 	CreateMcpServerData,
 	CreateMcpServerResponse,
+	CreateNodeBackupData,
+	CreateNodeBackupError,
+	CreateNodeBackupResponse,
 	CreateNodeChatConversationData,
 	CreateNodeChatConversationError,
 	CreateNodeChatConversationResponse,
@@ -1213,6 +1219,8 @@ import type {
 	ListLocalModelsResponse,
 	ListMcpServersData,
 	ListMcpServersResponse,
+	ListNodeBackupsData,
+	ListNodeBackupsResponse,
 	ListNodeChatConversationsData,
 	ListNodeChatConversationsError,
 	ListNodeChatConversationsResponse,
@@ -1397,6 +1405,9 @@ import type {
 	RestartExternalAppData,
 	RestartExternalAppError,
 	RestartExternalAppResponse,
+	RestoreNodeBackupData,
+	RestoreNodeBackupError,
+	RestoreNodeBackupResponse,
 	ResumeDevWorkflowRunData,
 	ResumeDevWorkflowRunError,
 	ResumeDevWorkflowRunResponse,
@@ -9146,6 +9157,67 @@ export const saveNodeSettingsMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await saveNodeSettings({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listNodeBackupsQueryKey = (options?: Options<ListNodeBackupsData>) => createQueryKey("listNodeBackups", options);
+
+export const listNodeBackupsOptions = (options?: Options<ListNodeBackupsData>) =>
+	queryOptions<
+		ListNodeBackupsResponse,
+		AxiosError<DefaultError>,
+		ListNodeBackupsResponse,
+		ReturnType<typeof listNodeBackupsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listNodeBackups({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listNodeBackupsQueryKey(options),
+	});
+
+export const createNodeBackupMutation = (
+	options?: Partial<Options<CreateNodeBackupData>>,
+): UseMutationOptions<CreateNodeBackupResponse, AxiosError<CreateNodeBackupError>, Options<CreateNodeBackupData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreateNodeBackupResponse,
+		AxiosError<CreateNodeBackupError>,
+		Options<CreateNodeBackupData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createNodeBackup({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const restoreNodeBackupMutation = (
+	options?: Partial<Options<RestoreNodeBackupData>>,
+): UseMutationOptions<RestoreNodeBackupResponse, AxiosError<RestoreNodeBackupError>, Options<RestoreNodeBackupData>> => {
+	const mutationOptions: UseMutationOptions<
+		RestoreNodeBackupResponse,
+		AxiosError<RestoreNodeBackupError>,
+		Options<RestoreNodeBackupData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await restoreNodeBackup({
 				...options,
 				...fnOptions,
 				throwOnError: true,

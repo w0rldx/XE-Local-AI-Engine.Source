@@ -55,8 +55,12 @@ import { testMantineTheme } from "@/test/MantineTestRender";
 import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { setupMswServer } from "@/test/UseMswServer";
 
-// The header reads the node's log level on every render; it is ambient to the snapshot tests, so it is a file default.
-const server = setupMswServer(jsonRoute("get", "diagnostics/log-level", { verbose: false }));
+// The header reads the node's log level and the database-snapshots card its list on every render; both are ambient to
+// the snapshot tests, so they are file defaults.
+const server = setupMswServer(
+	jsonRoute("get", "diagnostics/log-level", { verbose: false }),
+	jsonRoute("get", "node/backups", { backups: [], lastAutomaticBackup: { outcome: "NotRun" } }),
+);
 
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
 	return {

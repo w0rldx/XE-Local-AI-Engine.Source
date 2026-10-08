@@ -233,6 +233,9 @@ jobs:
           PACK_VERSION: ${{ needs.version.outputs.pack-version }}
         run: |
           set -euo pipefail
+          # The committed OpenAPI contract ships from the tagged source, before the SBOM so SPDX, manifest and
+          # checksums all cover it.
+          cp XE-Local-AI-Engine.Client.React/openapi/v1.json remote-primary/openapi-v1.json
           dotnet tool restore --tool-manifest dotnet-tools.json
           # sbom-tool's -m (ManifestDirPath) must already exist; it writes _manifest/ under it but does not create the
           # root. Unlike the build-pack SBOM step (which omits -m and defaults under -b), this envelope uses a distinct
@@ -292,6 +295,7 @@ jobs:
           TAG="v${{ needs.version.outputs.pack-version }}"
           (cd remote-primary && find . -maxdepth 1 -type f ! -name 'CHECKSUMS.sha256' -print0 | sort -z | xargs -0 sha256sum > CHECKSUMS.sha256)
           gh release upload "$TAG" \
+            remote-primary/openapi-v1.json \
             remote-primary/RELEASE.spdx.json \
             remote-primary/RELEASE-MANIFEST.json \
             remote-primary/CHECKSUMS.sha256 \
@@ -316,6 +320,7 @@ jobs:
           test -f remote-final/CHECKSUMS.sha256
           test -f remote-final/RELEASE.spdx.json
           test -f remote-final/RELEASE-MANIFEST.json
+          test -f remote-final/openapi-v1.json
           test "$(find remote-final -maxdepth 1 -type f | wc -l)" -eq \
                "$(( $(wc -l < remote-final/CHECKSUMS.sha256) + 1 ))"
           (cd remote-final && sha256sum --check CHECKSUMS.sha256)
@@ -378,6 +383,7 @@ jobs:
           test -f protected-remote/CHECKSUMS.sha256
           test -f protected-remote/RELEASE.spdx.json
           test -f protected-remote/RELEASE-MANIFEST.json
+          test -f protected-remote/openapi-v1.json
           test "$(find protected-remote -maxdepth 1 -type f | wc -l)" -eq \
                "$(( $(wc -l < protected-remote/CHECKSUMS.sha256) + 1 ))"
           (cd protected-remote && sha256sum --check CHECKSUMS.sha256)

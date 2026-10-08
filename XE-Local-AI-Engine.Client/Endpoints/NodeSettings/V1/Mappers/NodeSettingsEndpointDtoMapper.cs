@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 
+using System.Numerics;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
@@ -335,19 +336,20 @@ internal static class NodeSettingsEndpointDtoMapper
             HuggingFaceDefaultQuant = request.HuggingFaceDefaultQuant is null
                 ? currentSettings.HuggingFaceDefaultQuant
                 : request.HuggingFaceDefaultQuant.Trim(),
-            HuggingFaceDiskMarginBytes = request.HuggingFaceDiskMarginBytes ?? currentSettings.HuggingFaceDiskMarginBytes,
-            LlamaMaxLoadedProcesses = request.LlamaMaxLoadedProcesses ?? currentSettings.LlamaMaxLoadedProcesses,
-            LlamaIdleTimeToLiveSeconds = request.LlamaIdleTimeToLiveSeconds ?? currentSettings.LlamaIdleTimeToLiveSeconds,
+            // A nullable numeric knob takes TokenSettingUnset (-1) as "back to the default" via KeepOrUnset; exceptions say why.
+            HuggingFaceDiskMarginBytes = KeepOrUnset(request.HuggingFaceDiskMarginBytes, currentSettings.HuggingFaceDiskMarginBytes),
+            LlamaMaxLoadedProcesses = KeepOrUnset(request.LlamaMaxLoadedProcesses, currentSettings.LlamaMaxLoadedProcesses),
+            LlamaIdleTimeToLiveSeconds = KeepOrUnset(request.LlamaIdleTimeToLiveSeconds, currentSettings.LlamaIdleTimeToLiveSeconds),
             KeepModelWarmEnabled = request.KeepModelWarmEnabled ?? currentSettings.KeepModelWarmEnabled,
             KeepModelWarmModelName = request.KeepModelWarmModelName is null
                 ? currentSettings.KeepModelWarmModelName
                 : request.KeepModelWarmModelName.Trim(),
-            KeepModelWarmIntervalSeconds = request.KeepModelWarmIntervalSeconds ?? currentSettings.KeepModelWarmIntervalSeconds,
-            MaxResponseSizeMb = request.MaxResponseSizeMb ?? currentSettings.MaxResponseSizeMb,
+            KeepModelWarmIntervalSeconds = KeepOrUnset(request.KeepModelWarmIntervalSeconds, currentSettings.KeepModelWarmIntervalSeconds),
+            MaxResponseSizeMb = KeepOrUnset(request.MaxResponseSizeMb, currentSettings.MaxResponseSizeMb),
             RecommendedLlamaCppTag = request.RecommendedLlamaCppTag is null
                 ? currentSettings.RecommendedLlamaCppTag
                 : request.RecommendedLlamaCppTag.Trim(),
-            ChatCacheReuse = request.ChatCacheReuse ?? currentSettings.ChatCacheReuse,
+            ChatCacheReuse = KeepOrUnset(request.ChatCacheReuse, currentSettings.ChatCacheReuse),
             SpeculativeMode = request.SpeculativeMode is null
                 ? currentSettings.SpeculativeMode
                 : request.SpeculativeMode.Trim(),
@@ -364,7 +366,8 @@ internal static class NodeSettingsEndpointDtoMapper
             SpeculativeDraftModelName = request.SpeculativeDraftModelName is null
                 ? currentSettings.SpeculativeDraftModelName
                 : request.SpeculativeDraftModelName.Trim(),
-            SpeculativeDraftMaxTokens = request.SpeculativeDraftMaxTokens ?? currentSettings.SpeculativeDraftMaxTokens,
+            SpeculativeDraftMaxTokens = KeepOrUnset(request.SpeculativeDraftMaxTokens, currentSettings.SpeculativeDraftMaxTokens),
+            // No -1 here: in llama.cpp's own vocabulary a negative layer count is a value, not "unset".
             SpeculativeDraftGpuLayers = request.SpeculativeDraftGpuLayers ?? currentSettings.SpeculativeDraftGpuLayers,
             // Optional string, mirroring OllamaEndpoint/DefaultModelName: a null request field keeps the current value, and a supplied value (including the empty string the
             // "Off" option sends) is trimmed, with the store's Normalize mapping blank to null — reranking disabled.
@@ -374,13 +377,13 @@ internal static class NodeSettingsEndpointDtoMapper
             AutoEffortFastModelName = request.AutoEffortFastModelName is null
                 ? currentSettings.AutoEffortFastModelName
                 : request.AutoEffortFastModelName.Trim(),
-            OrchestrationIdleTimeoutSeconds = request.OrchestrationIdleTimeoutSeconds ?? currentSettings.OrchestrationIdleTimeoutSeconds,
-            AgentHomePrepareTimeoutSeconds = request.AgentHomePrepareTimeoutSeconds ?? currentSettings.AgentHomePrepareTimeoutSeconds,
-            AgentHomeCommandTimeoutSeconds = request.AgentHomeCommandTimeoutSeconds ?? currentSettings.AgentHomeCommandTimeoutSeconds,
-            AgentHomeMaxSelectedFolderBytes = request.AgentHomeMaxSelectedFolderBytes ?? currentSettings.AgentHomeMaxSelectedFolderBytes,
-            AgentHomeMaxPatchBytes = request.AgentHomeMaxPatchBytes ?? currentSettings.AgentHomeMaxPatchBytes,
-            MaxPendingToolCallAgeMinutes = request.MaxPendingToolCallAgeMinutes ?? currentSettings.MaxPendingToolCallAgeMinutes,
-            DetachedGraceSeconds = request.DetachedGraceSeconds ?? currentSettings.DetachedGraceSeconds,
+            OrchestrationIdleTimeoutSeconds = KeepOrUnset(request.OrchestrationIdleTimeoutSeconds, currentSettings.OrchestrationIdleTimeoutSeconds),
+            AgentHomePrepareTimeoutSeconds = KeepOrUnset(request.AgentHomePrepareTimeoutSeconds, currentSettings.AgentHomePrepareTimeoutSeconds),
+            AgentHomeCommandTimeoutSeconds = KeepOrUnset(request.AgentHomeCommandTimeoutSeconds, currentSettings.AgentHomeCommandTimeoutSeconds),
+            AgentHomeMaxSelectedFolderBytes = KeepOrUnset(request.AgentHomeMaxSelectedFolderBytes, currentSettings.AgentHomeMaxSelectedFolderBytes),
+            AgentHomeMaxPatchBytes = KeepOrUnset(request.AgentHomeMaxPatchBytes, currentSettings.AgentHomeMaxPatchBytes),
+            MaxPendingToolCallAgeMinutes = KeepOrUnset(request.MaxPendingToolCallAgeMinutes, currentSettings.MaxPendingToolCallAgeMinutes),
+            DetachedGraceSeconds = KeepOrUnset(request.DetachedGraceSeconds, currentSettings.DetachedGraceSeconds),
             // The node-default tool-approval policy has no editable field on this request, so the currently stored value is preserved: an unrelated node-settings save must
             // never wipe it.
             ToolApprovalPolicy = currentSettings.ToolApprovalPolicy,
@@ -396,10 +399,10 @@ internal static class NodeSettingsEndpointDtoMapper
                 {
                     Models = request.UsageRates
                 },
-            TranscriptionIdleTimeoutMinutes = request.TranscriptionIdleTimeoutMinutes ?? currentSettings.TranscriptionIdleTimeoutMinutes,
-            LlamaReadinessTimeoutCapSeconds = request.LlamaReadinessTimeoutCapSeconds ?? currentSettings.LlamaReadinessTimeoutCapSeconds,
-            LlamaChatHttpTimeoutSeconds = request.LlamaChatHttpTimeoutSeconds ?? currentSettings.LlamaChatHttpTimeoutSeconds,
-            LlamaEmbeddingHttpTimeoutSeconds = request.LlamaEmbeddingHttpTimeoutSeconds ?? currentSettings.LlamaEmbeddingHttpTimeoutSeconds,
+            TranscriptionIdleTimeoutMinutes = KeepOrUnset(request.TranscriptionIdleTimeoutMinutes, currentSettings.TranscriptionIdleTimeoutMinutes),
+            LlamaReadinessTimeoutCapSeconds = KeepOrUnset(request.LlamaReadinessTimeoutCapSeconds, currentSettings.LlamaReadinessTimeoutCapSeconds),
+            LlamaChatHttpTimeoutSeconds = KeepOrUnset(request.LlamaChatHttpTimeoutSeconds, currentSettings.LlamaChatHttpTimeoutSeconds),
+            LlamaEmbeddingHttpTimeoutSeconds = KeepOrUnset(request.LlamaEmbeddingHttpTimeoutSeconds, currentSettings.LlamaEmbeddingHttpTimeoutSeconds),
             // -1 is the request's "back to automatic", the one way a null-keeps member can clear a stored count.
             LlamaChatCacheRamMiB = request.LlamaChatCacheRamMiB switch
             {
@@ -407,21 +410,21 @@ internal static class NodeSettingsEndpointDtoMapper
                 StoredNodeSettings.LlamaChatCacheRamMiBAuto => null,
                 { } cacheRamMiB => cacheRamMiB
             },
-            LlamaCpuThreadReserve = request.LlamaCpuThreadReserve ?? currentSettings.LlamaCpuThreadReserve,
-            LlamaGpuReservePercent = request.LlamaGpuReservePercent ?? currentSettings.LlamaGpuReservePercent,
-            LlamaRamReservePercent = request.LlamaRamReservePercent ?? currentSettings.LlamaRamReservePercent,
-            ImageIdleTimeToLiveSeconds = request.ImageIdleTimeToLiveSeconds ?? currentSettings.ImageIdleTimeToLiveSeconds,
-            ModelFitSafetyMarginPercent = request.ModelFitSafetyMarginPercent ?? currentSettings.ModelFitSafetyMarginPercent,
-            MaxProviderCallsPerInvocation = request.MaxProviderCallsPerInvocation ?? currentSettings.MaxProviderCallsPerInvocation,
-            CustomToolMaxTimeoutSeconds = request.CustomToolMaxTimeoutSeconds ?? currentSettings.CustomToolMaxTimeoutSeconds,
-            WebFetchTimeoutSeconds = request.WebFetchTimeoutSeconds ?? currentSettings.WebFetchTimeoutSeconds,
-            WebFetchMaxContentChars = request.WebFetchMaxContentChars ?? currentSettings.WebFetchMaxContentChars,
-            KnowledgeSearchDefaultResults = request.KnowledgeSearchDefaultResults ?? currentSettings.KnowledgeSearchDefaultResults,
-            KnowledgeSearchMaxResults = request.KnowledgeSearchMaxResults ?? currentSettings.KnowledgeSearchMaxResults,
-            ReasoningBudgetMinimalTokens = KeepOrUnsetTokens(request.ReasoningBudgetMinimalTokens, currentSettings.ReasoningBudgetMinimalTokens),
-            ReasoningBudgetLowTokens = KeepOrUnsetTokens(request.ReasoningBudgetLowTokens, currentSettings.ReasoningBudgetLowTokens),
-            ReasoningBudgetMediumTokens = KeepOrUnsetTokens(request.ReasoningBudgetMediumTokens, currentSettings.ReasoningBudgetMediumTokens),
-            ReasoningBudgetHighTokens = KeepOrUnsetTokens(request.ReasoningBudgetHighTokens, currentSettings.ReasoningBudgetHighTokens),
+            LlamaCpuThreadReserve = KeepOrUnset(request.LlamaCpuThreadReserve, currentSettings.LlamaCpuThreadReserve),
+            LlamaGpuReservePercent = KeepOrUnset(request.LlamaGpuReservePercent, currentSettings.LlamaGpuReservePercent),
+            LlamaRamReservePercent = KeepOrUnset(request.LlamaRamReservePercent, currentSettings.LlamaRamReservePercent),
+            ImageIdleTimeToLiveSeconds = KeepOrUnset(request.ImageIdleTimeToLiveSeconds, currentSettings.ImageIdleTimeToLiveSeconds),
+            ModelFitSafetyMarginPercent = KeepOrUnset(request.ModelFitSafetyMarginPercent, currentSettings.ModelFitSafetyMarginPercent),
+            MaxProviderCallsPerInvocation = KeepOrUnset(request.MaxProviderCallsPerInvocation, currentSettings.MaxProviderCallsPerInvocation),
+            CustomToolMaxTimeoutSeconds = KeepOrUnset(request.CustomToolMaxTimeoutSeconds, currentSettings.CustomToolMaxTimeoutSeconds),
+            WebFetchTimeoutSeconds = KeepOrUnset(request.WebFetchTimeoutSeconds, currentSettings.WebFetchTimeoutSeconds),
+            WebFetchMaxContentChars = KeepOrUnset(request.WebFetchMaxContentChars, currentSettings.WebFetchMaxContentChars),
+            KnowledgeSearchDefaultResults = KeepOrUnset(request.KnowledgeSearchDefaultResults, currentSettings.KnowledgeSearchDefaultResults),
+            KnowledgeSearchMaxResults = KeepOrUnset(request.KnowledgeSearchMaxResults, currentSettings.KnowledgeSearchMaxResults),
+            ReasoningBudgetMinimalTokens = KeepOrUnset(request.ReasoningBudgetMinimalTokens, currentSettings.ReasoningBudgetMinimalTokens),
+            ReasoningBudgetLowTokens = KeepOrUnset(request.ReasoningBudgetLowTokens, currentSettings.ReasoningBudgetLowTokens),
+            ReasoningBudgetMediumTokens = KeepOrUnset(request.ReasoningBudgetMediumTokens, currentSettings.ReasoningBudgetMediumTokens),
+            ReasoningBudgetHighTokens = KeepOrUnset(request.ReasoningBudgetHighTokens, currentSettings.ReasoningBudgetHighTokens),
             // The empty string clears these two back to the shipped default, like WebSearchSearxngUrl.
             DefaultReasoningEffort = request.DefaultReasoningEffort switch
             {
@@ -435,33 +438,33 @@ internal static class NodeSettingsEndpointDtoMapper
                 "" => null,
                 { } mode => mode.Trim()
             },
-            ChatOutputCapMaxTokens = KeepOrUnsetTokens(request.ChatOutputCapMaxTokens, currentSettings.ChatOutputCapMaxTokens),
-            HuggingFaceDownloadConnections = request.HuggingFaceDownloadConnections ?? currentSettings.HuggingFaceDownloadConnections,
-            TranscriptionInferenceTimeoutMinutes = request.TranscriptionInferenceTimeoutMinutes ?? currentSettings.TranscriptionInferenceTimeoutMinutes,
-            AgentHomeMaxRunSeconds = request.AgentHomeMaxRunSeconds ?? currentSettings.AgentHomeMaxRunSeconds,
-            AgentHomeRunRetentionDays = request.AgentHomeRunRetentionDays ?? currentSettings.AgentHomeRunRetentionDays,
-            ToolPipelineMaxIterationsPerRequest = request.ToolPipelineMaxIterationsPerRequest ?? currentSettings.ToolPipelineMaxIterationsPerRequest,
-            ToolPipelineMaxToolResultChars = request.ToolPipelineMaxToolResultChars ?? currentSettings.ToolPipelineMaxToolResultChars,
-            ToolPipelineMaxConsecutiveInvalidToolCalls = request.ToolPipelineMaxConsecutiveInvalidToolCalls ?? currentSettings.ToolPipelineMaxConsecutiveInvalidToolCalls,
-            DefaultContextTokens = request.DefaultContextTokens ?? currentSettings.DefaultContextTokens,
-            ProviderBudgetRecentMessagesToKeep = request.ProviderBudgetRecentMessagesToKeep ?? currentSettings.ProviderBudgetRecentMessagesToKeep,
-            ProviderBudgetMaxCumulativeInputTokens = request.ProviderBudgetMaxCumulativeInputTokens ?? currentSettings.ProviderBudgetMaxCumulativeInputTokens,
-            ContextBudgetRecentTurnKeepCount = request.ContextBudgetRecentTurnKeepCount ?? currentSettings.ContextBudgetRecentTurnKeepCount,
-            CompactionAutoCompactPercent = request.CompactionAutoCompactPercent ?? currentSettings.CompactionAutoCompactPercent,
-            CompactionRecentMessagesVerbatim = request.CompactionRecentMessagesVerbatim ?? currentSettings.CompactionRecentMessagesVerbatim,
-            MaxInlinedAttachmentChars = request.MaxInlinedAttachmentChars ?? currentSettings.MaxInlinedAttachmentChars,
-            KnowledgeChatTopK = request.KnowledgeChatTopK ?? currentSettings.KnowledgeChatTopK,
-            ProviderMaxRetries = request.ProviderMaxRetries ?? currentSettings.ProviderMaxRetries,
-            SpawnMaxConcurrent = request.SpawnMaxConcurrent ?? currentSettings.SpawnMaxConcurrent,
-            SpawnMaxCloud = request.SpawnMaxCloud ?? currentSettings.SpawnMaxCloud,
-            SpawnQueueWaitSeconds = request.SpawnQueueWaitSeconds ?? currentSettings.SpawnQueueWaitSeconds,
+            ChatOutputCapMaxTokens = KeepOrUnset(request.ChatOutputCapMaxTokens, currentSettings.ChatOutputCapMaxTokens),
+            HuggingFaceDownloadConnections = KeepOrUnset(request.HuggingFaceDownloadConnections, currentSettings.HuggingFaceDownloadConnections),
+            TranscriptionInferenceTimeoutMinutes = KeepOrUnset(request.TranscriptionInferenceTimeoutMinutes, currentSettings.TranscriptionInferenceTimeoutMinutes),
+            AgentHomeMaxRunSeconds = KeepOrUnset(request.AgentHomeMaxRunSeconds, currentSettings.AgentHomeMaxRunSeconds),
+            AgentHomeRunRetentionDays = KeepOrUnset(request.AgentHomeRunRetentionDays, currentSettings.AgentHomeRunRetentionDays),
+            ToolPipelineMaxIterationsPerRequest = KeepOrUnset(request.ToolPipelineMaxIterationsPerRequest, currentSettings.ToolPipelineMaxIterationsPerRequest),
+            ToolPipelineMaxToolResultChars = KeepOrUnset(request.ToolPipelineMaxToolResultChars, currentSettings.ToolPipelineMaxToolResultChars),
+            ToolPipelineMaxConsecutiveInvalidToolCalls = KeepOrUnset(request.ToolPipelineMaxConsecutiveInvalidToolCalls, currentSettings.ToolPipelineMaxConsecutiveInvalidToolCalls),
+            DefaultContextTokens = KeepOrUnset(request.DefaultContextTokens, currentSettings.DefaultContextTokens),
+            ProviderBudgetRecentMessagesToKeep = KeepOrUnset(request.ProviderBudgetRecentMessagesToKeep, currentSettings.ProviderBudgetRecentMessagesToKeep),
+            ProviderBudgetMaxCumulativeInputTokens = KeepOrUnset(request.ProviderBudgetMaxCumulativeInputTokens, currentSettings.ProviderBudgetMaxCumulativeInputTokens),
+            ContextBudgetRecentTurnKeepCount = KeepOrUnset(request.ContextBudgetRecentTurnKeepCount, currentSettings.ContextBudgetRecentTurnKeepCount),
+            CompactionAutoCompactPercent = KeepOrUnset(request.CompactionAutoCompactPercent, currentSettings.CompactionAutoCompactPercent),
+            CompactionRecentMessagesVerbatim = KeepOrUnset(request.CompactionRecentMessagesVerbatim, currentSettings.CompactionRecentMessagesVerbatim),
+            MaxInlinedAttachmentChars = KeepOrUnset(request.MaxInlinedAttachmentChars, currentSettings.MaxInlinedAttachmentChars),
+            KnowledgeChatTopK = KeepOrUnset(request.KnowledgeChatTopK, currentSettings.KnowledgeChatTopK),
+            ProviderMaxRetries = KeepOrUnset(request.ProviderMaxRetries, currentSettings.ProviderMaxRetries),
+            SpawnMaxConcurrent = KeepOrUnset(request.SpawnMaxConcurrent, currentSettings.SpawnMaxConcurrent),
+            SpawnMaxCloud = KeepOrUnset(request.SpawnMaxCloud, currentSettings.SpawnMaxCloud),
+            SpawnQueueWaitSeconds = KeepOrUnset(request.SpawnQueueWaitSeconds, currentSettings.SpawnQueueWaitSeconds),
             CompactionAutoEnabled = request.CompactionAutoEnabled ?? currentSettings.CompactionAutoEnabled,
             CompactionDistillEnabled = request.CompactionDistillEnabled ?? currentSettings.CompactionDistillEnabled,
             ProviderRetryEnabled = request.ProviderRetryEnabled ?? currentSettings.ProviderRetryEnabled,
             KnowledgeAdaptiveRerankingEnabled = request.KnowledgeAdaptiveRerankingEnabled ?? currentSettings.KnowledgeAdaptiveRerankingEnabled,
-            KnowledgeRetrievalLatencyBudgetMs = request.KnowledgeRetrievalLatencyBudgetMs ?? currentSettings.KnowledgeRetrievalLatencyBudgetMs,
+            KnowledgeRetrievalLatencyBudgetMs = KeepOrUnset(request.KnowledgeRetrievalLatencyBudgetMs, currentSettings.KnowledgeRetrievalLatencyBudgetMs),
             KnowledgeScheduledReindexEnabled = request.KnowledgeScheduledReindexEnabled ?? currentSettings.KnowledgeScheduledReindexEnabled,
-            KnowledgeScheduledReindexIntervalMinutes = request.KnowledgeScheduledReindexIntervalMinutes ?? currentSettings.KnowledgeScheduledReindexIntervalMinutes,
+            KnowledgeScheduledReindexIntervalMinutes = KeepOrUnset(request.KnowledgeScheduledReindexIntervalMinutes, currentSettings.KnowledgeScheduledReindexIntervalMinutes),
             KnowledgeAgentToolsEnabled = request.KnowledgeAgentToolsEnabled ?? currentSettings.KnowledgeAgentToolsEnabled,
             AllowCloudModelAccess = request.AllowCloudModelAccess ?? currentSettings.AllowCloudModelAccess,
             AllowCloudModelUnattendedRuns = request.AllowCloudModelUnattendedRuns ?? currentSettings.AllowCloudModelUnattendedRuns,
@@ -472,25 +475,25 @@ internal static class NodeSettingsEndpointDtoMapper
             PlaybookEvalModelName = request.PlaybookEvalModelName is null ? currentSettings.PlaybookEvalModelName : request.PlaybookEvalModelName.Trim(),
             MemoryExtractionModelName = request.MemoryExtractionModelName is null ? currentSettings.MemoryExtractionModelName : request.MemoryExtractionModelName.Trim(),
             ChatRetentionEnabled = request.ChatRetentionEnabled ?? currentSettings.ChatRetentionEnabled,
-            ChatRetentionDays = request.ChatRetentionDays ?? currentSettings.ChatRetentionDays,
+            ChatRetentionDays = KeepOrUnset(request.ChatRetentionDays, currentSettings.ChatRetentionDays),
             AgentExecutionLogRetentionEnabled = request.AgentExecutionLogRetentionEnabled ?? currentSettings.AgentExecutionLogRetentionEnabled,
-            AgentExecutionLogRetentionDays = request.AgentExecutionLogRetentionDays ?? currentSettings.AgentExecutionLogRetentionDays,
-            NodeDbBackupRetainCount = request.NodeDbBackupRetainCount ?? currentSettings.NodeDbBackupRetainCount,
-            BenchmarkKldCacheMaxBytes = request.BenchmarkKldCacheMaxBytes ?? currentSettings.BenchmarkKldCacheMaxBytes,
-            SchedulerHistoryRetentionDays = request.SchedulerHistoryRetentionDays ?? currentSettings.SchedulerHistoryRetentionDays,
-            ImageMaxLoadedProcesses = request.ImageMaxLoadedProcesses ?? currentSettings.ImageMaxLoadedProcesses,
+            AgentExecutionLogRetentionDays = KeepOrUnset(request.AgentExecutionLogRetentionDays, currentSettings.AgentExecutionLogRetentionDays),
+            NodeDbBackupRetainCount = KeepOrUnset(request.NodeDbBackupRetainCount, currentSettings.NodeDbBackupRetainCount),
+            BenchmarkKldCacheMaxBytes = KeepOrUnset(request.BenchmarkKldCacheMaxBytes, currentSettings.BenchmarkKldCacheMaxBytes),
+            SchedulerHistoryRetentionDays = KeepOrUnset(request.SchedulerHistoryRetentionDays, currentSettings.SchedulerHistoryRetentionDays),
+            ImageMaxLoadedProcesses = KeepOrUnset(request.ImageMaxLoadedProcesses, currentSettings.ImageMaxLoadedProcesses),
             ImageTextEncoderOnGpu = request.ImageTextEncoderOnGpu ?? currentSettings.ImageTextEncoderOnGpu,
-            GraphWorkflowMaxConcurrentRuns = request.GraphWorkflowMaxConcurrentRuns ?? currentSettings.GraphWorkflowMaxConcurrentRuns,
-            GraphWorkflowDefaultNodeTimeoutSeconds = request.GraphWorkflowDefaultNodeTimeoutSeconds ?? currentSettings.GraphWorkflowDefaultNodeTimeoutSeconds,
-            WorkSessionMaxStepsPerRun = request.WorkSessionMaxStepsPerRun ?? currentSettings.WorkSessionMaxStepsPerRun,
-            WorkSessionMaxConcurrentSessions = request.WorkSessionMaxConcurrentSessions ?? currentSettings.WorkSessionMaxConcurrentSessions,
-            DevelopmentMaxAttemptDurationSeconds = request.DevelopmentMaxAttemptDurationSeconds ?? currentSettings.DevelopmentMaxAttemptDurationSeconds,
-            DevelopmentMaxToolCalls = request.DevelopmentMaxToolCalls ?? currentSettings.DevelopmentMaxToolCalls,
-            DevelopmentMaxOutputTokens = request.DevelopmentMaxOutputTokens ?? currentSettings.DevelopmentMaxOutputTokens,
-            AgentHomeMaxInnerToolCalls = request.AgentHomeMaxInnerToolCalls ?? currentSettings.AgentHomeMaxInnerToolCalls,
-            AgentHomePatchApplyTimeoutSeconds = request.AgentHomePatchApplyTimeoutSeconds ?? currentSettings.AgentHomePatchApplyTimeoutSeconds,
-            AgentHomeRunRetentionMaxRuns = request.AgentHomeRunRetentionMaxRuns ?? currentSettings.AgentHomeRunRetentionMaxRuns,
-            AgentHomeRunRetentionMaxTotalBytes = request.AgentHomeRunRetentionMaxTotalBytes ?? currentSettings.AgentHomeRunRetentionMaxTotalBytes,
+            GraphWorkflowMaxConcurrentRuns = KeepOrUnset(request.GraphWorkflowMaxConcurrentRuns, currentSettings.GraphWorkflowMaxConcurrentRuns),
+            GraphWorkflowDefaultNodeTimeoutSeconds = KeepOrUnset(request.GraphWorkflowDefaultNodeTimeoutSeconds, currentSettings.GraphWorkflowDefaultNodeTimeoutSeconds),
+            WorkSessionMaxStepsPerRun = KeepOrUnset(request.WorkSessionMaxStepsPerRun, currentSettings.WorkSessionMaxStepsPerRun),
+            WorkSessionMaxConcurrentSessions = KeepOrUnset(request.WorkSessionMaxConcurrentSessions, currentSettings.WorkSessionMaxConcurrentSessions),
+            DevelopmentMaxAttemptDurationSeconds = KeepOrUnset(request.DevelopmentMaxAttemptDurationSeconds, currentSettings.DevelopmentMaxAttemptDurationSeconds),
+            DevelopmentMaxToolCalls = KeepOrUnset(request.DevelopmentMaxToolCalls, currentSettings.DevelopmentMaxToolCalls),
+            DevelopmentMaxOutputTokens = KeepOrUnset(request.DevelopmentMaxOutputTokens, currentSettings.DevelopmentMaxOutputTokens),
+            AgentHomeMaxInnerToolCalls = KeepOrUnset(request.AgentHomeMaxInnerToolCalls, currentSettings.AgentHomeMaxInnerToolCalls),
+            AgentHomePatchApplyTimeoutSeconds = KeepOrUnset(request.AgentHomePatchApplyTimeoutSeconds, currentSettings.AgentHomePatchApplyTimeoutSeconds),
+            AgentHomeRunRetentionMaxRuns = KeepOrUnset(request.AgentHomeRunRetentionMaxRuns, currentSettings.AgentHomeRunRetentionMaxRuns),
+            AgentHomeRunRetentionMaxTotalBytes = KeepOrUnset(request.AgentHomeRunRetentionMaxTotalBytes, currentSettings.AgentHomeRunRetentionMaxTotalBytes),
             DevelopmentEnabled = request.DevelopmentEnabled ?? currentSettings.DevelopmentEnabled,
             WorkSessionsEnabled = request.WorkSessionsEnabled ?? currentSettings.WorkSessionsEnabled,
             GraphWorkflowsEnabled = request.GraphWorkflowsEnabled ?? currentSettings.GraphWorkflowsEnabled,
@@ -543,14 +546,15 @@ internal static class NodeSettingsEndpointDtoMapper
     /// <summary>The external-access profile stamp and the three switches it describes.</summary>
     private readonly record struct ExternalAccessStamp(string? Profile, bool? ApplicationUpdates, bool? RuntimeUpdates, bool? FirstRunModel);
 
-    /// <summary>Null keeps the stored value; <see cref="StoredNodeSettings.TokenSettingUnset" /> clears it back to the shipped default.</summary>
-    private static int? KeepOrUnsetTokens(int? requested, int? current)
+    /// <summary>Null keeps the stored value; <see cref="StoredNodeSettings.TokenSettingUnset" /> clears it back to the default.</summary>
+    private static T? KeepOrUnset<T>(T? requested, T? current)
+        where T : struct, INumber<T>
     {
-        return requested switch
+        if (requested is not { } value)
         {
-            null => current,
-            StoredNodeSettings.TokenSettingUnset => null,
-            { } tokens => tokens
-        };
+            return current;
+        }
+
+        return value == T.CreateChecked(StoredNodeSettings.TokenSettingUnset) ? null : value;
     }
 }

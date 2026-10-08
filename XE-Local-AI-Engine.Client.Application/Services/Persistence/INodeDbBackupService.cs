@@ -19,4 +19,25 @@ public interface INodeDbBackupService
 
     /// <summary>The full path of the newest complete snapshot, or null when none exists; named in fatal startup messages.</summary>
     string? FindNewestSnapshot();
+
+    /// <summary>What the pre-migration backup of this process run did.</summary>
+    NodeDbAutomaticBackupStatus LastAutomaticBackup { get; }
+
+    /// <summary>Every complete snapshot in the backups folder, newest first; empty when the folder does not exist.</summary>
+    IReadOnlyList<NodeDbSnapshot> ListSnapshots();
+
+    /// <summary>
+    ///     Checks a listed snapshot and writes the marker the next start applies. Shares the one-at-a-time guard with
+    ///     <see cref="CreateSnapshotAsync" />, so a snapshot and its retention prune never run while a restore is staged.
+    /// </summary>
+    Task<NodeDbRestoreStageResult> StageRestoreAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The full path of the listed snapshot with this exact file name, or null when there is none.</summary>
+    string? ResolveSnapshotPath(string name);
+
+    /// <summary>
+    ///     Takes a snapshot now with the same naming and retention as the pre-migration one. One at a time; failures other than the
+    ///     reported statuses throw.
+    /// </summary>
+    Task<NodeDbSnapshotCreateResult> CreateSnapshotAsync(CancellationToken cancellationToken = default);
 }

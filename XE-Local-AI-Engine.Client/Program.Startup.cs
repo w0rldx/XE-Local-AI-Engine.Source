@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client;
 using System.Data.Common;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Options;
 using Serilog;
 using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Hosting;
@@ -16,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Import;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 public sealed partial class Program
 {
@@ -99,8 +101,7 @@ public sealed partial class Program
     {
         try
         {
-            var dataSource = new SqliteConnectionStringBuilder(app.Configuration.GetConnectionString("node-sqlite")).DataSource;
-            var databasePath = string.IsNullOrWhiteSpace(dataSource) ? DesktopBootstrap.DatabaseFileName : Path.GetFullPath(dataSource);
+            var databasePath = ResolveDatabasePath(app.Configuration, dataDirectory: null);
             var snapshotPath = app.Services.GetService<INodeDbBackupService>()?.FindNewestSnapshot();
             var hint = DescribeDatabaseRecovery(exception, databasePath, snapshotPath);
 
@@ -111,6 +112,60 @@ public sealed partial class Program
         {
             // The hint is advisory; never let it replace the migration failure the caller exits on.
             Log.Warning(hintException, "Could not describe how to recover the node database.");
+        }
+    }
+
+    /// <summary>The node database file the connection string names, else <c>node.sqlite</c> in the data directory (relative when none).</summary>
+    private static string ResolveDatabasePath(IConfiguration configuration, string? dataDirectory)
+    {
+        var dataSource = new SqliteConnectionStringBuilder(configuration.GetConnectionString("node-sqlite")).DataSource;
+        if (!string.IsNullOrWhiteSpace(dataSource))
+        {
+            return Path.GetFullPath(dataSource);
+        }
+
+        return dataDirectory is null ? DesktopBootstrap.DatabaseFileName : Path.Combine(dataDirectory, DesktopBootstrap.DatabaseFileName);
+    }
+
+    /// <summary>Applies a restore the operator staged before the last stop; runs before the node key or the database is read.</summary>
+    private static Task<NodeDbRestoreApplyResult> ApplyStagedDatabaseRestoreAsync(IConfiguration configuration, string dataDirectory)
+    {
+        var backupDirectory = NodeDbRestoreStaging.ResolveBackupDirectory(dataDirectory, configuration[$"{NodeDbBackupOptions.SectionName}:{nameof(NodeDbBackupOptions.BackupDirectory)}"]);
+
+        // CancellationToken.None: no token exists before the host is built, and a half-applied restore is worse than a slow one.
+        return NodeDbRestoreStaging.ApplyPendingAsync(backupDirectory,
+            ResolveDatabasePath(configuration, dataDirectory),
+            TimeProvider.System.GetUtcNow(),
+            CancellationToken.None);
+    }
+
+    internal static string DescribeStagedRestoreFailure(NodeDbRestoreApplyResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (result.Installed)
+        {
+            return $"A staged restore of the node database was applied but not recorded: {result.Error}. The snapshot is the live database now. "
+                   + $"Delete '{result.MarkerPath}' before starting the node again; starting with the marker in place would restore the snapshot a second time and discard what was written since.";
+        }
+
+        // With a set-aside database still present nothing stands in its place, so the hint says where it is rather than "left in place".
+        var database = result.SetAsidePath is null
+            ? "The current database was left in place."
+            : $"The database was moved aside to '{result.SetAsidePath}' and nothing has replaced it yet; to cancel the restore, rename it back without the '.prerestore-' suffix before deleting the marker.";
+        return $"A staged restore of the node database could not be applied: {result.Error}. {database} "
+               + $"Fix the cause and start the node again to retry, or delete '{result.MarkerPath}' to cancel the restore.";
+    }
+
+    /// <summary>Only a local-mode start applies a staged restore; anywhere else the marker is reported and left alone.</summary>
+    private static void WarnIgnoredStagedRestore(IServiceProvider services)
+    {
+        var backupDirectory = NodeDbRestoreStaging.ResolveBackupDirectory(services.GetRequiredService<INodeDataDirectory>().Root,
+            services.GetRequiredService<IOptions<NodeDbBackupOptions>>().Value.BackupDirectory);
+        var markerPath = Path.Combine(backupDirectory, NodeDbRestoreStaging.MarkerFileName);
+        if (File.Exists(markerPath))
+        {
+            Log.Warning("Ignoring the staged node database restore {MarkerPath}: a restore is applied only when the node starts in local mode.", markerPath);
         }
     }
 

@@ -47,6 +47,8 @@ installer, signing certificate, or signed stable artifact exists.
 - [ ] Confirm the release is built from the canonical, immutable `v<version>` tag.
 - [ ] Confirm the verified artifacts are the exact portable assets handed to Velopack for publication.
 - [ ] Confirm checksums, SBOM, license inventory, `LICENSE`, and `NOTICE` refer to those exact artifact bytes.
+- [ ] Confirm the release carries `openapi-v1.json`, byte-identical to the tagged
+      `XE-Local-AI-Engine.Client.React/openapi/v1.json` and covered by the SPDX, manifest, and checksums.
 - [ ] Preserve the authority-register result and release evidence with the release record.
 
 ## Target-OS and public-equivalent rehearsal

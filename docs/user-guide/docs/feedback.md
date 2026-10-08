@@ -70,6 +70,10 @@ Verbose logging turns itself off the next time the engine restarts.
 If the engine cannot be reached, the export still works but contains only the browser snapshot, and a
 message says so.
 
+The **Diagnostics** page also holds the **Database snapshots** card. It is not part of a bug report: it
+takes and restores copies of the app's database, for example before you try something risky. See
+[Restoring a database snapshot](updating.md#restoring-a-database-snapshot).
+
 ### If you can't do that, include:
 
 - **What you did** — the steps, as plainly as you can

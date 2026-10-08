@@ -4846,6 +4846,31 @@ export type XeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeRequest
 	variant?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsNodeBackupsV1NodeAutomaticBackupResponse = {
+	outcome: XeLocalAiEngineClientServicesPersistenceNodeDbAutomaticBackupOutcome;
+	atUtc?: string | null;
+	error?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsNodeBackupsV1NodeBackupListResponse = {
+	backups: Array<XeLocalAiEngineClientEndpointsNodeBackupsV1NodeBackupResponse>;
+	lastAutomaticBackup: XeLocalAiEngineClientEndpointsNodeBackupsV1NodeAutomaticBackupResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsNodeBackupsV1NodeBackupResponse = {
+	name: string;
+	sizeBytes: number;
+	createdUtc: string;
+};
+
+export type XeLocalAiEngineClientEndpointsNodeBackupsV1RestoreNodeBackupRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsNodeBackupsV1RestoreNodeBackupResponse = {
+	nodeStopping: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsConflictResponse = {
 	message: string;
 };
@@ -6947,6 +6972,8 @@ export type XeLocalAiEngineClientServicesNodeSettingsModelRate = {
 	inputPer1M?: number;
 	outputPer1M?: number;
 };
+
+export type XeLocalAiEngineClientServicesPersistenceNodeDbAutomaticBackupOutcome = "NotRun" | "Succeeded" | "Skipped" | "Failed";
 
 export type XeLocalAiEngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1 = {
 	schemaVersion?: number;
@@ -17945,6 +17972,104 @@ export type SaveNodeSettingsResponses = {
 };
 
 export type SaveNodeSettingsResponse = SaveNodeSettingsResponses[keyof SaveNodeSettingsResponses];
+
+export type ListNodeBackupsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/node/backups";
+};
+
+export type ListNodeBackupsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListNodeBackupsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsNodeBackupsV1NodeBackupListResponse;
+};
+
+export type ListNodeBackupsResponse = ListNodeBackupsResponses[keyof ListNodeBackupsResponses];
+
+export type CreateNodeBackupData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/node/backups";
+};
+
+export type CreateNodeBackupErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+	507: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type CreateNodeBackupError = CreateNodeBackupErrors[keyof CreateNodeBackupErrors];
+
+export type CreateNodeBackupResponses = {
+	/**
+	 * Created
+	 */
+	201: XeLocalAiEngineClientEndpointsNodeBackupsV1NodeBackupResponse;
+};
+
+export type CreateNodeBackupResponse = CreateNodeBackupResponses[keyof CreateNodeBackupResponses];
+
+export type RestoreNodeBackupData = {
+	body?: never;
+	path: {
+		name: string;
+	};
+	query?: never;
+	url: "/api/local/v1/node/backups/{name}/restore";
+};
+
+export type RestoreNodeBackupErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type RestoreNodeBackupError = RestoreNodeBackupErrors[keyof RestoreNodeBackupErrors];
+
+export type RestoreNodeBackupResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsNodeBackupsV1RestoreNodeBackupResponse;
+};
+
+export type RestoreNodeBackupResponse = RestoreNodeBackupResponses[keyof RestoreNodeBackupResponses];
 
 export type RevokeLocalModelProxyApiKeyData = {
 	body?: never;

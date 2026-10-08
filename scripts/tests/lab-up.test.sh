@@ -733,6 +733,27 @@ for secret in tok-secret-1 tok-secret-2 key-secret-3 pw-secret-4; do
 done
 check_contains "http.jsonl keeps non-secret token counters" "promptTokens" "${JSONL}"
 check_contains "http.jsonl keeps the PUT's other fields" "externalAccessProfile" "${JSONL}"
+# The sink scrubs too, so a record that bypasses RecordingClient (hub events) cannot write a credential.
+python3 -c '
+import importlib.util, json, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("lab_driver", sys.argv[1])
+driver = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(driver)
+driver.append_jsonl(Path(sys.argv[2]), {"event": "x", "payload": {"accessToken": "sink-secret-5"}})
+# A chat stream tool event: Arguments and Result are STRINGS holding JSON.
+driver.append_jsonl(Path(sys.argv[2]), {"event": "ToolCall", "payload": {
+    "arguments": json.dumps({"path": "kept-path", "password": "sink-secret-6"}),
+    "result": json.dumps([{"apiKey": "sink-secret-7"}]),
+    "text": "{not json sink-kept-8"}})
+' "${REAL}/lab-driver.py" "${EV}/sink.jsonl" >/dev/null 2>&1
+SINK="$(cat "${EV}/sink.jsonl" 2>/dev/null)"
+check_contains "append_jsonl wrote the record" '"accessToken": "(redacted)"' "${SINK}"
+check_absent "append_jsonl never writes sink-secret-5" "sink-secret-5" "${SINK}"
+check_absent "a password inside a JSON-string arguments field is scrubbed" "sink-secret-6" "${SINK}"
+check_absent "an apiKey inside a JSON-string result array is scrubbed" "sink-secret-7" "${SINK}"
+check_contains "the JSON-string arguments keep their other fields" "kept-path" "${SINK}"
+check_contains "a string that only looks like JSON passes through unchanged" "sink-kept-8" "${SINK}"
 
 echo
 if [[ "${FAILED}" -ne 0 ]]; then

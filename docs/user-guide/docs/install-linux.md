@@ -106,6 +106,22 @@ The default Linux data directory is:
 
 If `XDG_DATA_HOME` is set, the app uses `$XDG_DATA_HOME/XE-Local-AI-Engine` instead.
 
+It holds:
+
+- the database with your account, chats and settings (`node.sqlite` and its `-wal`/`-shm` files),
+- `node.key`, the encryption key; without it the database cannot be read,
+- `dp-keys/`, the app's data-protection keys,
+- your saved credentials and API keys (`*.enc` files),
+- `node-settings.json`, the node settings,
+- `backups/`, your database backups,
+- knowledge documents, uploaded files and generated images,
+- `models/`, the downloaded models (large, but you can download them again), and the AI engine.
+
+## Removing it
+
+There is no uninstaller. Stop the app, then delete the AppImage and the data directory above. Deleting only the data
+directory is a full reset: the app starts fresh on its next launch.
+
 ## GPU notes
 
 Vulkan is the default Linux GPU path for AMD, Intel, and NVIDIA. Install your distribution's Vulkan ICD and use

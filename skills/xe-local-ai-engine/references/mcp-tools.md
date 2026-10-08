@@ -5,33 +5,37 @@ two columns are parsed by `McpToolsReferenceDriftTests`; keep one exact, single-
 and one exact scope in every data row. An `agentic` key sees both `delegate` and `agentic` rows; a
 `delegate` key sees only the eight `delegate` rows.
 
-| `tool` | scope | purpose | principal inputs / pattern |
-|---|---|---|---|
-| `list_agents` | delegate | List saved agents by id, name, and description. | — |
-| `list_models` | delegate | List installed models with local identity, size, kind, and whether each is the current default. | — |
-| `list_workspaces` | delegate | List authorized read-only workspaces as opaque ids and aliases. | — |
-| `run_agent` | delegate | Run one bounded task synchronously; reports progress every 15 s while generating. | `task` (≤ 32 KiB UTF-8); exactly one of `agent`/`model`; optional `modelOverride` (this spelling), `instructions`, `workspace_id`. |
-| `start_agent_run` | delegate | Accept a durable background run and return immediately. | Caller-generated UUID `request_id`; `task` (≤ 32 KiB UTF-8); exactly one of `agent`/`model`; optional `model_override` (this spelling), `instructions`, `workspace_id`. |
-| `get_agent_run` | delegate | Poll a background run by `request_id`. | Durable across MCP disconnects and restarts. |
-| `cancel_agent_run` | delegate | Durably request cancellation by `request_id`. | Lifecycle races return structured results. |
-| `list_agent_runs` | delegate | List bounded, content-free lifecycle metadata. | Optional bounded `limit` and lifecycle `status`. |
-| `get_status` | agentic | Get version, uptime, default model, and loaded llama.cpp process count. | — |
-| `get_runtime_status` | agentic | Read installed/recommended runtime versions, update/offline state, an active override (`overrideVariant`) and whether the install is a source build. | Cache-only; does not refresh the remote catalog. A non-null `overrideVariant` needs no acquisition. |
-| `start_runtime_acquisition` | agentic | Start managed llama.cpp runtime acquisition. | Optional `variant`: `cpu`, `cuda`, or `vulkan`. |
-| `get_runtime_acquisition` | agentic | Poll sanitized runtime acquisition progress. | — |
-| `start_model_pull` | agentic | Start or rejoin a background GGUF pull. | `repo_id`; optional `file_name`, `quant`, `revision`, `include_projector` (default `true`; `false` installs the weights only, which is what makes a vision-capable repo judge-eligible). |
-| `get_model_pull` | agentic | Poll a GGUF pull. | Canonical `model_name` returned by `start_model_pull`. |
-| `cancel_model_pull` | agentic | Request cooperative GGUF pull cancellation. | Canonical `model_name`. |
-| `delete_model` | agentic | Delete an installed model through coordinated deletion. | `model_name`. |
-| `set_default_model` | agentic | Select an installed local model as node default. | `model_name`. |
-| `get_node_settings` | agentic | Read the restricted core node-settings view. | Never returns secrets or unrestricted settings. |
-| `update_node_settings` | agentic | Apply a partial update to the exact 18-field whitelist. | See **Settings whitelist** below. |
-| `get_agent` | agentic | Get a saved agent by id or exact name. | `agent_id`. |
-| `create_agent` | agentic | Validate and create a saved agent. | Required `name`, `instructions`; optional definition/provenance fields. |
-| `update_agent` | agentic | Fully replace a saved agent by id or exact name. | `agent_id`, required `name`, `instructions`, plus the complete optional definition. |
-| `delete_agent` | agentic | Delete a saved agent by id or exact name. | `agent_id`. |
-| `list_workflow_runs` | agentic | List development workflow runs, one row per work item's latest run, as bounded lifecycle metadata. | Optional bounded `limit` and run `status`. Read-only. |
-| `get_workflow_run` | agentic | Get one workflow run's status, node tallies, terminal reason, and per-node rows. | `run_id`. Read-only; no graph, artifacts, transcripts, or host paths. |
+The third column states each tool's stability. A `stable` tool follows the compatibility rule in
+[wiki 09](../../../docs/wiki/09-api-and-hubs.md): its name, arguments and result fields are additive-only within
+the 1.x line, and a breaking change waits for the next major version. A `preview` tool may change without notice. Every tool below is `stable`.
+
+| `tool` | scope | stability | purpose | principal inputs / pattern |
+|---|---|---|---|---|
+| `list_agents` | delegate | stable | List saved agents by id, name, and description. | — |
+| `list_models` | delegate | stable | List installed models with local identity, size, kind, and whether each is the current default. | — |
+| `list_workspaces` | delegate | stable | List authorized read-only workspaces as opaque ids and aliases. | — |
+| `run_agent` | delegate | stable | Run one bounded task synchronously; reports progress every 15 s while generating. | `task` (≤ 32 KiB UTF-8); exactly one of `agent`/`model`; optional `modelOverride` (this spelling), `instructions`, `workspace_id`. |
+| `start_agent_run` | delegate | stable | Accept a durable background run and return immediately. | Caller-generated UUID `request_id`; `task` (≤ 32 KiB UTF-8); exactly one of `agent`/`model`; optional `model_override` (this spelling), `instructions`, `workspace_id`. |
+| `get_agent_run` | delegate | stable | Poll a background run by `request_id`. | Durable across MCP disconnects and restarts. |
+| `cancel_agent_run` | delegate | stable | Durably request cancellation by `request_id`. | Lifecycle races return structured results. |
+| `list_agent_runs` | delegate | stable | List bounded, content-free lifecycle metadata. | Optional bounded `limit` and lifecycle `status`. |
+| `get_status` | agentic | stable | Get version, uptime, default model, and loaded llama.cpp process count. | — |
+| `get_runtime_status` | agentic | stable | Read installed/recommended runtime versions, update/offline state, an active override (`overrideVariant`) and whether the install is a source build. | Cache-only; does not refresh the remote catalog. A non-null `overrideVariant` needs no acquisition. |
+| `start_runtime_acquisition` | agentic | stable | Start managed llama.cpp runtime acquisition. | Optional `variant`: `cpu`, `cuda`, or `vulkan`. |
+| `get_runtime_acquisition` | agentic | stable | Poll sanitized runtime acquisition progress. | — |
+| `start_model_pull` | agentic | stable | Start or rejoin a background GGUF pull. | `repo_id`; optional `file_name`, `quant`, `revision`, `include_projector` (default `true`; `false` installs the weights only, which is what makes a vision-capable repo judge-eligible). |
+| `get_model_pull` | agentic | stable | Poll a GGUF pull. | Canonical `model_name` returned by `start_model_pull`. |
+| `cancel_model_pull` | agentic | stable | Request cooperative GGUF pull cancellation. | Canonical `model_name`. |
+| `delete_model` | agentic | stable | Delete an installed model through coordinated deletion. | `model_name`. |
+| `set_default_model` | agentic | stable | Select an installed local model as node default. | `model_name`. |
+| `get_node_settings` | agentic | stable | Read the restricted core node-settings view. | Never returns secrets or unrestricted settings. |
+| `update_node_settings` | agentic | stable | Apply a partial update to the exact 18-field whitelist. | See **Settings whitelist** below. |
+| `get_agent` | agentic | stable | Get a saved agent by id or exact name. | `agent_id`. |
+| `create_agent` | agentic | stable | Validate and create a saved agent. | Required `name`, `instructions`; optional definition/provenance fields. |
+| `update_agent` | agentic | stable | Fully replace a saved agent by id or exact name. | `agent_id`, required `name`, `instructions`, plus the complete optional definition. |
+| `delete_agent` | agentic | stable | Delete a saved agent by id or exact name. | `agent_id`. |
+| `list_workflow_runs` | agentic | stable | List development workflow runs, one row per work item's latest run, as bounded lifecycle metadata. | Optional bounded `limit` and run `status`. Read-only. |
+| `get_workflow_run` | agentic | stable | Get one workflow run's status, node tallies, terminal reason, and per-node rows. | `run_id`. Read-only; no graph, artifacts, transcripts, or host paths. |
 
 ## Errors and arguments
 

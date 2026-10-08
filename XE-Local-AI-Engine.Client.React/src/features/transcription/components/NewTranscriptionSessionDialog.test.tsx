@@ -362,6 +362,8 @@ describe("NewTranscriptionSessionDialog", () => {
 		// File is the fallback, so its own controls are on screen and one segment is actually selected.
 		expect(await screen.findByTestId("new-transcription-session-file")).toBeDefined();
 		expect(screen.getByRole("radio", { name: "File" })).toHaveProperty("checked", true);
+		// The native file input stays hidden, so its accessible name is the only thing the label audit can see on it.
+		expect(document.querySelector("input[type=file]")?.getAttribute("aria-label")).toBe("Recording");
 		expect(screen.queryByTestId("new-transcription-session-process")).toBeNull();
 	});
 

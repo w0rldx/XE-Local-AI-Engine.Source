@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 public interface IBenchmarkProjectService
@@ -53,6 +54,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
     private readonly IAgentDefinitionStore _agentDefinitionStore;
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels;
     private readonly IModelClassificationStore _classifications;
+    private readonly IGgufModelStore _ggufModels;
     private readonly IBenchmarkJudgeRuntimeResolver _judgeRuntimeResolver;
     private readonly IBenchmarkQueueSignal? _queueSignal;
     private readonly IBenchmarkPairwisePlanner? _pairwisePlanner;
@@ -63,6 +65,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
         IBenchmarkCatalogService catalog,
         IModelClassificationStore classifications,
+        IGgufModelStore ggufModels,
         IBenchmarkQueueSignal? queueSignal = null,
         IBenchmarkPairwisePlanner? pairwisePlanner = null)
     {
@@ -72,8 +75,10 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         ArgumentNullException.ThrowIfNull(installedModels);
         ArgumentNullException.ThrowIfNull(judgeRuntimeResolver);
         ArgumentNullException.ThrowIfNull(classifications);
+        ArgumentNullException.ThrowIfNull(ggufModels);
         _catalog = catalog;
         _classifications = classifications;
+        _ggufModels = ggufModels;
         _benchmarkStore = benchmarkStore;
         _agentDefinitionStore = agentDefinitionStore;
         _installedModels = installedModels;
@@ -132,6 +137,12 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
     {
         ArgumentNullException.ThrowIfNull(settings);
         var baseModelName = NormalizeModelName(settings.KldBaseModelName);
+        var baseFingerprint = await ResolveKldBaseFingerprintAsync(settings.KldEnabled, settings.Chunks, baseModelName, cancellationToken);
+        if (measureExisting && settings is { Enabled: true, KldEnabled: true } && baseModelName is not null)
+        {
+            await EnsureKldBaseMatchesRunsAsync(projectId, baseModelName, cancellationToken);
+        }
+
         var change = await _benchmarkStore.UpdateProjectFidelityAsync(projectId,
             expectedVersion,
             new BenchmarkProjectFidelityInput
@@ -140,7 +151,7 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
                 FidelityKldEnabled = settings.KldEnabled,
                 FidelityChunks = settings.Chunks,
                 FidelityKldBaseModelName = baseModelName,
-                FidelityKldBaseFingerprint = await ResolveKldBaseFingerprintAsync(settings.KldEnabled, settings.Chunks, baseModelName, cancellationToken)
+                FidelityKldBaseFingerprint = baseFingerprint
             },
             measureExisting,
             cancellationToken);
@@ -461,6 +472,21 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
         var models = await _catalog.ListEligibleModelsAsync(contextTokens: null, cancellationToken);
         return models.FirstOrDefault(model => string.Equals(model.ModelName, baseModelName, StringComparison.Ordinal))?.ModelContentFingerprint
                ?? throw new BenchmarkValidationException("The KL-divergence base model is not an eligible local model.");
+    }
+
+    /// <summary>
+    ///     Refuses to queue KL-divergence measurements for runs of a model other than the base (see
+    ///     <see cref="BenchmarkKldBaseMatch" />), which the fidelity executor would only fail later.
+    /// </summary>
+    private async Task EnsureKldBaseMatchesRunsAsync(Guid projectId, string baseModelName, CancellationToken cancellationToken)
+    {
+        foreach (var primaryModelName in await _benchmarkStore.ListMissingFidelityModelNamesAsync(projectId, cancellationToken))
+        {
+            if (await BenchmarkKldBaseMatch.DescribeMismatchAsync(_ggufModels, primaryModelName, baseModelName, cancellationToken) is { } mismatch)
+            {
+                throw new BenchmarkValidationException(mismatch);
+            }
+        }
     }
 
     private static void ValidateFidelityChunks(int? chunks)

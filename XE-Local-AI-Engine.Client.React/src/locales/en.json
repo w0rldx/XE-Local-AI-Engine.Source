@@ -8417,6 +8417,33 @@
 	"diagnostics": {
 		"title": "Diagnostics",
 		"description": "Error snapshots captured in this browser. Export also fetches scrubbed logs and system info from your local node; the app never sends anything anywhere.",
+		"backups": {
+			"title": "Database snapshots",
+			"description": "Copies of the node database in the backups folder of the data directory. One is taken automatically before an update changes the database.",
+			"automatic": {
+				"NotRun": "Automatic backup at this start: not needed, no database update was pending.",
+				"Succeeded": "Automatic backup at this start: taken {{time}}.",
+				"Skipped": "Automatic backup at this start: skipped {{time}}. {{error}}",
+				"Failed": "Automatic backup at this start: failed {{time}}. {{error}}"
+			},
+			"take": "Take snapshot",
+			"takeSuccess": "Database snapshot taken.",
+			"takeError": "Could not take a database snapshot.",
+			"loadError": "Could not load the database snapshots.",
+			"empty": "No database snapshots yet.",
+			"columns": {
+				"name": "Name",
+				"size": "Size",
+				"created": "Created"
+			},
+			"restore": "Restore",
+			"restoreLabel": "Restore {{name}}",
+			"restoreConfirmTitle": "Restore {{name}}?",
+			"restoreConfirm": "This restores the database only: keys, settings and files on disk are not included. The node stops after the restore and must be started again. The current database is kept as a .prerestore copy.",
+			"restoreConfirmAction": "Restore and stop the node",
+			"restoreError": "Could not restore the database snapshot.",
+			"stopping": "The node is stopping to restore the snapshot. Start the app again."
+		},
 		"reportProblem": "Report a problem",
 		"reportProblemTooltip": "Capture a diagnostics snapshot of the current app state",
 		"reportSuccess": "Diagnostics snapshot captured.",

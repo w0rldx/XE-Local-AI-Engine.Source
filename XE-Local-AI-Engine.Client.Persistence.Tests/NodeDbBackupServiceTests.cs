@@ -46,6 +46,98 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         AssertEx.Equal(1, snapshots.Length, "Exactly one snapshot should be written when migrations are pending.");
         AssertEx.True(new FileInfo(snapshots[0]).Length > 0, "The snapshot should be a non-empty SQLite file.");
         AssertEx.True(await ProbeTableExistsAsync(snapshots[0]), "The snapshot should contain the seeded source data.");
+        AssertEx.Equal(NodeDbAutomaticBackupOutcome.Succeeded, backupService.LastAutomaticBackup.Outcome);
+    }
+
+    [Test]
+    public async Task CreateSnapshotAsync_WithNothingPending_WritesAListedSnapshot()
+    {
+        var databasePath = GetDatabasePath("on-demand.sqlite");
+        var clock = new FixedTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        await using var serviceProvider = BuildServiceProvider(databasePath, timeProvider: clock);
+        await using (var scope = serviceProvider.CreateAsyncScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.MigrateAsync();
+        }
+
+        var backupService = serviceProvider.GetRequiredService<INodeDbBackupService>();
+
+        var result = await backupService.CreateSnapshotAsync();
+
+        AssertEx.Equal(NodeDbSnapshotCreateStatus.Created, result.Status);
+        var snapshot = AssertEx.NotNull(result.Snapshot);
+        AssertEx.Equal($"{BackupFilePrefix}20260101T000000000Z{BackupFileExtension}", snapshot.Name);
+        AssertEx.Equal(clock.GetUtcNow(), snapshot.CreatedUtc);
+        AssertEx.Equal(snapshot.Name, backupService.ListSnapshots().Single().Name);
+        AssertEx.NotNull(backupService.ResolveSnapshotPath(snapshot.Name));
+        AssertEx.Equal(NodeDbAutomaticBackupOutcome.NotRun, backupService.LastAutomaticBackup.Outcome, "An on-demand snapshot is not the automatic one.");
+    }
+
+    [Test]
+    public async Task StageRestoreAsync_WhileASnapshotIsBeingTaken_IsBusy_AndStagesAfterwards()
+    {
+        var databasePath = GetDatabasePath("stage-busy.sqlite");
+        await SeedRawDataAsync(databasePath);
+        var gate = new SnapshotGate();
+        await using var serviceProvider = BuildServiceProvider(databasePath, chatInterceptor: gate);
+        var backupService = serviceProvider.GetRequiredService<INodeDbBackupService>();
+
+        var creating = backupService.CreateSnapshotAsync();
+        await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        var whileCreating = await backupService.StageRestoreAsync($"{BackupFilePrefix}20260101T000000000Z{BackupFileExtension}");
+        gate.Release.SetResult();
+        var created = await creating;
+
+        AssertEx.Equal(NodeDbRestoreStageStatus.Busy, whileCreating.Status);
+        AssertEx.False(File.Exists(Path.Combine(_rootPath, "backups", NodeDbRestoreStaging.MarkerFileName)), "A busy stage writes no marker.");
+
+        var staged = await backupService.StageRestoreAsync(created.Snapshot!.Name);
+        AssertEx.Equal(NodeDbRestoreStageStatus.Staged, staged.Status, staged.Reason);
+        AssertEx.Equal(created.Snapshot.Name, NodeDbRestoreStaging.ReadStagedSnapshotName(Path.Combine(_rootPath, "backups")));
+    }
+
+    [Test]
+    public async Task CreateSnapshotAsync_PruneKeepsTheSnapshotAStagedRestoreNames()
+    {
+        var databasePath = GetDatabasePath("prune-staged.sqlite");
+        await SeedRawDataAsync(databasePath);
+        var backupDirectory = Path.Combine(_rootPath, "backups");
+        Directory.CreateDirectory(backupDirectory);
+        foreach (var stamp in new[]
+                 {
+                     "20250101T000000000Z",
+                     "20250102T000000000Z",
+                     "20250103T000000000Z"
+                 })
+        {
+            await File.WriteAllTextAsync(Path.Combine(backupDirectory, $"{BackupFilePrefix}{stamp}{BackupFileExtension}"), "older");
+        }
+
+        var oldest = $"{BackupFilePrefix}20250101T000000000Z{BackupFileExtension}";
+        await NodeDbRestoreStaging.WriteMarkerAsync(backupDirectory, oldest, DateTimeOffset.UnixEpoch, CancellationToken.None);
+        var clock = new FixedTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        await using var serviceProvider = BuildServiceProvider(databasePath, retainCount: 1, timeProvider: clock);
+
+        await serviceProvider.GetRequiredService<INodeDbBackupService>().CreateSnapshotAsync();
+
+        var remaining = ListSnapshots().Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray();
+        AssertEx.Equal($"{oldest},{BackupFilePrefix}20260101T000000000Z{BackupFileExtension}", string.Join(',', remaining),
+            "Retention keeps the newest one plus the snapshot the staged restore names.");
+    }
+
+    [Test]
+    public async Task CreateSnapshotAsync_WhenFreeSpaceTooLow_ReportsItAndWritesNothing()
+    {
+        var databasePath = GetDatabasePath("on-demand-low-space.sqlite");
+        await SeedRawDataAsync(databasePath);
+        var freeSpace = Substitute.For<IFreeSpaceProbe>();
+        freeSpace.GetAvailableFreeBytes(Arg.Any<string>()).Returns(1L);
+        await using var serviceProvider = BuildServiceProvider(databasePath, freeSpaceProbe: freeSpace);
+
+        var result = await serviceProvider.GetRequiredService<INodeDbBackupService>().CreateSnapshotAsync();
+
+        AssertEx.Equal(NodeDbSnapshotCreateStatus.InsufficientSpace, result.Status);
+        AssertEx.Empty(ListSnapshots());
     }
 
     [Test]
@@ -153,9 +245,11 @@ public sealed class NodeDbBackupServiceTests : IDisposable
         freeSpace.GetAvailableFreeBytes(Arg.Any<string>()).Returns(1L);
         await using var serviceProvider = BuildServiceProvider(databasePath, freeSpaceProbe: freeSpace);
 
-        await serviceProvider.GetRequiredService<INodeDbBackupService>().BackupBeforeMigrationAsync();
+        var backupService = serviceProvider.GetRequiredService<INodeDbBackupService>();
+        await backupService.BackupBeforeMigrationAsync();
 
         AssertEx.Empty(Directory.GetFiles(Path.Combine(_rootPath, "backups")), "Too little free space skips the snapshot instead of filling the disk.");
+        AssertEx.Equal(NodeDbAutomaticBackupOutcome.Skipped, backupService.LastAutomaticBackup.Outcome);
     }
 
     [Test]
@@ -213,6 +307,8 @@ public sealed class NodeDbBackupServiceTests : IDisposable
 
         AssertEx.True(File.Exists(collidingPath), "The colliding file should be left untouched.");
         AssertEx.False(Directory.Exists(collidingPath), "The failed backup must not have replaced the file with a directory.");
+        AssertEx.Equal(NodeDbAutomaticBackupOutcome.Failed, backupService.LastAutomaticBackup.Outcome);
+        AssertEx.False(backupService.LastAutomaticBackup.Error!.Contains(_rootPath, StringComparison.Ordinal), "The recorded reason carries no path.");
     }
 
     private ServiceProvider BuildServiceProvider(string databasePath,
@@ -389,6 +485,20 @@ public sealed class NodeDbBackupServiceTests : IDisposable
                 Dispose();
                 return ValueTask.CompletedTask;
             }
+        }
+    }
+
+    /// <summary>Holds an on-demand snapshot inside its connection open until the test releases it.</summary>
+    private sealed class SnapshotGate : DbConnectionInterceptor
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async Task ConnectionOpenedAsync(DbConnection connection, ConnectionEndEventData eventData, CancellationToken cancellationToken = default)
+        {
+            Entered.TrySetResult();
+            await Release.Task;
         }
     }
 

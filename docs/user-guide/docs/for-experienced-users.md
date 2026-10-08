@@ -207,7 +207,9 @@ Everything lives in one directory (`%LOCALAPPDATA%\XE-Local-AI-Engine`), separat
   listed in the shipped [skill reference](../../../skills/xe-local-ai-engine/references/mcp-tools.md),
   and is operator-equivalent only for that enumerated surface — not a JWT or arbitrary REST access. Approval-required root tools are
   auto-approved only after a strict metadata-only audit write; children do not inherit elevation.
-  See the [Agentic Support guide](../../agentic-support/agent-install.md).
+  See the [Agentic Support guide](../../agentic-support/agent-install.md). The `/api/local/v1` routes and
+  stable MCP tools are additive-only within 1.x (a breaking change waits for the next major version); the rule is in the
+  [API compatibility note](../../wiki/09-api-and-hubs.md#conventions).
 
 ---
 

@@ -54,7 +54,8 @@ def now() -> str:
 def append_jsonl(path: Path, record: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        # codeql[py/clear-text-storage-sensitive-data] scrub() redacts credential-like keys at any depth first.
+        handle.write(json.dumps(scrub(record), ensure_ascii=False, default=str) + "\n")
 
 
 SECRET_KEYS = frozenset({"accesstoken", "refreshtoken", "token", "bearer", "password", "secret", "apikey", "api_key"})
@@ -71,6 +72,12 @@ def scrub(value: object) -> object:
         return {k: "(redacted)" if is_secret_key(str(k)) else scrub(v) for k, v in value.items()}
     if isinstance(value, list):
         return [scrub(v) for v in value]
+    # Tool-call arguments and results arrive as strings holding JSON, so a nested credential would pass through.
+    if isinstance(value, str) and value.strip()[:1] in ("{", "["):
+        try:
+            return json.dumps(scrub(json.loads(value)))
+        except json.JSONDecodeError:
+            return value
     return value
 
 

@@ -28,6 +28,8 @@ Every official release also publishes:
 - `CHECKSUMS.sha256`: SHA-256 checksums generated from the verified remote release bytes.
 - `RELEASE-MANIFEST.json`: the release tag, source commit, asset sizes and SHA-256 values, and signing state.
 - `RELEASE.spdx.json`: a detached SPDX 2.2 release envelope.
+- `openapi-v1.json`: the `/api/local/v1` OpenAPI contract, copied unchanged from the tagged
+  `XE-Local-AI-Engine.Client.React/openapi/v1.json` and covered by the three files above.
 
 The payloads carry their own SPDX manifest and license disclosures.
 

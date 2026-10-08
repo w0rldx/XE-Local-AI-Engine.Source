@@ -22,10 +22,10 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </remarks>
 public sealed class NodeDbBackupService : INodeDbBackupService
 {
-    private const string BackupFilePrefix = "node-chat-";
-    private const string BackupFileExtension = ".sqlite";
-    private const string DefaultBackupSubdirectory = "backups";
+    private const string BackupFilePrefix = NodeDbRestoreStaging.SnapshotFilePrefix;
+    private const string BackupFileExtension = NodeDbRestoreStaging.SnapshotFileExtension;
     private const string TemporaryFileExtension = ".tmp";
+    private const string SnapshotTimestampFormat = "yyyyMMdd'T'HHmmssfff'Z'";
 
     // VACUUM INTO writes a compacted copy, so the database size plus a margin is a safe upper bound for what it needs.
     private const double MinimumFreeSpaceRatio = 1.2;
@@ -37,6 +37,9 @@ public sealed class NodeDbBackupService : INodeDbBackupService
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
+
+    private int _creating;
+    private volatile NodeDbAutomaticBackupStatus _lastAutomaticBackup = NodeDbAutomaticBackupStatus.NotRun;
 
     public NodeDbBackupService(IServiceScopeFactory scopeFactory,
         INodeDataDirectory nodeDataDirectory,
@@ -81,6 +84,7 @@ public sealed class NodeDbBackupService : INodeDbBackupService
 
             if (!HasRoomForSnapshot(dbContext, backupDirectory))
             {
+                RecordAutomaticBackup(NodeDbAutomaticBackupOutcome.Skipped, "There was not enough free disk space for the snapshot.");
                 return;
             }
 
@@ -116,6 +120,7 @@ public sealed class NodeDbBackupService : INodeDbBackupService
                 snapshotBytes,
                 pendingCount);
 
+            RecordAutomaticBackup(NodeDbAutomaticBackupOutcome.Succeeded, error: null);
             PruneOldSnapshots(backupDirectory, await _runtimeSettings.GetNodeDbBackupRetainCountAsync(cancellationToken));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -126,6 +131,10 @@ public sealed class NodeDbBackupService : INodeDbBackupService
         {
             // Deliberately broad and non-rethrowing: the backup must never block migration or brick startup.
             _logger.LogError(exception, "Pre-migration node database backup failed; continuing with migration without a fresh snapshot.");
+            if (_lastAutomaticBackup.Outcome != NodeDbAutomaticBackupOutcome.Succeeded)
+            {
+                RecordAutomaticBackup(NodeDbAutomaticBackupOutcome.Failed, $"The snapshot failed ({exception.GetType().Name}); the node log has the details.");
+            }
         }
         finally
         {
@@ -150,11 +159,175 @@ public sealed class NodeDbBackupService : INodeDbBackupService
         }
     }
 
+    /// <inheritdoc />
+    public NodeDbAutomaticBackupStatus LastAutomaticBackup => _lastAutomaticBackup;
+
+    /// <inheritdoc />
+    public IReadOnlyList<NodeDbSnapshot> ListSnapshots()
+    {
+        var backupDirectory = ResolveBackupDirectory();
+        if (!Directory.Exists(backupDirectory))
+        {
+            return [];
+        }
+
+        return [.. ListCompleteSnapshots(backupDirectory).Select(ToSnapshot)];
+    }
+
+    /// <inheritdoc />
+    public async Task<NodeDbRestoreStageResult> StageRestoreAsync(string name, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (Interlocked.CompareExchange(ref _creating, 1, 0) != 0)
+        {
+            return new NodeDbRestoreStageResult
+            {
+                Status = NodeDbRestoreStageStatus.Busy
+            };
+        }
+
+        try
+        {
+            var snapshotPath = ResolveSnapshotPath(name);
+            if (snapshotPath is null)
+            {
+                return new NodeDbRestoreStageResult
+                {
+                    Status = NodeDbRestoreStageStatus.NotFound
+                };
+            }
+
+            var backupDirectory = ResolveBackupDirectory();
+            var refusal = NodeDbRestoreStaging.DescribeLinkedSnapshot(backupDirectory, snapshotPath)
+                          ?? await NodeDbRestoreStaging.CheckSnapshotIntegrityAsync(snapshotPath, NodeDbRestoreStaging.ShippedMigrationIds, cancellationToken);
+            if (refusal is not null)
+            {
+                return new NodeDbRestoreStageResult
+                {
+                    Status = NodeDbRestoreStageStatus.Refused,
+                    Reason = refusal
+                };
+            }
+
+            await NodeDbRestoreStaging.WriteMarkerAsync(backupDirectory, name, _timeProvider.GetUtcNow(), cancellationToken);
+            _logger.LogInformation("Staged a restore of node database snapshot {SnapshotName}; the next start applies it.", name);
+            return new NodeDbRestoreStageResult
+            {
+                Status = NodeDbRestoreStageStatus.Staged
+            };
+        }
+        finally
+        {
+            Volatile.Write(ref _creating, 0);
+        }
+    }
+
+    /// <inheritdoc />
+    public string? ResolveSnapshotPath(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        var backupDirectory = ResolveBackupDirectory();
+        return Directory.Exists(backupDirectory)
+            ? ListCompleteSnapshots(backupDirectory).FirstOrDefault(path => string.Equals(Path.GetFileName(path), name, StringComparison.Ordinal))
+            : null;
+    }
+
+    /// <inheritdoc />
+    public async Task<NodeDbSnapshotCreateResult> CreateSnapshotAsync(CancellationToken cancellationToken = default)
+    {
+        if (Interlocked.CompareExchange(ref _creating, 1, 0) != 0)
+        {
+            return new NodeDbSnapshotCreateResult
+            {
+                Status = NodeDbSnapshotCreateStatus.Busy
+            };
+        }
+
+        string? temporaryPath = null;
+        try
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+            var dataSource = dbContext.Database.GetDbConnection().DataSource;
+            if (string.IsNullOrWhiteSpace(dataSource) || string.Equals(dataSource, ":memory:", StringComparison.Ordinal))
+            {
+                return new NodeDbSnapshotCreateResult
+                {
+                    Status = NodeDbSnapshotCreateStatus.Unsupported
+                };
+            }
+
+            var backupDirectory = ResolveBackupDirectory();
+            Directory.CreateDirectory(backupDirectory);
+            if (!HasRoomForSnapshot(dbContext, backupDirectory))
+            {
+                return new NodeDbSnapshotCreateResult
+                {
+                    Status = NodeDbSnapshotCreateStatus.InsufficientSpace
+                };
+            }
+
+            var destinationPath = BuildSnapshotPath(backupDirectory);
+            temporaryPath = destinationPath + TemporaryFileExtension;
+            await VacuumIntoAsync(dbContext, temporaryPath, cancellationToken);
+            File.Move(temporaryPath, destinationPath);
+            temporaryPath = null;
+
+            var snapshot = ToSnapshot(destinationPath);
+            _logger.LogInformation("Snapshotted the node database to {BackupPath} ({BackupBytes} bytes) on the operator's request.", destinationPath, snapshot.SizeBytes);
+            PruneOldSnapshots(backupDirectory, await _runtimeSettings.GetNodeDbBackupRetainCountAsync(cancellationToken));
+            return new NodeDbSnapshotCreateResult
+            {
+                Status = NodeDbSnapshotCreateStatus.Created,
+                Snapshot = snapshot
+            };
+        }
+        finally
+        {
+            if (temporaryPath is not null)
+            {
+                TryDelete(temporaryPath);
+            }
+
+            Volatile.Write(ref _creating, 0);
+        }
+    }
+
+    private static NodeDbSnapshot ToSnapshot(string path)
+    {
+        var file = new FileInfo(path);
+        var stamp = file.Name[BackupFilePrefix.Length..^BackupFileExtension.Length];
+        var created = DateTimeOffset.TryParseExact(stamp,
+            SnapshotTimestampFormat,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var parsed)
+            ? parsed
+            : new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero);
+        return new NodeDbSnapshot
+        {
+            Name = file.Name,
+            SizeBytes = file.Length,
+            CreatedUtc = created
+        };
+    }
+
+    private void RecordAutomaticBackup(NodeDbAutomaticBackupOutcome outcome, string? error)
+    {
+        _lastAutomaticBackup = new NodeDbAutomaticBackupStatus
+        {
+            Outcome = outcome,
+            AtUtc = _timeProvider.GetUtcNow(),
+            Error = error
+        };
+    }
+
     private void LogBudgetExceeded(Exception? exception)
     {
         _logger.LogWarning(exception,
             "Pre-migration node database backup exceeded its {SnapshotTimeout} budget and was skipped; continuing with migration without a fresh snapshot.",
             _options.SnapshotTimeout);
+        RecordAutomaticBackup(NodeDbAutomaticBackupOutcome.Skipped, "The snapshot took longer than its time budget.");
     }
 
     private bool HasRoomForSnapshot(NodeChatDbContext dbContext, string backupDirectory)
@@ -179,7 +352,7 @@ public sealed class NodeDbBackupService : INodeDbBackupService
             return true;
         }
 
-        _logger.LogWarning("Skipped the pre-migration node database backup: {FreeBytes} bytes free in {BackupDirectory}, the {DatabaseBytes}-byte database needs {Ratio} times that.",
+        _logger.LogWarning("Skipped the node database backup: {FreeBytes} bytes free in {BackupDirectory}, the {DatabaseBytes}-byte database needs {Ratio} times that.",
             freeBytes,
             backupDirectory,
             databaseBytes,
@@ -207,16 +380,14 @@ public sealed class NodeDbBackupService : INodeDbBackupService
 
     private string ResolveBackupDirectory()
     {
-        return string.IsNullOrWhiteSpace(_options.BackupDirectory)
-            ? Path.Combine(_nodeDataDirectory.Root, DefaultBackupSubdirectory)
-            : _options.BackupDirectory;
+        return NodeDbRestoreStaging.ResolveBackupDirectory(_nodeDataDirectory.Root, _options.BackupDirectory);
     }
 
     private string BuildSnapshotPath(string backupDirectory)
     {
         // Filename-safe, invariant, lexicographically-sortable UTC timestamp — the sort order is also the chronological
         // order, which the retention prune relies on.
-        var timestamp = _timeProvider.GetUtcNow().UtcDateTime.ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
+        var timestamp = _timeProvider.GetUtcNow().UtcDateTime.ToString(SnapshotTimestampFormat, CultureInfo.InvariantCulture);
         return Path.Combine(backupDirectory, $"{BackupFilePrefix}{timestamp}{BackupFileExtension}");
     }
 
@@ -263,8 +434,11 @@ public sealed class NodeDbBackupService : INodeDbBackupService
                                  .ToList();
         var snapshots = ListCompleteSnapshots(backupDirectory).ToList();
 
+        // The snapshot a staged restore names is kept whatever its age: deleting it would turn the restore into a failed start.
+        var staged = NodeDbRestoreStaging.ReadStagedSnapshotName(backupDirectory);
         var retain = Math.Max(1, retainCount);
-        foreach (var stalePath in leftovers.Concat(snapshots.Skip(retain)))
+        var stale = snapshots.Skip(retain).Where(path => !string.Equals(Path.GetFileName(path), staged, StringComparison.Ordinal));
+        foreach (var stalePath in leftovers.Concat(stale))
         {
             try
             {

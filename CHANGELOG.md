@@ -24,6 +24,11 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Node database backups** — the operator can list the node's database snapshots, take one on demand, and restore
+  one through `node/backups`. A restore checks the snapshot, stops the node, and is applied at the next start before
+  anything opens the database; the replaced database is kept beside it. The list also says whether this start's
+  pre-migration backup ran, was skipped or failed. Database only: the node key, settings, credential files and
+  on-disk blobs are not part of a snapshot.
 - **Dev Workflows** — a development task is described as a graph and executed by the node. Agent, tool, dev-task,
   validation and apply nodes; a decomposition that grows a run into the work it finds; an operator gate in front of
   anything that writes; and scoped rule sets whose text reaches the coder and the reviewer. Runs are durable and

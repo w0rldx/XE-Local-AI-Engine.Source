@@ -102,7 +102,7 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
         foreach (var attachment in attachments)
         {
             var markdown = await _uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, attachment.FileId, cancellationToken);
-            if (!string.IsNullOrEmpty(markdown))
+            if (!string.IsNullOrWhiteSpace(markdown))
             {
                 parts.Add(new AttachmentTextPart(attachment.OriginalFileName, markdown));
             }
@@ -219,18 +219,25 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
         var requested = attachmentFileIds.ToHashSet();
         var available = await _uploadedFileStore.ListAsync(conversationId, cancellationToken);
 
-        // Mirrors the builders' skips: Extracted with empty text (ExtractedChars is the Markdown length) or on a turn that
-        // delivers no text, an image on a turn without vision, and every status neither builder reads.
-        return available
-               .Where(file => requested.Contains(file.FileId)
-                              && file.ExtractionStatus switch
-                              {
-                                  DocumentExtractionStatus.Extracted => !textAccepted || file.ExtractedChars == 0,
-                                  DocumentExtractionStatus.Image => !imagesAccepted,
-                                  _ => true
-                              })
-               .Select(static file => file.OriginalFileName)
-               .ToList();
+        // Mirrors the builders' skips: Extracted with blank text or on a turn that delivers no text, an image on a turn
+        // without vision, and every status neither builder reads. Legacy rows can count whitespace in ExtractedChars.
+        var unsent = new List<string>();
+        foreach (var file in available.Where(file => requested.Contains(file.FileId)))
+        {
+            var skipped = file.ExtractionStatus switch
+            {
+                DocumentExtractionStatus.Extracted => !textAccepted || file.ExtractedChars == 0
+                                                      || string.IsNullOrWhiteSpace(await _uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, file.FileId, cancellationToken)),
+                DocumentExtractionStatus.Image => !imagesAccepted,
+                _ => true
+            };
+            if (skipped)
+            {
+                unsent.Add(file.OriginalFileName);
+            }
+        }
+
+        return unsent;
     }
 
     /// <inheritdoc />

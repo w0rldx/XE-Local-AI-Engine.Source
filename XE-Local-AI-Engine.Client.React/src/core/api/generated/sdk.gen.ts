@@ -201,6 +201,9 @@ import type {
 	CreateMcpServerData,
 	CreateMcpServerErrors,
 	CreateMcpServerResponses,
+	CreateNodeBackupData,
+	CreateNodeBackupErrors,
+	CreateNodeBackupResponses,
 	CreateNodeChatConversationData,
 	CreateNodeChatConversationErrors,
 	CreateNodeChatConversationResponses,
@@ -930,6 +933,9 @@ import type {
 	ListMcpServersData,
 	ListMcpServersErrors,
 	ListMcpServersResponses,
+	ListNodeBackupsData,
+	ListNodeBackupsErrors,
+	ListNodeBackupsResponses,
 	ListNodeChatConversationsData,
 	ListNodeChatConversationsErrors,
 	ListNodeChatConversationsResponses,
@@ -1146,6 +1152,9 @@ import type {
 	RestartExternalAppData,
 	RestartExternalAppErrors,
 	RestartExternalAppResponses,
+	RestoreNodeBackupData,
+	RestoreNodeBackupErrors,
+	RestoreNodeBackupResponses,
 	ResumeDevWorkflowRunData,
 	ResumeDevWorkflowRunErrors,
 	ResumeDevWorkflowRunResponses,
@@ -1535,6 +1544,7 @@ import {
 	zCreateIntegrationTriggerResponse,
 	zCreateMcpServerBody,
 	zCreateMcpServerResponse,
+	zCreateNodeBackupResponse,
 	zCreateNodeChatConversationBody,
 	zCreateNodeChatConversationResponse,
 	zCreateNodeChatMessageRevisionPath,
@@ -1984,6 +1994,7 @@ import {
 	zListKnowledgeDocumentsResponse,
 	zListLocalModelsResponse,
 	zListMcpServersResponse,
+	zListNodeBackupsResponse,
 	zListNodeChatConversationsQuery,
 	zListNodeChatConversationsResponse,
 	zListNodeChatMessageRevisionsPath,
@@ -2129,6 +2140,8 @@ import {
 	zRestartExternalAppBody,
 	zRestartExternalAppPath,
 	zRestartExternalAppResponse,
+	zRestoreNodeBackupPath,
+	zRestoreNodeBackupResponse,
 	zResumeDevWorkflowRunBody,
 	zResumeDevWorkflowRunPath,
 	zResumeDevWorkflowRunResponse,
@@ -12836,6 +12849,96 @@ export const saveNodeSettings = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const listNodeBackups = <ThrowOnError extends boolean = false>(
+	options?: Options<ListNodeBackupsData, ThrowOnError>,
+): RequestResult<ListNodeBackupsResponses, ListNodeBackupsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListNodeBackupsResponses, ListNodeBackupsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListNodeBackupsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/node/backups",
+		...options,
+	});
+
+export const createNodeBackup = <ThrowOnError extends boolean = false>(
+	options?: Options<CreateNodeBackupData, ThrowOnError>,
+): RequestResult<CreateNodeBackupResponses, CreateNodeBackupErrors, ThrowOnError> =>
+	(options?.client ?? client).post<CreateNodeBackupResponses, CreateNodeBackupErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateNodeBackupResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/node/backups",
+		...options,
+	});
+
+export const restoreNodeBackup = <ThrowOnError extends boolean = false>(
+	options: Options<RestoreNodeBackupData, ThrowOnError>,
+): RequestResult<RestoreNodeBackupResponses, RestoreNodeBackupErrors, ThrowOnError> =>
+	(options.client ?? client).post<RestoreNodeBackupResponses, RestoreNodeBackupErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zRestoreNodeBackupPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRestoreNodeBackupResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/node/backups/{name}/restore",
+		...options,
 	});
 
 export const revokeLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(

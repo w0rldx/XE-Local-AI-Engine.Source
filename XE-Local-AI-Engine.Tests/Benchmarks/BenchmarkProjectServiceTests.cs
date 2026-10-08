@@ -575,6 +575,76 @@ public sealed class BenchmarkProjectServiceTests
         _ = context.Store.DidNotReceiveWithAnyArgs().UpdateProjectFidelityAsync(Guid.Empty, 0, null!, false, CancellationToken.None);
     }
 
+    [Test]
+    public async Task UpdateFidelity_MeasuringExistingRunsAgainstAnotherModelsKldBase_IsRefusedBeforeAnythingIsQueued()
+    {
+        // Freeze and the executor already refuse a base of another model; without the same check here the write queued
+        // one doomed KLD measurement per succeeded run, each failing only once the queue reached it.
+        var context = new ServiceContext();
+        context.Gguf.ResolveModelFootprintFactsAsync(ServiceContext.RunModelName, Arg.Any<CancellationToken>()).Returns(Footprint(blocks: 64));
+        context.Gguf.ResolveModelFootprintFactsAsync(ServiceContext.BaseModelName, Arg.Any<CancellationToken>()).Returns(Footprint(blocks: 40));
+
+        var refused = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.UpdateFidelityAsync(ProjectId, 1,
+            new BenchmarkProjectFidelitySettings
+            {
+                Enabled = true,
+                KldEnabled = true,
+                Chunks = null,
+                KldBaseModelName = ServiceContext.BaseModelName
+            },
+            measureExisting: true));
+
+        AssertEx.Contains(refused.Message, $"'{ServiceContext.BaseModelName}' is not the same model as '{ServiceContext.RunModelName}' (40 vs 64 layers)");
+        _ = context.Store.DidNotReceiveWithAnyArgs().UpdateProjectFidelityAsync(Guid.Empty, 0, null!, false, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task UpdateFidelity_WhenOnlyAnAlreadyMeasuredModelMismatchesTheKldBase_SavesAndQueuesTheRest()
+    {
+        // Only the runs the write would enqueue are checked: a mismatched model measured earlier is not re-queued, so
+        // refusing because of it blocked measuring the matching model and saving the settings at all.
+        var context = new ServiceContext
+        {
+            MissingFidelityModelNames = [ServiceContext.RunModelName]
+        };
+        context.Gguf.ResolveModelFootprintFactsAsync("measured.gguf", Arg.Any<CancellationToken>()).Returns(Footprint(blocks: 40));
+        context.Gguf.ResolveModelFootprintFactsAsync(ServiceContext.RunModelName, Arg.Any<CancellationToken>()).Returns(Footprint(blocks: 64));
+        context.Gguf.ResolveModelFootprintFactsAsync(ServiceContext.BaseModelName, Arg.Any<CancellationToken>()).Returns(Footprint(blocks: 64));
+        context.Store.UpdateProjectFidelityAsync(ProjectId, 1, Arg.Any<BenchmarkProjectFidelityInput>(), true, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkProjectFidelityChange
+               {
+                   Project = ServiceContext.CurrentProject(),
+                   EnqueuedRunIds = [Guid.NewGuid()]
+               });
+
+        var change = await context.Service.UpdateFidelityAsync(ProjectId, 1,
+            new BenchmarkProjectFidelitySettings
+            {
+                Enabled = true,
+                KldEnabled = true,
+                Chunks = null,
+                KldBaseModelName = ServiceContext.BaseModelName
+            },
+            measureExisting: true);
+
+        AssertEx.Equal(1, change.EnqueuedRunIds.Count);
+        _ = await context.Gguf.DidNotReceive().ResolveModelFootprintFactsAsync("measured.gguf", Arg.Any<CancellationToken>());
+    }
+
+    private static GgufModelFootprintFacts Footprint(long blocks) =>
+        new()
+        {
+            Quant = "Q4_K_M",
+            FileSizeBytes = 1,
+            ParamCount = null,
+            BlockCount = blocks,
+            AttentionHeadCount = null,
+            AttentionHeadCountKV = null,
+            EmbeddingLength = 4096,
+            ContextLength = null,
+            Architecture = "qwen3"
+        };
+
     private static BenchmarkProjectDraft Draft(ServiceContext context) =>
         new()
         {
@@ -1070,10 +1140,20 @@ public sealed class BenchmarkProjectServiceTests
                        }
                    ]);
 
-            Service = new BenchmarkProjectService(Store, agents, Models, runtimes, Catalog, Substitute.For<IModelClassificationStore>());
+            Store.ListMissingFidelityModelNamesAsync(ProjectId, Arg.Any<CancellationToken>())
+                 .Returns(_ => MissingFidelityModelNames);
+
+            Service = new BenchmarkProjectService(Store, agents, Models, runtimes, Catalog, Substitute.For<IModelClassificationStore>(), Gguf);
         }
 
         public const string BaseModelName = "base.gguf";
+        public const string RunModelName = "model.gguf";
+
+        /// <summary>Resolves no header facts unless a test sets them, so the KLD base check passes by default.</summary>
+        public IGgufModelStore Gguf { get; } = Substitute.For<IGgufModelStore>();
+
+        /// <summary>The models the store reports a <c>measureExisting</c> write would enqueue.</summary>
+        public IReadOnlyList<string> MissingFidelityModelNames { get; set; } = [RunModelName];
         public const string BaseFingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
         public IBenchmarkCatalogService Catalog { get; }
@@ -1194,7 +1274,7 @@ public sealed class BenchmarkProjectServiceTests
                 {
                     1
                 },
-                PrimaryModelName = "model.gguf",
+                PrimaryModelName = RunModelName,
                 PrimaryModelOrigin = LocalModelOrigin.Imported,
                 ModelContentFingerprint = $"v1:{new string('a', count: 64)}",
                 AgentName = "Agent",
