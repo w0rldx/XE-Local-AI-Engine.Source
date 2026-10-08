@@ -17,7 +17,7 @@ public sealed class MxcLaunchRequest
 
     /// <summary>
     ///     The child's complete environment, used verbatim. MXC merges nothing into a supplied block, so the caller passes the Windows
-    ///     basics (<c>SystemRoot</c>, <c>windir</c>, <c>ComSpec</c>, <c>PATH</c>, <c>PATHEXT</c>, <c>TEMP</c>/<c>TMP</c>, ...) or the launch fails.
+    ///     basics (<c>SystemRoot</c>, <c>ComSpec</c>, <c>PATH</c>, <c>PATHEXT</c>, <c>TEMP</c>, a jail <c>LOCALAPPDATA</c>, ...) or the launch fails.
     /// </summary>
     public required IReadOnlyDictionary<string, string> Environment { get; init; }
 

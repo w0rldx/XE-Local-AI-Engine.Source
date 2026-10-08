@@ -158,7 +158,10 @@ public sealed class MxcSandboxRuntimeWindowsTests
         }
     }
 
-    /// <summary>MXC merges nothing into a supplied environment, so the Windows basics are passed explicitly; temp points into the jail.</summary>
+    /// <summary>
+    ///     MXC merges nothing into a supplied environment, so the Windows basics are passed explicitly; temp and the profile trio point
+    ///     into the jail as <c>SandboxLauncher</c> composes them. The SDK refuses an environment without <c>LOCALAPPDATA</c>.
+    /// </summary>
     private static Dictionary<string, string> ChildEnvironment(string jail)
     {
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -181,6 +184,9 @@ public sealed class MxcSandboxRuntimeWindowsTests
         environment["PATH"] = Environment.GetFolderPath(Environment.SpecialFolder.System);
         environment["TEMP"] = jail;
         environment["TMP"] = jail;
+        environment["USERPROFILE"] = jail;
+        environment["APPDATA"] = jail;
+        environment["LOCALAPPDATA"] = jail;
         return environment;
     }
 
