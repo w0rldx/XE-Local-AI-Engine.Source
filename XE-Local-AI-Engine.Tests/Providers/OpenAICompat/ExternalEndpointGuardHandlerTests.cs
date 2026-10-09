@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 
 using System.Net;
-using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>

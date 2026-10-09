@@ -1,12 +1,13 @@
 namespace XE_Local_AI_Engine.Testing.FakeOpenAiGateway;
 
 using System.Globalization;
+using System.Runtime.InteropServices;
 
 /// <summary>
 ///     Runs the fake gateway by hand for a browser round:
 ///     <c>--token T --header Name=Value --model id:ctx --port N</c>, each flag optional, header and model repeatable.
 /// </summary>
-/// <remarks>Not named Program: the test-category scan resolves types by simple name and would confuse it with the node's.</remarks>
+/// <remarks>Not named Program: the test-category scan resolves helper types by simple name, and a second top-level Program would make that name ambiguous for every test that names the node's.</remarks>
 internal static class FakeOpenAiGatewayHost
 {
     public static async Task<int> Main(string[] args)
@@ -64,6 +65,14 @@ internal static class FakeOpenAiGatewayHost
             stop.Cancel();
         };
 
+        // A scripted round on Linux or macOS stops the host with SIGTERM (kill by PID), not Ctrl+C; without this the
+        // signal did not end the wait below and the process outlived the script. Windows ends a process outright.
+        using var sigterm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
+        {
+            context.Cancel = true;
+            stop.Cancel();
+        });
+
         await using var server = await FakeOpenAiGatewayServer.StartAsync(options, stop.Token);
         await Console.Out.WriteLineAsync(server.BaseAddress.ToString());
 
@@ -73,7 +82,7 @@ internal static class FakeOpenAiGatewayHost
         }
         catch (OperationCanceledException)
         {
-            // Ctrl+C is the only way out.
+            // Ctrl+C and SIGTERM are the only ways out.
         }
 
         return 0;

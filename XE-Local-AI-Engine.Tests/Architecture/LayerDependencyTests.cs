@@ -127,10 +127,12 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.LlamaServer",
                 "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.Providers.OpenAICompat",
-                // The composition layer joins the shared wire layer for ONE reason (2026-08-27): the encrypted
-                // external-provider store normalizes a saved base URL with the same OpenAICompatibleBaseAddress the
-                // outbound guard pins against. A private copy of that normalizer in the application layer is precisely
-                // how the stored value and the pinned value would come to disagree. Note the ordering trap below: this
+                // The composition layer joins the shared wire layer so the rules it stores and the rules the transport
+                // enforces are ONE code: the encrypted external-provider store normalizes a saved base URL with the same
+                // OpenAICompatibleBaseAddress the outbound guard pins against (2026-08-27), validates header names with
+                // CustomHeaderRules, and the connect-time probe runs through the same ExternalEndpointGuardHandler and
+                // CustomRequestHeadersHandler as chat and health (2026-10-09). A private copy of any of them in the
+                // application layer is precisely how the stored value and the enforced value would come to disagree. Note the ordering trap below: this
                 // name is a PREFIX of nothing, but "…Providers.OpenAICompat" IS a prefix of this one.
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
                 // The compute tool provisions its venv through the shared uv machinery directly, not through Training.

@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
+namespace XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 
 /// <summary>
 ///     Pins every outbound request of one external connection to that connection's NORMALIZED base address, and
@@ -11,7 +11,7 @@ namespace XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 ///     site building its own URI — would let a declared-Local connection exfiltrate somewhere the operator never saw,
 ///     so redirects are REFUSED rather than followed and the pin is structural rather than a rule callers must follow.
 /// </remarks>
-internal sealed class ExternalEndpointGuardHandler : DelegatingHandler
+public sealed class ExternalEndpointGuardHandler : DelegatingHandler
 {
     // Sanitized refusal message: it names neither the configured base address nor the attempted target, because the
     // exception text reaches the chat transcript.

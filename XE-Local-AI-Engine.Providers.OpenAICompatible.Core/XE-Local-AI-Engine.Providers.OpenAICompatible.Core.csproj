@@ -16,4 +16,10 @@
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Tests drive the outbound endpoint guard's pin check (ExternalEndpointGuardHandler.IsWithinPinnedEndpoint)
+         directly rather than through a live transport. -->
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
+  </ItemGroup>
+
 </Project>

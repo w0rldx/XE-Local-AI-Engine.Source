@@ -132,8 +132,8 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
 
         try
         {
-            // Ownership transfers into the HttpClient (disposeHandler: true), which this scope disposes. CA2000 cannot
-            // follow that transfer.
+            // Ownership transfers into the HttpClient (disposeHandler: true), which this scope disposes; the guard disposes
+            // the inner handler in turn. CA2000 cannot follow that transfer.
 #pragma warning disable CA2000
             var handler = _transportHandlerFactory?.Invoke()
                           ?? new SocketsHttpHandler
@@ -144,7 +144,9 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
                               // and then report that host as the connection's reachability. A 3xx is reported below.
                               AllowAutoRedirect = false
                           };
-            using var httpClient = new HttpClient(new CustomRequestHeadersHandler(headers, handler), disposeHandler: true)
+            // The same pin chat and health use (ExternalOpenAiChatClient.Build, ExternalOpenAiModelProvider.ProbeConnectionAsync):
+            // the probe reaches the reviewed base address and nothing else, structurally rather than by convention.
+            using var httpClient = new HttpClient(new CustomRequestHeadersHandler(headers, new ExternalEndpointGuardHandler(baseAddress, handler)), disposeHandler: true)
             {
                 Timeout = Timeout.InfiniteTimeSpan
             };

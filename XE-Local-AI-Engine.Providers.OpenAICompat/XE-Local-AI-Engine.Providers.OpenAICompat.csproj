@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Tests drive the internal chat-client stack (reasoning rewriting, effort injection, the outbound guard) against
+    <!-- Tests drive the internal chat-client stack (reasoning rewriting, effort injection) against
          a capturing transport rather than a live endpoint. -->
     <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
   </ItemGroup>
