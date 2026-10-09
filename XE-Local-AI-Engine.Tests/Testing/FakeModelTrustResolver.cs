@@ -29,14 +29,17 @@ internal sealed class FakeModelTrustResolver : IModelTrustResolver
         bool supportsVision = false,
         bool supportsReasoning = false,
         bool supportsReasoningEffort = false,
-        string? defaultReasoningEffort = null)
+        string? defaultReasoningEffort = null,
+        ExternalProviderCloudGrants? cloudGrants = null)
     {
         var connection = new ExternalProviderConnectionDescriptor
         {
             Id = connectionId,
             DisplayName = connectionId,
             BaseUrl = new Uri("http://127.0.0.1:18099/v1/", UriKind.Absolute),
-            Locality = locality
+            Locality = locality,
+            // The store's projection rule: only a Cloud connection carries grants.
+            CloudGrants = locality == ExternalProviderLocality.Cloud ? cloudGrants ?? ExternalProviderCloudGrants.None : ExternalProviderCloudGrants.None
         };
         var model = new ExternalProviderModelDescriptor
         {
@@ -81,6 +84,23 @@ internal sealed class FakeModelTrustResolver : IModelTrustResolver
         }
 
         return CacheIsCold ? ModelTrustLocality.Unresolved : ClassifyRegistered(modelId);
+    }
+
+    public Task<ExternalProviderCloudGrants> ResolveCloudGrantsAsync(string? modelId, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(GrantsOf(modelId));
+    }
+
+    public ExternalProviderCloudGrants ClassifyCloudGrants(string? modelId)
+    {
+        return CacheIsCold ? ExternalProviderCloudGrants.None : GrantsOf(modelId);
+    }
+
+    private ExternalProviderCloudGrants GrantsOf(string? modelId)
+    {
+        return ExternalModelId.HasExternalScheme(modelId) && ClassifyRegistered(modelId) == ModelTrustLocality.Cloud
+            ? Lookup(modelId)!.Connection.CloudGrants
+            : ExternalProviderCloudGrants.None;
     }
 
     private static ModelTrustLocality ClassifyNonExternal(string? modelId)

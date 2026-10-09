@@ -2763,11 +2763,28 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1DeleteExternalProvi
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderCloudGrantsRequest = {
+	localData?: boolean;
+	unattendedRuns?: boolean;
+	webTools?: boolean;
+	mcpTools?: boolean;
+	subAgents?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderCloudGrantsResponse = {
+	localData: boolean;
+	unattendedRuns: boolean;
+	webTools: boolean;
+	mcpTools: boolean;
+	subAgents: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse = {
 	id: string;
 	displayName: string;
 	baseUrl: string;
 	locality: string;
+	cloudGrants: XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderCloudGrantsResponse;
 	hasApiKey: boolean;
 	timeoutSeconds?: number | null;
 	allowInsecureHttp: boolean;
@@ -2833,6 +2850,7 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvide
 	displayName: string;
 	baseUrl: string;
 	locality?: string | null;
+	cloudGrants?: XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderCloudGrantsRequest | null;
 	apiKey?: string | null;
 	clearApiKey?: boolean;
 	timeoutSeconds?: number | null;

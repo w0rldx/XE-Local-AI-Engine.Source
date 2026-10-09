@@ -36,6 +36,10 @@ internal static class ExternalProviderEndpointDtoMapper
             DisplayName = connection.DisplayName,
             BaseUrl = connection.BaseUrl,
             Locality = connection.Locality.ToString(),
+            // The descriptor's rule: a Local connection never surfaces grants, even from a hand-edited file.
+            CloudGrants = ToResponse(connection.Locality == ExternalProviderLocality.Cloud
+                ? connection.CloudGrants ?? ExternalProviderCloudGrants.None
+                : ExternalProviderCloudGrants.None),
             HasApiKey = !string.IsNullOrEmpty(connection.ApiKey),
             TimeoutSeconds = connection.TimeoutSeconds,
             AllowInsecureHttp = connection.AllowInsecureHttp,
@@ -86,6 +90,16 @@ internal static class ExternalProviderEndpointDtoMapper
             DisplayName = request.DisplayName?.Trim() ?? string.Empty,
             BaseUrl = request.BaseUrl?.Trim() ?? string.Empty,
             Locality = ParseLocality(request.Locality),
+            CloudGrants = request.CloudGrants is { } grants
+                ? new ExternalProviderCloudGrants
+                {
+                    LocalData = grants.LocalData,
+                    UnattendedRuns = grants.UnattendedRuns,
+                    WebTools = grants.WebTools,
+                    McpTools = grants.McpTools,
+                    SubAgents = grants.SubAgents
+                }
+                : null,
             ApiKey = request.ApiKey,
             ClearApiKey = request.ClearApiKey,
             TimeoutSeconds = request.TimeoutSeconds,
@@ -113,6 +127,18 @@ internal static class ExternalProviderEndpointDtoMapper
                     ContextLength = model.ContextLength
                 })
             ]
+        };
+    }
+
+    private static ExternalProviderCloudGrantsResponse ToResponse(ExternalProviderCloudGrants grants)
+    {
+        return new ExternalProviderCloudGrantsResponse
+        {
+            LocalData = grants.LocalData,
+            UnattendedRuns = grants.UnattendedRuns,
+            WebTools = grants.WebTools,
+            McpTools = grants.McpTools,
+            SubAgents = grants.SubAgents
         };
     }
 

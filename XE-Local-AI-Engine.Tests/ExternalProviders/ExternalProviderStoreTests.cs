@@ -1020,6 +1020,157 @@ public sealed class ExternalProviderStoreTests : IDisposable
         AssertEx.Equal("sk-kept", onDisk.Connections.Single().ApiKey);
     }
 
+    [Test]
+    public async Task SaveConnectionAsync_CloudGrants_RoundTripThroughTheFileAndOntoTheDescriptor()
+    {
+        var grants = new ExternalProviderCloudGrants
+        {
+            WebTools = true,
+            McpTools = true
+        };
+        using (var store = CreateStore())
+        {
+            _ = await SaveAsync(store, Request(baseUrl: "https://gateway.example.com/v1",
+                locality: ExternalProviderLocality.Cloud,
+                models: [Model("qwen3")]) with
+            {
+                CloudGrants = grants
+            });
+        }
+
+        // A fresh store instance reads the file back, so this is the encrypted payload, not an in-memory copy.
+        using var reread = CreateStore();
+        AssertEx.Equal(grants, (await reread.LoadAsync()).Connections.Single().CloudGrants);
+        var registration = AssertEx.NotNull(await new ExternalProviderRegistry(reread).TryResolveAsync("ext:unsloth-box/qwen3", CancellationToken.None));
+        AssertEx.Equal(grants, registration.Connection.CloudGrants);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_ALocalConnection_StoresNoGrants()
+    {
+        using var store = CreateStore();
+
+        var committed = await SaveAsync(store, Request(locality: ExternalProviderLocality.Local) with
+        {
+            CloudGrants = AllGrants
+        });
+
+        // A later flip to Cloud must start closed, not inherit a tick the operator could not see while Trust was Local.
+        AssertEx.Equal(ExternalProviderCloudGrants.None, committed.Config.Connections.Single().CloudGrants);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_ACloudConnectionWithoutGrants_StoresNone()
+    {
+        using var store = CreateStore();
+
+        var committed = await SaveAsync(store, Request(baseUrl: "https://gateway.example.com/v1", locality: ExternalProviderLocality.Cloud));
+
+        AssertEx.Equal(ExternalProviderCloudGrants.None, committed.Config.Connections.Single().CloudGrants);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_AGrantChange_IsWrittenAndAnIdenticalResaveIsNot()
+    {
+        using var store = CreateStore();
+        var request = Request(baseUrl: "https://gateway.example.com/v1", locality: ExternalProviderLocality.Cloud);
+        _ = await SaveAsync(store, request);
+
+        var granted = await SaveAsync(store, request with
+        {
+            CloudGrants = new ExternalProviderCloudGrants
+            {
+                SubAgents = true
+            }
+        });
+        var again = await SaveAsync(store, request with
+        {
+            CloudGrants = new ExternalProviderCloudGrants
+            {
+                SubAgents = true
+            }
+        });
+
+        AssertEx.True(granted.Changed, "a grant is operator configuration, so changing it must be written");
+        AssertEx.False(again.Changed);
+    }
+
+    [Test]
+    public async Task LoadAsync_ARowWrittenBeforeGrants_ReadsNoneAndAMatchingResaveIsSkipped()
+    {
+        using var store = CreateStore();
+        var legacy = JsonSerializer.SerializeToNode(new StoredExternalProviderConfig
+        {
+            SchemaVersion = ExternalProviderStoreSchema.CurrentVersion,
+            Revision = "r",
+            Connections =
+            [
+                new StoredExternalProviderConnection
+                {
+                    Id = "unsloth-box",
+                    DisplayName = "Unsloth box",
+                    BaseUrl = "https://gateway.example.com/v1/",
+                    Locality = ExternalProviderLocality.Cloud,
+                    Models =
+                    [
+                        new StoredExternalProviderModel
+                        {
+                            WireId = "qwen3",
+                            // What Model("qwen3") saves, so the grants are the only field the resave could differ in.
+                            SupportsTools = false
+                        }
+                    ]
+                }
+            ]
+        }, RawSerializerOptions)!;
+        AssertEx.True(legacy["connections"]![0]!.AsObject().Remove("cloudGrants"), "the fixture must predate the field");
+        await File.WriteAllBytesAsync(StorePath, new MockDataProtector().Protect(Encoding.UTF8.GetBytes(legacy.ToJsonString())));
+
+        AssertEx.Null((await store.LoadAsync()).Connections.Single().CloudGrants);
+        var registration = AssertEx.NotNull(await new ExternalProviderRegistry(store).TryResolveAsync("ext:unsloth-box/qwen3", CancellationToken.None));
+        AssertEx.Equal(ExternalProviderCloudGrants.None, registration.Connection.CloudGrants);
+
+        // Null and None are the same grants, so the reconciler's idempotent resave does not churn the file.
+        var resave = await SaveAsync(store, Request(baseUrl: "https://gateway.example.com/v1",
+            locality: ExternalProviderLocality.Cloud,
+            models: [Model("qwen3")]) with
+        {
+            ExpectedRevision = "r"
+        });
+        AssertEx.False(resave.Changed);
+    }
+
+    [Test]
+    public void ToString_PrintsTheGrants()
+    {
+        var connection = new StoredExternalProviderConnection
+        {
+            Id = "gw",
+            DisplayName = "Gateway",
+            BaseUrl = "https://gateway.example.com/v1/",
+            ApiKey = SecretMarker,
+            Locality = ExternalProviderLocality.Cloud,
+            CloudGrants = new ExternalProviderCloudGrants
+            {
+                McpTools = true
+            }
+        };
+
+        var printed = connection.ToString();
+
+        AssertEx.Contains(printed, "McpTools = True");
+        AssertEx.False(printed.Contains(SecretMarker, StringComparison.Ordinal), "the key stays redacted beside the grants");
+    }
+
+    private static ExternalProviderCloudGrants AllGrants => new()
+    {
+        LocalData = true,
+        UnattendedRuns = true,
+        WebTools = true,
+        McpTools = true,
+        SubAgents = true
+    };
+
     private string StorePath => Path.Combine(_contentRootPath, "external-providers.enc");
 
     internal static StoredExternalProviderHeader Header(string name, string? value, bool isSecret = false)

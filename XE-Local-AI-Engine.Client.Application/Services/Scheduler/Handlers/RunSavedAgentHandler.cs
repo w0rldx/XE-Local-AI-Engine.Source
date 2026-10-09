@@ -132,7 +132,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         //    unless the operator lets cloud models run unattended. The offer below is then built with the real cloud flag.
         var capabilities = await modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
         var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
-        if (effectiveModelIsCloud && !await nodeRuntimeSettings.GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
+        if (effectiveModelIsCloud && !capabilities.CloudGrants.UnattendedRuns && !await nodeRuntimeSettings.GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
         {
             _logger.LogInformation("Scheduled agent run for definition {AgentDefinitionId} was rejected: its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
                 definition.Id);

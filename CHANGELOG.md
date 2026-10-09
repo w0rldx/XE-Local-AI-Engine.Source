@@ -24,6 +24,11 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Per-connection cloud permissions** — an external connection declared Cloud can grant its own models any of the five
+  cloud permissions (read local data, run unattended, web tools, MCP tools, sub-agents) in a new "Cloud permissions for
+  this connection" block of its editor, so a trusted private gateway gets them without opening the node-wide switches
+  for every cloud model. A grant never changes the connection's locality, a Local connection ignores its grants, and
+  `run_python`, AgentHome commands and command custom tools stay closed to every cloud model.
 - **Sandbox security profile** — the operator chooses `low` (today's behaviour) or `high` once in the first-run chain,
   after external access, and changes it on the new **Sandbox & isolation** section of Node settings, with a
   confirmation when lowering. Under `high`, every containment axis a workload declares it prefers (egress denial, a

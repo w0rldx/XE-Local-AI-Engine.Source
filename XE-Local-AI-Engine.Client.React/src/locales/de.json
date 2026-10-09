@@ -3127,7 +3127,18 @@
 				"keyStored": "Schlüssel gespeichert",
 				"insecureTransport": "Unverschlüsseltes HTTP",
 				"modelCount_one": "{{count}} registriertes Modell",
-				"modelCount_other": "{{count}} registrierte Modelle"
+				"modelCount_other": "{{count}} registrierte Modelle",
+				"cloudGrantCount_one": "{{count}} Freigabe",
+				"cloudGrantCount_other": "{{count}} Freigaben"
+			},
+			"cloudGrants": {
+				"title": "Cloud-Berechtigungen für diese Verbindung",
+				"hint": "Gilt nur für diese Verbindung; der knotenweite Schalter „{{setting}}“ wird dafür nicht benötigt.",
+				"localData": "Modellen dieser Verbindung lokale Daten erlauben",
+				"unattendedRuns": "Modelle dieser Verbindung unbeaufsichtigt ausführen lassen",
+				"webTools": "Modellen dieser Verbindung Webwerkzeuge erlauben",
+				"mcpTools": "Modellen dieser Verbindung MCP-Werkzeuge erlauben",
+				"subAgents": "Modellen dieser Verbindung Sub-Agenten erlauben"
 			},
 			"locality": {
 				"label": "Vertrauen",
@@ -3136,7 +3147,7 @@
 				"localBadge": "Als lokal deklariert",
 				"cloudBadge": "Als Cloud deklariert",
 				"localHint": "Modelle dieser Verbindung werden wie ein lokales Modell behandelt: Workspace- und Datei-Tools, die Wissensdatenbank, eigene Tools und Codeausführung stehen ihnen offen.",
-				"cloudHint": "Es gilt die Cloud-Absicherung: lokale Daten, unbeaufsichtigte Läufe, Web- und HTTP-Werkzeuge, MCP-Werkzeuge und Sub-Agenten folgen je einem Datenschutz-Schalter; keine Codeausführung und keine Befehls-Werkzeuge. Der Entwicklungsmodus lehnt diese Modelle ganz ab.",
+				"cloudHint": "Es gilt die Cloud-Absicherung: lokale Daten, unbeaufsichtigte Läufe, Web- und HTTP-Werkzeuge, MCP-Werkzeuge und Sub-Agenten folgen je einem Datenschutz-Schalter, sofern diese Verbindung sie nicht unten freigibt; keine Codeausführung und keine Befehls-Werkzeuge. Der Entwicklungsmodus lehnt diese Modelle ganz ab.",
 				"nonLocalHostWarning": "Diese Adresse liegt weder auf diesem Rechner noch in diesem privaten Netz, du hast sie aber als lokal deklariert. Der Endpunkt wird wie ein lokales Modell behandelt: Prompts und Inhalte von Workspace-Dateien werden an ihn gesendet."
 			},
 			"editor": {

@@ -246,7 +246,10 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
             // Resolve the participant's prompt here (in the async load) so ToSpecParticipant stays synchronous: fold in
             // its own enabled playbook when its playbook is enabled, else keep its base Instructions byte-identical.
-            var (resolvedInstructions, playbookWithheld) = await ComposeParticipantInstructionsAsync(participant, retrievalQuery, participantIsCloud, cancellationToken);
+            var (resolvedInstructions, playbookWithheld) = await ComposeParticipantInstructionsAsync(participant,
+                retrievalQuery,
+                participantIsCloud && !participantCapabilities.CloudGrants.LocalData,
+                cancellationToken);
             capable[participant.Id] = new ResolvedParticipant
             {
                 Definition = participant,
@@ -271,9 +274,9 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     ///     Without this a participant ran with NO base scaffold, unlike every direct agent send.
     /// </remarks>
     private async Task<ComposedInstructions> ComposeParticipantInstructionsAsync(AgentDefinitionRecord participant, string? retrievalQuery,
-        bool participantIsCloud, CancellationToken cancellationToken)
+        bool localDataNeedsCloudSwitch, CancellationToken cancellationToken)
     {
-        var (personaPrompt, playbookWithheld) = await ComposeParticipantPersonaAsync(participant, retrievalQuery, participantIsCloud, cancellationToken);
+        var (personaPrompt, playbookWithheld) = await ComposeParticipantPersonaAsync(participant, retrievalQuery, localDataNeedsCloudSwitch, cancellationToken);
         var instructions = participant.DisableBaseScaffold
             ? personaPrompt
             : BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), personaPrompt);
@@ -282,7 +285,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
     private readonly record struct ComposedInstructions(string Instructions, bool PlaybookWithheld);
 
-    private async Task<ComposedInstructions> ComposeParticipantPersonaAsync(AgentDefinitionRecord participant, string? retrievalQuery, bool participantIsCloud,
+    private async Task<ComposedInstructions> ComposeParticipantPersonaAsync(AgentDefinitionRecord participant, string? retrievalQuery, bool localDataNeedsCloudSwitch,
         CancellationToken cancellationToken)
     {
         if (!participant.PlaybookEnabled)
@@ -292,7 +295,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
         // The same egress gate as the single-agent path, keyed on THIS participant's effective model only, and
         // reported as withheld only when there IS enabled memory to withhold.
-        if (participantIsCloud && !await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken))
+        if (localDataNeedsCloudSwitch && !await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken))
         {
             var withheld = (await _playbookActionStore.ListEnabledByAgentAsync(participant.Id, cancellationToken)).Count > 0;
             if (withheld)

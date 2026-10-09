@@ -78,6 +78,7 @@ public sealed class ModelCapabilityResolver : IModelCapabilityResolver
                 registration.Connection.Locality == ExternalProviderLocality.Cloud)
             {
                 SupportsVision = registration.Model.SupportsVision,
+                CloudGrants = registration.Connection.CloudGrants,
                 // Vacuously enforceable: this provider emits no llama-server reasoning-budget field, so no cap can be
                 // silently accepted and ignored, and reporting false would suppress a marker nothing here reads.
                 ReasoningBudgetEnforceable = true

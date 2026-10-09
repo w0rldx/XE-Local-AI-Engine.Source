@@ -38,6 +38,7 @@ using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -1925,6 +1926,42 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_WhenTheCloudModelsConnectionGrantsLocalData_ComposesAttachmentWithTheSwitchOff()
+    {
+        const string gatewayModel = "ext:gateway/qwen3";
+        var trustResolver = new FakeModelTrustResolver().Register("gateway",
+            "qwen3",
+            ExternalProviderLocality.Cloud,
+            cloudGrants: new ExternalProviderCloudGrants { LocalData = true });
+
+        var (events, capturedContext) = await RunAttachmentEgressAsync(cloudModel: gatewayModel, allowCloudModelAccess: false, trustResolver: trustResolver);
+
+        AssertEx.Contains(capturedContext, message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal));
+        AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsWithheld)),
+            "the connection's grant stands in for AllowCloudModelAccess, so nothing was withheld");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenALocalTurnRunsAnAgentPinnedToAGrantedCloudModel_ComposesAttachmentWithTheSwitchOff()
+    {
+        // The active model is the local default; the bound agent's pin is the EFFECTIVE model, and its grants must decide.
+        const string pinnedModel = "ext:gateway/qwen3";
+        var trustResolver = new FakeModelTrustResolver().Register("gateway",
+            "qwen3",
+            ExternalProviderLocality.Cloud,
+            cloudGrants: new ExternalProviderCloudGrants { LocalData = true });
+        var agentResolver = Substitute.For<IAgentDefinitionResolver>();
+        agentResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                     .Returns(new ResolvedAgentRuntime("Pinned persona.", [], pinnedModel, null, 9, Guid.NewGuid(), "Pinned Agent", EffectiveModelIsCloud: true));
+
+        var (events, capturedContext) = await RunAttachmentEgressAsync(cloudModel: null, allowCloudModelAccess: false, trustResolver: trustResolver, agentResolver: agentResolver);
+
+        AssertEx.Contains(capturedContext, message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal));
+        AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsWithheld)),
+            "the pinned model's grant decides, not the local active model's absence of one");
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenLocalModelWithAttachment_ComposesAttachmentAndDoesNotNotify()
     {
         var (events, capturedContext) = await RunAttachmentEgressAsync(cloudModel: null, allowCloudModelAccess: false);
@@ -1967,7 +2004,9 @@ public sealed class NodeChatStreamServiceTests
     private static async Task<(List<ChatStreamEvent> Events, IReadOnlyList<ConversationMessageDto> CapturedContext)> RunAttachmentEgressAsync(string? cloudModel,
         bool allowCloudModelAccess,
         IReadOnlyList<ExtraUploadedFile>? extraFiles = null,
-        bool offerToolsWithoutFileTools = false)
+        bool offerToolsWithoutFileTools = false,
+        FakeModelTrustResolver? trustResolver = null,
+        IAgentDefinitionResolver? agentResolver = null)
     {
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
@@ -2010,8 +2049,8 @@ public sealed class NodeChatStreamServiceTests
 
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
-                CreateModelCapabilityResolver(),
+            new ChatTurnResolver(agentResolver ?? CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(trustResolver: trustResolver),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -4774,12 +4813,13 @@ public sealed class NodeChatStreamServiceTests
     // decision under test is unchanged, it just lives in one place now.
     private static IModelCapabilityResolver CreateModelCapabilityResolver(IModelClassificationService? classification = null,
         ILocalModelProviderResolver? providerResolver = null,
-        IGgufModelCapabilityResolver? gguf = null)
+        IGgufModelCapabilityResolver? gguf = null,
+        FakeModelTrustResolver? trustResolver = null)
     {
         return new ModelCapabilityResolver(classification ?? CreateModelClassificationService(),
             providerResolver ?? CreateLocalModelProviderResolver(),
             gguf ?? CreateGgufModelCapabilityResolver(),
-            new FakeModelTrustResolver());
+            trustResolver ?? new FakeModelTrustResolver());
     }
 
     // The default resolver reports every model as not-a-GGUF (null), so the existing Ollama-routed tests keep their

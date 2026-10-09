@@ -75,4 +75,16 @@ public interface IModelTrustResolver
     ///     has to distinguish "no answer" from "safe".
     /// </remarks>
     ModelTrustLocality? ClassifyExternalCached(string? modelId);
+
+    /// <summary>
+    ///     The cloud grants of the Cloud external connection behind <paramref name="modelId" />;
+    ///     <see cref="ExternalProviderCloudGrants.None" /> for a non-external, Local or unresolvable id. Never changes locality.
+    /// </summary>
+    Task<ExternalProviderCloudGrants> ResolveCloudGrantsAsync(string? modelId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The same answer as <see cref="ResolveCloudGrantsAsync" /> from the registry's cached generation, for the
+    ///     gates with no async boundary; a cold cache is <see cref="ExternalProviderCloudGrants.None" />.
+    /// </summary>
+    ExternalProviderCloudGrants ClassifyCloudGrants(string? modelId);
 }

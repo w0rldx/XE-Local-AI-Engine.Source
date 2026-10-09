@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using Harness = IntegrationCoordinatorHarness;
@@ -127,6 +128,32 @@ public sealed class IntegrationExecutionCoordinatorTests
         var assistant = context.Single(message => message.Role == MessageRole.Assistant);
         AssertEx.Equal("there are two files", assistant.Content);
         AssertEx.Equal(allowCloudModelAccess, assistant.ToolExchanges is { Count: > 0 }, "the replayed tool results follow the local-data switch.");
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Run_WhenTheCloudModelsConnectionGrantsUnattendedRuns_RunsWithBothSwitchesOff_AndReplaysToolHistoryOnlyUnderTheLocalDataGrant(bool localDataGrant)
+    {
+        // Both node-wide switches stay at their default (off): the connection's grants stand in for them, each for its own class.
+        using var harness = new Harness();
+        harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+               .Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: true)
+               {
+                   CloudGrants = new ExternalProviderCloudGrants { UnattendedRuns = true, LocalData = localDataGrant }
+               });
+        harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
+        harness.OfferedTools = [Harness.Tool("list_files", ToolCategory.ReadLocal)];
+        harness.AddHistory("user", "list the files");
+        harness.AddHistory("assistant", "there are two files", [Harness.CompletedToolPart("call-1", "list_files", "{\"path\":\".\"}", "a.txt\nb.txt")]);
+        var executionId = harness.SeedAccepted();
+
+        await harness.Coordinator.ProcessOneAsync(executionId, CancellationToken.None);
+
+        AssertEx.Equal(IntegrationExecutionStatus.Completed, harness.Row(executionId).Status);
+        var context = (harness.CapturedPackage ?? throw new AssertionException("The runner was never called.")).ConversationContext;
+        var assistant = context.Single(message => message.Role == MessageRole.Assistant);
+        AssertEx.Equal(localDataGrant, assistant.ToolExchanges is { Count: > 0 }, "the replayed tool results follow the local-data grant.");
     }
 
     [Test]

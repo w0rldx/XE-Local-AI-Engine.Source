@@ -15,9 +15,12 @@ import {
 } from "@/core/http-headers/CustomHeaders";
 import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
 import {
+	type ExternalProviderCloudGrant,
 	type ExternalProviderFormValues,
 	type ExternalProviderLocality,
 	type ExternalProviderModelDraft,
+	noCloudGrants,
+	parseCloudGrants,
 	parseLocality,
 } from "@/features/external-providers/models/ExternalProviderModel";
 
@@ -78,6 +81,7 @@ export const emptyFormValues: ExternalProviderFormValues = {
 	// A new connection starts declared Cloud: the safe half of the flag, so an operator who never touches the control
 	// gets the restrictive gating rather than full local trust by default.
 	locality: "Cloud",
+	cloudGrants: noCloudGrants,
 	apiKey: "",
 	clearApiKey: false,
 	timeoutSeconds: "",
@@ -129,6 +133,7 @@ export function connectionToFormValues(connection: ExternalProviderConnectionDto
 		displayName: connection.displayName,
 		baseUrl: connection.baseUrl,
 		locality: parseLocality(connection.locality),
+		cloudGrants: parseCloudGrants(connection.cloudGrants),
 		apiKey: "",
 		clearApiKey: false,
 		timeoutSeconds: numberToField(connection.timeoutSeconds),
@@ -162,6 +167,7 @@ function fieldToNumber(value: string): number | undefined {
  * - An Unknown capability is sent as `null`, never omitted, so the store records the operator's answer explicitly.
  * - Header rows are always sent (an empty list removes them all); a blank secret value is omitted, which keeps the
  *   stored value on the same origin and is refused by the backend when the address moved.
+ * - Cloud grants ride only on a Cloud save; a Local save omits them, which the backend reads as none.
  */
 export function toSaveRequestBody(values: ExternalProviderFormValues, expectedRevision: string | undefined): SaveConnectionBody {
 	const apiKey = values.apiKey.trim();
@@ -169,6 +175,7 @@ export function toSaveRequestBody(values: ExternalProviderFormValues, expectedRe
 		displayName: values.displayName.trim(),
 		baseUrl: values.baseUrl.trim(),
 		locality: values.locality,
+		...(values.locality === "Cloud" ? { cloudGrants: { ...values.cloudGrants } } : {}),
 		...(apiKey.length > 0 ? { apiKey: values.apiKey } : {}),
 		...(values.clearApiKey ? { clearApiKey: true } : {}),
 		timeoutSeconds: fieldToNumber(values.timeoutSeconds),
@@ -275,6 +282,7 @@ export type ExternalProviderFormAction =
 	| { type: "setField"; field: "connectionId" | "displayName" | "baseUrl" | "apiKey" | "timeoutSeconds"; value: string }
 	| { type: "setLocality"; value: ExternalProviderLocality }
 	| { type: "setAllowInsecureHttp"; value: boolean }
+	| { type: "setCloudGrant"; grant: ExternalProviderCloudGrant; value: boolean }
 	| { type: "removeApiKey" }
 	| { type: "keepApiKey" }
 	| { type: "addModel"; rowId: string }
@@ -338,6 +346,11 @@ function reduceForm(state: ExternalProviderFormState, action: ExternalProviderFo
 			return { ...state, values: { ...state.values, locality: action.value } };
 		case "setAllowInsecureHttp":
 			return { ...state, values: { ...state.values, allowInsecureHttp: action.value } };
+		case "setCloudGrant":
+			return {
+				...state,
+				values: { ...state.values, cloudGrants: { ...state.values.cloudGrants, [action.grant]: action.value } },
+			};
 		// Asking for removal also empties the field: a typed key and a removal request are contradictory instructions,
 		// and the request can only carry one of them.
 		case "removeApiKey":

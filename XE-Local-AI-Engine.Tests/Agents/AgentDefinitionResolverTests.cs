@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -1144,6 +1145,43 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.NotNull(resolved);
         AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
         AssertEx.False(resolved.PlaybookWithheld, "nothing was withheld, so the turn must stay silent");
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task ResolveAsync_WhenTheCloudModelsConnectionGrantsLocalData_InjectsPlaybookMemoryWithTheSwitchOff(bool pinned)
+    {
+        // Pinned, the pin's snapshot carries the grant; unpinned, the cloud active model is resolved for it.
+        const string grantedModel = "ext:gateway/qwen3";
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(grantedModel, Arg.Any<CancellationToken>())
+                          .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true)
+                          {
+                              CloudGrants = new ExternalProviderCloudGrants { LocalData = true }
+                          });
+        var resolver = BuildResolver(out var store,
+            out var playbookStore,
+            onGetOffered: null,
+            [OfferTool("GetCurrentTime")],
+            capabilityResolver: capabilityResolver,
+            allowCloudModelAccess: false);
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], modelProfile: pinned ? grantedModel : null, playbookEnabled: true);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(definition.Id, "Run the tests first.", priority: 1)]));
+
+        var resolved = await resolver.ResolveAsync(definition.Id,
+            pinned ? "qwen3:8b" : grantedModel,
+            retrievalQuery: null,
+            supportsTools: true,
+            honorModelProfile: true,
+            activeModelIsCloud: !pinned);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(SystemPrompt + "\n\n## Operating Playbook\n- Run the tests first.", resolved!.ResolvedSystemPrompt);
+        AssertEx.False(resolved.PlaybookWithheld, "the connection's grant stands in for AllowCloudModelAccess");
+        AssertEx.True(resolved.EffectiveModelIsCloud, "a grant never changes locality");
     }
 
     [Test]

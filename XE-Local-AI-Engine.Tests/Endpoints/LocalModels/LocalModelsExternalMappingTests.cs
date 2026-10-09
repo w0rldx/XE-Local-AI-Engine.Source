@@ -212,7 +212,8 @@ public sealed class LocalModelsExternalMappingTests
                 Id = "unsloth-box",
                 DisplayName = "Unsloth box",
                 BaseUrl = new Uri("http://127.0.0.1:18099/v1/"),
-                Locality = locality
+                Locality = locality,
+                CloudGrants = ExternalProviderCloudGrants.None
             },
             Model = new ExternalProviderModelDescriptor
             {

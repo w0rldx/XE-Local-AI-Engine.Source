@@ -1,4 +1,16 @@
-import { Alert, Badge, Button, Checkbox, Group, PasswordInput, SegmentedControl, Stack, Text, TextInput } from "@mantine/core";
+import {
+	Alert,
+	Badge,
+	Button,
+	Checkbox,
+	Group,
+	PasswordInput,
+	SegmentedControl,
+	Stack,
+	Switch,
+	Text,
+	TextInput,
+} from "@mantine/core";
 import { IconAlertTriangle, IconArrowBackUp, IconDeviceFloppy, IconTrash, IconX } from "@tabler/icons-react";
 import type { Dispatch } from "react";
 import { useTranslation } from "react-i18next";
@@ -149,6 +161,54 @@ export function ExternalProviderConnectionEditor(props: ExternalProviderConnecti
 				<Alert color="orange" icon={<IconAlertTriangle size={16} />} data-testid="external-provider-locality-warning">
 					<Text size="sm">{t("pages.externalProviders.locality.nonLocalHostWarning")}</Text>
 				</Alert>
+			) : null}
+
+			{/* Grants only mean something under cloud gating; a Local connection already has full local parity. */}
+			{values.locality === "Cloud" ? (
+				<Stack gap="xs" data-testid="external-provider-cloud-grants">
+					<Text size="sm" fw={500}>
+						{t("pages.externalProviders.cloudGrants.title", "Cloud permissions for this connection")}
+					</Text>
+					{[
+						{
+							grant: "localData" as const,
+							label: t("pages.externalProviders.cloudGrants.localData", "Let this connection's models read local data"),
+							twin: t("pages.nodeSettings.fields.allowCloudModelAccess.label", "Let cloud models read local data"),
+						},
+						{
+							grant: "unattendedRuns" as const,
+							label: t("pages.externalProviders.cloudGrants.unattendedRuns", "Let this connection's models run unattended"),
+							twin: t("pages.nodeSettings.fields.allowCloudModelUnattendedRuns.label", "Let cloud models run unattended"),
+						},
+						{
+							grant: "webTools" as const,
+							label: t("pages.externalProviders.cloudGrants.webTools", "Let this connection's models use web tools"),
+							twin: t("pages.nodeSettings.fields.allowCloudModelWebTools.label", "Let cloud models use web tools"),
+						},
+						{
+							grant: "mcpTools" as const,
+							label: t("pages.externalProviders.cloudGrants.mcpTools", "Let this connection's models use MCP tools"),
+							twin: t("pages.nodeSettings.fields.allowCloudModelMcpTools.label", "Let cloud models use MCP tools"),
+						},
+						{
+							grant: "subAgents" as const,
+							label: t("pages.externalProviders.cloudGrants.subAgents", "Let this connection's models delegate to sub-agents"),
+							twin: t("pages.nodeSettings.fields.allowCloudModelSubAgents.label", "Let cloud models delegate to sub-agents"),
+						},
+					].map(({ grant, label, twin }) => (
+						<Switch
+							key={grant}
+							label={label}
+							description={t("pages.externalProviders.cloudGrants.hint", { setting: twin })}
+							checked={values.cloudGrants[grant]}
+							data-testid={`external-provider-cloud-grant-${grant}`}
+							onChange={(event) => {
+								const value = event.currentTarget.checked;
+								dispatch({ type: "setCloudGrant", grant, value });
+							}}
+						/>
+					))}
+				</Stack>
 			) : null}
 
 			{/* A stored key is never returned, so the field loads blank and blank means "keep it". Removal is its own

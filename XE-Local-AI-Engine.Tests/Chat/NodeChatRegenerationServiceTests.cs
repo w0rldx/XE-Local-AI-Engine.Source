@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -414,13 +415,44 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     [Test]
     public async Task RegenerateAsync_WhenCloudEffectiveModelWithKnowledgeBase_WithholdsAndNotifiesByDefault()
     {
-        // The KB egress gate mirrors the send path: a cloud effective model must NOT receive KB context without the
+        // The KB egress gate mirrors the send path: a Codex cloud effective model must NOT receive KB context without the
         // operator opt-in. The rerun runs without KB context and the user gets a KnowledgeWithheld notice.
-        await using var provider = await BuildProviderAsync("regeneration-kb-cloud.sqlite");
+        var events = new List<ChatStreamEvent>();
+        var context = await RegenerateWithKnowledgeAsync("regeneration-kb-cloud.sqlite", "gpt-5.5", trustResolver: null, events);
+
+        AssertEx.False(context.Any(message => message.Content.Contains(KnowledgeChatContextComposer.Preamble, StringComparison.Ordinal)),
+            "the KB context block must not be composed for a cloud model without opt-in.");
+        AssertEx.False(context.Any(message => message.Content.Contains("secret runbook body", StringComparison.Ordinal)),
+            "a cloud model must not receive KB content without opt-in.");
+        AssertEx.Contains(events, streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                 && streamEvent.NoticeKind == nameof(TurnNoticeKind.KnowledgeWithheld));
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenTheCloudModelsConnectionGrantsLocalData_GroundsOnKnowledgeWithTheSwitchOff()
+    {
+        var trustResolver = new FakeModelTrustResolver().Register("gateway",
+            "qwen3",
+            ExternalProviderLocality.Cloud,
+            cloudGrants: new ExternalProviderCloudGrants { LocalData = true });
+
+        var events = new List<ChatStreamEvent>();
+        var context = await RegenerateWithKnowledgeAsync("regeneration-kb-granted.sqlite", "ext:gateway/qwen3", trustResolver, events);
+
+        AssertEx.Contains(context, message => message.Content.Contains("secret runbook body", StringComparison.Ordinal));
+        AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.KnowledgeWithheld)),
+            "the connection's grant stands in for AllowCloudModelAccess, so nothing was withheld");
+    }
+
+    // Regenerates a turn first answered by cloudModel, knowledge base on and AllowCloudModelAccess off; returns the rerun's context.
+    private async Task<IReadOnlyList<ConversationMessageDto>> RegenerateWithKnowledgeAsync(string databaseName,
+        string cloudModel,
+        FakeModelTrustResolver? trustResolver,
+        List<ChatStreamEvent> events)
+    {
+        await using var provider = await BuildProviderAsync(databaseName);
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 
-        // The original assistant turn was produced by a Codex cloud model, so the regenerate resolves that cloud model.
-        const string CloudModel = "gpt-5.5";
         var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest
         {
             Title = "Regen",
@@ -447,7 +479,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             MessageId = originalId,
             RequestId = originalCorrelation.RequestId,
             CreatedAtUtc = 12,
-            Model = CloudModel
+            Model = cloudModel
         });
         await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest
         {
@@ -455,27 +487,20 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             Status = NodeChatMessageStatusValues.Completed,
             UpdatedAtUtc = 13,
             Content = "eject it",
-            Model = CloudModel
+            Model = cloudModel
         });
 
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenContextCapturingRunner(dispatcher);
         var scopeFactory = CreateKnowledgeScopeFactory(KnowledgeHit("Runbook", "secret runbook body", score: 0.9));
-        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, scopeFactory, allowCloudModelAccess: false);
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, scopeFactory, allowCloudModelAccess: false, trustResolver);
 
-        var events = new List<ChatStreamEvent>();
         await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, reasoningEffort: null, useLocalTools: false, useKnowledgeBase: true))
         {
             events.Add(streamEvent);
         }
 
-        var context = AssertEx.NotNull(runner.LastContext);
-        AssertEx.False(context.Any(message => message.Content.Contains(KnowledgeChatContextComposer.Preamble, StringComparison.Ordinal)),
-            "the KB context block must not be composed for a cloud model without opt-in.");
-        AssertEx.False(context.Any(message => message.Content.Contains("secret runbook body", StringComparison.Ordinal)),
-            "a cloud model must not receive KB content without opt-in.");
-        AssertEx.Contains(events, streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
-                                                 && streamEvent.NoticeKind == nameof(TurnNoticeKind.KnowledgeWithheld));
+        return AssertEx.NotNull(runner.LastContext);
     }
 
     [Test]
@@ -3449,12 +3474,13 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         IInvocationRunner runner,
         RegenRecordingDispatcher dispatcher,
         IServiceScopeFactory scopeFactory,
-        bool allowCloudModelAccess = false)
+        bool allowCloudModelAccess = false,
+        FakeModelTrustResolver? trustResolver = null)
     {
         return new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
-                CreateModelCapabilityResolver(),
+                CreateModelCapabilityResolver(trustResolver: trustResolver),
                 NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -3525,12 +3551,13 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     // decision under test is unchanged, it just lives in one place now.
     private static IModelCapabilityResolver CreateModelCapabilityResolver(IModelClassificationService? classification = null,
         ILocalModelProviderResolver? providerResolver = null,
-        IGgufModelCapabilityResolver? gguf = null)
+        IGgufModelCapabilityResolver? gguf = null,
+        FakeModelTrustResolver? trustResolver = null)
     {
         return new ModelCapabilityResolver(classification ?? CreateModelClassificationService(),
             providerResolver ?? CreateLocalModelProviderResolver(),
             gguf ?? CreateGgufModelCapabilityResolver(),
-            new FakeModelTrustResolver());
+            trustResolver ?? new FakeModelTrustResolver());
     }
 
     // The default resolver reports every model as not-a-GGUF (null), so these Ollama-routed regen tests keep their

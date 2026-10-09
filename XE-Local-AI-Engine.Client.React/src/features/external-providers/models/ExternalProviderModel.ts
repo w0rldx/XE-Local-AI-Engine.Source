@@ -28,6 +28,31 @@ export function parseLocality(value: string | null | undefined): ExternalProvide
 	return value !== null && value !== undefined && isLocality(value) ? value : "Cloud";
 }
 
+// The five per-connection cloud grants, one per node-wide `AllowCloudModel*` switch. A grant lets a Cloud connection's
+// models do X without the node-wide switch; it never changes the declared locality. Meaningless while Local.
+export type ExternalProviderCloudGrant = "localData" | "unattendedRuns" | "webTools" | "mcpTools" | "subAgents";
+export type ExternalProviderCloudGrants = Record<ExternalProviderCloudGrant, boolean>;
+
+export const noCloudGrants: ExternalProviderCloudGrants = {
+	localData: false,
+	unattendedRuns: false,
+	webTools: false,
+	mcpTools: false,
+	subAgents: false,
+};
+
+// Fail closed, like the backend: a missing object, or a member that is missing or not literally `true`, is no grant.
+export function parseCloudGrants(value: unknown): ExternalProviderCloudGrants {
+	const source = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+	return {
+		localData: source["localData"] === true,
+		unattendedRuns: source["unattendedRuns"] === true,
+		webTools: source["webTools"] === true,
+		mcpTools: source["mcpTools"] === true,
+		subAgents: source["subAgents"] === true,
+	};
+}
+
 // One editable model row. Numeric fields are held as strings because they are text inputs: a blank string is
 // "unspecified" (the backend then falls back to its own defaults), which a number cannot express.
 export interface ExternalProviderModelDraft {
@@ -51,6 +76,8 @@ export interface ExternalProviderFormValues {
 	displayName: string;
 	baseUrl: string;
 	locality: ExternalProviderLocality;
+	// Kept while the operator flips Trust back and forth; only a Cloud save sends them.
+	cloudGrants: ExternalProviderCloudGrants;
 	// Write-only, like every other stored secret on this node: it loads blank, and a blank field on save means "keep
 	// the stored key" — the request omits `apiKey` entirely. An empty string does NOT clear a key.
 	apiKey: string;

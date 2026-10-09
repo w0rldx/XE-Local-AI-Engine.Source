@@ -172,6 +172,10 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             // visible as a load failure rather than silently repaired into a base the guard never reviewed.
             BaseUrl = new Uri(connection.BaseUrl, UriKind.Absolute),
             Locality = connection.Locality,
+            // A Local connection never carries grants, even from a hand-edited file.
+            CloudGrants = connection.Locality == ExternalProviderLocality.Cloud
+                ? connection.CloudGrants ?? ExternalProviderCloudGrants.None
+                : ExternalProviderCloudGrants.None,
             Timeout = connection.TimeoutSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : null
         };
     }
@@ -339,14 +343,17 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     {
         var noModels = Array.Empty<StoredExternalProviderModel>();
         var noHeaders = Array.Empty<StoredExternalProviderHeader>();
+        // A pre-grants row reads null and a save stores None: the same grants, so no rewrite.
         return left with
                {
                    Models = noModels,
-                   Headers = noHeaders
+                   Headers = noHeaders,
+                   CloudGrants = left.CloudGrants ?? ExternalProviderCloudGrants.None
                } == right with
                {
                    Models = noModels,
-                   Headers = noHeaders
+                   Headers = noHeaders,
+                   CloudGrants = right.CloudGrants ?? ExternalProviderCloudGrants.None
                }
                && left.Models.SequenceEqual(right.Models)
                && left.Headers.SequenceEqual(right.Headers);
@@ -390,6 +397,10 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             DisplayName = displayName,
             BaseUrl = baseUrl.AbsoluteUri,
             Locality = request.Locality,
+            // Stored only where a gate reads it: a Local connection keeps none, so a later flip to Cloud starts closed.
+            CloudGrants = request.Locality == ExternalProviderLocality.Cloud
+                ? request.CloudGrants ?? ExternalProviderCloudGrants.None
+                : ExternalProviderCloudGrants.None,
             TimeoutSeconds = request.TimeoutSeconds,
             // Kept only where it means something: a stale tick carried onto an https or loopback address would otherwise
             // pre-approve plain http the next time the address changes back.
@@ -553,6 +564,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             }
 
             // Schema 2 to 3 is a no-op lift: a schema-2 file has no Headers property, which reads back as an empty list.
+            // Absent CloudGrants read null, which is None: no lift and no bump.
             return new ExternalProviderLoadResult.Loaded(config.SchemaVersion switch
             {
                 < 2 => LiftSchema1(config),

@@ -15,6 +15,10 @@ silently breaks every upload path while every vitest test (msw never sees the re
 `OpenapiTs.config.ts`; `scripts/openapi-check` drift (the regenerated SDK carries no request validators).
 Proposed for: frontend-and-api.md, after "OpenAPI → hey-api is the sole REST data layer for React".
 
+### A substituted trust resolver answers null grants (target: backend-tests.md)
+
+**Rule:** an `IModelTrustResolver` built with `Substitute.For<T>()` returns null from `ResolveCloudGrantsAsync` and `ClassifyCloudGrants` unless configured. Any test whose trust answer is not `Local` must stub both to `ExternalProviderCloudGrants.None` (or use `FakeModelTrustResolver`, which mirrors the real rule), or the gate under test dies with a `NullReferenceException` instead of withholding. **Prevents:** a cloud-path test that crashes before it reaches the gate it pins. **Authority:** `GraphWorkflowAgentHostFixture`, `GraphWorkflowResponseSchemaWarningTests.BuildService`, `ModelTrustResolverTests.FakeModelTrustResolver_AnswersGrantsLikeTheRealResolver`.
+
 ### Monaco `editor.api` ships no contributions: an option for one draws nothing until it is imported
 
 **Rule:** `MonacoRuntime.ts` assembles `monaco-editor/editor/editor.api.js` (core only). Any editor feature that is

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using static GraphWorkflowChatTestSupport;
@@ -210,6 +211,25 @@ public sealed class GraphWorkflowChatAttachmentTests
         {
             AssertEx.Equal("[\"notes.md\"]", skipped, "a withheld file is named, never dropped silently.");
         }
+    }
+
+    /// <summary>A cloud model whose connection grants local data and unattended runs reads the attachments with both node switches off.</summary>
+    [Test]
+    public async Task ACloudModelWhoseConnectionGrantsLocalData_ReadsTheAttachmentsWithTheSwitchesOff()
+    {
+        const string reader = "attachments-granted-cloud-reader";
+        await using var harness = GraphWorkflowHarness.PrivateAgentHost(GraphWorkflowAgentHostFixture.WithRuntimeSettings(StubNodeRuntimeSettings.Create().Build()));
+        var model = GraphWorkflowModels.Grant("graph-cloud-granted-reader", new ExternalProviderCloudGrants { LocalData = true, UnattendedRuns = true });
+        var definitionId = await harness.SeedDefinitionAsync(TwoAgentGraph(reader, "second-after-granted-cloud", model));
+        var conversationId = await CreateConversationAsync(harness.Services);
+        var fileId = await AddTextAsync(harness, conversationId, "notes.md", "LOCAL-NOTES-BODY");
+
+        var runId = await StartAsync(harness.Factory, definitionId, conversationId, "summarize the notes", fileId);
+        await AdvanceUntilCompletedAsync(harness, runId);
+
+        AssertEx.Contains(Prompt(harness, reader), "LOCAL-NOTES-BODY");
+        AssertEx.Null(GraphWorkflowDocuments.Resolve((await harness.ReadNodeRunAsync(runId, "read")).OutputJson, "output.attachmentsSkipped")?.GetRawText(),
+            "a granted file is read, not skipped.");
     }
 
     /// <summary>Start → read (includeAttachments) → other (no flag) → End, in a Chat graph that accepts attachments.</summary>

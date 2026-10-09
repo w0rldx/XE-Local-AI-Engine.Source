@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using System.Runtime.InteropServices;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
 ///     One model's advertised <c>thinking</c> and <c>tools</c> capabilities plus its provider locality, all from a
@@ -35,4 +36,18 @@ public readonly record struct ModelCapabilitySnapshot(bool SupportsThinking, boo
     ///     which is why <c>default</c> leaving it <see langword="false" /> is unobservable.
     /// </remarks>
     public bool ReasoningBudgetEnforceable { get; init; }
+
+    /// <summary>
+    ///     The per-connection cloud grants of a Cloud external model; <see cref="ExternalProviderCloudGrants.None" /> for
+    ///     every other route and for <c>default</c>, so it is never null.
+    /// </summary>
+    /// <remarks>
+    ///     Init-only for the same reason as <see cref="SupportsVision" />. A grant never changes <see cref="IsCloud" />;
+    ///     it only answers for the node-wide switch of its class.
+    /// </remarks>
+    public ExternalProviderCloudGrants CloudGrants
+    {
+        get => field ?? ExternalProviderCloudGrants.None;
+        init;
+    }
 }

@@ -61,6 +61,33 @@ public sealed class ExternalProviderRegistryTests
     }
 
     [Test]
+    public async Task TryResolveAsync_ProjectsGrantsOnlyForACloudConnection()
+    {
+        var grants = new ExternalProviderCloudGrants
+        {
+            LocalData = true,
+            WebTools = true
+        };
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(
+            Connection("cloud-box", models: ["qwen3"], locality: ExternalProviderLocality.Cloud) with
+            {
+                CloudGrants = grants
+            },
+            // A hand-edited file: the save never stores grants on a Local row, and the projection must not honour them.
+            Connection("local-box", models: ["qwen3"]) with
+            {
+                CloudGrants = grants
+            },
+            Connection("legacy-box", models: ["qwen3"], locality: ExternalProviderLocality.Cloud)));
+
+        AssertEx.Equal(grants, AssertEx.NotNull(await registry.TryResolveAsync("ext:cloud-box/qwen3", CancellationToken.None)).Connection.CloudGrants);
+        AssertEx.Equal(ExternalProviderCloudGrants.None,
+            AssertEx.NotNull(await registry.TryResolveAsync("ext:local-box/qwen3", CancellationToken.None)).Connection.CloudGrants);
+        AssertEx.Equal(ExternalProviderCloudGrants.None,
+            AssertEx.NotNull(await registry.TryResolveAsync("ext:legacy-box/qwen3", CancellationToken.None)).Connection.CloudGrants);
+    }
+
+    [Test]
     public async Task TryResolveAsync_WithAMalformedId_ReturnsNull()
     {
         var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("box-a", models: ["qwen3"])));

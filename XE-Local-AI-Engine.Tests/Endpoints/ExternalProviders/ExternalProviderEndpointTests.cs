@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.ExternalProviders;
 
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -47,6 +48,45 @@ public sealed class ExternalProviderEndpointTests
         // The namespaced id is composed server-side so the picker selects exactly what the provider map routes.
         AssertEx.Equal("ext:unsloth-box/qwen3-27b", connection.Models.Single().ModelId);
         AssertEx.False(body.Contains(ApiKey, StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task ListConnections_WhenAStoredLocalRowCarriesGrants_ListsThemAllFalse()
+    {
+        // A hand-edited file: the store only normalizes on save, so the read model must apply the descriptor's rule itself.
+        var config = CreateConfig();
+        var store = Substitute.For<IExternalProviderStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>())
+             .Returns(new StoredExternalProviderConfig
+             {
+                 Revision = config.Revision,
+                 Connections =
+                 [
+                     config.Connections.Single() with
+                     {
+                         CloudGrants = new ExternalProviderCloudGrants
+                         {
+                             LocalData = true,
+                             UnattendedRuns = true,
+                             WebTools = true,
+                             McpTools = true,
+                             SubAgents = true
+                         }
+                     }
+                 ]
+             });
+        await using var factory = CreateFactory(store);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, ConnectionsRoute);
+        using var response = await client.SendAsync(request);
+        var connection = Deserialize<ExternalProviderConnectionsResponse>(await response.Content.ReadAsStringAsync()).Connections.Single();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("Local", connection.Locality);
+        var grants = AssertEx.NotNull(connection.CloudGrants);
+        AssertEx.False(grants.LocalData || grants.UnattendedRuns || grants.WebTools || grants.McpTools || grants.SubAgents,
+            "a Local connection never surfaces grants");
     }
 
     [Test]
@@ -426,6 +466,102 @@ public sealed class ExternalProviderEndpointTests
         AssertEx.True(model.SupportsTools == true);
         AssertEx.True(model.SupportsVision == false);
         AssertEx.Null(model.SupportsReasoning);
+    }
+
+    [Test]
+    public async Task SaveConnection_CarriesCloudGrantsBothWays()
+    {
+        var grants = new ExternalProviderCloudGrants
+        {
+            WebTools = true,
+            SubAgents = true
+        };
+        var administrationService = Substitute.For<IExternalProviderAdministrationService>();
+        var stored = CreateConfig();
+        administrationService.SaveConnectionAsync(Arg.Any<ExternalProviderConnectionSaveRequest>(), Arg.Any<CancellationToken>())
+                             .Returns(new ExternalProviderWriteResult.Committed(stored with
+                             {
+                                 Connections =
+                                 [
+                                     stored.Connections.Single() with
+                                     {
+                                         Locality = ExternalProviderLocality.Cloud,
+                                         CloudGrants = grants
+                                     }
+                                 ]
+                             }, Changed: true));
+        await using var factory = CreateFactory(administrationService: administrationService);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, ConnectionRoute);
+        request.Content = JsonContent.Create(ValidSaveRequest() with
+        {
+            Locality = "Cloud",
+            CloudGrants = new ExternalProviderCloudGrantsRequest
+            {
+                WebTools = true,
+                SubAgents = true
+            }
+        });
+        using var response = await client.SendAsync(request);
+        var returned = (await ReadJsonAsync<ExternalProviderConnectionsResponse>(response)).Connections.Single().CloudGrants;
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await administrationService.Received(1).SaveConnectionAsync(Arg.Is<ExternalProviderConnectionSaveRequest>(saved => saved.CloudGrants == grants),
+            Arg.Any<CancellationToken>());
+        AssertEx.Equal(new ExternalProviderCloudGrantsResponse
+        {
+            LocalData = false,
+            UnattendedRuns = false,
+            WebTools = true,
+            McpTools = false,
+            SubAgents = true
+        }, returned);
+    }
+
+    [Test]
+    public async Task SaveConnection_WithoutCloudGrants_GrantsNoneAndAStoredRowWithoutThemReadsAllFalse()
+    {
+        var administrationService = Substitute.For<IExternalProviderAdministrationService>();
+        administrationService.SaveConnectionAsync(Arg.Any<ExternalProviderConnectionSaveRequest>(), Arg.Any<CancellationToken>())
+                             .Returns(new ExternalProviderWriteResult.Committed(CreateConfig(), Changed: true));
+        await using var factory = CreateFactory(administrationService: administrationService);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, ConnectionRoute);
+        request.Content = JsonContent.Create(ValidSaveRequest());
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await administrationService.Received(1).SaveConnectionAsync(Arg.Is<ExternalProviderConnectionSaveRequest>(saved => saved.CloudGrants == null),
+            Arg.Any<CancellationToken>());
+        // The stored row predates grants (null); the response still carries the object, never null.
+        var returned = Deserialize<ExternalProviderConnectionsResponse>(body).Connections.Single().CloudGrants;
+        AssertEx.NotNull(returned);
+        AssertEx.False(returned.LocalData || returned.UnattendedRuns || returned.WebTools || returned.McpTools || returned.SubAgents);
+    }
+
+    [Test]
+    [Arguments("\"yes\"")]
+    [Arguments("1")]
+    [Arguments("null")]
+    public async Task SaveConnection_WithANonBooleanGrant_Returns400WithoutReachingTheStore(string value)
+    {
+        var administrationService = Substitute.For<IExternalProviderAdministrationService>();
+        await using var factory = CreateFactory(administrationService: administrationService);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, ConnectionRoute);
+        request.Content = new StringContent(
+            $$$"""{"displayName":"Unsloth box","baseUrl":"https://gateway.example.com","locality":"Cloud","models":[],"cloudGrants":{"webTools":{{{value}}}}}""",
+            Encoding.UTF8,
+            "application/json");
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await administrationService.DidNotReceiveWithAnyArgs()
+                                   .SaveConnectionAsync(Arg.Any<ExternalProviderConnectionSaveRequest>(), Arg.Any<CancellationToken>());
     }
 
     private static SaveExternalProviderConnectionRequest ValidSaveRequest()

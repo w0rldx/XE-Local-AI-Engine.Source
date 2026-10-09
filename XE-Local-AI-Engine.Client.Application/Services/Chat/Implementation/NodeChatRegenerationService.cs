@@ -475,13 +475,14 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         // The KB egress gate mirrors attachments: an ORCHESTRATION broadcasts one shared seed to every
         // participant, so a single cloud participant — even under a local root — forces the withhold too.
         var anyCloudParticipant = resolution.Orchestration?.AnyParticipantIsCloud ?? false;
-        var turnReachesCloud = resolution.EffectiveModelIsCloud || anyCloudParticipant;
+        var effectiveModelNeedsSwitch = resolution.EffectiveModelIsCloud && !resolution.EffectiveModelCloudGrants.LocalData;
+        var turnReachesCloud = effectiveModelNeedsSwitch || anyCloudParticipant;
         var knowledgeAllowed = !turnReachesCloud || await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken);
         if (!knowledgeAllowed)
         {
             // Name the model the notice is about: the effective cloud model when that is what reaches the cloud,
             // otherwise the cloud participant whose presence forced the withhold on an otherwise-local root.
-            var cloudModelForNotice = resolution.EffectiveModelIsCloud
+            var cloudModelForNotice = effectiveModelNeedsSwitch
                 ? resolution.EffectiveModel
                 : resolution.Orchestration?.FirstCloudParticipantModel ?? resolution.EffectiveModel;
             await ReportKnowledgeWithheldAsync(cloudModelForNotice, requestId, cancellationToken);

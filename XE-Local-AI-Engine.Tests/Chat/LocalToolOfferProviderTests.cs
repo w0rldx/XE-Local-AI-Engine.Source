@@ -946,7 +946,101 @@ public sealed class LocalToolOfferProviderTests
     private static string FormatWithheld(IReadOnlyList<CloudWithheldTool> withheld) =>
         string.Join(",", withheld.Select(static tool => $"{tool.Switch}:{tool.Name}").Order(StringComparer.Ordinal));
 
-    private static LocalToolOfferProvider CreateSwitchProvider(Func<StubNodeRuntimeSettings, StubNodeRuntimeSettings> configure)
+    private const string GatewayModel = "ext:gateway/qwen3";
+
+    /// <summary>A trust resolver with <see cref="GatewayModel" /> registered on a connection of the given locality and grants.</summary>
+    private static FakeModelTrustResolver Gateway(ExternalProviderLocality locality, ExternalProviderCloudGrants grants) =>
+        new FakeModelTrustResolver().Register("gateway", "qwen3", locality, cloudGrants: grants);
+
+    private static readonly ExternalProviderCloudGrants EveryGrant = new()
+    {
+        LocalData = true,
+        UnattendedRuns = true,
+        WebTools = true,
+        McpTools = true,
+        SubAgents = true
+    };
+
+    [Test]
+    [Arguments("mcp", "mcp,-,-,-,-")]
+    [Arguments("web", "-,web,fetch,-,-")]
+    [Arguments("spawn", "-,-,-,-,spawn")]
+    public async Task GetOfferedToolsForProfileAsync_WhenTheCloudConnectionGrantsOneClass_OffersExactlyItsClassWithEverySwitchOff(string grantName, string expected)
+    {
+        // The grant stands in for the node-wide switch of its class only; every switch stays at its default (off).
+        var grants = grantName switch
+        {
+            "mcp" => new ExternalProviderCloudGrants { McpTools = true },
+            "web" => new ExternalProviderCloudGrants { WebTools = true },
+            _ => new ExternalProviderCloudGrants { SubAgents = true }
+        };
+        var provider = CreateSwitchProvider(static settings => settings, Gateway(ExternalProviderLocality.Cloud, grants));
+
+        var pool = await provider.GetOfferedToolsForProfileAsync(GatewayModel, isCloudModel: true);
+
+        AssertEx.Equal(expected, GatedClasses(pool));
+    }
+
+    [Test]
+    public void GetOfferedTools_WhenTheCloudConnectionGrantsLocalData_OffersTheKnowledgeToolsWithTheSwitchOff()
+    {
+        var trustResolver = Gateway(ExternalProviderLocality.Cloud, new ExternalProviderCloudGrants { LocalData = true });
+        var provider = CreateProvider(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), allowCloudKnowledgeAccess: false, trustResolver, GatewayModel);
+
+        var offered = provider.GetOfferedTools(GatewayModel, isCloudModel: true);
+
+        AssertEx.Contains(offered, tool => tool.Name == KnowledgeSearchToolName);
+        AssertEx.Contains(offered, tool => tool.Name == CoderReadFileToolName);
+    }
+
+    [Test]
+    public async Task GetOfferedToolsForProfileAsync_WhenTheCloudConnectionGrantsEverything_StillWithholdsCommandToolsRunPythonAndAgentHome()
+    {
+        // No grant reaches the remote-execution gates, exactly as no node-wide switch does.
+        var provider = CreateSwitchProvider(static settings => settings, Gateway(ExternalProviderLocality.Cloud, EveryGrant));
+
+        var pool = await provider.GetOfferedToolsForProfileAsync(GatewayModel, isCloudModel: true);
+
+        AssertEx.Equal("mcp,web,fetch,-,spawn", GatedClasses(pool));
+        AssertEx.False(pool.Any(static tool => tool.Name == ComputeToolDefinition.ToolName), "run_python stays withheld with every grant on");
+        AssertEx.False(pool.Any(static tool => tool.Name == AgentHomeToolDefinition.ToolName), "run_in_agent_home stays withheld with every grant on");
+    }
+
+    [Test]
+    public async Task GetCloudWithheldToolsAsync_WhenTheCloudConnectionGrantsMcp_NamesOnlyTheUngrantedClasses()
+    {
+        var provider = CreateSwitchProvider(static settings => settings, Gateway(ExternalProviderLocality.Cloud, new ExternalProviderCloudGrants { McpTools = true }));
+
+        var withheld = await provider.GetCloudWithheldToolsAsync(GatewayModel, isCloudModel: true);
+
+        AssertEx.False(withheld.Any(static tool => tool.Switch == CloudToolSwitch.McpTools), "a granted class must not be named withheld");
+        AssertEx.Contains(withheld, static tool => tool.Switch == CloudToolSwitch.WebTools);
+        AssertEx.Contains(withheld, static tool => tool.Switch == CloudToolSwitch.SubAgents);
+    }
+
+    [Test]
+    public async Task GetCloudWithheldToolsAsync_WhenTheCloudConnectionGrantsEveryToolClass_ReturnsNothing()
+    {
+        var provider = CreateSwitchProvider(static settings => settings, Gateway(ExternalProviderLocality.Cloud, EveryGrant));
+
+        AssertEx.Empty(await provider.GetCloudWithheldToolsAsync(GatewayModel, isCloudModel: true));
+    }
+
+    [Test]
+    public async Task GetOfferedToolsForProfileAsync_WhenALocalConnectionCarriesGrants_OffersExactlyWhatItOffersWithout()
+    {
+        // A Local connection already earns every local privilege; its grants are irrelevant and change nothing.
+        var withGrants = CreateSwitchProvider(static settings => settings, Gateway(ExternalProviderLocality.Local, EveryGrant));
+        var withoutGrants = CreateSwitchProvider(static settings => settings, Gateway(ExternalProviderLocality.Local, ExternalProviderCloudGrants.None));
+
+        var granted = await withGrants.GetOfferedToolsForProfileAsync(GatewayModel, isCloudModel: false);
+        var ungranted = await withoutGrants.GetOfferedToolsForProfileAsync(GatewayModel, isCloudModel: false);
+
+        AssertEx.Equal(string.Join(",", ungranted.Select(static tool => tool.Name)), string.Join(",", granted.Select(static tool => tool.Name)));
+        AssertEx.Contains(granted, static tool => tool.Name == ComputeToolDefinition.ToolName);
+    }
+
+    private static LocalToolOfferProvider CreateSwitchProvider(Func<StubNodeRuntimeSettings, StubNodeRuntimeSettings> configure, FakeModelTrustResolver? trustResolver = null)
     {
         var mcpRegistry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
         mcpRegistry.ReplaceSnapshot([BuildMcpTool(McpForecastToolName)]);
@@ -963,12 +1057,12 @@ public sealed class LocalToolOfferProviderTests
                            .BuildServiceProvider()
                            .GetRequiredService<IServiceScopeFactory>();
         var settings = configure(StubNodeRuntimeSettings.Create()
-                                                        .WithToolCapableModels("qwen3:8b", UnresolvedExternalModel)
+                                                        .WithToolCapableModels("qwen3:8b", UnresolvedExternalModel, GatewayModel)
                                                         .WithWebAccessEnabled(true)
                                                         .WithCustomToolsEnabled(true));
 
-        // An empty registration set: "qwen3:8b" classifies Local, and the ext: id resolves to no connection, which is Unresolved.
-        return new LocalToolOfferProvider(new FakeAgentToolRegistry([]), mcpRegistry, settings.Build(), scopeFactory, new FakeModelTrustResolver());
+        // By default an empty registration set: "qwen3:8b" classifies Local, and an ext: id resolves to no connection, which is Unresolved.
+        return new LocalToolOfferProvider(new FakeAgentToolRegistry([]), mcpRegistry, settings.Build(), scopeFactory, trustResolver ?? new FakeModelTrustResolver());
     }
 
     private static bool IsWebTool(AllowedToolDto tool) =>

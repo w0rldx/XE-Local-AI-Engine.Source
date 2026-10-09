@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -81,6 +82,8 @@ public sealed class GraphWorkflowAgentHostFixture : IAsyncInitializer, IAsyncDis
                 var trust = Substitute.For<IModelTrustResolver>();
                 trust.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(call => LocalityOf(call.ArgAt<string?>(0)));
                 trust.Classify(Arg.Any<string?>()).Returns(call => LocalityOf(call.ArgAt<string?>(0)));
+                trust.ResolveCloudGrantsAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(call => GraphWorkflowModels.GrantsOf(call.ArgAt<string?>(0)));
+                trust.ClassifyCloudGrants(Arg.Any<string?>()).Returns(call => GraphWorkflowModels.GrantsOf(call.ArgAt<string?>(0)));
                 services.RemoveAll<IModelTrustResolver>();
                 services.AddSingleton(trust);
 
@@ -155,6 +158,21 @@ internal static class GraphWorkflowModels
     /// <summary>A name carrying this is cloud-hosted, refused before capacity unless the host lets cloud models run unattended.</summary>
     public const string CloudMarker = "cloud";
 
+    private static readonly ConcurrentDictionary<string, ExternalProviderCloudGrants> Grants = new(StringComparer.Ordinal);
+
+    /// <summary>Puts the cloud <paramref name="model" /> on a connection carrying <paramref name="grants" />. Invent a name per test: the host is shared.</summary>
+    public static string Grant(string model, ExternalProviderCloudGrants grants)
+    {
+        Grants[model] = grants;
+        return model;
+    }
+
+    /// <summary>The connection grants both host seams answer for <paramref name="model" />: what <see cref="Grant" /> registered for a cloud name, else none.</summary>
+    public static ExternalProviderCloudGrants GrantsOf(string? model) =>
+        model is not null && model.Contains(CloudMarker, StringComparison.Ordinal) && Grants.TryGetValue(model, out var grants)
+            ? grants
+            : ExternalProviderCloudGrants.None;
+
     /// <summary>A name carrying this advertises thinking AND an enforceable reasoning budget.</summary>
     public const string ThinkingMarker = "thinking";
 
@@ -205,7 +223,8 @@ internal sealed class FakeGraphWorkflowModelCapabilities : IModelCapabilityResol
             name.Contains(GraphWorkflowModels.CloudMarker, StringComparison.Ordinal))
         {
             ReasoningBudgetEnforceable = thinking,
-            SupportsVision = name.Contains(GraphWorkflowModels.VisionMarker, StringComparison.Ordinal)
+            SupportsVision = name.Contains(GraphWorkflowModels.VisionMarker, StringComparison.Ordinal),
+            CloudGrants = GraphWorkflowModels.GrantsOf(name)
         };
     }
 }

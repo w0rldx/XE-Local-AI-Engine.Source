@@ -16,7 +16,11 @@ import {
 	toProbeRequestBody,
 	toSaveRequestBody,
 } from "@/features/external-providers/models/ExternalProviderFormState";
-import type { ExternalProviderModelDraft } from "@/features/external-providers/models/ExternalProviderModel";
+import {
+	type ExternalProviderCloudGrant,
+	type ExternalProviderModelDraft,
+	noCloudGrants,
+} from "@/features/external-providers/models/ExternalProviderModel";
 
 function storedConnection(overrides: Partial<ExternalProviderConnectionDto> = {}): ExternalProviderConnectionDto {
 	return {
@@ -24,6 +28,7 @@ function storedConnection(overrides: Partial<ExternalProviderConnectionDto> = {}
 		displayName: "Unsloth box",
 		baseUrl: "http://127.0.0.1:8080/v1",
 		locality: "Local",
+		cloudGrants: { ...noCloudGrants },
 		hasApiKey: true,
 		timeoutSeconds: 120,
 		allowInsecureHttp: false,
@@ -119,6 +124,45 @@ describe("toSaveRequestBody — API key contract", () => {
 
 	it("carries the expected revision so a lost race is answered with a 409 rather than a silent overwrite", () => {
 		expect(toSaveRequestBody(connectionToFormValues(storedConnection()), "rev-7").expectedRevision).toBe("rev-7");
+	});
+});
+
+describe("cloud grants", () => {
+	const grants: readonly ExternalProviderCloudGrant[] = ["localData", "unattendedRuns", "webTools", "mcpTools", "subAgents"];
+	const cloud = (): ExternalProviderFormState => stateWith(connectionToFormValues(storedConnection({ locality: "Cloud" })));
+
+	it("loads the stored grants into the editor", () => {
+		const values = connectionToFormValues(
+			storedConnection({ locality: "Cloud", cloudGrants: { ...noCloudGrants, webTools: true, subAgents: true } }),
+		);
+
+		expect(values.cloudGrants).toEqual({ ...noCloudGrants, webTools: true, subAgents: true });
+	});
+
+	it.each(grants)("round-trips the %s switch into a Cloud save request, and back off again", (grant) => {
+		const on = formReducer(cloud(), { type: "setCloudGrant", grant, value: true });
+		expect(toSaveRequestBody(on.values, "rev-1").cloudGrants).toEqual({ ...noCloudGrants, [grant]: true });
+
+		const off = formReducer(on, { type: "setCloudGrant", grant, value: false });
+		expect(toSaveRequestBody(off.values, "rev-1").cloudGrants).toEqual(noCloudGrants);
+	});
+
+	it("sends no grants once Trust is switched to Local, whatever the switches held", () => {
+		const granted = formReducer(cloud(), { type: "setCloudGrant", grant: "mcpTools", value: true });
+		const local = formReducer(granted, { type: "setLocality", value: "Local" });
+
+		expect("cloudGrants" in toSaveRequestBody(local.values, "rev-1")).toBe(false);
+	});
+
+	it("keeps a probe result, because a grant is not part of what the probe tested", () => {
+		const state = cloud();
+		const probed = formReducer(state, {
+			type: "probeSucceeded",
+			fingerprint: probeInputFingerprint(state.values),
+			result: { reachable: true, models: [] },
+		});
+
+		expect(formReducer(probed, { type: "setCloudGrant", grant: "webTools", value: true }).probe).not.toBeNull();
 	});
 });
 

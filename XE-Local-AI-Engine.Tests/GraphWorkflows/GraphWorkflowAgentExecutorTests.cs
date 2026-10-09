@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -384,6 +385,55 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status, analyze.Error);
         AssertEx.Equal(model, harness.Invocations.PackageFor(instructions).ModelProfile);
         AssertEx.True(Runtimes(harness).CallFor(model).ActiveModelIsCloud, "the offer and the playbook gate must see the real locality, never a hard-coded false.");
+    }
+
+    [Test]
+    public async Task ACloudEffectiveModel_RunsWithTheSwitchOffWhenItsConnectionGrantsUnattendedRuns()
+    {
+        const string instructions = "cloud-granted";
+        var model = GraphWorkflowModels.Grant("graph-cloud-granted", new ExternalProviderCloudGrants { UnattendedRuns = true });
+        await using var harness = new GraphWorkflowHarness(Host);
+        var agentDefinitionId = await SeedAgentAsync(harness, model);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, $$"""
+                                                                              , "agentDefinitionId": "{{agentDefinitionId}}"
+                                                                              """));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status, analyze.Error);
+        AssertEx.True(Runtimes(harness).CallFor(model).ActiveModelIsCloud, "a grant never changes locality.");
+    }
+
+    [Test]
+    public async Task ACloudEffectiveModel_IsStillRefusedWhenItsConnectionGrantsEveryOtherClass()
+    {
+        const string instructions = "cloud-wrong-grants";
+        var model = GraphWorkflowModels.Grant("graph-cloud-wrong-grants",
+            new ExternalProviderCloudGrants { LocalData = true, WebTools = true, McpTools = true, SubAgents = true });
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await StartToTheAgentAsync(harness, Graph(instructions, $$"""
+                                                                              , "model": "{{model}}"
+                                                                              """));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass, "no other class's grant stands in for unattended runs.");
+        AssertEx.Contains(analyze.Error, "Node Settings → Privacy & updates");
+        AssertEx.Empty(Capacity(harness).ReservationsFor(model));
+    }
+
+    [Test]
+    public async Task ALlmCall_OnACloudModel_RunsWithTheSwitchOffWhenItsConnectionGrantsUnattendedRuns()
+    {
+        const string prompt = "llm-cloud-granted";
+        var model = GraphWorkflowModels.Grant("llm-cloud-granted-model", new ExternalProviderCloudGrants { UnattendedRuns = true });
+        await using var harness = new GraphWorkflowHarness(Host);
+        var runId = await StartToTheAgentAsync(harness, LlmGraph($$"""{ "prompt": "{{prompt}}", "model": "{{model}}" }"""));
+
+        var analyze = await AdvanceUntilTerminalAsync(harness, runId);
+
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Succeeded, analyze.Status, analyze.Error);
+        AssertEx.False(harness.Invocations.PackageFor(prompt).RequireNodeManagedLlama, "a grant never makes a cloud model node-managed.");
     }
 
     [Test]

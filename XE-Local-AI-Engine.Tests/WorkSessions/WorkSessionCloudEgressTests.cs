@@ -1,9 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -83,6 +87,65 @@ public sealed class WorkSessionCloudEgressTests
                                  });
 
         AssertEx.Equal(cloudAgentId, updated.AgentDefinitionId, "The operator's opt-in is the one thing that makes this egress intentional.");
+    }
+
+    [Test]
+    public async Task Update_WhenTheCloudModelsConnectionGrantsLocalData_AllowsTheRepointWithTheSwitchOff()
+    {
+        await using var factory = CloudGrantsFactory(new ExternalProviderCloudGrants { LocalData = true });
+        var sessionId = Guid.NewGuid();
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        await RecordAFindingAsync(factory, sessionId);
+        var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model");
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var updated = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
+                                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel
+                                 {
+                                     Title = null,
+                                     Objective = null,
+                                     AgentDefinitionId = cloudAgentId
+                                 });
+
+        AssertEx.Equal(cloudAgentId, updated.AgentDefinitionId, "The connection's local-data grant stands in for the node-wide opt-in.");
+    }
+
+    [Test]
+    public async Task Update_WhenTheCloudModelsConnectionGrantsEveryOtherClass_IsStillRefusedWithTheSwitchOff()
+    {
+        await using var factory = CloudGrantsFactory(new ExternalProviderCloudGrants { UnattendedRuns = true, WebTools = true, McpTools = true, SubAgents = true });
+        var sessionId = Guid.NewGuid();
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
+        await RecordAFindingAsync(factory, sessionId);
+        var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model");
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var refusal = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
+            scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
+                 .UpdateAsync(sessionId, new UpdateWorkSessionRequestModel
+                 {
+                     Title = null,
+                     Objective = null,
+                     AgentDefinitionId = cloudAgentId
+                 }));
+
+        AssertEx.Contains(refusal.Message, "send them off the node");
+    }
+
+    /// <summary>A private host whose every model is cloud on a connection carrying <paramref name="grants" />; AllowCloudModelAccess stays off.</summary>
+    private static TestServerWebAppFactory CloudGrantsFactory(ExternalProviderCloudGrants grants)
+    {
+        var capabilities = Substitute.For<IModelCapabilityResolver>();
+        capabilities.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                    .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true)
+                    {
+                        CloudGrants = grants
+                    });
+        return WorkSessionServiceTests.NewFactory(services =>
+        {
+            services.RemoveAll<IModelCapabilityResolver>();
+            services.AddSingleton(capabilities);
+        });
     }
 
     [Test]

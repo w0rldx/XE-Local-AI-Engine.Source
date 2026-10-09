@@ -35617,6 +35617,55 @@
         "type": "object",
         "additionalProperties": false
       },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderCloudGrantsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "localData": {
+            "type": "boolean"
+          },
+          "unattendedRuns": {
+            "type": "boolean"
+          },
+          "webTools": {
+            "type": "boolean"
+          },
+          "mcpTools": {
+            "type": "boolean"
+          },
+          "subAgents": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderCloudGrantsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "localData",
+          "unattendedRuns",
+          "webTools",
+          "mcpTools",
+          "subAgents"
+        ],
+        "properties": {
+          "localData": {
+            "type": "boolean"
+          },
+          "unattendedRuns": {
+            "type": "boolean"
+          },
+          "webTools": {
+            "type": "boolean"
+          },
+          "mcpTools": {
+            "type": "boolean"
+          },
+          "subAgents": {
+            "type": "boolean"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -35625,6 +35674,7 @@
           "displayName",
           "baseUrl",
           "locality",
+          "cloudGrants",
           "hasApiKey",
           "allowInsecureHttp",
           "insecureTransport"
@@ -35641,6 +35691,9 @@
           },
           "locality": {
             "type": "string"
+          },
+          "cloudGrants": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderCloudGrantsResponse"
           },
           "hasApiKey": {
             "type": "boolean"
@@ -35871,6 +35924,14 @@
           "locality": {
             "type": "string",
             "nullable": true
+          },
+          "cloudGrants": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderCloudGrantsRequest"
+              }
+            ]
           },
           "apiKey": {
             "type": "string",

@@ -22,6 +22,26 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class ModelTrustResolverTests
 {
+    private static readonly ExternalProviderCloudGrants GrantedCloud = new()
+    {
+        McpTools = true,
+        SubAgents = true
+    };
+
+    // Every kind of id that must answer None: a Local connection with hand-edited grants, a deleted connection, a
+    // malformed id, a case-variant scheme, Azure, Codex, a node-local model, and no model.
+    private static readonly string?[] GrantlessIds =
+    [
+        "ext:local-box/qwen3",
+        "ext:gone/qwen3",
+        "ext:not-an-id",
+        "EXT:cloud-box/qwen3",
+        "azure-gpt",
+        "gpt-5.5",
+        "qwen3-27b.gguf",
+        null
+    ];
+
     [Test]
     public async Task ResolveAsync_ForADeclaredLocalExternalModel_IsLocal()
     {
@@ -213,6 +233,93 @@ public sealed class ModelTrustResolverTests
         // The two paths must never disagree: one gates the send, the other gates the tools offered to that same send.
         AssertEx.Equal(await resolver.ResolveAsync("ext:local-box/qwen3"), resolver.ClassifyExternalCached("ext:local-box/qwen3")!.Value);
         AssertEx.Equal(await resolver.ResolveAsync("ext:cloud-box/qwen3"), resolver.ClassifyExternalCached("ext:cloud-box/qwen3")!.Value);
+    }
+
+    [Test]
+    public async Task ResolveCloudGrantsAsync_AnswersOnlyForACloudExternalConnection()
+    {
+        var resolver = await BuildPrimedAsync();
+
+        AssertEx.Equal(GrantedCloud, await resolver.ResolveCloudGrantsAsync("ext:cloud-box/qwen3"));
+        foreach (var modelId in GrantlessIds)
+        {
+            AssertEx.Equal(ExternalProviderCloudGrants.None, await resolver.ResolveCloudGrantsAsync(modelId), $"'{modelId}'");
+        }
+    }
+
+    [Test]
+    public async Task ClassifyCloudGrants_AgreesWithResolveCloudGrantsAsync_ForEveryKindOfId()
+    {
+        var resolver = await BuildPrimedAsync();
+
+        // One feeds the tool offer, the other the gates with an async boundary: they must never disagree.
+        foreach (var modelId in GrantlessIds.Append("ext:cloud-box/qwen3"))
+        {
+            AssertEx.Equal(await resolver.ResolveCloudGrantsAsync(modelId), resolver.ClassifyCloudGrants(modelId), $"'{modelId}'");
+        }
+    }
+
+    [Test]
+    public void ClassifyCloudGrants_WithAColdCache_IsNone()
+    {
+        var registryCache = Substitute.For<IExternalProviderRegistryCache>();
+        _ = registryCache.TryClassifyCached(Arg.Any<string>(), out Arg.Any<ExternalProviderModelRegistration?>()).Returns(false);
+        var resolver = new ModelTrustResolver(new FakeExternalProviderRegistry(),
+            registryCache,
+            Substitute.For<IActiveCloudChatClientFactory>(),
+            NullLogger<ModelTrustResolver>.Instance);
+
+        AssertEx.Equal(ExternalProviderCloudGrants.None, resolver.ClassifyCloudGrants("ext:cloud-box/qwen3"));
+    }
+
+    [Test]
+    public async Task ResolveCloudGrantsAsync_WhenTheRegistryThrows_IsNone()
+    {
+        var registry = Substitute.For<IExternalProviderRegistry>();
+        _ = registry.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                    .Returns<Task<ExternalProviderModelRegistration?>>(_ => throw new IOException("the store is unreadable"));
+        var resolver = new ModelTrustResolver(registry,
+            Substitute.For<IExternalProviderRegistryCache>(),
+            Substitute.For<IActiveCloudChatClientFactory>(),
+            NullLogger<ModelTrustResolver>.Instance);
+
+        AssertEx.Equal(ExternalProviderCloudGrants.None, await resolver.ResolveCloudGrantsAsync(ExternalProviderTestData.ModelId));
+    }
+
+    [Test]
+    public async Task FakeModelTrustResolver_AnswersGrantsLikeTheRealResolver()
+    {
+        var real = await BuildPrimedAsync();
+        var fake = new FakeModelTrustResolver().Register("cloud-box", "qwen3", ExternalProviderLocality.Cloud, cloudGrants: GrantedCloud)
+                                               .Register("local-box", "qwen3", cloudGrants: GrantedCloud);
+
+        // The fake stands in for the resolver in every gate test, so its grant rule must be the production one.
+        foreach (var modelId in new[] { "ext:cloud-box/qwen3", "ext:local-box/qwen3", "ext:gone/qwen3", "ext:not-an-id", "gpt-5.5", "qwen3-27b.gguf", null })
+        {
+            var expected = await real.ResolveCloudGrantsAsync(modelId);
+            AssertEx.Equal(expected, await fake.ResolveCloudGrantsAsync(modelId), $"'{modelId}'");
+            AssertEx.Equal(expected, fake.ClassifyCloudGrants(modelId), $"'{modelId}'");
+        }
+
+        fake.CacheIsCold = true;
+        AssertEx.Equal(ExternalProviderCloudGrants.None, fake.ClassifyCloudGrants("ext:cloud-box/qwen3"));
+    }
+
+    private static async Task<ModelTrustResolver> BuildPrimedAsync()
+    {
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(
+            ExternalProviderRegistryTests.Connection("local-box", ["qwen3"]) with
+            {
+                CloudGrants = GrantedCloud
+            },
+            ExternalProviderRegistryTests.Connection("cloud-box", ["qwen3"], locality: ExternalProviderLocality.Cloud) with
+            {
+                CloudGrants = GrantedCloud
+            }));
+        await registry.PrimeAsync();
+        var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
+        _ = cloudFactory.IsCloudProviderSelected("azure-gpt").Returns(true);
+        return new ModelTrustResolver(registry, registry, cloudFactory, NullLogger<ModelTrustResolver>.Instance);
     }
 
     private static ModelTrustResolver Build(out IActiveCloudChatClientFactory cloudFactory, ExternalProviderLocality locality)

@@ -91,13 +91,17 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         var pinnedModel = honorModelProfile ? definition.ModelProfile : null;
         var effectiveModel = pinnedModel ?? activeModelId;
 
-        // Gate the knowledge tools on the EFFECTIVE model's locality, never the turn's active one, or a cloud-pinned
-        // agent keeps them on a local turn. With no pin the effective model IS the active one: reuse the caller's flag.
-        var effectiveModelIsCloud = pinnedModel is null
-            ? activeModelIsCloud
-            : (await _modelCapabilityResolver.ResolveAsync(pinnedModel, cancellationToken)).IsCloud;
+        // Gate on the EFFECTIVE model's locality, never the active one's, or a cloud pin keeps the knowledge tools on a local
+        // turn. Unpinned, the caller's flag stands; a cloud effective model is resolved for its connection's grants.
+        var effectiveCapabilities = pinnedModel is null && !activeModelIsCloud
+            ? default
+            : await _modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
+        var effectiveModelIsCloud = pinnedModel is null ? activeModelIsCloud : effectiveCapabilities.IsCloud;
         var allowedTools = await ProjectAllowedToolsAsync(definition, effectiveModel, supportsTools, effectiveModelIsCloud, cancellationToken);
-        var (resolvedPrompt, playbookWithheld) = await ComposePromptAsync(definition, retrievalQuery, effectiveModelIsCloud, cancellationToken);
+        var (resolvedPrompt, playbookWithheld) = await ComposePromptAsync(definition,
+            retrievalQuery,
+            effectiveModelIsCloud && !effectiveCapabilities.CloudGrants.LocalData,
+            cancellationToken);
         var skills = await ResolveSkillsAsync(definition, cancellationToken);
         var customTools = await ResolveCustomToolsAsync(allowedTools, cancellationToken);
         var cloudWithheldTools = supportsTools
@@ -329,10 +333,10 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     ///     blank scaffold resource, skips the prepend entirely, so its resolved prompt and config hash are
     ///     byte-identical to the persona-only path.
     /// </remarks>
-    private async Task<ComposedPrompt> ComposePromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, bool effectiveModelIsCloud,
+    private async Task<ComposedPrompt> ComposePromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, bool localDataNeedsCloudSwitch,
         CancellationToken cancellationToken)
     {
-        var (personaPrompt, playbookWithheld) = await ComposePersonaPromptAsync(definition, retrievalQuery, effectiveModelIsCloud, cancellationToken);
+        var (personaPrompt, playbookWithheld) = await ComposePersonaPromptAsync(definition, retrievalQuery, localDataNeedsCloudSwitch, cancellationToken);
         var prompt = definition.DisableBaseScaffold
             ? personaPrompt
             : BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), personaPrompt);
@@ -345,13 +349,13 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     ///     Folds the definition's enabled playbook actions into its prompt when the playbook is enabled.
     /// </summary>
     /// <remarks>
-    ///     Disabled, or withheld from a cloud effective model without the <c>AllowCloudModelAccess</c> node setting
+    ///     Disabled, or withheld from a cloud effective model whose connection grants no local data, without the <c>AllowCloudModelAccess</c> node setting
     ///     (playbook memory is node-local data learned from conversations, gated like knowledge), the query is skipped
     ///     entirely and the base Instructions flow through unchanged, keeping prompt and config hash byte-identical. Above the retrieval threshold with a non-blank
     ///     <paramref name="retrievalQuery" /> only the top-k most relevant actions are injected; at or below it, or
     ///     with a blank query, the budget-capped static prepend keeps a within-budget prompt byte-identical as well.
     /// </remarks>
-    private async Task<ComposedPrompt> ComposePersonaPromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, bool effectiveModelIsCloud,
+    private async Task<ComposedPrompt> ComposePersonaPromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, bool localDataNeedsCloudSwitch,
         CancellationToken cancellationToken)
     {
         if (!definition.PlaybookEnabled)
@@ -359,7 +363,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             return new ComposedPrompt(definition.Instructions, false);
         }
 
-        if (effectiveModelIsCloud && !await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken))
+        if (localDataNeedsCloudSwitch && !await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken))
         {
             // Withheld only when there IS enabled memory to withhold, so an empty playbook raises no PlaybookWithheld notice.
             var withheld = (await _playbookActionStore.ListEnabledByAgentAsync(definition.Id, cancellationToken)).Count > 0;

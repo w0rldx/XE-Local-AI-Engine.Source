@@ -26,6 +26,7 @@ internal static class ExternalProviderTestData
             DisplayName = "Unsloth box",
             BaseUrl = new Uri(baseUrl, UriKind.Absolute),
             Locality = locality,
+            CloudGrants = ExternalProviderCloudGrants.None,
             Timeout = TimeSpan.FromMinutes(2)
         };
     }

@@ -206,7 +206,8 @@ public sealed class LocalModelExternalEndpointTests
                 Id = "unsloth-box",
                 DisplayName = "Unsloth box",
                 BaseUrl = new Uri("http://127.0.0.1:18099/v1/"),
-                Locality = ExternalProviderLocality.Local
+                Locality = ExternalProviderLocality.Local,
+                CloudGrants = ExternalProviderCloudGrants.None
             },
             Model = new ExternalProviderModelDescriptor
             {

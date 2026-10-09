@@ -169,6 +169,12 @@ search and page fetches.
 
   No switch lets a cloud model run Python, AgentHome commands or command custom tools on your
   computer, and none changes Development Mode's own rules.
+
+  If you trust one external connection (for example a private AI gateway your organization runs), you can
+  grant just that connection some of these permissions instead. Declare it as Cloud in its editor, then
+  switch on the ones you want under **Cloud permissions for this connection**. The five switches above stay
+  off for every other cloud model, and the same hard limits apply: a grant never lets a model run Python,
+  AgentHome commands or command custom tools on your computer.
 - **MCP servers you register.** An MCP server is a **separate program**, usually written by someone
   else, that the app launches. It runs **as you, with your permissions** — the same boundary as
   Development Mode, and with the same consequence: registering one is trusting its author with your

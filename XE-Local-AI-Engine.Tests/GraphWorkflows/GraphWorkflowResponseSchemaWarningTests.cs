@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Tools;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -193,6 +194,19 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
             "with the switch on the run would proceed, so validation must not call the node unrunnable.");
     }
 
+    [Test]
+    public async Task ValidateAsync_WhenAnLlmCallPinsACloudModelWhoseConnectionGrantsUnattendedRuns_DoesNotWarnWithTheSwitchOff()
+    {
+        var providers = Substitute.For<ILocalModelProviderResolver>();
+        providers.ResolveProviderNameForModelAsync(CloudRoutedModel, Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult("external"));
+
+        var result = await BuildService(providers, locality: ModelTrustLocality.Cloud, grants: new ExternalProviderCloudGrants { UnattendedRuns = true })
+            .ValidateAsync(LlmCallGraph(CloudRoutedModel));
+
+        AssertEx.Empty(result.Warnings.Where(warning => warning.Key == "analyze" && !warning.Message.Contains("maxLength", StringComparison.Ordinal)),
+            "the executor admits the node under the grant, so validation must not call it unrunnable.");
+    }
+
     /// <summary>An unpinned LLM call runs the node default, unknown here, so there is nothing to warn about.</summary>
     [Test]
     public async Task ValidateAsync_WhenAnLlmCallPinsNoModel_DoesNotWarn()
@@ -216,10 +230,12 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
     private static IGraphWorkflowDefinitionService BuildService(ILocalModelProviderResolver providers,
         IGgufModelStore? ggufModels = null,
         ModelTrustLocality locality = ModelTrustLocality.Local,
-        bool allowCloudUnattendedRuns = false)
+        bool allowCloudUnattendedRuns = false,
+        ExternalProviderCloudGrants? grants = null)
     {
         var trust = Substitute.For<IModelTrustResolver>();
         trust.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(locality);
+        trust.ResolveCloudGrantsAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(grants ?? ExternalProviderCloudGrants.None);
         return new GraphWorkflowDefinitionService(Substitute.For<IGraphWorkflowStore>(),
             Substitute.For<IToolInvocationService>(), StubNodeRuntimeSettings.Create().WithAllowCloudModelUnattendedRuns(allowCloudUnattendedRuns).Build(),
             providers,

@@ -44,6 +44,9 @@ public sealed record ExternalProviderConnectionResponse
     /// <summary>The declared trust locality as the <see cref="ExternalProviderLocality" /> enum name (<c>Local</c> | <c>Cloud</c>).</summary>
     public required string Locality { get; init; }
 
+    /// <summary>The per-connection cloud grants; all false unless <see cref="Locality" /> is <c>Cloud</c>.</summary>
+    public required ExternalProviderCloudGrantsResponse CloudGrants { get; init; }
+
     /// <summary>
     ///     True when an API key is stored for this connection. The key itself is NEVER returned; the editor renders a
     ///     placeholder from this flag and sends nothing back unless the operator types a new key.
@@ -67,6 +70,44 @@ public sealed record ExternalProviderConnectionResponse
 
     /// <summary>The custom request headers. A secret header's value is never returned.</summary>
     public IReadOnlyList<ExternalProviderHeaderResponse> Headers { get; init; } = [];
+}
+
+/// <summary>A connection's grants of the five cloud permissions, each standing in for its node-wide <c>AllowCloudModel*</c> switch.</summary>
+public sealed record ExternalProviderCloudGrantsResponse
+{
+    /// <summary>Node-local data: knowledge, attachments and file tools.</summary>
+    public required bool LocalData { get; init; }
+
+    /// <summary>Scheduled, graph and integration runs.</summary>
+    public required bool UnattendedRuns { get; init; }
+
+    /// <summary>The web tools.</summary>
+    public required bool WebTools { get; init; }
+
+    /// <summary>MCP tools.</summary>
+    public required bool McpTools { get; init; }
+
+    /// <summary>Sub-agent spawning.</summary>
+    public required bool SubAgents { get; init; }
+}
+
+/// <summary>The cloud grants on a save. An absent member is false; the server ignores grants on a Local connection.</summary>
+public sealed record ExternalProviderCloudGrantsRequest
+{
+    /// <summary>Node-local data: knowledge, attachments and file tools.</summary>
+    public bool LocalData { get; init; }
+
+    /// <summary>Scheduled, graph and integration runs.</summary>
+    public bool UnattendedRuns { get; init; }
+
+    /// <summary>The web tools.</summary>
+    public bool WebTools { get; init; }
+
+    /// <summary>MCP tools.</summary>
+    public bool McpTools { get; init; }
+
+    /// <summary>Sub-agent spawning.</summary>
+    public bool SubAgents { get; init; }
 }
 
 /// <summary>One stored custom request header as the editor reads it.</summary>
@@ -174,6 +215,9 @@ public sealed record SaveExternalProviderConnectionRequest
 
     /// <summary>The declared trust locality as a case-insensitive <see cref="ExternalProviderLocality" /> enum name.</summary>
     public string? Locality { get; init; }
+
+    /// <summary>The cloud grants. Absent grants none; ignored unless <see cref="Locality" /> is <c>Cloud</c>.</summary>
+    public ExternalProviderCloudGrantsRequest? CloudGrants { get; init; }
 
     /// <summary>
     ///     A NEW API key. ABSENT or blank means "keep whatever is stored" — the masked editor sends no key back, so

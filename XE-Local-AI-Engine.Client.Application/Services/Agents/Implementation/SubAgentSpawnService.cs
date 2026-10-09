@@ -135,8 +135,10 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         }
 
         // Trust guard at the SERVICE seam (an AllowedToolNames list, a pinned definition or a direct caller bypass the offer gate): delegation is egress, so a parent
-        // that may not read node-local data may not obtain it via a child, unless the operator allows cloud models to delegate. A null root model reads Local.
-        if (await _modelTrustResolver.ResolveAsync(context?.RootModelId, ct) != ModelTrustLocality.Local && !await _runtimeSettings.GetAllowCloudModelSubAgentsAsync(ct))
+        // that may not read node-local data may not obtain it via a child, unless the root's connection or the node allows cloud models to delegate. A null root model reads Local.
+        if (await _modelTrustResolver.ResolveAsync(context?.RootModelId, ct) != ModelTrustLocality.Local
+            && !(await _modelTrustResolver.ResolveCloudGrantsAsync(context?.RootModelId, ct)).SubAgents
+            && !await _runtimeSettings.GetAllowCloudModelSubAgentsAsync(ct))
         {
             return ReasonParentOutsideTrustBoundary;
         }

@@ -48,6 +48,7 @@ function connection(overrides: Partial<ExternalProviderConnectionDto> = {}): Ext
 		displayName: "Unsloth box",
 		baseUrl: "http://127.0.0.1:8080/v1",
 		locality: "Local",
+		cloudGrants: { localData: false, unattendedRuns: false, webTools: false, mcpTools: false, subAgents: false },
 		hasApiKey: true,
 		timeoutSeconds: 120,
 		allowInsecureHttp: false,
@@ -178,6 +179,78 @@ describe("ExternalProviders page", () => {
 		});
 
 		expect(screen.getByTestId("external-provider-locality-warning")).toBeTruthy();
+	});
+
+	it("shows the cloud permissions block only while Trust is Cloud, and a Local save sends no grants", async () => {
+		await openStoredEditor();
+
+		expect(screen.queryByTestId("external-provider-cloud-grants")).toBeNull();
+		fireEvent.click(screen.getByLabelText("Cloud (hosted)"));
+		expect(screen.getByText("Cloud permissions for this connection")).toBeTruthy();
+		expect(screen.getByText("Let this connection's models use MCP tools")).toBeTruthy();
+		expect(
+			screen.getByText(
+				"Applies to this connection only; the node-wide “Let cloud models use MCP tools” switch is not needed for it.",
+			),
+		).toBeTruthy();
+
+		fireEvent.click(screen.getByTestId("external-provider-cloud-grant-mcpTools"));
+		fireEvent.click(screen.getByLabelText("Local (self-hosted)"));
+		expect(screen.queryByTestId("external-provider-cloud-grants")).toBeNull();
+		fireEvent.click(screen.getByTestId("external-provider-save"));
+
+		await waitFor(() => expect(generatedMock.saveFn).toHaveBeenCalledTimes(1));
+		const [call] = generatedMock.saveFn.mock.calls[0] as [{ body: Record<string, unknown> }];
+		expect(call.body["locality"]).toBe("Local");
+		expect("cloudGrants" in call.body).toBe(false);
+	});
+
+	it("loads a Cloud connection's stored grants into the switches and saves the edited set", async () => {
+		generatedMock.listFn.mockResolvedValue({
+			revision: "rev-1",
+			connections: [
+				connection({
+					locality: "Cloud",
+					cloudGrants: { localData: false, unattendedRuns: false, webTools: true, mcpTools: false, subAgents: false },
+				}),
+			],
+		});
+		await openStoredEditor();
+
+		expect((screen.getByTestId("external-provider-cloud-grant-webTools") as HTMLInputElement).checked).toBe(true);
+		expect((screen.getByTestId("external-provider-cloud-grant-localData") as HTMLInputElement).checked).toBe(false);
+		fireEvent.click(screen.getByTestId("external-provider-cloud-grant-localData"));
+		fireEvent.click(screen.getByTestId("external-provider-cloud-grant-webTools"));
+		fireEvent.click(screen.getByTestId("external-provider-save"));
+
+		await waitFor(() => expect(generatedMock.saveFn).toHaveBeenCalledTimes(1));
+		const [call] = generatedMock.saveFn.mock.calls[0] as [{ body: Record<string, unknown> }];
+		expect(call.body["cloudGrants"]).toEqual({
+			localData: true,
+			unattendedRuns: false,
+			webTools: false,
+			mcpTools: false,
+			subAgents: false,
+		});
+	});
+
+	it("counts a connection's grants in a list badge, and shows none without a grant", async () => {
+		generatedMock.listFn.mockResolvedValue({
+			revision: "rev-1",
+			connections: [
+				connection({
+					id: "gateway",
+					locality: "Cloud",
+					cloudGrants: { localData: false, unattendedRuns: true, webTools: true, mcpTools: false, subAgents: false },
+				}),
+				connection({ id: "plain-cloud", locality: "Cloud" }),
+			],
+		});
+		renderPage();
+
+		await waitFor(() => expect(screen.getByTestId("external-provider-grants-gateway")).toBeTruthy());
+		expect(screen.getByTestId("external-provider-grants-gateway").textContent).toBe("2 grants");
+		expect(screen.queryByTestId("external-provider-grants-plain-cloud")).toBeNull();
 	});
 
 	it("offers the insecure-HTTP opt-in only for an http address, and sends it on save and probe once ticked", async () => {

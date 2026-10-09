@@ -59,6 +59,12 @@ public sealed record StoredExternalProviderConnection
     /// <summary>The operator-declared trust locality driving every downstream gate.</summary>
     public required ExternalProviderLocality Locality { get; init; }
 
+    /// <summary>
+    ///     The operator's cloud-permission grants. Absent in a file written before them, so <see langword="null" /> reads
+    ///     <see cref="ExternalProviderCloudGrants.None" />; the save stores None for a Local connection.
+    /// </summary>
+    public ExternalProviderCloudGrants? CloudGrants { get; init; }
+
     /// <summary>Per-connection network timeout in seconds, or <see langword="null" /> for the transport default.</summary>
     public int? TimeoutSeconds { get; init; }
 
@@ -84,6 +90,7 @@ public sealed record StoredExternalProviderConnection
         builder.Append(", BaseUrl = ").Append(BaseUrl);
         builder.Append(", ApiKey = ").Append(ApiKey is null ? "null" : "[REDACTED]");
         builder.Append(", Locality = ").Append(Locality);
+        builder.Append(", CloudGrants = ").Append(CloudGrants);
         builder.Append(", TimeoutSeconds = ").Append(TimeoutSeconds);
         builder.Append(", AllowInsecureHttp = ").Append(AllowInsecureHttp);
         builder.Append(", Models = ").Append(Models.Count);
@@ -141,6 +148,7 @@ public static class ExternalProviderStoreSchema
     ///     The schema version this build writes. Version 2 made the model capability flags tri-state (a version-1 file is
     ///     lifted on read); version 3 added custom headers, so an older build refuses a file that carries them.
     /// </summary>
+    /// <remarks>Cloud grants added no version: an older build ignores them, which only withholds more.</remarks>
     public const int CurrentVersion = 3;
 
     /// <summary>Upper bound on configured connections — a guard against a hand-edited or corrupted payload, not a product limit.</summary>

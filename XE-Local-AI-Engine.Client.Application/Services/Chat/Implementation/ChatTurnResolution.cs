@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>The up-front per-turn resolution shared by placeholder/variant stamping and runtime-package construction.</summary>
 internal sealed class ChatTurnResolution
@@ -25,6 +26,9 @@ internal sealed class ChatTurnResolution
     public required bool ActiveModelIsCloud { get; init; }
 
     public required bool EffectiveModelIsCloud { get; init; }
+
+    /// <summary>The effective model's per-connection cloud grants; never changes <see cref="EffectiveModelIsCloud" />.</summary>
+    public ExternalProviderCloudGrants EffectiveModelCloudGrants { get; init; } = ExternalProviderCloudGrants.None;
 
     public bool ReasoningBudgetEnforceable { get; init; } = true;
 

@@ -621,8 +621,9 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     /// </remarks>
     private async Task<bool> AreAttachmentsAllowedAsync(ChatTurnResolution resolution, CancellationToken cancellationToken)
     {
+        // A connection's local-data grant covers only its own model: a cloud participant still forces the shared-seed withhold.
         var anyCloudParticipant = resolution.Orchestration?.AnyParticipantIsCloud ?? false;
-        var turnReachesCloud = resolution.EffectiveModelIsCloud || anyCloudParticipant;
+        var turnReachesCloud = (resolution.EffectiveModelIsCloud && !resolution.EffectiveModelCloudGrants.LocalData) || anyCloudParticipant;
         return !turnReachesCloud || await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken);
     }
 
@@ -696,7 +697,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
 
         // Name the model the notice is about: the orchestrator's own cloud model when that is what reaches the
         // cloud, otherwise the cloud participant whose presence forced the withhold on an otherwise-local root.
-        var cloudModelForNotice = resolution.EffectiveModelIsCloud
+        var cloudModelForNotice = resolution.EffectiveModelIsCloud && !resolution.EffectiveModelCloudGrants.LocalData
             ? resolution.EffectiveModel
             : resolution.Orchestration?.FirstCloudParticipantModel ?? resolution.EffectiveModel;
         await ReportAttachmentsWithheldIfPresentAsync(request, cloudModelForNotice, requestId, cancellationToken);

@@ -384,7 +384,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             // 3. LOCALITY GATE. Classified on the EFFECTIVE model and refused before capacity and before any invocation: a graph workflow run is
             //    unattended by construction, so its content reaches a cloud model only while the operator lets cloud models run unattended.
             var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, cancellationToken);
-            if (capabilities.IsCloud && !await services.GetRequiredService<INodeRuntimeSettings>().GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
+            if (capabilities.IsCloud && !capabilities.CloudGrants.UnattendedRuns
+                                     && !await services.GetRequiredService<INodeRuntimeSettings>().GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
             {
                 _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
                     runId,
@@ -541,7 +542,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                     return Invalid($"Graph workflow {callName} nodes require a model classified for chat.");
                 }
             }
-            else if (!await services.GetRequiredService<INodeRuntimeSettings>().GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
+            else if (!(await services.GetRequiredService<IModelTrustResolver>().ResolveCloudGrantsAsync(effectiveModel, cancellationToken)).UnattendedRuns
+                     && !await services.GetRequiredService<INodeRuntimeSettings>().GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
             {
                 _logger.LogInformation("Graph workflow run {RunId} refused node '{NodeKey}': its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
                     runId,
@@ -1082,7 +1084,8 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         }
 
         // Uploaded files are node-local data, which follow the chat's rule: a cloud model reads them only by the operator's opt-in.
-        if (capabilities.IsCloud && !await services.GetRequiredService<INodeRuntimeSettings>().GetAllowCloudModelAccessAsync(cancellationToken))
+        if (capabilities.IsCloud && !capabilities.CloudGrants.LocalData
+                                 && !await services.GetRequiredService<INodeRuntimeSettings>().GetAllowCloudModelAccessAsync(cancellationToken))
         {
             _logger.LogInformation("Graph workflow run {RunId} node '{NodeKey}' skips {SkippedCount} attachment(s): its model is cloud-hosted and AllowCloudModelAccess is off.",
                 runId,

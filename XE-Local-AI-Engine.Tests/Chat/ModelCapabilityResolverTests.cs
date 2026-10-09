@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -127,6 +128,31 @@ public sealed class ModelCapabilityResolverTests
 
         AssertEx.True(cloud.SupportsThinking);
         AssertEx.True(cloud.ReasoningBudgetEnforceable, "the budget marker never reaches a cloud wire, so a cloud route reports the inert true");
+    }
+
+    [Test]
+    public async Task ResolveAsync_CarriesCloudGrantsOnlyForACloudExternalModel()
+    {
+        var grants = new ExternalProviderCloudGrants
+        {
+            LocalData = true,
+            UnattendedRuns = true
+        };
+        var trust = new FakeModelTrustResolver().Register("cloud-box", "qwen3", ExternalProviderLocality.Cloud, cloudGrants: grants)
+                                                .Register("local-box", "qwen3", cloudGrants: grants);
+        var resolver = new ModelCapabilityResolver(Substitute.For<IModelClassificationService>(),
+            Substitute.For<ILocalModelProviderResolver>(),
+            Substitute.For<IGgufModelCapabilityResolver>(),
+            trust);
+
+        var cloud = await resolver.ResolveAsync("ext:cloud-box/qwen3", CancellationToken.None);
+
+        AssertEx.Equal(grants, cloud.CloudGrants);
+        AssertEx.True(cloud.IsCloud, "a grant never changes locality");
+        AssertEx.Equal(ExternalProviderCloudGrants.None, (await resolver.ResolveAsync("ext:local-box/qwen3", CancellationToken.None)).CloudGrants);
+        AssertEx.Equal(ExternalProviderCloudGrants.None, (await resolver.ResolveAsync("ext:gone/qwen3", CancellationToken.None)).CloudGrants);
+        AssertEx.Equal(ExternalProviderCloudGrants.None, (await resolver.ResolveAsync("gpt-5.6-terra", CancellationToken.None)).CloudGrants);
+        AssertEx.Equal(ExternalProviderCloudGrants.None, default(ModelCapabilitySnapshot).CloudGrants);
     }
 
     private static ModelCapabilityResolver CreateResolver(IActiveCloudChatClientFactory factory, out ILocalModelProviderResolver providerResolver)

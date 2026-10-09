@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import type { ExternalProviderConnectionDto } from "@/features/external-providers/models/ExternalProviderFormState";
-import { parseLocality } from "@/features/external-providers/models/ExternalProviderModel";
+import { parseCloudGrants, parseLocality } from "@/features/external-providers/models/ExternalProviderModel";
 
 interface ExternalProviderConnectionListProps {
 	readonly connections: readonly ExternalProviderConnectionDto[];
@@ -40,6 +40,7 @@ export function ExternalProviderConnectionList({ connections, disabled, onEdit, 
 					{connections.map((connection) => {
 						const locality = parseLocality(connection.locality);
 						const modelCount = connection.models?.length ?? 0;
+						const grantCount = Object.values(parseCloudGrants(connection.cloudGrants)).filter(Boolean).length;
 						return (
 							<Group
 								key={connection.id}
@@ -57,6 +58,11 @@ export function ExternalProviderConnectionList({ connections, disabled, onEdit, 
 												? t("pages.externalProviders.locality.localBadge", "Declared local")
 												: t("pages.externalProviders.locality.cloudBadge", "Declared cloud")}
 										</Badge>
+										{grantCount > 0 ? (
+											<Badge size="sm" variant="light" color="grape" data-testid={`external-provider-grants-${connection.id}`}>
+												{t("pages.externalProviders.list.cloudGrantCount", { count: grantCount })}
+											</Badge>
+										) : null}
 										{connection.insecureTransport && !connection.allowInsecureHttp ? (
 											<Badge size="sm" variant="light" color="red" data-testid={`external-provider-insecure-${connection.id}`}>
 												{t("pages.externalProviders.list.insecureTransport", "Unencrypted HTTP")}

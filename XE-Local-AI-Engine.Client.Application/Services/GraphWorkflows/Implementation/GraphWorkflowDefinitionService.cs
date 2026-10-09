@@ -221,7 +221,8 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
                         + "Install the model or pin another one."));
                 }
             }
-            else if (!await _runtimeSettings.GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
+            else if (!(await _trust.ResolveCloudGrantsAsync(model, cancellationToken)).UnattendedRuns
+                     && !await _runtimeSettings.GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
             {
                 warnings.Add(new GraphWorkflowValidationError(node.NodeKey,
                     $"Node '{node.NodeKey}' pins model '{model}', which is not a node-local model, so a run will refuse this node while "

@@ -11,6 +11,8 @@ import {
 	isTrustedLocalHost,
 	MAX_TIMEOUT_SECONDS,
 	MIN_TIMEOUT_SECONDS,
+	noCloudGrants,
+	parseCloudGrants,
 	parseLocality,
 	requiresApiKeyReentry,
 	shouldWarnLocalDeclaration,
@@ -38,6 +40,25 @@ describe("parseLocality", () => {
 		expect(parseLocality("local")).toBe("Cloud");
 		expect(parseLocality(undefined)).toBe("Cloud");
 		expect(parseLocality("Onprem")).toBe("Cloud");
+	});
+});
+
+describe("parseCloudGrants", () => {
+	it("reads each literal true as a grant", () => {
+		const all = { localData: true, unattendedRuns: true, webTools: true, mcpTools: true, subAgents: true };
+
+		expect(parseCloudGrants(all)).toEqual(all);
+		expect(parseCloudGrants({ ...noCloudGrants, mcpTools: true })).toEqual({ ...noCloudGrants, mcpTools: true });
+	});
+
+	it("fails closed on a missing or non-object value", () => {
+		for (const value of [undefined, null, "all", 1, true, []]) {
+			expect(parseCloudGrants(value)).toEqual(noCloudGrants);
+		}
+	});
+
+	it("fails closed per member on a missing or non-boolean value", () => {
+		expect(parseCloudGrants({ localData: "true", unattendedRuns: 1, webTools: null, mcpTools: {} })).toEqual(noCloudGrants);
 	});
 });
 
@@ -255,6 +276,7 @@ describe("validateExternalProviderForm — custom headers", () => {
 			displayName: "Gateway",
 			baseUrl: "https://gw.example.com/v1",
 			locality: "Cloud",
+			cloudGrants: { ...noCloudGrants },
 			hasApiKey: false,
 			allowInsecureHttp: false,
 			insecureTransport: false,

@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -127,6 +128,42 @@ public sealed class RunSavedAgentHandlerTests
         AssertEx.Equal(expected: 0, harness.RunCount);
         // The cloud gate fires before capacity admission and before any resolve.
         await harness.Capacity.DidNotReceive().DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheCloudModelsConnectionGrantsUnattendedRuns_RunsWithTheSwitchOff()
+    {
+        using var harness = new Harness();
+        harness.Store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(BuildDefinition(modelProfile: "ext:gateway/qwen3"));
+        harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+               .Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: true)
+               {
+                   CloudGrants = new ExternalProviderCloudGrants { UnattendedRuns = true }
+               });
+
+        // AllowCloudModelUnattendedRuns stays at its default (off): the connection's grant stands in for it.
+        await harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, harness.RunCount);
+        await harness.Resolver.Received(1)
+                     .ResolveAsync(AgentId, "ext:gateway/qwen3", Arg.Any<string?>(), true, true, true, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheCloudModelsConnectionGrantsEveryOtherClass_StillRejectsWithTheSwitchOff()
+    {
+        using var harness = new Harness();
+        harness.Store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(BuildDefinition(modelProfile: "ext:gateway/qwen3"));
+        harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+               .Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: true)
+               {
+                   CloudGrants = new ExternalProviderCloudGrants { LocalData = true, WebTools = true, McpTools = true, SubAgents = true }
+               });
+
+        // Each grant answers for its own class only: none of these stands in for AllowCloudModelUnattendedRuns.
+        await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None));
+
+        AssertEx.Equal(expected: 0, harness.RunCount);
     }
 
     [Test]

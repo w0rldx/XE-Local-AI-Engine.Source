@@ -535,7 +535,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
         }
 
         var capabilities = await _capabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
-        if (!capabilities.IsCloud)
+        if (!capabilities.IsCloud || capabilities.CloudGrants.LocalData)
         {
             return;
         }

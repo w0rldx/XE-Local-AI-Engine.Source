@@ -477,7 +477,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         var capabilities = await services.GetRequiredService<IModelCapabilityResolver>().ResolveAsync(effectiveModel, runToken);
         var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
         var runtimeSettings = services.GetRequiredService<INodeRuntimeSettings>();
-        if (effectiveModelIsCloud && !await runtimeSettings.GetAllowCloudModelUnattendedRunsAsync(runToken))
+        if (effectiveModelIsCloud && !capabilities.CloudGrants.UnattendedRuns && !await runtimeSettings.GetAllowCloudModelUnattendedRunsAsync(runToken))
         {
             await TerminalizeBeforeRunAsync(context,
                 IntegrationFailureCategories.CloudModelRejected,
@@ -500,7 +500,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         var replaysToolHistory = trigger.SessionPolicy == IntegrationSessionPolicy.CallerManaged;
         //     Replayed tool results are node-local data, so a cloud model gets them only while AllowCloudModelAccess is on; the trigger payload and the
         //     prior outputs still go. The same flag drives the projection below and the context build in step 4, so both see the same transcript.
-        var replayToolCalls = replaysToolHistory && (!effectiveModelIsCloud || await runtimeSettings.GetAllowCloudModelAccessAsync(runToken));
+        var replayToolCalls = replaysToolHistory && (!effectiveModelIsCloud || capabilities.CloudGrants.LocalData || await runtimeSettings.GetAllowCloudModelAccessAsync(runToken));
         if (replaysToolHistory && !replayToolCalls)
         {
             _logger.LogInformation("Integration execution {ExecutionId} omits the replayed tool history: its model is cloud-hosted and AllowCloudModelAccess is off.", executionId);

@@ -314,7 +314,9 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // a pinned cloud id on a locally-routed turn. Both node switches are read per offer, so a save applies to the next turn.
         var baseOffer = _runtimeSettings.GetKnowledgeAgentToolsEnabled() ? _builtinAllTools : _builtinAllToolsNoKnowledge;
         var leavesNode = LeavesNode(activeModelId, isCloudModel);
-        if (!_runtimeSettings.GetAllowCloudModelAccess() && leavesNode)
+        // A connection's own grant stands in for the node-wide switch of its class; it never changes leavesNode.
+        var grants = _modelTrustResolver.ClassifyCloudGrants(activeModelId);
+        if (leavesNode && !grants.LocalData && !_runtimeSettings.GetAllowCloudModelAccess())
         {
             baseOffer = _builtinAllToolsNoLocalData;
         }
@@ -326,7 +328,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         }
 
         // An MCP server reaches whatever its host can, so a model outside the trust boundary gets its tools only by opt-in.
-        if (leavesNode && !_runtimeSettings.GetAllowCloudModelMcpTools())
+        if (leavesNode && !grants.McpTools && !_runtimeSettings.GetAllowCloudModelMcpTools())
         {
             _logger.LogDebug("MCP tools withheld from the offer: the model leaves the node and AllowCloudModelMcpTools is off (Node Settings, Privacy & updates section).");
             return baseOffer;
@@ -353,7 +355,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         }
 
         var leavesNode = LeavesNode(activeModelId, isCloudModel);
-        var cloudWebAllowed = !leavesNode || await _runtimeSettings.GetAllowCloudModelWebToolsAsync(cancellationToken);
+        var cloudWebAllowed = !leavesNode || _modelTrustResolver.ClassifyCloudGrants(activeModelId).WebTools || await _runtimeSettings.GetAllowCloudModelWebToolsAsync(cancellationToken);
         var webAccessEnabled = await _runtimeSettings.GetWebAccessEnabledAsync(cancellationToken);
 
         // A bound agent still gets the web tools only through its AllowedToolNames intersection.
@@ -463,14 +465,15 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             return [];
         }
 
-        // The same switch reads, in the same order of precedence, as the offer methods above.
+        // The same grant and switch reads, in the same order of precedence, as the offer methods above.
+        var grants = _modelTrustResolver.ClassifyCloudGrants(activeModelId);
         var withheld = new List<CloudWithheldTool>();
-        if (!await _runtimeSettings.GetAllowCloudModelMcpToolsAsync(cancellationToken))
+        if (!grants.McpTools && !await _runtimeSettings.GetAllowCloudModelMcpToolsAsync(cancellationToken))
         {
             withheld.AddRange(_mcpToolRegistry.GetDescriptors().Select(static descriptor => Withheld(descriptor.Name, CloudToolSwitch.McpTools)));
         }
 
-        if (await _runtimeSettings.GetWebAccessEnabledAsync(cancellationToken) && !await _runtimeSettings.GetAllowCloudModelWebToolsAsync(cancellationToken))
+        if (!grants.WebTools && await _runtimeSettings.GetWebAccessEnabledAsync(cancellationToken) && !await _runtimeSettings.GetAllowCloudModelWebToolsAsync(cancellationToken))
         {
             withheld.AddRange(_webAccessOfferDtos.Select(static tool => Withheld(tool.Name, CloudToolSwitch.WebTools)));
             if (await _runtimeSettings.GetCustomToolsEnabledAsync(cancellationToken))
@@ -481,7 +484,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             }
         }
 
-        if (!await _runtimeSettings.GetAllowCloudModelSubAgentsAsync(cancellationToken))
+        if (!grants.SubAgents && !await _runtimeSettings.GetAllowCloudModelSubAgentsAsync(cancellationToken))
         {
             withheld.Add(Withheld(SpawnSubAgentToolDefinition.ToolName, CloudToolSwitch.SubAgents));
         }
@@ -508,7 +511,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     private IReadOnlyList<AllowedToolDto> SpawnOffer(string? activeModelId, bool isCloudModel)
     {
 #pragma warning disable MA0045 // The spawn offer is part of the synchronous profile pool, which has no async boundary; the sync twin is the designated per-offer read.
-        if (!LeavesNode(activeModelId, isCloudModel) || _runtimeSettings.GetAllowCloudModelSubAgents())
+        if (!LeavesNode(activeModelId, isCloudModel) || _modelTrustResolver.ClassifyCloudGrants(activeModelId).SubAgents || _runtimeSettings.GetAllowCloudModelSubAgents())
 #pragma warning restore MA0045
         {
             return [_spawnOfferDto];

@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -271,6 +272,20 @@ public sealed class OrchestrationResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_WhenTheCloudParticipantsConnectionGrantsLocalData_InjectsItsPlaybookWithTheSwitchOff()
+    {
+        var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: false,
+            specialistGrants: new ExternalProviderCloudGrants { LocalData = true });
+
+        AssertEx.NotNull(resolved);
+        var cloudSpecialist = resolved!.Spec.Participants.Single(participant => participant.Name == "Specialist");
+        AssertEx.Equal("Instructions for Specialist\n\n## Operating Playbook\n- Stay terse.", cloudSpecialist.Instructions);
+        AssertEx.Empty(resolved.PlaybookWithheldParticipantNames);
+        // The grant covers the participant's own memory only; the shared seed still sees a cloud participant.
+        AssertEx.True(resolved.AnyParticipantIsCloud, "a grant never changes locality");
+    }
+
+    [Test]
     [Arguments(true, "McpTools:mcp__weather__get_forecast")]
     [Arguments(false, "")]
     public async Task ResolveAsync_CloudWithheldTools_AreTheParticipantsOwnMinusWebAndSpawn(bool specialistIsCloud, string expected)
@@ -360,7 +375,8 @@ public sealed class OrchestrationResolverTests
 
     private static async Task<ResolvedOrchestration?> ResolveWithCloudPinnedParticipantAsync(bool allowCloudKnowledgeAccess,
         bool specialistPlaybookEnabled = true,
-        bool hasEnabledActions = true)
+        bool hasEnabledActions = true,
+        ExternalProviderCloudGrants? specialistGrants = null)
     {
         // Both participants carry one enabled playbook action, so the playbook egress gate is observable per participant.
         var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: [KnowledgeSearchToolName], playbookEnabled: true);
@@ -389,7 +405,10 @@ public sealed class OrchestrationResolverTests
         capabilityResolver.ResolveAsync(ToolCapableModel, Arg.Any<CancellationToken>())
                           .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false)));
         capabilityResolver.ResolveAsync(CloudParticipantModel, Arg.Any<CancellationToken>())
-                          .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true)));
+                          .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true)
+                          {
+                              CloudGrants = specialistGrants ?? ExternalProviderCloudGrants.None
+                          }));
 
         var resolver = new OrchestrationResolver(store,
             playbookStore,

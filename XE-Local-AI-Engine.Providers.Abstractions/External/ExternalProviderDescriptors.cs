@@ -30,6 +30,12 @@ public sealed record ExternalProviderConnectionDescriptor
     public required ExternalProviderLocality Locality { get; init; }
 
     /// <summary>
+    ///     The operator's cloud-permission grants, never null; <see cref="ExternalProviderCloudGrants.None" /> unless
+    ///     <see cref="Locality" /> is <see cref="ExternalProviderLocality.Cloud" />.
+    /// </summary>
+    public required ExternalProviderCloudGrants CloudGrants { get; init; }
+
+    /// <summary>
     ///     Per-connection network timeout, or <see langword="null" /> to use the transport default. A slow self-hosted
     ///     runtime legitimately needs minutes for a long generation, so this is an outer floor, never a per-token bound.
     /// </summary>

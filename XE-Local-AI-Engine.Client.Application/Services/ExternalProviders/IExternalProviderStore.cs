@@ -141,6 +141,9 @@ public sealed record ExternalProviderConnectionSaveRequest
     /// <summary>The declared trust locality.</summary>
     public required ExternalProviderLocality Locality { get; init; }
 
+    /// <summary>The cloud-permission grants; <see langword="null" /> grants none, and the store drops them for a Local connection.</summary>
+    public ExternalProviderCloudGrants? CloudGrants { get; init; }
+
     /// <summary>
     ///     A NEW API key, or <see langword="null" />/blank to keep whatever is stored. The masked round-trip an editor
     ///     performs sends no key back, so treating blank as "clear" would silently de-authenticate a working connection

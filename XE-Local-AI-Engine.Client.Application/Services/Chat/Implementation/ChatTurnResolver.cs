@@ -115,12 +115,10 @@ public sealed class ChatTurnResolver
 
         // Read from the EFFECTIVE model, whose chat template owns this flag, or a pin llama-server cannot cap grades as
         // if it could. It is NOT on ResolvedAgentRuntime, which the FROZEN v1 benchmark snapshot embeds verbatim.
-        var reasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable;
-        if (!string.Equals(effectiveModel, capabilityModel, StringComparison.Ordinal))
-        {
-            var effectiveCapabilities = await _modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
-            reasoningBudgetEnforceable = effectiveCapabilities.ReasoningBudgetEnforceable;
-        }
+        var effectiveCapabilities = string.Equals(effectiveModel, capabilityModel, StringComparison.Ordinal)
+            ? capabilities
+            : await _modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
+        var reasoningBudgetEnforceable = effectiveCapabilities.ReasoningBudgetEnforceable;
 
         if (_logger.IsEnabled(LogLevel.Debug))
         {
@@ -150,6 +148,7 @@ public sealed class ChatTurnResolver
             RequiresInstalledChatModel = requiresInstalledChatModel && effectiveModel is null,
             ActiveModelIsCloud = activeModelIsCloud,
             EffectiveModelIsCloud = effectiveModelIsCloud,
+            EffectiveModelCloudGrants = effectiveCapabilities.CloudGrants,
             ReasoningBudgetEnforceable = reasoningBudgetEnforceable,
             AllowAutoModelSwap = allowAutoModelSwap
         };

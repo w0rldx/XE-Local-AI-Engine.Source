@@ -99,6 +99,40 @@ public sealed class SubAgentSpawnServiceTests
     }
 
     [Test]
+    public async Task Spawn_WhenTheParentsCloudConnectionGrantsSubAgents_ProceedsWithTheSwitchOff()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.TrustResolver.Register("hosted-box", "qwen3", ExternalProviderLocality.Cloud, cloudGrants: new ExternalProviderCloudGrants { SubAgents = true });
+        var service = harness.Build();
+
+        // The connection's grant stands in for AllowCloudModelSubAgents, which stays off here.
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3, rootModelId: "ext:hosted-box/qwen3");
+        var result = await service.SpawnAsync(ModelRequest("do the thing"), CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
+        AssertEx.Equal(1, harness.ChatClient.CallCount);
+    }
+
+    [Test]
+    public async Task Spawn_WhenTheParentsCloudConnectionGrantsEveryOtherClass_IsStillRefusedWithTheSwitchOff()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.TrustResolver.Register("hosted-box",
+            "qwen3",
+            ExternalProviderLocality.Cloud,
+            cloudGrants: new ExternalProviderCloudGrants { LocalData = true, UnattendedRuns = true, WebTools = true, McpTools = true });
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3, rootModelId: "ext:hosted-box/qwen3");
+        var result = await service.SpawnAsync(ModelRequest("do the thing"), CancellationToken.None);
+
+        AssertEx.Contains(result, "outside this node's trust boundary");
+        AssertEx.Equal(0, harness.ChatClient.CallCount);
+    }
+
+    [Test]
     public async Task Spawn_WhenTheParentIsAnUnresolvedExternalModel_IsRefused()
     {
         using var harness = new Harness();

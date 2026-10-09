@@ -85,6 +85,30 @@ public sealed class ModelTrustResolver : IModelTrustResolver
             : ModelTrustLocality.Unresolved;
     }
 
+    /// <inheritdoc />
+    public async Task<ExternalProviderCloudGrants> ResolveCloudGrantsAsync(string? modelId, CancellationToken cancellationToken = default)
+    {
+        return ExternalModelId.HasExternalScheme(modelId)
+            ? ToCloudGrants(await TryResolveExternalCoreAsync(modelId, cancellationToken))
+            : ExternalProviderCloudGrants.None;
+    }
+
+    /// <inheritdoc />
+    public ExternalProviderCloudGrants ClassifyCloudGrants(string? modelId)
+    {
+        return ExternalModelId.HasExternalScheme(modelId) && _registryCache.TryClassifyCached(modelId, out var registration)
+            ? ToCloudGrants(registration)
+            : ExternalProviderCloudGrants.None;
+    }
+
+    // Grants exist only where the trust answer is Cloud; Unresolved and Local carry none.
+    private static ExternalProviderCloudGrants ToCloudGrants(ExternalProviderModelRegistration? registration)
+    {
+        return registration is { } resolved && ToLocality(resolved) == ModelTrustLocality.Cloud
+            ? resolved.Connection.CloudGrants
+            : ExternalProviderCloudGrants.None;
+    }
+
     // A Codex catalog id is cloud with or without a session: without one it has no local runtime either, so "local"
     // would hand it node-local privileges on a send that can only fail. A routing-snapshot read failure fails closed.
     private ModelTrustLocality ClassifyNonExternal(string modelId)

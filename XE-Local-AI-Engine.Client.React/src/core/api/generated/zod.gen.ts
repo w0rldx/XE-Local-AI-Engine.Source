@@ -3086,6 +3086,22 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1DeleteExternalPro
 	z.never(),
 );
 
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderCloudGrantsRequest = z.object({
+	localData: z.boolean().optional(),
+	unattendedRuns: z.boolean().optional(),
+	webTools: z.boolean().optional(),
+	mcpTools: z.boolean().optional(),
+	subAgents: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderCloudGrantsResponse = z.object({
+	localData: z.boolean(),
+	unattendedRuns: z.boolean(),
+	webTools: z.boolean(),
+	mcpTools: z.boolean(),
+	subAgents: z.boolean(),
+});
+
 export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderHeaderRequest = z.object({
 	name: z.string().nullish(),
 	value: z.string().nullish(),
@@ -3120,6 +3136,7 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderC
 	displayName: z.string(),
 	baseUrl: z.string(),
 	locality: z.string(),
+	cloudGrants: zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderCloudGrantsResponse,
 	hasApiKey: z.boolean(),
 	timeoutSeconds: z
 		.int()
@@ -3184,6 +3201,7 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvi
 	displayName: z.string().min(1),
 	baseUrl: z.string().min(1),
 	locality: z.string().nullish(),
+	cloudGrants: zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderCloudGrantsRequest.nullish(),
 	apiKey: z.string().nullish(),
 	clearApiKey: z.boolean().optional(),
 	timeoutSeconds: z

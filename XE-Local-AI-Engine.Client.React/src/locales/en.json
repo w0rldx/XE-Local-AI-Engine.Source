@@ -3127,7 +3127,18 @@
 				"keyStored": "Key stored",
 				"insecureTransport": "Unencrypted HTTP",
 				"modelCount_one": "{{count}} registered model",
-				"modelCount_other": "{{count}} registered models"
+				"modelCount_other": "{{count}} registered models",
+				"cloudGrantCount_one": "{{count}} grant",
+				"cloudGrantCount_other": "{{count}} grants"
+			},
+			"cloudGrants": {
+				"title": "Cloud permissions for this connection",
+				"hint": "Applies to this connection only; the node-wide “{{setting}}” switch is not needed for it.",
+				"localData": "Let this connection's models read local data",
+				"unattendedRuns": "Let this connection's models run unattended",
+				"webTools": "Let this connection's models use web tools",
+				"mcpTools": "Let this connection's models use MCP tools",
+				"subAgents": "Let this connection's models delegate to sub-agents"
 			},
 			"locality": {
 				"label": "Trust",
@@ -3136,7 +3147,7 @@
 				"localBadge": "Declared local",
 				"cloudBadge": "Declared cloud",
 				"localHint": "Models on this connection are trusted like a local model: workspace and file tools, the knowledge base, custom tools and code execution are all available to them.",
-				"cloudHint": "Cloud gating applies: local data, unattended runs, web and HTTP tools, MCP tools and sub-agents each follow a Privacy switch; no code execution and no command custom tools. Development Mode rejects these models entirely.",
+				"cloudHint": "Cloud gating applies: local data, unattended runs, web and HTTP tools, MCP tools and sub-agents each follow a Privacy switch unless this connection grants it below; no code execution and no command custom tools. Development Mode rejects these models entirely.",
 				"nonLocalHostWarning": "This address is not on this machine or this private network, but you have declared it Local. This endpoint will be trusted like a local model: prompts and workspace file contents will be sent to it."
 			},
 			"editor": {
