@@ -104,7 +104,10 @@ public sealed class SubAgentSpawnServiceTests
     {
         using var harness = new Harness();
         harness.AllowLocal();
-        harness.TrustResolver.Register("hosted-box", "qwen3", ExternalProviderLocality.Cloud, cloudGrants: new ExternalProviderCloudGrants { SubAgents = true });
+        harness.TrustResolver.Register("hosted-box", "qwen3", ExternalProviderLocality.Cloud, cloudGrants: new ExternalProviderCloudGrants
+        {
+            SubAgents = true
+        });
         var service = harness.Build();
 
         // The connection's grant stands in for AllowCloudModelSubAgents, which stays off here.
@@ -123,7 +126,13 @@ public sealed class SubAgentSpawnServiceTests
         harness.TrustResolver.Register("hosted-box",
             "qwen3",
             ExternalProviderLocality.Cloud,
-            cloudGrants: new ExternalProviderCloudGrants { LocalData = true, UnattendedRuns = true, WebTools = true, McpTools = true });
+            cloudGrants: new ExternalProviderCloudGrants
+            {
+                LocalData = true,
+                UnattendedRuns = true,
+                WebTools = true,
+                McpTools = true
+            });
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3, rootModelId: "ext:hosted-box/qwen3");

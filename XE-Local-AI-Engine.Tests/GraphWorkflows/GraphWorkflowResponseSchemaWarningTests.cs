@@ -201,7 +201,10 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
         var providers = Substitute.For<ILocalModelProviderResolver>();
         providers.ResolveProviderNameForModelAsync(CloudRoutedModel, Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult("external"));
 
-        var result = await BuildService(providers, locality: ModelTrustLocality.Cloud, grants: new ExternalProviderCloudGrants { UnattendedRuns = true })
+        var result = await BuildService(providers, locality: ModelTrustLocality.Cloud, grants: new ExternalProviderCloudGrants
+            {
+                UnattendedRuns = true
+            })
             .ValidateAsync(LlmCallGraph(CloudRoutedModel));
 
         AssertEx.Empty(result.Warnings.Where(warning => warning.Key == "analyze" && !warning.Message.Contains("maxLength", StringComparison.Ordinal)),

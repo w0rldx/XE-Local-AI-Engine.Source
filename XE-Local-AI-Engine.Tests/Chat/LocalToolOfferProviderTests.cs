@@ -993,9 +993,18 @@ public sealed class LocalToolOfferProviderTests
         // The grant stands in for the node-wide switch of its class only; every switch stays at its default (off).
         var grants = grantName switch
         {
-            "mcp" => new ExternalProviderCloudGrants { McpTools = true },
-            "web" => new ExternalProviderCloudGrants { WebTools = true },
-            _ => new ExternalProviderCloudGrants { SubAgents = true }
+            "mcp" => new ExternalProviderCloudGrants
+            {
+                McpTools = true
+            },
+            "web" => new ExternalProviderCloudGrants
+            {
+                WebTools = true
+            },
+            _ => new ExternalProviderCloudGrants
+            {
+                SubAgents = true
+            }
         };
         var provider = CreateSwitchProvider(static settings => settings, Gateway(ExternalProviderLocality.Cloud, grants));
 
@@ -1007,7 +1016,10 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public void GetOfferedTools_WhenTheCloudConnectionGrantsLocalData_OffersTheKnowledgeToolsWithTheSwitchOff()
     {
-        var trustResolver = Gateway(ExternalProviderLocality.Cloud, new ExternalProviderCloudGrants { LocalData = true });
+        var trustResolver = Gateway(ExternalProviderLocality.Cloud, new ExternalProviderCloudGrants
+        {
+            LocalData = true
+        });
         var provider = CreateProvider(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), allowCloudKnowledgeAccess: false, trustResolver, GatewayModel);
 
         var offered = provider.GetOfferedTools(GatewayModel, isCloudModel: true);
@@ -1032,7 +1044,10 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public async Task GetCloudWithheldToolsAsync_WhenTheCloudConnectionGrantsMcp_NamesOnlyTheUngrantedClasses()
     {
-        var provider = CreateSwitchProvider(static settings => settings, Gateway(ExternalProviderLocality.Cloud, new ExternalProviderCloudGrants { McpTools = true }));
+        var provider = CreateSwitchProvider(static settings => settings, Gateway(ExternalProviderLocality.Cloud, new ExternalProviderCloudGrants
+        {
+            McpTools = true
+        }));
 
         var withheld = await provider.GetCloudWithheldToolsAsync(GatewayModel, isCloudModel: true);
 
@@ -1071,11 +1086,19 @@ public sealed class LocalToolOfferProviderTests
     {
         // A caller holding a snapshot passes its grants and the provider takes them as given, in both directions; only
         // null reads the resolver's cached answer.
-        var resolverGrants = resolverGrantsMcp ? new ExternalProviderCloudGrants { McpTools = true } : ExternalProviderCloudGrants.None;
+        var resolverGrants = resolverGrantsMcp
+            ? new ExternalProviderCloudGrants
+            {
+                McpTools = true
+            }
+            : ExternalProviderCloudGrants.None;
         var provider = CreateSwitchProvider(static settings => settings, Gateway(ExternalProviderLocality.Cloud, resolverGrants));
         var callerGrants = passed switch
         {
-            "mcp" => new ExternalProviderCloudGrants { McpTools = true },
+            "mcp" => new ExternalProviderCloudGrants
+            {
+                McpTools = true
+            },
             "none" => ExternalProviderCloudGrants.None,
             _ => null
         };

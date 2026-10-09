@@ -28,7 +28,9 @@ public sealed class RecommendationDiscoveryMemoTests
         inner.InspectRepoAsync("owner/repo", Arg.Any<CancellationToken>()).Returns(Detail("owner/repo"));
         var memo = new RecommendationDiscoveryMemo(inner, new ManualTimeProvider());
 
-        var searches = Enumerable.Range(0, 3).Select(_ => memo.SearchAsync(InstructTrending with { }, CancellationToken.None)).ToList();
+        var searches = Enumerable.Range(0, 3).Select(_ => memo.SearchAsync(InstructTrending with
+        {
+        }, CancellationToken.None)).ToList();
         gate.SetResult([]);
         await Task.WhenAll(searches);
         await memo.InspectRepoAsync("owner/repo", CancellationToken.None);

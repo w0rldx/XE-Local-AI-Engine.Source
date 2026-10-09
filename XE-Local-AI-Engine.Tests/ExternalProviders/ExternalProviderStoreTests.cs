@@ -1031,11 +1031,11 @@ public sealed class ExternalProviderStoreTests : IDisposable
         using (var store = CreateStore())
         {
             _ = await SaveAsync(store, Request(baseUrl: "https://gateway.example.com/v1",
-                locality: ExternalProviderLocality.Cloud,
-                models: [Model("qwen3")]) with
-            {
-                CloudGrants = grants
-            });
+                    locality: ExternalProviderLocality.Cloud,
+                    models: [Model("qwen3")]) with
+                {
+                    CloudGrants = grants
+                });
         }
 
         // A fresh store instance reads the file back, so this is the encrypted payload, not an in-memory copy.
@@ -1132,11 +1132,11 @@ public sealed class ExternalProviderStoreTests : IDisposable
 
         // Null and None are the same grants, so the reconciler's idempotent resave does not churn the file.
         var resave = await SaveAsync(store, Request(baseUrl: "https://gateway.example.com/v1",
-            locality: ExternalProviderLocality.Cloud,
-            models: [Model("qwen3")]) with
-        {
-            ExpectedRevision = "r"
-        });
+                locality: ExternalProviderLocality.Cloud,
+                models: [Model("qwen3")]) with
+            {
+                ExpectedRevision = "r"
+            });
         AssertEx.False(resave.Changed);
     }
 
@@ -1162,14 +1162,15 @@ public sealed class ExternalProviderStoreTests : IDisposable
         AssertEx.False(printed.Contains(SecretMarker, StringComparison.Ordinal), "the key stays redacted beside the grants");
     }
 
-    private static ExternalProviderCloudGrants AllGrants => new()
-    {
-        LocalData = true,
-        UnattendedRuns = true,
-        WebTools = true,
-        McpTools = true,
-        SubAgents = true
-    };
+    private static ExternalProviderCloudGrants AllGrants =>
+        new()
+        {
+            LocalData = true,
+            UnattendedRuns = true,
+            WebTools = true,
+            McpTools = true,
+            SubAgents = true
+        };
 
     private string StorePath => Path.Combine(_contentRootPath, "external-providers.enc");
 

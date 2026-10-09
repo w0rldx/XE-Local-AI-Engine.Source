@@ -141,7 +141,11 @@ public sealed class IntegrationExecutionCoordinatorTests
         harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
                .Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: true)
                {
-                   CloudGrants = new ExternalProviderCloudGrants { UnattendedRuns = true, LocalData = localDataGrant }
+                   CloudGrants = new ExternalProviderCloudGrants
+                   {
+                       UnattendedRuns = true,
+                       LocalData = localDataGrant
+                   }
                });
         harness.SetSessionPolicy(IntegrationSessionPolicy.CallerManaged);
         harness.OfferedTools = [Harness.Tool("list_files", ToolCategory.ReadLocal)];

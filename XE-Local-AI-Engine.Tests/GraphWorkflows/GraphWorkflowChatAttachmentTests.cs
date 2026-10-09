@@ -219,7 +219,11 @@ public sealed class GraphWorkflowChatAttachmentTests
     {
         const string reader = "attachments-granted-cloud-reader";
         await using var harness = GraphWorkflowHarness.PrivateAgentHost(GraphWorkflowAgentHostFixture.WithRuntimeSettings(StubNodeRuntimeSettings.Create().Build()));
-        var model = GraphWorkflowModels.Grant("graph-cloud-granted-reader", new ExternalProviderCloudGrants { LocalData = true, UnattendedRuns = true });
+        var model = GraphWorkflowModels.Grant("graph-cloud-granted-reader", new ExternalProviderCloudGrants
+        {
+            LocalData = true,
+            UnattendedRuns = true
+        });
         var definitionId = await harness.SeedDefinitionAsync(TwoAgentGraph(reader, "second-after-granted-cloud", model));
         var conversationId = await CreateConversationAsync(harness.Services);
         var fileId = await AddTextAsync(harness, conversationId, "notes.md", "LOCAL-NOTES-BODY");

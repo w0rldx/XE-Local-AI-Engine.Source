@@ -398,8 +398,22 @@ public sealed class DesktopLifecycleTests
         var options = DesktopStartupOptions.Parse([], directory.Path, directory.Path);
         // A stand-in engine that writes its last words and exits 8 without ever announcing readiness.
         var start = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo("cmd.exe") { ArgumentList = { "/c", "echo node key refused 1>&2 & exit 8" } }
-            : new ProcessStartInfo("/bin/sh") { ArgumentList = { "-c", "echo node key refused >&2; exit 8" } };
+            ? new ProcessStartInfo("cmd.exe")
+            {
+                ArgumentList =
+                {
+                    "/c",
+                    "echo node key refused 1>&2 & exit 8"
+                }
+            }
+            : new ProcessStartInfo("/bin/sh")
+            {
+                ArgumentList =
+                {
+                    "-c",
+                    "echo node key refused >&2; exit 8"
+                }
+            };
         start.UseShellExecute = false;
         start.CreateNoWindow = true;
         start.RedirectStandardOutput = true;

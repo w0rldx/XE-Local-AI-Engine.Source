@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Transcription.Capture;
 
 using System.Diagnostics;
-using Microsoft.Extensions.Logging;
 
 /// <summary>
 ///     The one place the Windows build floor for WASAPI process loopback is decided. Pure, so the policy is testable

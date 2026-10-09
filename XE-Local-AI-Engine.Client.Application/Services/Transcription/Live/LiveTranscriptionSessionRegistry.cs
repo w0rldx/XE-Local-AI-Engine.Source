@@ -247,7 +247,11 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             }
 
             session.QuietTimer?.Dispose();
-            session.QuietTimer = _timeProvider.CreateTimer(ReportSourceQuietOnTimer, new QuietTimerState { Registry = this, Session = session }, SourceQuietCheckPeriod, SourceQuietCheckPeriod);
+            session.QuietTimer = _timeProvider.CreateTimer(ReportSourceQuietOnTimer, new QuietTimerState
+            {
+                Registry = this,
+                Session = session
+            }, SourceQuietCheckPeriod, SourceQuietCheckPeriod);
         }
 
         return new LiveProducerRegistration

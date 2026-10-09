@@ -92,7 +92,10 @@ public sealed class WorkSessionCloudEgressTests
     [Test]
     public async Task Update_WhenTheCloudModelsConnectionGrantsLocalData_AllowsTheRepointWithTheSwitchOff()
     {
-        await using var factory = CloudGrantsFactory(new ExternalProviderCloudGrants { LocalData = true });
+        await using var factory = CloudGrantsFactory(new ExternalProviderCloudGrants
+        {
+            LocalData = true
+        });
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await RecordAFindingAsync(factory, sessionId);
@@ -113,7 +116,13 @@ public sealed class WorkSessionCloudEgressTests
     [Test]
     public async Task Update_WhenTheCloudModelsConnectionGrantsEveryOtherClass_IsStillRefusedWithTheSwitchOff()
     {
-        await using var factory = CloudGrantsFactory(new ExternalProviderCloudGrants { UnattendedRuns = true, WebTools = true, McpTools = true, SubAgents = true });
+        await using var factory = CloudGrantsFactory(new ExternalProviderCloudGrants
+        {
+            UnattendedRuns = true,
+            WebTools = true,
+            McpTools = true,
+            SubAgents = true
+        });
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId);
         await RecordAFindingAsync(factory, sessionId);

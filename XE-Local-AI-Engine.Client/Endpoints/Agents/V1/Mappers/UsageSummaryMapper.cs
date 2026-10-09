@@ -110,7 +110,8 @@ internal static class UsageSummaryMapper
     }
 
     /// <summary>Sums reported counts; stays null only while nothing has been reported.</summary>
-    private static long? AddReported(long? sum, long? value) => sum is null ? value : sum + (value ?? 0);
+    private static long? AddReported(long? sum, long? value) =>
+        sum is null ? value : sum + (value ?? 0);
 
     private static double Round(double cost)
     {

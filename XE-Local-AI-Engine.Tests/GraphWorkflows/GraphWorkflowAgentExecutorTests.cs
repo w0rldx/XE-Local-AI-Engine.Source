@@ -392,7 +392,10 @@ public sealed class GraphWorkflowAgentExecutorTests
     public async Task ACloudEffectiveModel_RunsWithTheSwitchOffWhenItsConnectionGrantsUnattendedRuns()
     {
         const string instructions = "cloud-granted";
-        var model = GraphWorkflowModels.Grant("graph-cloud-granted", new ExternalProviderCloudGrants { UnattendedRuns = true });
+        var model = GraphWorkflowModels.Grant("graph-cloud-granted", new ExternalProviderCloudGrants
+        {
+            UnattendedRuns = true
+        });
         await using var harness = new GraphWorkflowHarness(Host);
         var agentDefinitionId = await SeedAgentAsync(harness, model);
         var runId = await StartToTheAgentAsync(harness, Graph(instructions, $$"""
@@ -410,7 +413,13 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         const string instructions = "cloud-wrong-grants";
         var model = GraphWorkflowModels.Grant("graph-cloud-wrong-grants",
-            new ExternalProviderCloudGrants { LocalData = true, WebTools = true, McpTools = true, SubAgents = true });
+            new ExternalProviderCloudGrants
+            {
+                LocalData = true,
+                WebTools = true,
+                McpTools = true,
+                SubAgents = true
+            });
         await using var harness = new GraphWorkflowHarness(Host);
         var runId = await StartToTheAgentAsync(harness, Graph(instructions, $$"""
                                                                               , "model": "{{model}}"
@@ -427,7 +436,10 @@ public sealed class GraphWorkflowAgentExecutorTests
     public async Task ALlmCall_OnACloudModel_RunsWithTheSwitchOffWhenItsConnectionGrantsUnattendedRuns()
     {
         const string prompt = "llm-cloud-granted";
-        var model = GraphWorkflowModels.Grant("llm-cloud-granted-model", new ExternalProviderCloudGrants { UnattendedRuns = true });
+        var model = GraphWorkflowModels.Grant("llm-cloud-granted-model", new ExternalProviderCloudGrants
+        {
+            UnattendedRuns = true
+        });
         await using var harness = new GraphWorkflowHarness(Host);
         var runId = await StartToTheAgentAsync(harness, LlmGraph($$"""{ "prompt": "{{prompt}}", "model": "{{model}}" }"""));
 

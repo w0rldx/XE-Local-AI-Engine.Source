@@ -260,7 +260,10 @@ public sealed class OrchestrationResolverTests
         // must still need the switch, and the notice must name the first UNGRANTED cloud participant by definition id.
         const string grantedModel = "ext:gateway/granted";
         const string ungrantedModel = "ext:gateway/ungranted";
-        var grants = new ExternalProviderCloudGrants { LocalData = true };
+        var grants = new ExternalProviderCloudGrants
+        {
+            LocalData = true
+        };
         var triage = CreateDefinition("Triage", allowedTools: ["GetCurrentTime"]);
         var granted = CreateDefinition("Granted", modelProfile: grantedModel, allowedTools: ["GetCurrentTime"]) with
         {
@@ -275,7 +278,10 @@ public sealed class OrchestrationResolverTests
         capabilityResolver.ResolveAsync(ToolCapableModel, Arg.Any<CancellationToken>())
                           .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: false));
         capabilityResolver.ResolveAsync(grantedModel, Arg.Any<CancellationToken>())
-                          .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true) { CloudGrants = grants });
+                          .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true)
+                          {
+                              CloudGrants = grants
+                          });
         capabilityResolver.ResolveAsync(ungrantedModel, Arg.Any<CancellationToken>())
                           .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
@@ -328,7 +334,10 @@ public sealed class OrchestrationResolverTests
     public async Task ResolveAsync_WhenTheCloudParticipantsConnectionGrantsLocalData_InjectsItsPlaybookAndLiftsTheSeedGate()
     {
         var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: false,
-            specialistGrants: new ExternalProviderCloudGrants { LocalData = true });
+            specialistGrants: new ExternalProviderCloudGrants
+            {
+                LocalData = true
+            });
 
         AssertEx.NotNull(resolved);
         var cloudSpecialist = resolved!.Spec.Participants.Single(participant => participant.Name == "Specialist");

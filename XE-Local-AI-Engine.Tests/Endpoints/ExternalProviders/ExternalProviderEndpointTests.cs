@@ -553,8 +553,7 @@ public sealed class ExternalProviderEndpointTests
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, ConnectionRoute);
-        request.Content = new StringContent(
-            $$$"""{"displayName":"Unsloth box","baseUrl":"https://gateway.example.com","locality":"Cloud","models":[],"cloudGrants":{"webTools":{{{value}}}}}""",
+        request.Content = new StringContent($$$"""{"displayName":"Unsloth box","baseUrl":"https://gateway.example.com","locality":"Cloud","models":[],"cloudGrants":{"webTools":{{{value}}}}}""",
             Encoding.UTF8,
             "application/json");
         using var response = await client.SendAsync(request);

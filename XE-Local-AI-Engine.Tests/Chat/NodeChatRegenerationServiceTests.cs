@@ -436,7 +436,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var trustResolver = new FakeModelTrustResolver().Register("gateway",
             "qwen3",
             ExternalProviderLocality.Cloud,
-            cloudGrants: new ExternalProviderCloudGrants { LocalData = true });
+            cloudGrants: new ExternalProviderCloudGrants
+            {
+                LocalData = true
+            });
 
         var events = new List<ChatStreamEvent>();
         var context = await RegenerateWithKnowledgeAsync("regeneration-kb-granted.sqlite", "ext:gateway/qwen3", trustResolver, events);

@@ -121,8 +121,7 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
             {
                 // Spawn failure / timeout: remembered briefly, so a transient glitch still self-heals within a minute.
                 _failedUntil[cacheKey] = _timeProvider.GetUtcNow() + FailedProbeRetryAfter;
-                _logger.LogInformation(
-                    "The llama.cpp --list-devices probe for {Variant} failed or timed out; the device list stays unknown for {Seconds} s.",
+                _logger.LogInformation("The llama.cpp --list-devices probe for {Variant} failed or timed out; the device list stays unknown for {Seconds} s.",
                     variant,
                     (int)FailedProbeRetryAfter.TotalSeconds);
                 return LlamaDeviceInventory.Unknown(variant);

@@ -294,7 +294,16 @@ public sealed class ModelTrustResolverTests
                                                .Register("local-box", "qwen3", cloudGrants: GrantedCloud);
 
         // The fake stands in for the resolver in every gate test, so its grant rule must be the production one.
-        foreach (var modelId in new[] { "ext:cloud-box/qwen3", "ext:local-box/qwen3", "ext:gone/qwen3", "ext:not-an-id", "gpt-5.5", "qwen3-27b.gguf", null })
+        foreach (var modelId in new[]
+                 {
+                     "ext:cloud-box/qwen3",
+                     "ext:local-box/qwen3",
+                     "ext:gone/qwen3",
+                     "ext:not-an-id",
+                     "gpt-5.5",
+                     "qwen3-27b.gguf",
+                     null
+                 })
         {
             var expected = await real.ResolveCloudGrantsAsync(modelId);
             AssertEx.Equal(expected, await fake.ResolveCloudGrantsAsync(modelId), $"'{modelId}'");
@@ -307,8 +316,7 @@ public sealed class ModelTrustResolverTests
 
     private static async Task<ModelTrustResolver> BuildPrimedAsync()
     {
-        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(
-            ExternalProviderRegistryTests.Connection("local-box", ["qwen3"]) with
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(ExternalProviderRegistryTests.Connection("local-box", ["qwen3"]) with
             {
                 CloudGrants = GrantedCloud
             },

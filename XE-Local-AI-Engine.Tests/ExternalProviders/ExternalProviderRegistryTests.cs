@@ -68,8 +68,7 @@ public sealed class ExternalProviderRegistryTests
             LocalData = true,
             WebTools = true
         };
-        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(
-            Connection("cloud-box", models: ["qwen3"], locality: ExternalProviderLocality.Cloud) with
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("cloud-box", models: ["qwen3"], locality: ExternalProviderLocality.Cloud) with
             {
                 CloudGrants = grants
             },

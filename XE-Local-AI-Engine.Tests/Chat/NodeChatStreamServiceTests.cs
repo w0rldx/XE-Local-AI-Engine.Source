@@ -1936,7 +1936,10 @@ public sealed class NodeChatStreamServiceTests
         var trustResolver = new FakeModelTrustResolver().Register("gateway",
             "qwen3",
             ExternalProviderLocality.Cloud,
-            cloudGrants: new ExternalProviderCloudGrants { LocalData = true });
+            cloudGrants: new ExternalProviderCloudGrants
+            {
+                LocalData = true
+            });
 
         var (events, capturedContext) = await RunAttachmentEgressAsync(cloudModel: gatewayModel, allowCloudModelAccess: false, trustResolver: trustResolver);
 
@@ -1953,7 +1956,10 @@ public sealed class NodeChatStreamServiceTests
         var trustResolver = new FakeModelTrustResolver().Register("gateway",
             "qwen3",
             ExternalProviderLocality.Cloud,
-            cloudGrants: new ExternalProviderCloudGrants { LocalData = true });
+            cloudGrants: new ExternalProviderCloudGrants
+            {
+                LocalData = true
+            });
         var agentResolver = Substitute.For<IAgentDefinitionResolver>();
         agentResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                      .Returns(new ResolvedAgentRuntime("Pinned persona.", [], pinnedModel, null, 9, Guid.NewGuid(), "Pinned Agent", EffectiveModelIsCloud: true));
@@ -3252,8 +3258,7 @@ public sealed class NodeChatStreamServiceTests
             "an orchestration with no ungranted cloud participant must not trigger the attachments-withheld notice");
     }
 
-    private static async Task<(List<ChatStreamEvent> Events, IReadOnlyList<ConversationMessageDto> CapturedContext)> RunOrchestrationAttachmentEgressAsync(
-        bool anyParticipantNeedsCloudDataSwitch,
+    private static async Task<(List<ChatStreamEvent> Events, IReadOnlyList<ConversationMessageDto> CapturedContext)> RunOrchestrationAttachmentEgressAsync(bool anyParticipantNeedsCloudDataSwitch,
         bool allowCloudModelAccess)
     {
         var conversationId = Guid.NewGuid();

@@ -1158,7 +1158,10 @@ public sealed class AgentDefinitionResolverTests
         capabilityResolver.ResolveAsync(grantedModel, Arg.Any<CancellationToken>())
                           .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true)
                           {
-                              CloudGrants = new ExternalProviderCloudGrants { LocalData = true }
+                              CloudGrants = new ExternalProviderCloudGrants
+                              {
+                                  LocalData = true
+                              }
                           });
         var resolver = BuildResolver(out var store,
             out var playbookStore,
@@ -1189,10 +1192,16 @@ public sealed class AgentDefinitionResolverTests
     {
         // The turn reads grants ONCE: the pin's snapshot grants reach both offer reads, so neither re-reads the registry.
         const string grantedModel = "ext:gateway/qwen3";
-        var grants = new ExternalProviderCloudGrants { McpTools = true };
+        var grants = new ExternalProviderCloudGrants
+        {
+            McpTools = true
+        };
         var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
         capabilityResolver.ResolveAsync(grantedModel, Arg.Any<CancellationToken>())
-                          .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true) { CloudGrants = grants });
+                          .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true)
+                          {
+                              CloudGrants = grants
+                          });
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
         offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
                      .Returns([OfferTool("GetCurrentTime")]);

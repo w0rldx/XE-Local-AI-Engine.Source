@@ -154,7 +154,8 @@ public sealed partial class Program
         }
         else
         {
-            Log.Error("The recovery-code unlock succeeded but the admin password reset failed; the previous password and recovery code still apply, and the new recovery code shown on the unlock page is void: {Errors}",
+            Log.Error(
+                "The recovery-code unlock succeeded but the admin password reset failed; the previous password and recovery code still apply, and the new recovery code shown on the unlock page is void: {Errors}",
                 string.Join(" ", result.Errors));
         }
     }

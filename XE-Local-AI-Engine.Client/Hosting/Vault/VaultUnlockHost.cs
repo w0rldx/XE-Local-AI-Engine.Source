@@ -283,6 +283,7 @@ internal static class VaultUnlockHost
 
         internal TaskCompletionSource<VaultUnlockOutcome> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        internal bool TryReserve() => Interlocked.Exchange(ref _reserved, 1) == 0;
+        internal bool TryReserve() =>
+            Interlocked.Exchange(ref _reserved, 1) == 0;
     }
 }

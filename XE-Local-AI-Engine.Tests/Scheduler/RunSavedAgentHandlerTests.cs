@@ -139,7 +139,10 @@ public sealed class RunSavedAgentHandlerTests
         harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
                .Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: true)
                {
-                   CloudGrants = new ExternalProviderCloudGrants { UnattendedRuns = true }
+                   CloudGrants = new ExternalProviderCloudGrants
+                   {
+                       UnattendedRuns = true
+                   }
                });
 
         // AllowCloudModelUnattendedRuns stays at its default (off): the connection's grant stands in for it.
@@ -158,7 +161,13 @@ public sealed class RunSavedAgentHandlerTests
         harness.Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
                .Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: true)
                {
-                   CloudGrants = new ExternalProviderCloudGrants { LocalData = true, WebTools = true, McpTools = true, SubAgents = true }
+                   CloudGrants = new ExternalProviderCloudGrants
+                   {
+                       LocalData = true,
+                       WebTools = true,
+                       McpTools = true,
+                       SubAgents = true
+                   }
                });
 
         // Each grant answers for its own class only: none of these stands in for AllowCloudModelUnattendedRuns.
