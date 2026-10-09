@@ -36,6 +36,17 @@ budget. Monaco workers load through Vite `?worker` so the editor stays offline. 
 `GraphWorkflowNodeConfigPanel.tsx`; `config/bundle-budget.json`.
 [evidence](../agent-knowledge-evidence.md#ui-race-failures)
 
+### Monaco `editor.api` ships no contributions: an option for one draws nothing until it is imported
+
+**Rule:** `MonacoRuntime.ts` assembles `monaco-editor/editor/editor.api.js` (core only: `create`,
+`createDiffEditor`, `createModel`, `setModelLanguage`). Any feature that is a contribution (unicode highlighter,
+hover, find, folding, …) must be imported from `monaco-editor/editor/contrib/**`, or its options
+(`unicodeHighlight`, `renderControlCharacters`, …) are accepted and render nothing, with no warning. Check on the
+Vite origin with `monaco.editor.getEditors()[0].getModel().getAllDecorations()`. Each contribution lands in the lazy
+editor chunk (`lazyEditorJavaScriptBytes`); the hover alone is about 310 kB. **Prevents:** an "inspect" mode that
+passes its unit tests (they assert the options reach `monaco.editor.create`) yet shows an operator nothing.
+**Authority:** `MonacoRuntime.ts`; `CodeEditor.test.tsx`; `config/bundle-budget.json`.
+
 ### Push first: a `refetchInterval` is a bounded fallback, never the default
 
 **Rule:** state our own process changes reaches the UI over a SignalR hub, with the REST GET as the one-shot hydrate on
@@ -105,6 +116,17 @@ is Production and maps no document: 404 everywhere); read the port from `desktop
 `--urls`); with an isolated `HOME`, forward `MISE_TRUSTED_CONFIG_PATHS` and `MISE_DATA_DIR`, or mise aborts the host
 before readiness and it reads as a broken spec. **Authority:** `scripts/openapi-live-check.sh`;
 `DesktopPortStore.ResolveBindUrlAsync`. [evidence](../agent-knowledge-evidence.md#openapi-incidents)
+
+### hey-api `validator: true` validates requests too, and a `format: binary` body fails as a string
+
+**Rule:** keep `@hey-api/sdk` at `validator: { request: false, response: true }` in `OpenapiTs.config.ts`. Since
+hey-api 0.77 `validator: true` runs the zod schema on the request as well, and the zod plugin types `format: binary`
+as `z.string()`, so a multipart `File` body sent through the generated SDK (`uploadConversationFile`,
+`previewSkillImport`) is refused in the browser before any request leaves, with the misleading message "The server
+returned a response in an unexpected shape" and nothing in the network panel. Image, knowledge-base and
+transcription uploads post through `axiosInstance` directly and are not affected. **Prevents:** a regenerate that
+silently breaks the SDK upload paths while every vitest test (msw never sees the request) stays green.
+**Authority:** `OpenapiTs.config.ts`; `openapi:check` in `XE-Local-AI-Engine.Client.React/package.json`.
 
 ### A flag-gated route family vanishes from a regenerated spec unless the flag is on
 
@@ -245,8 +267,10 @@ again and loses the coverage; `i18next-browser-languagedetector` writes `i18next
 
 **Rule:** beyond wiki 17: file-wide routes go in `setupMswServer(...)` defaults; a test that means to make an
 undeclared request calls `assertNoUnhandledRequests()`, which asserts and drains. A request fired during RTL
-unmount is dropped and charged to no test. **Authority:** `src/test/UseMswServer.ts`;
-`ValidationProblemProbeApi.test.ts`.
+unmount is dropped and charged to no test. When the generated client loses an async hop (the request validators were
+dropped on 2026-10-09), a GET that used to fire one tick after the test unmounted fires inside it and hits the strict
+guard: register the route in that test, never widen `onUnhandledRequest` or add a wait. **Authority:**
+`src/test/UseMswServer.ts`; `ValidationProblemProbeApi.test.ts`; `DevWorkflowDefinitionFormPanel.test.tsx`.
 
 ### Every `MantineProvider` a test mounts carries `env="test"`
 
