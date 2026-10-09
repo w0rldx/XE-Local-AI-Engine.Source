@@ -31,6 +31,9 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
     private bool _failed;
     private bool _disposed;
 
+    // The shell's own exit code: the owned engine's when it stopped the session, so a launcher and a script see why it ended.
+    private int _exitCode;
+
     internal DesktopApplication(DesktopStartupOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -48,7 +51,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _window = new Window
             {
-                Title = "XE AI-Engine",
+                Title = DesktopText.Title,
                 Width = 560,
                 Height = 220
             };
@@ -93,6 +96,8 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
 
     private async Task InitializeDesktopAsync()
     {
+        // Set once the engine is ready: only a failure after it, while the native window is created, can be a missing WebView2.
+        var engineReady = false;
         try
         {
             Directory.CreateDirectory(_options.DataDirectory);
@@ -119,6 +124,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             DesktopText.Apply(await DesktopPreferences.ReadLanguageAsync(_options.DataDirectory, _stopping.Token));
             _engine = await DesktopEngineSession.StartAsync(_options, _stopping.Token);
             _stopping.Token.ThrowIfCancellationRequested();
+            engineReady = true;
             if (!_engine.OwnsEngine)
             {
                 await WriteNotStreamedAsync();
@@ -150,10 +156,14 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             await Console.Error.WriteLineAsync("Desktop startup failed; inspect the engine log and installed prerequisites.");
             if (_window is DesktopWindow failedWindow) { await failedWindow.DisposeAsync(); }
 
-            var reason = OperatingSystem.IsLinux() && _window is DesktopWindow ? GtkDesktopBridge.FailureText : DesktopText.StartupFailed;
+            _exitCode = exception is DesktopEngineStartupException { ExitCode: { } engineExitCode } ? engineExitCode : 1;
+            string reason;
+            if (OperatingSystem.IsLinux() && _window is DesktopWindow) { reason = GtkDesktopBridge.FailureText; }
+            else { reason = engineReady ? DesktopText.WindowFailed : DesktopText.StartupFailed; }
+
             // The engine's own last words (a missing shared runtime, a port conflict) are the only actionable part.
             ShowFailure($"{reason}{Environment.NewLine}{Environment.NewLine}{exception.Message}",
-                includeWebViewLink: OperatingSystem.IsWindows());
+                includeWebViewLink: engineReady && OperatingSystem.IsWindows());
         }
     }
 
@@ -170,7 +180,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         _tray = new TrayIcon
         {
             Icon = icon,
-            ToolTipText = "XE AI-Engine",
+            ToolTipText = DesktopText.Title,
             IsVisible = true
         };
         var menu = new NativeMenu();
@@ -334,7 +344,8 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             return;
         }
 
-        if (_engine?.EngineExitCode is not (null or 0))
+        _exitCode = _engine?.EngineExitCode ?? 0;
+        if (_exitCode != 0)
         {
             ShowWindow();
             await RefreshLanguageAsync();
@@ -396,7 +407,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             }
 
             await DisposeAsync();
-            _desktop?.Shutdown();
+            _desktop?.Shutdown(_exitCode);
         }
         catch (Exception)
         {
@@ -492,6 +503,11 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         {
             Content = panel
         };
+        _window.MinWidth = 480;
+        _window.MinHeight = 320;
+        _window.Width = Math.Max(_window.Width, 640);
+        _window.Height = Math.Max(_window.Height, 420);
+        _window.CanResize = true;
         _window.Show();
         _window.Activate();
     }
@@ -525,7 +541,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
     {
         var dialog = new Window
         {
-            Title = "XE AI-Engine",
+            Title = DesktopText.Title,
             Width = 440,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner

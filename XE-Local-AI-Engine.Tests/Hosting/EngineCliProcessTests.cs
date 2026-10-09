@@ -5,12 +5,15 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Hosting;
+using XE_Local_AI_Engine.Client.Services.Vault;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 [NotInParallel]
 [Category(TestCategories.Integration)]
@@ -18,6 +21,9 @@ public sealed class EngineCliProcessTests : IDisposable
 {
     /// <summary>The engine's deterministic "--port is taken" exit code; it never falls back to another port.</summary>
     private const int PortInUseExitCode = 6;
+
+    /// <summary>The documented "data directory or node settings unusable" exit code.</summary>
+    private const int DataDirectoryUnusableExitCode = 10;
 
     /// <summary>The node-settings file name owned by <c>NodeSettingsStore</c>, which keeps it private.</summary>
     private const string NodeSettingsFileName = "node-settings.json";
@@ -145,7 +151,7 @@ public sealed class EngineCliProcessTests : IDisposable
     }
 
     [Test]
-    public async Task Setup_WhenFilesystemPreparationFails_ReturnsRedactedExitOneInsteadOfRuntimeAbort()
+    public async Task Setup_WhenFilesystemPreparationFails_ReturnsRedactedExitTenInsteadOfRuntimeAbort()
     {
         var blockedDataPath = Path.Combine(Path.GetTempPath(), "xe-engine-cli-blocked-" + Guid.NewGuid().ToString("N"));
         await File.WriteAllTextAsync(blockedDataPath, "not-a-directory");
@@ -153,7 +159,7 @@ public sealed class EngineCliProcessTests : IDisposable
         {
             var result = await RunAsync(["--setup"], launchMode: null, blockedDataPath);
 
-            AssertEx.Equal(expected: 1, result.ExitCode, result.CombinedOutput);
+            AssertEx.Equal(DataDirectoryUnusableExitCode, result.ExitCode, result.CombinedOutput);
             AssertEx.Contains(result.StandardError,
                 "The engine command failed unexpectedly (stage=host-initialization, type=DesktopDataDirectoryException).");
             AssertEx.Contains(result.StandardError,
@@ -167,22 +173,77 @@ public sealed class EngineCliProcessTests : IDisposable
     }
 
     [Test]
-    public async Task Setup_WhenNodeSettingsFileIsUnreadable_ReturnsExitFiveNamingTheRecovery()
+    public async Task Setup_WhenNodeSettingsFileIsUnreadable_ReturnsExitTenNamingTheRecovery()
     {
-        // The store's UpdateAsync refuses a read-modify-write over a present-but-unreadable file, and NodeAuthService
-        // stamps the pending external-access profile through it BEFORE the identity commit. The HTTP endpoint maps that
-        // refusal to a 400; the CLI must report its documented exit code 5 with the operator-facing recovery, not die
-        // through the top-level fatal handler.
+        // The strict startup read stops every local-data launch on a present but unreadable file, before any command runs:
+        // setup must neither die through the top-level fatal handler nor create an administrator over a corrupt file.
         Directory.CreateDirectory(_root);
         await File.WriteAllTextAsync(Path.Combine(_root, NodeSettingsFileName), "{ \"maxMessageRequestTimeoutSeconds\": ");
 
         var result = await RunAsync(["--setup"], launchMode: null);
 
-        AssertEx.Equal(expected: 5, result.ExitCode, result.CombinedOutput);
-        AssertEx.Contains(result.StandardError, "could not be read, so nothing was written.");
-        AssertEx.Contains(result.StandardError, "Repair or delete node-settings.json and try again.");
+        AssertEx.Equal(DataDirectoryUnusableExitCode, result.ExitCode, result.CombinedOutput);
+        AssertEx.Contains(result.StandardError, "is present but cannot be read");
+        AssertEx.Contains(result.StandardError, "Repair or delete node-settings.json");
         AssertEx.False(result.StandardOutput.Contains("XE_SETUP=created", StringComparison.Ordinal),
-            "Setup must not claim it created an administrator when the settings write that precedes the commit failed.");
+            "Setup must not claim it created an administrator over an unreadable settings file.");
+    }
+
+    [Test]
+    public async Task Serve_WhenNodeSettingsFileIsUnreadable_ExitsTenInsteadOfStartingOnDefaults()
+    {
+        // Starting on the default record would show first-run onboarding while every stored choice is ignored.
+        Directory.CreateDirectory(_root);
+        var settingsPath = Path.Combine(_root, NodeSettingsFileName);
+        await File.WriteAllTextAsync(settingsPath, "{ \"uiMode\": \"simpl");
+
+        var result = await RunAsync(["--mcp-only"], launchMode: null);
+
+        AssertEx.Equal(DataDirectoryUnusableExitCode, result.ExitCode, result.CombinedOutput);
+        AssertEx.Contains(result.StandardError, settingsPath);
+        AssertEx.False(result.StandardOutput.Contains(ReadyPrefix, StringComparison.Ordinal), "An unreadable settings file must never announce readiness.");
+        AssertEx.Equal("{ \"uiMode\": \"simpl", await File.ReadAllTextAsync(settingsPath), "The engine must not rewrite the file it could not read.");
+    }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Serve_WhenTheDataDirectoryIsNotWritable_ExitsTenNamingTheDirectory()
+    {
+        if (Environment.IsPrivilegedProcess)
+        {
+            Skip.Test("BLOCKED: a privileged process bypasses the directory mode this test denies the lease file with.");
+        }
+
+        Directory.CreateDirectory(_root);
+        File.SetUnixFileMode(_root, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            var result = await RunAsync(["--mcp-only"], launchMode: null);
+
+            AssertEx.Equal(DataDirectoryUnusableExitCode, result.ExitCode, result.CombinedOutput);
+            AssertEx.Contains(result.StandardError, $"The data directory '{_root}' is not writable by this user");
+        }
+        finally
+        {
+            File.SetUnixFileMode(_root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    [Test]
+    public async Task MaintenanceCommands_WhenAnotherInstanceHoldsTheDataDirectory_ExitFourLikeEveryCommand()
+    {
+        Directory.CreateDirectory(_root);
+        using var held = AssertEx.NotNull(SingleInstanceLease.TryAcquire(_root), "The test must hold the data-directory lease.");
+
+        var reset = await RunAsync(["--mcp-only", "--reset-admin-password", "another long password"], launchMode: null);
+        AssertEx.Equal(expected: 4, reset.ExitCode, reset.CombinedOutput);
+
+        var downgrade = await RunAsync(["--mcp-only", "--knowledge-downgrade-preflight"], launchMode: null);
+        AssertEx.Equal(expected: 4, downgrade.ExitCode, downgrade.CombinedOutput);
+
+        var serve = await RunAsync(["--mcp-only"], launchMode: null);
+        AssertEx.Equal(expected: 1, serve.ExitCode, "A second serve is not a command: it keeps exit 1.");
     }
 
     [Test]
@@ -311,16 +372,20 @@ public sealed class EngineCliProcessTests : IDisposable
         };
 
         const string newPassword = "A brand-new admin passw0rd";
+        string rotatedCode;
         using (var recovered = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new
                {
                    recoveryCode,
                    newPassword
                }))
         {
-            AssertEx.Equal(HttpStatusCode.NoContent, recovered.StatusCode);
+            AssertEx.Equal(HttpStatusCode.OK, recovered.StatusCode);
+            var body = AssertEx.NotNull(await recovered.Content.ReadFromJsonAsync<VaultRecoveryUnlockResponse>());
+            rotatedCode = AssertEx.NotNull(body.RecoveryCode, "The reset must show the rotated recovery code once.");
         }
 
         await WaitForRealHostAsync(engine, client);
+        await AssertRecoveryCodeRotatedAsync(recoveryCode, rotatedCode);
         using (var oldLogin = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.Login), new
                {
                    password = AdminPassword
@@ -336,6 +401,38 @@ public sealed class EngineCliProcessTests : IDisposable
         {
             AssertEx.Equal(HttpStatusCode.OK, newLogin.StatusCode, await newLogin.Content.ReadAsStringAsync());
         }
+    }
+
+    [Test]
+    public async Task LockedVault_CliReset_PrintsTheRotatedRecoveryCodeAndRetiresTheOldOne()
+    {
+        Directory.CreateDirectory(_root);
+        var recoveryCode = await SetupLockedVaultAsync();
+
+        var reset = await RunAsync(["--mcp-only", "--reset-admin-password", "A brand-new admin passw0rd", DesktopLaunch.RecoveryCodeStdinArgument],
+            launchMode: null,
+            adminPassword: null,
+            standardInput: recoveryCode);
+
+        AssertEx.Equal(expected: 0, reset.ExitCode, reset.CombinedOutput);
+        var codeLine = reset.StandardOutput.Split(Environment.NewLine).SingleOrDefault(static line => line.StartsWith("XE_RECOVERY_CODE=", StringComparison.Ordinal));
+        var rotatedCode = AssertEx.NotNull(codeLine, "The reset must print the rotated recovery code once.")["XE_RECOVERY_CODE=".Length..];
+        await AssertRecoveryCodeRotatedAsync(recoveryCode, rotatedCode);
+
+        var reuse = await RunAsync(["--mcp-only", "--reset-admin-password", "Another new admin passw0rd", DesktopLaunch.RecoveryCodeStdinArgument],
+            launchMode: null,
+            adminPassword: null,
+            standardInput: recoveryCode);
+        AssertEx.Equal(expected: 5, reuse.ExitCode, "The code that proved a reset must not unlock the vault again.");
+    }
+
+    /// <summary>The key file now opens with <paramref name="rotatedCode" /> and no longer with <paramref name="oldCode" />.</summary>
+    private async Task AssertRecoveryCodeRotatedAsync(string oldCode, string rotatedCode)
+    {
+        AssertEx.NotEqual(oldCode, rotatedCode);
+        var file = VaultFileCodec.Read(await File.ReadAllBytesAsync(Path.Combine(_root, DesktopBootstrap.KeyFileName)));
+        _ = AssertEx.Throws<VaultUnlockException>(() => VaultFileCodec.UnwrapWithRecovery(file, oldCode));
+        AssertEx.Equal(32, VaultFileCodec.UnwrapWithRecovery(file, rotatedCode).Length);
     }
 
     [Test]
@@ -476,16 +573,24 @@ public sealed class EngineCliProcessTests : IDisposable
         string? launchMode,
         string? dataDirectory = null,
         string? adminPassword = AdminPassword,
-        string nodeName = DefaultNodeName)
+        string nodeName = DefaultNodeName,
+        string? standardInput = null)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         using var process = new Process
         {
             StartInfo = CreateStartInfo(arguments, launchMode, dataDirectory ?? _root, adminPassword, nodeName)
         };
+        process.StartInfo.RedirectStandardInput = standardInput is not null;
         if (!process.Start())
         {
             throw new InvalidOperationException("The engine CLI process could not be started.");
+        }
+
+        if (standardInput is not null)
+        {
+            await process.StandardInput.WriteLineAsync(standardInput);
+            process.StandardInput.Close();
         }
 
         var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);

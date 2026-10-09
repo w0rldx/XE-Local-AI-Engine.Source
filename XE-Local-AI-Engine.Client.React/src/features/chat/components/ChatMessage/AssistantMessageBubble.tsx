@@ -50,6 +50,8 @@ export function AssistantMessageBubble({
 	const { playingMessageId } = useVoiceRuntime();
 	const isBeingSpoken = playingMessageId === message.id;
 	const { assistantMessage, content } = display;
+	// A Stop before any answer text keeps only the thoughts, so the line says where the model was when stopped.
+	const stoppedWhileThinking = display.isCancelled && !content?.trim() && (message.reasoning?.trim().length ?? 0) > 0;
 
 	return (
 		<Group align="flex-start" wrap="nowrap" gap="sm" data-testid={`chat-message-${message.id}`}>
@@ -121,7 +123,9 @@ export function AssistantMessageBubble({
 					<Group gap={6} align="center" data-testid={`chat-message-stopped-${message.id}`} role="status">
 						<IconPlayerStop size={14} color="var(--mantine-color-dimmed)" />
 						<Text size="sm" c="dimmed">
-							{t("pages.chat.stopped", "Generation stopped")}
+							{stoppedWhileThinking
+								? t("pages.chat.stoppedWhileThinking", "Stopped while thinking")
+								: t("pages.chat.stopped", "Generation stopped")}
 						</Text>
 					</Group>
 				) : null}

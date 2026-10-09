@@ -15,6 +15,8 @@ public static class TranscriptionHubEvents
     public const string CatchUpProgress = "transcriptionCatchUpProgress";
 
     public const string AdmissionClosed = "transcriptionAdmissionClosed";
+
+    public const string SourceQuiet = "transcriptionSourceQuiet";
 }
 
 /// <summary>

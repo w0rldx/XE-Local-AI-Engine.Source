@@ -7,6 +7,7 @@ import {
 	refreshModelCatalogMutation,
 	refreshRecommendationsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import type { XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse } from "@/core/api/generated";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toHardwareProfile, toLatestRecommendations, toModelFitCatalogInfo } from "@/features/model-fit/models/ModelFitMappers";
 import type { ModelFitRecommendationFilters, ModelFitUseCase } from "@/features/model-fit/models/ModelFitModels";
@@ -72,9 +73,12 @@ export function useRefreshRecommendations() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: async (variables: RefreshRecommendationsVariables): Promise<void> => {
+		// Resolves with the response, whose `fireId` the scheduler hub's run events for this fire carry as `manualFireId`.
+		mutationFn: async (
+			variables: RefreshRecommendationsVariables,
+		): Promise<XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse | undefined> => {
 			const options = withResponseValidation(refreshRecommendationsMutation());
-			await options.mutationFn?.({ body: { ...variables } }, undefined as never);
+			return await options.mutationFn?.({ body: { ...variables } }, undefined as never);
 		},
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.latest) }),
 	});

@@ -1076,7 +1076,7 @@ XE-Local-AI-Engine.Tests/Hosting/DesktopBootstrapTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Hosting/DesktopLaunchTests.cs|run|2
 XE-Local-AI-Engine.Tests/Hosting/DesktopLaunchTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Hosting/DesktopPortStoreTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Hosting/EngineCliProcessTests.cs|run|2
+XE-Local-AI-Engine.Tests/Hosting/EngineCliProcessTests.cs|run|1
 XE-Local-AI-Engine.Tests/Hosting/EngineCommandDispatchTests.cs|run|1
 XE-Local-AI-Engine.Tests/Hosting/ExternalAccessProfileBackfillTests.cs|run|3
 XE-Local-AI-Engine.Tests/Hosting/ExternalAccessProfileBackfillTests.cs|summary|1

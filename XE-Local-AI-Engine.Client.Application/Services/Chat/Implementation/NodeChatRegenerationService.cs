@@ -637,6 +637,15 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         var unanswered = applyCompaction
             ? ConversationContextBuilder.FindUnansweredUserTurns(selected.Where(message => anchorSequence(message) < cutoffSequence), anchorSequence)
             : [];
+        // A prompt the user Stopped before any answer is left out, as the send path leaves it out. Read up to AND
+        // including the cutoff turn, which is last there and so never counts as abandoned.
+        if (applyCompaction)
+        {
+            var abandoned = ConversationContextBuilder.FindAbandonedUserTurns(selected.Where(message => anchorSequence(message) <= cutoffSequence),
+                anchorSequence,
+                includeToolHistory: false);
+            selected = [.. selected.Where(message => !abandoned.Contains(message.MessageId))];
+        }
 
         // The synthetic context messages — knowledge grounding, then the compaction synopsis — take the first slots so
         // the model reads them before the history, which shifts down by their count. Empty on a plain rerun.

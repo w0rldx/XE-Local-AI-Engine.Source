@@ -28,7 +28,9 @@ public interface INodeAuthService
     ///     exists the machine is no longer enough: <paramref name="recoveryCode" /> must unwrap the vault, which is then
     ///     re-wrapped under <paramref name="newPassword" /> before Identity is touched.
     /// </remarks>
-    Task<NodePasswordChangeResult> ResetAdminPasswordAsync(string newPassword, string? recoveryCode, CancellationToken cancellationToken);
+    /// <param name="newRecoveryCode">The rotated code when the caller already showed it; <see langword="null" /> mints one.</param>
+    /// <returns>The outcome; after a recovery-code reset, <see cref="NodePasswordChangeResult.RecoveryCode" /> is the rotated code.</returns>
+    Task<NodePasswordChangeResult> ResetAdminPasswordAsync(string newPassword, string? recoveryCode, string? newRecoveryCode, CancellationToken cancellationToken);
 
     /// <summary>
     ///     Wraps a legacy (pre-vault) <c>node.key</c> under the signed-in admin's password once Identity has verified
@@ -98,4 +100,7 @@ public sealed class NodePasswordChangeResult
     public required bool Succeeded { get; init; }
 
     public required IReadOnlyList<string> Errors { get; init; }
+
+    /// <summary>The rotated vault recovery code after a successful recovery reset; <see langword="null" /> otherwise.</summary>
+    public string? RecoveryCode { get; init; }
 }

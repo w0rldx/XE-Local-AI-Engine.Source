@@ -8,6 +8,9 @@ import type {
 	ChatMessageRevisionNav,
 } from "@/features/chat/models/ChatModels";
 
+// The data-row name the node seeds its default persona with (AgentDefaults.DefaultAgentName); never localized server-side.
+const seededDefaultAgentName = "Default Assistant";
+
 const EMPTY_PARTS: ChatMessagePart[] = [];
 
 // Verbatim copy of ProviderCallBudget.StepCallCapReachedMessage (XE-Local-AI-Engine.AI.Agent/Invocation/
@@ -133,8 +136,11 @@ export function deriveChatMessageDisplay({
 	// During streaming, message.agentName is the locally-selected agent name stamped optimistically at send
 	// time (see appendOptimisticNodeChatSend) and carried through every stream-state rebuild, so the correct
 	// agent shows live. The fallback only covers legacy turns and turns sent with no agent selected.
+	// The seeded default persona's stored name is English data, not copy, so it is shown in the reader's language too.
 	const agentDisplayName = assistantMessage
-		? (message.agentName ?? t("pages.chat.defaultAgentName", "Default Assistant"))
+		? message.agentName == null || message.agentName === seededDefaultAgentName
+			? t("pages.chat.defaultAgentName", "Default Assistant")
+			: message.agentName
 		: undefined;
 	// Model that produced the turn (ground truth from the persisted message — Ollama id or Codex/cloud id).
 	// Shown on every assistant turn that carries a model so multiple-provider threads stay auditable. Absent for

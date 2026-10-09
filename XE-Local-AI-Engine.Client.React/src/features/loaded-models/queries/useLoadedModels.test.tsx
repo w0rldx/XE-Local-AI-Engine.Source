@@ -39,6 +39,7 @@ import { resolveLoadedModelsPollIntervalMs, useLoadedModels } from "@/features/l
 import {
 	runningModelsPollIntervalMs,
 	runningModelsPushFloorMs,
+	useEjectRunningModel,
 	useRunningModels,
 } from "@/features/loaded-models/queries/useRunningModels";
 
@@ -187,5 +188,24 @@ describe("useRunningModels (llama.cpp) polling", () => {
 	it("pins the fallback cadence to 4s and the push floor to 60s", () => {
 		expect(runningModelsPollIntervalMs).toBe(4000);
 		expect(runningModelsPushFloorMs).toBe(60_000);
+	});
+});
+
+describe("useEjectRunningModel", () => {
+	afterEach(() => vi.clearAllMocks());
+
+	it("refreshes the llama.cpp runtime status too, so the Runtimes page stops counting the ejected model", async () => {
+		runningModelsGenMock.ejectRunningModelMutation.mockReturnValue({
+			mutationFn: vi.fn().mockResolvedValue({ modelName: "m", role: "Chat", outcome: "ejected" }),
+		});
+		const queryClient = makeClient();
+		queryClient.setQueryData([{ _id: "getLlamaCppRuntime" }], { runningProcessCount: 1 });
+		queryClient.setQueryData([{ _id: "listRunningModels" }], { items: [] });
+
+		const { result } = renderHook(() => useEjectRunningModel(), { wrapper: makeWrapper(queryClient) });
+		await result.current.mutateAsync({ modelName: "m" });
+
+		expect(queryClient.getQueryState([{ _id: "getLlamaCppRuntime" }])?.isInvalidated).toBe(true);
+		expect(queryClient.getQueryState([{ _id: "listRunningModels" }])?.isInvalidated).toBe(true);
 	});
 });

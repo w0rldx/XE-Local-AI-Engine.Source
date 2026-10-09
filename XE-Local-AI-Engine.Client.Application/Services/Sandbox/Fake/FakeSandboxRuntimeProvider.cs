@@ -142,7 +142,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
 
         if (inFlight is null)
         {
-            return BuildResult(request, scripted, completed: true, startedAt);
+            return BuildResult(request, scripted, completed: !scripted.FailsToLaunch, startedAt);
         }
 
         await using var registration = cancellationToken
@@ -424,6 +424,24 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         }
     }
 
+    /// <summary>Register a command whose executable cannot be started (e.g. not installed or not on the PATH).</summary>
+    public void RegisterLaunchFailure(string commandLine)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandLine);
+
+        lock (_sync)
+        {
+            _scripts[commandLine] = new ScriptedCommand
+            {
+                Blocks = false,
+                ExitCode = -1,
+                StandardOutput = string.Empty,
+                StandardError = "The sandbox command could not be launched.",
+                FailsToLaunch = true
+            };
+        }
+    }
+
     /// <summary>Register a command that blocks until it is cancelled or the sandbox is killed (for cancel/kill tests).</summary>
     public void RegisterBlockingCommand(string commandLine)
     {
@@ -583,7 +601,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
             ExecutionId = request.ExecutionId,
             ExitCode = completed ? scripted.ExitCode : -1,
             StandardOutput = completed ? scripted.StandardOutput : string.Empty,
-            StandardError = completed ? scripted.StandardError : "Command was cancelled before completion.",
+            StandardError = completed || scripted.FailsToLaunch ? scripted.StandardError : "Command was cancelled before completion.",
             Completed = completed,
             Duration = _timeProvider.GetUtcNow() - startedAt
         };
@@ -632,6 +650,9 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         public required string StandardOutput { get; init; }
 
         public required string StandardError { get; init; }
+
+        /// <summary>The executable cannot be started: the result is the not-completed exit -1 shape real providers return.</summary>
+        public bool FailsToLaunch { get; init; }
     }
 
     // One entry of the virtual filesystem as seen from the enumerated directory: its path relative to that directory,

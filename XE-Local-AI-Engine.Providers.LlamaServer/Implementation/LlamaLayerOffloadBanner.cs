@@ -40,4 +40,38 @@ internal static partial class LlamaLayerOffloadBanner
         RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex OffloadBannerRegex();
+
+    /// <summary>
+    ///     Reads the device name out of a <c>load_tensors:   CUDA0 model buffer size = 373.73 MiB</c> line. Returns
+    ///     <see langword="false" /> for any other line.
+    /// </summary>
+    public static bool TryParseModelBufferDevice(string? line, out string device)
+    {
+        device = string.Empty;
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return false;
+        }
+
+        var match = ModelBufferRegex().Match(line);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        device = match.Groups["device"].Value;
+        return true;
+    }
+
+    /// <summary>True for a host buffer (<c>CPU</c>, <c>CPU_Mapped</c>, <c>CPU_REPACK</c>, <c>CUDA_Host</c>); any other name is a GPU device.</summary>
+    public static bool IsHostBuffer(string device)
+    {
+        return device.StartsWith("CPU", StringComparison.OrdinalIgnoreCase)
+               || device.EndsWith("_Host", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [GeneratedRegex("""(?<device>[A-Za-z][A-Za-z0-9_]*)\s+model\s+buffer\s+size\s*=""",
+        RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex ModelBufferRegex();
 }

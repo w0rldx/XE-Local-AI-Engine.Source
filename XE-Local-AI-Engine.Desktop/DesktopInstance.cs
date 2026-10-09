@@ -46,6 +46,13 @@ internal sealed class DesktopInstance : IAsyncDisposable
         {
             throw;
         }
+        catch (UnauthorizedAccessException exception)
+        {
+            // The raw "Access to the path ... is denied" names neither the cause nor the fix.
+            throw new UnauthorizedAccessException(
+                $"The data directory '{directory}' is not writable by this user, so 'desktop-shell.lock' could not be opened. Check the ownership and permissions of that directory.",
+                exception);
+        }
         catch (IOException exception) when (!OperatingSystem.IsWindows() || (exception.HResult & 0xffff) is 32 or 33)
         {
             return null;

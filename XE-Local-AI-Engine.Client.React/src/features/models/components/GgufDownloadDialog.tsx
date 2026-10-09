@@ -19,6 +19,13 @@ const qualityTierLabelKey: Record<GgufQuantTier, string> = {
 	Minimal: "minimal",
 };
 
+// jsdom has no scrollIntoView, so the guard keeps every test host that renders this dialog working.
+function scrollRowIntoView(row: HTMLTableRowElement | null): void {
+	if (row !== null && "scrollIntoView" in row) {
+		row.scrollIntoView({ block: "nearest" });
+	}
+}
+
 interface GgufDownloadDialogProps {
 	// The repo whose quants are being picked; null closes the dialog (and gates the inspect query). The dialog inspects
 	// the repo itself; a tested catalog pick also names its tested quant, which becomes the default selection.
@@ -52,6 +59,9 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 			: preferredGgufFileName(files, repository?.preferredQuant);
 
 	const selectedFile = files.find((file) => file.fileName === selectedFileName) ?? null;
+	// The default pick (a tested or recommended quant) can sit far down a long quant list; until the operator picks, its
+	// row is scrolled into view. A module-level callback keeps the ref stable, so it fires once when that row mounts.
+	const defaultRowRef = pickedFileName === null ? scrollRowIntoView : undefined;
 
 	// The operator's projector choice, tagged with the repo it was made for. Inspecting a different repo simply stops
 	// matching, so the choice falls back to the default (included) with no derived-state effect — the same reason
@@ -145,7 +155,11 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 										const fitColor = fitVerdictColor[file.fitVerdict];
 										const fitLabelKey = file.fitVerdict === "Unknown" ? null : fitVerdictLabelKey[file.fitVerdict];
 										return (
-											<Table.Tr key={file.fileName} data-testid={`gguf-download-row-${file.quant}`}>
+											<Table.Tr
+												key={file.fileName}
+												ref={file.fileName === selectedFileName ? defaultRowRef : undefined}
+												data-testid={`gguf-download-row-${file.quant}`}
+											>
 												<Table.Td>
 													<Radio value={file.fileName} aria-label={file.quant} />
 												</Table.Td>

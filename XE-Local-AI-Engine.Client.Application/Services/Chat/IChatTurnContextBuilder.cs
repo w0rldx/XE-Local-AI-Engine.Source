@@ -51,6 +51,14 @@ public interface IChatTurnContextBuilder
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     The names of the requested extracted files that do not fit, whole, in the node's inlined-attachment budget:
+    ///     the plain-chat context carries only part of them, or none.
+    /// </summary>
+    Task<IReadOnlyList<string>> ListTruncatedAttachmentNamesAsync(Guid conversationId,
+        IReadOnlyList<Guid>? attachmentFileIds,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     The top-k fused knowledge-base hits for <paramref name="query" />, composed into ONE fenced untrusted
     ///     context message alongside the provenance of the inlined hits.
     /// </summary>

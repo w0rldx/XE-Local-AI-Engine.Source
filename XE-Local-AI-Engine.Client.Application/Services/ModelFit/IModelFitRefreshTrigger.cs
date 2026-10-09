@@ -17,7 +17,7 @@ public interface IModelFitRefreshTrigger
 {
     /// <summary>
     ///     Triggers an immediate refresh by firing the scheduled job <paramref name="scheduledJobId" />, delegating to
-    ///     <see cref="IScheduledJobManagementService.TriggerNowAsync" />.
+    ///     <see cref="IScheduledJobManagementService.TriggerNowAsync" />; returns the fire id its run events carry.
     /// </summary>
     /// <param name="useCaseOverride">Runs a specific use-case instead of the definition's baked one, validated against the fixed six-value llmfit allowlist.</param>
     /// <param name="limitOverride">Widens the recommendation breadth (<c>--limit</c>) for this run, validated to the supported <c>1..50</c> range.</param>
@@ -30,7 +30,7 @@ public interface IModelFitRefreshTrigger
     /// </remarks>
     /// <exception cref="ScheduledJobValidationException">No definition has that id, its template is not
     ///     <c>model-recommendation-check</c>, an override is invalid, or the scheduler rejects a disabled, deleted, forbidden or unscheduled job.</exception>
-    Task TriggerRecommendationRefreshAsync(Guid scheduledJobId,
+    Task<Guid> TriggerRecommendationRefreshAsync(Guid scheduledJobId,
         string? useCaseOverride = null,
         int? limitOverride = null,
         string? quantOverride = null,

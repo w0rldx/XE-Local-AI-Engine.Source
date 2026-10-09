@@ -412,8 +412,11 @@ public sealed class TokenUsageAggregateRecord
     /// <summary>Summed completion/output tokens (missing values counted as 0).</summary>
     public required long CompletionTokens { get; init; }
 
-    /// <summary>Summed reasoning tokens (missing values counted as 0).</summary>
-    public required long ReasoningTokens { get; init; }
+    /// <summary>
+    ///     Summed reasoning tokens over the runs that reported them, or <see langword="null" /> when none did: many local
+    ///     providers never report a reasoning count, and 0 would read as "no reasoning".
+    /// </summary>
+    public required long? ReasoningTokens { get; init; }
 
     /// <summary>Summed total tokens reported by the model (missing values counted as 0).</summary>
     public required long TotalTokens { get; init; }

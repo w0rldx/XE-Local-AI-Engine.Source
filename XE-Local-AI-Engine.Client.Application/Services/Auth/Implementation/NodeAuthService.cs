@@ -281,8 +281,8 @@ public sealed class NodeAuthService : INodeAuthService
     public Task<NodePasswordChangeResult> ChangePasswordAsync(ClaimsPrincipal principal, string currentPassword, string newPassword, CancellationToken cancellationToken) =>
         UnderPasswordLockAsync(() => ChangePasswordCoreAsync(principal, currentPassword, newPassword, cancellationToken), cancellationToken);
 
-    public Task<NodePasswordChangeResult> ResetAdminPasswordAsync(string newPassword, string? recoveryCode, CancellationToken cancellationToken) =>
-        UnderPasswordLockAsync(() => ResetAdminPasswordCoreAsync(newPassword, recoveryCode, cancellationToken), cancellationToken);
+    public Task<NodePasswordChangeResult> ResetAdminPasswordAsync(string newPassword, string? recoveryCode, string? newRecoveryCode, CancellationToken cancellationToken) =>
+        UnderPasswordLockAsync(() => ResetAdminPasswordCoreAsync(newPassword, recoveryCode, newRecoveryCode, cancellationToken), cancellationToken);
 
     public Task<NodeVaultConfirmResult> ConfirmLegacyVaultAsync(ClaimsPrincipal principal, string password, CancellationToken cancellationToken) =>
         UnderPasswordLockAsync(() => ConfirmLegacyVaultCoreAsync(principal, password, cancellationToken), cancellationToken);
@@ -364,7 +364,7 @@ public sealed class NodeAuthService : INodeAuthService
         };
     }
 
-    private async Task<NodePasswordChangeResult> ResetAdminPasswordCoreAsync(string newPassword, string? recoveryCode, CancellationToken cancellationToken)
+    private async Task<NodePasswordChangeResult> ResetAdminPasswordCoreAsync(string newPassword, string? recoveryCode, string? newRecoveryCode, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
 
@@ -395,7 +395,7 @@ public sealed class NodeAuthService : INodeAuthService
         {
             try
             {
-                vaultChange = await _vault.RewrapWithRecoveryAsync(recoveryCode!, newPassword, cancellationToken);
+                vaultChange = await _vault.RewrapWithRecoveryAsync(recoveryCode!, newPassword, newRecoveryCode, cancellationToken);
             }
             catch (VaultUnlockException)
             {
@@ -415,7 +415,14 @@ public sealed class NodeAuthService : INodeAuthService
                 await _vault.RestoreAsync(vaultChange, CancellationToken.None);
             }
 
-            return result;
+            return result.Succeeded && vaultChange?.RecoveryCode is { } rotated
+                ? new NodePasswordChangeResult
+                {
+                    Succeeded = true,
+                    Errors = result.Errors,
+                    RecoveryCode = rotated
+                }
+                : result;
         }
         catch when (vaultChange is not null)
         {

@@ -87,14 +87,16 @@ public sealed class SingleInstanceLeaseTests
         File.SetUnixFileMode(temp.Path, UnixFileMode.UserRead | UnixFileMode.UserExecute);
         try
         {
-            var exception = await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() =>
+            // DesktopDataDirectoryException is what the engine maps to exit 10 with this text, instead of crashing.
+            var exception = await AssertEx.ThrowsAsync<DesktopDataDirectoryException>(() =>
             {
                 SingleInstanceLease.TryAcquire(temp.Path);
                 return Task.CompletedTask;
             });
 
-            AssertEx.Contains(exception.Message, "ownership", StringComparison.OrdinalIgnoreCase);
-            AssertEx.Contains(exception.Message, temp.Path);
+            AssertEx.Contains(exception.SafeDiagnostic, "ownership", StringComparison.OrdinalIgnoreCase);
+            AssertEx.Contains(exception.SafeDiagnostic, temp.Path);
+            AssertEx.True(exception.InnerException is UnauthorizedAccessException, "The OS denial stays the inner exception.");
         }
         finally
         {

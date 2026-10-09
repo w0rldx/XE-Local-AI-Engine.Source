@@ -161,8 +161,8 @@ export function ScheduledJobForm({
 		if (!result.success) {
 			const nextErrors: Record<string, string> = {};
 			for (const issue of result.error.issues) {
-				// Custom issues carry an i18n key; built-in Zod issues carry their own message.
-				nextErrors[issueKey(issue.path)] = issue.code === "custom" ? t(issue.message) : issue.message;
+				// Custom issues and messages the schema names carry an i18n key; other built-in Zod issues carry their own text.
+				nextErrors[issueKey(issue.path)] = issue.message.startsWith("pages.") ? t(issue.message) : issue.message;
 			}
 			setErrors(nextErrors);
 			return;

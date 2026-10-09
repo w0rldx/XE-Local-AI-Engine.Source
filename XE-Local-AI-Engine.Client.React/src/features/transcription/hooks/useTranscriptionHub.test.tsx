@@ -14,6 +14,7 @@ import {
 	TRANSCRIPTION_PARTIAL_UPDATED,
 	TRANSCRIPTION_SEGMENT_COMMITTED,
 	TRANSCRIPTION_SESSION_STATUS_CHANGED,
+	TRANSCRIPTION_SOURCE_QUIET,
 } from "@/features/transcription/models/TranscriptionLiveModels";
 
 const SESSION_ID = "11111111-1111-1111-1111-111111111111";
@@ -386,6 +387,24 @@ describe("useTranscriptionHub", () => {
 
 		fire(TRANSCRIPTION_CATCH_UP_PROGRESS, { sessionId: SESSION_ID, bufferedMs: 0 });
 		await waitFor(() => expect(result.current.view?.bufferedMs).toBe(0));
+	});
+
+	// F-18: a captured application that went silent is reported, never ended. Zero means audio returned; another
+	// session's or a malformed push is ignored.
+	it("SourceQuiet_SurfacesQuietMsForThisSessionOnlyAndClearsOnZero", async () => {
+		const { result } = renderHub();
+		await waitFor(() => expect(result.current.hub.connected).toBe(true));
+		expect(result.current.view?.sourceQuietMs).toBeNull();
+
+		fire(TRANSCRIPTION_SOURCE_QUIET, { sessionId: SESSION_ID.toUpperCase(), channel: "Others", quietMs: 10_000 });
+		await waitFor(() => expect(result.current.view?.sourceQuietMs).toBe(10_000));
+
+		fire(TRANSCRIPTION_SOURCE_QUIET, { sessionId: "22222222-2222-2222-2222-222222222222", channel: "Others", quietMs: 99_000 });
+		fire(TRANSCRIPTION_SOURCE_QUIET, { sessionId: SESSION_ID, channel: "Others", quietMs: "long" });
+		expect(result.current.view?.sourceQuietMs).toBe(10_000);
+
+		fire(TRANSCRIPTION_SOURCE_QUIET, { sessionId: SESSION_ID, channel: "Others", quietMs: 0 });
+		await waitFor(() => expect(result.current.view?.sourceQuietMs).toBeNull());
 	});
 
 	// The node announces it stopped accepting audio so the capture can stop instead of recording into a

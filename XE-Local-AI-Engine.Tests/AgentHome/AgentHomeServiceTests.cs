@@ -1016,6 +1016,55 @@ public sealed class AgentHomeServiceTests : IDisposable
         AssertEx.Contains(copied, path => path.EndsWith("/attachments/spec.md", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    ///     A node without Git still stages chat attachments: nothing diffs the chat re-stage, so it takes no baseline.
+    /// </summary>
+    [Test]
+    public async Task PrepareConversationAttachmentsAsync_WhenGitCannotStart_StagesWithoutRunningGit()
+    {
+        var clock = new ManualTimeProvider(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        provider.RegisterLaunchFailure(GitInitCommandKey());
+        var resolver = new FakeSelectedFolderResolver();
+
+        var conversationId = Guid.NewGuid();
+        var store = new FakeConversationUploadedFileStore();
+        store.Add(conversationId, "spec.pdf", "# Spec\n\nPeak battery endurance 38 minutes.");
+
+        using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store, enabled: true);
+
+        await using var staged = await harness.Service.PrepareConversationAttachmentsAsync(conversationId);
+
+        AssertEx.Contains(staged.StagedPaths, path => string.Equals(path, "attachments/spec.md", StringComparison.Ordinal));
+        AssertEx.Empty(provider.ExecutedCommands.Where(command => command.Executable == AgentHomeGit.Executable));
+    }
+
+    /// <summary>A run still needs the baseline, so a Git that cannot start fails it with a message naming Git.</summary>
+    [Test]
+    public async Task PrepareAsync_WhenGitCannotStart_RejectsNamingGit()
+    {
+        var clock = new ManualTimeProvider(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        provider.RegisterLaunchFailure(GitInitCommandKey());
+        var resolver = new FakeSelectedFolderResolver();
+        var folderId = Guid.NewGuid();
+        resolver.Add(folderId, "selected-project", CreateSourceFolder());
+
+        using var harness = CreateHarness(clock, provider, resolver);
+
+        var exception = await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() => harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = [folderId.ToString()]
+        }));
+
+        AssertEx.Contains(exception.Message, "need Git installed");
+    }
+
+    private static string GitInitCommandKey()
+    {
+        return AgentHomeGit.Executable + " " + string.Join(" ", AgentHomeGit.WorkspaceArguments("init"));
+    }
+
     [Test]
     public async Task PrepareConversationAttachmentsAsync_WhenRestagedForAnotherConversation_LeavesNoResidue()
     {

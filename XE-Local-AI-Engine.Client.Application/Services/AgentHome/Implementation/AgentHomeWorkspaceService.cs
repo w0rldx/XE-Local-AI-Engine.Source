@@ -46,6 +46,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
     public async Task<IReadOnlyList<SelectedFolderSnapshot>> PrepareSelectedFoldersAsync(SandboxHandle handle,
         IReadOnlyList<ResolvedSelectedFolder> resolvedFolders,
         ICollection<AgentHomeCommandLogRecord>? baselineCommands = null,
+        bool createBaseline = true,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(handle);
@@ -92,7 +93,10 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                 snapshots.Add(await CopyFolderAsync(handle, plan, cancellationToken));
             }
 
-            await CreateGitBaselineAsync(handle, baselineCommands, cancellationToken);
+            if (createBaseline)
+            {
+                await CreateGitBaselineAsync(handle, baselineCommands, cancellationToken);
+            }
 
             requiresCleanup = false;
             return snapshots;
@@ -333,6 +337,14 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
             ErrorClass = null,
             Actor = AgentHomeCommandActors.Node
         });
+
+        if (!result.Completed && result.ExitCode == -1)
+        {
+            // Providers report a failed launch, a timeout and a cancel alike (exit -1, not completed). A missing Git is the
+            // common first-run cause, so the message names the requirement without claiming it was the one that fired.
+            throw new AgentHomeRequestRejectedException(
+                $"the in-sandbox git baseline command '{command.ExecutionId}' did not complete: Agent Home runs need Git installed and on the PATH, or the command timed out or was cancelled.");
+        }
 
         if (!result.Completed || result.ExitCode != 0)
         {

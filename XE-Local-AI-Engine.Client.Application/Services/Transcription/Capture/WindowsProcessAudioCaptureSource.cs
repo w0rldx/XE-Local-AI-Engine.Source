@@ -84,6 +84,18 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
                                                                        + TranscriptionProcessCaptureNotSupportedException.DefaultMessage);
         }
 
+        // Raced against the target's exit: WASAPI stops yielding packets when the target is gone, but its enumerator never
+        // ends, so returning here is the only way the coordinator learns the application closed and ends the session.
+        var targetExited = await ProcessAudioCaptureSupport.RunUntilProcessExitsAsync(processId,
+            token => CaptureCoreAsync(sessionId, processId, token), _logger, cancellationToken);
+        if (targetExited)
+        {
+            _logger.LogInformation("Process {ProcessId} exited; per-application capture for transcription session {SessionId} ends.", processId, sessionId);
+        }
+    }
+
+    private async Task CaptureCoreAsync(Guid sessionId, int processId, CancellationToken cancellationToken)
+    {
         // Two version numbers, two jobs — do not merge them. IsSupported gates the CAPABILITY on Microsoft's documented build
         // 20348; this guard satisfies CA1416 against NAudio's 19041 annotation, so the branch is unreachable in practice.
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))

@@ -368,10 +368,23 @@ the file; consumers must reject it when the PID is dead and poll `/health/ready`
 `--status --json` is one-shot, never starts the host or creates the data directory, and returns
 `{running,version,url,mcpUrl,dataDir,setupRequired,vault,installKind}`, where `vault` is `pending`, `locked` or `unlocked` (null when not running).
 
-Two startup refusals exit with their own code and an operator-facing stderr message instead of crashing: a node key
+Three startup refusals exit with their own code and an operator-facing stderr message instead of crashing: a node key
 that cannot open the database (it does not match the database's recorded key check, or `node.key` is missing next to
-an existing `node.sqlite`) exits **8**, and a failed database migration exits **9** after the restore or move-aside
-hint. The full exit-code list is in `--help` and the [agent install guide](../agentic-support/agent-install.md#11-exit-codes-and-troubleshooting).
+an existing `node.sqlite`) exits **8**, a failed database migration exits **9** after the restore or move-aside
+hint, and an unusable data directory exits **10**. Exit 10 covers a data directory that cannot be created or written
+(`DesktopDataDirectoryException`, raised by `SingleInstanceLease.TryAcquire` on an access denial) and a
+`node-settings.json` that is present but unreadable. That file is checked right after the lease with a strict read
+(`NodeStartupSettings.IsStoredFileUnreadableAsync`), because the tolerant read every service uses would start the node
+on default settings and show first-run onboarding. A missing file is a fresh node, not a failure. The desktop shell
+exits with the engine's code (`DesktopEngineStartupException`, `DesktopApplication.QuitAsync`) and the launcher
+forwards it. A busy data directory answers every one-shot command, the maintenance commands included, with **4**.
+The full exit-code list is in `--help` and the [agent install guide](../agentic-support/agent-install.md#11-exit-codes-and-troubleshooting).
+
+**Windows command line.** The top-level `XE-Local-AI-Engine.exe` is Velopack's native stub: it starts the current
+version but forwards neither standard output nor the exit code. Commands (`--help`, `--status --json`, `--setup`,
+`--reset-admin-password`, the knowledge-downgrade commands) therefore run through
+`current\XE-Local-AI-Engine.WindowsLauncher.exe`, which returns the engine's output and exit code. The first line of
+`--help` names it. Interactive launches keep using the top-level exe.
 
 **Locked start ([ADR 0018](../adr/0018-local-vault-passphrase-wrapped-node-key.md)).** When `node.key` is a v2 vault
 (`DesktopBootstrap.EnsureLocalDataConfiguration` returns `VaultState.Locked`), `Program` holds the single-instance
@@ -392,7 +405,7 @@ restart returns to the unlock page.
 with a stderr message, building nothing, when it is missing or wrong:
 
 - `--setup` and `--mcp-key` read the admin password from `XE_ADMIN_PASSWORD` (cleared after reading) or one stdin line with `--admin-password-stdin`.
-- `--reset-admin-password <new>` needs the recovery code on stdin with `--recovery-code-stdin`; it also exits 5 when a v2 vault exists and no code was piped. It resets the Identity hash and the vault's password wrap together.
+- `--reset-admin-password <new>` needs the recovery code on stdin with `--recovery-code-stdin`; it also exits 5 when a v2 vault exists and no code was piped. It resets the Identity hash and the vault's password wrap together, and rotates the recovery code: it prints one `XE_RECOVERY_CODE=<code>` line with the new code, and the code that proved the reset stops working. The unlock page's recovery path rotates it the same way and shows the new code once.
 - A fresh `--setup` creates the vault and prints one `XE_RECOVERY_CODE=<code>` line on stdout after `XE_SETUP=created` and `XE_ADMIN_EMAIL=`; the node keeps no copy. Under an operator-supplied secret (`XE_NODE_SQLITE_KEY`, secrets file, Aspire) no vault exists and no line is printed. `install.sh` and `install.ps1` relay the line once and never write it to a file.
 
 The repo-root installers can register user-scoped MCP-only autostart only through explicit
@@ -556,6 +569,14 @@ A second tag form exists alongside them: **`dev/<version>` lightweight tags** ma
 of `develop` (for example `dev/1.0.0-rc.2.dev.20260922.1`). They are created by the publish job of
 `.github/workflows/dev-build.yml`, are **never deleted** — so every reported Development version maps to a commit
 forever — and are deliberately not release tags: they carry no `v` prefix and never steer changelog generation.
+
+**Hand-cut tester snapshots** must be stamped inside the Development scheme: `<anchor>.dev.<yyyymmdd>.<100+n>`, for
+example `1.0.0-rc.2.dev.20261008.101` for the first snapshot cut on that date. The update check compares versions as
+SemVer only, with no notion of build date, and SemVer ranks the alphanumeric `dev` identifier above any number. A
+snapshot stamped `<anchor>.<yyyymmdd>.<n>` therefore loses to every Development build, so a tester on it is offered an
+older build as an update. Inside the scheme a snapshot orders by date against the automated builds, and the counter
+of 100 or more keeps it clear of the automated counters for the same date. `AppUpdateVersionsTests` pins this
+ordering.
 
 Releases through `0.1.0-rc.5.1` came out of a separate tester repository under a hand-run packaging flow with a
 different tag form. That provenance, including the tag-form change mid-flight, is recorded once in the

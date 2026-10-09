@@ -32,4 +32,7 @@ public sealed class NullTranscriptionEventPublisher : ITranscriptionEventPublish
 
     public Task PublishAdmissionClosedAsync(Guid sessionId, CancellationToken cancellationToken) =>
         Task.CompletedTask;
+
+    public Task PublishSourceQuietAsync(Guid sessionId, TranscriptChannel channel, long quietMs, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 }

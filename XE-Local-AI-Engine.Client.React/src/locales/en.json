@@ -286,7 +286,9 @@
 			"knowledgeUnavailableText": "Your knowledge base was not used for this message because no embedding model is installed, so your documents could not be indexed.",
 			"outputLimitReachedText": "The answer stopped at the length limit before the model finished.",
 			"toolCallAsTextText": "The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.",
-			"toolCallInReasoningText": "The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer."
+			"toolCallInReasoningText": "The model tried to call a tool inside its reasoning, where the call cannot run, and stopped without an answer.",
+			"attachmentsTruncated": "Attachment truncated",
+			"attachmentsTruncatedText": "Some attached files were too long for the attachment limit, so the model received only their beginning."
 		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting.",
 		"webReview": {
@@ -1204,6 +1206,11 @@
 			},
 			"streaming": "Receiving response",
 			"defaultAgentName": "Default Assistant",
+			"localDefaultModel": {
+				"label": "Local default",
+				"displayName": "Local runtime default",
+				"statusLabel": "Runtime-selected model"
+			},
 			"agentSelector": {
 				"search": "Search agents...",
 				"hint": "Choose an agent defined on this node.",
@@ -1294,7 +1301,8 @@
 						"pending": "Pending",
 						"unsupported": "Unsupported",
 						"failed": "Failed",
-						"unknown": "Unknown"
+						"unknown": "Unknown",
+						"noText": "No text found"
 					},
 					"uploadBatchFailed": "Failed to upload files."
 				}
@@ -1500,7 +1508,8 @@
 				"noticeUnreviewed": "With auto-accept on, the model's web requests in this conversation are sent without asking you, and their results reach the model without being shown to you first.",
 				"noticeReversible": "You can turn it off again at any time.",
 				"confirm": "Enable auto-accept"
-			}
+			},
+			"stoppedWhileThinking": "Stopped while thinking"
 		},
 		"clientNodes": {
 			"fields": {
@@ -2864,6 +2873,7 @@
 				"uvVersion": "uv {{version}}",
 				"uvPresent": "Installed",
 				"uvMissing": "Not downloaded yet",
+				"uvUnsupported": "Not available on this platform",
 				"pythonInstallsTitle": "Installed Python interpreters",
 				"noPythonInstalls": "None installed yet.",
 				"pythonMinor": "Python {{version}}",
@@ -3541,7 +3551,8 @@
 				"completionTokens": "Completion tokens",
 				"reasoningTokens": "Reasoning tokens",
 				"runCount": "Runs",
-				"estimatedCost": "Est. cost"
+				"estimatedCost": "Est. cost",
+				"notReported": "Not reported"
 			},
 			"daily": {
 				"title": "Daily token usage",
@@ -4289,7 +4300,9 @@
 					"startInvalid": "Start time is invalid",
 					"repeatCountInvalid": "Repeat count must be a positive whole number",
 					"maxRuntimeInvalid": "Max runtime must be a positive whole number of seconds",
-					"endInvalid": "End time is invalid"
+					"endInvalid": "End time is invalid",
+					"templateRequired": "Choose a template",
+					"timeZoneRequired": "A time zone is required"
 				}
 			},
 			"runs": {
@@ -8050,7 +8063,8 @@
 				"hint": "Segments appear as the runtime commits them. Audio is never stored.",
 				"waiting": "Listening — the first segment appears once enough speech has been captured.",
 				"showPartials": "Show provisional text",
-				"partialAttributed": "{{channel}}: {{text}}"
+				"partialAttributed": "{{channel}}: {{text}}",
+				"sourceQuiet": "No audio from the captured application for {{seconds}} s. The session keeps running and resumes when it plays again."
 			},
 			"capture": {
 				"start": "Start capture",
@@ -8500,6 +8514,7 @@
 			"setupButton": "Protect data",
 			"recoveryRevealTitle": "Save your recovery code now",
 			"recoveryRevealWarning": "This is the only time this code is shown. If you forget your admin password, it is the only way to unlock this node. Without both, the node's data cannot be recovered.",
+			"recoveryRotated": "This is your new recovery code. Keep the one you just used until you have signed in with your new password: if the reset did not complete, the old code still applies.",
 			"recoverySavedLabel": "I have saved this recovery code",
 			"continueButton": "Continue"
 		}

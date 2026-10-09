@@ -17,6 +17,12 @@ internal sealed record AgentHomePrepareRequest
     ///     the sandbox as a synthetic read-only folder. <see langword="null" /> when no conversation context was seeded.
     /// </summary>
     public Guid? ConversationId { get; init; }
+
+    /// <summary>
+    ///     Whether the workspace gets the in-sandbox git baseline. Only a run diffs against it; the chat attachment
+    ///     re-stage passes <see langword="false" /> so attachments work on a node without Git.
+    /// </summary>
+    public bool CreateBaseline { get; init; } = true;
 }
 
 /// <summary>Internal preparation outcome consumed before the lifecycle lease is released.</summary>

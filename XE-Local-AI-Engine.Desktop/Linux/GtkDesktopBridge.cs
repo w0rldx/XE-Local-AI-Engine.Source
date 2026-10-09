@@ -335,7 +335,7 @@ internal sealed class GtkDesktopBridge : IAsyncDisposable
 
         var dialog = new Window
         {
-            Title = "XE AI-Engine",
+            Title = DesktopText.Title,
             Width = 460,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner

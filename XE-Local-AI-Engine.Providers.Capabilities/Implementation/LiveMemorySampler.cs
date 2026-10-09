@@ -19,7 +19,9 @@ internal sealed class LiveMemorySampler : ILiveMemorySampler
     private const string NvidiaSmi = "nvidia-smi";
     private const long Mib = 1024L * 1024L;
 
-    private static readonly TimeSpan CacheWindow = TimeSpan.FromSeconds(2);
+    // Just under the gauge's 15 s poll: every tab and caller inside one poll cycle shares one nvidia-smi spawn, and on
+    // Windows each spawn flashes a console host, so the cadence is the cost.
+    internal static readonly TimeSpan CacheWindow = TimeSpan.FromSeconds(14);
 
     private readonly IHardwareProbeEnvironment _environment;
     private readonly Lock _gate = new();

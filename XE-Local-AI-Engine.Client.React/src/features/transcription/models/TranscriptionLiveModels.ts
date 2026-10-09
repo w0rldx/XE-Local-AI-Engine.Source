@@ -30,6 +30,13 @@ export const TRANSCRIPTION_CATCH_UP_PROGRESS = "transcriptionCatchUpProgress";
 export const TRANSCRIPTION_ADMISSION_CLOSED = "transcriptionAdmissionClosed";
 
 /**
+ * `TranscriptionSourceQuietPush` — an in-host capture lane (an application's audio) has had no audio for `quietMs`, or
+ * hears audio again when `quietMs` is 0. Sent once per second while quiet. Non-terminal: the session keeps running,
+ * because a paused video and a closed application tab look the same to the capture.
+ */
+export const TRANSCRIPTION_SOURCE_QUIET = "transcriptionSourceQuiet";
+
+/**
  * The `int channel` argument of `PushAudioFrame`, matching the backend `TranscriptChannel` enum (Mono 0, You 1,
  * Others 2). Written out rather than derived from an index, the same rule `TranscriptionMapper.ToWireChannel`
  * follows server-side: a reordered union would silently relabel every frame.
@@ -83,6 +90,12 @@ export const transcriptionPartialPushSchema = z.object({
 export const transcriptionCatchUpProgressPushSchema = z.object({
 	sessionId: z.string(),
 	bufferedMs: z.number(),
+});
+
+export const transcriptionSourceQuietPushSchema = z.object({
+	sessionId: z.string(),
+	channel: z.string(),
+	quietMs: z.number(),
 });
 
 export const transcriptionAdmissionClosedPushSchema = z.object({

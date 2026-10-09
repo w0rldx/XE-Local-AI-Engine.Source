@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
@@ -226,20 +227,15 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
     }
 
     [Test]
-    public async Task EnsureAsync_OfTheInstalledSourceBuildVariant_ServesTheManagedBuildUnderTheLease()
+    public async Task EnsureAsync_OfTheInstalledSourceBuildVariant_ServesTheManagedBuildWithoutTheLease()
     {
-#pragma warning disable CA2000 // Ownership transfers to the administration service, which disposes the admission lease after the ensure.
-        var lease = new RecordingLease();
-#pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
         supervisor.CountRunningProcesses().Returns(0);
         var installedStore = Substitute.For<IInstalledRuntimeStore>();
         installedStore.ReadAsync(Arg.Any<CancellationToken>())
                       .Returns(new InstalledRuntimeState("b10201", "(source-build:cuda)", new string('a', 64), GpuVariant.Cuda, DateTimeOffset.UtcNow, "/cache/llama.cpp/source-cuda/bin"));
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
-        binaryManager.EnsureBinaryAsync(GpuVariant.Cuda, lease, Arg.Any<CancellationToken>())
+        binaryManager.EnsureBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>())
                      .Returns(new LlamaBinary
                      {
                          ServerExecutablePath = "/cache/llama.cpp/source-cuda/bin/llama-server",
@@ -253,18 +249,13 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
 
         AssertEx.True(result.Succeeded, result.DisplayMessage);
         AssertEx.Equal("cuda", result.Binary!.Variant);
-        AssertEx.Equal(1, lease.DisposeCount);
+        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
     }
 
     [Test]
     public async Task EnsureAsync_OfAnotherVariantThanTheInstalledSourceBuild_StillAnswersTheSourceBuildRefusal()
     {
-#pragma warning disable CA2000 // Ownership transfers to the administration service, which disposes the rejected admission lease.
-        var lease = new RecordingLease();
-#pragma warning restore CA2000
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
         supervisor.CountRunningProcesses().Returns(0);
         var installedStore = Substitute.For<IInstalledRuntimeStore>();
         installedStore.ReadAsync(Arg.Any<CancellationToken>())
@@ -276,9 +267,125 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
 
         AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, result.Failure);
         AssertEx.Equal("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.", result.DisplayMessage);
-        await lease.Disposed;
-        await binaryManager.DidNotReceiveWithAnyArgs()
-                           .EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<ILlamaServerRuntimeMutationLease>(), Arg.Any<CancellationToken>());
+        await binaryManager.DidNotReceiveWithAnyArgs().EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task EnsureAsync_WhileALlamaServerRuns_ReachesTheBinaryManagerWithoutTheLease()
+    {
+        // The real supervisor refuses the lease while any llama-server runs; the ensure must not depend on it.
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
+        supervisor.CountRunningProcesses().Returns(1);
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        binaryManager.EnsureBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>())
+                     .Returns(new LlamaBinary
+                     {
+                         ServerExecutablePath = "/cache/llama.cpp/cuda/llama-server",
+                         Version = "b1",
+                         Variant = GpuVariant.Cuda,
+                         IsPinnedFallback = true
+                     });
+        var service = CreateService(binaryManager, supervisor);
+
+        var result = await service.EnsureAsync(GpuVariant.Cuda);
+
+        AssertEx.True(result.Succeeded, result.DisplayMessage);
+        await binaryManager.Received(1).EnsureBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task EnsureAsync_WaitsForTheSharedRuntimeEntry_AndHoldsItAcrossTheBinaryEnsureOnly()
+    {
+        // The entry stays pending while an install holds the exclusive lease; ensure must not touch the binary manager
+        // (whose RecordResolvedRuntimeAsync would overwrite the installed record) until it is granted.
+        var steps = new List<string>();
+        var entry = Substitute.For<IDisposable>();
+        entry.When(static disposable => disposable.Dispose()).Do(_ => steps.Add("exit"));
+        var granted = new TaskCompletionSource<IDisposable>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.EnterRuntimeMutationSharedAsync(Arg.Any<CancellationToken>()).Returns(granted.Task);
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        binaryManager.EnsureBinaryAsync(GpuVariant.Cpu, Arg.Any<CancellationToken>())
+                     .Returns(_ =>
+                     {
+                         steps.Add("ensure");
+                         return new LlamaBinary
+                         {
+                             ServerExecutablePath = "/cache/llama.cpp/cpu/llama-server",
+                             Version = "b1",
+                             Variant = GpuVariant.Cpu,
+                             IsPinnedFallback = true
+                         };
+                     });
+        var service = CreateService(binaryManager, supervisor);
+
+        var ensuring = service.EnsureAsync(GpuVariant.Cpu);
+        await AssertEx.StaysIncompleteAsync(ensuring, "Ensure must wait for the shared runtime entry.");
+        AssertEx.Empty(steps);
+
+        granted.SetResult(entry);
+        var result = await ensuring.WaitAsync(TimeSpan.FromSeconds(3));
+
+        AssertEx.True(result.Succeeded, result.DisplayMessage);
+        AssertEx.True(steps.SequenceEqual(["ensure", "exit"]), $"Expected ensure then exit, saw {string.Join(", ", steps)}.");
+        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+    }
+
+    [Test]
+    public async Task EnsureAsync_WithKeepModelWarmOn_ReachesTheBinaryManager_WhileInstallIsStillRefused()
+    {
+        // A warm CPU-fallback model is exactly the case a CUDA repair exists for: ensure only lands missing files and
+        // stops no server, so Keep Model Warm must not block it. Install swaps the tag and stops servers, so it still does.
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+        runtimeSettings.GetKeepModelWarmEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        runtimeSettings.GetRecommendedLlamaCppTagAsync(Arg.Any<CancellationToken>()).Returns("b1");
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        binaryManager.EnsureBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>())
+                     .Returns(new LlamaBinary
+                     {
+                         ServerExecutablePath = "/cache/llama.cpp/cuda/llama-server",
+                         Version = "b1",
+                         Variant = GpuVariant.Cuda,
+                         IsPinnedFallback = true
+                     });
+        var service = CreateService(binaryManager, Substitute.For<ILlamaServerProcessSupervisor>(), runtimeSettings: runtimeSettings);
+
+        var ensured = await service.EnsureAsync(GpuVariant.Cuda);
+        var installed = await service.InstallAsync("b1");
+
+        AssertEx.True(ensured.Succeeded, ensured.DisplayMessage);
+        await binaryManager.Received(1).EnsureBinaryAsync(GpuVariant.Cuda, Arg.Any<CancellationToken>());
+        AssertEx.False(installed.Succeeded, "Install still waits for Keep Model Warm to be off.");
+        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, installed.Failure);
+    }
+
+    [Test]
+    public async Task InstallAsync_WhileALlamaServerRuns_IsRefusedWithTheEjectMessage()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
+        supervisor.CountRunningProcesses().Returns(1);
+        var releaseCatalog = Substitute.For<ILlamaCppReleaseCatalog>();
+        releaseCatalog.ResolveAssetAsync("b1", Arg.Any<OSPlatform>(), Arg.Any<Architecture>(), GpuVariant.Cpu, Arg.Any<CancellationToken>())
+                      .Returns(LlamaCppReleaseResult.ForAsset("b1", new LlamaCppReleaseAsset
+                      {
+                          Name = "llama-b1-bin-cpu.zip",
+                          DownloadUrl = new Uri("https://example.invalid/llama-b1-bin-cpu.zip"),
+                          Digest = new string('a', 64),
+                          Size = 1
+                      }));
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var service = CreateService(binaryManager, supervisor, releaseCatalog: releaseCatalog);
+
+        var result = await service.InstallAsync("b1", GpuVariant.Cpu);
+
+        AssertEx.Equal(LlamaCppRuntimeAdministrationFailure.Busy, result.Failure);
+        AssertEx.Equal("Stop or eject all running llama.cpp models before updating the runtime.", result.DisplayMessage);
+        AssertEx.Equal(1, result.RunningProcessCount);
+        await binaryManager.DidNotReceiveWithAnyArgs().InstallTagAsync(default!, default!, default!, default, default, default!, default);
     }
 
     [Test]
@@ -385,7 +492,8 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
             overrideOptions ?? new LlamaServerRuntimeOverrideOptions(),
             lifetime,
             NullLogger<LlamaCppRuntimeAdministrationService>.Instance,
-            TimeProvider.System);
+            TimeProvider.System,
+            Substitute.For<IRuntimeDeviceAudit>());
     }
 
     private sealed class RecordingLease : ILlamaServerRuntimeMutationLease

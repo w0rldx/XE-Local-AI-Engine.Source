@@ -36,6 +36,15 @@ public interface ILlamaCppBinaryManager
     Task<LlamaBinary?> TryGetInstalledBinaryAsync(GpuVariant variant, CancellationToken ct);
 
     /// <summary>
+    ///     Whether a Windows CUDA build is on disk with incomplete companion libraries, which
+    ///     <see cref="TryGetInstalledBinaryAsync" /> reports as nothing installed. Read-only like that query.
+    /// </summary>
+    Task<bool> IsCompanionSetIncompleteAsync(GpuVariant variant, CancellationToken ct)
+    {
+        return Task.FromResult(false);
+    }
+
+    /// <summary>
     ///     Runtime endpoint ensure surface. The caller owns <paramref name="mutationLease" /> through completion; the
     ///     supervisor spawn path uses the non-lease overload because its registered inflight spawn is the exclusion token.
     /// </summary>

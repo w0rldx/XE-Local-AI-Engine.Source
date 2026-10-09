@@ -1443,6 +1443,9 @@ public sealed class InvocationRunnerTests
     [Test]
     [Arguments("<tool_call>\n{\"name\": \"Calculate\", \"arguments\": {\"expression\": \"2+2\"}}\n</tool_call>")]
     [Arguments("  <tool_call>{\"name\": \"a\"}</tool_call>\n\n<tool_call>{\"name\": \"b\"}</tool_call>\n")]
+    // A malformed, unclosed block seen in a tester round (F-13).
+    [Arguments("<tool_call> {\"tool\": {\"name\": \"list_files\", \"arguments\": {}}")]
+    [Arguments("<tool_call>{\"name\": \"a\"}")]
     public async Task RunAsync_WhenTheFinalAnswerIsOnlyToolCallMarkup_EmitsTheToolCallAsTextNotice(string answer)
     {
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -1460,7 +1463,6 @@ public sealed class InvocationRunnerTests
     [Test]
     [Arguments("Call it like this: <tool_call>{\"name\": \"a\"}</tool_call>")]
     [Arguments("<tool_call>{\"name\": \"a\"}</tool_call>\nThat is the syntax.")]
-    [Arguments("<tool_call>{\"name\": \"a\"}")]
     [Arguments("The answer is 4.")]
     public async Task RunAsync_WhenTheFinalAnswerHasTextBesideToolCallMarkup_RaisesNoEmptyAnswerNotice(string answer)
     {

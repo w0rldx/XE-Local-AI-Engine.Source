@@ -12,11 +12,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     <c>--list-devices</c> probe and parses the result into a structured inventory.
 /// </summary>
 /// <remarks>
-///     The answer is a pure function of the resolved binary, so a SUCCESSFUL probe is cached per (variant, binary path,
-///     binary mtime) and changes only when the binary does. A CPU variant short-circuits to a determinate empty list
-///     without spawning. Degrade, never throw: a spawn failure or the per-probe timeout yields
-///     <see cref="LlamaDeviceInventory.Unknown" /> and no installed runtime yields
-///     <see cref="LlamaDeviceInventory.RuntimeNotInstalled" />; neither is cached, so both self-heal on the next demand.
+///     A SUCCESSFUL probe is cached per (variant, binary path, mtime); a CPU variant answers an empty list without
+///     spawning. Degrade, never throw: a spawn failure or timeout yields <see cref="LlamaDeviceInventory.Unknown" />,
+///     remembered for <see cref="FailedProbeRetryAfter" /> so one cold load pays the timeout once, not once per audit,
+///     and forgotten early on <see cref="ForgetFailedProbes" /> or when the binary-changed signal moves; no installed runtime yields <see cref="LlamaDeviceInventory.RuntimeNotInstalled" />, never cached.
 /// </remarks>
 public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryProbe
 {
@@ -24,18 +23,55 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
 
     // Hard cap for the short-lived --list-devices probe (mirrors the available-VRAM probe). A wedged GPU driver could
     // otherwise stall the audit; on overrun the child is killed and the result degrades to "unknown".
-    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan DefaultProbeTimeout = TimeSpan.FromSeconds(15);
+
+    internal static readonly TimeSpan FailedProbeRetryAfter = TimeSpan.FromSeconds(60);
 
     private readonly ILlamaCppBinaryManager _binaryManager;
+    private readonly IActiveSourceBuildSignal? _binaryChangedSignal;
     private readonly ConcurrentDictionary<string, LlamaDeviceInventory> _cache = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _failedUntil = new(StringComparer.Ordinal);
     private readonly ILogger<LlamaDeviceInventoryProbe> _logger;
+    private readonly TimeProvider _timeProvider;
+    private readonly TimeSpan _probeTimeout;
+    private long _failuresSignalVersion;
 
-    public LlamaDeviceInventoryProbe(ILlamaCppBinaryManager binaryManager, ILogger<LlamaDeviceInventoryProbe> logger)
+    /// <param name="binaryManager">Resolves the installed binary; never asked to acquire one.</param>
+    /// <param name="logger">The probe's logger.</param>
+    /// <param name="timeProvider">Times the failed-probe retry window.</param>
+    /// <param name="binaryChangedSignal">
+    ///     Bumped when the binary on disk changes (an install, a CUDA adopt or remove); a move forgets remembered
+    ///     failures. Optional so a provider-only host can omit it.
+    /// </param>
+    public LlamaDeviceInventoryProbe(ILlamaCppBinaryManager binaryManager,
+        ILogger<LlamaDeviceInventoryProbe> logger,
+        TimeProvider timeProvider,
+        IActiveSourceBuildSignal? binaryChangedSignal = null)
+        : this(binaryManager, logger, timeProvider, DefaultProbeTimeout, binaryChangedSignal)
+    {
+    }
+
+    internal LlamaDeviceInventoryProbe(ILlamaCppBinaryManager binaryManager,
+        ILogger<LlamaDeviceInventoryProbe> logger,
+        TimeProvider timeProvider,
+        TimeSpan probeTimeout,
+        IActiveSourceBuildSignal? binaryChangedSignal = null)
     {
         ArgumentNullException.ThrowIfNull(binaryManager);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
         _binaryManager = binaryManager;
         _logger = logger;
+        _timeProvider = timeProvider;
+        _probeTimeout = probeTimeout;
+        _binaryChangedSignal = binaryChangedSignal;
+        _failuresSignalVersion = binaryChangedSignal?.Version ?? 0;
+    }
+
+    /// <inheritdoc />
+    public void ForgetFailedProbes()
+    {
+        _failedUntil.Clear();
     }
 
     /// <inheritdoc />
@@ -57,7 +93,9 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
             {
                 // Not cached (Unknown never is), so the first probe AFTER an install — by provisioning, the ensure/select
                 // endpoint, a source-build adoption or a BYO override — sees the new runtime and inventories it.
-                return LlamaDeviceInventory.RuntimeNotInstalled(variant);
+                return await _binaryManager.IsCompanionSetIncompleteAsync(variant, ct).ConfigureAwait(false)
+                    ? LlamaDeviceInventory.CompanionLibrariesIncomplete(variant)
+                    : LlamaDeviceInventory.RuntimeNotInstalled(variant);
             }
 
             var cacheKey = BuildCacheKey(variant, binary.ServerExecutablePath);
@@ -66,12 +104,31 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
                 return cached;
             }
 
-            var output = await LlamaListDevicesProcessRunner.RunAsync(binary.ServerExecutablePath, ProbeTimeout, _logger, ct).ConfigureAwait(false);
-            if (output is null)
+            var signalVersion = _binaryChangedSignal?.Version ?? 0;
+            if (Interlocked.Exchange(ref _failuresSignalVersion, signalVersion) != signalVersion)
             {
-                // Spawn failure / timeout: do NOT cache — a transient glitch must self-heal on the next demand.
+                // The binary changed under the remembered failures; a racing caller may re-probe once, which is harmless.
+                _failedUntil.Clear();
+            }
+
+            if (_failedUntil.TryGetValue(cacheKey, out var retryAt) && _timeProvider.GetUtcNow() < retryAt)
+            {
                 return LlamaDeviceInventory.Unknown(variant);
             }
+
+            var output = await LlamaListDevicesProcessRunner.RunAsync(binary.ServerExecutablePath, _probeTimeout, _logger, ct).ConfigureAwait(false);
+            if (output is null)
+            {
+                // Spawn failure / timeout: remembered briefly, so a transient glitch still self-heals within a minute.
+                _failedUntil[cacheKey] = _timeProvider.GetUtcNow() + FailedProbeRetryAfter;
+                _logger.LogInformation(
+                    "The llama.cpp --list-devices probe for {Variant} failed or timed out; the device list stays unknown for {Seconds} s.",
+                    variant,
+                    (int)FailedProbeRetryAfter.TotalSeconds);
+                return LlamaDeviceInventory.Unknown(variant);
+            }
+
+            _failedUntil.TryRemove(cacheKey, out _);
 
             var inventory = new LlamaDeviceInventory
             {

@@ -18,4 +18,7 @@ public interface ILlamaDeviceInventoryProbe
     ///     every other failure degrades to <see cref="LlamaDeviceInventory.Unknown" />.
     /// </summary>
     Task<LlamaDeviceInventory> GetDeviceInventoryAsync(GpuVariant variant, CancellationToken ct);
+
+    /// <summary>Forgets every remembered failed probe, so the next call spawns again; a forced audit refresh calls it.</summary>
+    void ForgetFailedProbes();
 }

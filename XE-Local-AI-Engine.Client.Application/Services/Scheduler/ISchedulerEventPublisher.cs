@@ -65,6 +65,9 @@ public sealed class SchedulerRunEvent
     public required string? ErrorMessage { get; init; }
 
     public required long OccurredAtUtc { get; init; }
+
+    /// <summary>The id <c>TriggerNowAsync</c> returned for this fire; <c>null</c> for a cron fire.</summary>
+    public Guid? ManualFireId { get; init; }
 }
 
 /// <summary>Sanitized progress event — a free-text message and optional percent; never structured run detail.</summary>

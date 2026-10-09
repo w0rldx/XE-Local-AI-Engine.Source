@@ -20,8 +20,9 @@ interface StickToBottomScrollInput {
 }
 
 /**
- * Follows new content to the bottom of the message list while the reader has not scrolled away. Registers no
- * state, so the caller re-renders only for its own reasons; the latch lives in a ref.
+ * Follows new content to the bottom of a scrolling list (the chat thread, the live transcript) while the reader has
+ * not scrolled away. Registers no state, so the caller re-renders only for its own reasons; the latch lives in a ref.
+ * `conversationId` is whatever identifies the list's content: a change re-latches to the bottom.
  */
 export function useStickToBottomScroll({
 	viewportRef,

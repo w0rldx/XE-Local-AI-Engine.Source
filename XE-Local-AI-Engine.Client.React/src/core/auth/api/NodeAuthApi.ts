@@ -11,6 +11,7 @@ import type {
 	NodeVaultConfirmResponse,
 	NodeVaultPasswordRequest,
 	NodeVaultRecoveryUnlockRequest,
+	NodeVaultRecoveryUnlockResponse,
 } from "@/core/auth/models/NodeAuthModels";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
@@ -96,9 +97,15 @@ export async function unlockNodeVault(request: NodeVaultPasswordRequest, config?
 	await authClient.post(buildLocalApiUrl("auth/vault/unlock"), request, config);
 }
 
+// 200 carries the rotated recovery code and, like the password unlock, starts the hand-over.
 export async function unlockNodeVaultWithRecovery(
 	request: NodeVaultRecoveryUnlockRequest,
 	config?: AxiosRequestConfig,
-): Promise<void> {
-	await authClient.post(buildLocalApiUrl("auth/vault/unlock-recovery"), request, config);
+): Promise<NodeVaultRecoveryUnlockResponse> {
+	const { data } = await authClient.post<NodeVaultRecoveryUnlockResponse>(
+		buildLocalApiUrl("auth/vault/unlock-recovery"),
+		request,
+		config,
+	);
+	return data;
 }

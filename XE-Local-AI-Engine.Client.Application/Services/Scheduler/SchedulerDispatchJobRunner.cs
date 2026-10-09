@@ -47,7 +47,8 @@ internal static class SchedulerDispatchJobRunner
             context.FireTimeUtc,
             context.CancellationToken,
             parameterOverrides,
-            triggeredBy);
+            triggeredBy,
+            Guid.TryParse(SafeGetString(context, SchedulerJobKeys.ManualFireIdKey), out var manualFireId) ? manualFireId : null);
     }
 
     /// <summary>

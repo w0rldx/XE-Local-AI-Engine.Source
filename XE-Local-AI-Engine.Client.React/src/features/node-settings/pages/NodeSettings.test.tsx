@@ -659,6 +659,37 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		expect(screen.queryByTestId("node-settings-fields-save-button")).toBeNull();
 	});
 
+	// 5.2: Mantine clamps on blur by default, which replaced an out-of-range entry with the bound before the save-time
+	// range check could name it. The entry must stay as typed, be flagged, and block the save.
+	it("keeps an out-of-range field entry as typed, flags it and blocks the save", async () => {
+		renderPage("runtime");
+		const maxProcesses = (await screen.findByTestId("node-settings-llama-max-processes")) as HTMLInputElement;
+		await waitFor(() => expect(generatedMock.getNodeSettingsOptions).toHaveBeenCalled());
+
+		fireEvent.change(maxProcesses, { target: { value: "17" } });
+		fireEvent.blur(maxProcesses);
+		expect(maxProcesses.value).toBe("17");
+
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+
+		await waitFor(() => expect(maxProcesses.getAttribute("aria-invalid")).toBe("true"));
+		expect(generatedMock.saveFn).not.toHaveBeenCalled();
+	});
+
+	it("keeps an out-of-range timeout as typed and shows its range error", async () => {
+		renderPage("chat");
+		await screen.findByDisplayValue(/600/);
+		const timeout = screen.getByLabelText(/Maximum message request timeout/) as HTMLInputElement;
+
+		fireEvent.change(timeout, { target: { value: "999999" } });
+		fireEvent.blur(timeout);
+
+		expect(timeout.value).toContain("999999");
+		expect(timeout.getAttribute("aria-invalid")).toBe("true");
+		fireEvent.click(screen.getByTestId("node-settings-save-button"));
+		expect(generatedMock.saveFn).not.toHaveBeenCalled();
+	});
+
 	it("badges restart-gated fields in place of the old hint text", async () => {
 		renderPage("runtime");
 

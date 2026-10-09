@@ -607,6 +607,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         // A caller that ran its own decision (a sub-agent dispatch) published the admission this launch consumes; deciding again would reject on it.
         if (key.Role == ModelRole.Chat && _launchAdmissions.Snapshot(key.ModelName, key.Role).HasRequestedKey)
         {
+            _logger.LogDebug("Chat launch of model {ModelName} uses the admission its caller already published; no second capacity decision.",
+                key.ModelName);
             return null;
         }
 

@@ -35,8 +35,8 @@ internal sealed class SingleInstanceLease : IDisposable
     /// </summary>
     /// <remarks>
     ///     The caller keeps the lease for the process lifetime and disposes it on shutdown. A genuinely broken data
-    ///     directory fails loudly rather than masquerading as a running instance:
-    ///     <see cref="UnauthorizedAccessException" />, <see cref="DirectoryNotFoundException" /> and
+    ///     directory fails loudly rather than masquerading as a running instance: an access denial surfaces as
+    ///     <see cref="DesktopDataDirectoryException" />, and <see cref="DirectoryNotFoundException" /> and
     ///     <see cref="PathTooLongException" /> all propagate, as does any other Windows IO fault such as disk-full.
     ///     Only a Windows sharing/lock violation or a Unix <c>flock</c> conflict counts as contention.
     /// </remarks>
@@ -69,7 +69,8 @@ internal sealed class SingleInstanceLease : IDisposable
         }
         catch (UnauthorizedAccessException exception)
         {
-            throw new UnauthorizedAccessException(
+            // An unusable data directory, reported as such: the engine exits 10 with this text instead of crashing.
+            throw new DesktopDataDirectoryException(
                 $"The data directory '{dataDirectory}' is not writable by this user, so '{LeaseFileName}' could not be opened. Check the ownership and permissions of that directory.",
                 exception);
         }

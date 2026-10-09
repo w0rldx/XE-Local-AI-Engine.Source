@@ -41,7 +41,7 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new AgentExecutionLogStore(context, TimeProvider.System);
 
-        // Day 1: two "llama-x" runs + one "llama-y" run (llama-y reports no reasoning/total → those sum to 0).
+        // Day 1: two "llama-x" runs + one "llama-y" run (llama-y reports no reasoning/total → null reasoning, 0 total).
         await AddEnvelopeAsync(context, "llama-x", DayOneStart + 10, prompt: 100, completion: 200, reasoning: 50, total: 350);
         await AddEnvelopeAsync(context, "llama-x", DayOneStart + 20, prompt: 10, completion: 20, reasoning: 5, total: 35);
         await AddEnvelopeAsync(context, "llama-y", DayOneStart + 30, prompt: 1, completion: 2, reasoning: null, total: null);
@@ -77,8 +77,8 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
         AssertEx.Equal(expected: 1, dayOneY.RunCount);
         AssertEx.Equal(expected: 1L, dayOneY.PromptTokens);
         AssertEx.Equal(expected: 2L, dayOneY.CompletionTokens);
-        // Missing reasoning/total fields count as 0, not null.
-        AssertEx.Equal(expected: 0L, dayOneY.ReasoningTokens);
+        // A bucket where no run reported reasoning stays null ("not reported"); a missing total still counts as 0.
+        AssertEx.Null(dayOneY.ReasoningTokens);
         AssertEx.Equal(expected: 0L, dayOneY.TotalTokens);
     }
 

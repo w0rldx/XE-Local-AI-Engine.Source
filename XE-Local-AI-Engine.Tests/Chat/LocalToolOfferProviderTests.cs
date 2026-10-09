@@ -243,6 +243,11 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public void GetOfferedToolsForProfile_WhenModelIsToolCapable_IncludesRunPythonInProfilePool()
     {
+        if (!OperatingSystem.IsLinux())
+        {
+            Skip.Test("run_python is offered only on Linux; the off-Linux half is GetOfferedToolsForProfile_OffLinux_NeverOffersRunPython.");
+        }
+
         var provider = CreateProvider("qwen3:8b");
 
         var pool = provider.GetOfferedToolsForProfile("qwen3:8b");
@@ -250,6 +255,21 @@ public sealed class LocalToolOfferProviderTests
         var compute = AssertEx.NotNull(pool.FirstOrDefault(tool => tool.Name == ComputeToolDefinition.ToolName));
         AssertEx.True(compute.RequiresApproval, "run_python must reach the model carrying its approval requirement");
         AssertEx.Equal(ToolCategory.WriteExecute, compute.Category);
+    }
+
+    /// <summary>The managed Python runtime exists only on Linux, so elsewhere the tool would fail every call (4.7).</summary>
+    [Test]
+    public void GetOfferedToolsForProfile_OffLinux_NeverOffersRunPython()
+    {
+        if (OperatingSystem.IsLinux())
+        {
+            Skip.Test("This host runs Linux, where run_python is offered; the assertion applies to Windows and macOS nodes.");
+        }
+
+        var provider = CreateProvider("qwen3:8b");
+
+        AssertEx.False(provider.GetOfferedToolsForProfile("qwen3:8b").Any(tool => tool.Name == ComputeToolDefinition.ToolName),
+            "run_python must not be offered where its runtime cannot exist");
     }
 
     [Test]

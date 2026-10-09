@@ -16,7 +16,8 @@ export interface UsageDailyPoint {
 	readonly totalTokens: number;
 	readonly promptTokens: number;
 	readonly completionTokens: number;
-	readonly reasoningTokens: number;
+	// Null while no run in the group reported reasoning tokens: many local providers never report a count.
+	readonly reasoningTokens: number | null;
 	readonly runCount: number;
 }
 
@@ -28,7 +29,8 @@ export interface UsageModelRow {
 	readonly runCount: number;
 	readonly promptTokens: number;
 	readonly completionTokens: number;
-	readonly reasoningTokens: number;
+	// Null while no run in the group reported reasoning tokens: many local providers never report a count.
+	readonly reasoningTokens: number | null;
 	readonly totalTokens: number;
 	// Estimated cost in USD, summed from the per-bucket server-computed values (never recomputed client-side). 0 for a
 	// model that only ran on free/local/unpriced providers.
@@ -72,6 +74,11 @@ export function isUsageEmpty(summary: UsageSummaryDto | undefined): boolean {
 	return !summary || summary.totals.runCount === 0;
 }
 
+// Sums reported counts; stays null only while nothing in the group has been reported.
+function addReported(sum: number | null, value: number | null | undefined): number | null {
+	return sum === null ? (value ?? null) : sum + (value ?? 0);
+}
+
 // Aggregates the flat (model, provider, day) buckets into one point per UTC day, summing every token dimension and
 // run count. Returned ascending by day so the line chart reads left→right in time order.
 export function aggregateByDay(items: readonly UsageBucketDto[]): UsageDailyPoint[] {
@@ -85,7 +92,7 @@ export function aggregateByDay(items: readonly UsageBucketDto[]): UsageDailyPoin
 				totalTokens: existing.totalTokens + bucket.totalTokens,
 				promptTokens: existing.promptTokens + bucket.promptTokens,
 				completionTokens: existing.completionTokens + bucket.completionTokens,
-				reasoningTokens: existing.reasoningTokens + bucket.reasoningTokens,
+				reasoningTokens: addReported(existing.reasoningTokens, bucket.reasoningTokens),
 				runCount: existing.runCount + bucket.runCount,
 			});
 		} else {
@@ -94,7 +101,7 @@ export function aggregateByDay(items: readonly UsageBucketDto[]): UsageDailyPoin
 				totalTokens: bucket.totalTokens,
 				promptTokens: bucket.promptTokens,
 				completionTokens: bucket.completionTokens,
-				reasoningTokens: bucket.reasoningTokens,
+				reasoningTokens: bucket.reasoningTokens ?? null,
 				runCount: bucket.runCount,
 			});
 		}
@@ -119,7 +126,7 @@ export function aggregateByModel(items: readonly UsageBucketDto[]): UsageModelRo
 				runCount: existing.runCount + bucket.runCount,
 				promptTokens: existing.promptTokens + bucket.promptTokens,
 				completionTokens: existing.completionTokens + bucket.completionTokens,
-				reasoningTokens: existing.reasoningTokens + bucket.reasoningTokens,
+				reasoningTokens: addReported(existing.reasoningTokens, bucket.reasoningTokens),
 				totalTokens: existing.totalTokens + bucket.totalTokens,
 				estimatedCostUsd: existing.estimatedCostUsd + bucket.estimatedCostUsd,
 			});
@@ -132,7 +139,7 @@ export function aggregateByModel(items: readonly UsageBucketDto[]): UsageModelRo
 				runCount: bucket.runCount,
 				promptTokens: bucket.promptTokens,
 				completionTokens: bucket.completionTokens,
-				reasoningTokens: bucket.reasoningTokens,
+				reasoningTokens: bucket.reasoningTokens ?? null,
 				totalTokens: bucket.totalTokens,
 				estimatedCostUsd: bucket.estimatedCostUsd,
 			});

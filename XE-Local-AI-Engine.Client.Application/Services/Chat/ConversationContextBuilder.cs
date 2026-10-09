@@ -37,6 +37,11 @@ internal static class ConversationContextBuilder
         var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
         // Read BEFORE compaction drops anything, so each user turn is still next to the answer that failed.
         var unanswered = FindUnansweredUserTurns(selected, anchorSequence);
+        var abandoned = FindAbandonedUserTurns(selected, anchorSequence, includeToolHistory);
+        if (abandoned.Count > 0)
+        {
+            selected = [.. selected.Where(message => !abandoned.Contains(message.MessageId))];
+        }
 
         // The synthetic context messages are plain-chat only and take the first slots, so the history shifts down by
         // their count: attachments, then knowledge, then the synopsis, which sits nearest the verbatim turns.
@@ -141,6 +146,48 @@ internal static class ConversationContextBuilder
 
         return unanswered;
     }
+
+    /// <summary>
+    ///     The user turns, on the selected path, followed by another sent user turn or by a Stopped answer the history
+    ///     will not carry.
+    /// </summary>
+    /// <remarks>
+    ///     Sent, such a prompt sits next to the following one, and the chat template renders the two as one request
+    ///     (F-12), so the send and regenerate builders leave it out.
+    /// </remarks>
+    /// <param name="includeToolHistory">
+    ///     Whether the caller keeps a Stopped answer for its completed tool calls; a kept answer keeps its prompt.
+    /// </param>
+    internal static HashSet<Guid> FindAbandonedUserTurns(IEnumerable<NodeChatPersistedMessageDto> selected,
+        Func<NodeChatPersistedMessageDto, int> anchorSequence,
+        bool includeToolHistory)
+    {
+        var abandoned = new HashSet<Guid>();
+        NodeChatPersistedMessageDto? previous = null;
+        foreach (var message in selected.OrderBy(anchorSequence))
+        {
+            if (previous is not null && !IsAssistant(previous))
+            {
+                // Only a following prompt that is itself sent; an in-flight row is not.
+                var unanswered = !IsAssistant(message) && IsSendable(message);
+                var stoppedAndDropped = IsAssistant(message)
+                                        && string.Equals(message.Status, NodeChatMessageStatusValues.Cancelled, StringComparison.Ordinal)
+                                        && !IsSendable(message)
+                                        && !(includeToolHistory && HasCompletedToolPart(message));
+                if (unanswered || stoppedAndDropped)
+                {
+                    _ = abandoned.Add(previous.MessageId);
+                }
+            }
+
+            previous = message;
+        }
+
+        return abandoned;
+    }
+
+    private static bool IsAssistant(NodeChatPersistedMessageDto message) =>
+        string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase);
 
     internal static string WithUnansweredNotice(NodeChatPersistedMessageDto message, HashSet<Guid> unanswered) =>
         unanswered.Contains(message.MessageId) ? $"{message.Content}\n\n{UnansweredNotice}" : message.Content;

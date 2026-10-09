@@ -1315,7 +1315,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         stream.ReasoningBuilder.Length > reasoningStart
         && stream.ReasoningBuilder.ToString(reasoningStart, stream.ReasoningBuilder.Length - reasoningStart).Contains("<tool_call>", StringComparison.Ordinal);
 
-    // Strict: the whole trimmed round is one or more closed <tool_call> blocks and nothing else, so an answer that explains the syntax is untouched.
+    // Strict: the whole trimmed round is one or more <tool_call> blocks and nothing else, so an answer that explains the syntax is untouched.
+    // The last block may be unclosed: a model that stops mid-call (F-13) leaves only markup all the same.
     private static bool AnswerIsOnlyToolCallMarkup(StreamState stream, int contentStart)
     {
         const string OpenTag = "<tool_call>";
@@ -1328,10 +1329,15 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         while (!rest.IsEmpty)
         {
-            var close = rest.IndexOf(CloseTag, StringComparison.Ordinal);
-            if (!rest.StartsWith(OpenTag, StringComparison.Ordinal) || close < 0)
+            if (!rest.StartsWith(OpenTag, StringComparison.Ordinal))
             {
                 return false;
+            }
+
+            var close = rest.IndexOf(CloseTag, StringComparison.Ordinal);
+            if (close < 0)
+            {
+                return true;
             }
 
             rest = rest[(close + CloseTag.Length)..].TrimStart();

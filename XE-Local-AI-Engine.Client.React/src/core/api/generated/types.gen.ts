@@ -272,7 +272,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsRespon
 	runCount: number;
 	promptTokens: number;
 	completionTokens: number;
-	reasoningTokens: number;
+	reasoningTokens: number | null;
 	totalTokens: number;
 	estimatedCostUsd: number;
 	currency: string;
@@ -285,7 +285,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketRespons
 	runCount: number;
 	promptTokens: number;
 	completionTokens: number;
-	reasoningTokens: number;
+	reasoningTokens: number | null;
 	totalTokens: number;
 	estimatedCostUsd: number;
 	currency: string;
@@ -306,7 +306,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsRespons
 	runCount: number;
 	promptTokens: number;
 	completionTokens: number;
-	reasoningTokens: number;
+	reasoningTokens: number | null;
 	totalTokens: number;
 	estimatedCostUsd: number;
 	currency: string;
@@ -4838,6 +4838,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsReques
 
 export type XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse = {
 	scheduledJobId: string;
+	fireId: string;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = {

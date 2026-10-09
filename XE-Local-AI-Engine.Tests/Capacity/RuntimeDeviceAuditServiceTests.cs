@@ -35,6 +35,20 @@ public sealed class RuntimeDeviceAuditServiceTests
     }
 
     [Test]
+    public void BuildState_CudaCompanionSetIncomplete_NamesTheRepair_NotAMissingRuntime()
+    {
+        // The Windows tester's CUDA dir without its companion DLLs: installed, not "No llama.cpp runtime is installed yet".
+        var state = RuntimeDeviceAuditService.BuildState(GpuProfile(GpuVendor.Nvidia),
+            GpuVariant.Cuda,
+            LlamaDeviceInventory.CompanionLibrariesIncomplete(GpuVariant.Cuda));
+
+        AssertEx.Equal("unknown", state.InferenceBackend);
+        var reason = AssertEx.NotNull(state.BackendUndeterminedReason);
+        AssertEx.True(reason.Contains("companion libraries are missing", StringComparison.Ordinal), reason);
+        AssertEx.False(reason.Contains("No llama.cpp runtime is installed yet", StringComparison.Ordinal), reason);
+    }
+
+    [Test]
     public void BuildState_GpuExpected_GpuVariantZeroDevices_IsFallback_AndNamesLikelyCause()
     {
         // The audited WSL2 case: the Vulkan build ran --list-devices and saw nothing (no ICD) — a silent CPU fallback.
@@ -188,7 +202,7 @@ public sealed class RuntimeDeviceAuditServiceTests
         var binaryManager = NoRuntimeInstalled();
         using var service = BuildService(GpuProfile(GpuVendor.Nvidia),
             GpuVariant.Vulkan,
-            new LlamaDeviceInventoryProbe(binaryManager, NullLogger<LlamaDeviceInventoryProbe>.Instance));
+            new LlamaDeviceInventoryProbe(binaryManager, NullLogger<LlamaDeviceInventoryProbe>.Instance, TimeProvider.System));
 
         var state = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
 
@@ -208,7 +222,7 @@ public sealed class RuntimeDeviceAuditServiceTests
         var raw = GpuProfile(GpuVendor.Nvidia);
         using var service = BuildService(raw,
             GpuVariant.Vulkan,
-            new LlamaDeviceInventoryProbe(binaryManager, NullLogger<LlamaDeviceInventoryProbe>.Instance));
+            new LlamaDeviceInventoryProbe(binaryManager, NullLogger<LlamaDeviceInventoryProbe>.Instance, TimeProvider.System));
 
         var effective = await service.GetEffectiveProfileAsync(forceRefreshProfile: false, CancellationToken.None);
 
@@ -332,6 +346,22 @@ public sealed class RuntimeDeviceAuditServiceTests
         await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
 
         await probe.Received(1).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetAudit_ForcedRefresh_ForgetsTheProbesRememberedFailures_AndAMemoizedReadDoesNot()
+    {
+        // A forced refresh follows a runtime change; a probe failure remembered against the old binary must not answer it.
+        var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
+        probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult(WithDevices(GpuVariant.Cuda)));
+        using var service = BuildService(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, probe);
+
+        await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        probe.DidNotReceive().ForgetFailedProbes();
+
+        await service.GetAuditAsync(forceRefresh: true, CancellationToken.None);
+        probe.Received(1).ForgetFailedProbes();
     }
 
     private static HardwareProfile GpuProfile(GpuVendor vendor)

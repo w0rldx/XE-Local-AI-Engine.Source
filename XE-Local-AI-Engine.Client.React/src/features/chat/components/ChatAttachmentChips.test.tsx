@@ -73,6 +73,18 @@ describe("ChatAttachmentChips", () => {
 		expect(statuses).toEqual(["Extracted", "Failed"]);
 	});
 
+	it("labels an extraction that found no text as No text found", () => {
+		renderWithProviders(
+			<ChatAttachmentChips
+				attachments={[attachment({ status: "extracted", extractedChars: 0 })]}
+				pendingUploads={[]}
+				onRemove={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-attachment-status").textContent).toBe("No text found");
+	});
+
 	it("renders an optimistic uploading chip with its percent", () => {
 		const pending: PendingAttachmentUpload = { tempId: "temp-1", name: "uploading.txt", sizeBytes: 10, percent: 42 };
 		renderWithProviders(<ChatAttachmentChips attachments={[]} pendingUploads={[pending]} onRemove={vi.fn()} />);

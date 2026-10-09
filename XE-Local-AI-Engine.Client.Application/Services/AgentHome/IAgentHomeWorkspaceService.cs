@@ -19,8 +19,12 @@ internal interface IAgentHomeWorkspaceService
     ///     Where the git baseline's own commands are recorded; <see langword="null" /> when the caller has no run to
     ///     attribute them to. The run path flushes them into <c>commands.jsonl</c> later.
     /// </param>
+    /// <param name="createBaseline">
+    ///     <see langword="false" /> skips the git baseline: a copy nothing will diff needs no Git on the host.
+    /// </param>
     Task<IReadOnlyList<SelectedFolderSnapshot>> PrepareSelectedFoldersAsync(SandboxHandle handle,
         IReadOnlyList<ResolvedSelectedFolder> resolvedFolders,
         ICollection<AgentHomeCommandLogRecord>? baselineCommands = null,
+        bool createBaseline = true,
         CancellationToken cancellationToken = default);
 }

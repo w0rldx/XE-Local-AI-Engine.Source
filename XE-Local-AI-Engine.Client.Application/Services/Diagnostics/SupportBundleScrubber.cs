@@ -7,7 +7,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Diagnostics;
 /// <summary>Removes personal and secret-shaped content from every text entry of a support bundle.</summary>
 /// <remarks>
 ///     Home and data-root prefixes become <c>~</c> / <c>&lt;data&gt;</c>, other absolute paths their leaf, then e-mail
-///     and token shapes (JWT, <c>sk-</c>, GitHub, <c>Bearer</c>, dense letter+digit runs) are masked. Hex and timestamp
+///     and token shapes (JWT, <c>sk-</c>, GitHub, <c>Bearer</c>, dense letter+digit runs) and private or link-local
+///     IPv4 addresses (the port is kept; loopback is kept) are masked. Hex and timestamp
 ///     segments (trace ids, SHAs, 20260913T134250Z), paths under a mapped root and model or category names are kept; a
 ///     bare user or host name and a hex-only secret are not covered. Line by line, 1 s regex timeouts; idempotent.
 /// </remarks>
@@ -17,6 +18,7 @@ public sealed partial class SupportBundleScrubber
     public const string DataMarker = "<data>";
     public const string RedactedEmail = "[redacted-email]";
     public const string RedactedToken = "[redacted-token]";
+    public const string RedactedIp = "[redacted-ip]";
     public const string DroppedLine = "[line removed: scrubber timeout]";
 
     private const int MatchTimeoutMilliseconds = 1000;
@@ -126,6 +128,7 @@ public sealed partial class SupportBundleScrubber
             scrubbed = KnownTokenRegex().Replace(scrubbed, RedactedToken);
             scrubbed = AssignedSecretRegex().Replace(scrubbed, "${name}${separator}${quote}" + RedactedToken + "${quote}");
             scrubbed = JwtRegex().Replace(scrubbed, static match => ContainsDigit(match.Value) ? RedactedToken : match.Value);
+            scrubbed = PrivateIpv4Regex().Replace(scrubbed, RedactedIp);
             var text = scrubbed;
             return TokenRunRegex().Replace(text, match => IsUnderScrubbedPrefix(text, match.Index) || !IsSecretShaped(match.Value) ? match.Value : RedactedToken);
         }
@@ -201,6 +204,12 @@ public sealed partial class SupportBundleScrubber
     // A JWT-shaped triple of base64url segments. Masked only when it carries a digit, so dotted log categories stay.
     [GeneratedRegex(@"[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}", RegexOptions.CultureInvariant, MatchTimeoutMilliseconds)]
     private static partial Regex JwtRegex();
+
+    // RFC 1918 and link-local IPv4 name the operator's network; loopback, public addresses and the ":port" stay. The
+    // guards keep a longer dotted run (a version such as 10.0.19041.1) from matching in part.
+    [GeneratedRegex(@"(?<![\w.])(?:10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])|192\.168|169\.254)\.\d{1,3}\.\d{1,3}(?!\.?\d)",
+        RegexOptions.CultureInvariant, MatchTimeoutMilliseconds)]
+    private static partial Regex PrivateIpv4Regex();
 
     // A delimited run of 20+ token-alphabet characters; IsSecretShaped decides.
     [GeneratedRegex(@"(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/=_-]{20,}(?![A-Za-z0-9+/=_-])", RegexOptions.CultureInvariant, MatchTimeoutMilliseconds)]

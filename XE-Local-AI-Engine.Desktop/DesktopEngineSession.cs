@@ -75,14 +75,15 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
             return new DesktopEngineSession(existing);
         }
 
-        var (owned, errorTail) = await StartOwnedAsync(options, cancellationToken);
+        var pipeName = "xe-desktop-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+        var (owned, errorTail, exitCode) = await StartOwnedAsync(options, CreateOwnedStartInfo(options, pipeName), pipeName, cancellationToken);
         if (owned is not null)
         {
             return owned;
         }
 
         existing = await DiscoverAsync(options.DataDirectory, cancellationToken);
-        if (existing is null) { throw new InvalidOperationException(DescribeStartupFailure(errorTail)); }
+        if (existing is null) { throw new DesktopEngineStartupException(DescribeStartupFailure(errorTail, exitCode), exitCode); }
 
         ValidateRequestedPort(existing, options.Port);
         return new DesktopEngineSession(existing);
@@ -90,15 +91,19 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
 
     /// <summary>Carries the engine's own last words (a missing shared runtime, a port conflict) into the failure the
     ///     operator sees and the startup breadcrumb, instead of discarding them with the child process.</summary>
-    internal static string DescribeStartupFailure(string? errorTail) =>
-        string.IsNullOrWhiteSpace(errorTail)
-            ? "The engine exited before readiness."
-            : "The engine exited before readiness. It reported: " + errorTail.Trim();
-
-    private static async Task<OwnedStart> StartOwnedAsync(DesktopStartupOptions options, CancellationToken cancellationToken)
+    internal static string DescribeStartupFailure(string? errorTail, int? exitCode = null)
     {
-        var pipeName = "xe-desktop-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-        var start = CreateOwnedStartInfo(options, pipeName);
+        var exited = exitCode is { } code
+            ? string.Create(CultureInfo.InvariantCulture, $"The engine exited before readiness (exit code {code}).")
+            : "The engine exited before readiness.";
+        return string.IsNullOrWhiteSpace(errorTail) ? exited : exited + " It reported: " + errorTail.Trim();
+    }
+
+    /// <summary>Starts the owned engine from <paramref name="start" /> and waits for its readiness or its exit.</summary>
+    internal static async Task<OwnedStart> StartOwnedAsync(DesktopStartupOptions options, ProcessStartInfo start, string pipeName, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(start);
         var pipe = new NamedPipeServerStream(pipeName, PipeDirection.Out, 1,
             PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         var process = new Process
@@ -139,14 +144,14 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
                 }
 
                 // Read before the finally disposes the session: this is the only surviving trace of why it died.
-                return new OwnedStart(null, session.ErrorTail);
+                return new OwnedStart(null, session.ErrorTail, process.ExitCode);
             }
 
             await startup;
             session._origin = await ReadOwnedReadyAsync(options.DataDirectory, process.Id, deadline.Token);
             var ownedSession = session;
             session = null;
-            return new OwnedStart(ownedSession, null);
+            return new OwnedStart(ownedSession, null, null);
         }
         finally
         {
@@ -441,6 +446,6 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
         return ValidateOrigin(root.GetProperty("url").GetString(), root.GetProperty("dataDir").GetString(), directory);
     }
 
-    /// <summary>An owned start's outcome: the ready session, or none and the engine's last stderr words.</summary>
-    private readonly record struct OwnedStart(DesktopEngineSession? Session, string? ErrorTail);
+    /// <summary>An owned start's outcome: the ready session, or none with the engine's last stderr words and exit code.</summary>
+    internal readonly record struct OwnedStart(DesktopEngineSession? Session, string? ErrorTail, int? ExitCode);
 }

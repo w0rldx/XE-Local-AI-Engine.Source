@@ -10,6 +10,7 @@ const { hooksMock } = vi.hoisted(() => ({
 		status: undefined as RuntimeAcquisitionStatus | undefined,
 		enabledArg: undefined as boolean | undefined,
 		ensureMutate: vi.fn(),
+		ensureError: null as unknown,
 	},
 }));
 
@@ -22,10 +23,12 @@ vi.mock("@/features/node-settings/hooks/useRuntimeAcquisitionHub", () => ({
 
 vi.mock("@/features/node-settings/queries/useLocalRuntime", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/features/node-settings/queries/useLocalRuntime")>()),
-	useEnsureLlamaCppBinary: () => ({ mutate: hooksMock.ensureMutate, isPending: false }),
+	useEnsureLlamaCppBinary: () => ({ mutate: hooksMock.ensureMutate, isPending: false, error: hooksMock.ensureError }),
 }));
 
 import { getLlamaCppRuntimeOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { ApiError } from "@/core/api/errors/ApiError";
+import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { RuntimeAcquisitionBanner } from "@/features/node-settings/components/RuntimeAcquisitionBanner";
 import { createTestQueryClient, renderWithProviders } from "@/test/RenderWithProviders";
@@ -42,6 +45,7 @@ describe("RuntimeAcquisitionBanner", () => {
 	beforeEach(() => {
 		hooksMock.status = undefined;
 		hooksMock.enabledArg = undefined;
+		hooksMock.ensureError = null;
 		useNodeAuthStore.setState({ accessToken: "token" });
 		vi.clearAllMocks();
 	});
@@ -141,6 +145,20 @@ describe("RuntimeAcquisitionBanner", () => {
 		fireEvent.click(screen.getByTestId("runtime-acquisition-banner-retry"));
 		// Re-ensures the variant the failed acquisition was targeting, not a silent downgrade to cpu.
 		expect(hooksMock.ensureMutate).toHaveBeenCalledWith("cuda");
+	});
+
+	it("shows the server's refusal when a retry is rejected with 409", () => {
+		hooksMock.status = status({ sequence: 11, phase: "Failed", sanitizedError: "could not be repaired" });
+		hooksMock.ensureError = new ApiError(409, {
+			runningProcessCount: 1,
+			message: "Stop or eject all running llama.cpp models before updating the runtime.",
+		} as unknown as ProblemDetails);
+
+		renderBanner();
+
+		expect(screen.getByTestId("runtime-acquisition-banner-retry-error").textContent).toBe(
+			"Stop or eject all running llama.cpp models before updating the runtime.",
+		);
 	});
 
 	it("retries the failed variant when the status carries the server's enum name", () => {

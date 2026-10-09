@@ -154,7 +154,7 @@ public sealed class NodeAuthPasswordResetTests
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var authService = scope.ServiceProvider.GetRequiredService<INodeAuthService>();
-        return await authService.ResetAdminPasswordAsync(newPassword, recoveryCode: null, CancellationToken.None);
+        return await authService.ResetAdminPasswordAsync(newPassword, recoveryCode: null, newRecoveryCode: null, CancellationToken.None);
     }
 
     private static Task<HttpResponseMessage> SetupAsync(HttpClient client)

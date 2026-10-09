@@ -1,7 +1,9 @@
-import { Group, Stack, Switch, Text } from "@mantine/core";
+import { Group, ScrollArea, Stack, Switch, Text } from "@mantine/core";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { useStickToBottomScroll } from "@/core/ui/hooks/useStickToBottomScroll";
 import { TranscriptSegmentRow } from "@/features/transcription/components/TranscriptSegmentList";
 import type { CaptureChannel } from "@/features/transcription/capture/CaptureSource";
 import type { LiveTranscriptView } from "@/features/transcription/hooks/useTranscriptionHub";
@@ -11,6 +13,10 @@ import { useTranscriptionCaptureStore } from "@/features/transcription/stores/Tr
 interface LiveTranscriptPanelProps {
 	readonly view: LiveTranscriptView | null;
 }
+
+// The committed list scrolls inside this height instead of growing the page; a long session stays readable and the
+// capture controls above it stay in view.
+const LIVE_TRANSCRIPT_MAX_HEIGHT_PX = 420;
 
 const partialChannels: readonly CaptureChannel[] = ["mono", "you", "others"];
 
@@ -30,6 +36,18 @@ export function LiveTranscriptPanel({ view }: LiveTranscriptPanelProps) {
 
 	const committed = view?.committed ?? [];
 	const partials = view?.partials ?? {};
+	const sourceQuietMs = view?.sourceQuietMs ?? null;
+
+	// Follows new commits only while the reader is near the bottom; scrolling up to re-read is left alone.
+	const viewportRef = useRef<HTMLDivElement | null>(null);
+	const endRef = useRef<HTMLDivElement | null>(null);
+	useStickToBottomScroll({
+		viewportRef,
+		endRef,
+		virtualTotalSize: 0,
+		scrollKey: `${committed.length}:${view?.lastSeq ?? 0}`,
+		isStreamingActive: true,
+	});
 
 	return (
 		<Stack gap="sm" data-testid="transcription-live-panel">
@@ -45,21 +63,37 @@ export function LiveTranscriptPanel({ view }: LiveTranscriptPanelProps) {
 				/>
 			</Group>
 
-			{committed.length === 0 ? (
-				<EmptyState message={t("pages.transcription.live.waiting")} data-testid="transcription-live-empty" />
-			) : (
-				<Stack gap="xs" data-testid="transcription-committed-list">
-					{committed.map((segment) => (
-						<TranscriptSegmentRow
-							key={segment.seq}
-							seq={segment.seq}
-							startMs={segment.startMs}
-							endMs={segment.endMs}
-							text={segment.text}
-							channel={toDisplayChannel(segment.channel)}
-						/>
-					))}
-				</Stack>
+			{/* The scroll box stays mounted while empty: the stick-to-bottom hook attaches its scroll listener to the
+			    viewport once, on first commit, so a viewport that only appears with the first row would never get it. */}
+			<ScrollArea.Autosize
+				mah={LIVE_TRANSCRIPT_MAX_HEIGHT_PX}
+				type="auto"
+				viewportRef={viewportRef}
+				data-testid="transcription-committed-scroll"
+			>
+				{committed.length === 0 ? (
+					<EmptyState message={t("pages.transcription.live.waiting")} data-testid="transcription-live-empty" />
+				) : (
+					<Stack gap="xs" data-testid="transcription-committed-list">
+						{committed.map((segment) => (
+							<TranscriptSegmentRow
+								key={segment.seq}
+								seq={segment.seq}
+								startMs={segment.startMs}
+								endMs={segment.endMs}
+								text={segment.text}
+								channel={toDisplayChannel(segment.channel)}
+							/>
+						))}
+						<div ref={endRef} />
+					</Stack>
+				)}
+			</ScrollArea.Autosize>
+
+			{sourceQuietMs === null ? null : (
+				<Text size="sm" c="orange" role="status" data-testid="transcription-source-quiet">
+					{t("pages.transcription.live.sourceQuiet", { seconds: Math.floor(sourceQuietMs / 1000) })}
+				</Text>
 			)}
 
 			{!showPartials

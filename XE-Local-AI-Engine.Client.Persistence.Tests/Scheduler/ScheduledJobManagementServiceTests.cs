@@ -114,6 +114,63 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
     }
 
+    /// <summary>Quartz parses a literal 99 as its internal <c>*</c>, so this would otherwise fire every second.</summary>
+    [Test]
+    [Arguments("99 99 99 * * ?")]
+    [Arguments("0 0 99 * * ?")]
+    [Arguments("0 099 * * * ?")]
+    public async Task CreateJobAsync_WithQuartzWildcardValue99_ThrowsValidation(string cronExpression)
+    {
+        var dbPath = GetDatabasePath("val-cron-99-" + Guid.NewGuid().ToString("N") + ".sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(ValidCronInput(cronExpression)));
+    }
+
+    [Test]
+    public async Task CreateJobAsync_WithCronYear2099_IsAccepted()
+    {
+        var dbPath = GetDatabasePath("val-cron-2099.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+
+        var record = await service.CreateJobAsync(ValidCronInput("0 0 12 1 1 ? 2099"));
+
+        AssertEx.NotNull(record);
+    }
+
+    [Test]
+    public async Task CreateJobAsync_WithNonJsonParameters_ThrowsValidationForEveryTemplate()
+    {
+        var dbPath = GetDatabasePath("val-params-not-json.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(ValidCronInput(parameters: "{not json")));
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() =>
+            service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue, parameters: "{not json")));
+    }
+
+    [Test]
+    public async Task CreateJobAsync_ForRunAgentWithoutAnAgent_ThrowsValidationAtCreateTime()
+    {
+        var dbPath = GetDatabasePath("val-runagent-params.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() =>
+            service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue, parameters: """{ "prompt": "hi" }""")));
+    }
+
     [Test]
     public async Task CreateJobAsync_WithNonPositiveIntervalSeconds_ThrowsValidation()
     {
@@ -385,10 +442,20 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         // single-writer contention between the Quartz worker thread and the store deadlocks the test. The end-to-end fire
         // (dispatcher → handler → snapshot) is covered deterministically by ModelRecommendationCheckSchedulerPathTests
         // Here we assert the manual-trigger path succeeds and the durable job stays registered/triggerable.
-        await service.TriggerNowAsync(record.Id);
+        var fireId = await service.TriggerNowAsync(record.Id);
 
         AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None),
             "The durable Manual job must remain registered and triggerable after TriggerNowAsync.");
+
+        // The scheduler is not started, so the fire's trigger is still stored: it carries the id the caller got back.
+        AssertEx.True(fireId != Guid.Empty, "TriggerNowAsync must return the fire id it stamped.");
+        var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None);
+        AssertEx.Equal(expected: 1,
+            triggers.Count(trigger => string.Equals(trigger.JobDataMap.GetString(SchedulerJobKeys.ManualFireIdKey), fireId.ToString("D"), StringComparison.Ordinal)),
+            "Exactly one stored fire must carry the returned id.");
+
+        var secondFireId = await service.TriggerNowAsync(record.Id);
+        AssertEx.True(fireId != secondFireId, "Every manual fire mints its own id.");
     }
 
     [Test]
@@ -887,7 +954,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         var scheduler = await schedulerFactory.GetScheduler(CancellationToken.None);
         await scheduler.Start(CancellationToken.None);
 
-        var record = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue));
+        var record = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue, parameters: ValidRunAgentParameters));
 
         var jobKey = new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group);
         var jobDetail = AssertEx.NotNull(await scheduler.GetJobDetail(jobKey, CancellationToken.None));
@@ -914,8 +981,10 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Start(CancellationToken.None);
 
         var derived = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
+            parameters: ValidRunAgentParameters,
             displayName: "Derived ceiling"));
         var explicitCeiling = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
+            parameters: ValidRunAgentParameters,
             displayName: "Operator ceiling",
             maxRuntimeSeconds: 90));
 
@@ -948,6 +1017,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await scheduler.Start(CancellationToken.None);
 
         var legacy = await service.CreateJobAsync(ValidCronInput(templateId: RunSavedAgentHandler.TemplateIdValue,
+            parameters: ValidRunAgentParameters,
             displayName: "Legacy ceiling",
             maxRuntimeSeconds: 600));
         // The same 600 on ANOTHER template is a plain operator value and must survive untouched.
@@ -1185,6 +1255,8 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
                .Build();
     }
 
+    private const string ValidRunAgentParameters = """{ "agentDefinitionId": "6f1c2a7e-3b4d-4c5e-8f90-123456789abc", "prompt": "hi" }""";
+
     // Valid cron input using the test.echo template (supports OneShot + Cron).
     private static ScheduledJobManagementInput ValidCronInput(string cronExpression = "0 0 * * * ?",
         string displayName = "Test Cron Job",
@@ -1192,7 +1264,8 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         string timeZoneId = "UTC",
         bool preventOverlap = false,
         int? maxRuntimeSeconds = null,
-        SchedulerMisfirePolicy? misfirePolicy = SchedulerMisfirePolicy.Smart)
+        SchedulerMisfirePolicy? misfirePolicy = SchedulerMisfirePolicy.Smart,
+        string? parameters = null)
     {
         return new ScheduledJobManagementInput
         {
@@ -1209,7 +1282,7 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             MisfirePolicy = misfirePolicy,
             PreventOverlap = preventOverlap,
             MaxRuntimeSeconds = maxRuntimeSeconds,
-            Parameters = null
+            Parameters = parameters
         };
     }
 

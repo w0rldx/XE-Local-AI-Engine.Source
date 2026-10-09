@@ -17,4 +17,7 @@ internal sealed class VaultUnlockOutcome
 
     /// <summary>The recovery code that proved the reset; that call verifies it again against the file.</summary>
     public string? ResetRecoveryCode { get; init; }
+
+    /// <summary>The rotated recovery code the pre-host already showed; the reset wraps the vault's recovery slot under it.</summary>
+    public string? ResetNewRecoveryCode { get; init; }
 }

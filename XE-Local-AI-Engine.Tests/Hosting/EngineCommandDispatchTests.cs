@@ -87,7 +87,8 @@ public sealed class EngineCommandDispatchTests
         AssertEx.Contains(output.ToString(), "XE_DATA_DIR must be an absolute path");
         AssertEx.Contains(output.ToString(), "Desktop app: [--debug]");
         AssertEx.Contains(output.ToString(),
-            "Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable; 7 unlock port lost; 8 node key does not open the database; 9 database migration failed.");
+            "Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable; 7 unlock port lost; 8 node key does not open the database; 9 database migration failed; 10 data directory or node settings unusable.");
+        AssertEx.Contains(output.ToString(), @"current\XE-Local-AI-Engine.WindowsLauncher.exe");
     }
 
     [Test]
@@ -213,7 +214,8 @@ public sealed class EngineCommandDispatchTests
 
             Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, "relative/path");
             var captured = await Program.CreateAppAsync(["--setup"], new ProgramAppCustomization());
-            AssertEx.Equal(expected: 1, captured.ExitCode);
+            // A relative data path is an unusable data directory: exit 10, not the generic 1.
+            AssertEx.Equal(expected: 10, captured.ExitCode);
             AssertEx.Null(Environment.GetEnvironmentVariable(DesktopLaunch.AdminPasswordEnvironmentVariable));
         }
         finally

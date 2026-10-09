@@ -45,8 +45,8 @@ public sealed class AgentUsageSummaryBucketResponse
     /// <summary>Summed completion/output tokens (a run reporting no usage contributes 0).</summary>
     public required long CompletionTokens { get; init; }
 
-    /// <summary>Summed reasoning tokens (a run reporting no usage contributes 0).</summary>
-    public required long ReasoningTokens { get; init; }
+    /// <summary>Summed reasoning tokens over the runs that reported them; null when none did (not reported, not zero).</summary>
+    public required long? ReasoningTokens { get; init; }
 
     /// <summary>Summed total tokens reported by the model (a run reporting no usage contributes 0).</summary>
     public required long TotalTokens { get; init; }
@@ -74,7 +74,8 @@ public sealed class AgentUsageSummaryTotalsResponse
 
     public required long CompletionTokens { get; init; }
 
-    public required long ReasoningTokens { get; init; }
+    /// <summary>Null when no run in the range reported reasoning tokens.</summary>
+    public required long? ReasoningTokens { get; init; }
 
     public required long TotalTokens { get; init; }
 
@@ -103,8 +104,8 @@ public sealed class AgentUsageProviderTotalsResponse
     /// <summary>Summed completion/output tokens for the provider (a run reporting no usage contributes 0).</summary>
     public required long CompletionTokens { get; init; }
 
-    /// <summary>Summed reasoning tokens for the provider (a run reporting no usage contributes 0).</summary>
-    public required long ReasoningTokens { get; init; }
+    /// <summary>Summed reasoning tokens for the provider; null when none of its runs reported them.</summary>
+    public required long? ReasoningTokens { get; init; }
 
     /// <summary>Summed total tokens for the provider (a run reporting no usage contributes 0).</summary>
     public required long TotalTokens { get; init; }

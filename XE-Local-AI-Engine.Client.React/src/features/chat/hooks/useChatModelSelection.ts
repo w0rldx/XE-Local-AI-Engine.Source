@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 import { getLocalModelDetailsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
@@ -64,6 +65,17 @@ export function useChatModelSelection({
 	pinnedAgentModelProfile,
 	scopedModelPending,
 }: ChatModelSelectionInput): ChatModelSelection {
+	const { t } = useTranslation();
+	// The sentinel's copy is user-facing, so it is translated here; the base keeps only the identity and capabilities.
+	const localDefaultOption = useMemo<ModelOption>(
+		() => ({
+			...localDefaultModelOptionBase,
+			label: t("pages.chat.localDefaultModel.label", "Local default"),
+			displayName: t("pages.chat.localDefaultModel.displayName", "Local runtime default"),
+			statusLabel: t("pages.chat.localDefaultModel.statusLabel", "Runtime-selected model"),
+		}),
+		[t],
+	);
 	const preferredModel = useNodeChatPreferencesStore((state) => state.selectedModel);
 	const reasoningEffort = useNodeChatPreferencesStore((state) => state.reasoningEffort);
 	const { setSelectedModel, setReasoningEffort } = useNodeChatPreferencesStore((state) => state.actions);
@@ -80,18 +92,18 @@ export function useChatModelSelection({
 	const modelOptions = useMemo<ModelOption[]>(() => {
 		const response = localModelsData;
 		if (!response) {
-			return [localDefaultModelOptionBase];
+			return [localDefaultOption];
 		}
 
 		// Mirror the resolved concrete model's capabilities onto the Local-default option so its reasoning/tool
 		// controls match picking that model directly (see resolveLocalDefaultModelCapabilities).
 		const items = response.items ?? [];
 		const localDefaultModelOption: ModelOption = {
-			...localDefaultModelOptionBase,
+			...localDefaultOption,
 			...resolveLocalDefaultModelCapabilities(items),
 		};
 		return [localDefaultModelOption, ...toChatModelOptions(items, response.isAvailable ?? false)];
-	}, [localModelsData]);
+	}, [localModelsData, localDefaultOption]);
 	// Cloud (Codex + Azure) model options — empty array when signed out; non-empty only when Codex session active.
 	const codexModelOptions = useCodexModelOptions();
 	// Models served by an operator-registered external OpenAI-compatible endpoint, one per registered model.
@@ -209,8 +221,8 @@ export function useChatModelSelection({
 
 		return selectedConcreteModelName.length > 0
 			? deriveModelIdDisplay(selectedConcreteModelName).primary
-			: "Local runtime default";
-	}, [selectedConcreteModelName, selectedModelOption]);
+			: t("pages.chat.localDefaultModel.displayName", "Local runtime default");
+	}, [selectedConcreteModelName, selectedModelOption, t]);
 
 	return {
 		modelOptions,

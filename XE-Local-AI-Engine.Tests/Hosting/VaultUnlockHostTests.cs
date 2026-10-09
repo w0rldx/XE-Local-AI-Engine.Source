@@ -148,19 +148,24 @@ public sealed class VaultUnlockHostTests : IDisposable
 #pragma warning disable CA1308 // Lower case is the point: the code is displayed upper case and must be accepted as typed.
         var typed = _recoveryCode.Replace("-", " ", StringComparison.Ordinal).ToLowerInvariant();
 #pragma warning restore CA1308
+        string rotatedCode;
         using (var right = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new
                {
                    recoveryCode = typed,
                    newPassword = NewPassword
                }))
         {
-            AssertEx.Equal(HttpStatusCode.NoContent, right.StatusCode);
+            AssertEx.Equal(HttpStatusCode.OK, right.StatusCode);
+            var body = AssertEx.NotNull(await right.Content.ReadFromJsonAsync<VaultRecoveryUnlockResponse>());
+            rotatedCode = body.RecoveryCode;
+            AssertEx.True(VaultKdf.TryParseRecoveryCode(rotatedCode, out _), "The response shows a well-formed rotated recovery code.");
         }
 
         var outcome = AssertEx.NotNull(await run.WaitAsync(Deadline));
         AssertEx.True(outcome.MasterKey.AsSpan().SequenceEqual(_masterKey), "The recovery code must unwrap the same master key.");
         AssertEx.Equal(NewPassword, outcome.ResetPassword);
         AssertEx.Equal(typed, outcome.ResetRecoveryCode);
+        AssertEx.Equal(rotatedCode, outcome.ResetNewRecoveryCode, "The real host must wrap the vault under the code the operator was shown.");
     }
 
     [Test]
@@ -195,6 +200,65 @@ public sealed class VaultUnlockHostTests : IDisposable
     }
 
     [Test]
+    public async Task ConcurrentRecoveryUnlocks_ExactlyOneAnswers200_WithTheCodeTheRealHostInstalls_TheOther409()
+    {
+        var (run, url) = await StartAsync();
+        using var first = await WarmClientAsync(url);
+        using var second = await WarmClientAsync(url);
+
+        var responses = await Task.WhenAll(PostRecoveryAsync(first), PostRecoveryAsync(second));
+        try
+        {
+            AssertEx.ContainsSingle(responses, static response => response.StatusCode == HttpStatusCode.OK);
+            AssertEx.ContainsSingle(responses, static response => response.StatusCode == HttpStatusCode.Conflict);
+            var winner = responses.Single(static response => response.StatusCode == HttpStatusCode.OK);
+            var loser = responses.Single(static response => response.StatusCode == HttpStatusCode.Conflict);
+            var problem = await loser.Content.ReadFromJsonAsync<JsonElement>();
+            AssertEx.Equal("Unlock in progress", problem.GetProperty("title").GetString());
+
+            var shown = AssertEx.NotNull(await winner.Content.ReadFromJsonAsync<VaultRecoveryUnlockResponse>()).RecoveryCode;
+            var outcome = AssertEx.NotNull(await run.WaitAsync(Deadline));
+            AssertEx.Equal(shown, outcome.ResetNewRecoveryCode, "The one code shown must be the one the real host wraps the vault under.");
+        }
+        finally
+        {
+            foreach (var response in responses)
+            {
+                response.Dispose();
+            }
+        }
+    }
+
+    [Test]
+    public async Task ConcurrentPasswordAndRecoveryUnlocks_ExactlyOneWins_TheOther409()
+    {
+        var (run, url) = await StartAsync();
+        using var passwordClient = await WarmClientAsync(url);
+        using var recoveryClient = await WarmClientAsync(url);
+
+        var responses = await Task.WhenAll(passwordClient.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new
+            {
+                password = Password
+            }),
+            PostRecoveryAsync(recoveryClient));
+        using var passwordResponse = responses[0];
+        using var recoveryResponse = responses[1];
+
+        var outcome = AssertEx.NotNull(await run.WaitAsync(Deadline));
+        if (passwordResponse.StatusCode == HttpStatusCode.NoContent)
+        {
+            AssertEx.Equal(HttpStatusCode.Conflict, recoveryResponse.StatusCode);
+            AssertEx.Null(outcome.ResetPassword, "A password win must not carry the losing recovery reset.");
+        }
+        else
+        {
+            AssertEx.Equal(HttpStatusCode.Conflict, passwordResponse.StatusCode);
+            AssertEx.Equal(HttpStatusCode.OK, recoveryResponse.StatusCode);
+            AssertEx.Equal(NewPassword, outcome.ResetPassword);
+        }
+    }
+
+    [Test]
     public async Task ParentLoss_StopsThePreHostWithoutUnlocking_AndRemovesTheReadinessFile()
     {
         var (run, _) = await StartAsync();
@@ -204,6 +268,25 @@ public sealed class VaultUnlockHostTests : IDisposable
         AssertEx.Null(await run.WaitAsync(Deadline));
         AssertEx.Null(await DesktopPortStore.ReadReadyAsync(_dataDirectory));
     }
+
+    /// <summary>A client whose connection is already open, so a concurrent request is in flight before the pre-host stops.</summary>
+    private static async Task<HttpClient> WarmClientAsync(string url)
+    {
+        var client = new HttpClient
+        {
+            BaseAddress = new Uri(url)
+        };
+        using var warm = await client.GetAsync(Route(LocalApiRoutes.Auth.Status));
+        AssertEx.Equal(HttpStatusCode.OK, warm.StatusCode);
+        return client;
+    }
+
+    private Task<HttpResponseMessage> PostRecoveryAsync(HttpClient client) =>
+        client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlockRecovery), new
+        {
+            recoveryCode = _recoveryCode,
+            newPassword = NewPassword
+        });
 
     private static Uri Route(string route) =>
         new($"/{LocalApiRoutes.Prefix}/{route}", UriKind.Relative);

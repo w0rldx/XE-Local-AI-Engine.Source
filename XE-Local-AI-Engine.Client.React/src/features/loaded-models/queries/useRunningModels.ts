@@ -17,6 +17,10 @@ import {
 // Generated keys are object arrays; TanStack partial matching on `_id` invalidates every endpoint variant.
 const runningModelsOperationId = "listRunningModels";
 
+// The llama.cpp runtime status carries `runningProcessCount`, which the Runtimes page reads; nothing else refreshes it
+// after an eject, so the page kept saying models were still loaded.
+const llamaCppRuntimeOperationId = "getLlamaCppRuntime";
+
 /** Builds the partial generated-query-key filter that matches every cached variant of the running-models endpoint. */
 function runningModelsInvalidationKey(): readonly [{ _id: string }] {
 	return [{ _id: runningModelsOperationId }];
@@ -55,7 +59,7 @@ export interface EjectRunningModelVariables {
 
 // Ejects a running model from the llama.cpp runtime, returning what the eject actually did (ejected /
 // timed_out_still_busy / forced / not_running) so the page can surface a distinct outcome toast. Invalidates the
-// running-models list so an ejected entry disappears.
+// running-models list so an ejected entry disappears, and the llama.cpp runtime status so its process count follows.
 export function useEjectRunningModel() {
 	const queryClient = useQueryClient();
 
@@ -65,6 +69,10 @@ export function useEjectRunningModel() {
 			const response = await options.mutationFn?.({ body: { ...variables } }, undefined as never);
 			return toEjectRunningModelResult(response);
 		},
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: runningModelsInvalidationKey() }),
+		onSuccess: () =>
+			Promise.all([
+				queryClient.invalidateQueries({ queryKey: runningModelsInvalidationKey() }),
+				queryClient.invalidateQueries({ queryKey: [{ _id: llamaCppRuntimeOperationId }] }),
+			]),
 	});
 }

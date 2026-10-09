@@ -225,7 +225,8 @@ public sealed class ApplicationHubWireTests
                            + "\",\"runId\":\"11111111-1111-4111-8111-111111111111\",\"scheduledJobId\":\"22222222-2222-4222-8222-222222222222\","
                            + "\"templateId\":\"model-fit-refresh\",\"status\":\"Succeeded\",\"triggeredBy\":\"Schedule\","
                            + "\"scheduledFireTimeUtc\":1758000000000,\"actualFireTimeUtc\":1758000000100,\"completedAtUtc\":1758000000900,"
-                           + "\"durationMs\":800,\"summary\":\"Refreshed 3 models.\",\"errorMessage\":null,\"occurredAtUtc\":1758000001000}]}"
+                           + "\"durationMs\":800,\"summary\":\"Refreshed 3 models.\",\"errorMessage\":null,\"occurredAtUtc\":1758000001000,"
+                           + "\"manualFireId\":null}]}"
                            + RecordSeparator,
                 WriteFrame(sent[index].Message));
         }

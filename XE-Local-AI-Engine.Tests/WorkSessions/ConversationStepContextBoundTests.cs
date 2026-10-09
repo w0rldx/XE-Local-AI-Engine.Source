@@ -296,6 +296,22 @@ public sealed class ConversationStepContextBoundTests
     }
 
     [Test]
+    public void Project_LeavesOutAPromptWhoseAnswerWasStopped()
+    {
+        // Mirrors ConversationContextBuilder.Build: a Stopped answer is not sent, and neither is its prompt (F-12).
+        var estimator = new HeuristicTokenEstimator();
+        var stopped = Message(sequence: 1, "assistant", "partial") with
+        {
+            Status = NodeChatMessageStatusValues.Cancelled
+        };
+
+        var projected = ConversationStepContextBound.Project(Conversation([Message(sequence: 0, "user", new string('a', 4_000)), stopped]), estimator);
+        var expected = ConversationStepContextBound.Project(Conversation([]), estimator);
+
+        AssertEx.Equal(expected, projected);
+    }
+
+    [Test]
     public void Project_CountsReasoningAndIgnoresWhatTheSynopsisAlreadyCovers()
     {
         var estimator = new HeuristicTokenEstimator();

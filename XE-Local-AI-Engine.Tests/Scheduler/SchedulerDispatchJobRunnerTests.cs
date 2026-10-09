@@ -109,6 +109,31 @@ public sealed class SchedulerDispatchJobRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenFireCarriesAManualFireId_ForwardsIt()
+    {
+        var fireId = Guid.NewGuid();
+        var executor = Substitute.For<ISchedulerDispatchExecutor>();
+        var context = BuildContext(new JobDataMap
+        {
+            [SchedulerJobKeys.ScheduledJobIdKey] = JobId.ToString(),
+            [SchedulerJobKeys.ManualFireKey] = bool.TrueString,
+            [SchedulerJobKeys.ManualFireIdKey] = fireId.ToString("D")
+        });
+
+        await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context);
+
+        // Correlation only: the id is not a parameter override.
+        await executor.Received(1).DispatchAsync(JobId,
+            "fire-x",
+            Arg.Any<DateTimeOffset?>(),
+            Arg.Any<DateTimeOffset>(),
+            Arg.Any<CancellationToken>(),
+            Arg.Is<IReadOnlyDictionary<string, string>?>(overrides => overrides == null),
+            ScheduledRunTrigger.Manual,
+            fireId);
+    }
+
+    [Test]
     public async Task RunAsync_WhenScheduledJobIdMissing_DoesNotDispatch()
     {
         var executor = Substitute.For<ISchedulerDispatchExecutor>();

@@ -267,7 +267,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResp
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	promptTokens: z.int(),
 	completionTokens: z.int(),
-	reasoningTokens: z.int(),
+	reasoningTokens: z.int().nullable(),
 	totalTokens: z.int(),
 	estimatedCostUsd: z.number(),
 	currency: z.string(),
@@ -283,7 +283,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketRespo
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	promptTokens: z.int(),
 	completionTokens: z.int(),
-	reasoningTokens: z.int(),
+	reasoningTokens: z.int().nullable(),
 	totalTokens: z.int(),
 	estimatedCostUsd: z.number(),
 	currency: z.string(),
@@ -298,7 +298,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsRespo
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	promptTokens: z.int(),
 	completionTokens: z.int(),
-	reasoningTokens: z.int(),
+	reasoningTokens: z.int().nullable(),
 	totalTokens: z.int(),
 	estimatedCostUsd: z.number(),
 	currency: z.string(),
@@ -4964,6 +4964,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequ
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsResponse = z.object({
 	scheduledJobId: z.guid(),
+	fireId: z.guid(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1RunningModelResponse = z.object({

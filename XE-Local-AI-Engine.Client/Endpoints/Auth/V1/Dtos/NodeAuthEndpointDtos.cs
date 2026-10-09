@@ -37,6 +37,12 @@ public sealed record VaultUnlockRequest
     public string Password { get; init; } = string.Empty;
 }
 
+/// <summary>The locked pre-host's <c>auth/vault/unlock-recovery</c> success body: the rotated recovery code, shown once.</summary>
+public sealed record VaultRecoveryUnlockResponse
+{
+    public required string RecoveryCode { get; init; }
+}
+
 /// <summary>The locked pre-host's <c>auth/vault/unlock-recovery</c> body: prove the code, set a new password.</summary>
 public sealed record VaultRecoveryUnlockRequest
 {

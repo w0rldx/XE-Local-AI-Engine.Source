@@ -112,7 +112,7 @@ public sealed class LiveMemorySamplerTests
         var sampler = CreateSampler(probe, clock: clock);
 
         var first = await sampler.SampleAsync(CancellationToken.None);
-        clock.Advance(TimeSpan.FromMilliseconds(1999));
+        clock.Advance(LiveMemorySampler.CacheWindow - TimeSpan.FromMilliseconds(1));
         var cached = await sampler.SampleAsync(CancellationToken.None);
 
         AssertEx.Equal(expected: 1, probe.CallCount);

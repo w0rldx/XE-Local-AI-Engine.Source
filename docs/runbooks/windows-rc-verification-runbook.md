@@ -278,8 +278,9 @@ it, the host logs the reason.
 - The correct password is refused: capture the log and the file; do not retry more than a few times, the unlock route is rate limited.
 
 **Also exercise once** (each needs the recovery code you wrote down): change the password, restart and unlock with
-the new one; then from a stopped engine run `--reset-admin-password <new>` with `--recovery-code-stdin` and confirm the
-old password no longer unlocks.
+the new one; then from a stopped engine run `current\XE-Local-AI-Engine.WindowsLauncher.exe --reset-admin-password <new>`
+with `--recovery-code-stdin` and confirm the old password no longer unlocks, a new `XE_RECOVERY_CODE=` line was printed
+and the old recovery code is refused.
 
 A v2 vault is user-independent: copying the data dir to another Windows user no longer produces the old misleading
 *"does not contain exactly 32 bytes"* message for `node.key`, and the password unlocks it on any account. Only the

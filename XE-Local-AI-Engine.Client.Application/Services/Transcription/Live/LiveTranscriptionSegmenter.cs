@@ -101,6 +101,7 @@ public sealed class LiveTranscriptionSegmenter
     private long _committedEndMs;
     private bool _detectLanguage;
     private string? _detectedLanguageCode;
+    private bool _tailHasSpeech;
     private long _lastSubmittedBoundaryMs = -1;
     private long _nextTickMs;
     private int _noProgressSubmissions;
@@ -288,7 +289,9 @@ public sealed class LiveTranscriptionSegmenter
             learnedLanguage = result.DetectedLanguageCode;
         }
 
-        Apply(result, windowStartMs, windowEndMs, atCap, flush, commits);
+        // Only a window starting over uncommitted speech asks for probabilities: whisper-server dies or answers 500 on a
+        // silent one (wiki 24, "The segmenter"), and speech this call committed is gone from the next window.
+        _tailHasSpeech = Apply(result, windowStartMs, windowEndMs, atCap, flush, commits);
         return learnedLanguage;
     }
 
@@ -336,11 +339,12 @@ public sealed class LiveTranscriptionSegmenter
             LanguageCode = _languageCode,
             Translate = _translate,
             UseVoiceActivityDetection = true,
-            DetectLanguage = _detectLanguage
+            DetectLanguage = _detectLanguage && _tailHasSpeech
         }, cancellationToken);
     }
 
     /// <summary>Turns one transcription result into commits and moves the watermark. Nothing here awaits.</summary>
+    /// <returns>Whether speech remains in the uncommitted tail, so the next window still hears it.</returns>
     /// <remarks>
     ///     The tail guard is suspended when the buffer must be cleared anyway (at the cap and on the final flush),
     ///     committing the model's answer about audio this lane cut itself, so a word straddling the boundary is a
@@ -348,7 +352,7 @@ public sealed class LiveTranscriptionSegmenter
     ///     routinely reports an end past the audio it was given (VAD padding; the fixture answers a 2000 ms window
     ///     with a segment ending at 2020 ms), which a zero guard rejects before the caller frees the audio for good.
     /// </remarks>
-    private void Apply(WhisperTranscriptionResult result,
+    private bool Apply(WhisperTranscriptionResult result,
         long windowStartMs,
         long windowEndMs,
         bool atCap,
@@ -421,6 +425,7 @@ public sealed class LiveTranscriptionSegmenter
         }
 
         _partial = flush ? string.Empty : string.Join(' ', pending).Trim();
+        return segments.Any(segment => segment.Text.Length > 0 && Math.Min(segment.EndMs, windowEndMs) > _tailStartMs);
     }
 
     private void AdvanceWatermark(long watermarkMs)

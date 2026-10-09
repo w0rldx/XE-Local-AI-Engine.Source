@@ -119,7 +119,7 @@ export interface NodeChatStreamEventDto {
 	// `noticeMessage` is the sanitized, user-facing sentence to display verbatim. `noticeDetail` is the notice's
 	// optional structured detail beside that prose — a stable machine code or short identifier naming WHY it fired
 	// (the kebab-case dispatch reason for "EffortDispatched", the effective model for the withheld kinds, the file
-	// names for "AttachmentsNotSent"). Rendered
+	// names for "AttachmentsNotSent" and "AttachmentsTruncated"). Rendered
 	// as-is, never translated, and absent on notices that carry none.
 	noticeKind?: string | null;
 	noticeMessage?: string | null;

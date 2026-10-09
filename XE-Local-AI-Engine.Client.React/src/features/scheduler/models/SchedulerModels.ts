@@ -169,7 +169,7 @@ export function parseDateTimeLocal(value: string): number | null | undefined {
 // are i18n keys; the form translates them.
 export const scheduledJobFormSchema = z
 	.object({
-		templateId: z.string().trim().min(1),
+		templateId: z.string().trim().min(1, "pages.scheduler.form.validation.templateRequired"),
 		displayName: z.string().trim().min(1).max(200),
 		description: z.string().max(2000),
 		scheduleKind: scheduleKindSchema,
@@ -178,7 +178,7 @@ export const scheduledJobFormSchema = z
 		repeatCount: z.string(),
 		startAtUtc: z.string(),
 		endAtUtc: z.string(),
-		timeZoneId: z.string().trim().min(1),
+		timeZoneId: z.string().trim().min(1, "pages.scheduler.form.validation.timeZoneRequired"),
 		misfirePolicy: misfirePolicySchema,
 		preventOverlap: z.boolean(),
 		maxRuntimeSeconds: z.string(),

@@ -93,6 +93,9 @@ export function NodeSettingsNumberField({
 			suffix={unit === "" ? undefined : unit === "%" ? " %" : ` ${unit}`}
 			min={bounds.min / scale}
 			max={bounds.max / scale}
+			// Never clamp: Mantine's default clamps on blur, silently replacing an out-of-range entry before the save-time
+			// range check can name it.
+			clampBehavior="none"
 			allowDecimal={scale !== 1}
 			decimalScale={scale === 1 ? undefined : 2}
 			disabled={disabled}

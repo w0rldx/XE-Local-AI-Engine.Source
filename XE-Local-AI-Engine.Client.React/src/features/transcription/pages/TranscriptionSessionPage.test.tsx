@@ -114,7 +114,15 @@ function detail(overrides: Record<string, unknown> = {}, segments = [segment(1),
 }
 
 function liveView(status: string, committed: LiveTranscriptView["committed"] = []): LiveTranscriptView {
-	return { committed, partials: {}, status, bufferedMs: null, lastSeq: committed.length, replayTruncated: false };
+	return {
+		committed,
+		partials: {},
+		status,
+		bufferedMs: null,
+		sourceQuietMs: null,
+		lastSeq: committed.length,
+		replayTruncated: false,
+	};
 }
 
 /** Delivers a live transcript the way the hub does: by writing the push-fed query the view reads. */
@@ -135,6 +143,8 @@ describe("TranscriptionSessionPage", () => {
 		liveCapture.capturedMs = 0;
 		usePendingComposerTextStore.setState({ pendingText: "" });
 		useTranscriptionCaptureStore.setState({ deviceIdBySession: {}, processIdBySession: {} });
+		// jsdom implements no layout; the live panel's stick-to-bottom follow calls this.
+		Element.prototype.scrollIntoView = vi.fn();
 	});
 
 	afterEach(() => {

@@ -59,13 +59,15 @@ public sealed class HubJsonProtocolTests
             DurationMs = null,
             Summary = null,
             ErrorMessage = null,
-            OccurredAtUtc = 1758000000000
+            OccurredAtUtc = 1758000000000,
+            ManualFireId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
         };
 
         var frame = WriteFrame(SchedulerHubEvents.RunCompleted, payload);
 
         AssertEx.Contains(frame, "\"status\":\"Succeeded\"");
         AssertEx.Contains(frame, "\"triggeredBy\":\"Schedule\"");
+        AssertEx.Contains(frame, "\"manualFireId\":\"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\"");
     }
 
     // The host's registered JSON hub protocol — the same instance a live connection writes through, so what it

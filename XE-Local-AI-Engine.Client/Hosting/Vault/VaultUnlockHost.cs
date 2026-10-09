@@ -44,7 +44,7 @@ internal static class VaultUnlockHost
 
         var keyPath = Path.Combine(options.DataDirectory, VaultFileCodec.KeyFileName);
         var file = VaultFileCodec.Read(await File.ReadAllBytesAsync(keyPath, cancellationToken));
-        var unlocked = new TaskCompletionSource<VaultUnlockOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var unlocked = new UnlockSlot();
         await using var limiter = new FixedWindowRateLimiter(new FixedWindowRateLimiterOptions
         {
             PermitLimit = AttemptLimit,
@@ -83,22 +83,23 @@ internal static class VaultUnlockHost
 
         DesktopReadyPublisher.Publish(options.DataDirectory, boundUrl, options.Version, TimeProvider.System, options.StandardOutput, logger);
 
-        await Task.WhenAny(unlocked.Task, stopping.Task, options.ParentLost ?? Task.Delay(Timeout.Infinite, cancellationToken));
+        await Task.WhenAny(unlocked.Completion.Task, stopping.Task, options.ParentLost ?? Task.Delay(Timeout.Infinite, cancellationToken));
 
         using (var stopBudget = new CancellationTokenSource(StopBudget))
         {
             await app.StopAsync(stopBudget.Token);
         }
 
-        if (unlocked.Task.IsCompletedSuccessfully)
+        if (unlocked.Completion.Task.IsCompletedSuccessfully)
         {
-            var outcome = await unlocked.Task;
+            var outcome = await unlocked.Completion.Task;
             return new VaultUnlockOutcome
             {
                 MasterKey = outcome.MasterKey,
                 BoundUrl = boundUrl.TrimEnd('/'),
                 ResetPassword = outcome.ResetPassword,
-                ResetRecoveryCode = outcome.ResetRecoveryCode
+                ResetRecoveryCode = outcome.ResetRecoveryCode,
+                ResetNewRecoveryCode = outcome.ResetNewRecoveryCode
             };
         }
 
@@ -107,7 +108,7 @@ internal static class VaultUnlockHost
         return null;
     }
 
-    private static void MapPipeline(WebApplication app, VaultFile file, RateLimiter limiter, TaskCompletionSource<VaultUnlockOutcome> unlocked)
+    private static void MapPipeline(WebApplication app, VaultFile file, RateLimiter limiter, UnlockSlot unlocked)
     {
         app.UseNodeResponseHeaders();
         app.UseMiddleware<NativeDesktopDocumentPolicy>();
@@ -147,7 +148,7 @@ internal static class VaultUnlockHost
         HttpContext context,
         VaultFile file,
         RateLimiter limiter,
-        TaskCompletionSource<VaultUnlockOutcome> unlocked)
+        UnlockSlot unlocked)
     {
         using var lease = limiter.AttemptAcquire();
         if (!lease.IsAcquired)
@@ -181,7 +182,7 @@ internal static class VaultUnlockHost
         HttpContext context,
         VaultFile file,
         RateLimiter limiter,
-        TaskCompletionSource<VaultUnlockOutcome> unlocked)
+        UnlockSlot unlocked)
     {
         using var lease = limiter.AttemptAcquire();
         if (!lease.IsAcquired)
@@ -207,11 +208,17 @@ internal static class VaultUnlockHost
             // Proves the code only. The password wrap and the Identity hash are reset together by the real host's
             // ResetAdminPasswordAsync, which re-proves the code and restores the file if Identity refuses.
             var masterKey = VaultFileCodec.UnwrapWithRecovery(file, request.RecoveryCode);
+            // The reset rotates the code. It is minted here so this response, the only one the operator sees, can show it.
+            var newRecoveryCode = VaultFileCodec.NewRecoveryCode();
             return Succeeded(context, unlocked, new VaultUnlockOutcome
             {
                 MasterKey = masterKey,
                 ResetPassword = request.NewPassword,
-                ResetRecoveryCode = request.RecoveryCode
+                ResetRecoveryCode = request.RecoveryCode,
+                ResetNewRecoveryCode = newRecoveryCode
+            }, new VaultRecoveryUnlockResponse
+            {
+                RecoveryCode = newRecoveryCode
             });
         }
         catch (VaultUnlockException)
@@ -221,20 +228,30 @@ internal static class VaultUnlockHost
         }
     }
 
-    /// <summary>Completes the unlock only once the 204 has been sent, so the caller sees success before the pre-host stops.</summary>
-    private static IResult Succeeded(HttpContext context, TaskCompletionSource<VaultUnlockOutcome> unlocked, VaultUnlockOutcome outcome)
+    /// <summary>
+    ///     Reserves the one unlock before answering and completes it once the response was sent. A concurrent second
+    ///     success answers 409, so no recovery unlock shows a code the real host will not install.
+    /// </summary>
+    /// <param name="body">The 200 body for a recovery unlock; <see langword="null" /> answers 204.</param>
+    private static IResult Succeeded(HttpContext context,
+        UnlockSlot unlocked,
+        VaultUnlockOutcome outcome,
+        VaultRecoveryUnlockResponse? body = null)
     {
+        if (!unlocked.TryReserve())
+        {
+            CryptographicOperations.ZeroMemory(outcome.MasterKey);
+            return Results.Problem(title: "Unlock in progress",
+                detail: "An unlock is already in progress.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
         context.Response.OnCompleted(() =>
         {
-            // A concurrent second success loses the race; its copy of the key is not needed.
-            if (!unlocked.TrySetResult(outcome))
-            {
-                CryptographicOperations.ZeroMemory(outcome.MasterKey);
-            }
-
+            unlocked.Completion.TrySetResult(outcome);
             return Task.CompletedTask;
         });
-        return Results.NoContent();
+        return body is null ? Results.NoContent() : Results.Json(body);
     }
 
     private static async Task DelayFailureAsync(long started, CancellationToken cancellationToken)
@@ -258,4 +275,14 @@ internal static class VaultUnlockHost
             Message = "The unlock request is invalid.",
             Errors = [.. errors]
         }, statusCode: StatusCodes.Status400BadRequest);
+
+    /// <summary>The single unlock a pre-host serves: reserved atomically by the first proven credential, completed once its response was sent.</summary>
+    private sealed class UnlockSlot
+    {
+        private int _reserved;
+
+        internal TaskCompletionSource<VaultUnlockOutcome> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal bool TryReserve() => Interlocked.Exchange(ref _reserved, 1) == 0;
+    }
 }

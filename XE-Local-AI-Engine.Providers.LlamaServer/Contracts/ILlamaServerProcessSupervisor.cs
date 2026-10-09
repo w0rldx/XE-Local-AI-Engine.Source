@@ -16,6 +16,15 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 public interface ILlamaServerProcessSupervisor
 {
     /// <summary>
+    ///     Enters the runtime-mutation gate SHARED, as a spawn does, for a binary ensure: it waits behind a held
+    ///     <see cref="TryAcquireRuntimeMutationLeaseAsync" /> lease and holds off a new one until disposed.
+    /// </summary>
+    Task<IDisposable> EnterRuntimeMutationSharedAsync(CancellationToken ct)
+    {
+        return Task.FromResult<IDisposable>(NoRuntimeGate.Instance);
+    }
+
+    /// <summary>
     ///     Atomically acquires an exclusive runtime-mutation lease only when no process is running or starting. While
     ///     held, new <see cref="EnsureRunningAsync(string, ModelRole, CancellationToken)" /> calls wait. Returns null when a process already owns the runtime.
     /// </summary>
@@ -211,4 +220,14 @@ public interface ILlamaServerProcessSupervisor
     ///     read.
     /// </remarks>
     LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role);
+
+    /// <summary>What an implementation without a runtime-mutation gate hands back: nothing to release.</summary>
+    private sealed class NoRuntimeGate : IDisposable
+    {
+        internal static readonly NoRuntimeGate Instance = new();
+
+        public void Dispose()
+        {
+        }
+    }
 }

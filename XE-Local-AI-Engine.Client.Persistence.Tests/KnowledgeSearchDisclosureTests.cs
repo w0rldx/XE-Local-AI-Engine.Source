@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
@@ -107,7 +108,58 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
     }
 
 
-    private static KnowledgeSearchService CreateSearchService(NodeChatDbContext context, IReadOnlyList<FtsSearchHit> ftsHits)
+    [Test]
+    public async Task SearchAsync_WithNoInstalledEmbedder_StaysLexical_AndNeverBuildsAnEmbeddingGenerator()
+    {
+        // A generator for an uninstalled embedder reached a capacity admission and a failing spawn on every search.
+        var databasePath = GetDatabasePath("no-embedder.sqlite");
+        var documentId = Guid.NewGuid();
+        var chunkId = Guid.NewGuid();
+
+        await MigrateAsync(databasePath);
+        await SeedDocumentAsync(databasePath, documentId, "Indexed");
+        await SeedChunkAsync(databasePath, documentId, chunkId, chunkIndex: 0, "alpha content");
+
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ListModelsAsync(Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([
+                    new LocalModelDescriptor
+                    {
+                        ModelName = "qwen3-8b:Q4_K_M",
+                        ProviderName = "llamacpp",
+                        IsAvailable = true,
+                        SizeBytes = 1024,
+                        ModifiedAt = DateTimeOffset.UnixEpoch,
+                        MaxContextTokens = null,
+                        Capabilities = []
+                    }
+                ]));
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProvider(Arg.Any<string>()).Returns(provider);
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(context, [
+            new FtsSearchHit
+            {
+                ChunkId = chunkId,
+                DocumentId = documentId,
+                Bm25Score = 1.0
+            }
+        ], providerResolver);
+
+        var result = await service.SearchAsync(new KnowledgeSearchRequest
+        {
+            Query = "the query",
+            Limit = 5
+        }, CancellationToken.None);
+
+        AssertEx.Equal(1, result.Results.Count);
+        provider.DidNotReceiveWithAnyArgs().CreateEmbeddingGenerator(default!);
+    }
+
+    private static KnowledgeSearchService CreateSearchService(NodeChatDbContext context,
+        IReadOnlyList<FtsSearchHit> ftsHits,
+        ILocalModelProviderResolver? providerResolverOverride = null)
     {
         // Reranking OFF (empty model) so the fused order is the seeded FTS order, unmodified.
         var options = Options.Create(new KnowledgeBaseOptions
@@ -124,9 +176,12 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
         var vectorSearchFactory = Substitute.For<IVectorSearchFactory>();
         vectorSearchFactory.Create().Returns(vectorSearch);
 
-        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
-        providerResolver.ResolveProvider(Arg.Any<string>())
-                        .Returns(_ => throw new InvalidOperationException("no embedding provider in this test"));
+        var providerResolver = providerResolverOverride ?? Substitute.For<ILocalModelProviderResolver>();
+        if (providerResolverOverride is null)
+        {
+            providerResolver.ResolveProvider(Arg.Any<string>())
+                            .Returns(_ => throw new InvalidOperationException("no embedding provider in this test"));
+        }
 
         return new KnowledgeSearchService(context,
             providerResolver,

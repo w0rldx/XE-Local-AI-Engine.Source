@@ -30,6 +30,16 @@ public static class SchedulerJobKeys
     public const string ManualFireKey = "manualFire";
 
     /// <summary>
+    ///     Per-fire trigger <c>JobDataMap</c> key carrying the id <c>TriggerNowAsync</c> minted and returned for this fire,
+    ///     so the caller can recognise its own terminal run event among every other fire of the same job.
+    /// </summary>
+    /// <remarks>
+    ///     Carried in memory from fire to the published run events only; it is never persisted and is not a parameter
+    ///     override.
+    /// </remarks>
+    public const string ManualFireIdKey = "manualFireId";
+
+    /// <summary>
     ///     Optional per-fire trigger <c>JobDataMap</c> key carrying a use-case override for a model-fit recommendation
     ///     refresh.
     /// </summary>

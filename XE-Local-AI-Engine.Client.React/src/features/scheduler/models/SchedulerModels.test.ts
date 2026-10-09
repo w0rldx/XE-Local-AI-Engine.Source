@@ -143,3 +143,15 @@ describe("scheduledJobFormSchema", () => {
 		expect(issuePaths(baseForm({ endAtUtc: "not a date" }))).toContain("endAtUtc");
 	});
 });
+
+describe("scheduledJobFormSchema required selects", () => {
+	it.each([
+		["templateId", "pages.scheduler.form.validation.templateRequired"],
+		["timeZoneId", "pages.scheduler.form.validation.timeZoneRequired"],
+	] as const)("reports %s with an i18n key, not zod's default text", (field, key) => {
+		const result = scheduledJobFormSchema.safeParse(baseForm({ [field]: "" }));
+
+		expect(result.success).toBe(false);
+		expect(result.error?.issues.find((issue) => issue.path.join(".") === field)?.message).toBe(key);
+	});
+});

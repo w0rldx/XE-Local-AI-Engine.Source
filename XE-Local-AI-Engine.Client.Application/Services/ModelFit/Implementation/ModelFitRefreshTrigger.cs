@@ -23,7 +23,7 @@ public sealed class ModelFitRefreshTrigger : IModelFitRefreshTrigger
         _scheduledJobManagementService = scheduledJobManagementService;
     }
 
-    public async Task TriggerRecommendationRefreshAsync(Guid scheduledJobId,
+    public async Task<Guid> TriggerRecommendationRefreshAsync(Guid scheduledJobId,
         string? useCaseOverride = null,
         int? limitOverride = null,
         string? quantOverride = null,
@@ -83,7 +83,7 @@ public sealed class ModelFitRefreshTrigger : IModelFitRefreshTrigger
 
         // Delegate to the scheduler; it does its own enabled/deleted/forbidden/unscheduled validation and fires the existing
         // definition. No override supplied → pass null so the dispatcher takes the unchanged cron path and owns the run history.
-        await _scheduledJobManagementService.TriggerNowAsync(scheduledJobId,
+        return await _scheduledJobManagementService.TriggerNowAsync(scheduledJobId,
             parameterOverrides.Count == 0 ? null : parameterOverrides,
             cancellationToken);
     }

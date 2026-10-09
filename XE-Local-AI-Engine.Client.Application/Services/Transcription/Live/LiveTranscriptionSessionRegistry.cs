@@ -38,6 +38,11 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     private static readonly TimeSpan LaneDrainTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ShutdownDrainTimeout = TimeSpan.FromSeconds(3);
 
+    // WASAPI yields no packet while its target is silent, so a quiet in-host source (a paused video) NEVER ends a
+    // session; past this threshold the client is told how long, each check period, and 0 when audio returns.
+    private static readonly TimeSpan SourceQuietThreshold = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan SourceQuietCheckPeriod = TimeSpan.FromSeconds(1);
+
     // Catch-up progress is reported at most once per this much audio consumed while behind.
     private const long CatchUpReportBytes = 1_000L * WavPcm16.BytesPerMillisecond;
 
@@ -179,6 +184,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             // memory cap ends it, gracefully, and the frame that crossed the cap is still queued, so nothing admitted is dropped.
             session.PendingBytes += owned.Length;
             session.ReceivedBytes += owned.Length;
+            lane.LastFrameTimestamp = _timeProvider.GetTimestamp();
             lane.QueuedBytes += owned.Length;
             lane.Chain = ConsumeAsync(session, lane, owned, lane.Chain);
             if (session.PendingBytes > _maxBufferedBytes && !session.BufferCapReached)
@@ -230,6 +236,18 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             session.AttachmentTimer = null;
 
             session.Producer = producer;
+
+            // Only an in-host producer can fall silent without a trace; a browser streams frames, silent or not. The watch
+            // starts now, so a capture of an application that never plays is reported quiet too.
+            var now = _timeProvider.GetTimestamp();
+            foreach (var lane in session.Lanes.Values)
+            {
+                lane.LastFrameTimestamp = now;
+                lane.QuietReported = false;
+            }
+
+            session.QuietTimer?.Dispose();
+            session.QuietTimer = _timeProvider.CreateTimer(ReportSourceQuietOnTimer, new QuietTimerState { Registry = this, Session = session }, SourceQuietCheckPeriod, SourceQuietCheckPeriod);
         }
 
         return new LiveProducerRegistration
@@ -345,6 +363,53 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             _logger.LogWarning("Live transcription sessions did not finish ending within {Timeout}.", ShutdownDrainTimeout);
         }
     }
+
+    private static void ReportSourceQuietOnTimer(object? state)
+    {
+        var timer = (QuietTimerState)state!;
+        _ = timer.Registry.ReportSourceQuietAsync(timer.Session);
+    }
+
+    /// <summary>
+    ///     Tells the client how long each lane has gone without a frame once that passes <see cref="SourceQuietThreshold" />,
+    ///     and <c>0</c> once a quiet lane hears audio again. Advisory: it never ends the session.
+    /// </summary>
+    /// <remarks>
+    ///     Computed inside the progress gate, so two overlapping ticks cannot publish out of order, and nothing follows the
+    ///     terminal status push.
+    /// </remarks>
+    private Task ReportSourceQuietAsync(LiveSession session) =>
+        PublishProgressAsync(session, async () =>
+        {
+            var reports = new List<KeyValuePair<TranscriptChannel, long>>();
+            lock (session.Gate)
+            {
+                if (session.AdmissionClosed || session.QuietTimer is null)
+                {
+                    return;
+                }
+
+                foreach (var lane in session.Lanes.Values)
+                {
+                    var quiet = _timeProvider.GetElapsedTime(lane.LastFrameTimestamp);
+                    if (quiet >= SourceQuietThreshold)
+                    {
+                        lane.QuietReported = true;
+                        reports.Add(new KeyValuePair<TranscriptChannel, long>(lane.Channel, (long)quiet.TotalMilliseconds));
+                    }
+                    else if (lane.QuietReported)
+                    {
+                        lane.QuietReported = false;
+                        reports.Add(new KeyValuePair<TranscriptChannel, long>(lane.Channel, 0));
+                    }
+                }
+            }
+
+            foreach (var report in reports)
+            {
+                await _publisher.PublishSourceQuietAsync(session.Id, report.Key, report.Value, CancellationToken.None);
+            }
+        }, "source quiet");
 
     private static void EndOnTimer(object? state)
     {
@@ -536,6 +601,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             session.AttachmentTimer = null;
             session.GraceTimer?.Dispose();
             session.GraceTimer = null;
+            session.QuietTimer?.Dispose();
+            session.QuietTimer = null;
         }
     }
 
@@ -915,7 +982,15 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         public required LiveEndReason Reason { get; init; }
     }
 
-    /// <summary>Detaches one producer, and only if it is still the attached one.</summary>
+    /// <summary>The state the source-quiet watch carries, so the callback closes over nothing.</summary>
+    private sealed record QuietTimerState
+    {
+        public required LiveTranscriptionSessionRegistry Registry { get; init; }
+
+        public required LiveSession Session { get; init; }
+    }
+
+    /// <summary>Detaches one producer, and only if it is still the attached one. A detached producer's quiet watch stops with it.</summary>
     private sealed class ProducerDetach : IDisposable
     {
         private readonly LiveSession _session;
@@ -934,6 +1009,8 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
                 if (ReferenceEquals(_session.Producer, _producer))
                 {
                     _session.Producer = null;
+                    _session.QuietTimer?.Dispose();
+                    _session.QuietTimer = null;
                 }
             }
         }
@@ -975,6 +1052,12 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
 
         /// <summary>Read and written only from this lane's own chain.</summary>
         public string LastPartial { get; set; } = string.Empty;
+
+        /// <summary>When this lane last admitted a frame, from the registry's clock. Guarded by the owning session's <c>Gate</c>.</summary>
+        public long LastFrameTimestamp { get; set; }
+
+        /// <summary>Whether a non-zero quiet report was sent and the <c>0</c> is still owed. Guarded by the owning session's <c>Gate</c>.</summary>
+        public bool QuietReported { get; set; }
     }
 
     /// <summary>
@@ -1035,6 +1118,9 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         public ITimer? AttachmentTimer { get; set; }
 
         public ITimer? GraceTimer { get; set; }
+
+        /// <summary>The source-quiet watch, armed while an in-host producer is attached.</summary>
+        public ITimer? QuietTimer { get; set; }
 
         public bool AdmissionClosed { get; set; }
 

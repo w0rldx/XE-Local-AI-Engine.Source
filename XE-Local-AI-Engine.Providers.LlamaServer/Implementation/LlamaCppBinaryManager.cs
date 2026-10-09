@@ -353,23 +353,12 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             return await TryServeManagedSourceBinaryAsync(installed, discardInvalidRecord: false, ct).ConfigureAwait(false);
         }
 
-        // Tier 2 (the recorded installed tag) then tier 3 (the pinned floor). The live catalog tier is deliberately
-        // skipped: it is a network call, and it only ever selects a tag to ACQUIRE — it cannot make a binary appear.
-        var resolvedTag = installed is { Tag.Length: > 0 } && IsValidTag(installed.Tag) ? installed.Tag : _activeTag;
-
-        var pin = _pinResolver(_os, _arch, variant);
-        if (pin is null)
-        {
-            // No prebuilt exists for this (os, arch, variant) — e.g. Linux CUDA. Nothing can be on disk under that name.
-            return null;
-        }
-
-        var variantDir = Path.Combine(_cacheRoot, "llama.cpp", resolvedTag, VariantSlug(variant));
+        var resolvedTag = ResolveInstalledTag(installed);
+        var cachedServer = ResolvePrebuiltServer(resolvedTag, variant);
 
         // Filesystem probes only, nothing created. A Windows-CUDA dir missing any companion DLL family is NOT topped up (that downloads) and reads as NOT installed: it enumerates
         // no GPU, and the device probe would cache that against an exe mtime the later top-up never changes. The next ensure repairs a pinned-tag dir.
-        var cachedServer = ResolveServerPath(variantDir, pin);
-        if (cachedServer is not null && variant == GpuVariant.Cuda && _os == OSPlatform.Windows && !CudartRuntimePresent(Path.GetDirectoryName(cachedServer)!))
+        if (cachedServer is not null && IsIncompleteWindowsCudaDir(variant, cachedServer))
         {
             return null;
         }
@@ -383,6 +372,45 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 Variant = variant,
                 IsPinnedFallback = string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal)
             };
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> IsCompanionSetIncompleteAsync(GpuVariant variant, CancellationToken ct)
+    {
+        if (variant != GpuVariant.Cuda || _os != OSPlatform.Windows || _overrideOptions?.IsActive == true)
+        {
+            return false;
+        }
+
+        var installed = _installedRuntimeStore is null
+            ? null
+            : await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+        if (installed?.SourceBuildPath is { Length: > 0 })
+        {
+            return false;
+        }
+
+        var cachedServer = ResolvePrebuiltServer(ResolveInstalledTag(installed), variant);
+        return cachedServer is not null && IsIncompleteWindowsCudaDir(variant, cachedServer);
+    }
+
+    // The recorded installed tag, else the pinned floor. The live catalog tier is skipped: it only selects a tag to
+    // acquire and cannot make a binary appear.
+    private string ResolveInstalledTag(InstalledRuntimeState? installed)
+    {
+        return installed is { Tag.Length: > 0 } && IsValidTag(installed.Tag) ? installed.Tag : _activeTag;
+    }
+
+    // Null when nothing is on disk, including a (os, arch, variant) with no prebuilt at all, e.g. Linux CUDA.
+    private string? ResolvePrebuiltServer(string resolvedTag, GpuVariant variant)
+    {
+        var pin = _pinResolver(_os, _arch, variant);
+        return pin is null ? null : ResolveServerPath(Path.Combine(_cacheRoot, "llama.cpp", resolvedTag, VariantSlug(variant)), pin);
+    }
+
+    private bool IsIncompleteWindowsCudaDir(GpuVariant variant, string serverPath)
+    {
+        return variant == GpuVariant.Cuda && _os == OSPlatform.Windows && !CudartRuntimePresent(Path.GetDirectoryName(serverPath)!);
     }
 
     /// <summary>
@@ -815,6 +843,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             TryDeleteDirectory(companionDir);
         }
+
+        Diagnose(() => _logger.LogInformation("Repaired the CUDA runtime libraries of llama.cpp {Tag} in {ServerDir}; the next model load uses CUDA.",
+            tag,
+            serverDir));
 
         // The served dir changed under an unchanged exe: the device audit must re-probe rather than serve its memo.
         _managedCudaSignal?.NotifyBinaryChanged();

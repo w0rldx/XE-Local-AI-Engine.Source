@@ -143,6 +143,11 @@ export function ManagedPythonCard() {
 	};
 
 	const toolchain = status.data?.toolchain;
+	// A host with no supported environment at all (an unsupported OS or architecture) will never download uv; saying
+	// "not downloaded yet" there promises something that cannot happen.
+	const environments = status.data?.environments ?? [];
+	const unsupported = environments.length > 0 && environments.every((environment) => environment.state === "Unsupported");
+	const uvKey = toolchain?.uvPresent ? "uvPresent" : unsupported ? "uvUnsupported" : "uvMissing";
 
 	return (
 		<Card withBorder={true} radius="md" p="lg" data-testid="managed-python-card">
@@ -166,8 +171,8 @@ export function ManagedPythonCard() {
 					<Stack gap="xs" data-testid="managed-python-toolchain">
 						<Group gap="sm">
 							<Text size="sm">{t(`${translationPrefix}.uvVersion`, { version: toolchain.uvVersion })}</Text>
-							<Badge color={toolchain.uvPresent ? "green" : "gray"}>
-								{t(`${translationPrefix}.${toolchain.uvPresent ? "uvPresent" : "uvMissing"}`)}
+							<Badge color={toolchain.uvPresent ? "green" : "gray"} data-testid="managed-python-uv-badge">
+								{t(`${translationPrefix}.${uvKey}`)}
 							</Badge>
 						</Group>
 						<Text size="sm">{t(`${translationPrefix}.pythonInstallsTitle`)}</Text>

@@ -11,7 +11,9 @@ import { testMantineTheme } from "@/test/MantineTestRender";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
-		t: (_key: string, defaultValue?: string) => defaultValue ?? _key,
+		// Validation keys come back marked, so a test can tell a translated key from one shown raw.
+		t: (_key: string, defaultValue?: string) =>
+			defaultValue ?? (_key.startsWith("pages.scheduler.form.validation.") ? `translated:${_key}` : _key),
 	}),
 }));
 
@@ -130,12 +132,13 @@ describe("ScheduledJobForm", () => {
 		vi.clearAllMocks();
 	});
 
-	it("blocks submit and surfaces validation errors when required fields are empty", () => {
+	it("blocks submit and surfaces validation errors when required fields are empty", async () => {
 		const { onSubmit, ref } = renderForm();
 
 		submitViaHandle(ref);
 
 		expect(onSubmit).not.toHaveBeenCalled();
+		expect(await screen.findByText("translated:pages.scheduler.form.validation.templateRequired")).toBeTruthy();
 	});
 
 	it("submits a valid cron job", () => {

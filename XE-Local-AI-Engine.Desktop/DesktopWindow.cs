@@ -24,7 +24,7 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         }
 
         Directory.CreateDirectory(Path.Combine(options.ProfileDirectory, "cache"));
-        Title = "XE Local AI Engine";
+        Title = DesktopText.Title;
         Width = 1280;
         Height = 800;
         MinWidth = 800;

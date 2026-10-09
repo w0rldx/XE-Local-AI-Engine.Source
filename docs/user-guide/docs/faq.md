@@ -29,8 +29,12 @@ Go back to the [Releases page](https://github.com/w0rldx/XE-Local-AI-Engine.Sour
 **`XE-Local-AI-Engine.exe`** in the **top-level** folder — the one sitting *next to* the `current`
 folder.
 
-Do not start `current\XE-Local-AI-Engine.WindowsLauncher.exe` or the adjacent client DLL directly. Velopack's
-top-level entry selects the current version and preserves the portable update context.
+Velopack's top-level entry selects the current version and preserves the portable update context, so start the app
+with it.
+
+**For command-line commands** (`--help`, `--status`, a password reset), use
+**`current\XE-Local-AI-Engine.WindowsLauncher.exe`** instead. The top-level exe starts the app but passes back neither
+a command's output nor its exit code. Do not start the client DLL directly.
 
 ### Nothing happens when I run it — the window flashes and disappears
 On the **Windows portable build, this is almost always a missing .NET runtime.** The Windows ZIP is
@@ -374,7 +378,8 @@ email (there's no server to send one).
 
 **The easy way: on the unlock page.** Start the app. On the **"Unlock this node"** page, click
 **"Forgot your password? Use your recovery code"**, enter the recovery code, choose a new password and
-click **"Unlock and set new password"**.
+click **"Unlock and set new password"**. The page then shows your **new recovery code** once: the code you just
+used stops working, so save the new one before you continue.
 
 **The command-line way.** First, stop the app — **Quit XE** in the tray menu. The reset won't run while
 the app is still open. The recovery code goes in through the keyboard input (piped in), never as part of the
@@ -384,10 +389,11 @@ command itself, so it doesn't show up in the list of running programs.
 
 1. Open the folder you start the app from (the one containing `XE-Local-AI-Engine.exe`).
 2. Click into the address bar, type `powershell`, and press **Enter** — a blue window opens.
-3. Paste the line below, put in your recovery code and the new password you want, and press **Enter**:
+3. Paste the line below, put in your recovery code and the new password you want, and press **Enter**. It runs the
+   launcher inside `current\`, because the top-level `XE-Local-AI-Engine.exe` shows no command output:
 
    ```powershell
-   "YOUR-RECOVERY-CODE" | & ".\XE-Local-AI-Engine.exe" --reset-admin-password "YourNewPassw0rd!" --recovery-code-stdin
+   "YOUR-RECOVERY-CODE" | & ".\current\XE-Local-AI-Engine.WindowsLauncher.exe" --reset-admin-password "YourNewPassw0rd!" --recovery-code-stdin
    ```
 
 **On Linux**
@@ -400,7 +406,8 @@ printf '%s\n' 'YOUR-RECOVERY-CODE' | XE_LAUNCH_MODE=desktop ./XE-Local-AI-Engine
 
 When it prints **`Admin password reset succeeded`** it's finished and closes on its own. Start the app
 again and unlock it with the new password. Anywhere that was signed in gets signed out. **Your recovery
-code stays the same** — keep it.
+code changes:** the command prints the new one on a line starting `XE_RECOVERY_CODE=`, and the old code no longer
+works. Save the new code now; it is not shown again.
 
 If the command stops with *"Resetting it requires the recovery code shown at setup"* or *"The recovery
 code does not unlock this node's key"* (exit code 5), the code was missing or wrong, and **nothing was

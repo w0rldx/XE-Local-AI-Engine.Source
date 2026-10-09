@@ -86,6 +86,10 @@ public sealed class PooledRoleLaunchAdmission : ILlamaServerPooledLaunchAdmissio
         var profile = await audit.GetEffectiveProfileAsync(forceRefreshProfile: false, ct);
         if (profile is not { GpuAccelAvailable: true, VramKnown: true, AvailableVramBytes: not null })
         {
+            // Without this line a second model loading beside a resident one leaves no trace of why nothing was decided.
+            _logger.LogInformation(
+                "Chat admission for model {ModelName} skipped: no global free-VRAM reading (GPU acceleration {GpuAccel}, VRAM known {VramKnown}, free {FreeMiB} MiB); the launch proceeds unadmitted.",
+                modelName, profile.GpuAccelAvailable, profile.VramKnown, profile.AvailableVramBytes / Mib);
             return null;
         }
 

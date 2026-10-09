@@ -364,15 +364,20 @@ public sealed class ConversationContextBuilderTests
         AssertEx.True(context.All(static message => message.Role == MessageRole.User));
     }
 
+    /// <summary>
+    ///     A Stopped answer is not sent, so its prompt is left out too: sent alone it sits next to the new message as
+    ///     one merged request (F-12). Empty and partial Stopped answers behave alike; neither is marked unanswered.
+    /// </summary>
     [Test]
-    public void Build_AfterACancelledTurn_LeavesTheRequestUnmarked()
+    [Arguments("")]
+    [Arguments("Rivers are")]
+    public void Build_AfterAStoppedTurn_LeavesTheAbandonedPromptOut(string stoppedContent)
     {
-        // A Stop is the user's own choice, not a failure; only failed and interrupted answers mark their request.
         var conversationId = Guid.NewGuid();
         var history = new[]
         {
             Message(conversationId, sequence: 0, "user", "write an essay"),
-            Message(conversationId, sequence: 1, "assistant", "Rivers", status: NodeChatMessageStatusValues.Cancelled)
+            Message(conversationId, sequence: 1, "assistant", stoppedContent, status: NodeChatMessageStatusValues.Cancelled)
         };
 
         var context = ConversationContextBuilder.Build(Conversation(conversationId, history),
@@ -380,7 +385,50 @@ public sealed class ConversationContextBuilderTests
             selectedPath: null,
             attachmentContext: null);
 
-        AssertEx.Equal("write an essay", context[0].Content);
+        AssertEx.Equal("now", string.Join("|", context.Select(static message => message.Content)));
+    }
+
+    [Test]
+    public void Build_AfterAPromptWithNoAnswerRow_LeavesItOut()
+    {
+        var conversationId = Guid.NewGuid();
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "first"),
+            Message(conversationId, sequence: 1, "assistant", "answer"),
+            Message(conversationId, sequence: 2, "user", "never answered"),
+            Message(conversationId, sequence: 3, "user", "second")
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history),
+            Message(conversationId, sequence: 4, "user", "now"),
+            selectedPath: null,
+            attachmentContext: null);
+
+        AssertEx.Equal("first|answer|second|now", string.Join("|", context.Select(static message => message.Content)));
+    }
+
+    [Test]
+    public void Build_WithToolHistoryOn_KeepsAStoppedTurnsPromptWhenItsToolCallsAreSent()
+    {
+        var conversationId = Guid.NewGuid();
+        var stopped = Message(conversationId, sequence: 1, "assistant", string.Empty, status: NodeChatMessageStatusValues.Cancelled) with
+        {
+            Parts = [CompletedToolPart("call-1", "list_files")]
+        };
+        var history = new[]
+        {
+            Message(conversationId, sequence: 0, "user", "list my files"),
+            stopped
+        };
+
+        var context = ConversationContextBuilder.Build(Conversation(conversationId, history),
+            Message(conversationId, sequence: 2, "user", "now"),
+            selectedPath: null,
+            attachmentContext: null,
+            includeToolHistory: true);
+
+        AssertEx.Equal("list my files", context[0].Content, "the kept tool exchange still needs the request it answered");
     }
 
     [Test]

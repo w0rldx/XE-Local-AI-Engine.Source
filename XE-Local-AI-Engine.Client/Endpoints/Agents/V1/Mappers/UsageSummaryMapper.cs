@@ -43,7 +43,7 @@ internal static class UsageSummaryMapper
         var runCount = 0;
         var promptTokens = 0L;
         var completionTokens = 0L;
-        var reasoningTokens = 0L;
+        long? reasoningTokens = null;
         var totalTokens = 0L;
         var cost = 0d;
 
@@ -52,7 +52,7 @@ internal static class UsageSummaryMapper
             runCount += record.RunCount;
             promptTokens += record.PromptTokens;
             completionTokens += record.CompletionTokens;
-            reasoningTokens += record.ReasoningTokens;
+            reasoningTokens = AddReported(reasoningTokens, record.ReasoningTokens);
             totalTokens += record.TotalTokens;
             cost += RawCost(record, rateResolver);
         }
@@ -84,7 +84,7 @@ internal static class UsageSummaryMapper
                    RunCount = group.Sum(record => record.RunCount),
                    PromptTokens = group.Sum(record => record.PromptTokens),
                    CompletionTokens = group.Sum(record => record.CompletionTokens),
-                   ReasoningTokens = group.Sum(record => record.ReasoningTokens),
+                   ReasoningTokens = group.Aggregate((long?)null, (sum, record) => AddReported(sum, record.ReasoningTokens)),
                    TotalTokens = group.Sum(record => record.TotalTokens),
                    EstimatedCostUsd = Round(group.Sum(record => RawCost(record, rateResolver))),
                    Currency = CurrencyUsd
@@ -106,8 +106,11 @@ internal static class UsageSummaryMapper
     {
         var rate = rateResolver.Resolve(record.Provider, record.ModelName);
         return (rate.InputPer1M / 1_000_000d * record.PromptTokens)
-               + (rate.OutputPer1M / 1_000_000d * (record.CompletionTokens + record.ReasoningTokens));
+               + (rate.OutputPer1M / 1_000_000d * (record.CompletionTokens + (record.ReasoningTokens ?? 0)));
     }
+
+    /// <summary>Sums reported counts; stays null only while nothing has been reported.</summary>
+    private static long? AddReported(long? sum, long? value) => sum is null ? value : sum + (value ?? 0);
 
     private static double Round(double cost)
     {

@@ -67,7 +67,8 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         DateTimeOffset actualFireTimeUtc,
         CancellationToken cancellationToken,
         IReadOnlyDictionary<string, string>? parameterOverrides = null,
-        ScheduledRunTrigger triggeredBy = ScheduledRunTrigger.Schedule)
+        ScheduledRunTrigger triggeredBy = ScheduledRunTrigger.Schedule,
+        Guid? manualFireId = null)
     {
         var definition = await _definitionStore.GetByIdAsync(scheduledJobId, cancellationToken);
         if (definition is null)
@@ -97,7 +98,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
             return;
         }
 
-        await RecordAndRunAsync(definition, handler, fireInstanceId, scheduledFireTimeUtc, actualFireTimeUtc, parameterOverrides, triggeredBy, cancellationToken);
+        await RecordAndRunAsync(definition, handler, fireInstanceId, scheduledFireTimeUtc, actualFireTimeUtc, parameterOverrides, triggeredBy, manualFireId, cancellationToken);
     }
 
     private async Task RecordAndRunAsync(ScheduledJobDefinitionRecord definition,
@@ -107,6 +108,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         DateTimeOffset actualFireTimeUtc,
         IReadOnlyDictionary<string, string>? parameterOverrides,
         ScheduledRunTrigger triggeredBy,
+        Guid? manualFireId,
         CancellationToken cancellationToken)
     {
         var actualFireMs = actualFireTimeUtc.ToUnixTimeMilliseconds();
@@ -134,7 +136,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
             return;
         }
 
-        await SafePublishRunAsync(run, SchedulerRunEventKind.Started);
+        await SafePublishRunAsync(run, SchedulerRunEventKind.Started, manualFireId);
 
         // The stored definition is NEVER mutated: a per-fire override is merged, whitelisted keys only, onto the copy of the
         // parameters the handler sees. A cron fire without overrides passes the stored parameters through unchanged.
@@ -177,7 +179,8 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
                 cancellationToken: CancellationToken.None);
 
             await SafePublishRunAsync(updated ?? run,
-                wasCancelRequested ? SchedulerRunEventKind.Cancelled : SchedulerRunEventKind.Failed);
+                wasCancelRequested ? SchedulerRunEventKind.Cancelled : SchedulerRunEventKind.Failed,
+                manualFireId);
 
             // Re-throw so Quartz observes the interrupt / shutdown.
             throw;
@@ -208,7 +211,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
                 errorDetails: exception.GetType().FullName,
                 cancellationToken: CancellationToken.None);
 
-            await SafePublishRunAsync(updated ?? run, SchedulerRunEventKind.Failed);
+            await SafePublishRunAsync(updated ?? run, SchedulerRunEventKind.Failed, manualFireId);
             return;
         }
 
@@ -238,7 +241,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
             succeeded = await RecordSucceededAsync();
         }
 
-        await SafePublishRunAsync(succeeded ?? run, SchedulerRunEventKind.Completed);
+        await SafePublishRunAsync(succeeded ?? run, SchedulerRunEventKind.Completed, manualFireId);
     }
 
     /// <summary>
@@ -379,7 +382,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         };
     }
 
-    private async Task SafePublishRunAsync(ScheduledJobRunRecord record, SchedulerRunEventKind kind)
+    private async Task SafePublishRunAsync(ScheduledJobRunRecord record, SchedulerRunEventKind kind, Guid? manualFireId)
     {
         try
         {
@@ -398,7 +401,8 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
                 DurationMs = record.DurationMs,
                 Summary = record.Summary,
                 ErrorMessage = record.ErrorMessage,
-                OccurredAtUtc = occurredAt
+                OccurredAtUtc = occurredAt,
+                ManualFireId = manualFireId
             };
 
             await _eventPublisher.PublishRunAsync(runEvent, CancellationToken.None);

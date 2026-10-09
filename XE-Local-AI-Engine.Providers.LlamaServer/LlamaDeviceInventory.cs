@@ -48,6 +48,12 @@ public sealed record LlamaDeviceInventory
     /// </remarks>
     public bool RuntimeMissing { get; init; }
 
+    /// <summary>
+    ///     A Windows CUDA build is installed with incomplete companion libraries, so it was not probed. Distinct from
+    ///     <see cref="RuntimeMissing" />, so the explanation names the repair.
+    /// </summary>
+    public bool CompanionSetIncomplete { get; init; }
+
     /// <summary><see langword="true" /> when the probe ran and enumerated at least one GPU device.</summary>
     public bool HasGpuDevice => ProbeSucceeded && Devices.Count > 0;
 
@@ -86,6 +92,18 @@ public sealed record LlamaDeviceInventory
             ProbeSucceeded = false,
             Devices = [],
             RuntimeMissing = true
+        };
+    }
+
+    /// <summary>Indeterminate because the installed CUDA build lacks part of its companion libraries; see <see cref="CompanionSetIncomplete" />.</summary>
+    public static LlamaDeviceInventory CompanionLibrariesIncomplete(GpuVariant variant)
+    {
+        return new LlamaDeviceInventory
+        {
+            Variant = variant,
+            ProbeSucceeded = false,
+            Devices = [],
+            CompanionSetIncomplete = true
         };
     }
 }

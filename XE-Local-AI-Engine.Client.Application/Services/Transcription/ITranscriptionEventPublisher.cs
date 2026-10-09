@@ -56,4 +56,14 @@ public interface ITranscriptionEventPublisher
     ///     the drain-start catch-up report; never for an abort, which gets its terminal status at once.
     /// </summary>
     Task PublishAdmissionClosedAsync(Guid sessionId, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Announces that one lane fed by an in-host capture has had no audio for <paramref name="quietMs" />, or that it
+    ///     hears audio again when <paramref name="quietMs" /> is <c>0</c>. Non-terminal: a quiet source never ends a session.
+    /// </summary>
+    /// <remarks>
+    ///     Sent once per second while the lane stays quiet past the threshold, once with <c>0</c> when audio returns, and
+    ///     never after <see cref="PublishStatusAsync" />.
+    /// </remarks>
+    Task PublishSourceQuietAsync(Guid sessionId, TranscriptChannel channel, long quietMs, CancellationToken cancellationToken);
 }

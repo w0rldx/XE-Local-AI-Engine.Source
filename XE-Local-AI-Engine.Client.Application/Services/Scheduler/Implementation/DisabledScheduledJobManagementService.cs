@@ -37,7 +37,7 @@ internal sealed class DisabledScheduledJobManagementService : IScheduledJobManag
     public Task<bool> DeleteJobAsync(Guid id, CancellationToken cancellationToken = default) =>
         throw Disabled();
 
-    public Task TriggerNowAsync(Guid id,
+    public Task<Guid> TriggerNowAsync(Guid id,
         IReadOnlyDictionary<string, string>? parameterOverrides = null,
         CancellationToken cancellationToken = default) =>
         throw Disabled();

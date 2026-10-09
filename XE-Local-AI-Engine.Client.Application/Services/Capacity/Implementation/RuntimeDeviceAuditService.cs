@@ -77,6 +77,12 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
                 return WithLivePlacement(current);
             }
 
+            if (forceRefresh)
+            {
+                // A forced refresh follows a runtime change; a failure remembered against the old binary must not answer it.
+                _deviceProbe.ForgetFailedProbes();
+            }
+
             var (state, fallbackReasonCode, determinate, signalVersion) = await ComputeAsync(ct);
 
             // Latch only a determinate audit: an indeterminate probe yields backend "unknown" with CpuFallback false, and memoizing it would keep capacity
@@ -212,7 +218,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             CpuFallback = cpuFallback,
             Reason = fallbackText?.Reason,
             Remediation = fallbackText?.Remediation,
-            BackendUndeterminedReason = backend == "unknown" ? BuildUndeterminedText(variant, inventory.RuntimeMissing) : null,
+            BackendUndeterminedReason = backend == "unknown" ? BuildUndeterminedText(variant, inventory) : null,
             Devices =
             [
                 .. inventory.Devices.Select(static device => new RuntimeAuditDevice
@@ -227,15 +233,21 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
 
     /// <summary>The operator-facing text for an undetermined backend — the probe neither succeeded nor proved a fallback.</summary>
     /// <remarks>
-    ///     Sizing downstream assumes a GPU nobody confirmed is reachable, so the text lists possible causes and asserts none. The
-    ///     <c>XE_LLAMACPP_SERVER_PATH</c> override is named first because it is the most reachable (measured on Windows 11): pointed at a
-    ///     GPU-variant binary that enumerates no devices, it is refused by <c>LlamaCppBinaryManager</c>'s no-silent-CPU invariant, and that
-    ///     deliberate refusal arrives here as an exception no probe can tell from a glitch. <paramref name="runtimeMissing" /> is the one
-    ///     known cause: no runtime is installed, and a page-load diagnostic must not download hundreds of megabytes to find out.
+    ///     Sizing downstream assumes a GPU nobody confirmed is reachable, so the generic text lists causes and asserts none. The
+    ///     <c>XE_LLAMACPP_SERVER_PATH</c> override comes first, the most reachable on Windows: a GPU-variant binary that lists no
+    ///     device is refused by the no-silent-CPU invariant, which no probe can tell from a glitch. Two causes are known and named
+    ///     outright: no runtime installed, and a Windows CUDA build missing companion libraries.
     /// </remarks>
-    private static string BuildUndeterminedText(GpuVariant variant, bool runtimeMissing)
+    private static string BuildUndeterminedText(GpuVariant variant, LlamaDeviceInventory inventory)
     {
-        if (runtimeMissing)
+        if (inventory.CompanionSetIncomplete)
+        {
+            return $"The {VariantName(variant)} llama.cpp runtime is installed, but some of its CUDA companion libraries "
+                   + "are missing, so it cannot use the GPU and its devices have not been listed. Models load on the CPU "
+                   + "until it is repaired. Retry the runtime download from Node Settings, or start a chat, to repair it.";
+        }
+
+        if (inventory.RuntimeMissing)
         {
             return $"No llama.cpp runtime is installed yet, so the {VariantName(variant)} GPU devices have not been "
                    + "listed and whether inference will use the GPU is unknown. Model sizing on this page still assumes "

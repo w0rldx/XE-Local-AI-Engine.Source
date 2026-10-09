@@ -14,6 +14,23 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 public sealed partial class LlamaServerProcessSupervisor
 {
     /// <inheritdoc />
+    public async Task<IDisposable> EnterRuntimeMutationSharedAsync(CancellationToken ct)
+    {
+        _runtimeMutationGate.BeginOperation();
+        try
+        {
+            await _runtimeMutationGate.EnterSharedAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            _runtimeMutationGate.EndOperation();
+            throw;
+        }
+
+        return new RuntimeMutationSharedEntry(_runtimeMutationGate);
+    }
+
+    /// <inheritdoc />
     public async Task EvictAsync(string modelName, ModelRole role, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
@@ -300,4 +317,25 @@ public sealed partial class LlamaServerProcessSupervisor
 
     /// <summary>A process taken for profiling's eviction and the claim token it was taken with (0 for an exited one).</summary>
     private readonly record struct EvictionClaim(ProcessKey Key, RunningProcess Process, long Claim);
+
+    /// <summary>One shared runtime-gate entry plus its operation, released once.</summary>
+    private sealed class RuntimeMutationSharedEntry : IDisposable
+    {
+        private readonly LlamaServerRuntimeMutationGate _gate;
+        private int _disposed;
+
+        public RuntimeMutationSharedEntry(LlamaServerRuntimeMutationGate gate)
+        {
+            _gate = gate;
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            {
+                _gate.ExitShared();
+                _gate.EndOperation();
+            }
+        }
+    }
 }

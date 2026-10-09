@@ -507,6 +507,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
         public Task<IReadOnlyList<SelectedFolderSnapshot>> PrepareSelectedFoldersAsync(SandboxHandle handle,
             IReadOnlyList<ResolvedSelectedFolder> resolvedFolders,
             ICollection<AgentHomeCommandLogRecord>? baselineCommands = null,
+            bool createBaseline = true,
             CancellationToken cancellationToken = default)
         {
             _ = baselineCommands;

@@ -56,6 +56,7 @@ function noticeIcon(noticeKind: string) {
 		case "KnowledgeUnavailable":
 			return IconBookOff;
 		case "AttachmentShortened":
+		case "AttachmentsTruncated":
 			return IconFileText;
 		case "AttachmentsNotSent":
 			return IconFileOff;
@@ -97,6 +98,8 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 			return "chat.notices.attachmentShortened";
 		case "AttachmentsNotSent":
 			return "chat.notices.attachmentsNotSent";
+		case "AttachmentsTruncated":
+			return "chat.notices.attachmentsTruncated";
 		default:
 			return undefined;
 	}
@@ -105,7 +108,7 @@ function noticeLabelKey(noticeKind: string): string | undefined {
 // Server notice sentences the SPA localizes, keyed by their exact English text (InvocationRunner's
 // StoppedWhileThinkingNoticeMessage, OutputLimitReachedNoticeMessage, ToolCallInReasoningNoticeMessage,
 // ToolCallAsTextNoticeMessage, and KnowledgeUnavailableNotice.Message and AttachmentShortenedNoticeMessage, and
-// NodeChatStreamService's AttachmentsNotSentNoticeMessage — change both together). Any other text renders verbatim.
+// NodeChatStreamService's AttachmentsNotSentNoticeMessage and AttachmentsTruncatedNoticeMessage — change both together). Any other text renders verbatim.
 const localizedNoticeKeys: Readonly<Record<string, string>> = {
 	"The model wrote a tool call as text instead of calling the tool, so the call did not run and there is no answer.":
 		"chat.notices.toolCallAsTextText",
@@ -122,6 +125,8 @@ const localizedNoticeKeys: Readonly<Record<string, string>> = {
 		"chat.notices.attachmentsNotSentText",
 	"Some attached files were not sent to the model: this turn offers tools but not the file tools, so attachment text is left out, or the model cannot see images.":
 		"chat.notices.attachmentsNotSentWithoutFileToolsText",
+	"Some attached files were too long for the attachment limit, so the model received only their beginning.":
+		"chat.notices.attachmentsTruncatedText",
 };
 
 /**

@@ -82,6 +82,27 @@ public sealed class SupervisorGateScopeTests
     }
 
     [Test]
+    public async Task RuntimeMutationSharedEntry_WaitsBehindAHeldLease_AndHoldsOffTheNextOne()
+    {
+        await using var supervisor = SupervisorFactory.Create();
+        var lease = AssertEx.NotNull(await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None));
+
+        // A binary ensure must not land files while an install holds the runtime exclusively.
+        var entering = supervisor.EnterRuntimeMutationSharedAsync(CancellationToken.None);
+        await AssertEx.StaysIncompleteAsync(entering, "A shared runtime entry must wait while the exclusive lease is held.");
+
+        await lease.DisposeAsync();
+        var entry = await entering.WaitAsync(TimeSpan.FromSeconds(3));
+
+        var nextLease = supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        await AssertEx.StaysIncompleteAsync(nextLease, "A new lease must wait until the shared entry is released.");
+
+        entry.Dispose();
+        var acquired = AssertEx.NotNull(await nextLease.WaitAsync(TimeSpan.FromSeconds(3)));
+        await acquired.DisposeAsync();
+    }
+
+    [Test]
     public async Task Admission_SlowEvictionTreeKill_DoesNotHoldTheAdmissionGate()
     {
         using var victimKill = new KillLatch();

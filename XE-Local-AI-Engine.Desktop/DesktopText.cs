@@ -34,6 +34,9 @@ internal static class DesktopText
         return true;
     }
 
+    /// <summary>The product name every shell window and the tray use.</summary>
+    internal const string Title = "XE Local AI Engine";
+
     internal static string Starting => German ? "XE wird gestartet…" : "Starting XE…";
     internal static string Closing => German ? "XE wird beendet…" : "Stopping XE…";
     internal static string Open => German ? "XE öffnen" : "Open XE";
@@ -52,8 +55,14 @@ internal static class DesktopText
 
     internal static string StartupFailed =>
         German
-            ? "XE konnte nicht gestartet werden. Prüfen Sie die Installation, den Datenordner und die Engine-Protokolle. Unter Windows muss Microsoft Edge WebView2 Runtime installiert sein."
-            : "XE could not start. Check the installation, data directory and engine logs. On Windows, Microsoft Edge WebView2 Runtime must be installed.";
+            ? "XE konnte nicht gestartet werden. Prüfen Sie die Installation, den Datenordner und die Engine-Protokolle."
+            : "XE could not start. Check the installation, data directory and engine logs.";
+
+    /// <summary>The engine is ready but the native window could not open: on Windows that is a missing WebView2 runtime.</summary>
+    internal static string WindowFailed =>
+        German
+            ? "Das XE-Fenster konnte nicht geöffnet werden. Unter Windows muss Microsoft Edge WebView2 Runtime installiert sein. Prüfen Sie die Installation und die Engine-Protokolle."
+            : "The XE window could not open. On Windows, Microsoft Edge WebView2 Runtime must be installed. Check the installation and engine logs.";
 
     internal static string WebViewDownload => German ? "WebView2 herunterladen" : "Download WebView2";
     internal static string SaveFailed => German ? "Die Auswahl konnte nicht gespeichert werden. Sie gilt nur für dieses Fenster." : "The choice could not be saved. It applies only to this window.";

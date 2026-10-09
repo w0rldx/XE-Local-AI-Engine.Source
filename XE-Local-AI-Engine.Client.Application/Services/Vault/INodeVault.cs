@@ -47,10 +47,14 @@ public interface INodeVault
     Task<VaultChange?> RewrapAsync(string currentPassword, string newPassword, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Re-wraps the password slot after proving the recovery code. Throws <see cref="VaultUnlockException" /> on a
-    ///     malformed or wrong code, leaving the file untouched.
+    ///     Re-wraps the password slot after proving the recovery code, and rotates the recovery slot: the proving code
+    ///     stops working and <see cref="VaultChange.RecoveryCode" /> carries the new one. Throws
+    ///     <see cref="VaultUnlockException" /> on a malformed or wrong code, leaving the file untouched.
     /// </summary>
-    Task<VaultChange?> RewrapWithRecoveryAsync(string recoveryCode, string newPassword, CancellationToken cancellationToken);
+    /// <param name="newRecoveryCode">
+    ///     The new code when the caller already showed it (the locked pre-host's reset); <see langword="null" /> mints one.
+    /// </param>
+    Task<VaultChange?> RewrapWithRecoveryAsync(string recoveryCode, string newPassword, string? newRecoveryCode, CancellationToken cancellationToken);
 
     /// <summary>Puts back the file bytes and state from before <paramref name="change" />.</summary>
     Task RestoreAsync(VaultChange change, CancellationToken cancellationToken);

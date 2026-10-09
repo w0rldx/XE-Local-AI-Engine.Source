@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Capacity;
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
@@ -9,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -321,6 +321,7 @@ public sealed class PooledRoleLaunchAdmissionTests
         AssertEx.Null(returned);
         AssertEx.Empty(host.Created);
         AssertEx.Equal(0, evictions.Calls);
+        AssertEx.True(host.Logger.AllText.Contains("Chat admission for model " + ChatModel + " skipped", StringComparison.Ordinal), host.Logger.AllText);
     }
 
     private static CapacityDecision Allow(IDisposable reservation) =>
@@ -378,8 +379,10 @@ public sealed class PooledRoleLaunchAdmissionTests
             Created = created;
             Audit = audit;
             Settings = settings;
-            Admission = new PooledRoleLaunchAdmission(provider.GetRequiredService<IServiceScopeFactory>(), Time, NullLogger<PooledRoleLaunchAdmission>.Instance);
+            Admission = new PooledRoleLaunchAdmission(provider.GetRequiredService<IServiceScopeFactory>(), Time, Logger);
         }
+
+        public CapturingLogger<PooledRoleLaunchAdmission> Logger { get; } = new();
 
         public PooledRoleLaunchAdmission Admission { get; }
 

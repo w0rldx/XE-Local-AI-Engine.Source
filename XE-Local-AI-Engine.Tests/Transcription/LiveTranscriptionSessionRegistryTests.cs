@@ -440,6 +440,79 @@ public sealed class LiveTranscriptionSessionRegistryTests
     }
 
     [Test]
+    public async Task SourceQuiet_AnAttachedProducerWithNoAudio_IsReportedAndNeverEndsTheSession()
+    {
+        // WASAPI yields no packet while its target is silent: a paused video and a closed tab look the same. The session
+        // must say the source is quiet and keep running, however long the quiet lasts.
+        var transcriber = new ScriptedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var statuses = fixture.RecordStatuses();
+        var quiet = fixture.RecordSourceQuiet();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(sourceKind: TranscriptionSourceKind.ApplicationProcess,
+            channels: [TranscriptChannel.Others]), CancellationToken.None);
+        var registration = fixture.Registry.AttachProducer(sessionId, new SilentProducer());
+        using (registration.Detach)
+        {
+            fixture.Time.Advance(TimeSpan.FromSeconds(9));
+            await AssertEx.SettleAsync();
+            AssertEx.Empty(Snapshot(quiet), "Nothing is reported below the threshold.");
+
+            fixture.Time.Advance(TimeSpan.FromSeconds(2));
+            await AssertEx.EventuallyAsync(() => Snapshot(quiet).Count >= 2, TestBudgets.Contended, "Each check past the threshold reports.");
+            AssertEx.Equal("Others:10000,Others:11000", string.Join(',', Snapshot(quiet).Take(2)), "The report names the lane and how long it has been quiet.");
+
+            fixture.Time.Advance(TimeSpan.FromMinutes(10));
+            await AssertEx.SettleAsync();
+            AssertEx.True(fixture.Registry.IsLive(sessionId), "A quiet source never ends the session.");
+            AssertEx.Empty(Snapshot(statuses), "No end of any kind happened.");
+            AssertEx.False(registration.ProducerToken.IsCancellationRequested, "The producer keeps running.");
+        }
+    }
+
+    [Test]
+    public async Task SourceQuiet_AudioReturning_ReportsZeroOnceAndStopsReporting()
+    {
+        var transcriber = new ScriptedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var quiet = fixture.RecordSourceQuiet();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(sourceKind: TranscriptionSourceKind.ApplicationProcess,
+            channels: [TranscriptChannel.Others]), CancellationToken.None);
+        var registration = fixture.Registry.AttachProducer(sessionId, new SilentProducer());
+        using (registration.Detach)
+        {
+            fixture.Time.Advance(TimeSpan.FromSeconds(10));
+            await AssertEx.EventuallyAsync(() => Snapshot(quiet).Count == 1, TestBudgets.Contended, "The lane went quiet.");
+
+            await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 500);
+            fixture.Time.Advance(TimeSpan.FromSeconds(3));
+
+            await AssertEx.EventuallyAsync(() => Snapshot(quiet).Count == 2, TestBudgets.Contended, "Audio returning is reported.");
+            await AssertEx.SettleAsync();
+            AssertEx.Equal("Others:10000,Others:0", string.Join(',', Snapshot(quiet)), "One zero, then nothing while audio flows again.");
+        }
+    }
+
+    [Test]
+    public async Task SourceQuiet_ABrowserSession_IsNeverWatched()
+    {
+        // The control: a browser streams frames whether or not anyone speaks, so only an in-host producer is watched.
+        var transcriber = new ScriptedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var quiet = fixture.RecordSourceQuiet();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        fixture.Time.Advance(TimeSpan.FromSeconds(30));
+        await AssertEx.SettleAsync();
+
+        AssertEx.Empty(Snapshot(quiet), "No quiet report for a session without an in-host producer.");
+    }
+
+    [Test]
     public async Task NativeAudioArrival_DoesNotCancelTheBrowserAbandonmentGrace()
     {
         var transcriber = new ScriptedWhisperTranscriber(OneSegment);
@@ -1871,6 +1944,23 @@ public sealed class LiveTranscriptionSessionRegistryTests
                              lock (recorded)
                              {
                                  recorded.Add(string.Create(CultureInfo.InvariantCulture, $"catchup:{call.ArgAt<long>(1)}"));
+                             }
+
+                             return Task.CompletedTask;
+                         });
+            return recorded;
+        }
+
+        /// <summary>Captures every source-quiet report as <c>{channel}:{quietMs}</c>, in publication order.</summary>
+        public List<string> RecordSourceQuiet()
+        {
+            var recorded = new List<string>();
+            _ = Publisher.PublishSourceQuietAsync(Arg.Any<Guid>(), Arg.Any<TranscriptChannel>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             lock (recorded)
+                             {
+                                 recorded.Add(string.Create(CultureInfo.InvariantCulture, $"{call.ArgAt<TranscriptChannel>(1)}:{call.ArgAt<long>(2)}"));
                              }
 
                              return Task.CompletedTask;

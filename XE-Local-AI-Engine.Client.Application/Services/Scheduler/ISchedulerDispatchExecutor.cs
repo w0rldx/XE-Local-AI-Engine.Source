@@ -26,11 +26,13 @@ public interface ISchedulerDispatchExecutor
     /// <param name="cancellationToken">Cancelled on job interrupt / scheduler shutdown; flows to the handler.</param>
     /// <param name="parameterOverrides">Per-fire override values from the firing trigger's <c>JobDataMap</c>; <c>null</c>, the cron path, leaves the stored parameters untouched.</param>
     /// <param name="triggeredBy">What caused this fire, recorded on the run row; the job runner passes <see cref="ScheduledRunTrigger.Manual" /> for the manual-fire marker.</param>
+    /// <param name="manualFireId">The id a manual fire was stamped with, carried onto every run event of this fire; <c>null</c> for a cron fire.</param>
     Task DispatchAsync(Guid scheduledJobId,
         string fireInstanceId,
         DateTimeOffset? scheduledFireTimeUtc,
         DateTimeOffset actualFireTimeUtc,
         CancellationToken cancellationToken,
         IReadOnlyDictionary<string, string>? parameterOverrides = null,
-        ScheduledRunTrigger triggeredBy = ScheduledRunTrigger.Schedule);
+        ScheduledRunTrigger triggeredBy = ScheduledRunTrigger.Schedule,
+        Guid? manualFireId = null);
 }

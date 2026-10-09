@@ -25,6 +25,7 @@ public interface IProcessAudioCaptureSource
     ///     16 kHz mono int16 PCM the segmenter accepts and pushing it into the session's <c>Others</c> lane. Runs
     ///     until <paramref name="cancellationToken" /> is cancelled.
     /// </summary>
+    /// <remarks>Returns normally when the target process exits, so the caller can end the session.</remarks>
     /// <exception cref="TranscriptionProcessCaptureNotSupportedException">This host cannot capture process audio.</exception>
     Task CaptureAsync(Guid sessionId, int processId, CancellationToken cancellationToken);
 }

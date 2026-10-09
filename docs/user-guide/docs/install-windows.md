@@ -29,6 +29,8 @@ Without it the window cannot open: the app shows an error that says WebView2 is 
 **Download WebView2** button. Until you install it, you can start the app with `--browser` added, for
 example `XE-Local-AI-Engine.exe --browser`, and it opens in your web browser instead.
 
+**Optional — Git for Agent Home runs:** an Agent Home run needs [Git for Windows](https://git-scm.com/download/win) installed and on the `PATH`; chat, attachments and everything else work without it.
+
 ---
 
 ## The short version
@@ -169,7 +171,7 @@ XE-Local-AI-Engine\
 ├── Update.exe                   ←  ❌ not this (the updater)
 ├── .portable
 └── current\
-    ├── XE-Local-AI-Engine.WindowsLauncher.exe  ← managed by the top-level entry
+    ├── XE-Local-AI-Engine.WindowsLauncher.exe  ← for command-line commands only
     └── XE-Local-AI-Engine.Client.dll           ← the framework-dependent app
 ```
 
@@ -180,6 +182,10 @@ XE-Local-AI-Engine\
 >
 > The one you want is called **`XE-Local-AI-Engine.exe`** and sits **next to** the `current` folder —
 > not inside it.
+>
+> Command-line commands (`--help`, `--status`, a password reset) are the exception: run them with
+> `current\XE-Local-AI-Engine.WindowsLauncher.exe` from PowerShell. The top-level exe passes back neither their output
+> nor their exit code.
 
 **Double-click `XE-Local-AI-Engine.exe`.**
 

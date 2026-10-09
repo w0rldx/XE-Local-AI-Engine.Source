@@ -158,5 +158,15 @@ public enum TurnNoticeKind
     ///     <see cref="TurnNoticePayload.Detail" /> carries the switch codes (<c>mcp-tools</c>, <c>web-tools</c>,
     ///     <c>sub-agents</c>), never a tool name.
     /// </remarks>
-    CloudToolsWithheld = 16
+    CloudToolsWithheld = 16,
+
+    /// <summary>
+    ///     The inlined attachment text exceeded the node's attachment budget (<c>MaxInlinedAttachmentChars</c>), so the
+    ///     model received only its start.
+    /// </summary>
+    /// <remarks>
+    ///     The fixed node cap; <see cref="AttachmentShortened" /> is the further cut to the launched context window.
+    ///     <see cref="TurnNoticePayload.Detail" /> lists the affected file names.
+    /// </remarks>
+    AttachmentsTruncated = 17
 }

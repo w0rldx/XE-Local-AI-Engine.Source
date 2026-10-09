@@ -43,7 +43,9 @@ page and `/health/ready`; scheduled jobs do not run, and every other local API r
   `--admin-password-stdin`, and the engine unlocks without the page. A wrong password exits `5`. See the
   [Agentic Support guide](agentic-support/agent-install.md).
 - **Command-line password reset** (app stopped): `--reset-admin-password '<new password>' --recovery-code-stdin`, with
-  the recovery code piped in. A missing or wrong code exits `5` and changes nothing. The user-facing steps are in the
+  the recovery code piped in. A missing or wrong code exits `5` and changes nothing. A successful reset prints a new
+  `XE_RECOVERY_CODE=` line and retires the old code. On Windows run it through
+  `current\XE-Local-AI-Engine.WindowsLauncher.exe`. The user-facing steps are in the
   [FAQ](user-guide/docs/faq.md#i-forgot-my-password).
 
 ## Readiness and port discovery

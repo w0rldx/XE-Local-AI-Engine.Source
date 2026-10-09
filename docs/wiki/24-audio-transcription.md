@@ -331,6 +331,7 @@ Server → client:
 | `transcriptionSessionStatusChanged` | `{ sessionId, status, errorCode }`, status one of `Completed`, `Cancelled`, `Abandoned`, `Failed`; `errorCode` is `live-never-attached` for a `NeverAttached` end (whose status reads `Abandoned`), `live-failed` for `Failed`, otherwise null |
 | `transcriptionAdmissionClosed` | `{ sessionId }`: the node stopped accepting audio for this session. Sent once when a graceful end (the buffered-audio cap or `EndSession`) closes admission, before the drain-start `transcriptionCatchUpProgress`, and never for an abort. A frame sent after it is dropped, so the client stops capturing. |
 | `transcriptionCatchUpProgress` | `{ sessionId, bufferedMs }`: the session's queued, untranscribed audio across all lanes. Sent at most once per second of audio a lane consumes while it still has frames queued, once with `0` when the backlog empties after a non-zero report, once at the start of a graceful end whatever the value, and never after the terminal status push. |
+| `transcriptionSourceQuiet` | `{ sessionId, channel, quietMs }`: a lane of a session with an attached in-host producer (per-application capture) has had no frame for `quietMs`. Sent once per second while the lane stays quiet for 10 s or more, once with `0` when a frame arrives again, never for a browser-fed session, and never after the terminal status push. Non-terminal: the session keeps running (see "A quiet source never ends a session"). |
 
 Catch-up progress is advisory. It is published under its own gate, never the commit gate, so a lane with nothing to
 commit does not wait behind a sibling's persistence; the gate closes just before the terminal status push, and a failed
@@ -380,6 +381,14 @@ calls into it per lane.
   as a first-attempt timeout, so a window never waits twice the timeout. A second death propagates and fails the lane. No other runtime failure is retried: a timeout would double the
   inference-timeout wait, and "not installed", "busy" or "rejected the audio" cannot succeed on a retry. The final
   flush submits through the same path.
+- **Language probabilities are asked for only on a window that starts over uncommitted speech.** With no forced
+  language the lane asks whisper-server for language probabilities until one window reports a language, but only when
+  the previous window left a non-empty segment in the uncommitted tail; speech it committed is gone from the next
+  window, so a short utterance followed by a pause does not make the next window ask. whisper-server crashes (Windows) or answers 500 (Linux) when a probability
+  request meets a window its VAD finds silent, and the transcriber's fallback retry carries no language, so asking on
+  every silent tick crashed the daemon once per second and pushed the lane into catch-up. The first window of a session
+  never asks; windows overlap the uncommitted speech, so the next window still sees what the tail held. At worst one
+  crash remains, when speech is followed at once by silence. `LiveTranscriptionSegmenterTests` pins it.
 - **The known ceiling: one word may be inserted, dropped or duplicated per forced boundary.** Windows are cut with
   no overlap, so a word straddling a forced cut is the model's guess from a fragment. `LiveSegmenterGoldenTests`
   bounds this — the committed transcript's word-level edit distance against a whole-clip transcript may not exceed
@@ -905,7 +914,17 @@ path the fallback is supposed to make instant.
   detaches before calling `EndAsync(Failed)`, so a recorder initialization failure, an unexpected clean return, or an
   uncancelled `OperationCanceledException` reaches persistence and the browser's terminal status event instead of leaving
   a session recording without a producer. Requested cancellation keeps the registry caller's status and graceful-flush
-  semantics. Which shape NAudio produces when a target exits — a clean end or a COM exception — still needs a Windows round.
+  semantics.
+- **The target process exiting ends the capture.** WASAPI stops yielding packets once its target is gone and its
+  enumerator does not end, so `WindowsProcessAudioCaptureSource.CaptureAsync` races the capture against the target's
+  `WaitForExitAsync` (`ProcessAudioCaptureSupport.RunUntilProcessExitsAsync`, which runs on every gate). An exit, or a
+  target already gone at start, returns normally, and the coordinator ends the session once through `EndAsync(Failed)`.
+  Closing one browser tab does not exit the process: Chromium plays audio from a long-lived utility process.
+- **A quiet source never ends a session.** WASAPI never yields a silent packet, so a paused video and a closed tab look
+  identical, and a silence timeout would end a healthy session. Instead, while an in-host producer is attached, the
+  registry stamps each lane's last frame and a one-second watch publishes `transcriptionSourceQuiet` once a lane has
+  been quiet for 10 s, and `0` when audio returns. The live panel shows "No audio from the captured application for
+  N s". The watch is armed by `AttachProducer` and disarmed by the producer's detach and by the end of the session.
 - **More than two channels is refused** with a `NotSupportedException`. `StereoToMonoSampleProvider` downmixes two
   channels only, and failing loudly beats interleaving channels into the transcript. Unreachable with NAudio's stereo
   default.

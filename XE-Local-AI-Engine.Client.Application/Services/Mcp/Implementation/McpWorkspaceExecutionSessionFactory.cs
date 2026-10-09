@@ -127,7 +127,7 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
 
             // No run log here: this session has no AgentHome run id, so the baseline's commands have nowhere to be
             // attributed and are not collected.
-            var snapshots = await _workspaceService.PrepareSelectedFoldersAsync(handle, [workspace], baselineCommands: null, cancellationToken);
+            var snapshots = await _workspaceService.PrepareSelectedFoldersAsync(handle, [workspace], baselineCommands: null, cancellationToken: cancellationToken);
             if (!HasExactCopiedWorkspace(snapshots, workspace))
             {
                 return await RejectAfterRecoveryAsync(attachKey, leaseKey, WorkspacePreparationFailed());

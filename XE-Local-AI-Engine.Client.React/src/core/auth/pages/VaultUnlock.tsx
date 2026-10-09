@@ -22,6 +22,7 @@ import { useTranslation } from "react-i18next";
 
 import { getNodeAuthStatus, unlockNodeVault, unlockNodeVaultWithRecovery } from "@/core/auth/api/NodeAuthApi";
 import type { NodeAuthErrorResponse } from "@/core/auth/models/NodeAuthModels";
+import { RecoveryCodeReveal } from "@/core/auth/components/RecoveryCodeReveal";
 import { unmetPasswordRules } from "@/core/auth/models/PasswordPolicy";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StandaloneScreenControls } from "@/core/ui/components/StandaloneScreenControls/StandaloneScreenControls";
@@ -47,7 +48,7 @@ const passwordRuleKeys = [
 	"auth.setup.passwordRuleSymbol",
 ] as const;
 
-// After a 204 the pre-host stops and the real host re-binds the same origin; until it does, requests fail with a
+// After a successful unlock the pre-host stops and the real host re-binds the same origin; until it does, requests fail with a
 // connection error or 503, and a still-draining pre-host may answer "locked" once more. All three mean "keep waiting".
 async function waitForUnlockedHost(isCancelled: () => boolean): Promise<boolean> {
 	let delay = handoverFirstDelayMs;
@@ -125,6 +126,10 @@ export function VaultUnlock() {
 	const [error, setError] = useState<string | undefined>();
 	const [submitting, setSubmitting] = useState(false);
 	const [handover, setHandover] = useState<"idle" | "starting" | "failed">("idle");
+	// The rotated recovery code from a recovery unlock: held here while the real host takes over, because the pre-host
+	// answers before that host commits the reset, and shown once only after the hand-over succeeded.
+	const pendingRecoveryCode = useRef<string | undefined>(undefined);
+	const [newRecoveryCode, setNewRecoveryCode] = useState<string | undefined>();
 	const unmounted = useRef(false);
 	const recoveryErrors = useMemo(() => validateRecovery(recovery, t), [recovery, t]);
 	const canSubmit = useRecovery ? Object.keys(recoveryErrors).length === 0 : password.length > 0;
@@ -151,6 +156,13 @@ export function VaultUnlock() {
 		}
 
 		if (unlocked) {
+			if (pendingRecoveryCode.current) {
+				setNewRecoveryCode(pendingRecoveryCode.current);
+				pendingRecoveryCode.current = undefined;
+				setHandover("idle");
+				return;
+			}
+
 			// Unlocking issues no session; the layout guard sends the operator on to the normal sign-in.
 			await navigate({ to: "/" });
 			return;
@@ -167,9 +179,14 @@ export function VaultUnlock() {
 		}
 
 		setSubmitting(true);
+		let rotatedCode: string | undefined;
 		try {
 			if (useRecovery) {
-				await unlockNodeVaultWithRecovery({ recoveryCode: recovery.recoveryCode.trim(), newPassword: recovery.newPassword });
+				const response = await unlockNodeVaultWithRecovery({
+					recoveryCode: recovery.recoveryCode.trim(),
+					newPassword: recovery.newPassword,
+				});
+				rotatedCode = response.recoveryCode;
 			} else {
 				await unlockNodeVault({ password });
 			}
@@ -182,10 +199,27 @@ export function VaultUnlock() {
 		setSubmitting(false);
 		setPassword("");
 		setRecovery({ recoveryCode: "", newPassword: "", confirmPassword: "" });
+		pendingRecoveryCode.current = rotatedCode;
 		await awaitHandover();
 	};
 
 	const renderBody = () => {
+		if (newRecoveryCode) {
+			return (
+				<Stack gap="md">
+					<Text size="sm">{t("auth.vault.recoveryRotated")}</Text>
+					<RecoveryCodeReveal
+						recoveryCode={newRecoveryCode}
+						onContinue={() => {
+							setNewRecoveryCode(undefined);
+							// Unlocking issues no session; the layout guard sends the operator on to the normal sign-in.
+							navigate({ to: "/" }).catch(() => undefined);
+						}}
+					/>
+				</Stack>
+			);
+		}
+
 		if (handover === "starting") {
 			return (
 				<Group justify="center" gap="sm" role="status">

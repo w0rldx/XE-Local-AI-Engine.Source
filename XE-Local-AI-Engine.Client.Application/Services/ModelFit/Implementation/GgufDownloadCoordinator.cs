@@ -424,6 +424,10 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 token.ThrowIfCancellationRequested();
                 var completedBytes = checked(source.SourceSizeBytes + (source.Projector?.SourceSizeBytes ?? 0));
                 SetStatus(operationId, GgufAcquisitionPhase.Completed, completedBytes, completedBytes, isInitialOrTerminal: true);
+                _logger.LogInformation("GGUF download completed for {ModelName} ({CompletedBytes} bytes{Projector}).",
+                    modelName,
+                    completedBytes,
+                    source.Projector is null ? string.Empty : ", vision projector included");
                 await RegisterToolCapabilityAsync(modelName, CancellationToken.None);
             }
             catch (OperationCanceledException)

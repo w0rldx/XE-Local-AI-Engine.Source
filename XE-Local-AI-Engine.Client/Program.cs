@@ -23,6 +23,13 @@ catch (HostAbortedException)
 {
     Log.Information("The Application was aborted");
 }
+catch (DesktopDataDirectoryException ex)
+{
+    // An unusable data directory (not writable, not creatable) is the operator's to fix, not a crash: name it and exit 10.
+    Log.Fatal(ex, "The data directory is unusable; startup stopped.");
+    await Console.Error.WriteLineAsync(ex.SafeDiagnostic);
+    return XE_Local_AI_Engine.Client.Program.DataDirectoryUnusableExitCode;
+}
 catch (NodeKeyCustodyException ex)
 {
     // Raised by the node-key check while the host starts: a refusal with an operator-facing message, not a crash.
@@ -167,15 +174,17 @@ namespace XE_Local_AI_Engine.Client
             catch (Exception exception)
             {
                 await standardError.WriteLineAsync($"The engine command failed unexpectedly (stage={commandContext.StageOutput}, type={exception.GetType().Name}).");
+                var exitCode = 1;
                 if (exception is DesktopDataDirectoryException dataDirectoryException)
                 {
                     await standardError.WriteLineAsync(dataDirectoryException.SafeDiagnostic);
+                    exitCode = DataDirectoryUnusableExitCode;
                 }
 
                 return new ProgramStartResult
                 {
                     App = null,
-                    ExitCode = 1
+                    ExitCode = exitCode
                 };
             }
         }
@@ -252,6 +261,10 @@ namespace XE_Local_AI_Engine.Client
                 };
             }
 
+            // The maintenance commands are one-shots too, so a busy data directory answers them with 4 like setup and --mcp-key.
+            var commandRequested = setupRequested || mcpKeyRequested || DesktopLaunch.TryGetResetAdminPassword(args, out _)
+                                   || DesktopLaunch.GetKnowledgeDowngradeCommand(args) != KnowledgeDowngradeCommand.None;
+
             commandContext?.SetStage(OneShotCommandStage.HostInitialization);
 
             // Held for the process lifetime once acquired in the desktop branch below; disposed after the host is built.
@@ -312,7 +325,7 @@ namespace XE_Local_AI_Engine.Client
                     StartupLoggerReady = true;
                     Log.Fatal("Another instance of XE Local AI Engine is already running for the data directory '{DataDirectory}'. "
                               + "Close the other instance before starting a new one.", desktopDataDirectory);
-                    if (setupRequested || mcpKeyRequested)
+                    if (commandRequested)
                     {
                         Log.Error("The engine is already running for this data directory. Use the HTTP path on the running "
                                   + "instance, or stop it before running this command.");
@@ -322,7 +335,25 @@ namespace XE_Local_AI_Engine.Client
                     return new ProgramStartResult
                     {
                         App = null,
-                        ExitCode = setupRequested || mcpKeyRequested ? 4 : 1
+                        ExitCode = commandRequested ? 4 : 1
+                    };
+                }
+
+                // A present but unreadable node-settings.json would otherwise start the node on default settings, which looks
+                // like a fresh install (first-run onboarding) while every stored choice is silently ignored. Stop honestly instead.
+                if (await NodeStartupSettings.IsStoredFileUnreadableAsync(desktopDataDirectory, CancellationToken.None))
+                {
+                    Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
+                    StartupLoggerReady = true;
+                    var hint = NodeStartupSettings.DescribeUnreadableFile(desktopDataDirectory);
+                    Log.Fatal("{NodeSettingsUnreadableHint}", hint);
+                    await standardError.WriteLineAsync(hint);
+                    await Log.CloseAndFlushAsync();
+                    instanceLease.Dispose();
+                    return new ProgramStartResult
+                    {
+                        App = null,
+                        ExitCode = DataDirectoryUnusableExitCode
                     };
                 }
 
@@ -633,7 +664,7 @@ namespace XE_Local_AI_Engine.Client
 
             if (resetRequested)
             {
-                var resetExitCode = await ResetAdminPasswordAsync(app.Services, resetPassword, resetRecoveryCode);
+                var resetExitCode = await ResetAdminPasswordAsync(app.Services, resetPassword, resetRecoveryCode, standardOutput);
                 instanceLease?.Dispose();
                 return new ProgramStartResult
                 {

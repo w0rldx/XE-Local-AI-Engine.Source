@@ -11,6 +11,7 @@
   BCL PBKDF2, whole-host wait, one password for two stores, persisted `node.key` only), recorded in
   `Plans/vault-key-custody-2026-10-01/PLAN.md` §0 (the plan directory is git-ignored; it is the record of the
   decisions, not a published document).
+- **Amended:** 2026-10-09, a recovery reset rotates the recovery code (see the amendment at the end).
 - **Amends:** nothing. It narrows one statement in [Security & Privacy](../wiki/12-security-and-privacy.md) §2.1: a
   persisted desktop `node.key` is no longer the raw secret (Linux: guarded by `0600` alone; Windows: DPAPI).
 
@@ -128,3 +129,29 @@ reads a protected value while locked, and would leave a half-alive node that ans
 - **Re-encrypt the data under a new key at migration.** Makes the master key independent of the legacy secret, but
   rewrites every encrypted column and the Data Protection ring in one risky step. Rejected: the legacy bytes become the
   master key, and rotating it remains a separate, explicit decision.
+
+## Amendment 2026-10-09: a recovery reset rotates the recovery code
+
+Operator decision of 2026-10-09 (Windows tester round). The original design kept the recovery code after a reset: it
+was "shown once" in the sense of printed once, not single-use, so a code that had been typed into a terminal or a
+browser stayed valid forever.
+
+- **What changes:** a password reset proven by the recovery code also re-wraps the recovery slot under a fresh code.
+  `NodeVault.RewrapWithRecoveryAsync` writes both slots through `VaultFileCodec.RewrapWithNewRecovery`; the code that
+  proved the reset stops working. The file format, its version and `createdUtc` are unchanged; only `rewrappedUtc`
+  moves.
+- **Where the new code is shown, once:** the CLI reset (`--reset-admin-password … --recovery-code-stdin`) prints one
+  `XE_RECOVERY_CODE=<code>` line, exactly as `--setup` does. The locked pre-host's `auth/vault/unlock-recovery` mints
+  the new code itself (`VaultFileCodec.NewRecoveryCode`), answers **200** `{recoveryCode}` instead of 204, and hands the
+  code to the real host, whose reset wraps the vault under that same code. The unlock page holds the code until the
+  hand-over succeeded (the real host answers `auth/status` unlocked) and only then shows it with the setup reveal.
+  Only one unlock is served: the first request that proves a credential reserves it before anything is answered, and a
+  concurrent one (password or recovery) answers **409** without showing a code, so no shown code goes
+  uninstalled.
+- **Known window:** the pre-host answers before the real host's reset commits, so the page never shows the code for a
+  hand-over that did not happen. The real host serves even when its reset failed; then the vault is restored, the shown
+  code is void and the previous password and code still apply, and the engine logs exactly that. The reveal therefore
+  tells the operator to keep the old code until the first sign-in with the new password succeeds, which fails in the
+  same case.
+- **What does not change:** a password change (current password known) keeps the recovery code, and a node under an
+  operator-supplied secret has no vault and no code.

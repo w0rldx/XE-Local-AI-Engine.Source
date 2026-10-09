@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import { GgufDownloadDialog } from "@/features/models/components/GgufDownloadDialog";
 import type { GgufRepository } from "@/features/models/models/GgufModels";
@@ -135,5 +135,26 @@ describe("GgufDownloadDialog vision-projector choice", () => {
 		await waitFor(() => expect((screen.getByTestId("gguf-download-include-projector") as HTMLInputElement).checked).toBe(true));
 		// …and the new repo's own projector size is what the label now shows.
 		expect(await screen.findByRole("checkbox", { name: /Include vision projector \(2\.0 GB\)/ })).toBeTruthy();
+	});
+});
+
+describe("GgufDownloadDialog default quant", () => {
+	afterEach(cleanup);
+
+	it("scrolls the preselected quant into view when the list opens", async () => {
+		const files = ["Q2_K", "Q3_K_M", "Q4_K_M", "Q5_K_M", "Q6_K", "Q8_0"].map((quant) => ({
+			...quantFile,
+			fileName: `model-${quant}.gguf`,
+			quant,
+			isRecommended: quant === "Q6_K",
+		}));
+		inspectReturns({ repoId: "owner/many", hasProjector: false, projectorSizeBytes: null, files });
+		renderDialog("owner/many");
+
+		expect(await screen.findByTestId("gguf-download-row-Q6_K")).toBeTruthy();
+		// The test render installs a scrollIntoView spy (jsdom has none); read which elements it was called on.
+		const spy = Element.prototype.scrollIntoView as unknown as Mock;
+		const scrolled = spy.mock.contexts.map((element) => (element as Element).getAttribute("data-testid"));
+		expect(scrolled).toEqual(["gguf-download-row-Q6_K"]);
 	});
 });

@@ -206,8 +206,8 @@ public sealed class RefreshRecommendationsRequest
 }
 
 /// <summary>
-///     Accepted response for <c>POST model-fit/recommendations/refresh</c>, echoing only the scheduled job id that was
-///     triggered.
+///     Accepted response for <c>POST model-fit/recommendations/refresh</c>, echoing the scheduled job id that was
+///     triggered and the id of this fire.
 /// </summary>
 /// <remarks>
 ///     The refresh is created asynchronously by the scheduler, whose dispatcher owns the run id — it is NOT fabricated
@@ -216,6 +216,9 @@ public sealed class RefreshRecommendationsRequest
 public sealed class RefreshRecommendationsResponse
 {
     public required Guid ScheduledJobId { get; init; }
+
+    /// <summary>The id of this fire; the scheduler hub's run events for it carry the same value as <c>manualFireId</c>.</summary>
+    public required Guid FireId { get; init; }
 }
 
 /// <summary>

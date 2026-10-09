@@ -348,7 +348,7 @@ describe("RuntimeResourcesWidget", () => {
 		await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith("An image job is still running."));
 	});
 
-	it("keeps the gauge at 5s and holds the resident lists to the push floor while the hub is live", async () => {
+	it("keeps the gauge at 15s and holds the resident lists to the push floor while the hub is live", async () => {
 		hubState.isLive = true;
 		serve([gpu(0, 32, 8)], [resident()], [runtimeResident()]);
 
@@ -356,7 +356,7 @@ describe("RuntimeResourcesWidget", () => {
 		await screen.findByTestId("runtime-resources-trigger");
 
 		expect(hubState.enabledCalls).toContain(true);
-		expect(refetchIntervalOf(queryClient, "getRuntimeResources")).toBe(5000);
+		expect(refetchIntervalOf(queryClient, "getRuntimeResources")).toBe(15_000);
 		expect(refetchIntervalOf(queryClient, "listRunningModels")).toBe(60_000);
 		expect(refetchIntervalOf(queryClient, "getRuntimeResidents")).toBe(60_000);
 	});
@@ -367,7 +367,7 @@ describe("RuntimeResourcesWidget", () => {
 		const { queryClient } = renderWithProviders(<RuntimeResourcesWidget />, { withRouter: true });
 		await screen.findByTestId("runtime-resources-trigger");
 
-		expect(refetchIntervalOf(queryClient, "getRuntimeResources")).toBe(5000);
+		expect(refetchIntervalOf(queryClient, "getRuntimeResources")).toBe(15_000);
 		expect(refetchIntervalOf(queryClient, "listRunningModels")).toBe(4000);
 		expect(refetchIntervalOf(queryClient, "getRuntimeResidents")).toBe(5000);
 	});

@@ -65,11 +65,12 @@ public sealed class RefreshRecommendationsEndpoint : Endpoint<RefreshRecommendat
             return;
         }
 
-        await _modelFitRefreshTrigger
+        var fireId = await _modelFitRefreshTrigger
             .TriggerRecommendationRefreshAsync(req.ScheduledJobId, req.UseCase, req.Limit, req.QuantOverride, req.CtxTarget, ct);
         await Send.OkAsync(new RefreshRecommendationsResponse
             {
-                ScheduledJobId = req.ScheduledJobId
+                ScheduledJobId = req.ScheduledJobId,
+                FireId = fireId
             },
             ct);
     }

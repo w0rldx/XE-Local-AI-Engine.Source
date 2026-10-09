@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { useDownloadRateEstimates } from "@/features/models/hooks/useDownloadRateEstimates";
 import type { RateTrackedProgress } from "@/features/models/hooks/useDownloadRateEstimates";
@@ -185,6 +186,15 @@ export function RuntimeAcquisitionBanner() {
 									: phaseMessage(phase, t)}
 							</Text>
 						</Group>
+						{/* A refused retry (409: models still running, keep-warm on) must say why, not do nothing. */}
+						{isFailed && ensureMutation.error ? (
+							<Text size="xs" c="red" data-testid="runtime-acquisition-banner-retry-error">
+								{apiErrorMessage(
+									ensureMutation.error,
+									t("pages.nodeSettings.llamaCpp.ensureError", "Could not ensure the llama.cpp binary."),
+								)}
+							</Text>
+						) : null}
 						{isFailed ? null : (
 							<Text size="xs" c="dimmed" data-testid="runtime-acquisition-banner-detail">
 								{detailLine.length > 0

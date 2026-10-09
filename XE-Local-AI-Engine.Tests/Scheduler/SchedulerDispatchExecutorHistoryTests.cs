@@ -304,6 +304,37 @@ public sealed class SchedulerDispatchExecutorHistoryTests
     }
 
     [Test]
+    public async Task DispatchAsync_WithAManualFireId_CarriesItOnTheStartedAndTerminalEvents()
+    {
+        var fireId = Guid.NewGuid();
+        var handler = new ConfigurableHandler((_, _) => Task.CompletedTask);
+        var (executor, _, _, publisher) = CreateExecutor(handler, ScheduledRunStatus.Running);
+
+        await executor.DispatchAsync(JobId, "fire-correlated", Now, Now, CancellationToken.None, parameterOverrides: null, ScheduledRunTrigger.Manual, fireId);
+
+        await publisher.Received(1).PublishRunAsync(Arg.Is<SchedulerRunEvent>(e => e.Kind == SchedulerRunEventKind.Started && e.ManualFireId == fireId),
+            Arg.Any<CancellationToken>());
+        await publisher.Received(1).PublishRunAsync(Arg.Is<SchedulerRunEvent>(e => e.Kind == SchedulerRunEventKind.Completed && e.ManualFireId == fireId),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DispatchAsync_WhenAManualFireFails_CarriesItsIdOnTheFailedEvent_AndACronFireCarriesNone()
+    {
+        var fireId = Guid.NewGuid();
+        var failing = new ConfigurableHandler((_, _) => throw new InvalidOperationException("boom"));
+        var (executor, _, _, publisher) = CreateExecutor(failing, ScheduledRunStatus.Running);
+
+        await executor.DispatchAsync(JobId, "fire-failed", Now, Now, CancellationToken.None, parameterOverrides: null, ScheduledRunTrigger.Manual, fireId);
+        await executor.DispatchAsync(JobId, "fire-cron", Now, Now, CancellationToken.None);
+
+        await publisher.Received(1).PublishRunAsync(Arg.Is<SchedulerRunEvent>(e => e.Kind == SchedulerRunEventKind.Failed && e.ManualFireId == fireId),
+            Arg.Any<CancellationToken>());
+        await publisher.Received(1).PublishRunAsync(Arg.Is<SchedulerRunEvent>(e => e.Kind == SchedulerRunEventKind.Failed && e.ManualFireId == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task DispatchAsync_WhenHandlerReportsProgress_PublishesProgressEvent()
     {
         var handler = new ConfigurableHandler(async (ctx, ct) => await ctx.ReportProgressAsync!("step", arg2: 25, ct));

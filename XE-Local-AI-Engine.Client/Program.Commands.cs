@@ -21,9 +21,11 @@ public sealed partial class Program
     ///     The vault recovery code, read ONCE by the caller via <see cref="DesktopLaunch.GetRecoveryCode(string[])" />
     ///     (the locked-vault unlock before the host is built needs the same code). Required when a v2 node.key exists.
     /// </param>
-    private static async Task<int> ResetAdminPasswordAsync(IServiceProvider services, string? newPassword, string? recoveryCode = null)
+    /// <param name="standardOutput">Receives the rotated <c>XE_RECOVERY_CODE=</c> line after a recovery-code reset.</param>
+    private static async Task<int> ResetAdminPasswordAsync(IServiceProvider services, string? newPassword, string? recoveryCode, TextWriter standardOutput)
     {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(standardOutput);
 
         if (string.IsNullOrWhiteSpace(newPassword))
         {
@@ -43,11 +45,17 @@ public sealed partial class Program
 
         var authService = scope.ServiceProvider.GetRequiredService<INodeAuthService>();
 
-        var result = await authService.ResetAdminPasswordAsync(newPassword, recoveryCode, CancellationToken.None);
+        var result = await authService.ResetAdminPasswordAsync(newPassword, recoveryCode, newRecoveryCode: null, CancellationToken.None);
         if (!result.Succeeded)
         {
             Log.Error("Admin password reset failed: {Errors}", string.Join(" ", result.Errors));
             return 1;
+        }
+
+        if (result.RecoveryCode is not null)
+        {
+            // The code that proved this reset no longer works. Printed once, here only, exactly as --setup prints it.
+            await standardOutput.WriteLineAsync($"XE_RECOVERY_CODE={result.RecoveryCode}");
         }
 
         Log.Information("Admin password reset succeeded. Refresh tokens revoked and existing access tokens invalidated; "
@@ -151,7 +159,8 @@ public sealed partial class Program
     private static async Task WriteHelpAsync(TextWriter standardOutput)
     {
         ArgumentNullException.ThrowIfNull(standardOutput);
-        await standardOutput.WriteLineAsync("XE Local AI Engine");
+        // The Windows top-level exe is the Velopack stub: it forwards neither output nor the exit code, so commands go to the launcher.
+        await standardOutput.WriteLineAsync(@"XE Local AI Engine (on Windows, run commands with current\XE-Local-AI-Engine.WindowsLauncher.exe)");
         await standardOutput.WriteLineAsync("Serve: --desktop | --browser | --headless | --mcp-only [--no-browser] [--port <1-65535>]");
         await standardOutput.WriteLineAsync("Desktop app: [--debug] enables WebView DevTools and, when this launch starts the engine, streams its log at Debug level to the terminal.");
         await standardOutput
@@ -162,7 +171,7 @@ public sealed partial class Program
             .WriteLineAsync("Credentials: scripts and installers must use XE_ADMIN_PASSWORD or --admin-password-stdin, never --admin-password on argv; argv exposes the password in process listings.");
         await standardOutput.WriteLineAsync("Data: XE_DATA_DIR must be an absolute path; status inspection never creates it.");
         await standardOutput.WriteLineAsync(
-            "Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable; 7 unlock port lost; 8 node key does not open the database; 9 database migration failed.");
+            "Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable; 7 unlock port lost; 8 node key does not open the database; 9 database migration failed; 10 data directory or node settings unusable.");
     }
 
     private static async Task<int> StatusCommandAsync(string[] args,

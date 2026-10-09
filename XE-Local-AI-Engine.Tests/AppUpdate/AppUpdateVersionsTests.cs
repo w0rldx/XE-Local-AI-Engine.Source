@@ -24,6 +24,41 @@ public sealed class AppUpdateVersionsTests
         "1.0.1"
     ];
 
+    /// <summary>
+    ///     A hand-cut tester snapshot is stamped inside the Development scheme with a counter of 100 or more
+    ///     (<c>&lt;anchor&gt;.dev.&lt;yyyymmdd&gt;.&lt;100+n&gt;</c>, wiki 11), so it orders by date against Development builds.
+    /// </summary>
+    private static readonly string[] SnapshotAscendingOrder =
+    [
+        "1.0.0-rc.2.dev.20261007.3",
+        "1.0.0-rc.2.dev.20261008.1",
+        "1.0.0-rc.2.dev.20261008.101",
+        "1.0.0-rc.2.dev.20261009.1",
+        "1.0.0-rc.2.dev.20261009.102"
+    ];
+
+    [Test]
+    public void IsHigher_SnapshotsInTheDevelopmentScheme_OrderByDateAgainstDevelopmentBuilds()
+    {
+        for (var index = 0; index < SnapshotAscendingOrder.Length - 1; index++)
+        {
+            var lower = SnapshotAscendingOrder[index];
+            var higher = SnapshotAscendingOrder[index + 1];
+
+            AssertEx.True(AppUpdateVersions.IsHigher(higher, lower), $"'{higher}' should outrank '{lower}'.");
+            AssertEx.False(AppUpdateVersions.IsHigher(lower, higher), $"'{lower}' should not outrank '{higher}'.");
+        }
+    }
+
+    [Test]
+    public void IsHigher_ASnapshotStampedOutsideTheDevelopmentScheme_LosesToEveryDevelopmentBuild()
+    {
+        // The tester round's scheme: SemVer ranks the alphanumeric "dev" above any number, so an older Development build
+        // outranks a newer snapshot and the update check offers a downgrade.
+        AssertEx.True(AppUpdateVersions.IsHigher("1.0.0-rc.2.dev.20261001.1", "1.0.0-rc.2.20261008.1"));
+        AssertEx.False(AppUpdateVersions.IsHigher("1.0.0-rc.2.20261008.1", "1.0.0-rc.2.dev.20261001.1"));
+    }
+
     [Test]
     public void IsHigher_AcrossTheVerifiedOrdering_AgreesWithVelopack()
     {

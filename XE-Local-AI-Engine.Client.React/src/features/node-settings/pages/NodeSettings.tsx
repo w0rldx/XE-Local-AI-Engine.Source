@@ -445,6 +445,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 								suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
 								min={minTimeout}
 								max={maxTimeout}
+								clampBehavior="none"
 								step={5}
 								allowDecimal={false}
 								value={timeoutSeconds}

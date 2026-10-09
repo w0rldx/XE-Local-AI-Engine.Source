@@ -93,6 +93,18 @@ internal sealed class TranscriptionEventPublisher : ITranscriptionEventPublisher
                        },
                        cancellationToken);
 
+    public Task PublishSourceQuietAsync(Guid sessionId, TranscriptChannel channel, long quietMs, CancellationToken cancellationToken) =>
+        _hubContext.Clients
+                   .Group(TranscriptionHubGroups.Session(sessionId))
+                   .SendAsync(TranscriptionHubEvents.SourceQuiet,
+                       new TranscriptionSourceQuietPush
+                       {
+                           SessionId = sessionId,
+                           Channel = TranscriptionMapper.ToWireChannel(channel),
+                           QuietMs = quietMs
+                       },
+                       cancellationToken);
+
     /// <summary>
     ///     The status a client sees for an end reason.
     /// </summary>

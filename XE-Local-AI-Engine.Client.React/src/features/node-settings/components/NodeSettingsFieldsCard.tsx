@@ -245,6 +245,7 @@ export function NodeSettingsFieldsCard(props: NodeSettingsFieldsCardProps) {
 								suffix=" MB"
 								min={bounds.maxResponseSizeMb.min}
 								max={bounds.maxResponseSizeMb.max}
+								clampBehavior="none"
 								allowDecimal={false}
 								value={form.maxResponseSizeMb}
 								onChange={(value) => onChange("maxResponseSizeMb", value)}

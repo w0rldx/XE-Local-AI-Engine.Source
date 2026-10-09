@@ -88,9 +88,12 @@ internal static class AddNodeModelFitExtensions
         builder.Services.AddSingleton<IGgufVariantRecommender, GgufVariantRecommender>();
         // The VRAM the configured knowledge reranker and embedder will claim, which both recommendation paths keep free. Singleton over singletons.
         builder.Services.AddSingleton<IKnowledgeCompanionReserve, KnowledgeCompanionReserve>();
+        // Shares Hugging Face discovery across the per-use-case runs of one "Refresh now"; the advisor below discovers through it.
+        builder.Services.AddSingleton<RecommendationDiscoveryMemo>();
         // The local model advisor: the single non-bypass path that profiles hardware, discovers candidate GGUF files, estimates memory
         // fit, ranks survivors and replaces the cached snapshot. Only ModelRecommendationCheckHandler invokes it. Scoped, over the scoped stores.
-        builder.Services.AddScoped<IModelFitRefreshService, ModelFitRefreshService>();
+        builder.Services.AddScoped<IModelFitRefreshService>(sp =>
+            ActivatorUtilities.CreateInstance<ModelFitRefreshService>(sp, sp.GetRequiredService<RecommendationDiscoveryMemo>()));
         // The operator-driven GGUF download coordinator owns a per-model cancellation registry, so a download started by one HTTP
         // request is cancellable by another, and tracks sanitized progress. Singleton: the download runs detached after its request scope returns.
         builder.Services.AddSingleton<IGgufAcquisitionOperationRegistry, GgufAcquisitionOperationRegistry>();

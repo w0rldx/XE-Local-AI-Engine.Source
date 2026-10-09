@@ -282,6 +282,40 @@ public sealed class ProcessAudioCaptureCoordinatorTests
         }
     }
 
+    [Test]
+    public async Task CaptureThatEndsOnItsOwn_EndsTheSessionExactlyOnce()
+    {
+        // The target exited, so the source returned without a stop. The registry's single EndAsync path tells the
+        // browser capture ended; a requested stop never reaches it (RequestedStop_NeverEndsTheSession).
+        await using var harness = Harness.Create();
+        harness.Source.EndsOnItsOwn = true;
+        var sessionId = Guid.NewGuid();
+
+        _ = harness.Coordinator.Start(sessionId, processId: 4321);
+
+        await AssertEx.EventuallyAsync(() => !harness.Registry.Ends.IsEmpty && !harness.Coordinator.IsCapturing(sessionId), Bound,
+            "A capture that ends on its own ends its session.");
+        AssertEx.Equal($"{sessionId}:{LiveEndReason.Failed}", string.Join(",", harness.Registry.Ends),
+            "Exactly one end, through the registry, for this session.");
+        AssertEx.Equal(1, harness.Registry.DetachCount(sessionId), "The producer detached before the session ended.");
+    }
+
+    [Test]
+    public async Task RequestedStop_NeverEndsTheSession()
+    {
+        // The control for the test above: a stop the registry asked for keeps the registry caller's reason.
+        await using var harness = Harness.Create();
+        var sessionId = Guid.NewGuid();
+
+        _ = harness.Coordinator.Start(sessionId, processId: 4321);
+        await harness.Source.WaitForCaptureAsync(sessionId, Bound);
+        _ = await harness.Coordinator.StopAsync(sessionId, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => !harness.Coordinator.IsCapturing(sessionId), Bound, "The stop released the session.");
+        await harness.Coordinator.DisposeAsync();
+
+        AssertEx.True(harness.Registry.Ends.IsEmpty, "A requested stop does not end the session a second time.");
+    }
+
     /// <summary>The coordinator wired to the two fakes, disposed together.</summary>
     private sealed class Harness : IAsyncDisposable
     {
@@ -429,8 +463,14 @@ public sealed class ProcessAudioCaptureCoordinatorTests
         public Task StartLiveSessionAsync(Guid sessionId, LiveSessionOptions options, CancellationToken cancellationToken) =>
             throw new NotSupportedException("The capture coordinator never starts a live session.");
 
-        public Task EndAsync(Guid sessionId, LiveEndReason reason, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("These requested-stop cases must not replace the registry caller's termination reason.");
+        /// <summary>Every <see cref="EndAsync" /> call as <c>{sessionId}:{reason}</c>, in order. Only a capture that ended on its own may make one.</summary>
+        public ConcurrentQueue<string> Ends { get; } = new();
+
+        public Task EndAsync(Guid sessionId, LiveEndReason reason, CancellationToken cancellationToken)
+        {
+            Ends.Enqueue($"{sessionId}:{reason}");
+            return Task.CompletedTask;
+        }
 
         public void NoteBrowserAttached(Guid sessionId, string connectionId) =>
             throw new NotSupportedException("A native capture is not a browser connection.");
@@ -502,6 +542,9 @@ public sealed class ProcessAudioCaptureCoordinatorTests
 
         public int FramesToPush { get; set; }
 
+        /// <summary>When set, the capture returns on its own after pushing, as it does when the target process exits.</summary>
+        public bool EndsOnItsOwn { get; set; }
+
         public int CaptureCalls => Volatile.Read(ref _captureCalls);
 
         public ValueTask<IReadOnlyList<ProcessAudioCaptureCandidate>> ListCandidatesAsync(CancellationToken cancellationToken) =>
@@ -516,6 +559,11 @@ public sealed class ProcessAudioCaptureCoordinatorTests
             for (var frame = 0; frame < FramesToPush && !cancellationToken.IsCancellationRequested; frame++)
             {
                 await _registry.PushAudioAsync(sessionId, TranscriptChannel.Others, new byte[320], cancellationToken);
+            }
+
+            if (EndsOnItsOwn)
+            {
+                return;
             }
 
             // Runs until stopped — a registration on the token rather than any kind of timer, so nothing here waits

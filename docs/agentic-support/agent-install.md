@@ -419,6 +419,7 @@ Remove `~/.claude/skills/xe-local-ai-engine` and
 | 7 | The unlock page's port was taken after an unlock; start the engine again. |
 | 8 | The node key cannot open the database (key mismatch, or `node.key` missing next to an existing database). |
 | 9 | Database migration failed; stderr names how to restore or move the database aside. |
+| 10 | Data directory unusable (not creatable or not writable), or `node-settings.json` present but unreadable; stderr names the path. |
 
 ### Installer
 

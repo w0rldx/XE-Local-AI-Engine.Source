@@ -286,7 +286,9 @@
 			"knowledgeUnavailableText": "Ihre Wissensdatenbank wurde für diese Nachricht nicht verwendet, weil kein Einbettungsmodell installiert ist und Ihre Dokumente daher nicht indiziert werden konnten.",
 			"outputLimitReachedText": "Die Antwort wurde an der Längengrenze beendet, bevor das Modell fertig war.",
 			"toolCallAsTextText": "Das Modell hat einen Tool-Aufruf als Text geschrieben, statt das Tool aufzurufen. Der Aufruf wurde daher nicht ausgeführt, und es gibt keine Antwort.",
-			"toolCallInReasoningText": "Das Modell hat versucht, ein Tool innerhalb seiner Überlegungen aufzurufen, wo der Aufruf nicht ausgeführt werden kann, und hat ohne Antwort aufgehört."
+			"toolCallInReasoningText": "Das Modell hat versucht, ein Tool innerhalb seiner Überlegungen aufzurufen, wo der Aufruf nicht ausgeführt werden kann, und hat ohne Antwort aufgehört.",
+			"attachmentsTruncated": "Anhang abgeschnitten",
+			"attachmentsTruncatedText": "Einige angehängte Dateien waren zu lang für das Anhangslimit, deshalb hat das Modell nur ihren Anfang erhalten."
 		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus.",
 		"webReview": {
@@ -1204,6 +1206,11 @@
 			},
 			"streaming": "Antwort wird empfangen",
 			"defaultAgentName": "Standard-Assistent",
+			"localDefaultModel": {
+				"label": "Lokaler Standard",
+				"displayName": "Lokaler Laufzeit-Standard",
+				"statusLabel": "Von der Laufzeit gewähltes Modell"
+			},
 			"agentSelector": {
 				"search": "Agenten suchen...",
 				"hint": "Einen auf diesem Knoten definierten Agenten auswählen.",
@@ -1294,7 +1301,8 @@
 						"pending": "Ausstehend",
 						"unsupported": "Nicht unterstützt",
 						"failed": "Fehlgeschlagen",
-						"unknown": "Unbekannt"
+						"unknown": "Unbekannt",
+						"noText": "Kein Text gefunden"
 					},
 					"uploadBatchFailed": "Dateien konnten nicht hochgeladen werden."
 				}
@@ -1500,7 +1508,8 @@
 				"noticeUnreviewed": "Mit automatischer Übernahme werden die Webanfragen des Modells in dieser Unterhaltung ohne Rückfrage gesendet, und ihre Ergebnisse gehen an das Modell, ohne dass sie Ihnen vorher angezeigt werden.",
 				"noticeReversible": "Sie können die Funktion jederzeit wieder ausschalten.",
 				"confirm": "Automatische Übernahme aktivieren"
-			}
+			},
+			"stoppedWhileThinking": "Beim Nachdenken gestoppt"
 		},
 		"clientNodes": {
 			"fields": {
@@ -2864,6 +2873,7 @@
 				"uvVersion": "uv {{version}}",
 				"uvPresent": "Installiert",
 				"uvMissing": "Noch nicht heruntergeladen",
+				"uvUnsupported": "Auf dieser Plattform nicht verfügbar",
 				"pythonInstallsTitle": "Installierte Python-Interpreter",
 				"noPythonInstalls": "Noch keine installiert.",
 				"pythonMinor": "Python {{version}}",
@@ -3541,7 +3551,8 @@
 				"completionTokens": "Antwort-Tokens",
 				"reasoningTokens": "Reasoning-Tokens",
 				"runCount": "Läufe",
-				"estimatedCost": "Gesch. Kosten"
+				"estimatedCost": "Gesch. Kosten",
+				"notReported": "Nicht gemeldet"
 			},
 			"daily": {
 				"title": "Tägliche Token-Nutzung",
@@ -4289,7 +4300,9 @@
 					"startInvalid": "Die Startzeit ist ungültig",
 					"repeatCountInvalid": "Die Anzahl der Wiederholungen muss eine positive ganze Zahl sein",
 					"maxRuntimeInvalid": "Die maximale Laufzeit muss eine positive ganze Zahl in Sekunden sein",
-					"endInvalid": "Die Endzeit ist ungültig"
+					"endInvalid": "Die Endzeit ist ungültig",
+					"templateRequired": "Wähle eine Vorlage",
+					"timeZoneRequired": "Eine Zeitzone ist erforderlich"
 				}
 			},
 			"runs": {
@@ -8050,7 +8063,8 @@
 				"hint": "Segmente erscheinen, sobald die Laufzeit sie festschreibt. Audio wird nie gespeichert.",
 				"waiting": "Es wird zugehört — das erste Segment erscheint, sobald genug Sprache aufgenommen wurde.",
 				"showPartials": "Vorläufigen Text anzeigen",
-				"partialAttributed": "{{channel}}: {{text}}"
+				"partialAttributed": "{{channel}}: {{text}}",
+				"sourceQuiet": "Seit {{seconds}} s kein Audio von der aufgenommenen Anwendung. Die Sitzung läuft weiter und setzt fort, sobald wieder etwas abgespielt wird."
 			},
 			"capture": {
 				"start": "Aufnahme starten",
@@ -8500,6 +8514,7 @@
 			"setupButton": "Daten schützen",
 			"recoveryRevealTitle": "Wiederherstellungscode jetzt sichern",
 			"recoveryRevealWarning": "Dieser Code wird nur dieses eine Mal angezeigt. Wenn du dein Admin-Passwort vergisst, ist er der einzige Weg, diese Node zu entsperren. Ohne beides lassen sich die Daten der Node nicht wiederherstellen.",
+			"recoveryRotated": "Das ist dein neuer Wiederherstellungscode. Bewahre den eben verwendeten auf, bis du dich mit dem neuen Passwort angemeldet hast: Wurde das Zurücksetzen nicht abgeschlossen, gilt weiterhin der alte Code.",
 			"recoverySavedLabel": "Ich habe diesen Wiederherstellungscode gesichert",
 			"continueButton": "Weiter"
 		}

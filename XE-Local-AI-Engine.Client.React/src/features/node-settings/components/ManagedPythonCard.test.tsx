@@ -109,6 +109,46 @@ describe("ManagedPythonCard", () => {
 		expect(screen.getByText(copy.uvMissing)).toBeTruthy();
 	});
 
+	// 5.5: on a platform no environment supports, uv is never downloaded; "not downloaded yet" promised otherwise.
+	it("says uv is not available on this platform when every environment is unsupported", async () => {
+		server.use(
+			jsonRoute(
+				"get",
+				statusPath,
+				status(
+					[
+						environment("training", { state: "Unsupported", installed: false }),
+						environment("compute", { state: "Unsupported", installed: false }),
+					],
+					{ uvPresent: false, pythonInstalls: [] },
+				),
+			),
+		);
+		renderWithProviders(<ManagedPythonCard />, { withRouter: true });
+
+		expect((await screen.findByTestId("managed-python-uv-badge")).textContent).toBe(copy.uvUnsupported);
+		expect(screen.queryByText(copy.uvMissing)).toBeNull();
+	});
+
+	it("keeps saying uv is not downloaded yet while one environment is supported", async () => {
+		server.use(
+			jsonRoute(
+				"get",
+				statusPath,
+				status(
+					[
+						environment("training", { state: "Unsupported", installed: false }),
+						environment("compute", { state: "NotProvisioned", installed: false }),
+					],
+					{ uvPresent: false, pythonInstalls: [] },
+				),
+			),
+		);
+		renderWithProviders(<ManagedPythonCard />, { withRouter: true });
+
+		expect((await screen.findByTestId("managed-python-uv-badge")).textContent).toBe(copy.uvMissing);
+	});
+
 	it("links the Training row to the Training page instead of offering actions", async () => {
 		server.use(jsonRoute("get", statusPath, status([environment("training")])));
 		renderWithProviders(<ManagedPythonCard />, { withRouter: true });

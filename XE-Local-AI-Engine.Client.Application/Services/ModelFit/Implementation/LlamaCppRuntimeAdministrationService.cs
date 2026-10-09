@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using System.Runtime.InteropServices;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -14,6 +15,9 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
 
     private const string KeepModelWarmBlockedMessage =
         "Disable Keep Model Warm before changing the llama.cpp runtime, then eject any running models and retry.";
+
+    private const string EjectRunningModelsMessage =
+        "Stop or eject all running llama.cpp models before updating the runtime.";
 
     private static readonly TimeSpan MinRefreshInterval = TimeSpan.FromSeconds(60);
     private readonly Lock _taskGate = new();
@@ -31,6 +35,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
     private readonly LlamaServerRuntimeOverrideOptions _overrideOptions;
     private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly ILogger<LlamaCppRuntimeAdministrationService> _logger;
+    private readonly IRuntimeDeviceAudit _deviceAudit;
     private Task? _ownedAcquisitionTask;
 
     public LlamaCppRuntimeAdministrationService(ILlamaCppBinaryManager binaryManager,
@@ -46,9 +51,12 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         LlamaServerRuntimeOverrideOptions overrideOptions,
         IHostApplicationLifetime applicationLifetime,
         ILogger<LlamaCppRuntimeAdministrationService> logger,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IRuntimeDeviceAudit deviceAudit)
     {
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(deviceAudit);
+        _deviceAudit = deviceAudit;
         _binaryManager = binaryManager;
         _releaseCatalog = releaseCatalog;
         _variantSelector = variantSelector;
@@ -116,21 +124,27 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         };
     }
 
+    // Lease-free but gate-SHARED like a spawn: a running llama-server or Keep Model Warm never blocks it, while an
+    // install, update, adopt or remove holding the exclusive lease does, so ensure never records over what it installed.
     public async Task<LlamaCppRuntimeMutationResult> EnsureAsync(GpuVariant variant,
         CancellationToken cancellationToken = default)
     {
-        var admission = await TryAcquirePrebuiltMutationAsync(variant, cancellationToken);
-        await using var lease = admission.Lease;
-        if (lease is null || admission.BlockedMessage is not null)
+        var blockedMessage = await FindPrebuiltMutationBlockAsync(variant, cancellationToken);
+        if (blockedMessage is not null)
         {
             return LlamaCppRuntimeMutationResult.Rejected(LlamaCppRuntimeAdministrationFailure.Busy,
-                admission.BlockedMessage ?? "The llama.cpp runtime is busy with another build or runtime change.",
-                admission.RunningProcessCount);
+                blockedMessage,
+                _processSupervisor.CountRunningProcesses());
         }
 
         try
         {
-            var binary = await _binaryManager.EnsureBinaryAsync(variant, lease, cancellationToken);
+            LlamaBinary binary;
+            using (await _processSupervisor.EnterRuntimeMutationSharedAsync(cancellationToken))
+            {
+                binary = await _binaryManager.EnsureBinaryAsync(variant, cancellationToken);
+            }
+
             var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken);
             return LlamaCppRuntimeMutationResult.Success(ToView(binary), recommendedTag);
         }
@@ -272,8 +286,6 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         };
     }
 
-    // An ensureVariant equal to the installed source build's variant passes the source-build block: EnsureBinaryAsync
-    // serves that build, still under the lease and the active-build and running-process checks below.
     private async Task<PrebuiltMutationAdmission> TryAcquirePrebuiltMutationAsync(GpuVariant? ensureVariant,
         CancellationToken cancellationToken)
     {
@@ -290,35 +302,28 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         var lease = await _processSupervisor.TryAcquireRuntimeMutationLeaseAsync(cancellationToken);
         if (lease is null)
         {
+            // The gate refuses the lease while any llama-server runs, so name that blocker instead of a generic busy text.
+            var running = _processSupervisor.CountRunningProcesses();
             return new PrebuiltMutationAdmission
             {
                 Lease = null,
-                RunningProcessCount = _processSupervisor.CountRunningProcesses(),
-                BlockedMessage = "The llama.cpp runtime is busy with another build or runtime change. Try again after it completes."
+                RunningProcessCount = running,
+                BlockedMessage = running > 0
+                    ? EjectRunningModelsMessage
+                    : "The llama.cpp runtime is busy with another build or runtime change. Try again after it completes."
             };
         }
 
         var transferred = false;
         try
         {
-            var installed = await _installedRuntimeStore.ReadAsync(cancellationToken);
-            if (installed?.SourceBuildPath is { Length: > 0 } && installed.Variant != ensureVariant)
+            if (await FindPrebuiltMutationBlockAsync(ensureVariant, cancellationToken) is { } blockedMessage)
             {
                 return new PrebuiltMutationAdmission
                 {
                     Lease = null,
                     RunningProcessCount = _processSupervisor.CountRunningProcesses(),
-                    BlockedMessage = SourceBuildInstalledMessage
-                };
-            }
-
-            if (_sourceBuildActivity.ActiveBuildId is not null)
-            {
-                return new PrebuiltMutationAdmission
-                {
-                    Lease = null,
-                    RunningProcessCount = _processSupervisor.CountRunningProcesses(),
-                    BlockedMessage = "Wait for the active llama.cpp source build to finish or cancel it before installing a prebuilt runtime."
+                    BlockedMessage = blockedMessage
                 };
             }
 
@@ -329,7 +334,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
                 {
                     Lease = null,
                     RunningProcessCount = runningProcessCount,
-                    BlockedMessage = "Stop or eject all running llama.cpp models before updating the runtime."
+                    BlockedMessage = EjectRunningModelsMessage
                 };
             }
 
@@ -350,6 +355,21 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         }
     }
 
+    // An ensureVariant equal to the installed source build's variant passes the source-build block: EnsureBinaryAsync
+    // serves that build.
+    private async Task<string?> FindPrebuiltMutationBlockAsync(GpuVariant? ensureVariant, CancellationToken cancellationToken)
+    {
+        var installed = await _installedRuntimeStore.ReadAsync(cancellationToken);
+        if (installed?.SourceBuildPath is { Length: > 0 } && installed.Variant != ensureVariant)
+        {
+            return SourceBuildInstalledMessage;
+        }
+
+        return _sourceBuildActivity.ActiveBuildId is not null
+            ? "Wait for the active llama.cpp source build to finish or cancel it before installing a prebuilt runtime."
+            : null;
+    }
+
     private async Task RunOwnedAcquisitionAsync(GpuVariant variant,
         ILlamaServerRuntimeMutationLease lease,
         CancellationToken applicationStopping)
@@ -357,6 +377,17 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
         await using (lease)
         {
             await _binaryManager.EnsureBinaryAsync(variant, lease, applicationStopping);
+        }
+
+        // Pay the first --list-devices probe now rather than on the first chat: on a cold Windows CUDA driver it can run
+        // to its full timeout, and the probe remembers a failure, so the chat path no longer waits for it.
+        try
+        {
+            await _deviceAudit.GetAuditAsync(forceRefresh: true, applicationStopping);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogDebug(exception, "Warming the runtime device audit after acquiring {Variant} failed.", variant);
         }
     }
 

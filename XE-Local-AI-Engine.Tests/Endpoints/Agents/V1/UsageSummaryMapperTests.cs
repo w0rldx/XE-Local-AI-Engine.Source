@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Unit)]
 public sealed class UsageSummaryMapperTests
 {
-    private static TokenUsageAggregateRecord Bucket(string model, string provider, long day, int runs, long prompt, long completion, long reasoning, long total)
+    private static TokenUsageAggregateRecord Bucket(string model, string provider, long day, int runs, long prompt, long completion, long? reasoning, long total)
     {
         return new TokenUsageAggregateRecord
         {
@@ -63,6 +63,23 @@ public sealed class UsageSummaryMapperTests
         // A local bucket is always free, even though the resolver has non-zero rates.
         AssertEx.Equal(expected: 0d, response.EstimatedCostUsd);
         AssertEx.Equal("USD", response.Currency);
+    }
+
+    /// <summary>Local providers often report no reasoning count; the totals must say "not reported", not 0.</summary>
+    [Test]
+    public void ToTotalsAndToByProvider_KeepReasoningNull_UntilABucketReportsIt()
+    {
+        var resolver = Resolver(inputPer1M: 1, outputPer1M: 1);
+        TokenUsageAggregateRecord[] unreported =
+        [
+            Bucket("llama-x", AgentUsageProviders.Local, day: 0, runs: 1, prompt: 1, completion: 1, reasoning: null, total: 2),
+            Bucket("llama-y", AgentUsageProviders.Local, day: 0, runs: 1, prompt: 1, completion: 1, reasoning: null, total: 2)
+        ];
+        TokenUsageAggregateRecord[] mixed = [.. unreported, Bucket("gpt-5", AgentUsageProviders.Codex, day: 0, runs: 1, prompt: 1, completion: 1, reasoning: 7, total: 9)];
+
+        AssertEx.Null(unreported.ToTotals(resolver).ReasoningTokens);
+        AssertEx.Null(unreported.ToByProvider(resolver).Single().ReasoningTokens);
+        AssertEx.Equal(expected: 7L, mixed.ToTotals(resolver).ReasoningTokens);
     }
 
     [Test]

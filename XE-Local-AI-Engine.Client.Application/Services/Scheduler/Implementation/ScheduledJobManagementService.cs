@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 
 using System.Globalization;
+using System.Text.Json;
 using Quartz;
 using Quartz.Plugin.Interrupt;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -246,7 +247,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         return deleted;
     }
 
-    public async Task TriggerNowAsync(Guid id,
+    public async Task<Guid> TriggerNowAsync(Guid id,
         IReadOnlyDictionary<string, string>? parameterOverrides = null,
         CancellationToken cancellationToken = default)
     {
@@ -294,11 +295,13 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
 
         // Per-fire overrides ride the firing trigger's JobDataMap, never the stored definition, and the dispatcher decides which keys
         // may override. Quartz honors the non-overlapping dispatch job's attribute, so an overlapping manual fire is serialized there.
+        var fireId = Guid.NewGuid();
         var fireDataMap = new JobDataMap
         {
             // Every fire through here is an operator/agent "Run now", which is the only thing that distinguishes it from
             // the cron fire of the same job once both are rows in the run history.
-            [SchedulerJobKeys.ManualFireKey] = bool.TrueString
+            [SchedulerJobKeys.ManualFireKey] = bool.TrueString,
+            [SchedulerJobKeys.ManualFireIdKey] = fireId.ToString("D")
         };
 
         if (parameterOverrides is not null)
@@ -315,6 +318,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
             definition.Id,
             definition.TemplateId,
             parameterOverrides?.Count ?? 0);
+        return fireId;
     }
 
     public async Task<int> ReconcileDurableJobsAsync(CancellationToken cancellationToken = default)
@@ -471,6 +475,18 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         ValidateScheduleFields(input);
         ValidateTimeZone(input.TimeZoneId);
 
+        if (!string.IsNullOrWhiteSpace(input.Parameters))
+        {
+            try
+            {
+                using var _ = JsonDocument.Parse(input.Parameters);
+            }
+            catch (JsonException exception)
+            {
+                throw new ScheduledJobValidationException("Parameters must be valid JSON.", exception);
+            }
+        }
+
         if (_templateRegistry.TryGetHandler(input.TemplateId, out var handler))
         {
             handler.ValidateParameters(input.Parameters);
@@ -498,7 +514,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
                     throw new ScheduledJobValidationException("A cron expression is required for a cron schedule.");
                 }
 
-                if (!CronExpression.IsValidExpression(input.CronExpression))
+                if (!CronExpression.IsValidExpression(input.CronExpression) || ContainsQuartzWildcardValue(input.CronExpression))
                 {
                     throw new ScheduledJobValidationException("The cron expression is not valid.");
                 }
@@ -534,6 +550,35 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
             default:
                 throw new ScheduledJobValidationException($"Schedule kind '{input.ScheduleKind}' is not supported.");
         }
+    }
+
+    /// <summary>Whether the expression holds the number 99, which is out of range in every cron field.</summary>
+    /// <remarks>
+    ///     Quartz stores <c>*</c> as the internal value 99 and skips its range check for that value, so a literal 99
+    ///     parses as <c>*</c>: <c>99 99 99 * * ?</c> fires every second.
+    /// </remarks>
+    private static bool ContainsQuartzWildcardValue(string expression)
+    {
+        for (var start = 0; start < expression.Length; start++)
+        {
+            if (!char.IsAsciiDigit(expression[start]) || (start > 0 && char.IsAsciiDigit(expression[start - 1])))
+            {
+                continue;
+            }
+
+            var end = start;
+            while (end < expression.Length && char.IsAsciiDigit(expression[end]))
+            {
+                end++;
+            }
+
+            if (int.TryParse(expression.AsSpan(start, end - start), NumberStyles.None, CultureInfo.InvariantCulture, out var value) && value == 99)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

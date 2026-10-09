@@ -22,6 +22,9 @@ public sealed partial class Program
     /// <summary>Exit code: the database migration pass failed; stderr names how to restore or move the database aside.</summary>
     internal const int DatabaseMigrationFailedExitCode = 9;
 
+    /// <summary>Exit code: the data directory is not usable (not writable or not creatable) or node-settings.json is present but unreadable.</summary>
+    internal const int DataDirectoryUnusableExitCode = 10;
+
     /// <summary>
     ///     Unwraps a locked v2 <c>node.key</c> before the host is built (ADR 0018). A CLI one-shot unlocks from what it
     ///     was given and never serves; anything else runs the <see cref="VaultUnlockHost" /> pre-host until the operator
@@ -144,14 +147,14 @@ public sealed partial class Program
     {
         await using var scope = services.CreateAsyncScope();
         var result = await scope.ServiceProvider.GetRequiredService<INodeAuthService>()
-                                .ResetAdminPasswordAsync(outcome.ResetPassword!, outcome.ResetRecoveryCode, CancellationToken.None);
+                                .ResetAdminPasswordAsync(outcome.ResetPassword!, outcome.ResetRecoveryCode, outcome.ResetNewRecoveryCode, CancellationToken.None);
         if (result.Succeeded)
         {
             Log.Information("Admin password reset with the recovery code; sign in with the new password.");
         }
         else
         {
-            Log.Error("The recovery-code unlock succeeded but the admin password reset failed; the previous password still applies: {Errors}",
+            Log.Error("The recovery-code unlock succeeded but the admin password reset failed; the previous password and recovery code still apply, and the new recovery code shown on the unlock page is void: {Errors}",
                 string.Join(" ", result.Errors));
         }
     }

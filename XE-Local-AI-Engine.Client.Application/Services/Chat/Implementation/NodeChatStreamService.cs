@@ -33,6 +33,9 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     private const string AttachmentsNotSentNoticeMessage =
         "Some attached files were not sent to the model: no text could be read from them, or the model cannot see images.";
 
+    private const string AttachmentsTruncatedNoticeMessage =
+        "Some attached files were too long for the attachment limit, so the model received only their beginning.";
+
     private const string AttachmentsNotSentWithoutFileToolsNoticeMessage =
         "Some attached files were not sent to the model: this turn offers tools but not the file tools, so attachment text is left out, or the model cannot see images.";
 
@@ -689,6 +692,19 @@ public sealed class NodeChatStreamService : INodeChatStreamService
                     Kind = TurnNoticeKind.AttachmentsNotSent,
                     Message = textAccepted ? AttachmentsNotSentNoticeMessage : AttachmentsNotSentWithoutFileToolsNoticeMessage,
                     Detail = string.Join(", ", unsentAttachments)
+                });
+            }
+
+            // Only plain chat inlines attachment text under the node cap; a tool turn reads the files whole.
+            if (!toolOffer.OfferTools
+                && await _turnContextBuilder.ListTruncatedAttachmentNamesAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken) is { Count: > 0 } truncatedAttachments)
+            {
+                await _eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+                {
+                    InvocationId = requestId,
+                    Kind = TurnNoticeKind.AttachmentsTruncated,
+                    Message = AttachmentsTruncatedNoticeMessage,
+                    Detail = string.Join(", ", truncatedAttachments)
                 });
             }
 

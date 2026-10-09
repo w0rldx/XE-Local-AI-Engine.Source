@@ -26,6 +26,11 @@ export interface NodeVaultConfirmResponse {
 	recoveryCode: string;
 }
 
+// The recovery unlock rotates the code: the one just used stops working, and this one is shown exactly once.
+export interface NodeVaultRecoveryUnlockResponse {
+	recoveryCode: string;
+}
+
 export interface NodeVaultRecoveryUnlockRequest {
 	recoveryCode: string;
 	newPassword: string;

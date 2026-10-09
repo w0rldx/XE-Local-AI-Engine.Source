@@ -56,9 +56,13 @@ public sealed class ModelFitRefreshTriggerTests
         var management = Substitute.For<IScheduledJobManagementService>();
         management.GetJobAsync(jobId, Arg.Any<CancellationToken>())
                   .Returns(JobWithTemplate(jobId, ModelRecommendationCheckHandler.TemplateIdValue));
+        var fireId = Guid.NewGuid();
+        management.TriggerNowAsync(jobId, Arg.Any<IReadOnlyDictionary<string, string>?>(), Arg.Any<CancellationToken>()).Returns(fireId);
         var trigger = new ModelFitRefreshTrigger(management);
 
-        await trigger.TriggerRecommendationRefreshAsync(jobId, cancellationToken: CancellationToken.None);
+        var returned = await trigger.TriggerRecommendationRefreshAsync(jobId, cancellationToken: CancellationToken.None);
+
+        AssertEx.Equal(fireId, returned, "The refresh hands back the scheduler's fire id.");
 
         // No use-case override supplied → the scheduler is fired with a null override map (the definition's baked
         // use-case is used unchanged), back-compat with the prior single-arg behavior.

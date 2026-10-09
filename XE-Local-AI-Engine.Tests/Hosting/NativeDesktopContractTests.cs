@@ -73,4 +73,35 @@ public sealed class NativeDesktopContractTests
         AssertEx.Equal(NativeDesktopDocumentPolicy.ContentPolicy, GtkDocumentPolicy.ContentSecurityPolicy);
         AssertEx.Equal(NativeDesktopDocumentPolicy.PermissionsPolicy, GtkDocumentPolicy.PermissionsPolicy);
     }
+
+    [Test]
+    public void StartupFailureText_MentionsWebView2OnlyForTheWindowFailure()
+    {
+        AssertEx.False(DesktopText.StartupFailed.Contains("WebView2", StringComparison.Ordinal),
+            "An engine that never reached readiness says nothing about the WebView2 runtime.");
+        AssertEx.Contains(DesktopText.WindowFailed, "WebView2");
+    }
+
+    [Test]
+    public void StartupFailureView_OffersTheWebView2DownloadOnlyAfterTheEngineWasReady()
+    {
+        var source = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "DesktopApplication.cs"));
+
+        AssertEx.Contains(source, "includeWebViewLink: engineReady && OperatingSystem.IsWindows()");
+        AssertEx.False(source.Contains("includeWebViewLink: OperatingSystem.IsWindows()", StringComparison.Ordinal),
+            "An engine failure before readiness must not offer the WebView2 download.");
+    }
+
+    [Test]
+    public void ShellWindows_UseOneProductTitle()
+    {
+        var desktop = RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop");
+        var stray = Directory.EnumerateFiles(desktop, "*.cs", SearchOption.AllDirectories)
+                             .Where(static path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                             .Where(static path => File.ReadAllText(path).Contains("\"XE AI-Engine\"", StringComparison.Ordinal))
+                             .ToList();
+
+        AssertEx.Equal("XE Local AI Engine", DesktopText.Title);
+        AssertEx.Empty(stray, "Every shell window and the tray take DesktopText.Title.");
+    }
 }

@@ -134,6 +134,30 @@ public sealed class NodeAuthVaultTests
     }
 
     [Test]
+    public async Task ResetAdminPassword_RotatesTheRecoveryCode_SoTheOldOneIsRejectedAndTheNewOneWorks()
+    {
+        await using var factory = CreateManagedFactory();
+        using var client = factory.CreateClient();
+        var oldCode = await SetupAsync(client);
+        var createdUtc = VaultFileCodec.Read(await File.ReadAllBytesAsync(KeyPath(factory))).CreatedUtc;
+
+        var reset = await ResetAsync(factory, oldCode);
+
+        AssertEx.True(reset.Succeeded, string.Join(" ", reset.Errors));
+        var newCode = AssertEx.NotNull(reset.RecoveryCode, "A recovery reset must hand back the rotated code.");
+        AssertEx.NotEqual(oldCode, newCode);
+        var file = VaultFileCodec.Read(await File.ReadAllBytesAsync(KeyPath(factory)));
+        _ = AssertEx.Throws<VaultUnlockException>(() => VaultFileCodec.UnwrapWithRecovery(file, oldCode));
+        AssertSecret(VaultFileCodec.UnwrapWithRecovery(file, newCode));
+        AssertEx.Equal(createdUtc, file.CreatedUtc, "Rotation re-wraps the same vault; it does not re-create it.");
+
+        var reuse = await ResetAsync(factory, oldCode);
+        AssertEx.False(reuse.Succeeded, "The code that proved a reset must not prove a second one.");
+        var again = await ResetAsync(factory, newCode);
+        AssertEx.True(again.Succeeded, string.Join(" ", again.Errors));
+    }
+
+    [Test]
     public async Task ConfirmLegacyVault_WrapsALegacyKeyOnceAndThenAnswersConflict()
     {
         await using var factory = CreateManagedFactory();
@@ -341,7 +365,7 @@ public sealed class NodeAuthVaultTests
     {
         await using var scope = factory.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<INodeAuthService>()
-                          .ResetAdminPasswordAsync(NewPassword, recoveryCode, CancellationToken.None);
+                          .ResetAdminPasswordAsync(NewPassword, recoveryCode, newRecoveryCode: null, CancellationToken.None);
     }
 
     private static async Task<string> GetVaultStatusAsync(HttpClient client)
@@ -431,8 +455,8 @@ public sealed class NodeAuthVaultTests
         public Task<VaultChange?> RewrapAsync(string currentPassword, string newPassword, CancellationToken cancellationToken) =>
             _inner.RewrapAsync(currentPassword, newPassword, cancellationToken);
 
-        public Task<VaultChange?> RewrapWithRecoveryAsync(string recoveryCode, string newPassword, CancellationToken cancellationToken) =>
-            _inner.RewrapWithRecoveryAsync(recoveryCode, newPassword, cancellationToken);
+        public Task<VaultChange?> RewrapWithRecoveryAsync(string recoveryCode, string newPassword, string? newRecoveryCode, CancellationToken cancellationToken) =>
+            _inner.RewrapWithRecoveryAsync(recoveryCode, newPassword, newRecoveryCode, cancellationToken);
 
         public Task RestoreAsync(VaultChange change, CancellationToken cancellationToken) =>
             _inner.RestoreAsync(change, cancellationToken);

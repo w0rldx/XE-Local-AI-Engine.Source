@@ -56,6 +56,42 @@ public sealed class LlamaLayerPlacementTests
     }
 
     [Test]
+    public void Sniffer_CudaBuildFallenBackToCpu_ReportsNoLayersOffloaded()
+    {
+        // The Windows tester's CPU-fallback load: the banner still claims 41/41, but only host buffers were allocated.
+        var sniffer = new LlamaServerLayerPlacementSniffer();
+        foreach (var line in new[]
+                 {
+                     "0.00.300.100 I load_tensors: loading model tensors, this can take a while... (mmap = true)",
+                     "0.00.408.696 I load_tensors: offloading output layer to GPU",
+                     "0.00.408.700 I load_tensors: offloading 40 repeating layers to GPU",
+                     "0.00.408.714 I load_tensors: offloaded 41/41 layers to GPU",
+                     "0.00.408.720 I load_tensors:   CPU_Mapped model buffer size =  4685.30 MiB",
+                     "0.00.408.721 I load_tensors:   CPU_REPACK model buffer size =  3474.00 MiB"
+                 })
+        {
+            sniffer.Add(line);
+        }
+
+        AssertEx.True(sniffer.TryGetObservation(out var offloaded, out var total));
+        AssertEx.Equal(expected: 0, offloaded);
+        AssertEx.Equal(expected: 41, total);
+    }
+
+    [Test]
+    public void Sniffer_GpuBufferBesideTheMappedHostBuffer_KeepsTheBannerCount()
+    {
+        var sniffer = new LlamaServerLayerPlacementSniffer();
+        sniffer.Add("0.00.408.714 I load_tensors: offloaded 41/41 layers to GPU");
+        sniffer.Add("0.00.408.720 I load_tensors:   CPU_Mapped model buffer size =   417.66 MiB");
+        sniffer.Add("0.00.408.721 I load_tensors:        CUDA0 model buffer size =  4267.64 MiB");
+
+        AssertEx.True(sniffer.TryGetObservation(out var offloaded, out var total));
+        AssertEx.Equal(expected: 41, offloaded);
+        AssertEx.Equal(expected: 41, total);
+    }
+
+    [Test]
     public void Report_ReloadingAModel_ReplacesItsEarlierReading()
     {
         // The staleness this prevents: model A loads alone and fits entirely, two more models load beside it, then A

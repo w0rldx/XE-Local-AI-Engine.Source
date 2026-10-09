@@ -66,7 +66,8 @@ public interface IScheduledJobManagementService
     ///     <c>JobDataMap</c>; they never mutate the stored definition, and the dispatcher decides which of them may
     ///     override a stored parameter. A <c>null</c> or empty map fires the stored parameters exactly.
     /// </remarks>
-    Task TriggerNowAsync(Guid id,
+    /// <returns>The id stamped on this fire, which its published run events carry as <c>ManualFireId</c>.</returns>
+    Task<Guid> TriggerNowAsync(Guid id,
         IReadOnlyDictionary<string, string>? parameterOverrides = null,
         CancellationToken cancellationToken = default);
 

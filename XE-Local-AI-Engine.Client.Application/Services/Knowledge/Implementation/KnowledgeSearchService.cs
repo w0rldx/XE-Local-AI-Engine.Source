@@ -35,6 +35,9 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
     /// <summary>Stable EventId of the Debug entry logged when the rerank misses the retrieval deadline and fusion order is kept.</summary>
     public const int RerankBudgetExpiredEventId = 4903;
 
+    /// <summary>Stable EventId of the Debug line logged when no embedding model is installed and search stays lexical.</summary>
+    public const int NoEmbedderInstalledEventId = 4904;
+
     /// <summary>Provenance tag stamped on every hit from this retrieval surface.</summary>
     private const string SourceTag = "knowledge-base";
 
@@ -431,6 +434,13 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
             // stamped with it. Confidence is irrelevant here — any embedding failure degrades search to lexical-only.
             var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken);
             var embeddingModelName = resolution.Name;
+            if (!resolution.IsConfident)
+            {
+                // No installed embedder: a generator here only reaches a capacity admission and a failing spawn on every search.
+                NoEmbedderInstalled(_logger, embeddingModelName);
+                return new QueryEmbedding(ReadOnlyMemory<float>.Empty, embeddingModelName, KnowledgeEmbeddingVectorPolicy.LegacyIdentity);
+            }
+
             var cacheFamilyIdentity = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, _options.EmbeddingVectorMode);
             if (_queryEmbeddingCache.TryGet(cacheFamilyIdentity, query, out var cached)
                 && KnowledgeEmbeddingVectorPolicy.MatchesCurrentPolicy(cached.VectorIdentity,
@@ -630,6 +640,10 @@ public sealed partial class KnowledgeSearchService : IKnowledgeSearchService
     [LoggerMessage(EventId = QueryEmbeddingUnavailableEventId, Level = LogLevel.Warning,
         Message = "Knowledge search query embedding unavailable; returning lexical results only. Exception type: {ExceptionType}.")]
     private static partial void QueryEmbeddingUnavailable(ILogger logger, string exceptionType);
+
+    [LoggerMessage(EventId = NoEmbedderInstalledEventId, Level = LogLevel.Debug,
+        Message = "No installed embedding model matches {ModelName}; knowledge search returns lexical results only.")]
+    private static partial void NoEmbedderInstalled(ILogger logger, string modelName);
 
     [LoggerMessage(EventId = RerankBudgetExpiredEventId, Level = LogLevel.Debug,
         Message = "Knowledge rerank missed the {BudgetMs} ms retrieval budget; keeping fusion order for {PoolSize} candidates.")]

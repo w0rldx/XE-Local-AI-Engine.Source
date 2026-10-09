@@ -135,6 +135,11 @@ internal sealed class ConversationStepContextBound
         var selected = SelectedPathResolver.Resolve(conversation.Messages, conversation.SelectedPath);
         // The send path marks a request whose answer failed, read before compaction drops anything, so count it too.
         var unanswered = ConversationContextBuilder.FindUnansweredUserTurns(selected, anchorSequence);
+        var abandoned = ConversationContextBuilder.FindAbandonedUserTurns(selected, anchorSequence, includeToolHistory);
+        if (abandoned.Count > 0)
+        {
+            selected = [.. selected.Where(message => !abandoned.Contains(message.MessageId))];
+        }
 
         var messages = new List<ChatMessage>(selected.Count + 1);
 

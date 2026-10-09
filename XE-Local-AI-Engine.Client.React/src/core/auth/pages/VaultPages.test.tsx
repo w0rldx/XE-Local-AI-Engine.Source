@@ -49,7 +49,7 @@ describe("vault unlock page", () => {
 		vi.useFakeTimers();
 		installJsdomEnvironmentMocks();
 		authApiMock.unlockNodeVault.mockResolvedValue(undefined);
-		authApiMock.unlockNodeVaultWithRecovery.mockResolvedValue(undefined);
+		authApiMock.unlockNodeVaultWithRecovery.mockResolvedValue({ recoveryCode: "NEWAA-NEWBB-NEWCC" });
 	});
 
 	afterEach(() => {
@@ -128,8 +128,10 @@ describe("vault unlock page", () => {
 		expect(screen.queryByText(vault.errorIncorrectPassword)).toBeNull();
 	});
 
-	it("unlocks with the recovery code and a new password", async () => {
-		authApiMock.getNodeAuthStatus.mockResolvedValue({ setupRequired: false, authenticated: false, vault: "unlocked" });
+	it("unlocks with the recovery code and shows the rotated code only once the real host answers", async () => {
+		authApiMock.getNodeAuthStatus
+			.mockRejectedValueOnce(axiosFailure(503))
+			.mockResolvedValue({ setupRequired: false, authenticated: false, vault: "unlocked" });
 		renderWithMantine(<VaultUnlock />);
 
 		fireEvent.click(screen.getByRole("button", { name: vault.useRecoveryToggle }));
@@ -150,7 +152,43 @@ describe("vault unlock page", () => {
 			newPassword: strongPassword,
 		});
 		expect(authApiMock.unlockNodeVault).not.toHaveBeenCalled();
+		// The pre-host answered before the real host committed the reset: nothing about rotation shows yet.
+		expect(screen.getByText(vault.startingEngine)).toBeTruthy();
+		expect(screen.queryByText(vault.recoveryRotated)).toBeNull();
+		expect(screen.queryByTestId("recovery-code-value")).toBeNull();
+
+		await advance(1_000);
+		expect(screen.getByText(vault.recoveryRotated)).toBeTruthy();
+		expect(screen.getByTestId("recovery-code-value").textContent).toBe("NEWAA-NEWBB-NEWCC");
+		expect(navigateMock).not.toHaveBeenCalled();
+		expect(submitButton(vault.continueButton).disabled).toBe(true);
+
+		fireEvent.click(screen.getByLabelText(vault.recoverySavedLabel));
+		fireEvent.click(submitButton(vault.continueButton));
+		await advance(0);
+
+		expect(screen.queryByTestId("recovery-code-value")).toBeNull();
 		expect(navigateMock).toHaveBeenCalledWith({ to: "/" });
+		expect(authApiMock.getNodeAuthStatus).toHaveBeenCalledTimes(2);
+	});
+
+	it("never shows the rotated code when the real host does not take over", async () => {
+		authApiMock.getNodeAuthStatus.mockRejectedValue({ isAxiosError: true });
+		renderWithMantine(<VaultUnlock />);
+
+		fireEvent.click(screen.getByRole("button", { name: vault.useRecoveryToggle }));
+		fireEvent.change(screen.getByLabelText(new RegExp(`^${vault.recoveryCodeLabel}`)), { target: { value: "ABCDE-FGHIJ" } });
+		fireEvent.change(screen.getByLabelText(new RegExp(`^${vault.newPasswordLabel}`)), { target: { value: strongPassword } });
+		fireEvent.change(screen.getByLabelText(new RegExp(`^${vault.confirmPasswordLabel}`)), {
+			target: { value: strongPassword },
+		});
+		fireEvent.click(submitButton(vault.recoveryUnlockButton));
+		await advance(61_500);
+
+		expect(screen.getByText(vault.errorHandoverTimeout)).toBeTruthy();
+		expect(screen.queryByText(vault.recoveryRotated)).toBeNull();
+		expect(screen.queryByTestId("recovery-code-value")).toBeNull();
+		expect(navigateMock).not.toHaveBeenCalled();
 	});
 
 	it("blocks a weak new password and reports an invalid recovery code", async () => {

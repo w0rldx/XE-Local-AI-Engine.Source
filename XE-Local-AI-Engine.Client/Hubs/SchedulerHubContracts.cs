@@ -44,6 +44,9 @@ internal sealed class SchedulerRunHubMessage
     public required string? ErrorMessage { get; init; }
 
     public required long OccurredAtUtc { get; init; }
+
+    /// <summary>The id a manual trigger returned for this fire (<c>fireId</c> of a recommendation refresh); null for a cron fire.</summary>
+    public Guid? ManualFireId { get; init; }
 }
 
 /// <summary>Run progress push payload.</summary>

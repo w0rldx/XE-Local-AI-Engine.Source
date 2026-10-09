@@ -10,6 +10,7 @@ import {
 	TRANSCRIPTION_PARTIAL_UPDATED,
 	TRANSCRIPTION_SEGMENT_COMMITTED,
 	TRANSCRIPTION_SESSION_STATUS_CHANGED,
+	TRANSCRIPTION_SOURCE_QUIET,
 	type TranscriptionSegmentPush,
 	channelToWire,
 	fromWireChannel,
@@ -18,6 +19,7 @@ import {
 	transcriptionPartialPushSchema,
 	transcriptionSegmentPushSchema,
 	transcriptionSnapshotSchema,
+	transcriptionSourceQuietPushSchema,
 	transcriptionStatusPushSchema,
 } from "@/features/transcription/models/TranscriptionLiveModels";
 
@@ -58,6 +60,11 @@ export interface LiveTranscriptView {
 	 * first progress push: "no report yet" and "caught up" (0) read differently while a stop drains.
 	 */
 	readonly bufferedMs: number | null;
+	/**
+	 * How long the captured application has been silent, from `transcriptionSourceQuiet`. Null while audio flows or
+	 * before the node reported anything. Advisory only: a quiet source never ends the session.
+	 */
+	readonly sourceQuietMs: number | null;
 	/** The watermark every row up to which has actually been delivered. What a reconnect resumes from. */
 	readonly lastSeq: number;
 	readonly replayTruncated: boolean;
@@ -213,6 +220,7 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 		let lastSeq = 0;
 		let status = "";
 		let bufferedMs: number | null = null;
+		let sourceQuietMs: number | null = null;
 		let replayTruncated = false;
 		// A terminal status that arrived live must not be overwritten by a snapshot still reporting `Transcribing`.
 		let liveStatusSeen = false;
@@ -223,6 +231,7 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 				partials: { ...partials },
 				status,
 				bufferedMs,
+				sourceQuietMs,
 				lastSeq,
 				replayTruncated,
 			} satisfies LiveTranscriptView);
@@ -278,6 +287,15 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 			render();
 		};
 
+		const onSourceQuiet = (payload: unknown): void => {
+			const parsed = transcriptionSourceQuietPushSchema.safeParse(payload);
+			if (!parsed.success || !isSameSession(parsed.data.sessionId, sessionId)) {
+				return;
+			}
+			sourceQuietMs = parsed.data.quietMs > 0 ? parsed.data.quietMs : null;
+			render();
+		};
+
 		const onAdmissionClosed = (payload: unknown): void => {
 			const parsed = transcriptionAdmissionClosedPushSchema.safeParse(payload);
 			if (parsed.success && isSameSession(parsed.data.sessionId, sessionId)) {
@@ -292,6 +310,7 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 			}
 			liveStatusSeen = true;
 			status = parsed.data.status;
+			sourceQuietMs = null;
 			setTerminal({ status: parsed.data.status, errorCode: parsed.data.errorCode ?? null });
 			render();
 		};
@@ -384,6 +403,7 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 		connection.on(TRANSCRIPTION_SESSION_STATUS_CHANGED, onStatus);
 		connection.on(TRANSCRIPTION_CATCH_UP_PROGRESS, onCatchUpProgress);
 		connection.on(TRANSCRIPTION_ADMISSION_CLOSED, onAdmissionClosed);
+		connection.on(TRANSCRIPTION_SOURCE_QUIET, onSourceQuiet);
 
 		// A reconnect is a subscription like any other: it re-subscribes from the watermark it has, never from 0, and
 		// goes through the same buffer-then-merge path.
@@ -402,6 +422,7 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 			connection.off(TRANSCRIPTION_SESSION_STATUS_CHANGED, onStatus);
 			connection.off(TRANSCRIPTION_CATCH_UP_PROGRESS, onCatchUpProgress);
 			connection.off(TRANSCRIPTION_ADMISSION_CLOSED, onAdmissionClosed);
+			connection.off(TRANSCRIPTION_SOURCE_QUIET, onSourceQuiet);
 			removeReconnected();
 			removeReconnecting();
 			removeClosed();

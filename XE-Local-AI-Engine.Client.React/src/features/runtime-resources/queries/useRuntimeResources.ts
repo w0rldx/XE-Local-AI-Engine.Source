@@ -4,10 +4,10 @@ import { getRuntimeResourcesOptions } from "@/core/api/generated/@tanstack/react
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toRuntimeResources } from "@/features/runtime-resources/models/RuntimeResourcesModels";
 
-// Poll cadence (ms) for the top-bar gauge. The node caches its sample for about two seconds, so several open tabs
-// share one probe. TanStack Query's default `refetchIntervalInBackground: false` pauses the poll while the document
+// Poll cadence (ms) for the top-bar gauge. Each node sample spawns nvidia-smi (a console host on Windows), so the gauge
+// polls slowly; the node caches its sample for just under this, so several open tabs share one probe. TanStack Query's default `refetchIntervalInBackground: false` pauses the poll while the document
 // is hidden.
-const runtimeResourcesPollIntervalMs = 5000;
+const runtimeResourcesPollIntervalMs = 15_000;
 
 // Live whole-machine RAM and VRAM. `enabled` keeps a signed-out shell from polling an Operator-only endpoint.
 export function useRuntimeResources(enabled = true) {

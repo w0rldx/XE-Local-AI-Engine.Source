@@ -52,11 +52,23 @@ export function UsageTotalsCards({ totals }: { readonly totals: UsageTotalsDto }
 				value={totals.completionTokens}
 				testId="usage-completion-tokens"
 			/>
-			<StatCard
-				label={t("pages.usage.totals.reasoningTokens", "Reasoning tokens")}
-				value={totals.reasoningTokens}
-				testId="usage-reasoning-tokens"
-			/>
+			{totals.reasoningTokens == null ? (
+				// No run in the range reported a reasoning count; 0 would read as "the model did not reason".
+				<StatTile
+					variant="card"
+					label={t("pages.usage.totals.reasoningTokens", "Reasoning tokens")}
+					value={t("pages.usage.totals.notReported", "Not reported")}
+					exactValue={t("pages.usage.totals.notReported", "Not reported")}
+					data-testid="usage-reasoning-tokens"
+					valueTestId="usage-reasoning-tokens-value"
+				/>
+			) : (
+				<StatCard
+					label={t("pages.usage.totals.reasoningTokens", "Reasoning tokens")}
+					value={totals.reasoningTokens}
+					testId="usage-reasoning-tokens"
+				/>
+			)}
 			<StatCard label={t("pages.usage.totals.runCount", "Runs")} value={totals.runCount} testId="usage-run-count" />
 			<StatCard
 				label={t("pages.usage.totals.estimatedCost", "Est. cost")}

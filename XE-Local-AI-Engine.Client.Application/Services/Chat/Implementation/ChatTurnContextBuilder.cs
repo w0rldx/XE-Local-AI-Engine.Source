@@ -243,6 +243,38 @@ public sealed class ChatTurnContextBuilder : IChatTurnContextBuilder
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<string>> ListTruncatedAttachmentNamesAsync(Guid conversationId,
+        IReadOnlyList<Guid>? attachmentFileIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (attachmentFileIds is null || attachmentFileIds.Count == 0)
+        {
+            return [];
+        }
+
+        var requested = attachmentFileIds.ToHashSet();
+        var available = await _uploadedFileStore.ListAsync(conversationId, cancellationToken);
+        var maxChars = await _runtimeSettings.GetMaxInlinedAttachmentCharsAsync(cancellationToken);
+
+        // Sums the stored extracted lengths in the composer's order and ignores its per-file fence overhead, so a file that
+        // fits by under a few hundred characters can still be cut without a notice. Reading the text would close that gap.
+        var truncated = new List<string>();
+        long used = 0;
+        foreach (var file in available.Where(file => requested.Contains(file.FileId)
+                                                     && file.ExtractionStatus == DocumentExtractionStatus.Extracted
+                                                     && file.ExtractedChars is > 0))
+        {
+            used += file.ExtractedChars.GetValueOrDefault();
+            if (used > maxChars)
+            {
+                truncated.Add(file.OriginalFileName);
+            }
+        }
+
+        return truncated;
+    }
+
+    /// <inheritdoc />
     public async Task<KnowledgeChatGrounding?> BuildKnowledgeContextAsync(string query, bool isRegeneratedTurn = false, CancellationToken cancellationToken = default)
     {
         var validation = KnowledgeQueryLimits.ValidateAndNormalize(query, out var normalizedQuery);

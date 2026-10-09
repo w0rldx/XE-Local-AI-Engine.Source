@@ -67,6 +67,22 @@ public sealed class NodeStartupSettings
         };
     }
 
+    /// <summary>
+    ///     The strict startup check: <see langword="true" /> when <c>node-settings.json</c> under <paramref name="dataDirectory" />
+    ///     exists but cannot be read or parsed. A missing file is a fresh node, not a failure.
+    /// </summary>
+    public static async Task<bool> IsStoredFileUnreadableAsync(string dataDirectory, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
+        using var store = new NodeSettingsStore(new FixedNodeDataDirectory(dataDirectory), NullLogger<NodeSettingsStore>.Instance);
+        return await store.LoadStrictAsync(cancellationToken) is null;
+    }
+
+    /// <summary>The operator-facing reason the engine stopped on an unreadable settings file, naming the recovery.</summary>
+    public static string DescribeUnreadableFile(string dataDirectory) =>
+        $"The node settings file '{Path.Combine(dataDirectory, SettingsFileName)}' is present but cannot be read, so the engine stopped "
+        + "instead of starting with default settings. Repair or delete node-settings.json, then start the engine again.";
+
     private sealed class FixedNodeDataDirectory : INodeDataDirectory
     {
         public FixedNodeDataDirectory(string root)

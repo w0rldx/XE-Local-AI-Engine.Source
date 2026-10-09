@@ -534,6 +534,14 @@ describe("ChatMessage actions", () => {
 		expect(screen.queryByTestId("chat-message-error-assistant-1")).toBeNull();
 	});
 
+	it("labels a turn stopped before any answer text, with reasoning, as 'Stopped while thinking'", () => {
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ content: "", reasoning: "Let me work out", status: "cancelled" })} />,
+		);
+
+		expect(screen.getByTestId("chat-message-stopped-assistant-1").textContent).toContain("Stopped while thinking");
+	});
+
 	it("still renders the red error alert for a genuinely failed turn (cancelled classification does not leak)", () => {
 		renderWithProviders(<ChatMessage message={assistantMessage({ content: "", status: "failed", error: "Stream failed." })} />);
 

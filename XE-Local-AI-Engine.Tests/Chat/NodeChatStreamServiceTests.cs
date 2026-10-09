@@ -1971,6 +1971,21 @@ public sealed class NodeChatStreamServiceTests
             "a local model must not trigger the attachments-withheld notice");
         AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsNotSent)),
             "a turn whose every file reached the model must not report one as unsent");
+        AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsTruncated)),
+            "a file within the attachment budget is not truncated");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenAPlainChatFileExceedsTheAttachmentBudget_NamesItInATruncatedNotice()
+    {
+        // The composer cut the text and told only the model; the user saw a complete-looking answer (4.4).
+        var (events, _) = await RunAttachmentEgressAsync(cloudModel: null, allowCloudModelAccess: false, extraFiles:
+        [
+            new ExtraUploadedFile("long.pdf", DocumentExtractionStatus.Extracted, ExtractedChars: StoredNodeSettings.DefaultMaxInlinedAttachmentChars + 1)
+        ]);
+
+        var notice = events.Single(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsTruncated));
+        AssertEx.Equal("long.pdf", notice.NoticeDetail);
     }
 
     [Test]

@@ -104,24 +104,7 @@ public static class VaultFileCodec
         var code = RandomNumberGenerator.GetBytes(VaultKdf.RecoveryCodeLength);
         try
         {
-            var recoverySalt = RandomNumberGenerator.GetBytes(VaultKdf.SaltLength);
-            var recoveryKek = VaultKdf.DeriveRecoveryKek(code, recoverySalt);
-            VaultRecoveryWrap recovery;
-            try
-            {
-                var (nonce, ct) = Wrap(recoveryKek, masterKey, RecoveryAad);
-                recovery = new VaultRecoveryWrap
-                {
-                    Salt = recoverySalt,
-                    Nonce = nonce,
-                    Ct = ct
-                };
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(recoveryKek);
-            }
-
+            var recovery = WrapWithRecovery(masterKey, code);
             var (kdf, passwordWrap) = WrapWithPassword(masterKey, password, iterations);
             var file = new VaultFile
             {
@@ -137,6 +120,57 @@ public static class VaultFileCodec
             {
                 File = file,
                 RecoveryCode = VaultKdf.FormatRecoveryCode(code)
+            };
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(code);
+        }
+    }
+
+    /// <summary>A fresh random recovery code, formatted for the operator; it is shown once and never stored.</summary>
+    public static string NewRecoveryCode()
+    {
+        var code = RandomNumberGenerator.GetBytes(VaultKdf.RecoveryCodeLength);
+        try
+        {
+            return VaultKdf.FormatRecoveryCode(code);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(code);
+        }
+    }
+
+    /// <summary>
+    ///     Re-wraps BOTH slots: the password slot under <paramref name="newPassword" /> and the recovery slot under
+    ///     <paramref name="newRecoveryCode" />, so the code that proved a reset stops working. The file format is unchanged.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="newRecoveryCode" /> is not a well-formed recovery code.</exception>
+    public static VaultFile RewrapWithNewRecovery(VaultFile file,
+        ReadOnlySpan<byte> masterKey,
+        string newPassword,
+        string newRecoveryCode,
+        DateTimeOffset nowUtc,
+        int iterations = VaultKdf.DefaultIterations)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        ValidateMasterKey(masterKey);
+        if (!VaultKdf.TryParseRecoveryCode(newRecoveryCode, out var code))
+        {
+            throw new ArgumentException("The new recovery code is not well formed.", nameof(newRecoveryCode));
+        }
+
+        try
+        {
+            var recovery = WrapWithRecovery(masterKey, code);
+            var (kdf, passwordWrap) = WrapWithPassword(masterKey, newPassword, iterations);
+            return file with
+            {
+                Kdf = kdf,
+                Password = passwordWrap,
+                Recovery = recovery,
+                RewrappedUtc = nowUtc
             };
         }
         finally
@@ -205,6 +239,26 @@ public static class VaultFileCodec
             {
                 CryptographicOperations.ZeroMemory(kek);
             }
+        }
+    }
+
+    private static VaultRecoveryWrap WrapWithRecovery(ReadOnlySpan<byte> masterKey, ReadOnlySpan<byte> code)
+    {
+        var recoverySalt = RandomNumberGenerator.GetBytes(VaultKdf.SaltLength);
+        var recoveryKek = VaultKdf.DeriveRecoveryKek(code, recoverySalt);
+        try
+        {
+            var (nonce, ct) = Wrap(recoveryKek, masterKey, RecoveryAad);
+            return new VaultRecoveryWrap
+            {
+                Salt = recoverySalt,
+                Nonce = nonce,
+                Ct = ct
+            };
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(recoveryKek);
         }
     }
 

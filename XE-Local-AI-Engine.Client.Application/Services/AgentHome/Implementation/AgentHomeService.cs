@@ -196,7 +196,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
         // Clear before resolution so preparation never reasons over a prior selection. The workspace service resets
         // again immediately before copying; the lifecycle catch performs final recovery on every failure.
-        await _workspaceService.PrepareSelectedFoldersAsync(handle, [], baselineCommands: null, prepareToken);
+        await _workspaceService.PrepareSelectedFoldersAsync(handle, [], baselineCommands: null, cancellationToken: prepareToken);
         return await PrepareAttachedAsync(request, effectiveProfile, attachKey, layout, handle, prepareToken);
     }
 
@@ -217,7 +217,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         IReadOnlyList<SelectedFolderSnapshot> folderSnapshots;
 
         // The baseline's git runs before any run id or log exists, so its records are collected for RunAsync to flush
-        // once the log opens. The chat attachment re-stage has no run to attribute them to and drops the list.
+        // once the log opens. The chat attachment re-stage skips the baseline: nothing diffs it, and it needs Git.
         var baselineCommands = new List<AgentHomeCommandLogRecord>();
         try
         {
@@ -247,7 +247,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             // Workspace copy: each resolved selected folder into the sandbox workspace, with exclusions, the symlink-escape
             // guard, the per-folder byte budget and the git baseline. Under the preparation timeout, not the command one.
             folderSnapshots = await _workspaceService
-                .PrepareSelectedFoldersAsync(handle, foldersToCopy, baselineCommands, prepareToken);
+                .PrepareSelectedFoldersAsync(handle, foldersToCopy, baselineCommands, request.CreateBaseline, prepareToken);
         }
         finally
         {
@@ -313,7 +313,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             {
                 SelectedFolderIds = [],
                 RuntimeProfile = null,
-                ConversationId = conversationId
+                ConversationId = conversationId,
+                CreateBaseline = false
             }, attachKey, effectiveProfile, cancellationToken);
             return new ConversationSandboxPreparation(prepared.StagedAttachmentRelativePaths, lease);
         }

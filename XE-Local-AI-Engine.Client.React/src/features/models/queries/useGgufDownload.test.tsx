@@ -236,6 +236,34 @@ describe("useActiveGgufDownloads", () => {
 		expect(useGgufBrowseStore.getState().inFlightDownloads).not.toContain("unsloth/x:Q4_K_M");
 	});
 
+	it("keeps a retried download visible when the cancelled run of the same model is still retained", () => {
+		const { result } = renderActiveDownloads();
+
+		act(() => {
+			handlers.get(STATUS_CHANGED)?.({
+				operationId: "22222222-2222-2222-2222-222222222222",
+				operationKind: "Download",
+				modelName: "unsloth/x:Q4_K_M",
+				phase: "Running",
+				completedBytes: 5,
+				totalBytes: 20,
+				sanitizedError: null,
+			});
+			handlers.get(STATUS_CHANGED)?.({
+				operationId: "11111111-1111-1111-1111-111111111111",
+				operationKind: "Download",
+				modelName: "unsloth/x:Q4_K_M",
+				phase: "Cancelled",
+				completedBytes: 3,
+				totalBytes: 20,
+				sanitizedError: null,
+			});
+		});
+
+		expect(result.current.get("unsloth/x:Q4_K_M")?.phase).toBe("Downloading");
+		expect(useGgufBrowseStore.getState().inFlightDownloads).toContain("unsloth/x:Q4_K_M");
+	});
+
 	it("invalidates the installed-models list once on a Completed push so the new model appears without a refresh", () => {
 		const { queryClient } = renderActiveDownloads();
 		const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();

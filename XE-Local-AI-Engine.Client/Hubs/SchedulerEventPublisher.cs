@@ -39,7 +39,8 @@ internal sealed class SchedulerEventPublisher : ISchedulerEventPublisher
             DurationMs = runEvent.DurationMs,
             Summary = runEvent.Summary,
             ErrorMessage = runEvent.ErrorMessage,
-            OccurredAtUtc = runEvent.OccurredAtUtc
+            OccurredAtUtc = runEvent.OccurredAtUtc,
+            ManualFireId = runEvent.ManualFireId
         }, cancellationToken);
     }
 

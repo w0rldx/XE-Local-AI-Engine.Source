@@ -83,7 +83,7 @@ const LATEST_KEY = modelFitInvalidationKey(modelFitQueryIds.latest);
 
 const invalidatedKeys: unknown[] = [];
 
-function renderHub(scheduledJobId?: string) {
+function renderHub(scheduledJobId?: string, onTerminalRun?: (manualFireId: string | undefined) => void) {
 	invalidatedKeys.length = 0;
 	handlers.clear();
 	signalRMock.connection.on.mockImplementation((name: string, handler: (...args: unknown[]) => void) => {
@@ -97,7 +97,7 @@ function renderHub(scheduledJobId?: string) {
 	function Wrapper({ children }: { children: ReactNode }) {
 		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 	}
-	return renderHook(() => useModelFitSchedulerEvents(scheduledJobId), { wrapper: Wrapper });
+	return renderHook(() => useModelFitSchedulerEvents(scheduledJobId, onTerminalRun), { wrapper: Wrapper });
 }
 
 // Seeds a real query whose key matches the generated full-key shape `[{ _id, ..., query }]`, then drives an event
@@ -180,6 +180,17 @@ describe("useModelFitSchedulerEvents", () => {
 		handlers.get("scheduler.runCompleted")?.({ templateId: MODEL_FIT_TEMPLATE_ID });
 
 		expect(invalidatedKeys).toContainEqual(LATEST_KEY);
+	});
+
+	it("hands the terminal run's manual fire id to the caller, and undefined for a fire without one", () => {
+		const onTerminalRun = vi.fn();
+		renderHub(undefined, onTerminalRun);
+
+		handlers.get("scheduler.runCompleted")?.({ templateId: MODEL_FIT_TEMPLATE_ID, manualFireId: "fire-a" });
+		handlers.get("scheduler.runFailed")?.({ templateId: MODEL_FIT_TEMPLATE_ID, manualFireId: null });
+		handlers.get("scheduler.runCancelled")?.({ templateId: "some-other-template", manualFireId: "fire-b" });
+
+		expect(onTerminalRun.mock.calls).toEqual([["fire-a"], [undefined]]);
 	});
 
 	it("ignores terminal runs for other templates", () => {

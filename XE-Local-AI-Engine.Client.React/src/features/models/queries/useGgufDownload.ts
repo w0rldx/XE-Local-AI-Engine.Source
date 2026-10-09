@@ -147,6 +147,10 @@ export function useCancelGgufDownload() {
 	});
 }
 
+function isActiveDownloadPhase(phase: GgufAcquisitionStatus["phase"]): boolean {
+	return phase === "Queued" || phase === "Validating" || phase === "Downloading" || phase === "Committing";
+}
+
 // Domain view-model for a single active GGUF download, derived from the backend DTO.
 export type GgufDownloadStatus = GgufAcquisitionStatus & {
 	readonly operationKind: "Download";
@@ -170,6 +174,11 @@ export function useActiveGgufDownloads({ enabled = true }: { enabled?: boolean }
 	const statuses = useMemo(() => {
 		const downloads = new Map<string, GgufDownloadStatus>();
 		for (const status of acquisitions.values()) {
+			// A retry after a cancel is a second operation for the same model; the retained Cancelled one must not hide it.
+			const current = downloads.get(status.modelName);
+			if (current !== undefined && isActiveDownloadPhase(current.phase) && !isActiveDownloadPhase(status.phase)) {
+				continue;
+			}
 			if (status.operationKind === "Download") {
 				downloads.set(status.modelName, {
 					...status,
@@ -182,17 +191,10 @@ export function useActiveGgufDownloads({ enabled = true }: { enabled?: boolean }
 	}, [acquisitions]);
 
 	// Reconcile the store with the live map: Running → markInFlight (show progress), terminal → removeInFlight (clear).
-	// On a Completed download, also invalidate the installed-models list so the freshly downloaded GGUF appears without a
-	// page refresh — completion has no REST mutation to hang invalidation off, so this push-driven reconcile is the only
-	// hook point. Guarded by completedHandled so a re-pushed/re-hydrated Completed status refetches exactly once.
+	// The installed-models refetch on completion lives in useActiveGgufAcquisitions.
 	useEffect(() => {
 		for (const status of statuses.values()) {
-			if (
-				status.phase === "Queued" ||
-				status.phase === "Validating" ||
-				status.phase === "Downloading" ||
-				status.phase === "Committing"
-			) {
+			if (isActiveDownloadPhase(status.phase)) {
 				markInFlight(status.modelName);
 				continue;
 			}

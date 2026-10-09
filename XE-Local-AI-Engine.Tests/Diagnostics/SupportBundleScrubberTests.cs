@@ -83,6 +83,26 @@ public sealed class SupportBundleScrubberTests
     }
 
     [Test]
+    [Arguments("Container bridge listens on 192.168.178.20:18790", "Container bridge listens on [redacted-ip]:18790")]
+    [Arguments("peer 10.0.0.7 refused", "peer [redacted-ip] refused")]
+    [Arguments("http://172.16.4.2:8080/v1 and 172.31.255.1.", "http://[redacted-ip]:8080/v1 and [redacted-ip].")]
+    [Arguments("link-local 169.254.12.3", "link-local [redacted-ip]")]
+    public void PrivateIpv4_IsRedacted_AndThePortKept(string input, string expected)
+    {
+        AssertEx.Equal(expected, Posix.Scrub(input));
+        AssertEx.Equal(expected, Posix.Scrub(expected), "A second pass changes nothing.");
+    }
+
+    [Test]
+    [Arguments("listening on http://127.0.0.1:5123")]
+    [Arguments("public 8.8.8.8 and 172.32.0.1 and 172.15.0.1 and 192.169.0.1")]
+    [Arguments("Windows 10.0.19041.1 build and llama.cpp 1.10.0.1.2")]
+    public void LoopbackPublicAddressesAndVersions_AreKept(string input)
+    {
+        AssertEx.Equal(input, Posix.Scrub(input));
+    }
+
+    [Test]
     public void TraceIdsAndCommitShas_Survive_WhileSecretsOnTheSameLineAreReplaced()
     {
         const string trace = "[trace:4bf92f3577b34da6a3ce929d0e0e4736 span:00f067aa0ba902b7]";

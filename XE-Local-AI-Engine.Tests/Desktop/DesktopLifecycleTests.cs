@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Desktop;
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO.Pipes;
 using System.Text;
@@ -380,6 +381,36 @@ public sealed class DesktopLifecycleTests
         AssertEx.Equal("The engine exited before readiness.", DesktopEngineSession.DescribeStartupFailure("  \n "));
         AssertEx.Equal("The engine exited before readiness. It reported: You must install or update .NET",
             DesktopEngineSession.DescribeStartupFailure("  You must install or update .NET\n"));
+    }
+
+    [Test]
+    public void StartupFailure_NamesTheEnginesExitCode()
+    {
+        AssertEx.Equal("The engine exited before readiness (exit code 8).", DesktopEngineSession.DescribeStartupFailure(null, 8));
+        AssertEx.Equal("The engine exited before readiness (exit code 10). It reported: data directory not writable",
+            DesktopEngineSession.DescribeStartupFailure("data directory not writable\n", 10));
+    }
+
+    [Test]
+    public async Task OwnedStart_WhenTheEngineExitsBeforeReadiness_SurfacesItsExitCodeAndLastWords()
+    {
+        using var directory = new TempDirectory();
+        var options = DesktopStartupOptions.Parse([], directory.Path, directory.Path);
+        // A stand-in engine that writes its last words and exits 8 without ever announcing readiness.
+        var start = OperatingSystem.IsWindows()
+            ? new ProcessStartInfo("cmd.exe") { ArgumentList = { "/c", "echo node key refused 1>&2 & exit 8" } }
+            : new ProcessStartInfo("/bin/sh") { ArgumentList = { "-c", "echo node key refused >&2; exit 8" } };
+        start.UseShellExecute = false;
+        start.CreateNoWindow = true;
+        start.RedirectStandardOutput = true;
+        start.RedirectStandardError = true;
+
+        var owned = await DesktopEngineSession.StartOwnedAsync(options, start, "xe-desktop-test-" + Guid.NewGuid().ToString("N"), CancellationToken.None)
+                                              .WaitAsync(TimeSpan.FromSeconds(60));
+
+        AssertEx.Null(owned.Session);
+        AssertEx.Equal(8, owned.ExitCode);
+        AssertEx.Contains(AssertEx.NotNull(owned.ErrorTail), "node key refused");
     }
 
     private static StreamReader Reader(string text) =>

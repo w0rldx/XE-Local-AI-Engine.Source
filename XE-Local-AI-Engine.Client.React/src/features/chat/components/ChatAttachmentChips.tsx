@@ -38,6 +38,11 @@ function statusLabel(status: ChatAttachmentStatus, t: (key: string, fallback: st
 	}
 }
 
+// An extraction that found nothing (e.g. a scanned PDF) is not sent, so "Extracted" would mislead.
+function hasNoText(attachment: ChatAttachment): boolean {
+	return attachment.status === "extracted" && attachment.extractedChars === 0;
+}
+
 // Renders the attached-files chip row shown above the composer input: one chip per uploaded file (name, size,
 // extraction status, remove) plus an optimistic "uploading" chip per in-flight upload. Renders nothing when there
 // is nothing to show, so the composer keeps its compact height until a file is attached.
@@ -76,8 +81,15 @@ export function ChatAttachmentChips({ attachments, pendingUploads, onRemove, dis
 						<Text size="xs" c="dimmed">
 							{formatAttachmentSize(attachment.sizeBytes)}
 						</Text>
-						<Badge size="xs" variant="light" color={statusColors[attachment.status]} data-testid="chat-attachment-status">
-							{statusLabel(attachment.status, t)}
+						<Badge
+							size="xs"
+							variant="light"
+							color={hasNoText(attachment) ? "yellow" : statusColors[attachment.status]}
+							data-testid="chat-attachment-status"
+						>
+							{hasNoText(attachment)
+								? t("pages.chat.composer.attachments.status.noText", "No text found")
+								: statusLabel(attachment.status, t)}
 						</Badge>
 						<ActionIcon
 							size="xs"

@@ -365,6 +365,10 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         return reportProgress(summary, 100, cancellationToken);
     }
 
+    /// <summary>Rejects at create/update time what <see cref="ExecuteAsync" /> would reject on every fire.</summary>
+    public void ValidateParameters(string? parametersJson) =>
+        _ = ParseAndValidate(parametersJson);
+
     /// <summary>
     ///     Parses and validates the decrypted parameter JSON. A blank/invalid <c>agentDefinitionId</c> or a blank
     ///     <c>prompt</c> throws <see cref="ScheduledJobValidationException" /> (the dispatcher records the failure without

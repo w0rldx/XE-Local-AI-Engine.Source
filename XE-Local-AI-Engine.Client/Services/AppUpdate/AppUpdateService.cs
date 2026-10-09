@@ -222,7 +222,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
 
         if (winner is not null && winningFeed is not null)
         {
-            return StoreSnapshot(Snapshot(currentVersion,
+            return StoreCheckedSnapshot(Snapshot(currentVersion,
                 selectedChannel,
                 availableVersion: winner.AvailableVersion,
                 updateAvailable: true,
@@ -237,10 +237,10 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         {
             var reason = results.FirstOrDefault(result => result.Outcome is VelopackCheckOutcome.Failed)?.FailureReason
                          ?? AppUpdateFailureReason.Unexpected;
-            return StoreSnapshot(FailedSnapshot(currentVersion, selectedChannel, reason, recommendedVersion));
+            return StoreCheckedSnapshot(FailedSnapshot(currentVersion, selectedChannel, reason, recommendedVersion));
         }
 
-        return StoreSnapshot(Snapshot(currentVersion,
+        return StoreCheckedSnapshot(Snapshot(currentVersion,
             selectedChannel,
             isConfigured: true,
             checkStatus: status,
@@ -422,6 +422,18 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
     {
         _state.Store(snapshot);
         return snapshot;
+    }
+
+    /// <summary>The one Information line per configured check: what ran, what it found, so a support log shows why an update was or was not offered.</summary>
+    private AppUpdateSnapshot StoreCheckedSnapshot(AppUpdateSnapshot snapshot)
+    {
+        _logger.LogInformation("App update check: current {CurrentVersion}, channel {Channel}, status {CheckStatus}, available {AvailableVersion}, recommended {RecommendedVersion}.",
+            snapshot.CurrentVersion,
+            snapshot.SelectedChannel,
+            snapshot.CheckStatus,
+            snapshot.AvailableVersion ?? "none",
+            snapshot.RecommendedVersion ?? "none");
+        return StoreSnapshot(snapshot);
     }
 
     private void PrimeInitialSnapshot()

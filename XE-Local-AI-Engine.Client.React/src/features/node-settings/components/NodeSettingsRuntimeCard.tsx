@@ -82,6 +82,7 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.llamaMaxLoadedProcesses.min}–${bounds.llamaMaxLoadedProcesses.max}.`}
 						min={bounds.llamaMaxLoadedProcesses.min}
 						max={bounds.llamaMaxLoadedProcesses.max}
+						clampBehavior="none"
 						allowDecimal={false}
 						value={form.llamaMaxLoadedProcesses}
 						onChange={(value) => onChange("llamaMaxLoadedProcesses", value)}
@@ -104,6 +105,7 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						suffix={` ${minutes}`}
 						min={idleTtlBounds.min}
 						max={idleTtlBounds.max}
+						clampBehavior="none"
 						decimalScale={2}
 						value={form.llamaIdleTimeToLiveSeconds}
 						onChange={(value) => onChange("llamaIdleTimeToLiveSeconds", value)}
@@ -292,6 +294,7 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
 						min={bounds.keepModelWarmIntervalSeconds.min}
 						max={bounds.keepModelWarmIntervalSeconds.max}
+						clampBehavior="none"
 						disabled={!form.keepModelWarmEnabled}
 						allowDecimal={false}
 						value={form.keepModelWarmIntervalSeconds}
@@ -396,6 +399,7 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 							description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.speculativeDraftMaxTokens.min}–${bounds.speculativeDraftMaxTokens.max}.`}
 							min={bounds.speculativeDraftMaxTokens.min}
 							max={bounds.speculativeDraftMaxTokens.max}
+							clampBehavior="none"
 							allowDecimal={false}
 							value={form.speculativeDraftMaxTokens}
 							onChange={(value) => onChange("speculativeDraftMaxTokens", value)}
@@ -415,6 +419,7 @@ export function NodeSettingsRuntimeCard({ form, bounds, errors, onChange, draftM
 						)}
 						min={bounds.chatCacheReuse.min}
 						max={bounds.chatCacheReuse.max}
+						clampBehavior="none"
 						allowDecimal={false}
 						value={form.chatCacheReuse}
 						onChange={(value) => onChange("chatCacheReuse", value)}

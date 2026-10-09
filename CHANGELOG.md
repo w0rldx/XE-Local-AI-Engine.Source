@@ -147,6 +147,15 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   headers (name, value, and whether the value is a secret) with every request, so a private AI gateway's project or
   routing header reaches it. A gateway that expects a bearer token takes it pasted into the API key field.
 
+- **Quiet captured source** — a live transcription lane that receives no audio for more than 10 s publishes the
+  additive `transcriptionSourceQuiet` hub event, and the live transcript shows a "source quiet" line; the session never ends on silence.
+- **Truncated attachments are announced** — a turn whose attached files exceed the inlined-attachment limit carries the
+  new `AttachmentsTruncated` turn notice instead of noting the cut only inside the prompt.
+- **Exit code 10** — the engine stops with `10` when the data directory cannot be created or written, or its
+  `node-settings.json` is present but unreadable; `--help`, the user guide and wiki 11 list it.
+- **A recovery reset rotates the recovery code** — the CLI reset prints the new code as one `XE_RECOVERY_CODE=` line,
+  and the vault unlock page shows it once the engine has started ([ADR 0018](docs/adr/0018-local-vault-passphrase-wrapped-node-key.md) amendment).
+
 ### Changed
 
 - **MCP tools are no longer offered to cloud models by default.** They used to reach every tool-capable model,
@@ -212,6 +221,14 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 - **The Hugging Face quant picker no longer recommends an unquantized file** (`F32`/`F16`/`BF16`) when the repository offers a quantized one; the float files stay listed with their tier and fit verdict.
 - **The "Tested by the authors" list is ordered best fitting first** — models that fit come first, then tight fits, each largest first, then the ones that won't fit, smallest first. Until this machine's fit is known the list keeps the catalog order.
 
+- **`auth/vault/unlock-recovery` answers 200 `{recoveryCode}` instead of 204**, carrying the rotated recovery code.
+- **Usage `reasoningTokens` is nullable** in the three usage-summary response types: a model that reports none shows
+  "not reported" instead of 0. An intentional pre-1.0 contract change.
+- **Runtime ensure and repair no longer need ejected models**: they only land missing files, so neither a running
+  llama-server nor Keep Model Warm blocks them. Install and update still do.
+- **The memory gauge polls every 15 s** instead of 5 s, so `nvidia-smi` runs once per poll.
+- **`run_python` is offered on Linux only**; its description says so.
+
 ### Removed
 
 - **Open Canvas (the experimental "Preview → Open Canvas" workflow builder) has been removed**, and Graph Workflows
@@ -269,6 +286,33 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 - **Tester rounds 3 to 5** — draft-dialog model picker, orphaned chat Stop, image VRAM eviction, flaky idle tests, transcription recovery after a dead CUDA `whisper-server`, graph editor handles, resident-model reuse and Docker probe handling.
 - **Compute venv** is rebuilt through a staged swap, and web page extraction is bounded.
 - **Knowledge reranking** no longer cold-spawns or backlogs, and search hits name their score kind.
+
+- **F-1 slow first chat** — a timed-out `--list-devices` probe is remembered for 60 s per binary, so one cold load pays the timeout once, not three times.
+- **F-4 desktop exit code** — the desktop shell exits with the engine's exit code instead of 0 and names it in the failure window.
+- **F-6, F-20 unusable data directory or settings** — an unwritable data directory or an unreadable `node-settings.json` stops with exit code 10 and a message, instead of a crash or silent default settings.
+- **F-3 maintenance commands** — password reset and knowledge downgrade are evaluated before the instance lease, so a busy data directory exits 4 for them instead of 1.
+- **F-5 failure window** — it scrolls and sizes to its content, shows the WebView2 hint only when WebView2 failed, and uses one window title.
+- **F-7 snapshot ordering** — the Development snapshot version recipe is documented in wiki 11 and pinned by a test, so a snapshot no longer offers a downgrade.
+- **F-8 downloads** — a finished download no longer hides the next active one, completion is logged, and the quant picker scrolls to the preselected file.
+- **F-9 recommendation refresh** — one Hugging Face discovery is shared across the six use cases of a refresh, and Refresh now stays pending until it finishes.
+- **F-10 layer placement** — a run that only allocated CPU buffers is no longer reported as "all layers on the GPU"; an incomplete CUDA companion set has its own reason text.
+- **F-11 runtime repair** — "Try again" on the runtime banner works while a CPU-fallback model is loaded, and a refusal shows its message.
+- **F-12 stopped turns** — a stopped turn's prompt is no longer merged into the next prompt.
+- **F-13 extraction chip and tool markup** — an attachment with no extracted text says "No text found", and an unclosed `<tool_call>` block counts as markup.
+- **F-14 Git requirement** — chat attachments no longer need Git; an Agent Home run without Git names it as the requirement.
+- **F-15 admission logging** — each skipped capacity admission is logged, and knowledge search queries an embedder only when one is installed.
+- **F-17 whisper crash on silence** — language probabilities are requested only while speech remains in the uncommitted audio, so a silent window no longer crashes `whisper-server`.
+- **F-18 per-application capture** — the session ends when the captured application exits.
+- **F-19 scheduler validation** — a `99` cron field and non-JSON job parameters are rejected.
+- **4.4 silent attachment truncation** — attachments cut at the inlined-attachment limit now raise the `AttachmentsTruncated` notice.
+- **Stopped while thinking** — a user Stop during reasoning is labelled "Stopped while thinking".
+- **Runtimes page after an eject** — the runtime status refreshes after a model is ejected.
+- **Number fields in Node Settings** — out-of-range values stay as typed and show the range error instead of being clamped.
+- **Managed Python card** — it says "Not available on this platform" when no environment is supported.
+- **Support bundle** — private and link-local IPv4 addresses are redacted; loopback and ports are kept.
+- **Live transcript** — the committed rows scroll inside a fixed-height panel that sticks to the bottom.
+- **German strings** — the local-default model labels and the seeded Default Assistant name are translated.
+- **Windows CLI docs (F-2)** — the user guide names `current\XE-Local-AI-Engine.WindowsLauncher.exe` as the command-line entry.
 
 ### Internal
 

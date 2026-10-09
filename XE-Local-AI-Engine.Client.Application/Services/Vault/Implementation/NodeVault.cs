@@ -105,12 +105,16 @@ public sealed class NodeVault : INodeVault, IDisposable
 
     public Task<VaultChange?> RewrapAsync(string currentPassword, string newPassword, CancellationToken cancellationToken)
     {
-        return RewrapCoreAsync(file => VaultFileCodec.UnwrapWithPassword(file, currentPassword), newPassword, cancellationToken);
+        return RewrapCoreAsync(file => VaultFileCodec.UnwrapWithPassword(file, currentPassword), newPassword, newRecoveryCode: null, cancellationToken);
     }
 
-    public Task<VaultChange?> RewrapWithRecoveryAsync(string recoveryCode, string newPassword, CancellationToken cancellationToken)
+    public Task<VaultChange?> RewrapWithRecoveryAsync(string recoveryCode, string newPassword, string? newRecoveryCode, CancellationToken cancellationToken)
     {
-        return RewrapCoreAsync(file => VaultFileCodec.UnwrapWithRecovery(file, recoveryCode), newPassword, cancellationToken);
+        // A recovery reset always rotates the code: the one just typed in may have been seen, and the reset is its only use.
+        return RewrapCoreAsync(file => VaultFileCodec.UnwrapWithRecovery(file, recoveryCode),
+            newPassword,
+            newRecoveryCode ?? VaultFileCodec.NewRecoveryCode(),
+            cancellationToken);
     }
 
     public async Task RestoreAsync(VaultChange change, CancellationToken cancellationToken)
@@ -143,7 +147,8 @@ public sealed class NodeVault : INodeVault, IDisposable
         _gate.Dispose();
     }
 
-    private async Task<VaultChange?> RewrapCoreAsync(Func<VaultFile, byte[]> unwrap, string newPassword, CancellationToken cancellationToken)
+    /// <param name="newRecoveryCode">Also re-wraps the recovery slot under this code; <see langword="null" /> keeps it.</param>
+    private async Task<VaultChange?> RewrapCoreAsync(Func<VaultFile, byte[]> unwrap, string newPassword, string? newRecoveryCode, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(newPassword);
 
@@ -162,7 +167,9 @@ public sealed class NodeVault : INodeVault, IDisposable
             var masterKey = unwrap(file);
             try
             {
-                var rewrapped = VaultFileCodec.Rewrap(file, masterKey, newPassword, _timeProvider.GetUtcNow());
+                var rewrapped = newRecoveryCode is null
+                    ? VaultFileCodec.Rewrap(file, masterKey, newPassword, _timeProvider.GetUtcNow())
+                    : VaultFileCodec.RewrapWithNewRecovery(file, masterKey, newPassword, newRecoveryCode, _timeProvider.GetUtcNow());
                 await VaultFileCodec.WriteAsync(_path, rewrapped, cancellationToken);
             }
             finally
@@ -170,9 +177,10 @@ public sealed class NodeVault : INodeVault, IDisposable
                 CryptographicOperations.ZeroMemory(masterKey);
             }
 
-            _logger.LogInformation("Node vault password wrap replaced.");
+            _logger.LogInformation("Node vault password wrap replaced (recovery code rotated: {RecoveryCodeRotated}).", newRecoveryCode is not null);
             return new VaultChange
             {
+                RecoveryCode = newRecoveryCode,
                 PreviousFile = previous,
                 PreviousState = previousState
             };

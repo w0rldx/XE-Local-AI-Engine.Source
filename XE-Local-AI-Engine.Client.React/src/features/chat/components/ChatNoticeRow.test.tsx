@@ -198,6 +198,7 @@ describe("ChatNoticeRow", () => {
 		["KnowledgeUnavailable", "Knowledge base unavailable", ".tabler-icon-book-off"],
 		["AttachmentShortened", "Attachment shortened", ".tabler-icon-file-text"],
 		["AttachmentsNotSent", "Attachments not sent", ".tabler-icon-file-off"],
+		["AttachmentsTruncated", "Attachment truncated", ".tabler-icon-file-text"],
 	])("renders the %s notice with its own glyph and label", (noticeKind, label, iconClass) => {
 		const { container } = renderWithProviders(
 			<ChatNoticeRow part={noticePart({ noticeKind, text: "a server-owned sentence" })} />,

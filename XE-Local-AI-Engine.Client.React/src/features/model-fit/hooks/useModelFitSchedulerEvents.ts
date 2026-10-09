@@ -53,6 +53,7 @@ interface SchedulerRunEventPayload {
 	templateId?: string;
 	errorMessage?: string | null;
 	runId?: string;
+	manualFireId?: string | null;
 }
 
 function isModelRecommendationRun(payload: unknown): boolean {
@@ -65,7 +66,7 @@ function isModelRecommendationRun(payload: unknown): boolean {
 
 // Defensive narrowing of the two extra wire fields. Anything not a string becomes undefined so the toast layer never
 // renders non-text data (the body is shown verbatim, no HTML).
-function readRefreshFields(payload: unknown): { errorMessage?: string; runId?: string } {
+function readRefreshFields(payload: unknown): { errorMessage?: string; runId?: string; manualFireId?: string } {
 	if (typeof payload !== "object" || payload === null) {
 		return {};
 	}
@@ -73,6 +74,7 @@ function readRefreshFields(payload: unknown): { errorMessage?: string; runId?: s
 	return {
 		errorMessage: typeof candidate.errorMessage === "string" ? candidate.errorMessage : undefined,
 		runId: typeof candidate.runId === "string" ? candidate.runId : undefined,
+		manualFireId: typeof candidate.manualFireId === "string" ? candidate.manualFireId : undefined,
 	};
 }
 
@@ -94,9 +96,16 @@ function readRefreshFields(payload: unknown): { errorMessage?: string; runId?: s
 //      job id so it re-runs when undefined → real WITHOUT tearing down / rebuilding the SignalR connection.
 // The connection/handler subscription effect has STABLE deps so live pushes are never dropped and handlers are never
 // double-registered. Pass the model-recommendation-check job id to enable the catch-up; without it only the push runs.
-export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
+// `onTerminalRun` (optional) is told about every pushed terminal model-recommendation run with the run's manual fire id
+// (the `fireId` the refresh POST returned; undefined for a cron fire), so a caller can keep a pending indicator up until
+// the runs IT enqueued have finished. Read through a ref, so it never rebuilds the connection.
+export function useModelFitSchedulerEvents(
+	scheduledJobId?: string,
+	onTerminalRun?: (manualFireId: string | undefined) => void,
+): void {
 	const queryClient = useQueryClient();
 	const { t } = useTranslation();
+	const onTerminalRunRef = useRef(onTerminalRun);
 
 	// Hold the latest `t` in a ref so toast text uses the current language WITHOUT making `t` an effect dependency.
 	// react-i18next hands back a NEW `t` on the ready transition / language change (and React StrictMode double-invokes
@@ -111,7 +120,8 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 	useLayoutEffect(() => {
 		tRef.current = t;
 		jobIdRef.current = scheduledJobId;
-	}, [scheduledJobId, t]);
+		onTerminalRunRef.current = onTerminalRun;
+	}, [scheduledJobId, t, onTerminalRun]);
 	const [watermarkUtc] = useState(Date.now);
 
 	// Gate for the late-job-id catch-up effect: true once the hub has connected at least once. The connection effect
@@ -166,11 +176,13 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 				return;
 			}
 
+			const { errorMessage, runId, manualFireId } = readRefreshFields(payload);
+			onTerminalRunRef.current?.(manualFireId);
+
 			// Authoritative state path (unchanged): TanStack Query refetches the canonical snapshot.
 			queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.latest) }).catch(() => undefined);
 
 			// Best-effort UI feedback. Stable id per run so a reconnect/duplicate broadcast replaces rather than stacks.
-			const { errorMessage, runId } = readRefreshFields(payload);
 			notifyModelFitRefreshEvent(eventName, { errorMessage, runId }, tRef.current);
 		};
 

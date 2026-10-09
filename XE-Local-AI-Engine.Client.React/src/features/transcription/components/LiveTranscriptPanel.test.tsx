@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LiveTranscriptPanel } from "@/features/transcription/components/LiveTranscriptPanel";
 import type { LiveTranscriptView } from "@/features/transcription/hooks/useTranscriptionHub";
 import { useTranscriptionCaptureStore } from "@/features/transcription/stores/TranscriptionCaptureStore";
-import { renderWithProviders } from "@/test/RenderWithProviders";
+import { createProvidersWrapper, renderWithProviders } from "@/test/RenderWithProviders";
 
 function view(overrides: Partial<LiveTranscriptView> = {}): LiveTranscriptView {
 	return {
@@ -17,6 +17,7 @@ function view(overrides: Partial<LiveTranscriptView> = {}): LiveTranscriptView {
 		partials: { you: "and then", others: "hold on" },
 		status: "Transcribing",
 		bufferedMs: null,
+		sourceQuietMs: null,
 		lastSeq: 2,
 		replayTruncated: false,
 		...overrides,
@@ -26,6 +27,8 @@ function view(overrides: Partial<LiveTranscriptView> = {}): LiveTranscriptView {
 describe("LiveTranscriptPanel", () => {
 	beforeEach(() => {
 		useTranscriptionCaptureStore.setState({ showPartials: true });
+		// jsdom implements no layout, so the stick-to-bottom follow has nothing to call.
+		Element.prototype.scrollIntoView = vi.fn();
 	});
 
 	afterEach(() => {
@@ -80,6 +83,65 @@ describe("LiveTranscriptPanel", () => {
 			"Listening — the first segment appears once enough speech has been captured.",
 		);
 		expect(screen.queryByTestId("transcription-committed-list")).toBeNull();
+	});
+
+	// A long session grew the page without bound: the committed rows scroll inside a bounded box instead.
+	it("scrolls a long transcript inside a bounded box and follows new rows", () => {
+		const rows = (count: number) =>
+			Array.from({ length: count }, (_, index) => ({
+				seq: index + 1,
+				startMs: index * 1_000,
+				endMs: index * 1_000 + 900,
+				text: `row ${index + 1}`,
+				channel: "mono" as const,
+				confidence: null,
+			}));
+		const { rerender } = render(<LiveTranscriptPanel view={view({ committed: rows(50), lastSeq: 50 })} />, {
+			wrapper: createProvidersWrapper().wrapper,
+		});
+
+		const scroll = screen.getByTestId("transcription-committed-scroll");
+		expect(scroll.contains(screen.getByTestId("transcription-committed-list"))).toBe(true);
+		expect(scroll.style.maxHeight).not.toBe("");
+
+		const follow = vi.mocked(Element.prototype.scrollIntoView);
+		follow.mockClear();
+		rerender(<LiveTranscriptPanel view={view({ committed: rows(51), lastSeq: 51 })} />);
+		expect(follow).toHaveBeenCalled();
+	});
+
+	// The follow latch listens on the scroll box from its first commit, so the box must exist before the first row.
+	it("keeps the scroll box mounted while the transcript is still empty", () => {
+		const { rerender } = render(<LiveTranscriptPanel view={view({ committed: [], partials: {}, lastSeq: 0 })} />, {
+			wrapper: createProvidersWrapper().wrapper,
+		});
+		const scroll = screen.getByTestId("transcription-committed-scroll");
+		expect(scroll.contains(screen.getByTestId("transcription-live-empty"))).toBe(true);
+
+		rerender(
+			<LiveTranscriptPanel
+				view={view({
+					committed: [{ seq: 1, startMs: 0, endMs: 900, text: "row 1", channel: "mono", confidence: null }],
+					lastSeq: 1,
+				})}
+			/>,
+		);
+		expect(screen.getByTestId("transcription-committed-scroll")).toBe(scroll);
+		expect(scroll.contains(screen.getByTestId("transcription-committed-list"))).toBe(true);
+	});
+
+	// The captured application went silent: say so, but keep the session running.
+	it("shows how long the captured application has been quiet, and nothing once audio returns", () => {
+		const { rerender } = render(<LiveTranscriptPanel view={view({ sourceQuietMs: 12_400 })} />, {
+			wrapper: createProvidersWrapper().wrapper,
+		});
+
+		expect(screen.getByTestId("transcription-source-quiet").textContent).toBe(
+			"No audio from the captured application for 12 s. The session keeps running and resumes when it plays again.",
+		);
+
+		rerender(<LiveTranscriptPanel view={view({ sourceQuietMs: null })} />);
+		expect(screen.queryByTestId("transcription-source-quiet")).toBeNull();
 	});
 
 	it("renders as a live panel before the hub has written anything", () => {

@@ -105,6 +105,15 @@ describe("UsageDashboard (generated hey-api data layer)", () => {
 		expect(screen.getByTestId("usage-provider-cost-local").textContent).toBe("—");
 	});
 
+	it("shows reasoning tokens as not reported when no run reported them", async () => {
+		const summary = createSummary();
+		generatedMock.summaryFn.mockResolvedValue({ ...summary, totals: { ...summary.totals, reasoningTokens: null } });
+
+		renderWithProviders(<UsageDashboard />);
+
+		expect((await screen.findByTestId("usage-reasoning-tokens-value")).textContent).toBe("Not reported");
+	});
+
 	it("renders the empty-state guidance when no usage was recorded", async () => {
 		generatedMock.summaryFn.mockResolvedValue({
 			items: [],

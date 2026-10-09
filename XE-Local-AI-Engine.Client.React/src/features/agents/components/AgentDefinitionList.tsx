@@ -43,7 +43,11 @@ export function AgentDefinitionList({ definitions, isMutating, onEdit, onDelete 
 					{definitions.map((definition) => (
 						<Table.Tr key={definition.id} data-testid={`agent-definition-row-${definition.id}`}>
 							<Table.Td>
-								<Text fw={600}>{definition.name}</Text>
+								<Text fw={600}>
+									{definition.isDefaultAssistant && definition.name === "Default Assistant"
+										? t("pages.chat.defaultAgentName", "Default Assistant")
+										: definition.name}
+								</Text>
 								{definition.description ? (
 									<Text size="xs" c="dimmed" lineClamp={1}>
 										{definition.description}
