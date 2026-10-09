@@ -51,6 +51,10 @@ Sandbox, compute and AgentHome containment: [sandbox-and-compute](sandbox-and-co
 
 **Rule:** a wrapper meant to run an approval-required function without a human (an auto-approval adapter) must override `GetService` to return null for `typeof(ApprovalRequiredAIFunction)`; unwrapping via `InnerFunction` works too. `FunctionInvokingChatClient` detects approval with `GetService<ApprovalRequiredAIFunction>()`, and `DelegatingAIFunction.GetService` forwards to the wrapped function, so a plain delegating wrapper stays approval-required. **Prevents:** every call becoming a `ToolApprovalRequestContent` nothing answers, the run ending as an empty "succeeded" with no invocation and no audit row (inbound agentic MCP runs, I-D12). **Authority:** `McpAgenticToolAdapter` (`GetService` override), `McpAgenticToolAdapterTests.FunctionInvocation_RunsAdaptedTool_InsteadOfRequestingApproval`; ADR 0006 amendment 2026-09-30.
 
+### Cloud-model tool gates live only in the offer
+
+**Rule:** a tool's cloud-model gate is the `LocalToolOfferProvider` offer branch (plus the `SubAgentSpawnService` seam guard for spawn); no executor (`WebFetchService`, `WebSearchService`, `CustomToolCatalog`, `McpToolRegistry`, `InvocationToolResolver`) re-checks locality. A new tool class that must stay off cloud models needs its own offer branch keyed on `IModelTrustResolver` (Unresolved counts as cloud) and, if it is opened by a Privacy switch, the sync getter read on the same path. Unattended callers must pass the real cloud flag into the offer, never a hard-coded `false`. **Prevents:** a tool reaching cloud models ungated, as MCP tools did before `AllowCloudModelMcpTools`, and a cloud unattended run getting the local-data offer. **Authority:** `LocalToolOfferProviderTests`, `SubAgentSpawnServiceTests`, `GraphWorkflowAgentExecutorTests`.
+
 ## MAF, MEAI and package cohorts
 
 ### MAF traps

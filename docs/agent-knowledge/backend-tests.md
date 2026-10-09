@@ -70,6 +70,10 @@ debugging a backend test, or changing `TestServerWebAppFactory`, `scripts/run-te
 
 **Rule:** treat a sibling coverage run as blind to an unwrapped concurrent build: coverage rewrites each project's own assemblies, which the guard cannot tell from a foreign build, so siblings run unguarded. The lock still covers cooperating shells; the batched module keeps its guard. **Prevents:** trusting a coverage-run green as uncontaminated. **Authority:** `scripts/run-backend-tests.sh` header (coverage-mode exception).
 
+### Skipping the build lock on a long lane voids its timings
+
+**Rule:** `NO_BUILD_LOCK=1` on a long opt-in lane such as the model matrix is acceptable only when the lane builds nothing shared: it builds its own worktree once up front, and the assembly guard stays armed and reports the build output unchanged at the end, or the result is void. Sibling sessions keep building their own worktrees meanwhile, so timing numbers (time to first token, tokens per second) measured under that load are not comparable with an idle-machine run; say so in the evidence. **Prevents:** a run whose binaries changed underneath it being reported as green, and loaded-machine timings read as a regression or a win. **Authority:** `scripts/with-build-lock.sh`, `scripts/assembly-guard.sh`, `scripts/run-model-matrix-local.sh` header.
+
 ## Flakes and parallelism
 
 ### The full Tests module is flaky under parallelism — verify suspects in isolation
@@ -188,6 +192,10 @@ debugging a backend test, or changing `TestServerWebAppFactory`, `scripts/run-te
 ### A test host can never reach `LaunchMode.Desktop` — two independent walls, not a convention
 
 **Rule:** a test of an `IDesktopOnlyEndpoint` asserts the endpoint's ABSENCE. `Program.CreateAppCoreAsync` resolves `launchMode` only when `customization is null`, and every `TestServerWebAppFactory` host passes one and runs `Headless`; separately, `VelopackInstall.IsManaged()` throws until `VelopackApp.SetLocator` runs, never in a fixture. **Prevents:** opting a test into desktop mode through args or env. **Authority:** `Program.CreateAppCoreAsync`, `VelopackInstall.IsManaged`, `ValidateExecutableEndpointTests`.
+
+### An E2E run rewrites the checkout's node settings
+
+**Rule:** prepare a model-matrix or lab node only AFTER any Playwright E2E run in the same checkout, or run the two in different worktrees. The E2E suite's in-process host uses the checkout's Client project directory as content root, which `NodeDataDirectory` treats as the node root, so it rewrites `XE-Local-AI-Engine.Client/node-settings.json`: an `offline` external-access profile prepared for the matrix was gone after an E2E run and `ExternalAccessProfileBackfillService` stamped `recommended`. The mechanism is unconfirmed; the effect is confirmed. **Prevents:** `scripts/run-model-matrix-local.sh` exiting 2 on its prerequisite "the node's external-access profile must be `offline` … it is 'recommended'" after an unrelated E2E run. **Authority:** `NodeDataDirectory`, `ExternalAccessProfileBackfillService`, the matrix runner's prerequisite check.
 
 ## Stale beliefs
 

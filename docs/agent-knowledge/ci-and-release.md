@@ -68,6 +68,10 @@ unless `needs.backend-tests.result == 'success'`. `TEST_SHARD` without `TEST_GRO
 `scripts/run-tests-memory-safe.sh`. **Prevents:** a failed leg leaving the required check skipped, which never resolves.
 **Authority:** `.github/workflows/build-and-test.yml` (`build-and-test` job).
 
+### A stale credential helper hangs the GitHub CLI
+
+**Rule:** run `gh` alone and under `timeout`, never inside a chained evidence command. The GitHub CLI can hang indefinitely on a stale credential helper, and a chain containing it then never returns. A hang is never a pass. **Prevents:** a stuck `gh` call read as a hung gate, or a chain that never finished reported as evidence. **Authority:** operator experience in two rounds, 2026-10-07 and 2026-10-09.
+
 ## Packaging and release
 
 ### Packaging (Velopack)

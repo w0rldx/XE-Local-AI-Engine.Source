@@ -32,6 +32,10 @@ change and reset revoke all. **Prevents:** reviving a logged-out cookie, or a lo
 
 **Rule:** a read of node state before the host is built takes the same `customization is null` guard `Program.cs` passes to `NodeStartupSettings.Read` (`includeLegacyContentRoot`): a test host's content root is the developer's source directory, so a legacy-path fallback there reads whatever file a dev run left behind. **Prevents:** test hosts whose registrations depend on a stray `node-settings.json` in `XE-Local-AI-Engine.Client/`, green on CI and red on one machine. **Authority:** `NodeStartupSettings.Read`, `Program.cs` (`includeLegacyContentRoot: customization is null`), node-settings tier B S0.
 
+### A host that dies at startup may be a stale key ring, not the change
+
+**Rule:** when a dev host or opt-in runner dies at startup, read the node log for "encrypted key-ring element could not be decrypted with the current node operator secret" before suspecting the change. A checkout's `XE-Local-AI-Engine.Client/dp-keys` ring can be encrypted under an older operator secret than the current `XE-Local-AI-Engine.AppHost/.data/node.key`, and then every start stops in `NodeKeyCheckStartupService`. Run node-based lanes from a fresh worktree, or park the stale ring with `XE-Local-AI-Engine.AppHost/.data/node-sqlite` and `XE-Local-AI-Engine.Client/node-settings.json` (move them, never delete without the operator); `node.key` stays. **Prevents:** chasing a runner's bare "app resource failed to start" (exit 5) as a product regression. **Authority:** `NodeKeyCheckStartupService`, `NodeDataProtectionKeyRingDecryptor`; `scripts/run-gpu-smoke-local.sh` exit codes.
+
 ## Dev host lifecycle
 
 ### Probe the GPU; never assume one
@@ -116,6 +120,10 @@ read as a stale-AppHost problem. **Authority:** `dev_aspire_ps_json`, `dev_match
 
 **Rule:** a live round beside another running host still gets its own copy of the MANAGED llama-server build (behind `XE_LLAMACPP_SERVER_PATH`); never point two hosts at another host's `source-build/active/build/bin/llama-server`, because the startup `StaleProcessReaper` still claims every llama-server under its managed root by path. A BYO binary outside the root is safe to share: on Linux it is reaped only through this node's spawn receipts (`runtime/llama-server/<pid>.json`), resolved by pid (/proc exe realpath + starttime), not by process name. **Prevents:** a resident model vanishing mid-round. **Authority:** `StaleProcessReaper`, `ProcessSpawnReceiptStore`, `LlamaServerProcessSupervisor.SpawnCoreAsync`.
 [evidence](../agent-knowledge-evidence.md#two-hosts-on-one-box-must-never-share-a-llama-server-binary-path-or-one-hosts-reaper-kills-the-others-models)
+
+### A lab or scratch models dir holds hard links or copies, never symlinks
+
+**Rule:** when seeding a throwaway models directory (`scripts/lab-up.sh` profile `modelsDir`, any `HuggingFace__ModelsDirectory` a live round points at), hard-link or copy the GGUF, its `.xe-model.json` sidecar and any projector from the user-level store: `ln <src> <dir>/`, never `ln -s`. Every installed-model member is refused when `FileInfo.LinkTarget` is set or the file is a reparse point, so a symlinked model is skipped at startup (`invalid acquisition sidecar` in the host log), `GET models` says `isAvailable=false`, and the lab stops at the model phase (exit 2, no manifest). **Prevents:** a round spending its first hour on a "model not installed" that is only a link. **Authority:** `InstalledGgufSnapshotStore` / `InstalledGgufDeletionStore` member checks, `ValidatedGgufImportSource.OpenNoFollow`; wiki 13 "Lab bootstrap for live rounds".
 
 ## Containers, sandbox and External Apps (host side)
 

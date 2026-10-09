@@ -48,6 +48,10 @@ containment check (jail paths, symlink guards, path containment, patch apply).
 
 **Rule:** the `high` rule lives in `SandboxSecurityProfilePolicy` and is called by both enforcement and the capability summary; never add an axis a declaration does not ask for, never re-derive the rule in a caller or the SPA, and read the profile per call through `INodeRuntimeSettings`. Floors are untouched and the two `RequireEgressDenial` keys stay tighten-only above it. **Prevents:** a row that says `Satisfied` while a create site refuses, work refused for a boundary it never asks for, and the profile reaching an agentic surface. **Authority:** [ADR 0020](../adr/0020-sandbox-security-profile.md); `SandboxSecurityProfilePolicy`, `SandboxSecurityProfilePolicyTests`, the sandbox architecture tests enumerating `SandboxWorkloads`.
 
+### MXC ProcessContainer: host prep, one command line, a verbatim environment
+
+**Rule:** treat an MXC `Probe` warning naming `wxc-host-prep` as "unavailable", never as a warning: the one-time `prepare-system-drive` and the per-boot `prepare-null-device` are admin steps the product never runs, and without them children fail to start. `ContainerRequest.Command` is one command LINE, so quote argv with `WindowsCommandLine.Join` (CommandLineToArgvW rules), never `string.Join(" ")`. A non-null `Environment` is used verbatim: pass `SystemRoot`, `windir`, `ComSpec`, `PATHEXT`, `PATH`, a jail `TEMP` and a jail `LOCALAPPDATA` (the SDK refuses an environment without it, 2026-10-08). **Prevents:** a host advertising a boundary whose every launch dies, argv split differently inside the container, and a child that cannot find `cmd.exe`. **Authority:** ADR 0019; `HostSandboxContainmentProbe.MeasureWindows`, `WindowsCommandLine`, `SandboxLauncher.BuildAppContainerEnvironment`.
+
 ## Compute and AgentHome
 
 ### `ExecuteDetailedAsync` is the single compute execution boundary
