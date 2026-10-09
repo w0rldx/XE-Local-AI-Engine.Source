@@ -85,6 +85,9 @@ public sealed class InvocationRunnerTests
     // A running turn on the manual clock holds two timers: the stream-idle deadline of the current pull and the whole-turn deadline.
     private const int IdleAndTurnDeadline = 2;
 
+    // A turn deadline the idle-window stepping in AdvanceIdleWindowsUntilCompleteAsync cannot reach: the default 300 s is five 61 s steps away.
+    private const int IdleOnlyTurnSeconds = 3600;
+
     // MAF's skill-tool names, aliased once for the use sites below.
     private const string LoadSkillToolName = AgentSkillsProvider.LoadSkillToolName;
 
@@ -5779,7 +5782,7 @@ public sealed class InvocationRunnerTests
             eventDispatcher: dispatcher,
             providerStreamResilience: NoRetryResilience(),
             timeProvider: clock);
-        var package = RuntimePackageBuilder.Valid().WithAllowedTool("slow-tool").WithTimeout(streamIdleSeconds: 60).Build();
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("slow-tool").WithTimeout(invocationSeconds: IdleOnlyTurnSeconds, streamIdleSeconds: 60).Build();
 
         var run = RunAsync(runner, package);
         await AssertEx.CompletesAsync(textYielded.Task, TestBudgets.Contended, "the provider never pulled past the second round's text");
@@ -5835,7 +5838,7 @@ public sealed class InvocationRunnerTests
             eventDispatcher: dispatcher,
             providerStreamResilience: NoRetryResilience(),
             timeProvider: clock);
-        var package = RuntimePackageBuilder.Valid().WithTimeout(streamIdleSeconds: 60).Build();
+        var package = RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: IdleOnlyTurnSeconds, streamIdleSeconds: 60).Build();
 
         var run = RunAsync(runner, package);
         await AssertEx.CompletesAsync(textYielded.Task, TestBudgets.Contended, "the provider never pulled past its text");
@@ -5904,7 +5907,7 @@ public sealed class InvocationRunnerTests
             return segment == 1 ? ApprovalRequestUpdates() : SilentAfterTextUpdates(never.Task, resumeTextYielded, token);
         });
         var runner = CreateRunner(factory, eventDispatcher: dispatcher, providerStreamResilience: NoRetryResilience(), timeProvider: clock);
-        var package = RuntimePackageBuilder.Valid().WithTimeout(streamIdleSeconds: 60).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build();
+        var package = RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: IdleOnlyTurnSeconds, streamIdleSeconds: 60).WithAllowedTool("run_in_agent_home", requiresApproval: true).Build();
 
         var run = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => approvals.Count == 1, TimeSpan.FromSeconds(10));
@@ -5921,6 +5924,7 @@ public sealed class InvocationRunnerTests
     }
 
     // Steps the clock one idle window at a time until the run completes: the idle timer is armed after the stream's signal, so one advance can miss it.
+    // Each miss still walks the turn deadline forward, so a test that wants the idle failure runs with IdleOnlyTurnSeconds, which these steps cannot reach.
     private static async Task AdvanceIdleWindowsUntilCompleteAsync(ManualTimeProvider clock, Task run)
     {
         var budget = Stopwatch.StartNew();
@@ -5934,7 +5938,7 @@ public sealed class InvocationRunnerTests
         }
     }
 
-    // Repeated idle windows also walk toward the whole-turn deadline; pinning the idle message keeps that deadline from passing a timeout test.
+    // Pins the idle failure, so the whole-turn deadline reporting a timeout could never pass an idle-deadline test.
     private static bool IsStreamIdleMessage(string message) =>
         message.StartsWith("Streaming stalled", StringComparison.Ordinal);
 
