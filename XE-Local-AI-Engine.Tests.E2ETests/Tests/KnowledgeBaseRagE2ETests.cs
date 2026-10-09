@@ -285,7 +285,7 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
         });
         await Expect(newConversation).ToBeVisibleAsync();
         await newConversation.ClickAsync();
-        await SelectFakeOllamaModelAsync();
+        await SelectComposerModelAsync(FakeOllamaChatModel);
 
         var knowledgeToggle = Page.GetByTestId("chat-knowledge-base-toggle");
         await Expect(knowledgeToggle).ToBeEnabledAsync(new LocatorAssertionsToBeEnabledOptions
@@ -327,19 +327,6 @@ public sealed class KnowledgeBaseRagE2ETests : XESerialE2ETestBase
         await Expect(detail).ToContainTextAsync(DefaultCollection);
         await Expect(detail).ToContainTextAsync(SharedDocument);
         await Expect(detail).ToContainTextAsync(query);
-    }
-
-    private async Task SelectFakeOllamaModelAsync()
-    {
-        var trigger = Page.GetByTestId("chat-model-selector-trigger");
-        await Expect(trigger).ToBeVisibleAsync();
-        await trigger.ClickAsync();
-
-        var option = Page.GetByTestId($"chat-model-selector-option-{FakeOllamaChatModel}");
-        await Expect(option).ToBeVisibleAsync();
-        await option.ClickAsync();
-        await Expect(Page.GetByTestId("chat-model-selector-selected"))
-            .ToContainTextAsync(FakeOllamaChatModel);
     }
 
     private async Task PurgeScenarioDocumentsAsync()
