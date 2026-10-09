@@ -56,6 +56,14 @@
 			"none": "The model gave no explanation for this draft.",
 			"assumptions": "Assumptions it made",
 			"confidence": "The model's own confidence: {{percent}}% — its claim, not a measurement."
+		},
+		"view": {
+			"label": "Draft view",
+			"draft": "Draft",
+			"compare": "Compare"
+		},
+		"compare": {
+			"ariaLabel": "Current content compared with the draft"
 		}
 	},
 	"runtimeResources": {
@@ -8210,7 +8218,8 @@
 		},
 		"codeEditor": {
 			"fallbackLabel": "Code",
-			"inspectUnavailable": "The inspection editor could not load, so this content cannot be reviewed here."
+			"inspectUnavailable": "The inspection editor could not load, so this content cannot be reviewed here.",
+			"diffUnavailable": "The comparison could not load."
 		},
 		"headerBar": {
 			"logout": "Logout",

@@ -1,12 +1,49 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
 import { testMantineTheme } from "@/test/MantineTestRender";
+
+// A fake Monaco at the runtime level: the real CodeEditor and MonacoCodeEditor run, only the ~3 MB editor is faked.
+const editorMock = vi.hoisted(() => {
+	let value = "";
+	let contentListener: (() => void) | undefined;
+	const instance = {
+		getValue: vi.fn(() => value),
+		hasTextFocus: vi.fn(() => false),
+		setValue: vi.fn((next: string) => {
+			value = next;
+			contentListener?.();
+		}),
+		getModel: vi.fn(() => ({ dispose: vi.fn() })),
+		updateOptions: vi.fn(),
+		onDidChangeModelContent: vi.fn((listener: () => void) => {
+			contentListener = listener;
+			return { dispose: vi.fn() };
+		}),
+		dispose: vi.fn(),
+	};
+	return {
+		instance,
+		create: vi.fn((_container: HTMLElement, options: { value: string }) => {
+			value = options.value;
+			return instance;
+		}),
+		/** Simulates the user typing: mutates the model, then fires the change listener as Monaco does. */
+		type(next: string) {
+			value = next;
+			contentListener?.();
+		},
+	};
+});
+
+vi.mock("@/core/ui/components/CodeEditor/MonacoRuntime", () => ({
+	monaco: { editor: { create: editorMock.create, setModelLanguage: vi.fn(), setTheme: vi.fn() } },
+}));
 
 function renderWithProviders(ui: ReactElement) {
 	return render(
@@ -97,5 +134,64 @@ describe("MarkdownEditorField", () => {
 		renderWithProviders(<MarkdownEditorField value="" onChange={vi.fn()} error="Required field" data-testid="mef" />);
 		fireEvent.click(screen.getByText("Preview"));
 		expect(screen.getByText("Required field")).toBeTruthy();
+	});
+
+	describe("code editor variant", () => {
+		beforeEach(() => {
+			vi.clearAllMocks();
+		});
+
+		it("renders a markdown code editor inside the label, description and error wrapper, named by the label", async () => {
+			renderWithProviders(
+				<MarkdownEditorField
+					value="# Title"
+					onChange={vi.fn()}
+					editor="code"
+					label="Body"
+					description="The full instructions."
+					error="Body is required."
+					required={true}
+					data-testid="mef"
+				/>,
+			);
+
+			expect(await screen.findByTestId("mef-editor")).toBeTruthy();
+			expect(screen.queryByTestId("mef-textarea")).toBeNull();
+			expect(screen.getByText("Body")).toBeTruthy();
+			expect(screen.getByText("*")).toBeTruthy();
+			expect(screen.getByText("The full instructions.")).toBeTruthy();
+			expect(screen.getByText("Body is required.")).toBeTruthy();
+			expect(editorMock.create.mock.calls[0]?.[1]).toMatchObject({
+				value: "# Title",
+				language: "markdown",
+				wordWrap: "on",
+				readOnly: false,
+				ariaLabel: "Body",
+			});
+		});
+
+		it("forwards an edit in the code editor through onChange", async () => {
+			const onChange = vi.fn();
+			renderWithProviders(<MarkdownEditorField value="" onChange={onChange} editor="code" data-testid="mef" />);
+			await screen.findByTestId("mef-editor");
+
+			act(() => editorMock.type("typed text"));
+
+			expect(onChange).toHaveBeenCalledWith("typed text");
+		});
+
+		it("toggles between the code editor and the preview", async () => {
+			renderWithProviders(<MarkdownEditorField value="Hello **world**" onChange={vi.fn()} editor="code" data-testid="mef" />);
+			await screen.findByTestId("mef-editor");
+
+			fireEvent.click(screen.getByText("Preview"));
+			expect(screen.getByTestId("mef-preview").textContent).toContain("world");
+			expect(screen.queryByTestId("mef-editor")).toBeNull();
+			expect(editorMock.instance.dispose).toHaveBeenCalledTimes(1);
+
+			fireEvent.click(screen.getByText("Edit"));
+			expect(await screen.findByTestId("mef-editor")).toBeTruthy();
+			expect(screen.queryByTestId("mef-preview")).toBeNull();
+		});
 	});
 });

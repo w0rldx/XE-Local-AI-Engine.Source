@@ -1,4 +1,4 @@
-import { Alert, Button, Collapse, Group, List, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
+import { Alert, Button, Collapse, Group, List, SegmentedControl, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { IconInfoCircle, IconSparkles } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
 import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { CodeDiffViewer } from "@/core/ui/components/CodeEditor/CodeDiffViewer";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
@@ -71,6 +72,8 @@ export function GenerationAssistDialog({
 	// The generated draft, editable in place before Apply. `generationMetadata` rides along untouched.
 	const [draft, setDraft] = useState<AssistDraft | null>(null);
 	const [showRationale, setShowRationale] = useState(false);
+	// Improve only: the editable draft, or a diff of the form's current content against it.
+	const [view, setView] = useState<"draft" | "compare">("draft");
 	// A deliberate cancel rejects the mutation like any other failure; this flag keeps it from rendering as one.
 	const [isCancelled, setIsCancelled] = useState(false);
 	const [elapsedMs, setElapsedMs] = useState(0);
@@ -109,6 +112,7 @@ export function GenerationAssistDialog({
 		abortRef.current = controller;
 		setIsCancelled(false);
 		setDraft(null);
+		setView("draft");
 		setElapsedMs(0);
 		mutation.mutate(
 			{
@@ -288,90 +292,119 @@ export function GenerationAssistDialog({
 
 				{draft ? (
 					<Stack gap="md" data-testid="assist-result">
-						{isImage ? null : (
-							<TextInput
-								label={t("assist.result.nameLabel", "Name")}
-								value={draft.name}
-								onChange={(event) => {
-									const value = event.currentTarget.value;
-									setDraft((current) => (current ? { ...current, name: value } : current));
-								}}
-								data-testid="assist-result-name"
+						{mode === "Improve" ? (
+							<SegmentedControl
+								value={view}
+								onChange={(value) => setView(value === "compare" ? "compare" : "draft")}
+								data={[
+									{ value: "draft", label: t("assist.view.draft", "Draft") },
+									{ value: "compare", label: t("assist.view.compare", "Compare") },
+								]}
+								aria-label={t("assist.view.label", "Draft view")}
+								data-testid="assist-view"
 							/>
-						)}
-						<Textarea
-							label={
-								isImage
-									? t("assist.result.negativePromptLabel", "Negative prompt")
-									: t("assist.result.descriptionLabel", "Description")
-							}
-							value={draft.description}
-							autosize={true}
-							minRows={2}
-							onChange={(event) => {
-								const value = event.currentTarget.value;
-								setDraft((current) => (current ? { ...current, description: value } : current));
-							}}
-							data-testid="assist-result-description"
-						/>
-						{isImage ? (
-							// A prompt is plain text, not Markdown.
-							<Textarea
-								label={surfaceContentLabel}
-								value={draft.content}
-								autosize={true}
-								minRows={4}
-								onChange={(event) => {
-									const value = event.currentTarget.value;
-									setDraft((current) => (current ? { ...current, content: value } : current));
-								}}
-								data-testid="assist-result-content"
+						) : null}
+						{mode === "Improve" && view === "compare" ? (
+							<CodeDiffViewer
+								original={existing.content}
+								modified={draft.content}
+								language={isImage ? "plaintext" : "markdown"}
+								height={420}
+								aria-label={t("assist.compare.ariaLabel", "Current content compared with the draft")}
+								data-testid="assist-compare"
 							/>
 						) : (
-							<MarkdownEditorField
-								label={surfaceContentLabel}
-								value={draft.content}
-								minRows={8}
-								onChange={(value) => setDraft((current) => (current ? { ...current, content: value } : current))}
-								data-testid="assist-result-content"
-							/>
-						)}
+							<>
+								{isImage ? null : (
+									<TextInput
+										label={t("assist.result.nameLabel", "Name")}
+										value={draft.name}
+										onChange={(event) => {
+											const value = event.currentTarget.value;
+											setDraft((current) => (current ? { ...current, name: value } : current));
+										}}
+										data-testid="assist-result-name"
+									/>
+								)}
+								<Textarea
+									label={
+										isImage
+											? t("assist.result.negativePromptLabel", "Negative prompt")
+											: t("assist.result.descriptionLabel", "Description")
+									}
+									value={draft.description}
+									autosize={true}
+									minRows={2}
+									onChange={(event) => {
+										const value = event.currentTarget.value;
+										setDraft((current) => (current ? { ...current, description: value } : current));
+									}}
+									data-testid="assist-result-description"
+								/>
+								{isImage ? (
+									// A prompt is plain text, not Markdown.
+									<Textarea
+										label={surfaceContentLabel}
+										value={draft.content}
+										autosize={true}
+										minRows={4}
+										onChange={(event) => {
+											const value = event.currentTarget.value;
+											setDraft((current) => (current ? { ...current, content: value } : current));
+										}}
+										data-testid="assist-result-content"
+									/>
+								) : (
+									<MarkdownEditorField
+										label={surfaceContentLabel}
+										value={draft.content}
+										minRows={8}
+										onChange={(value) => setDraft((current) => (current ? { ...current, content: value } : current))}
+										data-testid="assist-result-content"
+									/>
+								)}
 
-						<Group justify="flex-start">
-							<Button
-								variant="subtle"
-								size="compact-sm"
-								onClick={() => setShowRationale((current) => !current)}
-								data-testid="assist-why-toggle"
-							>
-								{t("assist.rationale.toggle", "Why this draft")}
-							</Button>
-						</Group>
-						<Collapse expanded={showRationale}>
-							<Stack gap="xs" data-testid="assist-why">
-								<Text size="sm">
-									{draft.generationMetadata.rationale ??
-										t("assist.rationale.none", "The model gave no explanation for this draft.")}
-								</Text>
-								{draft.generationMetadata.assumptions && draft.generationMetadata.assumptions.length > 0 ? (
-									<>
-										<Text size="sm" fw={600}>
-											{t("assist.rationale.assumptions", "Assumptions it made")}
+								<Group justify="flex-start">
+									<Button
+										variant="subtle"
+										size="compact-sm"
+										onClick={() => setShowRationale((current) => !current)}
+										data-testid="assist-why-toggle"
+									>
+										{t("assist.rationale.toggle", "Why this draft")}
+									</Button>
+								</Group>
+								<Collapse expanded={showRationale}>
+									<Stack gap="xs" data-testid="assist-why">
+										<Text size="sm">
+											{draft.generationMetadata.rationale ??
+												t("assist.rationale.none", "The model gave no explanation for this draft.")}
 										</Text>
-										<List size="sm">
-											{draft.generationMetadata.assumptions.map((assumption) => (
-												<List.Item key={assumption}>{assumption}</List.Item>
-											))}
-										</List>
-									</>
-								) : null}
-								<Text size="xs" c="dimmed">
-									{t("assist.rationale.confidence", "The model's own confidence: {{percent}}% — its claim, not a measurement.", {
-										percent: Math.round((draft.generationMetadata.confidence ?? 0) * 100),
-									})}
-								</Text>
-							</Stack>
-						</Collapse>
+										{draft.generationMetadata.assumptions && draft.generationMetadata.assumptions.length > 0 ? (
+											<>
+												<Text size="sm" fw={600}>
+													{t("assist.rationale.assumptions", "Assumptions it made")}
+												</Text>
+												<List size="sm">
+													{draft.generationMetadata.assumptions.map((assumption) => (
+														<List.Item key={assumption}>{assumption}</List.Item>
+													))}
+												</List>
+											</>
+										) : null}
+										<Text size="xs" c="dimmed">
+											{t(
+												"assist.rationale.confidence",
+												"The model's own confidence: {{percent}}% — its claim, not a measurement.",
+												{
+													percent: Math.round((draft.generationMetadata.confidence ?? 0) * 100),
+												},
+											)}
+										</Text>
+									</Stack>
+								</Collapse>
+							</>
+						)}
 					</Stack>
 				) : null}
 			</Stack>

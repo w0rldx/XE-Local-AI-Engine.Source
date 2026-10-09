@@ -56,6 +56,14 @@
 			"none": "Das Modell hat diesen Entwurf nicht begründet.",
 			"assumptions": "Getroffene Annahmen",
 			"confidence": "Selbsteingeschätzte Sicherheit des Modells: {{percent}} % – eine Behauptung, keine Messung."
+		},
+		"view": {
+			"label": "Entwurfsansicht",
+			"draft": "Entwurf",
+			"compare": "Vergleich"
+		},
+		"compare": {
+			"ariaLabel": "Aktueller Inhalt im Vergleich zum Entwurf"
 		}
 	},
 	"runtimeResources": {
@@ -8210,7 +8218,8 @@
 		},
 		"codeEditor": {
 			"fallbackLabel": "Code",
-			"inspectUnavailable": "Der Prüf-Editor konnte nicht geladen werden, daher kann dieser Inhalt hier nicht geprüft werden."
+			"inspectUnavailable": "Der Prüf-Editor konnte nicht geladen werden, daher kann dieser Inhalt hier nicht geprüft werden.",
+			"diffUnavailable": "Der Vergleich konnte nicht geladen werden."
 		},
 		"headerBar": {
 			"logout": "Abmelden",

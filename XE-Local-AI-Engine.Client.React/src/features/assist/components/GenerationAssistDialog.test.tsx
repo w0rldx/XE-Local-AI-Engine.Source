@@ -34,13 +34,23 @@ vi.mock("@/core/api/generated", async (importOriginal) => ({
 	updateSkill: updateSkillSpy,
 }));
 
+// The real viewer lazy-loads Monaco, which jsdom cannot lay out; this stand-in shows which texts it was handed.
+vi.mock("@/core/ui/components/CodeEditor/CodeDiffViewer", () => ({
+	CodeDiffViewer: (props: { original: string; modified: string; "data-testid"?: string }) => (
+		<div data-testid={props["data-testid"]}>
+			<pre data-testid="diff-original">{props.original}</pre>
+			<pre data-testid="diff-modified">{props.modified}</pre>
+		</div>
+	),
+}));
+
 import type {
 	XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse,
 	XeLocalAiEngineClientEndpointsSkillsV1DraftSkillRequest,
 } from "@/core/api/generated";
 import { ApiError } from "@/core/api/errors/ApiError";
 import { GenerationAssistDialog } from "@/features/assist/components/GenerationAssistDialog";
-import type { AssistDraft, AssistSurface, GenerationMetadata } from "@/features/assist/models/AssistModels";
+import type { AssistDraft, AssistMode, AssistSurface, GenerationMetadata } from "@/features/assist/models/AssistModels";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
 const models: XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse[] = [
@@ -77,7 +87,9 @@ const draftResponse = {
 	},
 };
 
-function renderDialog(surface: AssistSurface = "skill", installedModels = models) {
+const existingSkill = { name: "invoice-review", description: "Old description.", content: "# Old body" };
+
+function renderDialog(surface: AssistSurface = "skill", installedModels = models, mode: AssistMode = "Create") {
 	const onApply = vi.fn<(draft: AssistDraft) => void>();
 	const onDiscard = vi.fn<() => void>();
 	const onClose = vi.fn<() => void>();
@@ -89,8 +101,8 @@ function renderDialog(surface: AssistSurface = "skill", installedModels = models
 				<GenerationAssistDialog
 					opened={true}
 					surface={surface}
-					mode="Create"
-					existing={{ name: "", description: "", content: "" }}
+					mode={mode}
+					existing={mode === "Improve" ? existingSkill : { name: "", description: "", content: "" }}
 					models={installedModels}
 					loadedModelNames={["qwen3-4b"]}
 					onApply={onApply}
@@ -289,6 +301,59 @@ describe("GenerationAssistDialog", () => {
 
 		const options = draftSkillSpy.mock.calls[0]?.[0] as { body: XeLocalAiEngineClientEndpointsSkillsV1DraftSkillRequest };
 		expect(options.body.modelName).toBe("llama-3-8b");
+	});
+
+	it("offers no Compare view outside Improve mode", async () => {
+		draftSkillSpy.mockResolvedValue(draftResponse);
+		renderDialog();
+
+		generate();
+		await waitFor(() => expect(screen.getByTestId("assist-result")).toBeTruthy());
+
+		expect(screen.queryByTestId("assist-view")).toBeNull();
+		expect(screen.queryByRole("radio", { name: "Compare" })).toBeNull();
+	});
+
+	it("compares the current content with an Improve draft and still applies the draft from there", async () => {
+		draftSkillSpy.mockResolvedValue(draftResponse);
+		const { onApply } = renderDialog("skill", models, "Improve");
+		// Nothing to compare until a draft exists.
+		expect(screen.queryByTestId("assist-view")).toBeNull();
+
+		generate("Tighten the steps.");
+		await waitFor(() => expect(screen.getByTestId("assist-view")).toBeTruthy());
+		expect(screen.queryByTestId("assist-compare")).toBeNull();
+
+		fireEvent.click(screen.getByRole("radio", { name: "Compare" }));
+
+		expect(screen.getByTestId("diff-original").textContent).toBe("# Old body");
+		expect(screen.getByTestId("diff-modified").textContent).toBe("# Review an invoice\n\n1. Check the rate card.");
+		expect(screen.queryByTestId("assist-result-content")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("assist-apply"));
+
+		expect(onApply).toHaveBeenCalledWith({
+			name: "invoice-review",
+			description: "How to review supplier invoices.",
+			content: "# Review an invoice\n\n1. Check the rate card.",
+			generationMetadata,
+		});
+	});
+
+	it("returns to the Draft view when a new draft is generated", async () => {
+		draftSkillSpy.mockResolvedValue(draftResponse);
+		renderDialog("skill", models, "Improve");
+
+		generate("Tighten the steps.");
+		await waitFor(() => expect(screen.getByTestId("assist-view")).toBeTruthy());
+		fireEvent.click(screen.getByRole("radio", { name: "Compare" }));
+		expect(screen.getByTestId("assist-compare")).toBeTruthy();
+
+		fireEvent.click(screen.getByTestId("assist-generate"));
+		await waitFor(() => expect(draftSkillSpy).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(screen.getByTestId("assist-result-content")).toBeTruthy());
+
+		expect(screen.queryByTestId("assist-compare")).toBeNull();
 	});
 
 	// The image form has nothing to save: applying fills the prompt, so its intro must not tell the operator to save.

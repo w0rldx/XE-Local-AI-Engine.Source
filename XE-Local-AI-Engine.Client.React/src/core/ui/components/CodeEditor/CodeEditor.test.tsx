@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -194,6 +194,26 @@ describe("CodeEditor", () => {
 		const alert = await screen.findByRole("alert");
 		expect(alert.textContent).toContain("The inspection editor could not load");
 		expect(screen.queryByText(/hidden/)).toBeNull();
+		vi.doUnmock("@/core/ui/components/CodeEditor/MonacoCodeEditor");
+	});
+
+	it("an editor keeps the content editable through a plain textarea when the editor chunk cannot load", async () => {
+		// Same chunk miss as above, but with `onChange` set: a read-only block would leave the form field impossible to
+		// fill, so the fallback is a textarea that still reports edits.
+		vi.resetModules();
+		vi.doMock("@/core/ui/components/CodeEditor/MonacoCodeEditor", () => {
+			throw new Error("chunk load failed");
+		});
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		const { CodeEditor: FailingEditor } = await import("@/core/ui/components/CodeEditor/CodeEditor");
+		const onChange = vi.fn();
+
+		renderEditor(<FailingEditor value="# Body" onChange={onChange} aria-label="Body" data-testid="editor" />);
+
+		const textarea = (await screen.findByRole("textbox", { name: "Body" })) as HTMLTextAreaElement;
+		expect(textarea.value).toBe("# Body");
+		fireEvent.change(textarea, { target: { value: "# Body\nmore" } });
+		expect(onChange).toHaveBeenCalledWith("# Body\nmore");
 		vi.doUnmock("@/core/ui/components/CodeEditor/MonacoCodeEditor");
 	});
 });

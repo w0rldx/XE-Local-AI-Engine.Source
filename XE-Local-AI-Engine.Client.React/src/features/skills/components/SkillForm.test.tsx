@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { AssistDraft } from "@/features/assist/models/AssistModels";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
@@ -20,9 +22,66 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
-// The basic-fields section now embeds the AI-draft affordance, which is server-state backed (installed models +
-// running set). Stub it out: this file covers the form's own fields, and the affordance has its own test.
-vi.mock("@/features/assist/components/AssistActions", () => ({ AssistActions: () => null }));
+const appliedDraft = vi.hoisted(
+	(): AssistDraft => ({
+		name: "drafted-skill",
+		description: "Drafted description",
+		content: "# Drafted body\n\nFrom the model.",
+		generationMetadata: { model: "test-model" },
+	}),
+);
+
+// The basic-fields section embeds the AI-draft affordance, which is server-state backed (installed models + running
+// set) and has its own tests. It hands `onApply` straight to GenerationAssistDialog, which calls it with the draft and
+// then closes; this stand-in exposes exactly that call, so the form's side of the apply is what runs here.
+vi.mock("@/features/assist/components/AssistActions", () => ({
+	AssistActions: ({ onApply }: { onApply: (draft: AssistDraft) => void }) => (
+		<button type="button" data-testid="stub-assist-apply" onClick={() => onApply(appliedDraft)}>
+			apply
+		</button>
+	),
+}));
+
+// A fake Monaco at the runtime level, so the real MonacoCodeEditor (and its focus guard) runs against it.
+const editorMock = vi.hoisted(() => {
+	let value = "";
+	let contentListener: (() => void) | undefined;
+	let hasFocus = false;
+	const instance = {
+		getValue: vi.fn(() => value),
+		hasTextFocus: vi.fn(() => hasFocus),
+		setValue: vi.fn((next: string) => {
+			value = next;
+			contentListener?.();
+		}),
+		getModel: vi.fn(() => ({ dispose: vi.fn() })),
+		updateOptions: vi.fn(),
+		onDidChangeModelContent: vi.fn((listener: () => void) => {
+			contentListener = listener;
+			return { dispose: vi.fn() };
+		}),
+		dispose: vi.fn(),
+	};
+	return {
+		instance,
+		create: vi.fn((_container: HTMLElement, options: { value: string }) => {
+			value = options.value;
+			return instance;
+		}),
+		/** Simulates the operator typing: mutates the model, then fires the change listener as Monaco does. */
+		type(next: string) {
+			value = next;
+			contentListener?.();
+		},
+		focus(next: boolean) {
+			hasFocus = next;
+		},
+	};
+});
+
+vi.mock("@/core/ui/components/CodeEditor/MonacoRuntime", () => ({
+	monaco: { editor: { create: editorMock.create, setModelLanguage: vi.fn(), setTheme: vi.fn() } },
+}));
 
 import { SkillForm, type SkillFormHandle } from "@/features/skills/components/SkillForm";
 import type { SkillFormValues } from "@/features/skills/models/SkillModels";
@@ -115,6 +174,7 @@ function renderForm(props: HarnessProps = {}) {
 describe("SkillForm", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
+		editorMock.focus(false);
 	});
 
 	afterEach(() => {
@@ -170,13 +230,41 @@ describe("SkillForm", () => {
 		);
 	});
 
-	it("accepts typed input into the markdown body textarea", () => {
-		renderForm({ initialValues: { name: "ok", description: "d" } });
+	it("edits the body in the code editor and submits what was typed", async () => {
+		const { onSubmit } = renderForm({ initialValues: { name: "ok", description: "d" } });
+		await screen.findByTestId("skill-form-body-editor");
+		expect(editorMock.create.mock.calls[0]?.[1]).toMatchObject({ language: "markdown", ariaLabel: "Body" });
 
-		const body = screen.getByTestId("skill-form-body-textarea") as HTMLTextAreaElement;
-		fireEvent.change(body, { target: { value: "fresh body" } });
+		editorMock.focus(true);
+		act(() => editorMock.type("fresh body"));
+		fireEvent.click(screen.getByTestId("harness-save"));
 
-		expect(body.value).toBe("fresh body");
+		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ body: "fresh body" }));
+	});
+
+	it("lands an applied AI draft in the body editor, though the operator had typed there before the modal opened", async () => {
+		const { onSubmit } = renderForm({ initialValues: { name: "ok", description: "d", body: "old body" } });
+		await screen.findByTestId("skill-form-body-editor");
+
+		// The operator edits the body, then opens the assist modal: focus leaves the editor for the modal.
+		editorMock.focus(true);
+		act(() => editorMock.type("old body, edited"));
+		editorMock.focus(false);
+		editorMock.instance.setValue.mockClear();
+
+		fireEvent.click(screen.getByTestId("stub-assist-apply"));
+
+		expect(editorMock.instance.setValue).toHaveBeenCalledWith(appliedDraft.content);
+		expect(editorMock.instance.getValue()).toBe(appliedDraft.content);
+		fireEvent.click(screen.getByTestId("harness-save"));
+		expect(onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				name: appliedDraft.name,
+				description: appliedDraft.description,
+				body: "# Drafted body\n\nFrom the model.",
+				generated: true,
+			}),
+		);
 	});
 
 	it("words allowed-tools as display-only, because this node enforces nothing from it", () => {

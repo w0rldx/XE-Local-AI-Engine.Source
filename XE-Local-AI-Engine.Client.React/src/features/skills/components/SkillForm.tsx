@@ -239,6 +239,7 @@ export function SkillForm({
 				minRows={6}
 				error={errors.body ? t("pages.skills.form.body.required", "Body is required.") : undefined}
 				onChange={handleBodyChange}
+				editor="code"
 				data-testid="skill-form-body"
 			/>
 			<Text size="xs" c={bodyBudget.isOverGuidance ? "orange" : "dimmed"} data-testid="skill-form-body-budget">
