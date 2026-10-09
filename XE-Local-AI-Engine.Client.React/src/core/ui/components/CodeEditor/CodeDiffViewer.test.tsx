@@ -20,7 +20,9 @@ const diffMock = vi.hoisted(() => {
 	};
 	type FakeModel = ReturnType<typeof makeModel>;
 	const models: FakeModel[] = [];
+	const viewModel = { dispose: vi.fn() };
 	const editor = {
+		createViewModel: vi.fn((_model: { original: FakeModel; modified: FakeModel }) => viewModel),
 		setModel: vi.fn(),
 		getModel: vi.fn(),
 		updateOptions: vi.fn(),
@@ -28,6 +30,7 @@ const diffMock = vi.hoisted(() => {
 	};
 	return {
 		editor,
+		viewModel,
 		models,
 		createDiffEditor: vi.fn((_container: HTMLElement, _options: Record<string, unknown>) => editor),
 		createModel: vi.fn((value: string) => {
@@ -93,7 +96,11 @@ describe("CodeDiffViewer", () => {
 		});
 		expect(diffMock.createModel).toHaveBeenNthCalledWith(1, "old", "markdown");
 		expect(diffMock.createModel).toHaveBeenNthCalledWith(2, "new", "markdown");
-		expect(diffMock.editor.setModel).toHaveBeenCalledWith({ original: diffMock.models[0], modified: diffMock.models[1] });
+		expect(diffMock.editor.createViewModel).toHaveBeenCalledWith({
+			original: diffMock.models[0],
+			modified: diffMock.models[1],
+		});
+		expect(diffMock.editor.setModel).toHaveBeenCalledWith(diffMock.viewModel);
 		expect(diffMock.setTheme).toHaveBeenCalledWith("xe-light");
 	});
 
@@ -116,15 +123,24 @@ describe("CodeDiffViewer", () => {
 		expect(diffMock.models[0]?.setValue).not.toHaveBeenCalled();
 	});
 
-	it("disposes the diff editor and both models on unmount", async () => {
+	it("disposes the diff editor, then the view model it owns, then both models on unmount", async () => {
 		const { unmount } = renderViewer(<CodeDiffViewer original="old" modified="new" data-testid="diff" />, true);
 		await screen.findByTestId("diff");
 
 		unmount();
 
 		expect(diffMock.editor.dispose).toHaveBeenCalledTimes(1);
+		// The view model cancels the in-flight diff computation; disposing the models first would make it reject.
+		expect(diffMock.viewModel.dispose).toHaveBeenCalledTimes(1);
 		expect(diffMock.models[0]?.dispose).toHaveBeenCalledTimes(1);
 		expect(diffMock.models[1]?.dispose).toHaveBeenCalledTimes(1);
+		const order = [
+			diffMock.editor.dispose.mock.invocationCallOrder[0],
+			diffMock.viewModel.dispose.mock.invocationCallOrder[0],
+			diffMock.models[0]?.dispose.mock.invocationCallOrder[0],
+			diffMock.models[1]?.dispose.mock.invocationCallOrder[0],
+		];
+		expect(order).toEqual([...order].sort((a, b) => (a ?? 0) - (b ?? 0)));
 	});
 
 	it("shows an alert instead of the comparison when the editor cannot be created", async () => {

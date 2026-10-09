@@ -58,11 +58,16 @@ export default function MonacoCodeDiffViewer({
 		});
 		const originalModel = monaco.editor.createModel(original, language);
 		const modifiedModel = monaco.editor.createModel(modified, language);
-		editor.setModel({ original: originalModel, modified: modifiedModel });
+		// Created here, not by `setModel({ original, modified })`: the view model that call creates is never disposed with
+		// the editor, so its first diff computation outlives an early unmount and rejects "no diff result available"
+		// once the models below are gone. Owning it makes `dispose` cancel that computation.
+		const viewModel = editor.createViewModel({ original: originalModel, modified: modifiedModel });
+		editor.setModel(viewModel);
 		instanceRef.current = { editor, original: originalModel, modified: modifiedModel };
 		return () => {
-			// The editor does not own models handed to `setModel`; both are released explicitly after it.
+			// The editor owns neither the view model nor the models; all three are released explicitly after it.
 			editor.dispose();
+			viewModel.dispose();
 			originalModel.dispose();
 			modifiedModel.dispose();
 			instanceRef.current = null;
