@@ -41,37 +41,8 @@ public sealed class ChatActionsE2ETests : XESerialE2ETestBase
 
         var chatInput = Page.GetByPlaceholder(ChatInputPlaceholder);
         await Expect(chatInput).ToBeVisibleAsync();
-        await SelectFakeOllamaModelAsync();
+        await SelectComposerModelAsync(FakeOllamaChatModel);
         return chatInput;
-    }
-
-    /// <summary>
-    ///     Opens the composer's model selector and picks <see cref="FakeOllamaChatModel" />, mirroring
-    ///     <c>ChatLocalToolsE2ETests.SelectToolCapableModelAsync</c>. Without this the turn never reaches a
-    ///     provider (see <see cref="FakeOllamaChatModel" />) and the reply carries no content, which silently
-    ///     removes the content-gated per-message actions (Copy, feedback).
-    /// </summary>
-    private async Task SelectFakeOllamaModelAsync()
-    {
-        var trigger = Page.GetByTestId("chat-model-selector-trigger");
-        await Expect(trigger).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
-        {
-            Timeout = 5000
-        });
-        await trigger.ClickAsync();
-
-        var option = Page.GetByTestId($"chat-model-selector-option-{FakeOllamaChatModel}");
-        await Expect(option).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
-        {
-            Timeout = 5000
-        });
-        await option.ClickAsync();
-
-        await Expect(Page.GetByTestId("chat-model-selector-selected"))
-            .ToContainTextAsync(FakeOllamaChatModel, new LocatorAssertionsToContainTextOptions
-            {
-                Timeout = 5000
-            });
     }
 
     /// <summary>

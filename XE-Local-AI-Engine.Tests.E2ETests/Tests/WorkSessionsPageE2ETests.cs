@@ -232,7 +232,7 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
 
         // The seeded General persona is picked through the SAME AgentSelectorCard the chat composer uses.
         await Page.GetByTestId("chat-agent-selector-trigger").ClickAsync();
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        await Page.GetByRole(AriaRole.Menuitemradio, new PageGetByRoleOptions
         {
             Name = GeneralAgentName
         }).First.ClickAsync();
@@ -374,7 +374,7 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
         await Page.GetByTestId("create-work-session-objective").FillAsync("This session must never be created.");
 
         await Page.GetByTestId("chat-agent-selector-trigger").ClickAsync();
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        await Page.GetByRole(AriaRole.Menuitemradio, new PageGetByRoleOptions
         {
             Name = GeneralAgentName
         }).First.ClickAsync();

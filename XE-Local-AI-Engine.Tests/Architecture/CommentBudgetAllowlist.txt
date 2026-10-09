@@ -305,13 +305,13 @@ XE-Local-AI-Engine.Tests.E2ETests/Tests/BenchmarkQualityScoreE2ETests.cs|block|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/BenchmarkQualityScoreE2ETests.cs|run|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/BenchmarkQualityScoreE2ETests.cs|summary|2
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatActionsE2ETests.cs|run|2
-XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatActionsE2ETests.cs|summary|4
+XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatActionsE2ETests.cs|summary|3
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatAgentModeE2ETests.cs|block|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatAgentModeE2ETests.cs|run|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatAgentModeE2ETests.cs|summary|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatLocalToolsE2ETests.cs|block|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatLocalToolsE2ETests.cs|run|7
-XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatLocalToolsE2ETests.cs|summary|2
+XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatLocalToolsE2ETests.cs|summary|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatPageE2ETests.cs|block|1
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatPageE2ETests.cs|run|3
 XE-Local-AI-Engine.Tests.E2ETests/Tests/ChatPageE2ETests.cs|summary|1

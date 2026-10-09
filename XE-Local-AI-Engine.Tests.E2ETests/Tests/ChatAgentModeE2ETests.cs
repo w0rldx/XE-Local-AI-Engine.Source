@@ -109,8 +109,8 @@ public sealed class ChatAgentModeE2ETests : XESerialE2ETestBase
         await Expect(selectorTrigger).ToBeEnabledAsync();
         await selectorTrigger.ClickAsync();
 
-        // The picker lists the Default Assistant ("off") row plus each created agent. Pick ours by name.
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        // The picker lists the Default Assistant ("off") row plus each created agent as a menuitemradio. Pick ours by name.
+        await Page.GetByRole(AriaRole.Menuitemradio, new PageGetByRoleOptions
         {
             Name = agentName
         }).First.ClickAsync();

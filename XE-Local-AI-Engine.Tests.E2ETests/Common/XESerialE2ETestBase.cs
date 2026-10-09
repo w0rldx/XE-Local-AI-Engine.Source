@@ -63,4 +63,32 @@ public abstract class XESerialE2ETestBase : XEE2ETestBase
         // On success the SPA navigates away from /login.
         await page.WaitForURLAsync(url => !url.Contains("/login", StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>
+    ///     Opens the composer's model selector and picks <paramref name="modelName" />; a streamed reply needs a
+    ///     FakeOllama model, the default local model has no GGUF and fails at once.
+    /// </summary>
+    /// <param name="modelName">The option value behind <c>data-testid="chat-model-selector-option-{value}"</c>.</param>
+    protected async Task SelectComposerModelAsync(string modelName)
+    {
+        var trigger = Page.GetByTestId("chat-model-selector-trigger");
+        await Expect(trigger).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
+        await trigger.ClickAsync();
+
+        var option = Page.GetByTestId($"chat-model-selector-option-{modelName}");
+        await Expect(option).ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+        {
+            Timeout = 5000
+        });
+        await option.ClickAsync();
+
+        await Expect(Page.GetByTestId("chat-model-selector-selected"))
+            .ToContainTextAsync(modelName, new LocatorAssertionsToContainTextOptions
+            {
+                Timeout = 5000
+            });
+    }
 }

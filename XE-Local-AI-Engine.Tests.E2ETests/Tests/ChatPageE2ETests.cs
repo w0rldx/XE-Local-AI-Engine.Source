@@ -36,6 +36,7 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
     private const string ChatInputPlaceholder = "Type your message";
     private const string SendButtonTestId = "chat-send-button";
     private const string GatedAnswerText = "this answer must never arrive";
+    private const string FakeOllamaChatModel = "qwen3.5:0.8b";
 
     // Holds the fake's answer open until the after-hook releases it; only the cancel test installs it.
     private readonly TaskCompletionSource<bool> _answerGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -202,6 +203,8 @@ public sealed class ChatPageE2ETests : XESerialE2ETestBase
         // needs: Stop is always observable, and only the cancel can end the turn.
         Factory.FakeOllamaState.ChatScript = _ => GatedAnswerAsync(_answerGate.Task, CancellationToken.None);
         var (chatInput, sendButton) = await NavigateAndWaitForChatAsync();
+        // The default local model has no GGUF on the fixture node, so its turn fails before Stop is observable.
+        await SelectComposerModelAsync(FakeOllamaChatModel);
 
         await chatInput.FillAsync("Stream then cancel");
         await Expect(sendButton).ToBeEnabledAsync();
