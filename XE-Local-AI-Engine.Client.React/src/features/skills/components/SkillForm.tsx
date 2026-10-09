@@ -12,8 +12,8 @@ import {
 	SKILL_BODY_GUIDANCE_LINES,
 	SKILL_BODY_GUIDANCE_TOKENS,
 	type SkillFormValues,
-	skillFormSchema,
 	type SkillProvenance,
+	skillFormSchema,
 } from "@/features/skills/models/SkillModels";
 
 // Imperative handle so the host dialog can place Save in its sticky footer (outside the form body) yet still

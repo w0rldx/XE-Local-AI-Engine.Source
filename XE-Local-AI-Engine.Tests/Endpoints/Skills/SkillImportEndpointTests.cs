@@ -405,6 +405,103 @@ public sealed class SkillImportEndpointTests
         AssertEx.Equal(expected: 0, skill.GetProperty("resources").GetArrayLength());
     }
 
+    [Test]
+    public async Task PreviewResource_WhenNoBearerToken_ReturnsUnauthorized()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, PreviewResourceRoute(Guid.NewGuid(), SkillName(), "references/FAQ.md"));
+        using var response = await client.SendAsync(request);
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Test]
+    public async Task PreviewResource_WhenTokenUnknown_ReturnsNotFound()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        using var response = await GetPreviewResourceAsync(factory, client, Guid.NewGuid(), SkillName(), "references/FAQ.md");
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "Preview the source again.");
+    }
+
+    [Test]
+    public async Task PreviewResource_WhenResourceUnknown_ReturnsNotFound()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        var name = SkillName();
+        var preview = await PreviewArchiveAsync(factory, client, name);
+
+        using var response = await GetPreviewResourceAsync(factory, client, preview.GetProperty("token").GetGuid(), name, "references/absent.md");
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // The report carries no resource content; this route is how the operator reads it before deciding.
+    [Test]
+    public async Task PreviewResource_AfterPreview_ReturnsContentWithoutConsumingTheToken()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        var name = SkillName();
+        var preview = await PreviewArchiveAsync(factory, client, name);
+        var token = preview.GetProperty("token").GetGuid();
+
+        using var response = await GetPreviewResourceAsync(factory, client, token, name.ToUpperInvariant(), "references/FAQ.md");
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(payload);
+        AssertEx.Equal("references/FAQ.md", document.RootElement.GetProperty("name").GetString());
+        AssertEx.Equal("Frequently asked.", document.RootElement.GetProperty("content").GetString());
+
+        using var commit = await CommitAsync(factory, client, token, name, acknowledged: true);
+        AssertEx.Equal(HttpStatusCode.OK, commit.StatusCode);
+    }
+
+    [Test]
+    public async Task PreviewResource_AfterCommitConsumedTheToken_ReturnsNotFound()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+
+        var name = SkillName();
+        var preview = await PreviewArchiveAsync(factory, client, name);
+        var token = preview.GetProperty("token").GetGuid();
+
+        using (var commit = await CommitAsync(factory, client, token, name, acknowledged: true))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, commit.StatusCode);
+        }
+
+        using var response = await GetPreviewResourceAsync(factory, client, token, name, "references/FAQ.md");
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    private static string PreviewResourceRoute(Guid token, string skillName, string resourceName)
+    {
+        return $"{PreviewRoute}/{token}/skills/{skillName}/resources/{Uri.EscapeDataString(resourceName)}";
+    }
+
+    private static async Task<HttpResponseMessage> GetPreviewResourceAsync(TestServerWebAppFactory factory,
+        HttpClient client,
+        Guid token,
+        string skillName,
+        string resourceName)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, PreviewResourceRoute(token, skillName, resourceName));
+        factory.AddNodeBearerToken(request);
+        return await client.SendAsync(request);
+    }
+
     /// <summary>An archive holding one skill with one bundled file, used by every write-path test here.</summary>
     private static byte[] BuildArchive(string name)
     {

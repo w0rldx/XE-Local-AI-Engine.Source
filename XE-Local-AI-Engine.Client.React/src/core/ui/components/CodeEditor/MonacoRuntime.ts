@@ -9,6 +9,10 @@
  */
 import * as monaco from "monaco-editor/editor/editor.api.js";
 import EditorWorker from "monaco-editor/editor/editor.worker.js?worker";
+// `editor.api` carries no editor contributions. These two are what `inspect` mode relies on: the Unicode highlighter
+// draws the box around an invisible or look-alike character, and the hover names its code point when pointed at.
+import "monaco-editor/editor/contrib/hover/browser/hoverContribution.js";
+import "monaco-editor/editor/contrib/unicodeHighlighter/browser/unicodeHighlighter.js";
 import "monaco-editor/languages/definitions/csharp/register.js";
 import "monaco-editor/languages/definitions/dockerfile/register.js";
 import "monaco-editor/languages/definitions/ini/register.js";

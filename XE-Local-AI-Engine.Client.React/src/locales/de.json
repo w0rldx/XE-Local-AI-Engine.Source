@@ -5176,7 +5176,7 @@
 					"title": "Importierte Skills sind nicht vertrauenswürdige Inhalte",
 					"untrusted": "Skills, die Sie importieren, sind fremde Anweisungen. Dieser Knoten prüft, scannt und isoliert sie nicht. Der Inhalt eines Skills wird wortwörtlich in den Kontext Ihres Agenten eingefügt und kann versuchen, den Agenten zu etwas anderem zu bewegen als dem, was seine Beschreibung angibt.",
 					"consequence": "Die Anweisungen eines aktivierten Skills laufen mit den Tool-Rechten Ihres Agenten — er kann damit ohne weitere Rückfrage Ihre Wissensdatenbank und lokale Dateien in Ihrem Arbeitsverzeichnis lesen.",
-					"posture": "Skripte werden nie importiert. Alles andere wird Ihnen genau so angezeigt, wie es gespeichert wird — lesen Sie unten den vollständigen Inhalt und jede Ressource, und entscheiden Sie dann.",
+					"posture": "Skripte werden nie importiert, und Dateien nicht unterstützter Typen werden verworfen; jeder Skill unten listet beides auf. Alles andere ist unten genau so lesbar, wie es gespeichert wird: Öffnen Sie den vollständigen Inhalt und jede mitgelieferte Ressource, in denen versteckte und verwechselbare Zeichen markiert sind, und entscheiden Sie dann.",
 					"disabled": "Importierte Skills sind zunächst deaktiviert. Sie zu aktivieren ist ein eigener, bewusster Schritt."
 				},
 				"tabs": {
@@ -5216,7 +5216,12 @@
 					"conflict": "Ein Skill namens '{{name}}' existiert auf diesem Knoten bereits.",
 					"resources": "Mitgelieferte Ressourcen ({{count}})",
 					"showBody": "Vollständigen Inhalt anzeigen",
-					"hideBody": "Vollständigen Inhalt ausblenden"
+					"hideBody": "Vollständigen Inhalt ausblenden",
+					"ignoredTitle": "Ignoriert — nicht unterstützte Dateitypen werden nicht importiert",
+					"metadata": "Metadaten ({{count}})",
+					"bodyLabel": "Inhalt von {{name}}",
+					"resourceExpired": "Diese Vorschau ist abgelaufen oder wurde bereits importiert, daher kann die Ressource hier nicht mehr gelesen werden. Wählen Sie die Quelle erneut, um die Vorschau neu zu erstellen.",
+					"resourceError": "Diese Ressource konnte nicht geladen werden."
 				},
 				"outcomes": {
 					"title": "Import-Ergebnis",
@@ -8193,7 +8198,8 @@
 			"skipToContent": "Zum Hauptinhalt springen"
 		},
 		"codeEditor": {
-			"fallbackLabel": "Code"
+			"fallbackLabel": "Code",
+			"inspectUnavailable": "Der Prüf-Editor konnte nicht geladen werden, daher kann dieser Inhalt hier nicht geprüft werden."
 		},
 		"headerBar": {
 			"logout": "Abmelden",

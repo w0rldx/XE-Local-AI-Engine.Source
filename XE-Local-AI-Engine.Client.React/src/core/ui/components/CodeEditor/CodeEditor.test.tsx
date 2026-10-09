@@ -155,4 +155,45 @@ describe("CodeEditor", () => {
 
 		expect(editorMock.instance.setValue).toHaveBeenCalledWith("replaced");
 	});
+
+	it("inspect mode forces read-only and renders whitespace, control characters and invisible or ambiguous Unicode", async () => {
+		const withZeroWidthSpace = "a\u200Bb";
+		renderEditor(<CodeEditor value={withZeroWidthSpace} inspect={true} readOnly={false} data-testid="viewer" />);
+		await screen.findByTestId("viewer");
+
+		expect(editorMock.create.mock.calls[0]?.[1]).toMatchObject({
+			readOnly: true,
+			domReadOnly: true,
+			renderWhitespace: "all",
+			renderControlCharacters: true,
+			unicodeHighlight: {
+				invisibleCharacters: true,
+				ambiguousCharacters: true,
+				nonBasicASCII: false,
+				includeComments: true,
+				includeStrings: true,
+				// No locale exemption: a look-alike is flagged whatever the reviewer's own language.
+				allowedLocales: {},
+			},
+		});
+	});
+
+	it("inspect mode fails closed to an alert, never the plain-text fallback, when the editor chunk cannot load", async () => {
+		// A fresh module graph whose lazy editor import rejects, as an offline chunk miss does. The plain <Code> fallback
+		// would show the untrusted text with its zero-width characters invisible again, so it must not appear.
+		vi.resetModules();
+		vi.doMock("@/core/ui/components/CodeEditor/MonacoCodeEditor", () => {
+			throw new Error("chunk load failed");
+		});
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		const { CodeEditor: FailingEditor } = await import("@/core/ui/components/CodeEditor/CodeEditor");
+
+		const untrusted = "hidden\u200Btext";
+		renderEditor(<FailingEditor value={untrusted} inspect={true} data-testid="viewer" />);
+
+		const alert = await screen.findByRole("alert");
+		expect(alert.textContent).toContain("The inspection editor could not load");
+		expect(screen.queryByText(/hidden/)).toBeNull();
+		vi.doUnmock("@/core/ui/components/CodeEditor/MonacoCodeEditor");
+	});
 });

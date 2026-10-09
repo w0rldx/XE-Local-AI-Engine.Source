@@ -94,12 +94,28 @@ public sealed class SkillImportCandidateResponse
     /// <summary>Script files found and dropped. Listed because an operator should see what a skill expected to run.</summary>
     public required IReadOnlyList<string> RefusedScripts { get; init; }
 
+    /// <summary>Files dropped because their type is not a supported resource. Names that fail the charset guard are counted in the warnings instead.</summary>
+    public required IReadOnlyList<string> IgnoredFiles { get; init; }
+
     public required bool ConflictsWithExistingSkill { get; init; }
 
     /// <summary>Non-empty means this skill cannot be imported at all. Messages never echo untrusted content.</summary>
     public required IReadOnlyList<string> Problems { get; init; }
 
     public required bool CanImport { get; init; }
+}
+
+/// <summary>
+///     Route binding for <c>GET skills/import/preview/{token}/skills/{skillName}/resources/{resourceName}</c>.
+///     <see cref="ResourceName" /> arrives percent-escaped whenever it carries a slash.
+/// </summary>
+public sealed class GetSkillImportPreviewResourceRequest
+{
+    public Guid Token { get; init; }
+
+    public string? SkillName { get; init; }
+
+    public string? ResourceName { get; init; }
 }
 
 /// <summary>Phase 2 request: which skills from the approved report to write, and the operator's explicit consent.</summary>

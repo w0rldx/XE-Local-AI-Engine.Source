@@ -64,7 +64,7 @@ export function SkillImportPreviewPresentation({
 						<Text size="sm">
 							{t(
 								"pages.skills.import.warning.posture",
-								"Scripts are never imported. Everything else is shown to you exactly as it will be stored — read the full body and every resource below, then decide.",
+								"Scripts are never imported and files of unsupported types are dropped; each skill below lists both. Everything else is readable below exactly as it will be stored: open the full body and every bundled resource, where hidden and look-alike characters are marked, then decide.",
 							)}
 						</Text>
 						<Text size="sm">
@@ -206,6 +206,7 @@ function SkillImportReport({
 				<SkillImportCandidateCard
 					key={candidate.name}
 					candidate={candidate}
+					token={report.token}
 					selected={selected.has(candidate.name)}
 					onToggle={onToggleCandidate}
 				/>

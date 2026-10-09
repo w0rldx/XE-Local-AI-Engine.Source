@@ -5176,7 +5176,7 @@
 					"title": "Imported skills are untrusted content",
 					"untrusted": "Skills you import are third-party instructions. This node does not validate, scan or sandbox them. A skill's body is injected verbatim into your agent's context and can attempt to redirect the agent to do something other than what its description says.",
 					"consequence": "An enabled skill's instructions run with your agent's tool access — including reading your knowledge base and local workspace files without a further prompt.",
-					"posture": "Scripts are never imported. Everything else is shown to you exactly as it will be stored — read the full body and every resource below, then decide.",
+					"posture": "Scripts are never imported and files of unsupported types are dropped; each skill below lists both. Everything else is readable below exactly as it will be stored: open the full body and every bundled resource, where hidden and look-alike characters are marked, then decide.",
 					"disabled": "Imported skills arrive disabled. Enabling one is a separate, deliberate step."
 				},
 				"tabs": {
@@ -5216,7 +5216,12 @@
 					"conflict": "A skill named '{{name}}' already exists on this node.",
 					"resources": "Bundled resources ({{count}})",
 					"showBody": "View full body",
-					"hideBody": "Hide full body"
+					"hideBody": "Hide full body",
+					"ignoredTitle": "Ignored — unsupported file types are not imported",
+					"metadata": "Metadata ({{count}})",
+					"bodyLabel": "Body of {{name}}",
+					"resourceExpired": "This preview has expired or was already imported, so the resource can no longer be read here. Choose the source again to re-run the preview.",
+					"resourceError": "Could not load this resource."
 				},
 				"outcomes": {
 					"title": "Import result",
@@ -8193,7 +8198,8 @@
 			"skipToContent": "Skip to main content"
 		},
 		"codeEditor": {
-			"fallbackLabel": "Code"
+			"fallbackLabel": "Code",
+			"inspectUnavailable": "The inspection editor could not load, so this content cannot be reviewed here."
 		},
 		"headerBar": {
 			"logout": "Logout",

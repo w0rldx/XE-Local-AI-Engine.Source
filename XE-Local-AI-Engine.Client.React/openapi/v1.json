@@ -19715,6 +19715,87 @@
         ]
       }
     },
+    "/api/local/v1/skills/import/preview/{token}/skills/{skillName}/resources/{resourceName}": {
+      "get": {
+        "tags": [
+          "Skills"
+        ],
+        "operationId": "getSkillImportPreviewResource",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "skillName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSkillsV1SkillResourceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/skills/{skillId}": {
       "delete": {
         "tags": [
@@ -45805,6 +45886,10 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsSkillsV1GetSkillImportPreviewResourceRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "XE_Local_AI_EngineClientEndpointsSkillsV1GetSkillRequest": {
         "type": "object",
         "additionalProperties": false
@@ -45882,6 +45967,7 @@
           "bodyLineCount",
           "resources",
           "refusedScripts",
+          "ignoredFiles",
           "conflictsWithExistingSkill",
           "problems",
           "canImport"
@@ -45930,6 +46016,12 @@
             }
           },
           "refusedScripts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ignoredFiles": {
             "type": "array",
             "items": {
               "type": "string"

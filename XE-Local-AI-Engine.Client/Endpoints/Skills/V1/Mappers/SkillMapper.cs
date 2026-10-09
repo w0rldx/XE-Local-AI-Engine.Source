@@ -126,11 +126,26 @@ internal static class SkillMapper
                         })
                     ],
                     RefusedScripts = skill.RefusedScripts,
+                    IgnoredFiles = skill.IgnoredFiles,
                     ConflictsWithExistingSkill = skill.ConflictsWithExistingSkill,
                     Problems = skill.Problems,
                     CanImport = skill.CanImport
                 })
             ]
+        };
+    }
+
+    public static SkillResourceResponse ToResponse(this SkillImportResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return new SkillResourceResponse
+        {
+            Name = resource.Name,
+            Description = resource.Description,
+            MediaType = resource.MediaType,
+            SizeBytes = resource.SizeBytes,
+            Content = resource.Content
         };
     }
 

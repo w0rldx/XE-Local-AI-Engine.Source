@@ -3,6 +3,7 @@
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react-i18next", () => ({
@@ -28,12 +29,29 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 	previewSkillImportMutation: () => ({ mutationFn: previewSpy }),
 }));
 
+// Monaco needs a layout engine jsdom lacks (its own wrapper contract is pinned in CodeEditor.test.tsx). This stand-in
+// renders the text it was handed and whether inspection mode was asked for, which is what the import review relies on.
+vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
+	CodeEditor: (props: { value: string; inspect?: boolean; "data-testid"?: string }) => (
+		<pre data-testid={props["data-testid"]} data-inspect={String(props.inspect === true)}>
+			{props.value}
+		</pre>
+	),
+}));
+
 import type { XeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewResponse } from "@/core/api/generated";
 import { SkillImportDialog } from "@/features/skills/components/SkillImportDialog";
 import { testMantineTheme } from "@/test/MantineTestRender";
+import { localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
+import { server } from "@/test/msw/Server";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
+
+const resourceRoute = "skills/import/preview/:token/skills/:skillName/resources/:resourceName";
 
 const report: XeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewResponse = {
-	token: "report-token-1",
+	token: "3f2b8c1e-5d4a-4e6f-9a7b-1c2d3e4f5a6b",
 	sourceUri: "github:microsoft/skills",
 	warnings: [],
 	skills: [
@@ -44,11 +62,12 @@ const report: XeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewResponse =
 			license: "MIT",
 			compatibility: null,
 			allowedTools: "read_file",
-			metadata: null,
+			metadata: { author: "contoso", version: "1.2" },
 			bodySizeBytes: 31,
 			bodyLineCount: 3,
 			resources: [{ name: "reference/rates.md", description: "", mediaType: "text/markdown", sizeBytes: 120 }],
 			refusedScripts: ["scripts/setup.py", "scripts/run.sh"],
+			ignoredFiles: ["assets/logo.png", "data/table.xlsx"],
 			conflictsWithExistingSkill: false,
 			problems: [],
 			canImport: true,
@@ -65,6 +84,7 @@ const report: XeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewResponse =
 			bodyLineCount: 1,
 			resources: [],
 			refusedScripts: [],
+			ignoredFiles: [],
 			conflictsWithExistingSkill: true,
 			problems: [],
 			canImport: true,
@@ -81,6 +101,7 @@ const report: XeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewResponse =
 			bodyLineCount: 1,
 			resources: [],
 			refusedScripts: [],
+			ignoredFiles: [],
 			conflictsWithExistingSkill: false,
 			problems: ["Name 'bad--name' is not valid."],
 			canImport: false,
@@ -225,6 +246,75 @@ describe("SkillImportDialog", () => {
 		await waitFor(() =>
 			expect(screen.getByTestId("skill-import-body-invoice-review").textContent).toContain("Review an invoice"),
 		);
+		// The body is untrusted text: it must render in the inspection editor, which draws hidden characters.
+		expect(screen.getByTestId("skill-import-body-invoice-review").getAttribute("data-inspect")).toBe("true");
+	});
+
+	it("lists the whole manifest: accepted resources, refused scripts, ignored files and metadata", async () => {
+		await renderReport();
+
+		expect(screen.getByTestId("skill-import-resource-invoice-review-reference/rates.md").textContent).toContain(
+			"reference/rates.md",
+		);
+		expect(screen.getByTestId("skill-import-refused-invoice-review").textContent).toContain("scripts/run.sh");
+		const ignored = screen.getByTestId("skill-import-ignored-invoice-review").textContent ?? "";
+		expect(ignored).toContain("assets/logo.png");
+		expect(ignored).toContain("data/table.xlsx");
+		expect(ignored).toContain("not imported");
+		const metadata = screen.getByTestId("skill-import-metadata-invoice-review").textContent ?? "";
+		expect(metadata).toContain("author: contoso");
+		expect(metadata).toContain("version: 1.2");
+		// A candidate with nothing dropped and no metadata shows neither list.
+		expect(screen.queryByTestId("skill-import-ignored-legal-redline")).toBeNull();
+		expect(screen.queryByTestId("skill-import-metadata-legal-redline")).toBeNull();
+	});
+
+	it("fetches a resource's content from the preview only when the operator opens it", async () => {
+		const requested: Record<string, string>[] = [];
+		server.use(
+			http.get(localApiPath(resourceRoute), ({ params }) => {
+				requested.push(params as Record<string, string>);
+				return HttpResponse.json({
+					name: "reference/rates.md",
+					description: "",
+					mediaType: "text/markdown",
+					sizeBytes: 120,
+					content: "Rate card\u200B with a hidden character",
+				});
+			}),
+		);
+		await renderReport();
+		expect(requested).toHaveLength(0);
+
+		fireEvent.click(screen.getByTestId("skill-import-resource-toggle-invoice-review-reference/rates.md"));
+
+		const content = await screen.findByTestId("skill-import-resource-content-invoice-review-reference/rates.md");
+		expect(content.textContent).toContain("Rate card\u200B with a hidden character");
+		expect(content.getAttribute("data-inspect")).toBe("true");
+		expect(requested).toEqual([
+			{ resourceName: "reference/rates.md", skillName: "invoice-review", token: "3f2b8c1e-5d4a-4e6f-9a7b-1c2d3e4f5a6b" },
+		]);
+	});
+
+	it("shows the server's own reason when a resource read fails for another reason", async () => {
+		server.use(problemDetailsRoute("get", resourceRoute, 500, { detail: "The preview store is unavailable." }));
+		await renderReport();
+
+		fireEvent.click(screen.getByTestId("skill-import-resource-toggle-invoice-review-reference/rates.md"));
+
+		const error = await screen.findByTestId("skill-import-resource-error-invoice-review-reference/rates.md");
+		expect(error.textContent).toContain("The preview store is unavailable.");
+	});
+
+	it("says the preview expired, rather than showing a blank, when the resource read answers 404", async () => {
+		server.use(problemDetailsRoute("get", resourceRoute, 404, { title: "Not Found" }));
+		await renderReport();
+
+		fireEvent.click(screen.getByTestId("skill-import-resource-toggle-invoice-review-reference/rates.md"));
+
+		const error = await screen.findByTestId("skill-import-resource-error-invoice-review-reference/rates.md");
+		expect(error.textContent).toContain("This preview has expired or was already imported");
+		expect(screen.queryByTestId("skill-import-resource-content-invoice-review-reference/rates.md")).toBeNull();
 	});
 
 	it("commits the report token, the selected names and the acknowledgement", async () => {
@@ -236,7 +326,12 @@ describe("SkillImportDialog", () => {
 
 		await waitFor(() => expect(commitSpy).toHaveBeenCalledTimes(1));
 		expect(commitSpy.mock.calls[0]?.[0]).toEqual({
-			body: { acknowledged: true, conflictResolution: "Skip", skillNames: ["invoice-review"], token: "report-token-1" },
+			body: {
+				acknowledged: true,
+				conflictResolution: "Skip",
+				skillNames: ["invoice-review"],
+				token: "3f2b8c1e-5d4a-4e6f-9a7b-1c2d3e4f5a6b",
+			},
 		});
 		// The result names what landed, and repeats that an imported skill is not live until enabled.
 		await waitFor(() => expect(screen.getByTestId("skill-import-outcome-invoice-review")).toBeTruthy());

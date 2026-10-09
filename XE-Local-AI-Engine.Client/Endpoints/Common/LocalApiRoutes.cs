@@ -297,6 +297,10 @@ public static class LocalApiRoutes
         public const string ImportPreview = "skills/import/preview";
         public const string Import = "skills/import";
 
+        // One bundled file's content read out of a live preview, so it can be reviewed before the commit. Same
+        // percent-escaped {resourceName} rule as ResourceByName; {skillName} is matched NOCASE like the commit's selection.
+        public const string ImportPreviewResource = "skills/import/preview/{token}/skills/{skillName}/resources/{resourceName}";
+
         // AI-assisted drafting, same literal-segment-under-the-collection rule as "import". Writes nothing — the draft
         // only populates the operator's form; the existing create/update routes stay the sole persistence path.
         public const string Draft = "skills/draft";

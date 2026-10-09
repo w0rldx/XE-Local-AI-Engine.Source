@@ -21,7 +21,7 @@ internal static class SkillArchiveReader
 
     private const string SkillFileName = "SKILL.md";
 
-    /// <summary>MAF's own default <c>AllowedResourceExtensions</c>. Anything else is silently ignored, not refused.</summary>
+    /// <summary>MAF's own default <c>AllowedResourceExtensions</c>. Anything else is ignored, not refused, and listed in the report.</summary>
     private static readonly HashSet<string> ResourceExtensions =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -169,6 +169,7 @@ internal static class SkillArchiveReader
     {
         var files = new List<SkillArchiveFile>();
         var refusedScripts = new List<string>();
+        var ignoredFiles = new List<string>();
         var resourceLimitExceeded = false;
 
         foreach (var (path, entry) in entries.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
@@ -195,6 +196,8 @@ internal static class SkillArchiveReader
 
             if (!ResourceExtensions.Contains(Path.GetExtension(relative)))
             {
+                // Recorded, never inflated: the operator sees what the skill shipped that will not be imported.
+                ignoredFiles.Add(relative);
                 continue;
             }
 
@@ -221,6 +224,7 @@ internal static class SkillArchiveReader
             SkillMarkdown = await ReadTextAsync(entries[root + SkillFileName], budget, options, cancellationToken),
             Files = files,
             RefusedScripts = refusedScripts,
+            IgnoredFiles = ignoredFiles,
             ResourceLimitExceeded = resourceLimitExceeded
         };
     }

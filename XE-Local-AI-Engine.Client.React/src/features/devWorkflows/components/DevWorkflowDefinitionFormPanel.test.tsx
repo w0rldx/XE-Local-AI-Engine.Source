@@ -166,6 +166,8 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 	});
 
 	it("prompts for a template rather than rendering an empty form when none is picked", () => {
+		// The empty panel still fetches the agent and model options so a picked template opens ready; answer them.
+		server.use(...optionRoutes());
 		renderWithProviders(
 			<ConfirmProvider>
 				<DevWorkflowDefinitionFormPanel definitionId={undefined} />

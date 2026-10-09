@@ -60,6 +60,13 @@ public interface ISkillImportService
     /// </summary>
     /// <exception cref="SkillImportException">Unacknowledged, unknown/expired token, or an unselectable skill name.</exception>
     Task<SkillImportResult> CommitAsync(SkillImportCommitRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Reads one bundled file, content included, out of a live preview so the operator can review it before the
+    ///     commit. Reads the cached payload only: no re-parse, no new cache entry, and the token is not consumed.
+    /// </summary>
+    /// <returns><c>null</c> when the token is unknown, expired or consumed, or no such skill or resource is in the report.</returns>
+    SkillImportResource? FindPreviewResource(Guid token, string skillName, string resourceName);
 }
 
 /// <summary>
@@ -146,6 +153,12 @@ public sealed class SkillImportCandidate
 
     /// <summary>Script files found and dropped. Listed because an operator should see what a skill expected to run.</summary>
     public required IReadOnlyList<string> RefusedScripts { get; init; }
+
+    /// <summary>
+    ///     Files outside the resource extension allowlist, dropped without being read. Only names that pass the
+    ///     resource-name charset guard are listed; the rest are counted into one preview warning.
+    /// </summary>
+    public required IReadOnlyList<string> IgnoredFiles { get; init; }
 
     /// <summary>A skill with this name (NOCASE) is already in the library; the commit's conflict resolution decides.</summary>
     public required bool ConflictsWithExistingSkill { get; init; }

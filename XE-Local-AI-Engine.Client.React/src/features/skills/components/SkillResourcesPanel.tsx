@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
+import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useSkillResourceContent, useSkillResources } from "@/features/skills/queries/useSkillImport";
 
@@ -86,9 +86,16 @@ export function SkillResourcesPanel({ skillId }: SkillResourcesPanelProps) {
 									)}
 								/>
 							) : (
-								<div data-testid={`skill-resource-content-${resource.name}`}>
-									<CodeBlock language="markdown" code={contentQuery.data?.content ?? ""} />
-								</div>
+								// The same inspection view as the import preview, so a resource reads identically before and after.
+								<CodeEditor
+									inspect={true}
+									language="markdown"
+									wordWrap={true}
+									height={240}
+									value={contentQuery.data?.content ?? ""}
+									aria-label={resource.name}
+									data-testid={`skill-resource-content-${resource.name}`}
+								/>
 							)
 						) : null}
 					</Stack>

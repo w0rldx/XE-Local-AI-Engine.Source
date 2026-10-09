@@ -5279,6 +5279,8 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1DeleteSkillRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsSkillsV1GetSkillImportPreviewResourceRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1GetSkillResourceRequest = z.record(z.string(), z.never());
@@ -5338,6 +5340,7 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1SkillImportCandidateResponse
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	resources: z.array(zXeLocalAiEngineClientEndpointsSkillsV1SkillResourceSummaryResponse),
 	refusedScripts: z.array(z.string()),
+	ignoredFiles: z.array(z.string()),
 	conflictsWithExistingSkill: z.boolean(),
 	problems: z.array(z.string()),
 	canImport: z.boolean(),
@@ -12754,6 +12757,17 @@ export const zPreviewSkillImportBody = zXeLocalAiEngineClientEndpointsSkillsV1Sk
  * Success
  */
 export const zPreviewSkillImportResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillImportPreviewResponse;
+
+export const zGetSkillImportPreviewResourcePath = z.object({
+	token: z.guid(),
+	skillName: z.string(),
+	resourceName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetSkillImportPreviewResourceResponse = zXeLocalAiEngineClientEndpointsSkillsV1SkillResourceResponse;
 
 export const zDeleteSkillPath = z.object({
 	skillId: z.guid(),

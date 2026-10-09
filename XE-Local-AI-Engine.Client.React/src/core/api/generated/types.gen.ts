@@ -5569,6 +5569,10 @@ export type XeLocalAiEngineClientEndpointsSkillsV1DraftSkillRequest = {
 	existingContent?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsSkillsV1GetSkillImportPreviewResourceRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsSkillsV1GetSkillRequest = {
 	[key: string]: never;
 };
@@ -5610,6 +5614,7 @@ export type XeLocalAiEngineClientEndpointsSkillsV1SkillImportCandidateResponse =
 	bodyLineCount: number;
 	resources: Array<XeLocalAiEngineClientEndpointsSkillsV1SkillResourceSummaryResponse>;
 	refusedScripts: Array<string>;
+	ignoredFiles: Array<string>;
 	conflictsWithExistingSkill: boolean;
 	problems: Array<string>;
 	canImport: boolean;
@@ -18850,6 +18855,48 @@ export type PreviewSkillImportResponses = {
 };
 
 export type PreviewSkillImportResponse = PreviewSkillImportResponses[keyof PreviewSkillImportResponses];
+
+export type GetSkillImportPreviewResourceData = {
+	body?: never;
+	path: {
+		token: string;
+		skillName: string;
+		resourceName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/skills/import/preview/{token}/skills/{skillName}/resources/{resourceName}";
+};
+
+export type GetSkillImportPreviewResourceErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsErrorResponse;
+};
+
+export type GetSkillImportPreviewResourceError = GetSkillImportPreviewResourceErrors[keyof GetSkillImportPreviewResourceErrors];
+
+export type GetSkillImportPreviewResourceResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsSkillsV1SkillResourceResponse;
+};
+
+export type GetSkillImportPreviewResourceResponse =
+	GetSkillImportPreviewResourceResponses[keyof GetSkillImportPreviewResourceResponses];
 
 export type DeleteSkillData = {
 	body?: never;

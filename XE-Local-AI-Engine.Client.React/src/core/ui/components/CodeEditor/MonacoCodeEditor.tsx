@@ -5,6 +5,27 @@ import type { CodeEditorProps } from "@/core/ui/components/CodeEditor/CodeEditor
 import { monaco } from "@/core/ui/components/CodeEditor/MonacoRuntime";
 
 /**
+ * What `inspect` turns on: every character that does not look like itself is drawn so a reviewer can see it.
+ * `allowedLocales: {}` flags look-alikes whatever the reviewer's locale (by default Monaco exempts the OS/browser
+ * locale's own script, so a Cyrillic reviewer would not see a Cyrillic "а" in a Latin word). Noisy on a genuinely
+ * non-Latin skill, which is the right trade for third-party content.
+ * simplified: off means "pass nothing" (Monaco's defaults), so switching inspect off on a live instance keeps these;
+ * no consumer toggles it, every inspect surface is inspect for its whole life.
+ */
+const INSPECT_OPTIONS: monaco.editor.IEditorOptions = {
+	renderWhitespace: "all",
+	renderControlCharacters: true,
+	unicodeHighlight: {
+		invisibleCharacters: true,
+		ambiguousCharacters: true,
+		nonBasicASCII: false,
+		includeComments: true,
+		includeStrings: true,
+		allowedLocales: {},
+	},
+};
+
+/**
  * The Monaco-backed body of `CodeEditor`. Only ever mounted through `React.lazy` so `./MonacoRuntime` (the ~3 MB editor
  * chunk) is fetched on first use, never on app boot. Owns exactly one editor instance for its lifetime; prop changes
  * are applied in place (value only when it actually differs, so a controlled round-trip does not reset the caret).
@@ -12,13 +33,15 @@ import { monaco } from "@/core/ui/components/CodeEditor/MonacoRuntime";
 export default function MonacoCodeEditor({
 	value,
 	language = "plaintext",
-	readOnly = false,
+	readOnly: readOnlyProp = false,
+	inspect = false,
 	onChange,
 	height = 320,
 	wordWrap = false,
 	"aria-label": ariaLabel,
 	"data-testid": testId,
 }: CodeEditorProps) {
+	const readOnly = readOnlyProp || inspect;
 	const containerRef = useRef<HTMLDivElement>(null);
 	const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 	const onChangeRef = useRef(onChange);
@@ -49,6 +72,7 @@ export default function MonacoCodeEditor({
 			wordWrap: wordWrap ? "on" : "off",
 			fontSize: 13,
 			domReadOnly: readOnly,
+			...(inspect ? INSPECT_OPTIONS : {}),
 		});
 		editorRef.current = editor;
 		const subscription = editor.onDidChangeModelContent(() => {
@@ -99,8 +123,9 @@ export default function MonacoCodeEditor({
 			renderLineHighlight: readOnly ? "none" : "line",
 			wordWrap: wordWrap ? "on" : "off",
 			ariaLabel,
+			...(inspect ? INSPECT_OPTIONS : {}),
 		});
-	}, [readOnly, wordWrap, ariaLabel]);
+	}, [readOnly, wordWrap, ariaLabel, inspect]);
 
 	useEffect(() => {
 		monaco.editor.setTheme(colorScheme === "dark" ? "xe-dark" : "xe-light");

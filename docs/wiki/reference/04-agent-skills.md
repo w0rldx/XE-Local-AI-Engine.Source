@@ -191,9 +191,17 @@ operator can see what was withheld, but no execution surface is added by this fe
 scripts would need `AgentFileSkill` + a custom script runner + on-disk storage, reversing the DB-only
 storage decision in §4.1 as well; it is not a small increment.
 
+**Files outside the resource allowlist are ignored, not refused, and listed** (`IgnoredFiles` on each
+candidate) so the report names everything the skill shipped: accepted resources, refused scripts and
+ignored files. They are never inflated. An ignored name that fails the resource-name charset guard is not
+listed; such names are counted into one preview warning that echoes none of them.
+
 Endpoints (`Endpoints/Skills/V1/`, routes under `LocalApiRoutes.Skills`): `POST skills/import/preview`
 (multipart, all three sources with an explicit discriminator), `POST skills/import` (report token +
-selection + `acknowledged: true`), `GET skills/{id}/resources`, `GET skills/{id}/resources/{name}`. An
+selection + `acknowledged: true`), `GET skills/import/preview/{token}/skills/{skillName}/resources/{resourceName}`
+(one resource's content read from the live preview so it can be reviewed before the commit; the report
+itself carries no resource content; 404 once the token is expired or consumed),
+`GET skills/{id}/resources`, `GET skills/{id}/resources/{name}`. An
 export endpoint was deliberately **not** shipped — it would stream decrypted skill bodies as a zip
 (exfiltration-shaped) and re-materialise attacker-chosen file names onto the operator's filesystem;
 the round-trip is instead proven as an in-process unit test. Skill body/resource content is excluded

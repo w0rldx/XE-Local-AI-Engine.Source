@@ -80,7 +80,8 @@ internal sealed partial class SkillImportService : ISkillImportService
             RootPath = string.Empty,
             SkillMarkdown = skillMarkdown ?? string.Empty,
             Files = [],
-            RefusedScripts = []
+            RefusedScripts = [],
+            IgnoredFiles = []
         };
         return BuildPreviewAsync([folder], UploadSourceUri, cancellationToken);
     }
@@ -121,6 +122,19 @@ internal sealed partial class SkillImportService : ISkillImportService
         {
             Outcomes = outcomes
         };
+    }
+
+    public SkillImportResource? FindPreviewResource(Guid token, string skillName, string resourceName)
+    {
+        if (!_cache.TryGetValue(CacheKey(token), out SkillImportPreview? preview) || preview is null)
+        {
+            return null;
+        }
+
+        // Skill NOCASE as the commit selects it; resource ordinal, because the archive's case-distinct paths are distinct files.
+        return preview.Skills
+                      .FirstOrDefault(skill => string.Equals(skill.Name, skillName, StringComparison.OrdinalIgnoreCase))
+                      ?.Resources.FirstOrDefault(resource => string.Equals(resource.Name, resourceName, StringComparison.Ordinal));
     }
 
     /// <summary>Resolves the caller's selection against the approved report, rejecting the whole commit before any write if it does not line up.</summary>
@@ -226,6 +240,13 @@ internal sealed partial class SkillImportService : ISkillImportService
                                 .OrderBy(static candidate => candidate.Name, StringComparer.Ordinal)
                                 .ToList();
 
+        var unsafeIgnored = folders.Sum(static folder => folder.IgnoredFiles.Count(static name => !IsSafeResourceName(name)));
+        if (unsafeIgnored > 0)
+        {
+            // Counted, not echoed, for the same reason a rejected resource name is not: the name is the payload.
+            warnings.Add($"{unsafeIgnored} ignored file name(s) use characters that are not allowed and are not listed.");
+        }
+
         // Two scan roots resolving to the same skill name would make the report ambiguous and the persist order
         // decide which content wins — the same preview/persist divergence the duplicate-entry guard closes.
         if (candidates.Select(static candidate => candidate.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != candidates.Count)
@@ -284,6 +305,7 @@ internal sealed partial class SkillImportService : ISkillImportService
             BodyLineCount = frontmatter.Body.Length == 0 ? 0 : frontmatter.Body.Count(static character => character == '\n') + 1,
             Resources = resources,
             RefusedScripts = folder.RefusedScripts,
+            IgnoredFiles = [.. folder.IgnoredFiles.Where(IsSafeResourceName)],
             ConflictsWithExistingSkill = existingNames.Contains(name),
             Problems = problems
         };
@@ -428,6 +450,7 @@ internal sealed partial class SkillImportService : ISkillImportService
             BodyLineCount = 0,
             Resources = [],
             RefusedScripts = [],
+            IgnoredFiles = [],
             ConflictsWithExistingSkill = false,
             Problems = problems
         };

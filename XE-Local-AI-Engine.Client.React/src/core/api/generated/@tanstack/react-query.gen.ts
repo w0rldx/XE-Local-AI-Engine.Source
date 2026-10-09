@@ -237,6 +237,7 @@ import {
 	getScheduledJob,
 	getScheduledJobRun,
 	getSkill,
+	getSkillImportPreviewResource,
 	getSkillResource,
 	getSlashCommand,
 	getStableDiffusionCppSourceBuildPrerequisites,
@@ -1031,6 +1032,9 @@ import type {
 	GetScheduledJobRunData,
 	GetScheduledJobRunResponse,
 	GetSkillData,
+	GetSkillImportPreviewResourceData,
+	GetSkillImportPreviewResourceError,
+	GetSkillImportPreviewResourceResponse,
 	GetSkillResourceData,
 	GetSkillResourceResponse,
 	GetSkillResponse,
@@ -9733,6 +9737,28 @@ export const previewSkillImportMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getSkillImportPreviewResourceQueryKey = (options: Options<GetSkillImportPreviewResourceData>) =>
+	createQueryKey("getSkillImportPreviewResource", options);
+
+export const getSkillImportPreviewResourceOptions = (options: Options<GetSkillImportPreviewResourceData>) =>
+	queryOptions<
+		GetSkillImportPreviewResourceResponse,
+		AxiosError<GetSkillImportPreviewResourceError>,
+		GetSkillImportPreviewResourceResponse,
+		ReturnType<typeof getSkillImportPreviewResourceQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getSkillImportPreviewResource({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getSkillImportPreviewResourceQueryKey(options),
+	});
 
 export const deleteSkillMutation = (
 	options?: Partial<Options<DeleteSkillData>>,

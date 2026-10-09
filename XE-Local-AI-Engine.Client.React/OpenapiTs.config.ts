@@ -20,7 +20,7 @@ export default defineConfig({
 		{ name: "zod", dates: { offset: true } },
 		// validator: true makes each generated SDK fn run its zod response schema as the client
 		// `responseValidator`. A thrown ZodError is remapped to ApiError centrally (see Generated.runtime.ts).
-		{ name: "@hey-api/sdk", validator: true },
+		{ name: "@hey-api/sdk", validator: { request: false, response: true } },
 		{
 			name: "@tanstack/react-query",
 			queryOptions: true,
