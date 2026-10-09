@@ -225,8 +225,8 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
                      && !await _runtimeSettings.GetAllowCloudModelUnattendedRunsAsync(cancellationToken))
             {
                 warnings.Add(new GraphWorkflowValidationError(node.NodeKey,
-                    $"Node '{node.NodeKey}' pins model '{model}', which is not a node-local model, so a run will refuse this node while "
-                    + "'Let cloud models run unattended' is off in Node Settings → Privacy & updates."));
+                    $"Node '{node.NodeKey}' pins model '{model}', which is not a node-local model, so a run will refuse this node. Turn on "
+                    + "'Let cloud models run unattended' in Node Settings → Privacy & updates, or grant unattended runs on the model's external connection when it has one, to allow it."));
             }
         }
 

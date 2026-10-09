@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
 {
@@ -97,15 +98,17 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             ? default
             : await _modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken);
         var effectiveModelIsCloud = pinnedModel is null ? activeModelIsCloud : effectiveCapabilities.IsCloud;
-        var allowedTools = await ProjectAllowedToolsAsync(definition, effectiveModel, supportsTools, effectiveModelIsCloud, cancellationToken);
+        // Unpinned and local, default's grants answer None: the offer reads no grant of its own for this turn.
+        var effectiveCloudGrants = effectiveCapabilities.CloudGrants;
+        var allowedTools = await ProjectAllowedToolsAsync(definition, effectiveModel, supportsTools, effectiveModelIsCloud, effectiveCloudGrants, cancellationToken);
         var (resolvedPrompt, playbookWithheld) = await ComposePromptAsync(definition,
             retrievalQuery,
-            effectiveModelIsCloud && !effectiveCapabilities.CloudGrants.LocalData,
+            effectiveModelIsCloud && !effectiveCloudGrants.LocalData,
             cancellationToken);
         var skills = await ResolveSkillsAsync(definition, cancellationToken);
         var customTools = await ResolveCustomToolsAsync(allowedTools, cancellationToken);
         var cloudWithheldTools = supportsTools
-            ? await ResolveCloudWithheldToolsAsync(definition, effectiveModel, effectiveModelIsCloud, cancellationToken)
+            ? await ResolveCloudWithheldToolsAsync(definition, effectiveModel, effectiveModelIsCloud, effectiveCloudGrants, cancellationToken)
             : null;
 
         return new ResolvedAgentRuntime(resolvedPrompt,
@@ -129,9 +132,9 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     // Narrowed to what THIS agent would have been offered: the Default Assistant reproduces plain chat, which never
     // offers spawn_subagent, and every other definition only ever gets its AllowedToolNames.
     private async Task<IReadOnlyList<CloudWithheldTool>> ResolveCloudWithheldToolsAsync(AgentDefinitionRecord definition, string? effectiveModelId, bool effectiveModelIsCloud,
-        CancellationToken cancellationToken)
+        ExternalProviderCloudGrants cloudGrants, CancellationToken cancellationToken)
     {
-        var withheld = await _localToolOfferProvider.GetCloudWithheldToolsAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken);
+        var withheld = await _localToolOfferProvider.GetCloudWithheldToolsAsync(effectiveModelId, effectiveModelIsCloud, cloudGrants, cancellationToken);
         if (AgentDefaults.IsDefaultAssistant(definition))
         {
             return [.. withheld.Where(static tool => tool.Switch != CloudToolSwitch.SubAgents)];
@@ -390,7 +393,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     }
 
     private async Task<IReadOnlyList<AllowedToolDto>> ProjectAllowedToolsAsync(AgentDefinitionRecord definition, string? effectiveModelId, bool supportsTools, bool effectiveModelIsCloud,
-        CancellationToken cancellationToken)
+        ExternalProviderCloudGrants cloudGrants, CancellationToken cancellationToken)
     {
         // A model that does not advertise "tools" cannot drive ANY call, so withhold the whole offer before per-tool
         // gating. This is the capability gate; ToolCapableModels remains the extra gate for high-risk tools.
@@ -405,7 +408,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         {
             // The node-default approval policy still applies, tighten-only, so no node-wide policy is bypassable by
             // mode-off chat. Per-agent ToolApprovals are NOT applied: this path reproduces plain chat, which has none.
-            var wholeOffer = await _localToolOfferProvider.GetOfferedToolsAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken);
+            var wholeOffer = await _localToolOfferProvider.GetOfferedToolsAsync(effectiveModelId, effectiveModelIsCloud, cloudGrants, cancellationToken);
             AllowedToolDto[] composedWholeOffer =
             [
                 .. wholeOffer.Select(tool => tool with
@@ -421,14 +424,14 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             // The whole offer holds the state tools out, so a work-session step lifts them from the profile pool.
             return WorkSessionTurnScope.IsActive
                 ? WorkSessionTurnScope.EnsureStateTools(withAskUser,
-                    await _localToolOfferProvider.GetOfferedToolsForProfileAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken),
+                    await _localToolOfferProvider.GetOfferedToolsForProfileAsync(effectiveModelId, effectiveModelIsCloud, cloudGrants, cancellationToken),
                     _toolApprovalPolicy)
                 : withAskUser;
         }
 
         // Start from the PROFILE pool (the whole offer plus opt-in-only spawn_subagent), which is what lets a profile
         // listing it resolve while mode-off never does, then intersect. A named tool absent from the pool is dropped.
-        var offered = await _localToolOfferProvider.GetOfferedToolsForProfileAsync(effectiveModelId, effectiveModelIsCloud, cancellationToken);
+        var offered = await _localToolOfferProvider.GetOfferedToolsForProfileAsync(effectiveModelId, effectiveModelIsCloud, cloudGrants, cancellationToken);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
         var projected = offered

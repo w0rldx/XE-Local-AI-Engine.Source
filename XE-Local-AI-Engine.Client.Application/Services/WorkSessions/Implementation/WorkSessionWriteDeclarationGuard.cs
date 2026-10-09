@@ -77,7 +77,7 @@ internal sealed class WorkSessionWriteDeclarationGuard
         // An unresolved binding keeps the DEFAULT PERSONA and its whole capability-gated offer, so that offer is the
         // honest question — judging the fallback, not assuming the worst.
         var projection = resolved?.AllowedTools
-                         ?? await _offer.GetOfferedToolsAsync(activeModel, isCloudModel: false, cancellationToken);
+                         ?? await _offer.GetOfferedToolsAsync(activeModel, isCloudModel: false, cancellationToken: cancellationToken);
         return Refuse(projection, bindingResolved: resolved is not null);
     }
 

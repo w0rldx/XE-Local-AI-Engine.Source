@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
 ///     Default <see cref="IOrchestrationResolver" />: compiles an orchestrator definition and its topology into an
@@ -157,15 +158,15 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             ReturnToPrevious = topology.ReturnToPrevious
         };
 
-        // The shared seed reaches EVERY participant, so one cloud participant makes the whole turn cloud-reaching for
-        // the attachment gate. The first is picked by definition id, so the notice names a stable model.
-        var firstCloudParticipant = participants.Values
-                                                .Where(participant => participant.IsCloud)
-                                                .OrderBy(participant => participant.Definition.Id)
-                                                .FirstOrDefault();
-        var firstCloudParticipantModel = firstCloudParticipant is null
+        // The shared seed reaches EVERY participant, so one cloud participant whose connection does not grant local data
+        // gates the whole seed on the node switch. The first such one by definition id is named, so the notice is stable.
+        var firstUngrantedCloudParticipant = participants.Values
+                                                         .Where(static participant => participant.IsCloud && !participant.CloudGrants.LocalData)
+                                                         .OrderBy(static participant => participant.Definition.Id)
+                                                         .FirstOrDefault();
+        var firstUngrantedCloudParticipantModel = firstUngrantedCloudParticipant is null
             ? null
-            : firstCloudParticipant.Definition.ModelProfile ?? activeModelId;
+            : firstUngrantedCloudParticipant.Definition.ModelProfile ?? activeModelId;
 
         return OrchestrationResolution.Compiled(new ResolvedOrchestration
         {
@@ -174,8 +175,8 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             ModelProfile = orchestrator.ModelProfile,
             ReasoningEffort = orchestrator.ReasoningEffort,
             AgentDefinitionVersion = orchestrator.Version,
-            AnyParticipantIsCloud = firstCloudParticipant is not null,
-            FirstCloudParticipantModel = firstCloudParticipantModel,
+            AnyParticipantNeedsCloudDataSwitch = firstUngrantedCloudParticipant is not null,
+            FirstUngrantedCloudParticipantModel = firstUngrantedCloudParticipantModel,
             PlaybookWithheldParticipantNames =
             [
                 .. participants.Values
@@ -193,7 +194,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         CancellationToken cancellationToken)
     {
         var definition = participant.Definition;
-        var withheld = await _localToolOfferProvider.GetCloudWithheldToolsAsync(definition.ModelProfile ?? activeModelId, participant.IsCloud, cancellationToken);
+        var withheld = await _localToolOfferProvider.GetCloudWithheldToolsAsync(definition.ModelProfile ?? activeModelId, participant.IsCloud, participant.CloudGrants, cancellationToken);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
         return
         [
@@ -257,6 +258,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
                 PlaybookWithheld = playbookWithheld,
                 SupportsThinking = supportsThinking,
                 IsCloud = participantIsCloud,
+                CloudGrants = participantCapabilities.CloudGrants,
                 ReasoningBudgetEnforceable = participantCapabilities.ReasoningBudgetEnforceable
             };
         }
@@ -374,7 +376,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             ReasoningBudgetEnforceable = participant.ReasoningBudgetEnforceable,
             // Gate on the participant's OWN effective-model locality (resolved during the async load), not the turn's
             // active model — so a cloud-pinned participant is withheld the knowledge tools even on a local-active turn.
-            Tools = await ProjectAllowedToolsAsync(definition, activeModelId, participant.IsCloud, cancellationToken)
+            Tools = await ProjectAllowedToolsAsync(definition, activeModelId, participant.IsCloud, participant.CloudGrants, cancellationToken)
         };
     }
 
@@ -387,10 +389,11 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     ///     name the definition allows but the offer lacks is dropped and logged, never fabricated, so a participant is
     ///     never handed a tool the node cannot execute.
     /// </remarks>
-    private async Task<IReadOnlyList<AllowedToolDto>> ProjectAllowedToolsAsync(AgentDefinitionRecord definition, string? activeModelId, bool effectiveModelIsCloud, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<AllowedToolDto>> ProjectAllowedToolsAsync(AgentDefinitionRecord definition, string? activeModelId, bool effectiveModelIsCloud,
+        ExternalProviderCloudGrants cloudGrants, CancellationToken cancellationToken)
     {
         var effectiveModel = definition.ModelProfile ?? activeModelId;
-        var offered = await _localToolOfferProvider.GetOfferedToolsAsync(effectiveModel, effectiveModelIsCloud, cancellationToken);
+        var offered = await _localToolOfferProvider.GetOfferedToolsAsync(effectiveModel, effectiveModelIsCloud, cloudGrants, cancellationToken);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
         var projected = offered
@@ -455,6 +458,9 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         public required bool SupportsThinking { get; init; }
 
         public required bool IsCloud { get; init; }
+
+        // The participant's connection grants; they lift switch-gated data and tools but never change IsCloud.
+        public required ExternalProviderCloudGrants CloudGrants { get; init; }
 
         public required bool PlaybookWithheld { get; init; }
 

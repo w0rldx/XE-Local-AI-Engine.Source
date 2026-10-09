@@ -130,8 +130,8 @@ public sealed class ExternalModelPolicyGateTests
     {
         var provider = CreateOfferProvider();
 
-        var offered = await provider.GetOfferedToolsAsync(CloudExternalModel, isCloudModel: false, CancellationToken.None);
-        var localOffered = await provider.GetOfferedToolsAsync(LocalExternalModel, isCloudModel: false, CancellationToken.None);
+        var offered = await provider.GetOfferedToolsAsync(CloudExternalModel, isCloudModel: false, cancellationToken: CancellationToken.None);
+        var localOffered = await provider.GetOfferedToolsAsync(LocalExternalModel, isCloudModel: false, cancellationToken: CancellationToken.None);
 
         // The turn's own isCloudModel flag is false for both — the cloud branch never sees an ext: id — so any
         // difference here is the trust resolver doing its job.

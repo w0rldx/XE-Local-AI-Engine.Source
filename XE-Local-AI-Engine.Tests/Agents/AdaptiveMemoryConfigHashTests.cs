@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -146,8 +147,8 @@ public sealed class AdaptiveMemoryConfigHashTests
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var skillStore = Substitute.For<IAgentSkillStore>();
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([]);
-        offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([]);
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns([]);
+        offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns([]);
         offerProvider.GetKnownToolNames().Returns([]);
 
         return new AgentDefinitionResolver(store,

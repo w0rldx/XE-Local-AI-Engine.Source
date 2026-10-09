@@ -90,7 +90,7 @@ export function GraphWorkflowAgentConfigForm({
 					placeholder={t("pages.graphWorkflows.config.modelPlaceholder", "The agent's own model")}
 					description={t(
 						"pages.graphWorkflows.config.cloudModelHelp",
-						"Cloud models run only when “Let cloud models run unattended” is on in Node Settings → Privacy & updates.",
+						"Cloud models run only when “Let cloud models run unattended” is on in Node Settings → Privacy & updates, or when the model's external connection grants unattended runs.",
 					)}
 					data={withCurrentValue(withCloudModelLabels(modelOptions, t), node.model)}
 					value={node.model}

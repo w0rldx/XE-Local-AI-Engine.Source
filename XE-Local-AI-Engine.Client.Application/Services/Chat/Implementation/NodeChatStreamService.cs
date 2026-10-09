@@ -495,7 +495,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             InvocationId = requestId,
             Kind = TurnNoticeKind.AttachmentsWithheld,
             Message =
-                "Your uploaded files were not shared with the cloud model handling this message. Enable cloud data access for this node to allow attachments and file tools to reach a cloud model.",
+                "Your uploaded files were not shared with the cloud model handling this message. Enable cloud data access for this node, or grant local data on the model's external connection when it has one, to allow attachments and file tools to reach a cloud model.",
             Detail = effectiveModel
         });
     }
@@ -510,7 +510,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             InvocationId = requestId,
             Kind = TurnNoticeKind.KnowledgeWithheld,
             Message =
-                "Your knowledge base was not searched for this message because it is handled by a cloud model. Enable cloud data access for this node to allow knowledge-base grounding to reach a cloud model.",
+                "Your knowledge base was not searched for this message because it is handled by a cloud model. Enable cloud data access for this node, or grant local data on the model's external connection when it has one, to allow knowledge-base grounding to reach a cloud model.",
             Detail = effectiveModel
         });
     }
@@ -525,7 +525,7 @@ public sealed class NodeChatStreamService : INodeChatStreamService
             InvocationId = requestId,
             Kind = TurnNoticeKind.ToolHistoryWithheld,
             Message =
-                "Earlier tool results in this conversation were not sent because this message is handled by a cloud model. Enable cloud data access for this node to allow them to reach a cloud model.",
+                "Earlier tool results in this conversation were not sent because this message is handled by a cloud model. Enable cloud data access for this node, or grant local data on the model's external connection when it has one, to allow them to reach a cloud model.",
             Detail = effectiveModel
         });
     }
@@ -617,16 +617,16 @@ public sealed class NodeChatStreamService : INodeChatStreamService
     /// </summary>
     /// <remarks>
     ///     Node-local attachments are private data and reach a cloud model only under
-    ///     the <c>AllowCloudModelAccess</c> node setting. An orchestration broadcasts ONE shared seed to every
-    ///     participant, so a single cloud PARTICIPANT under a local root withholds the shared attachment context too —
-    ///     per-participant tool stripping cannot redact a seed. The offer provider additionally withholds the file and
-    ///     knowledge tools for a cloud model.
+    ///     the <c>AllowCloudModelAccess</c> node setting or their connection's local-data grant. An orchestration
+    ///     broadcasts ONE shared seed to every participant, so a single ungranted cloud PARTICIPANT under a local root
+    ///     withholds the shared attachment context too — per-participant tool stripping cannot redact a seed. The offer
+    ///     provider additionally withholds the file and knowledge tools for a cloud model.
     /// </remarks>
     private async Task<bool> AreAttachmentsAllowedAsync(ChatTurnResolution resolution, CancellationToken cancellationToken)
     {
-        // A connection's local-data grant covers only its own model: a cloud participant still forces the shared-seed withhold.
-        var anyCloudParticipant = resolution.Orchestration?.AnyParticipantIsCloud ?? false;
-        var turnReachesCloud = (resolution.EffectiveModelIsCloud && !resolution.EffectiveModelCloudGrants.LocalData) || anyCloudParticipant;
+        // A connection's local-data grant covers only its own model: an ungranted cloud participant still forces the withhold.
+        var anyUngrantedCloudParticipant = resolution.Orchestration?.AnyParticipantNeedsCloudDataSwitch ?? false;
+        var turnReachesCloud = (resolution.EffectiveModelIsCloud && !resolution.EffectiveModelCloudGrants.LocalData) || anyUngrantedCloudParticipant;
         return !turnReachesCloud || await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken);
     }
 
@@ -712,10 +712,10 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         }
 
         // Name the model the notice is about: the orchestrator's own cloud model when that is what reaches the
-        // cloud, otherwise the cloud participant whose presence forced the withhold on an otherwise-local root.
+        // cloud, otherwise the ungranted cloud participant whose presence forced the withhold on an otherwise-local root.
         var cloudModelForNotice = resolution.EffectiveModelIsCloud && !resolution.EffectiveModelCloudGrants.LocalData
             ? resolution.EffectiveModel
-            : resolution.Orchestration?.FirstCloudParticipantModel ?? resolution.EffectiveModel;
+            : resolution.Orchestration?.FirstUngrantedCloudParticipantModel ?? resolution.EffectiveModel;
         await ReportAttachmentsWithheldIfPresentAsync(request, cloudModelForNotice, requestId, cancellationToken);
 
         // KB grounding rides the SAME cloud-egress gate as attachments. Plain chat only — agent mode reaches the data

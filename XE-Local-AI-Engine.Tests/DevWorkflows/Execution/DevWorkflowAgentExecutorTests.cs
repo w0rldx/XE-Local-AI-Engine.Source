@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -1690,8 +1691,8 @@ public sealed class DevWorkflowAgentExecutorTests
         new(services =>
         {
             var provider = Substitute.For<ILocalToolOfferProvider>();
-            _ = provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(offer);
-            _ = provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(offer);
+            _ = provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(offer);
+            _ = provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(offer);
             _ = provider.GetKnownToolNamesAsync(Arg.Any<CancellationToken>()).Returns([.. offer.Select(static tool => tool.Name)]);
             services.RemoveAll<ILocalToolOfferProvider>();
             services.AddSingleton(provider);

@@ -50,7 +50,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     private const string ReasonDepthExceeded = "Cannot spawn: a sub-agent may not spawn further sub-agents.";
 
     private const string ReasonParentOutsideTrustBoundary =
-        "Cannot spawn: a model outside this node's trust boundary may not delegate to a sub-agent unless the operator allows it in Node Settings → Privacy & updates.";
+        "Cannot spawn: a model outside this node's trust boundary may not delegate to a sub-agent unless the operator allows it in Node Settings → Privacy & updates or on the model's external connection.";
 
     private readonly IAgentDefinitionResolver _agentDefinitionResolver;
     private readonly ICapacityService _capacityService;

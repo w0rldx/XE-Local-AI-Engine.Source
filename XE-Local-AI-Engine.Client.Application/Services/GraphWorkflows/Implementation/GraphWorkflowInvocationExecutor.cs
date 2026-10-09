@@ -391,7 +391,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                     runId,
                     node.NodeKey);
                 return Invalid(
-                    "This graph workflow agent node's effective model is a cloud model, and a cloud model runs unattended only while 'Let cloud models run unattended' is on in Node Settings → Privacy & updates.");
+                    "This graph workflow agent node's effective model is a cloud model, which does not run unattended. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates, or grant unattended runs on the model's external connection when it has one, to allow it.");
             }
 
             // The capability gate, for a bound agent only: the default persona lists no tools and requires none.
@@ -549,7 +549,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
                     runId,
                     node.NodeKey);
                 return Invalid(locality == ModelTrustLocality.Cloud
-                    ? $"Node '{node.NodeKey}' would run this {callName} on the cloud model '{effectiveModel}', and a cloud model runs unattended only while 'Let cloud models run unattended' is on in Node Settings → Privacy & updates."
+                    ? $"Node '{node.NodeKey}' would run this {callName} on the cloud model '{effectiveModel}', which does not run unattended. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates, or grant unattended runs on the model's external connection when it has one, to allow it."
                     : $"Node '{node.NodeKey}' would run this {callName} on '{effectiveModel}', which is not a node-local model; a model outside the trust boundary runs unattended only while 'Let cloud models run unattended' is on in Node Settings → Privacy & updates.");
             }
 
@@ -754,7 +754,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         {
             var approvalPolicy = services.GetRequiredService<IToolApprovalPolicy>();
             var offer = await services.GetRequiredService<ILocalToolOfferProvider>()
-                                      .GetOfferedToolsAsync(effectiveModel, capabilities.IsCloud, cancellationToken);
+                                      .GetOfferedToolsAsync(effectiveModel, capabilities.IsCloud, capabilities.CloudGrants, cancellationToken);
             offered.AddRange(offer.Select(tool => tool with
             {
                 RequiresApproval = approvalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [Category(TestCategories.Unit)]
@@ -144,7 +145,7 @@ public sealed class DatasetDefinitionServiceTests
         public Harness(bool teacherSupportsThinking = false)
         {
             var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-            _ = offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            _ = offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
                              .Returns<IReadOnlyList<AllowedToolDto>>([
                                  new AllowedToolDto
                                  {

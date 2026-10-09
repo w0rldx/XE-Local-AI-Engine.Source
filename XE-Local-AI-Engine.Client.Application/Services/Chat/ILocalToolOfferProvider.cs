@@ -1,15 +1,17 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
 ///     Surfaces the local tool catalog as the transport-level offer list.
 /// </summary>
 /// <remarks>
-///     This is the Client-layer abstraction over the internal <c>IAgentToolRegistry</c>: it converts the registry's
-///     descriptors into <see cref="AllowedToolDto" />s — name, schema and approval flag, located <c>ClientLocal</c> —
-///     so the send and regenerate paths attach an offer without depending on the AI.Agent assembly's internals.
-///     Which tools each projection carries, and why, is in <c>docs/wiki/05-chat.md</c>.
+///     The Client-layer abstraction over the internal <c>IAgentToolRegistry</c>, projecting its descriptors into
+///     <c>ClientLocal</c> <see cref="AllowedToolDto" />s; what each projection carries is in <c>docs/wiki/05-chat.md</c>.
+///     A caller holding a <see cref="ModelCapabilitySnapshot" /> passes its <c>CloudGrants</c> as <c>cloudGrants</c>,
+///     so the turn reads grants once; null falls back to the trust resolver's cached answer. Grants never change
+///     whether the model leaves the node.
 /// </remarks>
 public interface ILocalToolOfferProvider
 {
@@ -27,7 +29,8 @@ public interface ILocalToolOfferProvider
     /// <param name="isCloudModel">
     ///     The per-turn locality the caller already resolved; this seam performs no lookup of its own.
     /// </param>
-    IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId, bool isCloudModel = false);
+    /// <param name="cloudGrants">The snapshot's grants for the model; null reads the trust resolver's cached answer once.</param>
+    IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId, bool isCloudModel = false, ExternalProviderCloudGrants? cloudGrants = null);
 
     /// <summary>
     ///     Whether the operator-maintained tool-capable allow-list (<c>AgentHome:ToolCapableModels</c>, read LIVE per
@@ -50,7 +53,8 @@ public interface ILocalToolOfferProvider
     ///     command or fetch tool reaches local data and the host — and only while <c>NodeSettings.CustomToolsEnabled</c>
     ///     is on, default off. Otherwise the result is byte-identical to <see cref="GetOfferedTools" />.
     /// </remarks>
-    Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsAsync(string? activeModelId, bool isCloudModel, ExternalProviderCloudGrants? cloudGrants = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     The offer pool an EXPLICIT agent profile may intersect against (<c>offered ∩ AllowedToolNames</c>).
@@ -60,13 +64,14 @@ public interface ILocalToolOfferProvider
     ///     capability-gated, so a profile that lists <c>spawn_subagent</c> on a tool-capable model resolves it while
     ///     the default path never does. The same provider-locality gate applies.
     /// </remarks>
-    IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId, bool isCloudModel = false);
+    IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId, bool isCloudModel = false, ExternalProviderCloudGrants? cloudGrants = null);
 
     /// <summary>
     ///     The profile intersection pool PLUS the node's enabled, acknowledged custom tools, under the same gates as
     ///     <see cref="GetOfferedToolsAsync" />; the synchronous overload never carries custom tools.
     /// </summary>
-    Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsForProfileAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsForProfileAsync(string? activeModelId, bool isCloudModel, ExternalProviderCloudGrants? cloudGrants = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     The tools the three cloud-model switches removed from the PROFILE pool for this model, each tagged with its
@@ -77,7 +82,8 @@ public interface ILocalToolOfferProvider
     ///     withheld them), and HttpFetch custom tools only while <c>CustomToolsEnabled</c> is on too. Drives the
     ///     <c>CloudToolsWithheld</c> turn notice.
     /// </remarks>
-    Task<IReadOnlyList<CloudWithheldTool>> GetCloudWithheldToolsAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CloudWithheldTool>> GetCloudWithheldToolsAsync(string? activeModelId, bool isCloudModel, ExternalProviderCloudGrants? cloudGrants = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     The ONE built-in tool an integration execution is additionally offered, and the only way to reach it.

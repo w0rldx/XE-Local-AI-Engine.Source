@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -121,9 +122,9 @@ public sealed class NodeChatStreamServiceSandboxReleaseTests
             }
         ];
         var offer = Substitute.For<ILocalToolOfferProvider>();
-        offer.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>()).Returns(tools);
-        offer.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
-        offer.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
+        offer.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>()).Returns(tools);
+        offer.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(tools);
+        offer.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(tools);
 
         var defaultAgent = Substitute.For<IDefaultAgentProvider>();
         defaultAgent.GetDefaultAgentIdAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<Guid?>(null));

@@ -486,4 +486,6 @@ payload and the agent's context reach that provider by the operator's consent. A
 offered and refused at call time (`IsUnattended`, R4-5 above; the scheduler and graph paths strip them instead), and the
 other cloud-model switches still decide which tools the run is offered. `cloud-model-rejected` stays
 in the closed vocabulary with the same meaning for the off case. The operator took this decision on 2026-10-07; the
-switch set is described in `docs/wiki/12-security-and-privacy.md`.
+switch set is described in `docs/wiki/12-security-and-privacy.md`. Since the per-connection cloud grants (2026-10-09)
+an external connection's unattended-runs grant admits the run with the switch off, and the rejection names that grant
+as the alternative.

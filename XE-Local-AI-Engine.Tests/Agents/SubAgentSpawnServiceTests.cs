@@ -76,6 +76,7 @@ public sealed class SubAgentSpawnServiceTests
 
         AssertEx.Contains(result, "outside this node's trust boundary");
         AssertEx.Contains(result, "Node Settings → Privacy & updates");
+        AssertEx.Contains(result, "on the model's external connection");
         AssertEx.Equal(0, harness.ChatClient.CallCount);
     }
 

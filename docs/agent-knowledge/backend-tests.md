@@ -179,6 +179,10 @@ debugging a backend test, or changing `TestServerWebAppFactory`, `scripts/run-te
 ### A constructor that newly requires a service breaks hand-built test containers the focused lanes never run
 **Rule:** some tests build a real `ServiceCollection` and resolve the type under test through it (`McpServerConnectionManagerDiTests`, `DevelopmentValidationReviewAndApplyTests`); a constructor that gains a required dependency compiles, passes the class's own tests (they use the builder or a fake) and fails only those DI tests at resolve time. When a constructor gains a parameter, grep the test tree for `AddSingleton<I...>` registrations of the type and run those classes, or run the full gate before hand-off; the touched-classes filter does not catch it. **Prevents:** a green focused lane followed by a red full gate on a `ServiceProvider` resolve. **Authority:** `McpServerConnectionManagerDiTests`, `DevelopmentValidationReviewAndApplyTests`; sandbox-security-profile round, 2026-10-09.
 
+### A substituted trust resolver answers null grants
+
+**Rule:** an `IModelTrustResolver` built with `Substitute.For<T>()` returns null from `ResolveCloudGrantsAsync` and `ClassifyCloudGrants` unless configured. Any test whose trust answer is not `Local` must stub both to `ExternalProviderCloudGrants.None` (or use `FakeModelTrustResolver`, which mirrors the real rule), or the gate under test dies with a `NullReferenceException` instead of withholding. **Prevents:** a cloud-path test that crashes before it reaches the gate it pins. **Authority:** `GraphWorkflowAgentHostFixture`, `GraphWorkflowResponseSchemaWarningTests.BuildService`, `ModelTrustResolverTests.FakeModelTrustResolver_AnswersGrantsLikeTheRealResolver`.
+
 ## Browser E2E host
 
 ### a solution build overwrites the E2E test host, so the flagged build must be the LAST one before a `--no-build` E2E run

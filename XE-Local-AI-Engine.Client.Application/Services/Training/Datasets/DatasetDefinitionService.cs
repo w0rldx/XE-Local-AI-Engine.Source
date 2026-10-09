@@ -217,7 +217,7 @@ public sealed class DatasetDefinitionService : IDatasetDefinitionService
         }
 
         // The teacher is always node-local (invariant #5), so the offer is taken with isCloudModel: false.
-        var offered = await _offerProvider.GetOfferedToolsAsync(body.TeacherModelName, isCloudModel: false, cancellationToken);
+        var offered = await _offerProvider.GetOfferedToolsAsync(body.TeacherModelName, isCloudModel: false, cancellationToken: cancellationToken);
         var byName = offered.ToDictionary(tool => tool.Name, StringComparer.Ordinal);
         var missing = requested.Where(name => !byName.ContainsKey(name)).Order(StringComparer.Ordinal).ToArray();
         if (missing.Length > 0)

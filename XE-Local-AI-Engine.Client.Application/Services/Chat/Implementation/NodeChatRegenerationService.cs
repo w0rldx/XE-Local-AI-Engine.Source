@@ -446,7 +446,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
             return resolvedAllowedTools;
         }
 
-        var fallbackOffer = await _localToolOfferProvider.GetOfferedToolsAsync(activeModel, resolution.EffectiveModelIsCloud, cancellationToken);
+        var fallbackOffer = await _localToolOfferProvider.GetOfferedToolsAsync(activeModel, resolution.EffectiveModelIsCloud, resolution.EffectiveModelCloudGrants, cancellationToken);
         return
         [
             .. fallbackOffer.Select(tool => tool with
@@ -473,18 +473,18 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         CancellationToken cancellationToken)
     {
         // The KB egress gate mirrors attachments: an ORCHESTRATION broadcasts one shared seed to every
-        // participant, so a single cloud participant — even under a local root — forces the withhold too.
-        var anyCloudParticipant = resolution.Orchestration?.AnyParticipantIsCloud ?? false;
+        // participant, so a single ungranted cloud participant — even under a local root — forces the withhold too.
+        var anyUngrantedCloudParticipant = resolution.Orchestration?.AnyParticipantNeedsCloudDataSwitch ?? false;
         var effectiveModelNeedsSwitch = resolution.EffectiveModelIsCloud && !resolution.EffectiveModelCloudGrants.LocalData;
-        var turnReachesCloud = effectiveModelNeedsSwitch || anyCloudParticipant;
+        var turnReachesCloud = effectiveModelNeedsSwitch || anyUngrantedCloudParticipant;
         var knowledgeAllowed = !turnReachesCloud || await _runtimeSettings.GetAllowCloudModelAccessAsync(cancellationToken);
         if (!knowledgeAllowed)
         {
             // Name the model the notice is about: the effective cloud model when that is what reaches the cloud,
-            // otherwise the cloud participant whose presence forced the withhold on an otherwise-local root.
+            // otherwise the ungranted cloud participant whose presence forced the withhold on an otherwise-local root.
             var cloudModelForNotice = effectiveModelNeedsSwitch
                 ? resolution.EffectiveModel
-                : resolution.Orchestration?.FirstCloudParticipantModel ?? resolution.EffectiveModel;
+                : resolution.Orchestration?.FirstUngrantedCloudParticipantModel ?? resolution.EffectiveModel;
             await ReportKnowledgeWithheldAsync(cloudModelForNotice, requestId, cancellationToken);
             return null;
         }
@@ -809,7 +809,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
             InvocationId = requestId,
             Kind = TurnNoticeKind.KnowledgeWithheld,
             Message =
-                "Your knowledge base was not searched for this message because it is handled by a cloud model. Enable cloud data access for this node to allow knowledge-base grounding to reach a cloud model.",
+                "Your knowledge base was not searched for this message because it is handled by a cloud model. Enable cloud data access for this node, or grant local data on the model's external connection when it has one, to allow knowledge-base grounding to reach a cloud model.",
             Detail = effectiveModel
         });
     }

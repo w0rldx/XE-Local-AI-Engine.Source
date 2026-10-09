@@ -101,8 +101,9 @@ from the same node setting: `RunSavedAgentHandler.ExecuteAsync` passes
 Security and runtime invariants:
 
 - **Node-local unless the Privacy switch allows cloud.** The handler resolves the effective model after the agent's
-  model pin and rejects a cloud (or unresolved) model before capacity admission or invocation, naming the switch,
-  unless **Let cloud models run unattended** (`AllowCloudModelUnattendedRuns`, Node Settings → Privacy) is on. A
+  model pin and rejects a cloud (or unresolved) model before capacity admission or invocation, naming the switch and
+  the unattended-runs grant on the model's external connection, unless **Let cloud models run unattended**
+  (`AllowCloudModelUnattendedRuns`, Node Settings → Privacy) is on or that connection grants unattended runs. A
   cloud run admitted that way builds its offer with the real cloud flag, so the other cloud switches still decide
   which tools it gets ([Security & Privacy](12-security-and-privacy.md)).
 - **Tool-capable when the agent needs tools.** An agent that lists tools, or orchestrates, on a model that cannot call

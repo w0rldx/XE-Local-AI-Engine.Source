@@ -97,6 +97,7 @@ public sealed class IntegrationExecutionCoordinatorTests
         var row = harness.Row(executionId);
         AssertEx.Equal(IntegrationFailureCategories.CloudModelRejected, row.FailureCategory, "Unattended external work is node-local only.");
         AssertEx.Contains(row.FailureSummary ?? string.Empty, "Node Settings → Privacy & updates");
+        AssertEx.Contains(row.FailureSummary, "grant unattended runs on the model's external connection");
         AssertEx.Equal(expected: 0, harness.RunCount, "The locality gate must reject before any invocation.");
         await harness.Dispatcher.DidNotReceive().ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>());
     }

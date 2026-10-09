@@ -481,7 +481,7 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
         {
             await TerminalizeBeforeRunAsync(context,
                 IntegrationFailureCategories.CloudModelRejected,
-                "The trigger's effective model is cloud-hosted, and unattended runs are node-local only. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates to allow it.");
+                "The trigger's effective model is cloud-hosted, and unattended runs are node-local only. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates, or grant unattended runs on the model's external connection when it has one, to allow it.");
             return;
         }
 

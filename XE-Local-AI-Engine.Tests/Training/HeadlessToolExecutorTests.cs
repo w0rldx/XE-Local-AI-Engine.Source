@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -111,7 +112,7 @@ public sealed class HeadlessToolExecutorTests
                 Category = category
             };
             var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-            _ = offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            _ = offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
                              .Returns<IReadOnlyList<AllowedToolDto>>([offer]);
 
             // The SAME tool as the model-agnostic catalog entry the shared invocation seam reads, so the real

@@ -69,7 +69,7 @@ internal sealed class ChatTurnResolution
                     InvocationId = invocationId,
                     Kind = TurnNoticeKind.PlaybookWithheld,
                     Message =
-                        "The learned playbook of some agents in this orchestration was not applied because they run on a cloud model. Enable cloud data access for this node to let playbook memory reach a cloud model.",
+                        "The learned playbook of some agents in this orchestration was not applied because they run on a cloud model. Enable cloud data access for this node, or grant local data on each participant's external connection when it has one, to let playbook memory reach a cloud model.",
                     Detail = string.Join(", ", orchestration.PlaybookWithheldParticipantNames)
                 };
         }
@@ -80,7 +80,7 @@ internal sealed class ChatTurnResolution
                 InvocationId = invocationId,
                 Kind = TurnNoticeKind.PlaybookWithheld,
                 Message =
-                    "This agent's learned playbook was not applied because it runs on a cloud model. Enable cloud data access for this node to let playbook memory reach a cloud model.",
+                    "This agent's learned playbook was not applied because it runs on a cloud model. Enable cloud data access for this node, or grant local data on the model's external connection when it has one, to let playbook memory reach a cloud model.",
                 Detail = EffectiveModel
             }
             : null;
@@ -116,19 +116,19 @@ internal sealed class ChatTurnResolution
         {
             return CloudToolsWithheldNotice(invocationId,
                 orchestration.CloudWithheldTools,
-                "Some tools were not offered to agents in this orchestration that run on a cloud model because their cloud-model switches are off. Turn them on under Node Settings, Privacy & updates, to let a cloud model use them.");
+                "Some tools were not offered to agents in this orchestration that run on a cloud model because their cloud-model switches are off. Turn them on under Node Settings, Privacy & updates, or grant them on each participant's external connection when it has one, to let a cloud model use them.");
         }
 
         var withheld = Resolved is { } resolved
             ? resolved.CloudWithheldTools ?? []
             :
             [
-                .. (await localToolOfferProvider.GetCloudWithheldToolsAsync(ActiveModel, EffectiveModelIsCloud, cancellationToken))
+                .. (await localToolOfferProvider.GetCloudWithheldToolsAsync(ActiveModel, EffectiveModelIsCloud, EffectiveModelCloudGrants, cancellationToken))
                 .Where(static tool => tool.Switch != CloudToolSwitch.SubAgents)
             ];
         return CloudToolsWithheldNotice(invocationId,
             withheld,
-            "Some tools were not offered to the cloud model handling this message because their cloud-model switches are off. Turn them on under Node Settings, Privacy & updates, to let a cloud model use them.");
+            "Some tools were not offered to the cloud model handling this message because their cloud-model switches are off. Turn them on under Node Settings, Privacy & updates, or grant them on the model's external connection when it has one, to let a cloud model use them.");
     }
 
     private static TurnNoticePayload? CloudToolsWithheldNotice(Guid invocationId, IReadOnlyList<CloudWithheldTool> withheld, string message)

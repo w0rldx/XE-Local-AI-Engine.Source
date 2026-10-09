@@ -1185,6 +1185,40 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_ForACloudPin_HandsTheSnapshotsGrantsToTheOfferAndTheWithheldList()
+    {
+        // The turn reads grants ONCE: the pin's snapshot grants reach both offer reads, so neither re-reads the registry.
+        const string grantedModel = "ext:gateway/qwen3";
+        var grants = new ExternalProviderCloudGrants { McpTools = true };
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(grantedModel, Arg.Any<CancellationToken>())
+                          .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true) { CloudGrants = grants });
+        var offerProvider = Substitute.For<ILocalToolOfferProvider>();
+        offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
+                     .Returns([OfferTool("GetCurrentTime")]);
+        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>([]));
+        var resolver = new AgentDefinitionResolver(Substitute.For<IAgentDefinitionStore>(),
+            Substitute.For<IPlaybookActionStore>(),
+            CreateEmptySkillStore(),
+            Substitute.For<ICustomToolStore>(),
+            offerProvider,
+            new LexicalPlaybookRetrievalRanker(),
+            Options.Create(new PlaybookRetrievalOptions()),
+            new FakeAgentInstructionProvider(),
+            capabilityResolver,
+            new PermissiveToolApprovalPolicy(),
+            StubNodeRuntimeSettings.Create().Build(),
+            NullLogger<AgentDefinitionResolver>.Instance);
+
+        var resolved = await resolver.ResolveAsync(CreateDefinition(allowedTools: ["GetCurrentTime"], modelProfile: grantedModel), ToolCapableModel);
+
+        AssertEx.Equal("GetCurrentTime", string.Join(",", AssertEx.NotNull(resolved).AllowedTools.Select(static tool => tool.Name)));
+        await offerProvider.Received(1).GetOfferedToolsForProfileAsync(grantedModel, true, grants, Arg.Any<CancellationToken>());
+        await offerProvider.Received(1).GetCloudWithheldToolsAsync(grantedModel, true, grants, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task ResolveAsync_WhenAgentPinnedToCloudModel_OnLocalActiveTurn_WithholdsPlaybookMemory()
     {
         // The gate keys on the EFFECTIVE model: a cloud pin withholds the playbook even though the turn's active model is local.
@@ -1664,8 +1698,8 @@ public sealed class AgentDefinitionResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([]);
-        offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([]);
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns([]);
+        offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns([]);
         offerProvider.GetKnownToolNames().Returns([]);
         skillStore = Substitute.For<IAgentSkillStore>();
         return new AgentDefinitionResolver(store,
@@ -1771,7 +1805,7 @@ public sealed class AgentDefinitionResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
         {
             var modelId = callInfo.ArgAt<string?>(0);
             onGetOffered?.Invoke(modelId);
@@ -1780,14 +1814,14 @@ public sealed class AgentDefinitionResolverTests
         // The profile-intersection pool mirrors the whole offer PLUS spawn_subagent (still capability-gated), matching
         // the real LocalToolOfferProvider.GetOfferedToolsForProfile asymmetry that keeps spawn out of the mode-off path.
         // The model-id observation fires here too, since a non-default profile gates via THIS method.
-        offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
         {
             var modelId = callInfo.ArgAt<string?>(0);
             onGetOffered?.Invoke(modelId);
             return GateProfilePool(offeredTools, modelId);
         });
         offerProvider.GetKnownToolNames().Returns([.. offeredTools.Select(static tool => tool.Name)]);
-        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult(cloudWithheldTools ?? []));
         return new AgentDefinitionResolver(store,
             playbookStore,
@@ -1856,9 +1890,9 @@ public sealed class AgentDefinitionResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
             GateOffer(offeredTools, callInfo.ArgAt<string?>(0)));
-        offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
             GateProfilePool(offeredTools, callInfo.ArgAt<string?>(0)));
         offerProvider.GetKnownToolNames().Returns([.. offeredTools.Select(static tool => tool.Name)]);
         var retrievalOptions = Options.Create(new PlaybookRetrievalOptions

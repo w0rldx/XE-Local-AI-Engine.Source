@@ -88,7 +88,7 @@ internal sealed class HeadlessToolExecutor : IHeadlessToolExecutor
             };
         }
 
-        var offered = await _offerProvider.GetOfferedToolsAsync(teacherModelName, isCloudModel: false, cancellationToken);
+        var offered = await _offerProvider.GetOfferedToolsAsync(teacherModelName, isCloudModel: false, cancellationToken: cancellationToken);
         var offer = offered.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal));
         if (offer is null)
         {

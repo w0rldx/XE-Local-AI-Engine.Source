@@ -1900,6 +1900,8 @@ public sealed class NodeChatStreamServiceTests
             "a cloud model must not receive KB content without opt-in.");
         AssertEx.Contains(events, streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
                                                  && streamEvent.NoticeKind == nameof(TurnNoticeKind.KnowledgeWithheld));
+        AssertEx.Contains(events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.KnowledgeWithheld)).NoticeMessage,
+            "grant local data on the model's external connection");
     }
 
     [Test]
@@ -1915,6 +1917,8 @@ public sealed class NodeChatStreamServiceTests
             "the attachment context block must not be composed for a cloud model without opt-in");
         AssertEx.Contains(events, streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
                                                  && streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsWithheld));
+        AssertEx.Contains(events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsWithheld)).NoticeMessage,
+            "grant local data on the model's external connection");
     }
 
     [Test]
@@ -2362,7 +2366,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ReasoningCapturingInvocationRunner(dispatcher);
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
-        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>(providerReportsWithheld
                          ?
                          [
@@ -2432,6 +2436,11 @@ public sealed class NodeChatStreamServiceTests
                                                                && streamEvent.NoticeKind == nameof(TurnNoticeKind.CloudToolsWithheld))
                                   .Select(static streamEvent => $"[{streamEvent.NoticeDetail}]");
         AssertEx.Equal(providerReportsWithheld ? "[mcp-tools, web-tools]" : "", string.Concat(noticeDetails));
+        if (providerReportsWithheld)
+        {
+            AssertEx.Contains(events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.CloudToolsWithheld)).NoticeMessage,
+                "grant them on the model's external connection");
+        }
     }
 
     [Test]
@@ -2922,8 +2931,8 @@ public sealed class NodeChatStreamServiceTests
                                  ModelProfile = "qwen3:8b",
                                  ReasoningEffort = null,
                                  AgentDefinitionVersion = 4,
-                                 AnyParticipantIsCloud = false,
-                                 FirstCloudParticipantModel = null
+                                 AnyParticipantNeedsCloudDataSwitch = false,
+                                 FirstUngrantedCloudParticipantModel = null
                              }));
 
         var service = new NodeChatStreamService(persistence,
@@ -2995,8 +3004,8 @@ public sealed class NodeChatStreamServiceTests
                                  ModelProfile = "qwen3:8b",
                                  ReasoningEffort = null,
                                  AgentDefinitionVersion = 4,
-                                 AnyParticipantIsCloud = false,
-                                 FirstCloudParticipantModel = null
+                                 AnyParticipantNeedsCloudDataSwitch = false,
+                                 FirstUngrantedCloudParticipantModel = null
                              }));
 
         var service = new NodeChatStreamService(persistence,
@@ -3090,6 +3099,7 @@ public sealed class NodeChatStreamServiceTests
         {
             AssertEx.Equal("qwen3:8b", notices[0].NoticeDetail);
             AssertEx.Contains(notices[0].NoticeMessage, "learned playbook was not applied");
+            AssertEx.Contains(notices[0].NoticeMessage, "grant local data on the model's external connection");
         }
     }
 
@@ -3106,8 +3116,8 @@ public sealed class NodeChatStreamServiceTests
                 ModelProfile = null,
                 ReasoningEffort = null,
                 AgentDefinitionVersion = 4,
-                AnyParticipantIsCloud = true,
-                FirstCloudParticipantModel = "azure-specialist-deploy",
+                AnyParticipantNeedsCloudDataSwitch = true,
+                FirstUngrantedCloudParticipantModel = "azure-specialist-deploy",
                 PlaybookWithheldParticipantNames = ["Researcher", "Writer"]
             }),
             playbookWithheld: true);
@@ -3116,6 +3126,8 @@ public sealed class NodeChatStreamServiceTests
             streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice && streamEvent.NoticeKind == nameof(TurnNoticeKind.PlaybookWithheld),
             "an orchestration raises at most one playbook-withheld notice");
         AssertEx.Equal("Researcher, Writer", events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.PlaybookWithheld)).NoticeDetail);
+        AssertEx.Contains(events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.PlaybookWithheld)).NoticeMessage,
+            "grant local data on each participant's external connection");
     }
 
     [Test]
@@ -3131,8 +3143,8 @@ public sealed class NodeChatStreamServiceTests
                 ModelProfile = null,
                 ReasoningEffort = null,
                 AgentDefinitionVersion = 4,
-                AnyParticipantIsCloud = true,
-                FirstCloudParticipantModel = "azure-specialist-deploy",
+                AnyParticipantNeedsCloudDataSwitch = true,
+                FirstUngrantedCloudParticipantModel = "azure-specialist-deploy",
                 CloudWithheldTools =
                 [
                     new CloudWithheldTool
@@ -3156,6 +3168,8 @@ public sealed class NodeChatStreamServiceTests
                                                                && streamEvent.NoticeKind == nameof(TurnNoticeKind.CloudToolsWithheld))
                                   .Select(static streamEvent => $"[{streamEvent.NoticeDetail}]");
         AssertEx.Equal("[mcp-tools]", string.Concat(noticeDetails));
+        AssertEx.Contains(events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.CloudToolsWithheld)).NoticeMessage,
+            "grant them on each participant's external connection");
     }
 
     // Runs one bound-agent send whose orchestration resolver returns the given resolution, and returns the streamed events.
@@ -3201,43 +3215,45 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
-    public async Task SendMessageAsync_WhenOrchestrationHasCloudParticipant_LocalRoot_WithholdsSharedSeedAttachment()
+    public async Task SendMessageAsync_WhenOrchestrationHasUngrantedCloudParticipant_LocalRoot_WithholdsSharedSeedAttachment()
     {
         // Blocker 1 (mixed-locality): the orchestration seed is ONE shared list broadcast to every participant, so a
-        // LOCAL orchestrator root with a CLOUD participant must still withhold node-local attachment content from that
-        // shared seed without opt-in — per-participant tool stripping cannot redact content already inlined into the seed.
-        var (events, capturedContext) = await RunOrchestrationAttachmentEgressAsync(anyParticipantIsCloud: true, allowCloudModelAccess: false);
+        // LOCAL orchestrator root with an ungranted CLOUD participant must still withhold node-local attachment content
+        // without opt-in — per-participant tool stripping cannot redact content already inlined into the seed.
+        var (events, capturedContext) = await RunOrchestrationAttachmentEgressAsync(anyParticipantNeedsCloudDataSwitch: true, allowCloudModelAccess: false);
 
         AssertEx.False(capturedContext.Any(message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal)),
             "the shared orchestration seed must not carry attachment content when a participant is cloud and there is no opt-in");
         AssertEx.False(capturedContext.Any(message => message.Content.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal)),
             "the attachment context block must not be composed for a mixed-locality orchestration without opt-in");
-        AssertEx.Contains(events, streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsWithheld),
-            "the user must see the attachments-withheld notice for a mixed-locality orchestration");
+        var notice = events.Single(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsWithheld));
+        AssertEx.Equal("azure-specialist-deploy", notice.NoticeDetail, "the notice names the ungranted cloud participant, not the local root");
     }
 
     [Test]
-    public async Task SendMessageAsync_WhenOrchestrationHasCloudParticipant_AndOperatorOptedIn_ComposesAttachment()
+    public async Task SendMessageAsync_WhenOrchestrationHasUngrantedCloudParticipant_AndOperatorOptedIn_ComposesAttachment()
     {
         // Opt-in restores the shared seed: with AllowCloudModelAccess the mixed-locality orchestration inlines the
         // attachment exactly as an all-local turn would.
-        var (_, capturedContext) = await RunOrchestrationAttachmentEgressAsync(anyParticipantIsCloud: true, allowCloudModelAccess: true);
+        var (_, capturedContext) = await RunOrchestrationAttachmentEgressAsync(anyParticipantNeedsCloudDataSwitch: true, allowCloudModelAccess: true);
 
         AssertEx.Contains(capturedContext, message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal));
     }
 
     [Test]
-    public async Task SendMessageAsync_WhenOrchestrationAllLocal_ComposesAttachmentAndDoesNotNotify()
+    public async Task SendMessageAsync_WhenNoOrchestrationParticipantNeedsTheCloudDataSwitch_ComposesAttachmentAndDoesNotNotify()
     {
-        // All-local orchestration is unaffected: the attachment composes and no withheld notice fires.
-        var (events, capturedContext) = await RunOrchestrationAttachmentEgressAsync(anyParticipantIsCloud: false, allowCloudModelAccess: false);
+        // All-local, or every cloud participant's connection grants local data (the resolver folds both into the
+        // aggregate): the attachment composes with AllowCloudModelAccess off and no withheld notice fires.
+        var (events, capturedContext) = await RunOrchestrationAttachmentEgressAsync(anyParticipantNeedsCloudDataSwitch: false, allowCloudModelAccess: false);
 
         AssertEx.Contains(capturedContext, message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal));
         AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsWithheld)),
-            "an all-local orchestration must not trigger the attachments-withheld notice");
+            "an orchestration with no ungranted cloud participant must not trigger the attachments-withheld notice");
     }
 
-    private static async Task<(List<ChatStreamEvent> Events, IReadOnlyList<ConversationMessageDto> CapturedContext)> RunOrchestrationAttachmentEgressAsync(bool anyParticipantIsCloud,
+    private static async Task<(List<ChatStreamEvent> Events, IReadOnlyList<ConversationMessageDto> CapturedContext)> RunOrchestrationAttachmentEgressAsync(
+        bool anyParticipantNeedsCloudDataSwitch,
         bool allowCloudModelAccess)
     {
         var conversationId = Guid.NewGuid();
@@ -3285,8 +3301,8 @@ public sealed class NodeChatStreamServiceTests
                                  ModelProfile = "qwen3:8b",
                                  ReasoningEffort = null,
                                  AgentDefinitionVersion = 4,
-                                 AnyParticipantIsCloud = anyParticipantIsCloud,
-                                 FirstCloudParticipantModel = anyParticipantIsCloud ? "azure-specialist-deploy" : null
+                                 AnyParticipantNeedsCloudDataSwitch = anyParticipantNeedsCloudDataSwitch,
+                                 FirstUngrantedCloudParticipantModel = anyParticipantNeedsCloudDataSwitch ? "azure-specialist-deploy" : null
                              }));
 
         var service = new NodeChatStreamService(persistence,
@@ -4147,8 +4163,8 @@ public sealed class NodeChatStreamServiceTests
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        _ = offerProvider.Received().GetOfferedToolsAsync("qwen3:8b", Arg.Any<bool>(), Arg.Any<CancellationToken>());
-        _ = offerProvider.DidNotReceive().GetOfferedToolsAsync(new LocalChatAgentOptions().DefaultModel, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _ = offerProvider.Received().GetOfferedToolsAsync("qwen3:8b", Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>());
+        _ = offerProvider.DidNotReceive().GetOfferedToolsAsync(new LocalChatAgentOptions().DefaultModel, Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -4338,8 +4354,8 @@ public sealed class NodeChatStreamServiceTests
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         // The resolved installed GGUF — not the static config default — drives the offer-time active model.
-        _ = offerProvider.Received().GetOfferedToolsAsync("phi-4:Q4_K_M", Arg.Any<bool>(), Arg.Any<CancellationToken>());
-        _ = offerProvider.DidNotReceive().GetOfferedToolsAsync(new LocalChatAgentOptions().DefaultModel, Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _ = offerProvider.Received().GetOfferedToolsAsync("phi-4:Q4_K_M", Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>());
+        _ = offerProvider.DidNotReceive().GetOfferedToolsAsync(new LocalChatAgentOptions().DefaultModel, Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>());
         AssertEx.Equal(InvocationStatus.Completed, dispatcher.CurrentInvocation!.Status);
     }
 
@@ -4408,7 +4424,7 @@ public sealed class NodeChatStreamServiceTests
         // Tool calling is enabled for ALL Codex ids, so the requested local tool offer (UseLocalTools: true) is
         // honored for the Codex model — capabilities still come from the Codex matrix, not the Ollama classifier. The
         // offer is requested with isCloudModel: true so the knowledge-tool provider-locality gate applies.
-        _ = offerProvider.Received().GetOfferedToolsAsync("gpt-5.5", true, Arg.Any<CancellationToken>());
+        _ = offerProvider.Received().GetOfferedToolsAsync("gpt-5.5", true, Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -4554,10 +4570,10 @@ public sealed class NodeChatStreamServiceTests
     private static ILocalToolOfferProvider CreateOfferProvider(params AllowedToolDto[] tools)
     {
         var provider = Substitute.For<ILocalToolOfferProvider>();
-        provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>()).Returns(tools);
-        provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
-        provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
-        provider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>()).Returns(tools);
+        provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(tools);
+        provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(tools);
+        provider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>([]));
         return provider;
     }
@@ -5265,6 +5281,8 @@ public sealed class NodeChatStreamServiceTests
 
         AssertEx.True(runner.CapturedContext.All(message => message.ToolExchanges is null), "Node-local tool output must not reach a cloud model without the opt-in.");
         AssertEx.ContainsSingle(runner.Events, streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.ToolHistoryWithheld));
+        AssertEx.Contains(runner.Events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.ToolHistoryWithheld)).NoticeMessage,
+            "grant local data on the model's external connection");
     }
 
     private static IReadOnlyList<NodeChatPersistedMessageDto> ToolInvestigationTurn(Guid conversationId) =>

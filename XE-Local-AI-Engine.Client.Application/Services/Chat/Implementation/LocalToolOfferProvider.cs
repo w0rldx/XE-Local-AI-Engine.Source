@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 {
@@ -302,24 +303,23 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         return false;
     }
 
-    public IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId, bool isCloudModel = false)
+    public IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId, bool isCloudModel = false, ExternalProviderCloudGrants? cloudGrants = null)
     {
         // High-risk tools (coder, knowledge, ask_user and every MCP tool) go only to a tool-capable model, and a null or
-        // unknown id counts as not capable. The MCP part is read live and sorted, so one catalog state yields one offer.
-        var capable = IsToolCapable(activeModelId);
-        if (!capable)
-        {
-            // The non-capable variant already excludes the knowledge tools (they are capable-only), so it needs no
-            // locality gate.
-            return _builtinAllToolsNonCapable;
-        }
+        // unknown id counts as not capable. The non-capable variant excludes the knowledge tools, so needs no locality gate.
+        return IsToolCapable(activeModelId) ? CapableOffer(activeModelId, isCloudModel, ResolveGrants(activeModelId, cloudGrants)) : _builtinAllToolsNonCapable;
+    }
 
+    // The tool-capable whole offer under already-resolved grants. The MCP part is read live and sorted, so one catalog
+    // state yields one offer.
+#pragma warning disable MA0045 // The whole offer is the synchronous base of every offer, which has no async boundary; the sync twins are the designated per-offer reads.
+    private IReadOnlyList<AllowedToolDto> CapableOffer(string? activeModelId, bool isCloudModel, ExternalProviderCloudGrants grants)
+    {
         // Provider-locality gate: node-local-data tools are withheld from a cloud model unless opted in; the trust checks catch
         // a pinned cloud id on a locally-routed turn. Both node switches are read per offer, so a save applies to the next turn.
         var baseOffer = _runtimeSettings.GetKnowledgeAgentToolsEnabled() ? _builtinAllTools : _builtinAllToolsNoKnowledge;
         var leavesNode = LeavesNode(activeModelId, isCloudModel);
         // A connection's own grant stands in for the node-wide switch of its class; it never changes leavesNode.
-        var grants = _modelTrustResolver.ClassifyCloudGrants(activeModelId);
         if (leavesNode && !grants.LocalData && !_runtimeSettings.GetAllowCloudModelAccess())
         {
             baseOffer = _builtinAllToolsNoLocalData;
@@ -344,22 +344,28 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             .. mcpDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.Description, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))
         ];
     }
+#pragma warning restore MA0045
 
-    public async Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsAsync(string? activeModelId, bool isCloudModel, ExternalProviderCloudGrants? cloudGrants = null,
+        CancellationToken cancellationToken = default)
     {
-#pragma warning disable MA0042 // The synchronous overload IS this method's base: it is the pure in-memory built-in + MCP view, which the async overload extends with the custom-tool store read. Calling the async twin here recurses.
-        var baseOffer = GetOfferedTools(activeModelId, isCloudModel);
+        // Custom and web tools merge ONLY in the tool-capable branch.
+        return IsToolCapable(activeModelId)
+            ? CapableOfferAsync(activeModelId, isCloudModel, ResolveGrants(activeModelId, cloudGrants), cancellationToken)
+            : Task.FromResult(_builtinAllToolsNonCapable);
+    }
+
+    // The tool-capable whole offer plus web and custom tools. A model outside the trust boundary gets the web tools and
+    // HttpFetch custom tools only by opt-in, and a Command custom tool (host execution) never.
+    private async Task<IReadOnlyList<AllowedToolDto>> CapableOfferAsync(string? activeModelId, bool isCloudModel, ExternalProviderCloudGrants grants,
+        CancellationToken cancellationToken)
+    {
+#pragma warning disable MA0042 // The synchronous core IS this method's base: it is the pure in-memory built-in + MCP view, which the async overload extends with the custom-tool store read. Calling the async twin here recurses.
+        var baseOffer = CapableOffer(activeModelId, isCloudModel, grants);
 #pragma warning restore MA0042
 
-        // Custom and web tools merge ONLY in the tool-capable branch. A model outside the trust boundary gets the web
-        // tools and HttpFetch custom tools only by opt-in, and a Command custom tool (host execution) never.
-        if (!IsToolCapable(activeModelId))
-        {
-            return baseOffer;
-        }
-
         var leavesNode = LeavesNode(activeModelId, isCloudModel);
-        var cloudWebAllowed = !leavesNode || _modelTrustResolver.ClassifyCloudGrants(activeModelId).WebTools || await _runtimeSettings.GetAllowCloudModelWebToolsAsync(cancellationToken);
+        var cloudWebAllowed = !leavesNode || grants.WebTools || await _runtimeSettings.GetAllowCloudModelWebToolsAsync(cancellationToken);
         var webAccessEnabled = await _runtimeSettings.GetWebAccessEnabledAsync(cancellationToken);
 
         // A bound agent still gets the web tools only through its AllowedToolNames intersection.
@@ -421,7 +427,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     public IReadOnlyList<AllowedToolDto> GetIntegrationOutputOffer() =>
         [_emitOutputOfferDto];
 
-    public IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId, bool isCloudModel = false)
+    public IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId, bool isCloudModel = false, ExternalProviderCloudGrants? cloudGrants = null)
     {
         // The profile-intersection pool: the whole offer PLUS the opt-in-only tools, still capability-gated, so a
         // non-capable model gets the non-capable variant and no spawn tool and the opt-in cannot bypass the gate.
@@ -431,17 +437,19 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             return _builtinAllToolsNonCapable;
         }
 
+        var grants = ResolveGrants(activeModelId, cloudGrants);
         return
         [
-            .. GetOfferedTools(activeModelId, isCloudModel),
-            .. SpawnOffer(activeModelId, isCloudModel),
+            .. CapableOffer(activeModelId, isCloudModel, grants),
+            .. SpawnOffer(activeModelId, isCloudModel, grants),
             .. ComputeOffer(activeModelId, isCloudModel),
             .. AgentHomeOffer(activeModelId, isCloudModel),
             .. _workSessionOfferDtos
         ];
     }
 
-    public async Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsForProfileAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsForProfileAsync(string? activeModelId, bool isCloudModel, ExternalProviderCloudGrants? cloudGrants = null,
+        CancellationToken cancellationToken = default)
     {
         // Non-capable models get the non-capable variant and NO spawn/custom tools, so the opt-in cannot bypass the gate.
         if (!IsToolCapable(activeModelId))
@@ -450,11 +458,12 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         }
 
         // The async whole offer (built-in + MCP + capability/local-gated custom) PLUS the opt-in-only spawn tool — the same
-        // asymmetry as the synchronous GetOfferedToolsForProfile, with custom tools folded in through GetOfferedToolsAsync.
+        // asymmetry as the synchronous GetOfferedToolsForProfile, with custom tools folded in through CapableOfferAsync.
+        var grants = ResolveGrants(activeModelId, cloudGrants);
         return
         [
-            .. await GetOfferedToolsAsync(activeModelId, isCloudModel, cancellationToken),
-            .. SpawnOffer(activeModelId, isCloudModel),
+            .. await CapableOfferAsync(activeModelId, isCloudModel, grants, cancellationToken),
+            .. SpawnOffer(activeModelId, isCloudModel, grants),
             .. ComputeOffer(activeModelId, isCloudModel),
             .. AgentHomeOffer(activeModelId, isCloudModel),
             .. _workSessionOfferDtos
@@ -462,7 +471,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<CloudWithheldTool>> GetCloudWithheldToolsAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<CloudWithheldTool>> GetCloudWithheldToolsAsync(string? activeModelId, bool isCloudModel, ExternalProviderCloudGrants? cloudGrants = null,
+        CancellationToken cancellationToken = default)
     {
         if (!IsToolCapable(activeModelId) || !LeavesNode(activeModelId, isCloudModel))
         {
@@ -470,7 +480,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         }
 
         // The same grant and switch reads, in the same order of precedence, as the offer methods above.
-        var grants = _modelTrustResolver.ClassifyCloudGrants(activeModelId);
+        var grants = ResolveGrants(activeModelId, cloudGrants);
         var withheld = new List<CloudWithheldTool>();
         if (!grants.McpTools && !await _runtimeSettings.GetAllowCloudModelMcpToolsAsync(cancellationToken))
         {
@@ -512,10 +522,10 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     ///     direct gates. It therefore sits behind its own switch, <c>AllowCloudModelSubAgents</c>, not behind
     ///     <c>AllowCloudModelAccess</c>, which cannot be given informedly about data a child fetches on its own.
     /// </remarks>
-    private IReadOnlyList<AllowedToolDto> SpawnOffer(string? activeModelId, bool isCloudModel)
+    private IReadOnlyList<AllowedToolDto> SpawnOffer(string? activeModelId, bool isCloudModel, ExternalProviderCloudGrants grants)
     {
 #pragma warning disable MA0045 // The spawn offer is part of the synchronous profile pool, which has no async boundary; the sync twin is the designated per-offer read.
-        if (!LeavesNode(activeModelId, isCloudModel) || _modelTrustResolver.ClassifyCloudGrants(activeModelId).SubAgents || _runtimeSettings.GetAllowCloudModelSubAgents())
+        if (!LeavesNode(activeModelId, isCloudModel) || grants.SubAgents || _runtimeSettings.GetAllowCloudModelSubAgents())
 #pragma warning restore MA0045
         {
             return [_spawnOfferDto];
@@ -564,6 +574,12 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     private bool LeavesNode(string? activeModelId, bool isCloudModel)
     {
         return isCloudModel || _modelTrustResolver.Classify(activeModelId) != ModelTrustLocality.Local;
+    }
+
+    // The ONE grant read of a public offer call: the caller's snapshot grants, else the resolver's cached answer.
+    private ExternalProviderCloudGrants ResolveGrants(string? activeModelId, ExternalProviderCloudGrants? cloudGrants)
+    {
+        return cloudGrants ?? _modelTrustResolver.ClassifyCloudGrants(activeModelId);
     }
 
     public IReadOnlyList<string> GetKnownToolNames()

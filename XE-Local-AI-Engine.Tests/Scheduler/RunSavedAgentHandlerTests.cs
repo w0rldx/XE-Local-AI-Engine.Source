@@ -125,6 +125,7 @@ public sealed class RunSavedAgentHandlerTests
         var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "Node Settings → Privacy & updates");
+        AssertEx.Contains(exception.Message, "grant unattended runs on the model's external connection");
         AssertEx.Equal(expected: 0, harness.RunCount);
         // The cloud gate fires before capacity admission and before any resolve.
         await harness.Capacity.DidNotReceive().DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());

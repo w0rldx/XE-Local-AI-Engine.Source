@@ -705,8 +705,9 @@ for what a response schema costs at the llama.cpp grammar layer.
 
 **An Agent node is node-local unless the operator allows cloud.** If the node's effective model resolves to a cloud
 (or unresolved) model the node run is refused `ValidationFailed` before any capacity is reserved, with a reason naming
-the switch, unless **Let cloud models run unattended** (`AllowCloudModelUnattendedRuns`, Node Settings → Privacy) is
-on: by default an unattended run never hands the operator's content to a cloud provider. A cloud run admitted by the
+the switch and the unattended-runs grant on the model's external connection, unless **Let cloud models run
+unattended** (`AllowCloudModelUnattendedRuns`, Node Settings → Privacy) is on or that connection grants unattended
+runs: by default an unattended run never hands the operator's content to a cloud provider. A cloud run admitted by the
 switch resolves its agent and its offer with the real cloud flag, so the other cloud switches still decide which tools,
 playbook memory and attachments it gets ([Security & Privacy](12-security-and-privacy.md)). Approval-required tools are
 likewise stripped from the offer, and the turn runs

@@ -42,7 +42,7 @@ internal static class ChatToolOfferResolver
             };
         }
 
-        var fallbackOffer = await localToolOfferProvider.GetOfferedToolsAsync(resolution.ActiveModel, resolution.EffectiveModelIsCloud, cancellationToken);
+        var fallbackOffer = await localToolOfferProvider.GetOfferedToolsAsync(resolution.ActiveModel, resolution.EffectiveModelIsCloud, resolution.EffectiveModelCloudGrants, cancellationToken);
         return new ChatToolOffer
         {
             OfferTools = true,

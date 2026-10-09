@@ -4,10 +4,6 @@ Pending rules awaiting operator approval. Not required reading: nothing here is 
 Add an entry in the normal format (`### <heading>`, then `**Rule:** … **Prevents:** … **Authority:** …`).
 Once the operator approves it, move the entry to its topic file and delete it here; a rejected entry is deleted.
 
-### A substituted trust resolver answers null grants (target: backend-tests.md)
-
-**Rule:** an `IModelTrustResolver` built with `Substitute.For<T>()` returns null from `ResolveCloudGrantsAsync` and `ClassifyCloudGrants` unless configured. Any test whose trust answer is not `Local` must stub both to `ExternalProviderCloudGrants.None` (or use `FakeModelTrustResolver`, which mirrors the real rule), or the gate under test dies with a `NullReferenceException` instead of withholding. **Prevents:** a cloud-path test that crashes before it reaches the gate it pins. **Authority:** `GraphWorkflowAgentHostFixture`, `GraphWorkflowResponseSchemaWarningTests.BuildService`, `ModelTrustResolverTests.FakeModelTrustResolver_AnswersGrantsLikeTheRealResolver`.
-
 ### The host reaches shared provider rules through Client.Application, never OpenAICompatible.Core (target: build-and-analyzers.md)
 
 **Rule:** `XE-Local-AI-Engine.Client` does not reference `Providers.OpenAICompatible.Core`; an endpoint or validator that needs a shared rule (header names, base-address normalization) calls the `Client.Application` surface that wraps it (`StoredExternalProviderHeader.FindViolations`, `OpenAICompatibleBaseAddress` via the store), never the Core type directly. **Prevents:** a host project reference to the leaf transport layer, which `LayerDependencyTests` rejects after the endpoint is already written. **Authority:** `LayerDependencyTests`; `Client.Application` csproj references.

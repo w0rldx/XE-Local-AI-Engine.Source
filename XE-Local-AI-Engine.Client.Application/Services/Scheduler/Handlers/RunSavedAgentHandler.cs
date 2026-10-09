@@ -73,7 +73,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
     {
         TemplateId = TemplateIdValue,
         DisplayName = "Run a saved agent",
-        Description = "Runs a saved agent on a schedule with a fixed prompt. Cloud models only when allowed in Node Settings → Privacy & updates.",
+        Description = "Runs a saved agent on a schedule with a fixed prompt. Cloud models only when allowed in Node Settings → Privacy & updates or on the model's external connection.",
         ParameterSchema = ParameterSchemaJson,
         DefaultParameters = null,
         SupportedScheduleKinds = [ScheduleKind.Cron, ScheduleKind.OneShot, ScheduleKind.SimpleInterval, ScheduleKind.Manual],
@@ -137,7 +137,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             _logger.LogInformation("Scheduled agent run for definition {AgentDefinitionId} was rejected: its effective model is cloud-hosted and AllowCloudModelUnattendedRuns is off.",
                 definition.Id);
             throw new ScheduledJobExecutionException(
-                "Scheduled agent runs are restricted to node-local models. This agent is configured to use a cloud model, so it will not run unattended. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates to allow it.");
+                "Scheduled agent runs are restricted to node-local models. This agent is configured to use a cloud model, so it will not run unattended. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates, or grant unattended runs on the model's external connection when it has one, to allow it.");
         }
 
         // 3b. CAPABILITY GATE: a tool-requiring agent on a model without tool calling would "succeed" having called nothing.

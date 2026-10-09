@@ -426,6 +426,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             "a cloud model must not receive KB content without opt-in.");
         AssertEx.Contains(events, streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
                                                  && streamEvent.NoticeKind == nameof(TurnNoticeKind.KnowledgeWithheld));
+        AssertEx.Contains(events.First(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.KnowledgeWithheld)).NoticeMessage,
+            "grant local data on the model's external connection");
     }
 
     [Test]
@@ -962,8 +964,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                                  ModelProfile = "qwen3:8b",
                                  ReasoningEffort = null,
                                  AgentDefinitionVersion = 4,
-                                 AnyParticipantIsCloud = false,
-                                 FirstCloudParticipantModel = null
+                                 AnyParticipantNeedsCloudDataSwitch = false,
+                                 FirstUngrantedCloudParticipantModel = null
                              }));
 
         var service = new NodeChatRegenerationService(persistence,
@@ -1070,8 +1072,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                                  ModelProfile = "qwen3:8b",
                                  ReasoningEffort = null,
                                  AgentDefinitionVersion = 4,
-                                 AnyParticipantIsCloud = true,
-                                 FirstCloudParticipantModel = "azure-specialist-deploy",
+                                 AnyParticipantNeedsCloudDataSwitch = true,
+                                 FirstUngrantedCloudParticipantModel = "azure-specialist-deploy",
                                  CloudWithheldTools =
                                  [
                                      new CloudWithheldTool
@@ -1532,7 +1534,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("llamacpp");
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
-        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>(providerReportsWithheld
                          ?
                          [
@@ -3174,7 +3176,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         // Tool calling is enabled for all Codex ids (V0=true), so the requested local tool offer is honored on
         // regenerate. It is requested with isCloudModel: true so the knowledge-tool provider-locality gate applies.
-        _ = offerProvider.Received().GetOfferedToolsAsync(CodexModel, true, Arg.Any<CancellationToken>());
+        _ = offerProvider.Received().GetOfferedToolsAsync(CodexModel, true, Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -3400,10 +3402,10 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     private static ILocalToolOfferProvider CreateOfferProvider(params AllowedToolDto[] tools)
     {
         var provider = Substitute.For<ILocalToolOfferProvider>();
-        provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>()).Returns(tools);
-        provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
-        provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(tools);
-        provider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>()).Returns(tools);
+        provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(tools);
+        provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(tools);
+        provider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>([]));
         return provider;
     }

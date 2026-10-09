@@ -264,7 +264,7 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         const string instructions = "agentless-web-offer";
         var offer = Substitute.For<ILocalToolOfferProvider>();
-        offer.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        offer.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
              .Returns([HarmlessTool("read_file"), HarmlessTool("web_fetch"), HarmlessTool("web_search")]);
         await using var harness = GraphWorkflowHarness.PrivateAgentHost(services =>
         {
@@ -360,6 +360,7 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass, "a cloud model is a configuration refusal, and a retry answers the same.");
         AssertEx.Contains(analyze.Error, "cloud model");
         AssertEx.Contains(analyze.Error, "Node Settings → Privacy & updates", message: "the refusal names the switch that would allow it.");
+        AssertEx.Contains(analyze.Error, "grant unattended runs on the model's external connection", message: "the refusal names the connection grant as the alternative.");
         AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(instructions, StringComparison.Ordinal)),
             "the refusal happens before any invocation exists.");
         AssertEx.Empty(Capacity(harness).ReservationsFor(model), "and before capacity is asked, so there is nothing to leak.");
@@ -448,6 +449,7 @@ public sealed class GraphWorkflowAgentExecutorTests
 
         AssertEx.Equal(GraphWorkflowFailureClass.ValidationFailed, analyze.FailureClass);
         AssertEx.Contains(analyze.Error, "Node Settings → Privacy & updates");
+        AssertEx.Contains(analyze.Error, "grant unattended runs on the model's external connection");
         AssertEx.Empty(harness.Invocations.Packages.Where(package => Prompt(package).Contains(prompt, StringComparison.Ordinal)));
         AssertEx.Empty(Capacity(harness).ReservationsFor(model));
     }

@@ -82,7 +82,7 @@ public sealed class ToolMockService : IToolMockService
     {
         // The profile pool with no active model: verification is about the mock's shape, not about which model may be
         // offered the tool, so nothing here should be capability-gated away.
-        var offered = await _offerProvider.GetOfferedToolsForProfileAsync(activeModelId: null, isCloudModel: false, cancellationToken);
+        var offered = await _offerProvider.GetOfferedToolsForProfileAsync(activeModelId: null, isCloudModel: false, cancellationToken: cancellationToken);
         return offered.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal))?.ParameterSchema;
     }
 

@@ -160,7 +160,7 @@ public sealed class OrchestrationResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(new[]
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(new[]
         {
             OfferTool("GetCurrentTime")
         });
@@ -242,15 +242,68 @@ public sealed class OrchestrationResolverTests
     }
 
     [Test]
-    public async Task ResolveAsync_WhenAnyParticipantIsCloud_SurfacesAggregateAndNamesCloudModel()
+    public async Task ResolveAsync_WhenAnUngrantedParticipantIsCloud_SurfacesAggregateAndNamesCloudModel()
     {
-        // Blocker 1: the caller gates the SHARED orchestration seed's attachment content on this aggregate (a cloud
-        // participant taints the whole shared seed), and names the cloud model in the withheld notice.
+        // Blocker 1: the caller gates the SHARED orchestration seed's attachment content on this aggregate (an ungranted
+        // cloud participant taints the whole shared seed), and names the cloud model in the withheld notice.
         var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: false);
 
         AssertEx.NotNull(resolved);
-        AssertEx.True(resolved!.AnyParticipantIsCloud, "a cloud-pinned participant must make the aggregate cloud-reaching");
-        AssertEx.Equal(CloudParticipantModel, resolved.FirstCloudParticipantModel);
+        AssertEx.True(resolved!.AnyParticipantNeedsCloudDataSwitch, "an ungranted cloud-pinned participant must make the aggregate need the switch");
+        AssertEx.Equal(CloudParticipantModel, resolved.FirstUngrantedCloudParticipantModel);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WithAGrantedAndAnUngrantedCloudParticipant_NamesTheUngrantedOne()
+    {
+        // The granted participant sorts first by definition id, so naming it would be the pre-grant bug: the aggregate
+        // must still need the switch, and the notice must name the first UNGRANTED cloud participant by definition id.
+        const string grantedModel = "ext:gateway/granted";
+        const string ungrantedModel = "ext:gateway/ungranted";
+        var grants = new ExternalProviderCloudGrants { LocalData = true };
+        var triage = CreateDefinition("Triage", allowedTools: ["GetCurrentTime"]);
+        var granted = CreateDefinition("Granted", modelProfile: grantedModel, allowedTools: ["GetCurrentTime"]) with
+        {
+            Id = new Guid("00000000-0000-0000-0000-000000000001")
+        };
+        var ungranted = CreateDefinition("Ungranted", modelProfile: ungrantedModel, allowedTools: ["GetCurrentTime"]) with
+        {
+            Id = new Guid("00000000-0000-0000-0000-000000000002")
+        };
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, granted, ungranted]);
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(ToolCapableModel, Arg.Any<CancellationToken>())
+                          .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: false));
+        capabilityResolver.ResolveAsync(grantedModel, Arg.Any<CancellationToken>())
+                          .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true) { CloudGrants = grants });
+        capabilityResolver.ResolveAsync(ungrantedModel, Arg.Any<CancellationToken>())
+                          .Returns(new ModelCapabilitySnapshot(SupportsThinking: false, SupportsTools: true, IsCloud: true));
+        var offerProvider = Substitute.For<ILocalToolOfferProvider>();
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
+                     .Returns([OfferTool("GetCurrentTime")]);
+        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<CloudWithheldTool>>([]));
+        var store = Substitute.For<IAgentDefinitionStore>();
+        var resolver = new OrchestrationResolver(store,
+            Substitute.For<IPlaybookActionStore>(),
+            offerProvider,
+            new LexicalPlaybookRetrievalRanker(),
+            Options.Create(new PlaybookRetrievalOptions()),
+            StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, grantedModel, ungrantedModel).Build(),
+            capabilityResolver,
+            new FakeAgentInstructionProvider(),
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<OrchestrationResolver>.Instance);
+        SeedParticipants(store, triage, granted, ungranted);
+
+        var resolved = AssertEx.NotNull((await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration);
+
+        AssertEx.True(resolved.AnyParticipantNeedsCloudDataSwitch, "one ungranted cloud participant still taints the shared seed");
+        AssertEx.Equal(ungrantedModel, resolved.FirstUngrantedCloudParticipantModel);
+        // Each participant's own offer reads its own grants once, and a grant never changes its locality.
+        await offerProvider.Received(1).GetOfferedToolsAsync(grantedModel, true, grants, Arg.Any<CancellationToken>());
+        await offerProvider.Received(1).GetCloudWithheldToolsAsync(grantedModel, true, grants, Arg.Any<CancellationToken>());
+        await offerProvider.Received(1).GetOfferedToolsAsync(ungrantedModel, true, ExternalProviderCloudGrants.None, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -272,7 +325,7 @@ public sealed class OrchestrationResolverTests
     }
 
     [Test]
-    public async Task ResolveAsync_WhenTheCloudParticipantsConnectionGrantsLocalData_InjectsItsPlaybookWithTheSwitchOff()
+    public async Task ResolveAsync_WhenTheCloudParticipantsConnectionGrantsLocalData_InjectsItsPlaybookAndLiftsTheSeedGate()
     {
         var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: false,
             specialistGrants: new ExternalProviderCloudGrants { LocalData = true });
@@ -281,8 +334,11 @@ public sealed class OrchestrationResolverTests
         var cloudSpecialist = resolved!.Spec.Participants.Single(participant => participant.Name == "Specialist");
         AssertEx.Equal("Instructions for Specialist\n\n## Operating Playbook\n- Stay terse.", cloudSpecialist.Instructions);
         AssertEx.Empty(resolved.PlaybookWithheldParticipantNames);
-        // The grant covers the participant's own memory only; the shared seed still sees a cloud participant.
-        AssertEx.True(resolved.AnyParticipantIsCloud, "a grant never changes locality");
+        // The only cloud participant is granted, so the shared seed no longer needs the node switch.
+        AssertEx.False(resolved.AnyParticipantNeedsCloudDataSwitch, "a granted cloud participant must not taint the shared seed");
+        AssertEx.Null(resolved.FirstUngrantedCloudParticipantModel);
+        // The snapshot's grant reaches the participant's own offer: the switch-gated knowledge tool is offered.
+        AssertEx.Contains(cloudSpecialist.Tools, tool => tool.Name == KnowledgeSearchToolName);
     }
 
     [Test]
@@ -305,8 +361,8 @@ public sealed class OrchestrationResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([OfferTool("GetCurrentTime")]);
-        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns([OfferTool("GetCurrentTime")]);
+        offerProvider.GetCloudWithheldToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>())
                      .Returns(callInfo => Task.FromResult<IReadOnlyList<CloudWithheldTool>>(callInfo.ArgAt<bool>(1)
                          ?
                          [
@@ -366,8 +422,8 @@ public sealed class OrchestrationResolverTests
         var resolved = (await resolver.ResolveAsync(orchestrator, ToolCapableModel)).Orchestration;
 
         AssertEx.NotNull(resolved);
-        AssertEx.False(resolved!.AnyParticipantIsCloud, "an all-local orchestration must not be flagged cloud-reaching");
-        AssertEx.Null(resolved.FirstCloudParticipantModel);
+        AssertEx.False(resolved!.AnyParticipantNeedsCloudDataSwitch, "an all-local orchestration must not need the cloud data switch");
+        AssertEx.Null(resolved.FirstUngrantedCloudParticipantModel);
     }
 
     private const string KnowledgeSearchToolName = "search_knowledge_base";
@@ -762,7 +818,7 @@ public sealed class OrchestrationResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(offeredTools);
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(offeredTools);
         var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel).Build();
         return new OrchestrationResolver(store,
             playbookStore,
@@ -802,7 +858,7 @@ public sealed class OrchestrationResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
         {
             var modelId = callInfo.ArgAt<string?>(0);
             var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);
@@ -849,7 +905,7 @@ public sealed class OrchestrationResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
         {
             var modelId = callInfo.ArgAt<string?>(0);
             var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);
@@ -971,7 +1027,7 @@ public sealed class OrchestrationResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
+        offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(callInfo =>
         {
             var modelId = callInfo.ArgAt<string?>(0);
             var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);

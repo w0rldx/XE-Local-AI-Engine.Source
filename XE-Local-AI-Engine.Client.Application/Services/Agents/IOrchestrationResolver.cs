@@ -135,21 +135,22 @@ public sealed class ResolvedOrchestration
     public required int AgentDefinitionVersion { get; init; }
 
     /// <summary>
-    ///     True when ANY resolved participant's effective model is cloud-hosted.
+    ///     True when ANY resolved participant's effective model is cloud-hosted AND its connection does not grant local
+    ///     data, so node-local data in the shared seed needs the <c>AllowCloudModelAccess</c> switch.
     /// </summary>
     /// <remarks>
-    ///     The orchestration seed is a SINGLE shared list broadcast to every participant, and per-participant tool
-    ///     stripping cannot redact content already embedded in it. The caller must therefore gate node-local private
-    ///     data on this aggregate, not on the orchestrator's own locality, or an inlined attachment reaches a cloud
-    ///     participant. <see cref="FirstCloudParticipantModel" /> names one such model.
+    ///     The seed is ONE shared list broadcast to every participant, which per-participant tool stripping cannot
+    ///     redact, so the caller gates node-local data on this aggregate, not on the orchestrator's own locality. A
+    ///     cloud participant whose connection grants local data no longer taints the seed. A grant never changes a
+    ///     participant's locality, which still gates its own tool offer.
     /// </remarks>
-    public required bool AnyParticipantIsCloud { get; init; }
+    public required bool AnyParticipantNeedsCloudDataSwitch { get; init; }
 
     /// <summary>
-    ///     The effective model id of the first cloud participant (ordinal by definition id, for determinism), or
-    ///     <see langword="null" /> when no participant is cloud. Used to name the cloud model in the attachments-withheld notice.
+    ///     The effective model id of the first cloud participant without a local-data grant, ordered by definition id for
+    ///     determinism, or <see langword="null" /> when there is none. Names the model in the withheld notices.
     /// </summary>
-    public required string? FirstCloudParticipantModel { get; init; }
+    public required string? FirstUngrantedCloudParticipantModel { get; init; }
 
     /// <summary>
     ///     The names of the participants whose enabled playbook memory was withheld from their cloud model, ordered by

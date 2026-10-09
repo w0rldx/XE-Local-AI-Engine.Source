@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -984,10 +985,10 @@ public sealed class WorkSessionStepLoopTests
             ];
             var provider = Substitute.For<ILocalToolOfferProvider>();
             _ = provider.IsToolCapable(Arg.Any<string?>()).Returns(true);
-            _ = provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>()).Returns(offer);
-            _ = provider.GetOfferedToolsForProfile(Arg.Any<string?>(), Arg.Any<bool>()).Returns(offer);
-            _ = provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(offer);
-            _ = provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(offer);
+            _ = provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>()).Returns(offer);
+            _ = provider.GetOfferedToolsForProfile(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>()).Returns(offer);
+            _ = provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(offer);
+            _ = provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(offer);
             _ = provider.GetKnownToolNames().Returns([.. offer.Select(static tool => tool.Name)]);
             _ = provider.GetKnownToolNamesAsync(Arg.Any<CancellationToken>()).Returns([.. offer.Select(static tool => tool.Name)]);
             services.RemoveAll<ILocalToolOfferProvider>();

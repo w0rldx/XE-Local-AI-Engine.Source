@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -326,7 +327,7 @@ public sealed class ChatContextEstimateServiceTests
             var turnResolver = new ChatTurnResolver(AgentResolver, agentStore, orchestration, new NamedModelCapabilities(), NullLogger<ChatTurnResolver>.Instance);
 
             var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-            offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(offered);
+            offerProvider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(offered);
             var defaultAgent = Substitute.For<IDefaultAgentProvider>();
             defaultAgent.GetDefaultAgentIdAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<Guid?>(null));
             var nodeSettings = Substitute.For<INodeSettingsStore>();

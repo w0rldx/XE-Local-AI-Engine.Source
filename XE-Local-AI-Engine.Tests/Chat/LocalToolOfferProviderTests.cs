@@ -1063,6 +1063,70 @@ public sealed class LocalToolOfferProviderTests
         AssertEx.Contains(granted, static tool => tool.Name == ComputeToolDefinition.ToolName);
     }
 
+    [Test]
+    [Arguments(false, "mcp", "mcp,-,-,-,-")]
+    [Arguments(true, "", "mcp,-,-,-,-")]
+    [Arguments(true, "none", "-,-,-,-,-")]
+    public async Task GetOfferedToolsForProfileAsync_TheCallersGrantsWinOverTheResolver_AndNullFallsBackToIt(bool resolverGrantsMcp, string passed, string expected)
+    {
+        // A caller holding a snapshot passes its grants and the provider takes them as given, in both directions; only
+        // null reads the resolver's cached answer.
+        var resolverGrants = resolverGrantsMcp ? new ExternalProviderCloudGrants { McpTools = true } : ExternalProviderCloudGrants.None;
+        var provider = CreateSwitchProvider(static settings => settings, Gateway(ExternalProviderLocality.Cloud, resolverGrants));
+        var callerGrants = passed switch
+        {
+            "mcp" => new ExternalProviderCloudGrants { McpTools = true },
+            "none" => ExternalProviderCloudGrants.None,
+            _ => null
+        };
+
+        var pool = await provider.GetOfferedToolsForProfileAsync(GatewayModel, isCloudModel: true, callerGrants);
+
+        AssertEx.Equal(expected, GatedClasses(pool));
+    }
+
+    [Test]
+    [Arguments("wholeAsync")]
+    [Arguments("profileAsync")]
+    [Arguments("withheld")]
+    public async Task EveryAsyncGatedOfferCall_ReadsTheResolversGrantsAtMostOnce_AndNeverWhenTheCallerPassesThem(string call)
+    {
+        // One read per public call is what keeps the offer and the notice of one turn on the same grants.
+        var trustResolver = Gateway(ExternalProviderLocality.Cloud, ExternalProviderCloudGrants.None);
+        var provider = CreateSwitchProvider(static settings => settings, trustResolver);
+
+        await InvokeGatedOfferAsync(provider, call, cloudGrants: null);
+        AssertEx.Equal(expected: 1, trustResolver.ClassifyCloudGrantsCalls, $"{call} must read the grants once when the caller passes none");
+
+        await InvokeGatedOfferAsync(provider, call, ExternalProviderCloudGrants.None);
+        AssertEx.Equal(expected: 1, trustResolver.ClassifyCloudGrantsCalls, $"{call} must not read the grants when the caller passes them");
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public void EverySyncGatedOfferCall_ReadsTheResolversGrantsAtMostOnce_AndNeverWhenTheCallerPassesThem(bool profile)
+    {
+        var trustResolver = Gateway(ExternalProviderLocality.Cloud, ExternalProviderCloudGrants.None);
+        var provider = CreateSwitchProvider(static settings => settings, trustResolver);
+
+        _ = profile ? provider.GetOfferedToolsForProfile(GatewayModel, isCloudModel: true) : provider.GetOfferedTools(GatewayModel, isCloudModel: true);
+        AssertEx.Equal(expected: 1, trustResolver.ClassifyCloudGrantsCalls, "one read when the caller passes no grants");
+
+        _ = profile
+            ? provider.GetOfferedToolsForProfile(GatewayModel, isCloudModel: true, ExternalProviderCloudGrants.None)
+            : provider.GetOfferedTools(GatewayModel, isCloudModel: true, ExternalProviderCloudGrants.None);
+        AssertEx.Equal(expected: 1, trustResolver.ClassifyCloudGrantsCalls, "no read when the caller passes them");
+    }
+
+    private static Task InvokeGatedOfferAsync(LocalToolOfferProvider provider, string call, ExternalProviderCloudGrants? cloudGrants) =>
+        call switch
+        {
+            "wholeAsync" => provider.GetOfferedToolsAsync(GatewayModel, isCloudModel: true, cloudGrants),
+            "profileAsync" => provider.GetOfferedToolsForProfileAsync(GatewayModel, isCloudModel: true, cloudGrants),
+            _ => provider.GetCloudWithheldToolsAsync(GatewayModel, isCloudModel: true, cloudGrants)
+        };
+
     private static LocalToolOfferProvider CreateSwitchProvider(Func<StubNodeRuntimeSettings, StubNodeRuntimeSettings> configure, FakeModelTrustResolver? trustResolver = null)
     {
         var mcpRegistry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);

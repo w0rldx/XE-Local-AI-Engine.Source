@@ -190,6 +190,7 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
         AssertEx.True(off.IsValid, "a cloud pin is a warning, never an error.");
         var warning = AssertEx.NotNull(off.Warnings.SingleOrDefault(warning => warning.Key == "analyze"), $"one switch warning expected: {string.Join(" | ", off.Warnings)}");
         AssertEx.Contains(warning.Message, "Let cloud models run unattended", message: "the warning names the switch that would admit the node, not a GGUF to install.");
+        AssertEx.Contains(warning.Message, "grant unattended runs on the model's external connection", message: "the warning names the connection grant as the alternative.");
         AssertEx.Empty(on.Warnings.Where(warning => warning.Key == "analyze" && !warning.Message.Contains("maxLength", StringComparison.Ordinal)),
             "with the switch on the run would proceed, so validation must not call the node unrunnable.");
     }

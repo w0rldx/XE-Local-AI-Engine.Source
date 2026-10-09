@@ -7109,7 +7109,7 @@
 				"publishToChat": "Ergebnis im Chat veröffentlichen",
 				"includeAttachments": "Chat-Anhänge einbeziehen",
 				"includeAttachmentsDisabled": "Aktivieren Sie zuerst „Nimmt Anhänge an“ in den Workflow-Einstellungen.",
-				"cloudModelHelp": "Cloud-Modelle laufen nur, wenn „Cloud-Modelle unbeaufsichtigt ausführen lassen“ unter Knoteneinstellungen → Datenschutz & Updates eingeschaltet ist.",
+				"cloudModelHelp": "Cloud-Modelle laufen nur, wenn „Cloud-Modelle unbeaufsichtigt ausführen lassen“ unter Knoteneinstellungen → Datenschutz & Updates eingeschaltet ist oder die externe Verbindung des Modells unbeaufsichtigte Läufe erlaubt.",
 				"cloudModelLabel": "{{label}} · {{provider}} (Cloud)"
 			},
 			"edge": {

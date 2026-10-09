@@ -21,6 +21,9 @@ internal sealed class FakeModelTrustResolver : IModelTrustResolver
     /// <summary>Set to make <see cref="ClassifyExternalCached" /> behave as it does before the registry is primed.</summary>
     public bool CacheIsCold { get; set; }
 
+    /// <summary>How many times <see cref="ClassifyCloudGrants" /> was called, for the read-grants-once tests.</summary>
+    public int ClassifyCloudGrantsCalls { get; private set; }
+
     public FakeModelTrustResolver Register(string connectionId,
         string wireId,
         ExternalProviderLocality locality = ExternalProviderLocality.Local,
@@ -93,6 +96,7 @@ internal sealed class FakeModelTrustResolver : IModelTrustResolver
 
     public ExternalProviderCloudGrants ClassifyCloudGrants(string? modelId)
     {
+        ClassifyCloudGrantsCalls++;
         return CacheIsCold ? ExternalProviderCloudGrants.None : GrantsOf(modelId);
     }
 
