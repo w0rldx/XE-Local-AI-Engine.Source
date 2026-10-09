@@ -334,7 +334,7 @@ git read-tree HEAD                                     # resync the shared index
 ```
 
 The three-argument `update-ref` is the guard: if another agent committed after `read-tree`, it fails instead of
-writing a tree that silently reverts their commit; start again from the first line. The message follows the commit
+writing a tree that silently reverts their commit; start again from the first line. The last line, `git read-tree HEAD`, is what resyncs the shared index: a commit that skips it leaves the shared index at the old tree, and the next committer's `git diff --cached --quiet` guard fires although nothing is staged. `git diff --cached --quiet <previous HEAD>` exiting 0 means the index is only stale; `git read-tree HEAD` clears it. The message follows the commit
 rules in `AGENTS.md`, and `commit-tree` takes the identity from the repository config like a plain `git commit`.
 
 ### Landing a branch on develop

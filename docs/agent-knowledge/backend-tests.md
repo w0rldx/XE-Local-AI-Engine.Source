@@ -166,6 +166,15 @@ debugging a backend test, or changing `TestServerWebAppFactory`, `scripts/run-te
 
 **Rule:** a test asserting that a Development-gated endpoint or hub is ABSENT builds its own factory with `EnableDevelopmentMode = false`, never the shared host, where the surface is mapped. **Prevents:** an absence test that fails against the shared host, or is "fixed" by weakening its assertion. **Authority:** `TestServerWebAppFactory.EnableDevelopmentMode`; `docs/wiki/17-writing-tests.md` ("Per-host knobs").
 
+### TUnit `[Arguments]` cannot read a `private const` of the test class
+**Rule:** a constant referenced from `[Arguments(...)]` is re-emitted by TUnit's source generator in a generated class, so a `private const` on the test class fails the Release build with CS0122 inside the generated source while the IDE shows the test file clean. Declare such constants `internal const`. **Prevents:** a red Release build whose error points at a generated file nobody wrote. **Authority:** `SandboxSecurityProfilePolicyTests` capability constants; sandbox-security-profile round, 2026-10-08.
+
+### `NodeSettingsEndpointTests.Persisted(mutate)` replays the mutation on a FRESH record
+**Rule:** `Persisted(mutate)` applies the save endpoint's mutation to a fresh `StoredNodeSettings`, and the mutation returns `latest` unchanged when the stored record differs from the one it validated. A round-trip test seeded with a non-default record therefore passes its endpoint half and fails its persisted half with the field at its default. Start such a test from `NewSettingsStore()`, or pass the same seeded record to `Persisted(mutate, stored)`. **Prevents:** chasing a "setting not saved" failure that is only the fixture's fresh record. **Authority:** `NodeSettingsEndpointTests.Persisted`, `NewSettingsStore`.
+
+### A constructor that newly requires a service breaks hand-built test containers the focused lanes never run
+**Rule:** some tests build a real `ServiceCollection` and resolve the type under test through it (`McpServerConnectionManagerDiTests`, `DevelopmentValidationReviewAndApplyTests`); a constructor that gains a required dependency compiles, passes the class's own tests (they use the builder or a fake) and fails only those DI tests at resolve time. When a constructor gains a parameter, grep the test tree for `AddSingleton<I...>` registrations of the type and run those classes, or run the full gate before hand-off; the touched-classes filter does not catch it. **Prevents:** a green focused lane followed by a red full gate on a `ServiceProvider` resolve. **Authority:** `McpServerConnectionManagerDiTests`, `DevelopmentValidationReviewAndApplyTests`; sandbox-security-profile round, 2026-10-09.
+
 ## Browser E2E host
 
 ### a solution build overwrites the E2E test host, so the flagged build must be the LAST one before a `--no-build` E2E run

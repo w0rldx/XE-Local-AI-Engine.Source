@@ -26,7 +26,7 @@ where Debug was green.
 
 ### `.Result` false-positives are why MA0042/MA0045 replace a `BannedSymbols` line
 
-**Rule:** sync-over-async is enforced by Meziantou MA0042/MA0045, which are type-aware, never by a `BannedSymbols.txt` text ban on `.Result`, `.Wait(` or `GetAwaiter().GetResult()`: many DTOs have a `Result` property and zero-timeout `Wait(0)` admission polls are legitimate. The analyzers also catch sync I/O with an async twin inside an async method. Take site counts from a Release build, not a grep census. **Prevents:** a text ban redding every `Result`-named property. **Authority:** `.editorconfig` Meziantou block; `BannedSymbols.txt` header. [evidence](../agent-knowledge-evidence.md#result-false-positives-are-why-ma0042ma0045-replace-a-bannedsymbols-line)
+**Rule:** sync-over-async is enforced by Meziantou MA0042/MA0045, which are type-aware, never by a `BannedSymbols.txt` text ban on `.Result`, `.Wait(` or `GetAwaiter().GetResult()`: many DTOs have a `Result` property and zero-timeout `Wait(0)` admission polls are legitimate. The analyzers also catch sync I/O with an async twin inside an async method. Take site counts from a Release build, not a grep census. With CA1849/S6966 it also rejects a sync `INodeRuntimeSettings` getter beside its `Async` twin in async code: give a new setting only `Get<Name>Async`, a sync twin only for a caller with no async context. **Prevents:** a text ban redding every `Result`-named property. **Authority:** `.editorconfig` Meziantou block; `BannedSymbols.txt` header. [evidence](../agent-knowledge-evidence.md#result-false-positives-are-why-ma0042ma0045-replace-a-bannedsymbols-line)
 
 ### `TimeProvider` is registered once, in `Client/ConfigureServices.cs`
 
@@ -125,6 +125,9 @@ where Debug was green.
 ### ReSharper cleanup runs only with the `BuildSafe` profile and never on MSBuild files
 
 **Rule:** run `dotnet jb cleanupcode XE-Local-AI-Engine.slnx --profile="BuildSafe" --exclude="**/*.props;**/*.targets;**/*.csproj"`, then a Release build. `BuildSafe` (in `XE-Local-AI-Engine.slnx.DotSettings`) never reorders members; a new profile must keep "Reorder type members" off. **Prevents:** a reordered static field initializing from a not-yet-initialized sibling (C# runs static initializers in textual order), and the XML formatter wrapping an MSBuild property value in whitespace so a `== 'true'` condition silently flips. A Debug build under-reports the `IDExxxx` rewrites the cleanup makes. **Authority:** `dotnet-tools.json` (`jetbrains.resharper.globaltools`); `XE-Local-AI-Engine.slnx.DotSettings`.
+
+### A new `//` line under a 2-line comment makes a 3-line run and fails the comment ratchet
+**Rule:** `CommentBudgetConventionTests` counts consecutive own-line `//` lines as one run and fails any run over 2 lines in a file whose allowlist line does not already carry that count. Adding one `//` line directly below an existing two-line comment is the usual way to create one: merge it into the existing lines or move it next to the code it explains, and run the `CommentBudgetConventionTests` class before hand-off whenever a change adds comments. **Prevents:** a red Architecture lane (and fail-fast gate stop) from a one-line comment edit. **Authority:** `CommentBudgetConventionTests` run shape (`RunLineBudget`); wiki 16 "Comment budget".
 
 ## Stale beliefs
 
