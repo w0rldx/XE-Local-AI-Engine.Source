@@ -18,9 +18,6 @@ internal sealed class RecommendationDiscoveryMemo : IHuggingFaceGgufDiscovery
     // Matches the advisor's own per-call budget; the advisor still applies its own timeout to the wait.
     private static readonly TimeSpan SharedCallTimeout = TimeSpan.FromSeconds(20);
 
-    // Prune by full scan once the map passes this size; entries are a few dozen per refresh.
-    private const int PruneThreshold = 256;
-
     private readonly IHuggingFaceGgufDiscovery _inner;
     private readonly TimeProvider _timeProvider;
     private readonly ConcurrentDictionary<GgufSearchQuery, SharedCall<IReadOnlyList<GgufRepoSummary>>> _searches = new();
@@ -31,6 +28,9 @@ internal sealed class RecommendationDiscoveryMemo : IHuggingFaceGgufDiscovery
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
+
+    /// <summary>Entries held right now, expired ones included until the next call prunes them.</summary>
+    internal int CachedCallCount => _searches.Count + _inspections.Count;
 
     public Task<IReadOnlyList<GgufRepoSummary>> SearchAsync(GgufSearchQuery query, CancellationToken ct)
     {
@@ -61,12 +61,10 @@ internal sealed class RecommendationDiscoveryMemo : IHuggingFaceGgufDiscovery
         where TKey : notnull
     {
         var now = _timeProvider.GetUtcNow();
-        if (calls.Count > PruneThreshold)
+        // Full scan per call: the map holds a few dozen entries per refresh, and an expired entry keeps a repo's file list alive.
+        foreach (var stale in calls.Where(pair => !pair.Value.IsReusable(now)).ToList())
         {
-            foreach (var stale in calls.Where(pair => !pair.Value.IsReusable(now)).ToList())
-            {
-                calls.TryRemove(stale);
-            }
+            calls.TryRemove(stale);
         }
 
         var call = calls.AddOrUpdate(key,

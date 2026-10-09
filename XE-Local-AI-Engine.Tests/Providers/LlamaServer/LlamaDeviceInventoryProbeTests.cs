@@ -320,7 +320,7 @@ public sealed class LlamaDeviceInventoryProbeTests
                          Variant = GpuVariant.Vulkan,
                          IsPinnedFallback = true
                      }));
-        var clock = new ManualClock(new DateTimeOffset(2026, 10, 9, 8, 0, 0, TimeSpan.Zero));
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 10, 9, 8, 0, 0, TimeSpan.Zero));
         var probe = new LlamaDeviceInventoryProbe(binaryManager,
             NullLogger<LlamaDeviceInventoryProbe>.Instance,
             clock,
@@ -338,28 +338,8 @@ public sealed class LlamaDeviceInventoryProbeTests
     {
         public required LlamaDeviceInventoryProbe Probe { get; init; }
 
-        public required ManualClock Clock { get; init; }
+        public required ManualTimeProvider Clock { get; init; }
 
         public required string SpawnLog { get; init; }
-    }
-
-    private sealed class ManualClock : TimeProvider
-    {
-        private DateTimeOffset _utcNow;
-
-        public ManualClock(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
-
-        public void Advance(TimeSpan elapsed)
-        {
-            _utcNow += elapsed;
-        }
     }
 }

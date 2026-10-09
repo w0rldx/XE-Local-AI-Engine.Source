@@ -250,6 +250,9 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- A final answer that is prose starting with `<tool_call>` is no longer reported as a tool call written as text; only an
+  unclosed block followed by JSON counts. The agent tool picker names `run_python` as Linux-only only on a node where it
+  is withheld, and the "Refresh now" discovery memo drops expired readings on every call instead of past 256 entries.
 - The model advisor dropped every catalog entry with a large tokenizer vocabulary (all Qwen3.5, 3.6 and 3.8 entries):
   the remote GGUF header read fetched the whole tokenizer for each quant file and ran into the per-repository
   timeout. The tokenizer is now read once per repository and architecture instead of once per quant file, and

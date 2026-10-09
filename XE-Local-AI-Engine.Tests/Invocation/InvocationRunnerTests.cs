@@ -1463,6 +1463,7 @@ public sealed class InvocationRunnerTests
     [Test]
     [Arguments("Call it like this: <tool_call>{\"name\": \"a\"}</tool_call>")]
     [Arguments("<tool_call>{\"name\": \"a\"}</tool_call>\nThat is the syntax.")]
+    [Arguments("<tool_call> is the tag a call starts with; nothing was called.")]
     [Arguments("The answer is 4.")]
     public async Task RunAsync_WhenTheFinalAnswerHasTextBesideToolCallMarkup_RaisesNoEmptyAnswerNotice(string answer)
     {

@@ -1337,7 +1337,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
             var close = rest.IndexOf(CloseTag, StringComparison.Ordinal);
             if (close < 0)
             {
-                return true;
+                // Unclosed: markup only when a JSON object follows the tag, so prose that merely starts with the tag stays an answer.
+                return rest[OpenTag.Length..].TrimStart().StartsWith('{');
             }
 
             rest = rest[(close + CloseTag.Length)..].TrimStart();

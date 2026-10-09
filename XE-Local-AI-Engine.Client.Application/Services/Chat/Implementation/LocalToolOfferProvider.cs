@@ -219,8 +219,11 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             new LocalToolCatalogEntry
             {
                 Name = ComputeToolDefinition.ToolName,
-                // Picker text only; the model never sees this entry, and is offered the tool only where it can run.
-                Description = ComputeToolDefinition.Description + " (Linux only)",
+                // Picker text only; the model never sees this entry, and is offered the tool only where it can run. Off Linux
+                // this suffix is where an operator learns that a profile selecting it gets no tool on this node.
+                Description = OperatingSystem.IsLinux()
+                    ? ComputeToolDefinition.Description
+                    : ComputeToolDefinition.Description + " (Linux only: not available on this node, an agent selecting it gets no tool)",
                 RequiresApproval = true,
                 Source = BuiltinSource,
                 // run_python runs commands on the node, the category that drives the picker's danger badge. Listing it

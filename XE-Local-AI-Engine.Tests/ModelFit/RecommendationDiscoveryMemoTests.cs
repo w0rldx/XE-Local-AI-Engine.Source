@@ -26,7 +26,7 @@ public sealed class RecommendationDiscoveryMemoTests
         var inner = Substitute.For<IHuggingFaceGgufDiscovery>();
         inner.SearchAsync(InstructTrending, Arg.Any<CancellationToken>()).Returns(gate.Task);
         inner.InspectRepoAsync("owner/repo", Arg.Any<CancellationToken>()).Returns(Detail("owner/repo"));
-        var memo = new RecommendationDiscoveryMemo(inner, new ManualClock());
+        var memo = new RecommendationDiscoveryMemo(inner, new ManualTimeProvider());
 
         var searches = Enumerable.Range(0, 3).Select(_ => memo.SearchAsync(InstructTrending with { }, CancellationToken.None)).ToList();
         gate.SetResult([]);
@@ -44,7 +44,8 @@ public sealed class RecommendationDiscoveryMemoTests
         var inner = Substitute.For<IHuggingFaceGgufDiscovery>();
         inner.InspectRepoAsync("owner/repo", Arg.Any<CancellationToken>())
              .Returns(_ => Task.FromException<GgufRepoDetail>(new HttpRequestException("hub down")), _ => Detail("owner/repo"));
-        var clock = new ManualClock();
+        inner.InspectRepoAsync("owner/other", Arg.Any<CancellationToken>()).Returns(Detail("owner/other"));
+        var clock = new ManualTimeProvider();
         var memo = new RecommendationDiscoveryMemo(inner, clock);
 
         await AssertEx.ThrowsAsync<HttpRequestException>(() => memo.InspectRepoAsync("owner/repo", CancellationToken.None));
@@ -53,6 +54,8 @@ public sealed class RecommendationDiscoveryMemoTests
         await inner.Received(2).InspectRepoAsync("owner/repo", Arg.Any<CancellationToken>());
 
         clock.Advance(RecommendationDiscoveryMemo.ReuseWindow);
+        await memo.InspectRepoAsync("owner/other", CancellationToken.None);
+        AssertEx.Equal(1, memo.CachedCallCount, "The expired reading is pruned by the next call, whatever its key.");
         await memo.InspectRepoAsync("owner/repo", CancellationToken.None);
 
         await inner.Received(3).InspectRepoAsync("owner/repo", Arg.Any<CancellationToken>());
@@ -67,20 +70,5 @@ public sealed class RecommendationDiscoveryMemoTests
             License = null,
             Files = []
         });
-    }
-
-    private sealed class ManualClock : TimeProvider
-    {
-        private DateTimeOffset _utcNow = new(2026, 10, 9, 8, 0, 0, TimeSpan.Zero);
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            return _utcNow;
-        }
-
-        public void Advance(TimeSpan elapsed)
-        {
-            _utcNow += elapsed;
-        }
     }
 }

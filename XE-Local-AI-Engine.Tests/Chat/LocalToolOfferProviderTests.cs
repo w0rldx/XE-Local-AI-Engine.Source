@@ -424,7 +424,10 @@ public sealed class LocalToolOfferProviderTests
         var provider = CreateProvider("qwen3:8b");
 
         AssertEx.Contains(provider.GetKnownToolNames(), ComputeToolDefinition.ToolName);
-        AssertEx.Contains(provider.GetKnownTools(), entry => entry.Name == ComputeToolDefinition.ToolName);
+        var catalogEntry = provider.GetKnownTools().Single(static entry => entry.Name == ComputeToolDefinition.ToolName);
+        // The picker is the one place an operator learns the tool is unavailable on this node; on Linux no caveat is owed.
+        AssertEx.Equal(!OperatingSystem.IsLinux(), catalogEntry.Description.Contains("Linux only", StringComparison.Ordinal),
+            "The Linux-only caveat is shown exactly where the tool is withheld.");
     }
 
     [Test]
