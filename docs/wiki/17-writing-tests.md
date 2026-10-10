@@ -230,6 +230,10 @@ If your test also persists the `node-admin-test` Identity row, seed
 
 TUnit runs classes — and tests within a class — in parallel.
 
+- **The width is capped at eight per assembly.** `AssemblyParallelLimit` in `XE-Local-AI-Engine.Tests` and
+  `Client.Persistence.Tests` carries `[assembly: ParallelLimiter<…>]`, because TUnit's default is 4 × CPU cores and a
+  live `TestServerWebAppFactory` host costs ~200 MB. A `--maximum-parallel-tests` below eight still narrows; never add
+  a class-level `[ParallelLimiter<…>]` or call `ClearParallelLimiter` (`ParallelLimitConventionTests` fails the gate).
 - **Bare `[NotInParallel]` is a run-alone guard.** It means "nothing else while this runs". Do **not** give it a
   key to "make it stricter"; a key does the opposite.
 - **Keyed `[NotInParallel("X")]` serializes on the shared resource `X`.** Every test that touches `X` must use

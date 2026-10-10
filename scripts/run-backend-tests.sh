@@ -5,8 +5,8 @@
 #   The documented gate used to be a solution-wide `dotnet test XE-Local-AI-Engine.slnx
 #   --max-parallel-test-modules 1`, which serialized the three test modules because MTP's default
 #   module width is Environment.ProcessorCount and XE-Local-AI-Engine.Client.Persistence.Tests at
-#   TUnit's default in-process width peaked at 11.6 GB RSS. Serializing three modules to survive one
-#   unpinned module is the wrong trade: this script pins a per-project width instead and then runs
+#   TUnit's default in-process width (4 x CPU cores) peaked at 11.6 GB RSS. Serializing three modules to
+#   survive one unpinned module is the wrong trade: this script pins a per-project width instead and then runs
 #   the modules CONCURRENTLY — the shape .github/workflows/build-and-test.yml already used for its
 #   `siblings` leg, which now calls this script rather than carrying a second copy of it.
 #
@@ -162,6 +162,8 @@
 #                                     (XE_TEST_WIDTH_Client_Persistence_Tests, XE_TEST_WIDTH_AI_Agent_Tests).
 #                                     Client.Persistence.Tests defaults to 4: measured fastest on a
 #                                     32-core box (102 s / 2.7 GB) against a much larger default width.
+#                                     Values above 8 are clamped to 8 by each assembly's own
+#                                     [ParallelLimiter] (AssemblyParallelLimit.cs), silently.
 #
 # Exit codes:
 #   0    — every project green
@@ -359,9 +361,11 @@ if [[ "${#MODULE_PROJECTS[@]}" -eq 0 ]]; then
 fi
 printf 'Enrolled test project: %s\n' "${TEST_PROJECTS[@]}"
 
-# Per-project in-process width. The default is deliberately NOT TUnit's (which is thread-pool driven
-# and unbounded): Client.Persistence.Tests at that width measured 6:08 wall / 11.6 GB RSS, against
-# 102 s / 2.7 GB at width 4.
+# Per-project in-process width. The default is deliberately NOT TUnit's (4 x CPU cores, over a hundred on a
+# many-core machine): Client.Persistence.Tests at that width measured 6:08 wall / 11.6 GB RSS, against
+# 102 s / 2.7 GB at width 4. The Tests and Client.Persistence.Tests assemblies also carry an assembly-level
+# [ParallelLimiter] of 8 (AssemblyParallelLimit.cs) so a bare host run without this flag cannot exceed
+# it; the width here is the narrower of the two.
 width_for() {
   local module="$1" key var value
   key="${module#XE-Local-AI-Engine.}"; key="${key//[.-]/_}"
