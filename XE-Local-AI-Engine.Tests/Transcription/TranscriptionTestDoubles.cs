@@ -41,7 +41,6 @@ internal sealed class FakeWhisperTranscriber : IWhisperTranscriber
                 }
             ],
             DetectedLanguageCode = "en",
-            DetectedLanguageProbability = 0.99,
             DurationSeconds = 1.25
         };
 
@@ -73,8 +72,6 @@ internal sealed class FakeWhisperTranscriber : IWhisperTranscriber
 
     public bool LastTranslate { get; private set; }
 
-    public bool LastDetectLanguage { get; private set; }
-
     public async Task<WhisperTranscriptionResult> TranscribeAsync(string modelId, WhisperTranscriptionRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -85,7 +82,6 @@ internal sealed class FakeWhisperTranscriber : IWhisperTranscriber
         LastLanguageMode = request.LanguageMode;
         LastLanguageCode = request.LanguageCode;
         LastTranslate = request.Translate;
-        LastDetectLanguage = request.DetectLanguage;
         LastStartPosition = request.Audio.Position;
 
         var head = new byte[16];

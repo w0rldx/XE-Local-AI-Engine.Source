@@ -169,12 +169,27 @@ function startEntry(hubPath: string, entry: HubEntry, isRestart: boolean): void 
 			},
 			(error: unknown) => {
 				console.warn(`shared signalr hub "${hubPath}" failed to start`, error);
-				scheduleRestart(hubPath, entry);
+				// A 404 from negotiate means the hub's feature is off for this process: retrying cannot succeed, so stop here
+				// as if the retry policy gave up. A later acquire after the lease is released tries once more.
+				if (!isFeatureOffStart(error)) {
+					scheduleRestart(hubPath, entry);
+				}
 			},
 		)
 		.finally(() => {
 			entry.starting = false;
 		});
+}
+
+// SignalR wraps the negotiate HttpError in a FailedToNegotiateWithServerError that keeps the status only in its message.
+function isFeatureOffStart(error: unknown): boolean {
+	const candidate = error as { statusCode?: unknown; errorType?: unknown; message?: unknown } | null;
+	return (
+		candidate?.statusCode === 404 ||
+		(candidate?.errorType === "FailedToNegotiateWithServerError" &&
+			typeof candidate.message === "string" &&
+			candidate.message.includes("Status code '404'"))
+	);
 }
 
 function scheduleRestart(hubPath: string, entry: HubEntry): void {

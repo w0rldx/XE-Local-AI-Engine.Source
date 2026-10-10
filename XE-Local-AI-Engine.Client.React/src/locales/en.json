@@ -1318,6 +1318,7 @@
 			"loadingHistory": "Loading local chat history…",
 			"loadingMessages": "Loading messages…",
 			"modelUnavailable": "Unavailable",
+			"nodeDefaultModel": "Node default",
 			"nativeReasoningLabel": "Native reasoning",
 			"reasoningLabel": "Reasoning",
 			"retryConnection": "Retry",
@@ -2811,7 +2812,8 @@
 				},
 				"developmentEnabled": {
 					"label": "Development mode",
-					"description": "Lets agents change code in registered source folders, each attempt in its own isolated worktree."
+					"description": "Lets agents change code in registered source folders, each attempt in its own isolated worktree.",
+					"offHint": "Turning it off applies immediately; turning it on needs a restart."
 				},
 				"workSessionsEnabled": {
 					"label": "Work sessions",
@@ -3344,6 +3346,7 @@
 					"untrustedPublisher": "Unverified publisher",
 					"untrustedPublisherHint": "This publisher is not a known GGUF packager — review the repo before downloading.",
 					"download": "Download",
+					"downloadOtherQuant": "Other quant",
 					"noGguf": "No GGUF",
 					"clearSearch": "Clear search",
 					"columns": {

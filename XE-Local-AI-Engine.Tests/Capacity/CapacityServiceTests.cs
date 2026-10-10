@@ -797,6 +797,56 @@ public sealed class CapacityServiceTests
         AssertEx.Equal(8 * Gb, harness.Ledger.Reserved.GpuBytes);
     }
 
+    /// <summary>
+    ///     A caller that decides for itself (a graph node, the scheduler, a sub-agent) feeds a launch that skips the supervisor's own
+    ///     decision, so this Allow is the only trace of the window and memory it was admitted at.
+    /// </summary>
+    [Test]
+    public async Task Capacity_ChatAllowDecidedByTheCaller_LogsOneInformationLineWithModelWindowAndMemory()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: 20 * Gb),
+            Footprint = GpuFootprint(8 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        var info = harness.Logger.Entries.Where(static entry => entry.Level == LogLevel.Information).ToArray();
+        AssertEx.Equal(1, info.Length);
+        AssertEx.Contains(info[0].Message, "Chat admission for model " + Model);
+        AssertEx.Contains(info[0].Message, "window 8192");
+        AssertEx.Contains(info[0].Message, "free 20480 MiB VRAM");
+        AssertEx.Contains(info[0].Message, "footprint 8192 MiB GPU");
+        decision.Reservation?.Dispose();
+    }
+
+    /// <summary>The supervisor's own chat admission logs its own "Chat admission" line, so this service stays silent for it.</summary>
+    [Test]
+    public async Task Capacity_ChatAllowForTheSupervisorsOwnAdmission_LogsNothingAtInformation()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: 20 * Gb),
+            Footprint = GpuFootprint(8 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(new CapacityRequest
+            {
+                ModelName = Model,
+                Role = ModelRole.Chat,
+                SupervisorEnforcesProcessCap = true
+            },
+            CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.False(harness.Logger.Entries.Any(static entry => entry.Level == LogLevel.Information));
+        decision.Reservation?.Dispose();
+    }
+
     [Test]
     public async Task Capacity_GpuResidentFootprint_WithNoRamReservation_DoesNotRequireRamTelemetry()
     {

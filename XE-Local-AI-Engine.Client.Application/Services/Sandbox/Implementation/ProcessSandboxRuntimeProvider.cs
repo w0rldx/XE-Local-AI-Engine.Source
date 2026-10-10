@@ -606,6 +606,10 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 : new InvalidOperationException($"Execution id '{request.ExecutionId}' is already in flight for this sandbox.");
         }
 
+        _logger.LogInformation("Sandboxed interactive command {ExecutionId} started (mechanism {Mechanism}, filesystem isolation {Isolated}).",
+            request.ExecutionId,
+            launch.MxcRequest is not null ? "MXC AppContainer" : "process",
+            launch.AppliedFilesystemIsolation);
         return new InteractiveProcess(this, state, request.ExecutionId, process, launch, markerId, commandCancelSource, stderrTail);
     }
 
@@ -1180,6 +1184,10 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         public Stream StandardInput => _process.StandardInput;
 
         public Stream StandardOutput => _process.StandardOutput;
+
+        public int? ExitCode => Volatile.Read(ref _disposed) == 0 ? _process.ExitCode : null;
+
+        public IReadOnlyList<string> Warnings => Volatile.Read(ref _disposed) == 0 ? _process.Warnings : [];
 
         public async Task<string?> GetStandardErrorTailAsync()
         {

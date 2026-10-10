@@ -1319,6 +1319,39 @@ public sealed class NodeChatStreamServiceTests
         await runner.DidNotReceive().RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    ///     A node-authored refusal (here the <c>high</c> sandbox profile the backend cannot serve) names the setting to change,
+    ///     so it reaches the failed turn verbatim instead of the generic text kept for exceptions that may carry a host path.
+    /// </summary>
+    [Test]
+    public async Task SendMessageAsync_WhenAgentHomePreparationIsRejected_FailsWithTheRejectionText()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        NodeChatTerminalizeMessageRequest? terminalRequest = null;
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, request => terminalRequest = request);
+        var runner = Substitute.For<IInvocationRunner>();
+        var stager = Substitute.For<IConversationSandboxStager>();
+        const string rejection = "The 'high' Sandbox:SecurityProfile requires a filesystem boundary this backend cannot serve.";
+        stager.PrepareConversationAttachmentsAsync(conversationId, Arg.Any<CancellationToken>())
+              .Returns<Task<ConversationSandboxPreparation>>(_ => throw new AgentHomeRequestRejectedException(rejection));
+        var service = CreateAgentHomeService(persistence, runner, new RecordingWorkerEventDispatcher(), stager);
+
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)))
+        {
+            // Drain the failure stream so terminalization completes.
+        }
+
+        AssertEx.Equal(NodeChatMessageStatusValues.Failed, AssertEx.NotNull(terminalRequest).Status);
+        AssertEx.Equal(rejection, terminalRequest!.Error);
+        await runner.DidNotReceive().RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
+    }
+
     [Test]
     public async Task SendMessageAsync_WhenTheConversationIsUnknown_ThrowsTheTypedNotFound()
     {

@@ -64,7 +64,7 @@ page and `/health/ready`; scheduled jobs do not run, and every other local API r
 ## Logs and debug mode
 
 - **Files** live in `logs/` under the data directory: the engine's daily `xe-node-<date>.log` (rolls at 50 MB, keeps
-  7 files), plus `desktop.log` (the app window), `startup-crash.log` and, on Windows, `launcher.log`. They survive the
+  7 files), plus `desktop.log` (app-window failures only, so empty after a healthy start), `startup-crash.log` and, on Windows, `launcher.log`. They survive the
   app closing. **Open logs folder** in the tray menu or on the startup-error screen opens the directory.
 - **Verbose logging without a restart:** on the **Diagnostics** page, turn on **Verbose logging until restart**. The
   node log gets Debug detail until the engine next restarts.

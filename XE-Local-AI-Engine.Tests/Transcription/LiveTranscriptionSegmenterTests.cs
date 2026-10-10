@@ -545,99 +545,40 @@ public sealed class LiveTranscriptionSegmenterTests
     }
 
     [Test]
-    public async Task DetectedLanguage_AWindowThatReportsNone_KeepsAskingUntilOneDoes()
+    public async Task DetectedLanguage_AWindowThatReportsNone_IsLearnedFromALaterOne()
     {
-        // A speech window can still report no language, because the transcriber retried it without probabilities. The
-        // session must keep asking on every window after speech until one reports a language.
+        // A window can report no language (no speech in it); the session keeps the first code a later window reports.
         var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
 
-        _ = await PushAsync(segmenter, 0, 2_500, 500);
-        var asked = transcriber.DetectLanguageFlags.Count;
-        AssertEx.Equal("False,True", string.Join(',', transcriber.DetectLanguageFlags),
-            "The first window follows no speech, so it never asks; the window after it does and reports nothing.");
+        var before = await PushAsync(segmenter, 0, 2_500, 500);
+        AssertEx.Null(segmenter.DetectedLanguageCode, "No window has reported a language yet.");
         transcriber.DetectedLanguageCode = "en";
-        _ = await PushAsync(segmenter, 2_500, 4_500, 500);
+        var after = await PushAsync(segmenter, 2_500, 4_500, 500);
 
-        var flags = transcriber.DetectLanguageFlags;
-        AssertEx.True(flags.Count > asked + 1 && flags[asked], $"Detection is asked for again after a window reported none: {string.Join(',', flags)}");
-        AssertEx.True(flags.Skip(asked + 1).All(static flag => !flag), $"and not after one reported a language: {string.Join(',', flags)}");
         AssertEx.Equal("en", segmenter.DetectedLanguageCode);
+        AssertEx.ContainsSingle(before.Concat(after), tick => tick.DetectedLanguage == "en", "It is reported once, on the call that learned it.");
     }
 
     [Test]
-    public async Task DetectedLanguage_SilentWindows_NeverAskForProbabilities()
+    public async Task ExplicitLanguage_IsSentOnEveryWindowAndNeverReportedAsDetected()
     {
-        // whisper-server dies on Windows (500 on Linux) when a probability request meets a window VAD finds silent. A
-        // lane listening to silence must never ask, or the daemon crashes once per tick and the lane falls behind.
-        var speaking = false;
-        var transcriber = new ScriptedWhisperTranscriber(window => speaking ? ContinuousSpeech(window) : []);
-
-        // A 10 s cap keeps every window below it: a cap commits the whole span, and an emptied tail asks nothing.
-        var segmenter = Create(transcriber, Settings(maxWindowSeconds: 10));
-
-        _ = await PushAsync(segmenter, 0, 4_000, 500);
-        AssertEx.True(transcriber.DetectLanguageFlags.Count > 0 && transcriber.DetectLanguageFlags.All(static flag => !flag),
-            $"No silent window asks: {string.Join(',', transcriber.DetectLanguageFlags)}");
-
-        var silentCalls = transcriber.DetectLanguageFlags.Count;
-        speaking = true;
-        _ = await PushAsync(segmenter, 4_000, 6_000, 500);
-
-        var flags = transcriber.DetectLanguageFlags;
-        AssertEx.Equal("False,True", string.Join(',', flags.Skip(silentCalls)),
-            "The first speech window follows silence and does not ask; the one after it does.");
-    }
-
-    [Test]
-    public async Task DetectedLanguage_ASilentWindowAfterCommittedSpeech_DoesNotAsk_ButOneAfterSpeechInTheTailDoes()
-    {
-        // A short utterance commits before the tail guard and moves the watermark past it; the next window then hears
-        // only the pause. Asking there is the whisper.cpp no-speech crash, once per pause-separated utterance.
-        var call = 0;
-        var transcriber = new ScriptedWhisperTranscriber(window => ++call switch
+        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech)
         {
-            1 => [Speech(0.0, 1.0)],
-            2 => [Speech(0.0, 0.9)],
-            3 => [],
-            _ => ContinuousSpeech(window)
-        });
-        var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
-
-        _ = await PushAsync(segmenter, 0, 5_000, 500);
-
-        AssertEx.Equal(900L, segmenter.CommittedEndMs, "The second window committed the utterance ending before its tail guard.");
-        AssertEx.Equal("False,True,False,False,True", string.Join(',', transcriber.DetectLanguageFlags),
-            "The window after the commit hears only the pause and must not ask; the next follows that silence and does not ask either; speech it leaves in the tail makes the one after it ask.");
-
-        static WhisperTranscriptSegment Speech(double startSeconds, double endSeconds) =>
-            new()
-            {
-                StartSeconds = startSeconds,
-                EndSeconds = endSeconds,
-                Text = "hello",
-                Confidence = 0.9
-            };
-    }
-
-    [Test]
-    public async Task ExplicitLanguage_NeverAsksForDetection()
-    {
-        // English forced must never ask for language probabilities: whisper-server answers that request with 500 when
-        // VAD finds no speech in the window.
-        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
+            DetectedLanguageCode = "en"
+        };
         var segmenter = new LiveTranscriptionSegmenter(transcriber, TranscriptChannel.Mono, ModelId, languageCode: "en", translate: false,
             Settings(maxWindowSeconds: 5), new ManualTimeProvider());
 
         _ = await PushAsync(segmenter, 0, 3_000, 500);
 
-        var flags = transcriber.DetectLanguageFlags;
-        AssertEx.True(flags.Count > 0 && flags.All(static flag => !flag), $"No request asks for detection: {string.Join(',', flags)}");
+        var modes = transcriber.LanguageModes;
+        AssertEx.True(modes.Count > 0 && modes.All(static mode => mode == WhisperLanguageMode.Explicit), $"Every window forces the language: {string.Join(',', modes)}");
         AssertEx.Null(segmenter.DetectedLanguageCode, "A forced language is not a detected one.");
     }
 
     [Test]
-    public async Task DetectedLanguage_IsAskedForOncePerSessionAndThenRemembered()
+    public async Task DetectedLanguage_IsLearnedOnceAndThenRemembered()
     {
         var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech)
         {
@@ -649,9 +590,6 @@ public sealed class LiveTranscriptionSegmenterTests
 
         AssertEx.Equal("en", segmenter.DetectedLanguageCode, "The first code any window reports is the session's.");
         AssertEx.ContainsSingle(ticks, tick => tick.DetectedLanguage == "en", "It is reported once, on the call that learned it.");
-        AssertEx.Equal("False,True,False",
-            string.Join(',', transcriber.DetectLanguageFlags),
-            "The probability pass is paid once per session, not once per second.");
     }
 
     [Test]
@@ -855,7 +793,7 @@ internal sealed record SubmittedWindow(long StartMs, long EndMs)
 /// </remarks>
 internal sealed class ScriptedWhisperTranscriber : IWhisperTranscriber
 {
-    private readonly List<bool> _detectLanguageFlags = [];
+    private readonly List<WhisperLanguageMode> _languageModes = [];
     private readonly List<SubmittedWindow> _windows = [];
     private readonly Func<SubmittedWindow, IReadOnlyList<WhisperTranscriptSegment>> _respond;
 
@@ -870,7 +808,7 @@ internal sealed class ScriptedWhisperTranscriber : IWhisperTranscriber
     /// <summary>Each thrown once, in order, before <see cref="Failure" /> or an answer is considered.</summary>
     public Queue<Exception> FailOnce { get; } = new();
 
-    /// <summary>The code every answer that asked for detection reports, or <see langword="null" /> to report none.</summary>
+    /// <summary>The code every auto-language answer with speech reports, or <see langword="null" /> to report none.</summary>
     public string? DetectedLanguageCode { get; set; }
 
     /// <inheritdoc />
@@ -881,8 +819,8 @@ internal sealed class ScriptedWhisperTranscriber : IWhisperTranscriber
 
     public IReadOnlyList<SubmittedWindow> Windows => _windows;
 
-    /// <summary>Whether each call asked for the language probabilities, in call order.</summary>
-    public IReadOnlyList<bool> DetectLanguageFlags => _detectLanguageFlags;
+    /// <summary>The language mode of each call, in call order.</summary>
+    public IReadOnlyList<WhisperLanguageMode> LanguageModes => _languageModes;
 
     public int CallCount => _windows.Count;
 
@@ -899,7 +837,7 @@ internal sealed class ScriptedWhisperTranscriber : IWhisperTranscriber
 
         var window = LivePcm.Decode(WavPayload.Read(buffer.ToArray()));
         _windows.Add(window);
-        _detectLanguageFlags.Add(request.DetectLanguage);
+        _languageModes.Add(request.LanguageMode);
 
         if (OnCall is not null)
         {
@@ -916,15 +854,13 @@ internal sealed class ScriptedWhisperTranscriber : IWhisperTranscriber
             throw Failure;
         }
 
-        // Like whisper-server, a language is reported only for a request that asked for the probabilities.
+        // Like WhisperServerTranscriber, a language is reported only for an auto-language window that heard speech.
         var segments = _respond(window);
-        var detected = request.DetectLanguage ? DetectedLanguageCode : null;
         return new WhisperTranscriptionResult
         {
             Text = string.Join(' ', segments.Select(segment => segment.Text)).Trim(),
             Segments = segments,
-            DetectedLanguageCode = detected,
-            DetectedLanguageProbability = detected is null ? null : 0.99,
+            DetectedLanguageCode = request.LanguageMode == WhisperLanguageMode.Auto && segments.Count > 0 ? DetectedLanguageCode : null,
             DurationSeconds = window.DurationMs / 1000.0
         };
     }

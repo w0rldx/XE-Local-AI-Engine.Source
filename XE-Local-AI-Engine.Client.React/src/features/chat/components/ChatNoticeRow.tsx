@@ -155,10 +155,14 @@ export const ChatNoticeRow = memo(function ChatNoticeRow({ part }: ChatNoticeRow
 			</ThemeIcon>
 			<Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }}>
 				{text}
+				{/* A real space, not a margin, so copied text and screen readers do not run the sentence into the detail. */}
 				{part.detail ? (
-					<Text component="span" size="xs" c="dimmed" ff="monospace" opacity={0.7} ml={6} data-testid="chat-notice-detail">
-						{part.detail}
-					</Text>
+					<>
+						{" "}
+						<Text component="span" size="xs" c="dimmed" ff="monospace" opacity={0.7} data-testid="chat-notice-detail">
+							{part.detail}
+						</Text>
+					</>
 				) : null}
 			</Text>
 		</Group>

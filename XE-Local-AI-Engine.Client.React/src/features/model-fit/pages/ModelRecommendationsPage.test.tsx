@@ -242,7 +242,7 @@ const hardwareProfile = {
 	freeDiskBytes: 500_000_000_000,
 };
 
-// A refresh mutation whose every POST stays open until the test releases it, answering fire ids fire-0, fire-1, ...
+// A refresh mutation whose POST stays open until the test releases it, answering fire ids fire-0, fire-1, ...
 function gatedRefresh(gates: Array<() => void>) {
 	return vi.fn(
 		() =>
@@ -395,73 +395,34 @@ describe("ModelRecommendationsPage", () => {
 		return callback;
 	}
 
-	it("refreshes every use case sequentially, selected first, keeping Refresh now disabled until every enqueued run finished", async () => {
-		// Each POST fires a real HuggingFace discovery run, so the page must await one before sending the next. Hold every
-		// request open on a gate the test controls and release them one at a time.
+	const refreshButton = () => screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement;
+
+	it("sends one refresh POST for the selected use case and stays pending until that fire's run is terminal", async () => {
 		const gates: Array<() => void> = [];
 		const mutateAsync = gatedRefresh(gates);
 		hooksMock.useRefreshRecommendations.mockReturnValue(makeMutation({ mutateAsync }));
 
 		renderPage();
+		expect(refreshButton().disabled).toBe(false);
+		fireEvent.click(refreshButton());
 
-		const button = screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement;
-		expect(button.disabled).toBe(false);
-		fireEvent.click(button);
-
-		const expectedOrder = ["coding", "general", "reasoning", "chat", "multimodal", "embedding"];
-		for (const [index, useCase] of expectedOrder.entries()) {
-			// biome-ignore lint/performance/noAwaitInLoops: the test releases each request in order to prove the loop is sequential.
-			await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(index + 1));
-			expect(mutateAsync).toHaveBeenLastCalledWith({ scheduledJobId: "job-mf", useCase, limit: 50 });
-			// The next request has not been sent while this one is still open, and the button stays disabled.
-			expect(mutateAsync).toHaveBeenCalledTimes(index + 1);
-			expect((screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement).disabled).toBe(true);
-			await act(async () => gates[index]?.());
-		}
-
-		// Every POST has returned, but the runs it enqueued are still pending: the button keeps spinning until each one
-		// reports a terminal status through the scheduler hub.
+		await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+		expect(mutateAsync).toHaveBeenCalledWith({ scheduledJobId: "job-mf", useCase: "coding", limit: 50 });
+		await act(async () => gates[0]?.());
 		await waitFor(() => expect(toastMock.info).toHaveBeenCalled());
-		for (let run = 0; run < expectedOrder.length; run += 1) {
-			expect((screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement).disabled).toBe(true);
-			act(() => latestTerminalRunCallback()(`fire-${run}`));
-		}
-		await waitFor(() => expect((screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement).disabled).toBe(false));
-		expect(mutateAsync).toHaveBeenCalledTimes(expectedOrder.length);
 		expect(toastMock.info).toHaveBeenCalledWith(
 			expect.stringContaining("Checking for the latest model recommendations"),
 			expect.objectContaining({ id: "model-fit-refresh-start", title: "Refresh started" }),
 		);
-	});
 
-	// A run enqueued by an early POST can finish before the later POSTs have been sent; that completion must count.
-	it("counts a run that finishes while later requests are still being sent", async () => {
-		const gates: Array<() => void> = [];
-		const mutateAsync = gatedRefresh(gates);
-		hooksMock.useRefreshRecommendations.mockReturnValue(makeMutation({ mutateAsync }));
+		// The POST answered but its run is still pending: a scheduled fire (no id) or another fire id does not clear it.
+		act(() => latestTerminalRunCallback()(undefined));
+		act(() => latestTerminalRunCallback()("other-tab-fire"));
+		expect(refreshButton().disabled).toBe(true);
 
-		renderPage();
-		fireEvent.click(screen.getByTestId("model-fit-refresh-button"));
-		await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
-		await act(async () => gates[0]?.());
-		await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
-		// The first run reports its terminal status while the second request is still open.
 		act(() => latestTerminalRunCallback()("fire-0"));
-
-		const total = 6;
-		for (let index = 1; index < total; index += 1) {
-			// biome-ignore lint/performance/noAwaitInLoops: the test releases each request in order to prove the loop is sequential.
-			await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(index + 1));
-			await act(async () => gates[index]?.());
-		}
-		await waitFor(() => expect(toastMock.info).toHaveBeenCalled());
-
-		// Five runs are still pending, not six: the early completion was not lost.
-		for (let run = 1; run < total; run += 1) {
-			expect((screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement).disabled).toBe(true);
-			act(() => latestTerminalRunCallback()(`fire-${run}`));
-		}
-		await waitFor(() => expect((screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement).disabled).toBe(false));
+		await waitFor(() => expect(refreshButton().disabled).toBe(false));
+		expect(mutateAsync).toHaveBeenCalledTimes(1);
 	});
 
 	// The run reports its terminal status before its own POST answered: once the answer lands it must not count again.
@@ -471,70 +432,25 @@ describe("ModelRecommendationsPage", () => {
 		hooksMock.useRefreshRecommendations.mockReturnValue(makeMutation({ mutateAsync }));
 
 		renderPage();
-		fireEvent.click(screen.getByTestId("model-fit-refresh-button"));
+		fireEvent.click(refreshButton());
 		await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
 		act(() => latestTerminalRunCallback()("fire-0"));
+		await act(async () => gates[0]?.());
 
-		const total = 6;
-		for (let index = 0; index < total; index += 1) {
-			// biome-ignore lint/performance/noAwaitInLoops: the test releases each request in order to prove the loop is sequential.
-			await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(index + 1));
-			await act(async () => gates[index]?.());
-		}
-		await waitFor(() => expect(toastMock.info).toHaveBeenCalled());
-
-		for (let run = 1; run < total; run += 1) {
-			expect((screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement).disabled).toBe(true);
-			act(() => latestTerminalRunCallback()(`fire-${run}`));
-		}
-		await waitFor(() => expect((screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement).disabled).toBe(false));
+		await waitFor(() => expect(refreshButton().disabled).toBe(false));
 	});
 
-	// A scheduled fire (no id) or another tab's refresh (a foreign id) of the same job must not end this page's wait.
-	it("ignores terminal runs this page did not enqueue", async () => {
-		const gates: Array<() => void> = [];
-		const mutateAsync = gatedRefresh(gates);
+	it("shows the error toast and re-enables Refresh now when the request fails", async () => {
+		const mutateAsync = vi.fn().mockRejectedValueOnce(new Error("boom"));
 		hooksMock.useRefreshRecommendations.mockReturnValue(makeMutation({ mutateAsync }));
 
 		renderPage();
-		fireEvent.click(screen.getByTestId("model-fit-refresh-button"));
-		const total = 6;
-		for (let index = 0; index < total; index += 1) {
-			// biome-ignore lint/performance/noAwaitInLoops: the test releases each request in order to prove the loop is sequential.
-			await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(index + 1));
-			await act(async () => gates[index]?.());
-		}
-		await waitFor(() => expect(toastMock.info).toHaveBeenCalled());
-
-		for (let foreign = 0; foreign < total; foreign += 1) {
-			act(() => latestTerminalRunCallback()(undefined));
-			act(() => latestTerminalRunCallback()(`other-tab-${foreign}`));
-		}
-		expect((screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement).disabled).toBe(true);
-
-		for (let run = 0; run < total; run += 1) {
-			act(() => latestTerminalRunCallback()(`fire-${run}`));
-		}
-		await waitFor(() => expect((screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement).disabled).toBe(false));
-	});
-
-	it("stops the refresh-all loop and shows the error toast when a request fails", async () => {
-		const mutateAsync = vi
-			.fn()
-			.mockResolvedValueOnce({ scheduledJobId: "job-mf", fireId: "fire-0" })
-			.mockRejectedValueOnce(new Error("boom"));
-		hooksMock.useRefreshRecommendations.mockReturnValue(makeMutation({ mutateAsync }));
-
-		renderPage();
-
-		fireEvent.click(screen.getByTestId("model-fit-refresh-button"));
+		fireEvent.click(refreshButton());
 
 		await waitFor(() => expect(toastMock.error).toHaveBeenCalledTimes(1));
-		expect(mutateAsync).toHaveBeenCalledTimes(2);
+		expect(mutateAsync).toHaveBeenCalledTimes(1);
 		expect(toastMock.info).not.toHaveBeenCalled();
-		// The first request did enqueue a run; the button waits for that one alone.
-		act(() => latestTerminalRunCallback()("fire-0"));
-		await waitFor(() => expect((screen.getByTestId("model-fit-refresh-button") as HTMLButtonElement).disabled).toBe(false));
+		await waitFor(() => expect(refreshButton().disabled).toBe(false));
 	});
 
 	it("disables Refresh now and shows guidance when no model-recommendation-check job exists", () => {

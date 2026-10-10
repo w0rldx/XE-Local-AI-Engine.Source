@@ -72,6 +72,11 @@ export function ManagedPythonCard() {
 	const stateLabel = (state: string): string =>
 		Object.hasOwn(stateColors, state) ? t(`${translationPrefix}.states.${state}`) : state;
 
+	// A host with no supported environment at all (an unsupported OS or architecture) will never download uv; saying
+	// "not downloaded yet" there promises something that cannot happen, and Compute's repair/remove have nothing to act on.
+	const environments = status.data?.environments ?? [];
+	const unsupported = environments.length > 0 && environments.every((environment) => environment.state === "Unsupported");
+
 	const renderEnvironment = (environment: ManagedPythonEnvironment) => {
 		const isCompute = environment.profileId === "compute";
 		const actionsDisabled =
@@ -115,7 +120,7 @@ export function ManagedPythonCard() {
 						{t(`${translationPrefix}.trainingLink`)}
 					</Anchor>
 				) : null}
-				{isCompute ? (
+				{isCompute && !unsupported ? (
 					<Group>
 						<Button
 							variant="light"
@@ -143,10 +148,6 @@ export function ManagedPythonCard() {
 	};
 
 	const toolchain = status.data?.toolchain;
-	// A host with no supported environment at all (an unsupported OS or architecture) will never download uv; saying
-	// "not downloaded yet" there promises something that cannot happen.
-	const environments = status.data?.environments ?? [];
-	const unsupported = environments.length > 0 && environments.every((environment) => environment.state === "Unsupported");
 	const uvKey = toolchain?.uvPresent ? "uvPresent" : unsupported ? "uvUnsupported" : "uvMissing";
 
 	return (

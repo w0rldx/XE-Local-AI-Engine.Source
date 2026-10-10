@@ -13,6 +13,12 @@ public interface INodeAuthService
 
     Task<NodeAuthTokenResult> RefreshAsync(string? refreshToken, CancellationToken cancellationToken);
 
+    /// <summary>
+    ///     Issues a new token chain for the single admin after the vault unlock proved the admin password (ADR 0018
+    ///     decision 4). The caller has already consumed the one-time unlock ticket; fails when no admin exists.
+    /// </summary>
+    Task<NodeAuthTokenResult> IssueSessionAfterVaultUnlockAsync(CancellationToken cancellationToken);
+
     Task RevokeRefreshTokensAsync(ClaimsPrincipal principal, CancellationToken cancellationToken);
 
     Task<NodePasswordChangeResult> ChangePasswordAsync(ClaimsPrincipal principal, string currentPassword, string newPassword, CancellationToken cancellationToken);

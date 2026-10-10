@@ -175,7 +175,6 @@ internal sealed class RecordedWhisperTranscriber : IWhisperTranscriber
             Text = string.Join(' ', segments.Select(segment => segment.Text)).Trim(),
             Segments = segments,
             DetectedLanguageCode = window.DetectedLanguageCode,
-            DetectedLanguageProbability = window.DetectedLanguageCode is null ? null : 0.99,
             DurationSeconds = durationMs / 1000.0
         };
     }

@@ -28,9 +28,7 @@ public sealed class WhisperServerTranscriberTests
                                             {
                                               "text": "  And so my fellow Americans.  ",
                                               "duration": 11.0,
-                                              "detected_language": "english",
-                                              "detected_language_probability": 0.97,
-                                              "language_probabilities": { "de": 0.01, "en": 0.97, "fr": 0.02 },
+                                              "language": "english",
                                               "segments": [
                                                 { "start": 0.0, "end": 5.5, "text": "  And so my fellow  ", "avg_logprob": -0.2231435513 },
                                                 { "start": 5.5, "end": 11.0, "text": " Americans. ", "avg_logprob": null }
@@ -43,15 +41,13 @@ public sealed class WhisperServerTranscriberTests
     {
         // The whole mapping table in one assertion block: trimmed text, seconds preserved, exp(avg_logprob) as the
         // confidence proxy, a null log probability yielding null rather than a fabricated number, and the detected
-        // code taken from the probability map's argmax — the payload's own "detected_language" is an English NAME,
-        // never a code, so reading it would put "english" on the wire as if it were ISO.
+        // code mapped from "language", which is whisper's English NAME, never a code.
         await using var harness = new TranscriberHarness(RealisticPayload);
 
         var result = await harness.TranscribeAsync();
 
         AssertEx.Equal("And so my fellow Americans.", result.Text);
         AssertEx.Equal("en", result.DetectedLanguageCode);
-        AssertClose(expected: 0.97, result.DetectedLanguageProbability, "detected-language probability");
         AssertClose(expected: 11.0, result.DurationSeconds, "duration");
         AssertEx.Equal(expected: 2, result.Segments.Count);
 
@@ -85,27 +81,71 @@ public sealed class WhisperServerTranscriberTests
     }
 
     [Test]
-    public async Task Transcribe_WithoutLanguageProbabilities_ReportsNoDetectedCode()
+    [Arguments("english", "en")]
+    [Arguments("german", "de")]
+    [Arguments("haitian creole", "ht")]
+    [Arguments("klingon", null)]
+    public async Task Transcribe_MapsTheLanguageNameToItsCode(string languageName, string? expected)
     {
-        // Computing the probabilities is expensive and is off unless the caller asks. Absent map means "not asked",
-        // which must read as null rather than as a guess.
-        await using var harness = new TranscriberHarness("""{"text":"x","duration":1.0,"segments":[]}""");
+        await using var harness = new TranscriberHarness(SpeechPayload(languageName));
 
-        var result = await harness.TranscribeAsync(detectLanguage: false);
+        var result = await harness.TranscribeAsync();
+
+        AssertEx.Equal<string?>(expected, result.DetectedLanguageCode, $"'{languageName}' maps to '{expected ?? "null"}'.");
+    }
+
+    [Test]
+    public async Task Transcribe_WithNoSegments_ReportsNoDetectedCode()
+    {
+        // whisper's language id defaults to English, so a window VAD found no speech in still says "english": nothing was heard.
+        await using var harness = new TranscriberHarness("""{"text":"","duration":1.0,"language":"english","segments":[]}""");
+
+        var result = await harness.TranscribeAsync();
 
         AssertEx.Null(result.DetectedLanguageCode);
         AssertEx.Empty(result.Segments);
     }
 
     [Test]
+    public async Task Transcribe_WithAnExplicitLanguage_ReportsNoDetectedCode()
+    {
+        // The daemon echoes a forced language back in "language"; that is the caller's choice, not a detection.
+        await using var harness = new TranscriberHarness(SpeechPayload("german"));
+
+        var result = await harness.TranscribeAsync(static request => request with
+        {
+            LanguageMode = WhisperLanguageMode.Explicit,
+            LanguageCode = "de"
+        });
+
+        AssertEx.Null(result.DetectedLanguageCode);
+    }
+
+    // whisper-server b5130 with --vad crashes (Windows) or answers 500 when VAD finds no speech AND probabilities were requested.
+    [Test]
+    [Arguments(WhisperLanguageMode.Auto)]
+    [Arguments(WhisperLanguageMode.Explicit)]
+    public async Task Transcribe_NeverAsksForLanguageProbabilities(WhisperLanguageMode mode)
+    {
+        await using var harness = new TranscriberHarness(SilentPayload);
+
+        _ = await harness.TranscribeAsync(request => request with
+        {
+            LanguageMode = mode,
+            LanguageCode = mode == WhisperLanguageMode.Explicit ? "en" : null
+        });
+
+        AssertEx.Equal("true", NoLanguageProbabilities(AssertEx.NotNull(harness.Handler.LastRequestBody)));
+    }
+
+    [Test]
     public async Task Transcribe_SendsTheDaemonsExactMultipartFieldSet()
     {
         // The multipart contract, pinned: the fixed submitted file name (the daemon logs what it receives, and a file
-        // name is user content), verbose_json so the timed segments exist at all, and the inverted
-        // no_language_probabilities switch, which is "false" precisely when detection IS wanted.
+        // name is user content), verbose_json so the timed segments exist at all, and the language fields.
         await using var harness = new TranscriberHarness("""{"text":"x","duration":1.0,"segments":[]}""");
 
-        await harness.TranscribeAsync(detectLanguage: true);
+        await harness.TranscribeAsync();
 
         var body = AssertEx.NotNull(harness.Handler.LastRequestBody);
         AssertEx.Contains(body, "name=file", StringComparison.Ordinal);
@@ -215,97 +255,26 @@ public sealed class WhisperServerTranscriberTests
         AssertEx.Equal(expected: 1, harness.Supervisor.LeasesDisposed);
     }
 
-    // whisper-server 927cfce with --vad answers 500 ("basic_string: construction from null is not valid") when VAD finds
-    // no speech AND language probabilities were asked for; the same audio is a 200 without them.
-    [Test]
-    public async Task Transcribe_DetectingALanguage_RetriesA500OnceWithoutProbabilitiesAndReportsNoLanguage()
-    {
-        await using var harness = new TranscriberHarness(Sequence((HttpStatusCode.InternalServerError, NullStringError),
-            (HttpStatusCode.OK, SilentPayload)));
-
-        var result = await harness.TranscribeAsync(detectLanguage: true);
-
-        AssertEx.Equal(expected: 2, harness.Handler.CallCount);
-        AssertEx.Equal(expected: 2, harness.Handler.RequestBodies.Count);
-        AssertEx.Equal("false", NoLanguageProbabilities(harness.Handler.RequestBodies[0]), "The first request asks for probabilities.");
-        AssertEx.Equal("true", NoLanguageProbabilities(harness.Handler.RequestBodies[1]), "The retry does not.");
-        AssertEx.Contains(harness.Handler.RequestBodies[1], "RIFFxxxxWAVE", StringComparison.Ordinal);
-        AssertEx.Null(result.DetectedLanguageCode, "A result without probabilities detects nothing; a later window asks again.");
-        AssertEx.Empty(result.Segments);
-        AssertEx.Equal(expected: 1, harness.Supervisor.LeasesDisposed);
-    }
-
-    // 60 s of silence under auto-detect is 60 fallbacks: the first is worth a Warning, the rest are not.
-    [Test]
-    public async Task Transcribe_SilentWindowFallback_WarnsOnceThenLogsAtDebug()
-    {
-        await using var harness = new TranscriberHarness(Sequence((HttpStatusCode.InternalServerError, NullStringError),
-            (HttpStatusCode.OK, SilentPayload),
-            (HttpStatusCode.InternalServerError, NullStringError),
-            (HttpStatusCode.OK, SilentPayload)));
-
-        _ = await harness.TranscribeAsync(detectLanguage: true);
-        _ = await harness.TranscribeAsync(detectLanguage: true);
-
-        var entries = harness.Logger.Entries;
-        AssertEx.Equal(expected: 1, entries.Count(static entry => entry.Level == LogLevel.Warning), "One Warning for the whole transcriber.");
-        AssertEx.True(harness.Logger.HasEntry(LogLevel.Warning, "Later occurrences are logged at Debug"), "The Warning explains itself.");
-        AssertEx.True(harness.Logger.HasEntry(LogLevel.Debug, NullStringError), "The later occurrence still names the daemon's error.");
-        AssertEx.Equal(expected: 2, entries.Count(static entry => entry.Level == LogLevel.Debug && entry.Message.StartsWith("Retrying", StringComparison.Ordinal)),
-            "One Debug retry line per window.");
-    }
-
     [Test]
     public async Task Transcribe_ARejectionThatIsNotRetried_WarnsWithTheBodyEveryTime()
     {
         await using var harness = new TranscriberHarness(NullStringError, HttpStatusCode.InternalServerError);
 
-        _ = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync(detectLanguage: false));
-        _ = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync(detectLanguage: false));
+        _ = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync());
+        _ = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync());
 
         AssertEx.Equal(expected: 2, harness.Logger.Entries.Count(static entry => entry.Level == LogLevel.Warning
                                                                                  && entry.Message.Contains("rejected a transcription request (500): basic_string", StringComparison.Ordinal)));
     }
 
     [Test]
-    public async Task Transcribe_DetectingALanguage_WhenTheRetryFailsToo_ThrowsTheRejection()
-    {
-        await using var harness = new TranscriberHarness(Sequence((HttpStatusCode.InternalServerError, NullStringError),
-            (HttpStatusCode.InternalServerError, NullStringError)));
-
-        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync(detectLanguage: true));
-
-        AssertEx.Contains(exception.Message, "rejected the audio", StringComparison.Ordinal);
-        AssertEx.Equal(expected: 2, harness.Handler.CallCount, "Retried once, never twice.");
-        AssertEx.Equal(expected: 1, harness.Supervisor.LeasesDisposed);
-        AssertEx.True(harness.Logger.HasEntry(LogLevel.Warning, "rejected a transcription request (500): basic_string"),
-            "The failed retry keeps its own Warning with the body.");
-    }
-
-    [Test]
-    public async Task Transcribe_WithAnExplicitLanguage_NeverAsksForProbabilitiesAndDoesNotRetry()
-    {
-        await using var harness = new TranscriberHarness(NullStringError, HttpStatusCode.InternalServerError);
-
-        _ = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync(detectLanguage: true,
-            static request => request with
-            {
-                LanguageMode = WhisperLanguageMode.Explicit,
-                LanguageCode = "en"
-            }));
-
-        AssertEx.Equal(expected: 1, harness.Handler.CallCount, "Nothing to fall back from: probabilities were never asked for.");
-        AssertEx.Equal("true", NoLanguageProbabilities(AssertEx.NotNull(harness.Handler.LastRequestBody)));
-    }
-
-    [Test]
-    [Arguments(false, HttpStatusCode.InternalServerError)]
-    [Arguments(true, HttpStatusCode.BadRequest)]
-    public async Task Transcribe_OtherRejections_AreNotRetried(bool detectLanguage, HttpStatusCode status)
+    [Arguments(HttpStatusCode.InternalServerError)]
+    [Arguments(HttpStatusCode.BadRequest)]
+    public async Task Transcribe_Rejections_AreNotRetried(HttpStatusCode status)
     {
         await using var harness = new TranscriberHarness(NullStringError, status);
 
-        _ = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync(detectLanguage));
+        _ = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync());
 
         AssertEx.Equal(expected: 1, harness.Handler.CallCount);
     }
@@ -336,29 +305,8 @@ public sealed class WhisperServerTranscriberTests
         AssertEx.Equal(expected: 1, harness.Supervisor.LeasesDisposed);
     }
 
-    // The same no-speech bug on the Windows build is an access violation, not a 500: the daemon dies, and re-sending the
-    // identical request kills the respawned one too (2026-09-28 tester log).
     [Test]
-    public async Task Transcribe_DetectingALanguage_WhenTheDaemonDies_RetriesOnceOnAFreshLeaseWithoutProbabilities()
-    {
-        await using var harness = new TranscriberHarness(ResetThenSilent());
-        harness.Supervisor.RequestFailureVerdict = new WhisperRuntimeException("The transcription runtime process exited (exit code -1073741819).")
-        {
-            ProcessExited = true
-        };
-
-        var result = await harness.TranscribeAsync(detectLanguage: true);
-
-        AssertEx.Equal(expected: 2, harness.Handler.RequestBodies.Count);
-        AssertEx.Equal("false", NoLanguageProbabilities(harness.Handler.RequestBodies[0]), "The first request asks for probabilities.");
-        AssertEx.Equal("true", NoLanguageProbabilities(harness.Handler.RequestBodies[1]), "The retry does not.");
-        AssertEx.Equal(expected: 2, harness.Supervisor.EnsureCallCount, "The retry respawns the dead daemon through a fresh ensure.");
-        AssertEx.Equal(expected: 2, harness.Supervisor.LeasesDisposed);
-        AssertEx.Null(result.DetectedLanguageCode);
-    }
-
-    [Test]
-    public async Task Transcribe_WithoutLanguageDetection_WhenTheDaemonDies_DoesNotRetry()
+    public async Task Transcribe_WhenTheDaemonDies_DoesNotRetry()
     {
         await using var harness = new TranscriberHarness(ResetThenSilent());
         harness.Supervisor.RequestFailureVerdict = new WhisperRuntimeException("The transcription runtime process exited.")
@@ -366,10 +314,10 @@ public sealed class WhisperServerTranscriberTests
             ProcessExited = true
         };
 
-        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync(detectLanguage: false));
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.TranscribeAsync());
 
         AssertEx.True(exception.ProcessExited, "The caller's own daemon-death retry keys on this flag.");
-        AssertEx.Equal(expected: 1, harness.Handler.CallCount, "Nothing to drop: the request never asked for probabilities.");
+        AssertEx.Equal(expected: 1, harness.Handler.CallCount, "The adapter never retries a dead daemon; its caller does.");
     }
 
     [Test]
@@ -400,6 +348,9 @@ public sealed class WhisperServerTranscriberTests
     private const string NullStringError = "basic_string: construction from null is not valid";
 
     private const string SilentPayload = """{"text":"","duration":1.0,"segments":[]}""";
+
+    private static string SpeechPayload(string languageName) =>
+        $$"""{"text":"x","duration":1.0,"language":"{{languageName}}","segments":[{"start":0,"end":1,"text":"x"}]}""";
 
     /// <summary>The first request dies with a connection reset, as a crashing daemon's does; every later one is a silent 200.</summary>
     private static Func<HttpRequestMessage, HttpResponseMessage> ResetThenSilent()
@@ -476,15 +427,13 @@ public sealed class WhisperServerTranscriberTests
 
         public WhisperServerTranscriber Transcriber { get; }
 
-        public async Task<WhisperTranscriptionResult> TranscribeAsync(bool detectLanguage = true,
-            Func<WhisperTranscriptionRequest, WhisperTranscriptionRequest>? configure = null)
+        public async Task<WhisperTranscriptionResult> TranscribeAsync(Func<WhisperTranscriptionRequest, WhisperTranscriptionRequest>? configure = null)
         {
             await using var audio = new MemoryStream(Encoding.ASCII.GetBytes("RIFFxxxxWAVE"));
             var request = new WhisperTranscriptionRequest
             {
                 Audio = audio,
-                ContentType = "audio/wav",
-                DetectLanguage = detectLanguage
+                ContentType = "audio/wav"
             };
 
             return await Transcriber.TranscribeAsync("base", configure is null ? request : configure(request), CancellationToken.None);

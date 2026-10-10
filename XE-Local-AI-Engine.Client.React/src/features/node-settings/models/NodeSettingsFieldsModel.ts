@@ -1167,7 +1167,13 @@ export function lowersSandboxSecurityProfile(body: SaveNodeSettingsRequest): boo
 }
 
 export function touchesRestartGatedField(body: SaveNodeSettingsRequest): boolean {
-	return Object.keys(body).some((key) => restartGatedNodeSettingsFields.has(key as keyof NodeSettingsFieldsForm));
+	return Object.entries(body).some(([key, value]) => needsRestartFor(key as keyof NodeSettingsFieldsForm, value));
+}
+
+// Development mode is mapped at startup but its request gate reads the live setting, so only turning it ON waits for
+// a restart; turning it off applies at once.
+function needsRestartFor(field: keyof NodeSettingsFieldsForm, newValue: unknown): boolean {
+	return restartGatedNodeSettingsFields.has(field) && !(field === "developmentEnabled" && newValue === false);
 }
 
 // The outcome of validating the whole form: the request body containing ONLY changed fields, plus a per-field error
@@ -1851,5 +1857,5 @@ export function summarizePendingChanges(
 		}
 	}
 	const list = [...changed];
-	return { changed: list, restartRequired: list.filter((field) => restartGatedNodeSettingsFields.has(field)) };
+	return { changed: list, restartRequired: list.filter((field) => needsRestartFor(field, form[field])) };
 }

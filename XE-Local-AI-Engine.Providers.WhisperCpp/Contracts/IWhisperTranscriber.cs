@@ -41,12 +41,6 @@ public sealed record WhisperTranscriptionRequest
 
     /// <summary>Run voice-activity detection, so silence is not submitted to the model.</summary>
     public bool UseVoiceActivityDetection { get; init; } = true;
-
-    /// <summary>
-    ///     Ask for the detected language. Computing the language probabilities is expensive and is skipped unless this
-    ///     is set, which is why the daemon is launched with them off by default.
-    /// </summary>
-    public bool DetectLanguage { get; init; } = true;
 }
 
 /// <summary>One transcribed segment. Times are seconds from the start of the submitted audio.</summary>
@@ -77,11 +71,8 @@ public sealed class WhisperTranscriptionResult
     /// <summary>The timed segments, in order.</summary>
     public required IReadOnlyList<WhisperTranscriptSegment> Segments { get; init; }
 
-    /// <summary>The detected ISO language code, or <see langword="null" /> when not requested.</summary>
+    /// <summary>The detected language code, or <see langword="null" /> when the language was forced or no speech was heard.</summary>
     public required string? DetectedLanguageCode { get; init; }
-
-    /// <summary>The detector's confidence, when one was reported.</summary>
-    public required double? DetectedLanguageProbability { get; init; }
 
     /// <summary>The duration of the audio the model processed.</summary>
     public required double DurationSeconds { get; init; }

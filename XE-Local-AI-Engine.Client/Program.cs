@@ -7,6 +7,12 @@ using XE_Local_AI_Engine.Client.Persistence;
 FrameworkDependentVelopackBootstrap.Run(args);
 ProcessCrashHooks.Register();
 
+// Once, before any child exists: children inherit the error mode, so one that fails to initialise exits instead of hanging on a dialog.
+if (OperatingSystem.IsWindows())
+{
+    WindowsErrorMode.SuppressHardErrorDialogs();
+}
+
 // Everything above, and the desktop bootstrap inside CreateAppAsync, runs while Log.Logger is still the silent default, so an exception there would be caught
 // but never written to disk — the "flashes then closes, empty logs folder" report. Program.StartupLoggerReady is what routes that window to StartupCrashLog.
 try
@@ -33,7 +39,7 @@ catch (DesktopDataDirectoryException ex)
 catch (NodeKeyCustodyException ex)
 {
     // Raised by the node-key check while the host starts: a refusal with an operator-facing message, not a crash.
-    Log.Fatal(ex, "The node key cannot open the database; startup stopped.");
+    Log.Fatal(ex.InnerException, "The node key cannot open the database; startup stopped: {Reason}", ex.Message);
     await Console.Error.WriteLineAsync(ex.Message);
     return XE_Local_AI_Engine.Client.Program.NodeKeyCustodyExitCode;
 }
@@ -412,7 +418,8 @@ namespace XE_Local_AI_Engine.Client
                 {
                     Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
                     StartupLoggerReady = true;
-                    Log.Fatal(custodyException, "The node key cannot open the database; startup stopped.");
+                    // The refusal is the operator's message, printed below; a stack trace is logged only for an underlying cause.
+                    Log.Fatal(custodyException.InnerException, "The node key cannot open the database; startup stopped: {Reason}", custodyException.Message);
                     await standardError.WriteLineAsync(custodyException.Message);
                     await Log.CloseAndFlushAsync();
                     instanceLease.Dispose();
@@ -482,6 +489,7 @@ namespace XE_Local_AI_Engine.Client
                 }
 
                 vaultUnlock = attempt.Outcome;
+                var portRelease = Stopwatch.StartNew();
                 if (vaultUnlock.BoundUrl is { } unlockPageUrl)
                 {
                     if (!await RebindUnlockPagePortAsync(unlockPageUrl, standardError))
@@ -499,7 +507,17 @@ namespace XE_Local_AI_Engine.Client
                 }
 
                 InjectUnlockedSecret(builder.Configuration, vaultUnlock);
+                if (vaultUnlock.UnlockTicket is { } unlockTicket)
+                {
+                    // The password unlock's one-time ticket: NodeRefreshEndpoint trades it for a session once when the stored refresh cookie fails.
+                    builder.Services.AddSingleton(unlockTicket);
+                }
+                Log.Information("Vault unlocked; port {Port} free again after {ElapsedMs} ms; building the engine host.",
+                    Uri.TryCreate(bindUrl, UriKind.Absolute, out var boundUri) ? boundUri.Port : 0,
+                    portRelease.ElapsedMilliseconds);
             }
+
+            var hostBuild = Stopwatch.StartNew();
 
             if (bindUrl is not null)
             {
@@ -580,6 +598,7 @@ namespace XE_Local_AI_Engine.Client
             customization?.ConfigureBuilder?.Invoke(builder);
 
             var app = builder.Build();
+            Log.Information("Engine host built in {ElapsedMs} ms; applying migrations, then starting hosted services.", hostBuild.ElapsedMilliseconds);
 
             // SQLite's own error log and the raw-open pragma failures reach this host's logger until it stops. The native hook is process-global and
             // registered once; see docs/wiki/08-data-and-persistence.md ("Connection pragmas").

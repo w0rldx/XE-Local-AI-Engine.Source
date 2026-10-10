@@ -36,6 +36,7 @@ public static class MxcAclResidueSweeper
         ArgumentNullException.ThrowIfNull(roots);
         ArgumentNullException.ThrowIfNull(logger);
         var removed = 0;
+        var checkedRoots = 0;
         foreach (var root in roots)
         {
             try
@@ -45,6 +46,7 @@ public static class MxcAclResidueSweeper
                     continue;
                 }
 
+                checkedRoots++;
                 removed += SweepEntry(new DirectoryInfo(root), logger);
                 foreach (var entry in new DirectoryInfo(root).EnumerateFileSystemInfos("*", ChildOptions))
                 {
@@ -60,6 +62,11 @@ public static class MxcAclResidueSweeper
         if (removed > 0)
         {
             logger.LogInformation("MXC ACL residue sweep removed {Count} AppContainer ACE(s)", removed);
+        }
+        else
+        {
+            // Said out loud, so a startup log shows the sweep ran rather than leaving its silence ambiguous.
+            logger.LogInformation("MXC ACL residue sweep checked {Roots} engine-owned root(s); no AppContainer ACEs found", checkedRoots);
         }
 
         return removed;

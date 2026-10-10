@@ -1250,7 +1250,6 @@ XE-Local-AI-Engine.Tests/Mcp/McpServerConnectionManagerTests.cs|run|3
 XE-Local-AI-Engine.Tests/Mcp/McpServerConnectionManagerTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Mcp/McpServerEndpointTests.cs|run|3
 XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs|summary|2
-XE-Local-AI-Engine.Tests/Mcp/McpServerServiceTests.cs|run|1
 XE-Local-AI-Engine.Tests/Mcp/McpServerStartupConnectorTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Mcp/McpToolCallTimeoutAIFunctionTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Mcp/NodeAdminMcpToolsTests.cs|run|2
@@ -1512,7 +1511,7 @@ XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerReadinessProbeTests.c
 XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerRuntimeOverrideOptionsTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerSupervisorTests.cs|run|4
 XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerSupervisorTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerTranscriberTests.cs|run|2
+XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerTranscriberTests.cs|run|1
 XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerTranscriberTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperSourceRuntimeFoundationTests.cs|run|4
 XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperSourceRuntimeFoundationTests.cs|summary|1

@@ -15,7 +15,8 @@ internal static class AgentHomeToolDefinition
     public const string Description =
         "Work on a goal inside the node-scoped, supervised AgentHome sandbox over COPIES of the selected folders. "
         + "A bounded inner agent reads, edits and runs commands on the copy — never on the original — and the run "
-        + "returns what it did plus an exported patch. Grant only the actions the goal needs.";
+        + "returns what it did plus an exported patch. Grant only the actions the goal needs. "
+        + "The conversation's uploaded files are always copied in under the folder id \"attachments\", which selectedFolderIds may name.";
 
     /// <summary>The AgentHome tool parameter schema. Kept byte-for-byte aligned with the server seed.</summary>
     /// <remarks>

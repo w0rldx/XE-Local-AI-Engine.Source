@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Middleware;
 using Microsoft.AspNetCore.Routing.Template;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 /// <summary>
 ///     Answers 404 for a feature's whole route family, hub included, while its node-settings switch is off, read per request so a
@@ -10,27 +11,28 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </summary>
 /// <remarks>
 ///     Installed ahead of local API security and authentication, so a switched-off feature cannot be probed through 401 or 403. The
-///     endpoints stay discovered either way, so the OpenAPI document is the same on every node. A capability GET stays reachable so
-///     the SPA can say the feature is off instead of reading a bodyless 404 as a load failure; transcription and external apps have
-///     none, but transcription keeps its stop routes open so work started before the switch went off can end. Development's
-///     endpoints are also filtered at discovery from the startup value.
+///     endpoints stay discovered either way, so the OpenAPI document is the same on every node. A capability GET stays reachable so the
+///     SPA can say the feature is off; transcription keeps its stop routes open so started work can end. The scheduler gate reads
+///     the startup value: its engine is registered at start, so the family stays reachable until the restart.
 /// </remarks>
 public sealed class FeatureSwitchMiddleware
 {
     private static readonly FeatureGate[] Gates =
     [
         new(Route(LocalApiRoutes.Development.Root), Route(LocalApiRoutes.Development.Capability),
-            static (settings, ct) => settings.GetDevelopmentEnabledAsync(ct)),
+            static (settings, _, ct) => settings.GetDevelopmentEnabledAsync(ct)),
         new(Route(LocalApiRoutes.WorkSessions.Root), Route(LocalApiRoutes.WorkSessions.Capability),
-            static (settings, ct) => settings.GetWorkSessionsEnabledAsync(ct)),
+            static (settings, _, ct) => settings.GetWorkSessionsEnabledAsync(ct)),
         new(Route(LocalApiRoutes.DevelopmentWorkflows.Root), Route(LocalApiRoutes.DevelopmentWorkflows.Capability),
-            static (settings, ct) => settings.GetDevWorkflowsEnabledAsync(ct)),
+            static (settings, _, ct) => settings.GetDevWorkflowsEnabledAsync(ct)),
         new(Route(LocalApiRoutes.GraphWorkflows.Root), Route(LocalApiRoutes.GraphWorkflows.Capability),
-            static (settings, ct) => settings.GetGraphWorkflowsEnabledAsync(ct)),
+            static (settings, _, ct) => settings.GetGraphWorkflowsEnabledAsync(ct)),
         new(Route(LocalApiRoutes.Transcription.Root), PathString.Empty,
-            static (settings, ct) => settings.GetTranscriptionEnabledAsync(ct)),
+            static (settings, _, ct) => settings.GetTranscriptionEnabledAsync(ct)),
         new(Route(LocalApiRoutes.ExternalApps.Root), PathString.Empty,
-            static (settings, ct) => settings.GetExternalAppsEnabledAsync(ct))
+            static (settings, _, ct) => settings.GetExternalAppsEnabledAsync(ct)),
+        new(Route(LocalApiRoutes.Scheduler.Root), PathString.Empty,
+            static (_, startup, _) => Task.FromResult(startup.SchedulerEnabled))
     ];
 
     /// <summary>The (method, route) pairs that only end transcription work, so they stay reachable while the switch is off.</summary>
@@ -51,10 +53,11 @@ public sealed class FeatureSwitchMiddleware
         _next = next;
     }
 
-    public async Task InvokeAsync(HttpContext context, INodeRuntimeSettings runtimeSettings)
+    public async Task InvokeAsync(HttpContext context, INodeRuntimeSettings runtimeSettings, NodeStartupSettings startupSettings)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(runtimeSettings);
+        ArgumentNullException.ThrowIfNull(startupSettings);
 
         var path = context.Request.Path;
         foreach (var (root, capability, isEnabled) in Gates)
@@ -66,7 +69,7 @@ public sealed class FeatureSwitchMiddleware
 
             if ((!capability.HasValue || !path.Equals(capability, StringComparison.OrdinalIgnoreCase))
                 && !IsTranscriptionStop(context.Request)
-                && !await isEnabled(runtimeSettings, context.RequestAborted))
+                && !await isEnabled(runtimeSettings, startupSettings, context.RequestAborted))
             {
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
@@ -89,7 +92,7 @@ public sealed class FeatureSwitchMiddleware
         new(TemplateParser.Parse($"{LocalApiRoutes.Prefix}/{relative}"), new RouteValueDictionary());
 
     /// <summary>One feature's route family, its always-reachable capability GET, and the switch that gates it.</summary>
-    private readonly record struct FeatureGate(PathString Root, PathString Capability, Func<INodeRuntimeSettings, CancellationToken, Task<bool>> IsEnabled);
+    private readonly record struct FeatureGate(PathString Root, PathString Capability, Func<INodeRuntimeSettings, NodeStartupSettings, CancellationToken, Task<bool>> IsEnabled);
 
     /// <summary>A method and route template that stays reachable while its feature is off.</summary>
     private readonly record struct StopRoute(string Method, TemplateMatcher Matcher);

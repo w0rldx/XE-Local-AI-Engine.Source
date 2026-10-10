@@ -299,6 +299,19 @@ public sealed class ChatTurnContextBuilderTests
         AssertEx.Equal(ConversationContextKind.Attachment, message.Kind);
     }
 
+    /// <summary>
+    ///     An agent offered only <c>run_in_agent_home</c> has no <c>read_file</c>; the hint must tell it the folder id the
+    ///     staged files travel under, or it guesses one the resolver refuses.
+    /// </summary>
+    [Test]
+    public void BuildAgentAttachmentHint_NamesTheAttachmentsFolderIdForRunInAgentHome()
+    {
+        var message = AssertEx.NotNull(CreateBuilder().BuildAgentAttachmentHint(Guid.NewGuid(), ["attachments/runbook.md"]));
+
+        AssertEx.Contains(message.Content, "read_file");
+        AssertEx.Contains(message.Content, "run_in_agent_home with \"attachments\" in selectedFolderIds");
+    }
+
     private static ChatTurnContextBuilder CreateBuilder(IConversationUploadedFileStore? uploadedFileStore = null,
         LocalChatAgentOptions? options = null,
         IServiceScopeFactory? scopeFactory = null,

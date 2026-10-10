@@ -13,6 +13,12 @@ public interface IDocumentTextExtractor
     bool IsSupported(string extension);
 
     /// <summary>
+    ///     The structured character cap when <paramref name="extension" /> is read as plain text, so an upload can refuse a file
+    ///     whose byte count already proves it cannot extract; <see langword="null" /> for every other reader.
+    /// </summary>
+    int? MaxPlainTextChars(string extension);
+
+    /// <summary>
     ///     Extracts text from <paramref name="content"/>. This never throws for malformed input: a corrupt or
     ///     unreadable file yields <see cref="DocumentExtractionStatus.Failed"/> and an unknown extension yields
     ///     <see cref="DocumentExtractionStatus.Unsupported"/>. The output is capped to bound memory.

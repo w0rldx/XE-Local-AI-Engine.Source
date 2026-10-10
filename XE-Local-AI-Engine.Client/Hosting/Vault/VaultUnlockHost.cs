@@ -99,7 +99,8 @@ internal static class VaultUnlockHost
                 BoundUrl = boundUrl.TrimEnd('/'),
                 ResetPassword = outcome.ResetPassword,
                 ResetRecoveryCode = outcome.ResetRecoveryCode,
-                ResetNewRecoveryCode = outcome.ResetNewRecoveryCode
+                ResetNewRecoveryCode = outcome.ResetNewRecoveryCode,
+                UnlockTicket = outcome.UnlockTicket
             };
         }
 
@@ -166,10 +167,12 @@ internal static class VaultUnlockHost
         try
         {
             var masterKey = VaultFileCodec.UnwrapWithPassword(file, request.Password);
+            var ticketValue = VaultUnlockTicket.NewValue();
             return Succeeded(context, unlocked, new VaultUnlockOutcome
             {
-                MasterKey = masterKey
-            });
+                MasterKey = masterKey,
+                UnlockTicket = new VaultUnlockTicket(ticketValue, TimeProvider.System.GetUtcNow() + VaultUnlockTicket.Lifetime)
+            }, ticketValue: ticketValue);
         }
         catch (VaultUnlockException)
         {
@@ -233,10 +236,12 @@ internal static class VaultUnlockHost
     ///     success answers 409, so no recovery unlock shows a code the real host will not install.
     /// </summary>
     /// <param name="body">The 200 body for a recovery unlock; <see langword="null" /> answers 204.</param>
+    /// <param name="ticketValue">The password unlock's one-time ticket, set as the <c>node_ut</c> cookie once the unlock is reserved.</param>
     private static IResult Succeeded(HttpContext context,
         UnlockSlot unlocked,
         VaultUnlockOutcome outcome,
-        VaultRecoveryUnlockResponse? body = null)
+        VaultRecoveryUnlockResponse? body = null,
+        string? ticketValue = null)
     {
         if (!unlocked.TryReserve())
         {
@@ -244,6 +249,11 @@ internal static class VaultUnlockHost
             return Results.Problem(title: "Unlock in progress",
                 detail: "An unlock is already in progress.",
                 statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (ticketValue is not null)
+        {
+            NodeAuthCookie.AppendUnlockTicket(context.Response, ticketValue, outcome.UnlockTicket!.ExpiresAt.UtcDateTime);
         }
 
         context.Response.OnCompleted(() =>

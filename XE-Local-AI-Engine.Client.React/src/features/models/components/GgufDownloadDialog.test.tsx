@@ -141,7 +141,7 @@ describe("GgufDownloadDialog vision-projector choice", () => {
 describe("GgufDownloadDialog default quant", () => {
 	afterEach(cleanup);
 
-	it("scrolls the preselected quant into view when the list opens", async () => {
+	it("scrolls the preselected quant to the middle of the quant list, not the dialog body", async () => {
 		const files = ["Q2_K", "Q3_K_M", "Q4_K_M", "Q5_K_M", "Q6_K", "Q8_0"].map((quant) => ({
 			...quantFile,
 			fileName: `model-${quant}.gguf`,
@@ -149,12 +149,33 @@ describe("GgufDownloadDialog default quant", () => {
 			isRecommended: quant === "Q6_K",
 		}));
 		inspectReturns({ repoId: "owner/many", hasProjector: false, projectorSizeBytes: null, files });
-		renderDialog("owner/many");
+		// jsdom has no layout: the list sits at y=100 and is 200 px tall, the Q6_K row sits at y=500 and is 40 px tall.
+		const isList = (element: Element) => element.hasAttribute("data-quant-list");
+		const isPick = (element: Element) => element.getAttribute("data-testid") === "gguf-download-row-Q6_K";
+		const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+			const top = isList(this) ? 100 : isPick(this) ? 500 : 0;
+			return { top, bottom: top, left: 0, right: 0, width: 0, height: 0, x: 0, y: top, toJSON: () => ({}) };
+		});
+		const clientHeight = vi.spyOn(Element.prototype, "clientHeight", "get").mockImplementation(function (this: Element) {
+			return isList(this) ? 200 : 0;
+		});
+		const offsetHeight = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+			return isPick(this) ? 40 : 0;
+		});
+		const scrollTopSet = vi.spyOn(Element.prototype, "scrollTop", "set");
+		try {
+			renderDialog("owner/many");
 
-		expect(await screen.findByTestId("gguf-download-row-Q6_K")).toBeTruthy();
-		// The test render installs a scrollIntoView spy (jsdom has none); read which elements it was called on.
-		const spy = Element.prototype.scrollIntoView as unknown as Mock;
-		const scrolled = spy.mock.contexts.map((element) => (element as Element).getAttribute("data-testid"));
-		expect(scrolled).toEqual(["gguf-download-row-Q6_K"]);
+			expect(await screen.findByTestId("gguf-download-row-Q6_K")).toBeTruthy();
+			// Row offset 400 inside the list, centred: 400 - (200 - 40) / 2 = 320, set on the list and nothing else.
+			expect(scrollTopSet.mock.calls).toEqual([[320]]);
+			expect(isList(scrollTopSet.mock.contexts[0] as Element)).toBe(true);
+			expect((Element.prototype.scrollIntoView as unknown as Mock).mock.calls).toHaveLength(0);
+		} finally {
+			rect.mockRestore();
+			clientHeight.mockRestore();
+			offsetHeight.mockRestore();
+			scrollTopSet.mockRestore();
+		}
 	});
 });

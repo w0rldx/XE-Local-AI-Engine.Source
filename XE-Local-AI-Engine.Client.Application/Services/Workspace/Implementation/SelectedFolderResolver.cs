@@ -34,6 +34,11 @@ internal sealed partial class SelectedFolderResolver : ISelectedFolderResolver
             throw new SelectedFolderValidationException($"Alias '{registration.Alias}' is not a valid selected-folder alias.");
         }
 
+        if (string.Equals(alias, SelectedFolderRegistration.ReservedAttachmentsAlias, StringComparison.Ordinal))
+        {
+            throw new SelectedFolderValidationException($"Alias '{alias}' is reserved for the conversation's staged attachments.");
+        }
+
         if (!IsSafeHostPath(registration.HostPath))
         {
             // Never log the raw host path; the alias is the safe identifier.

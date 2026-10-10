@@ -24,7 +24,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 {
     // Stable sandbox alias for staged conversation upload attachments. The agent reads them at
     // workspace/selected/attachments/ via its existing file tools.
-    private const string AttachmentsFolderAlias = "attachments";
+    private const string AttachmentsFolderAlias = SelectedFolderRegistration.ReservedAttachmentsAlias;
 
     private static readonly AgentHomePatchExport EmptyPatchExport = new()
     {
@@ -170,7 +170,25 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         // Read per call so a profile change applies to the next run; under `high` a preferred boundary or ceiling the backend cannot
         // serve refuses the run here, naming the profile (ADR 0020). Coder shares this sandbox, so it inherits the refusal.
         var profile = await _runtimeSettings.GetSandboxSecurityProfileAsync(prepareToken);
-        SandboxSecurityProfilePolicy.EnsureServed(SandboxWorkloads.AgentHome, _provider.Capabilities, profile);
+
+        // Default-deny egress wherever the provider can enforce it: everything AgentHome and Coder run in the sandbox
+        // is local, so denial costs no capability. Capability-gated, with RequireEgressDenial or the `high` profile demanding a refusal.
+        SandboxNetworkPolicy networkPolicy;
+        try
+        {
+            SandboxSecurityProfilePolicy.EnsureServed(SandboxWorkloads.AgentHome, _provider.Capabilities, profile);
+            networkPolicy = SandboxSecurityProfilePolicy.ResolveEgress(SandboxWorkloads.AgentHome,
+                _provider.Capabilities,
+                profile,
+                _sandboxOptions.RequireEgressDenial,
+                SandboxEgressPolicy.AgentOptionKey);
+        }
+        catch (SandboxCapabilityNotSupportedException exception)
+        {
+            // Both refusals are node-authored and name the setting to change, so the chat turn and the tool gateway show them
+            // verbatim; the provider's own capability throws stay developer text.
+            throw new AgentHomeRequestRejectedException(exception.Message, exception);
+        }
 
         var createRequest = new SandboxCreateRequest
         {
@@ -179,14 +197,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             // A real filesystem boundary wherever a STABLE one is advertised (a Preview one serves floor workloads only, ADR 0019):
             // capability-gated, so it can never fail the run closed; CreateOrAttach reuses an owner-node sandbox.
             Isolation = SandboxWorkloads.AgentHome.RequestedIsolation(_provider.Capabilities),
-
-            // Default-deny egress wherever the provider can enforce it: everything AgentHome and Coder run in the sandbox
-            // is local, so denial costs no capability. Capability-gated, with RequireEgressDenial or the `high` profile demanding a refusal.
-            NetworkPolicy = SandboxSecurityProfilePolicy.ResolveEgress(SandboxWorkloads.AgentHome,
-                _provider.Capabilities,
-                profile,
-                _sandboxOptions.RequireEgressDenial,
-                SandboxEgressPolicy.AgentOptionKey),
+            NetworkPolicy = networkPolicy,
 
             // The node's ceilings wherever the backend can impose them, derived through the one helper every create
             // site shares so this request cannot disagree with SandboxWorkloads.AgentHome's declaration.
@@ -207,7 +218,16 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         SandboxHandle handle,
         CancellationToken prepareToken)
     {
-        var resolvedFolders = await ResolveFoldersAsync(request.SelectedFolderIds, prepareToken);
+        // A conversation's attachments are staged below under the reserved alias, which no stored folder can carry, so
+        // naming it is a request for that staged folder rather than an id to resolve.
+        var folderIds = request.SelectedFolderIds;
+        var attachmentsNamed = request.ConversationId is not null && folderIds.Any(IsAttachmentsAlias);
+        if (attachmentsNamed)
+        {
+            folderIds = [.. folderIds.Where(static id => !IsAttachmentsAlias(id))];
+        }
+
+        var resolvedFolders = await ResolveFoldersAsync(folderIds, prepareToken);
 
         // Stage the conversation's extracted, decrypted attachments as a synthetic read-only "attachments" folder the
         // file tools discover. The snapshot holds plaintext: the finally disposes it the moment the copy completes.
@@ -222,6 +242,11 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         try
         {
             attachmentsSnapshot = await TryStageConversationAttachmentsAsync(request.ConversationId, prepareToken);
+            if (attachmentsSnapshot is null && attachmentsNamed)
+            {
+                throw new AgentHomeRequestRejectedException($"this conversation has no extracted attachments to copy under '{AttachmentsFolderAlias}'.");
+            }
+
             if (attachmentsSnapshot is not null)
             {
                 foldersToCopy =
@@ -619,6 +644,9 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
         return resolved;
     }
+
+    private static bool IsAttachmentsAlias(string id) =>
+        string.Equals(id, AttachmentsFolderAlias, StringComparison.OrdinalIgnoreCase);
 
     private string CreateRunId()
     {

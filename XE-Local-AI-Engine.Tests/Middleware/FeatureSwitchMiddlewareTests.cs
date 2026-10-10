@@ -4,12 +4,13 @@ using Microsoft.AspNetCore.Http;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Middleware;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     <see cref="FeatureSwitchMiddleware" /> answers 404 for a switched-off feature's route family, keeps each capability GET
-///     reachable, and reads the switch per request so a saved change applies without a restart.
+///     reachable, and reads the switch per request; the scheduler gate reads the startup value instead.
 /// </summary>
 [Category(TestCategories.Unit)]
 public sealed class FeatureSwitchMiddlewareTests
@@ -23,9 +24,11 @@ public sealed class FeatureSwitchMiddlewareTests
     [Arguments("/api/local/v1/transcription/runtime")]
     [Arguments("/api/local/v1/transcription/capability")]
     [Arguments("/api/local/v1/external-apps/hub/negotiate")]
+    [Arguments("/api/local/v1/scheduler/jobs")]
+    [Arguments("/api/local/v1/scheduler/hub/negotiate")]
     public async Task EachFamily_AnswersNotFound_WhileItsSwitchIsOff(string path)
     {
-        var (status, nextCalled) = await InvokeAsync(path, AllOff().Build());
+        var (status, nextCalled) = await InvokeAsync(path, AllOff().Build(), startup: new NodeStartupSettings { SchedulerEnabled = false });
 
         AssertEx.Equal(StatusCodes.Status404NotFound, status, path);
         AssertEx.False(nextCalled, "a switched-off feature must not reach security, routing or the endpoint");
@@ -77,6 +80,7 @@ public sealed class FeatureSwitchMiddlewareTests
     [Arguments("/api/local/v1/graph-workflows/definitions")]
     [Arguments("/api/local/v1/transcription/runtime")]
     [Arguments("/api/local/v1/external-apps")]
+    [Arguments("/api/local/v1/scheduler/jobs")]
     public async Task EachFamily_PassesThrough_WhileItsSwitchIsOn(string path)
     {
         var (_, nextCalled) = await InvokeAsync(path, StubNodeRuntimeSettings.Create().Build());
@@ -97,13 +101,25 @@ public sealed class FeatureSwitchMiddlewareTests
         var runtimeSettings = settings.Build();
 
         var first = Context("/api/local/v1/work-sessions");
-        await middleware.InvokeAsync(first, runtimeSettings);
+        await middleware.InvokeAsync(first, runtimeSettings, new NodeStartupSettings());
         _ = settings.WithWorkSessionsEnabled(true);
         var second = Context("/api/local/v1/work-sessions");
-        await middleware.InvokeAsync(second, runtimeSettings);
+        await middleware.InvokeAsync(second, runtimeSettings, new NodeStartupSettings());
 
         AssertEx.Equal(StatusCodes.Status404NotFound, first.Response.StatusCode);
         AssertEx.Equal(expected: 1, nextCalls, "the request after the switch turned on must reach the pipeline");
+    }
+
+    [Test]
+    public async Task TheSchedulerGate_FollowsTheStartupValue_NotTheSavedSetting()
+    {
+        // The scheduler engine is registered at start, so a saved change must not hide running jobs before the restart.
+        var (_, stillOpen) = await InvokeAsync("/api/local/v1/scheduler/jobs", AllOff().Build());
+        var (status, _) = await InvokeAsync("/api/local/v1/scheduler/jobs", StubNodeRuntimeSettings.Create().Build(),
+            startup: new NodeStartupSettings { SchedulerEnabled = false });
+
+        AssertEx.True(stillOpen, "the saved switch alone must not close the scheduler family");
+        AssertEx.Equal(StatusCodes.Status404NotFound, status, "the startup value closes it");
     }
 
     [Test]
@@ -134,10 +150,11 @@ public sealed class FeatureSwitchMiddlewareTests
                                .WithDevWorkflowsEnabled(false)
                                .WithGraphWorkflowsEnabled(false)
                                .WithTranscriptionEnabled(false)
-                               .WithExternalAppsEnabled(false);
+                               .WithExternalAppsEnabled(false)
+                               .WithSchedulerEnabled(false);
 
     private static async Task<(int Status, bool NextCalled)> InvokeAsync(string path, INodeRuntimeSettings runtimeSettings,
-        string method = "GET")
+        string method = "GET", NodeStartupSettings? startup = null)
     {
         var nextCalled = false;
         var middleware = new FeatureSwitchMiddleware(_ =>
@@ -148,7 +165,7 @@ public sealed class FeatureSwitchMiddlewareTests
         var context = Context(path);
         context.Request.Method = method;
 
-        await middleware.InvokeAsync(context, runtimeSettings);
+        await middleware.InvokeAsync(context, runtimeSettings, startup ?? new NodeStartupSettings());
 
         return (context.Response.StatusCode, nextCalled);
     }

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import i18next from "i18next";
+import { afterEach, describe, expect, it } from "vitest";
 
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
 import {
@@ -10,6 +11,8 @@ import {
 	toExternalModelOptions,
 	toModelOption,
 } from "@/features/chat/pages/ChatModelOptions";
+import de from "@/locales/de.json";
+import en from "@/locales/en.json";
 
 type LocalModelDto = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse;
 
@@ -333,5 +336,26 @@ describe("external-provider containment (D10)", () => {
 		const options = toExternalModelOptions([externalModel({ declaredLocality: null })], true);
 
 		expect(groupExternalModelOptions(options)[0]?.isDeclaredCloud).toBe(true);
+	});
+});
+
+describe("model picker strings in German", () => {
+	afterEach(async () => {
+		// The i18next instance is shared across this file's tests; undo the German switch.
+		await i18next.changeLanguage("en");
+	});
+
+	it("names the node default in the active language", async () => {
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage("de");
+
+		const option = toModelOption(model({ isSelected: true, parameterSize: "8B" }), true);
+
+		expect(option.statusLabel).toBe("Node-Standard · 8B");
+	});
+
+	it("translates the picker's reasoning badges", () => {
+		expect(de.pages.chat.reasoningLabel).not.toBe(en.pages.chat.reasoningLabel);
+		expect(de.pages.chat.nativeReasoningLabel).not.toBe(en.pages.chat.nativeReasoningLabel);
 	});
 });

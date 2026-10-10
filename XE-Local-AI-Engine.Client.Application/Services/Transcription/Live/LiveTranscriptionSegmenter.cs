@@ -99,9 +99,7 @@ public sealed class LiveTranscriptionSegmenter
     private readonly IWhisperTranscriber _transcriber;
     private long _audioEndMs;
     private long _committedEndMs;
-    private bool _detectLanguage;
     private string? _detectedLanguageCode;
-    private bool _tailHasSpeech;
     private long _lastSubmittedBoundaryMs = -1;
     private long _nextTickMs;
     private int _noProgressSubmissions;
@@ -134,10 +132,6 @@ public sealed class LiveTranscriptionSegmenter
         _channel = channel;
         _modelId = modelId;
         _languageCode = string.IsNullOrWhiteSpace(languageCode) ? null : languageCode;
-
-        // A forced language is never detected: the probability pass is paid for nothing, and whisper-server 927cfce
-        // answers 500 when VAD finds no speech in a window that asked for it.
-        _detectLanguage = _languageCode is null;
         _translate = translate;
         _settings = settings;
         _timeProvider = timeProvider;
@@ -283,15 +277,11 @@ public sealed class LiveTranscriptionSegmenter
         string? learnedLanguage = null;
         if (_detectedLanguageCode is null && !string.IsNullOrWhiteSpace(result.DetectedLanguageCode))
         {
-            // The probability pass is paid once per session, not once per second.
             _detectedLanguageCode = result.DetectedLanguageCode;
-            _detectLanguage = false;
             learnedLanguage = result.DetectedLanguageCode;
         }
 
-        // Only a window starting over uncommitted speech asks for probabilities: whisper-server dies or answers 500 on a
-        // silent one (wiki 24, "The segmenter"), and speech this call committed is gone from the next window.
-        _tailHasSpeech = Apply(result, windowStartMs, windowEndMs, atCap, flush, commits);
+        Apply(result, windowStartMs, windowEndMs, atCap, flush, commits);
         return learnedLanguage;
     }
 
@@ -338,13 +328,11 @@ public sealed class LiveTranscriptionSegmenter
             LanguageMode = _languageCode is null ? WhisperLanguageMode.Auto : WhisperLanguageMode.Explicit,
             LanguageCode = _languageCode,
             Translate = _translate,
-            UseVoiceActivityDetection = true,
-            DetectLanguage = _detectLanguage && _tailHasSpeech
+            UseVoiceActivityDetection = true
         }, cancellationToken);
     }
 
     /// <summary>Turns one transcription result into commits and moves the watermark. Nothing here awaits.</summary>
-    /// <returns>Whether speech remains in the uncommitted tail, so the next window still hears it.</returns>
     /// <remarks>
     ///     The tail guard is suspended when the buffer must be cleared anyway (at the cap and on the final flush),
     ///     committing the model's answer about audio this lane cut itself, so a word straddling the boundary is a
@@ -352,7 +340,7 @@ public sealed class LiveTranscriptionSegmenter
     ///     routinely reports an end past the audio it was given (VAD padding; the fixture answers a 2000 ms window
     ///     with a segment ending at 2020 ms), which a zero guard rejects before the caller frees the audio for good.
     /// </remarks>
-    private bool Apply(WhisperTranscriptionResult result,
+    private void Apply(WhisperTranscriptionResult result,
         long windowStartMs,
         long windowEndMs,
         bool atCap,
@@ -425,7 +413,6 @@ public sealed class LiveTranscriptionSegmenter
         }
 
         _partial = flush ? string.Empty : string.Join(' ', pending).Trim();
-        return segments.Any(segment => segment.Text.Length > 0 && Math.Min(segment.EndMs, windowEndMs) > _tailStartMs);
     }
 
     private void AdvanceWatermark(long watermarkMs)

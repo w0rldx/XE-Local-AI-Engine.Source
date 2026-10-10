@@ -7,7 +7,6 @@ using Microsoft.Extensions.Hosting;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
-using XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -22,8 +21,9 @@ public sealed class SchedulerFeatureGateTests
     private const string ApiPrefix = "/api/local/v1";
 
     [Test]
-    public async Task SchedulerRoutes_WhenDisabled_TheNodeStartsAndAnswersFeatureDisabled()
+    public async Task SchedulerRoutes_WhenDisabled_TheNodeStartsAndAnswersNotFound()
     {
+        // N-12b: the family is gated like every other switched feature, so a disabled node answers 404, not a 400 plus a warning stack.
         await using var factory = new TestServerWebAppFactory
         {
             AdditionalConfiguration = new Dictionary<string, string?>
@@ -43,10 +43,8 @@ public sealed class SchedulerFeatureGateTests
             using var request = new HttpRequestMessage(HttpMethod.Get, route);
             factory.AddNodeBearerToken(request);
             using var response = await client.SendAsync(request);
-            var body = await response.Content.ReadAsStringAsync();
 
-            AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, $"{route}: {body}");
-            AssertEx.True(body.Contains(DisabledScheduledJobManagementService.DisabledMessage, StringComparison.Ordinal), body);
+            AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, route);
         }
     }
 

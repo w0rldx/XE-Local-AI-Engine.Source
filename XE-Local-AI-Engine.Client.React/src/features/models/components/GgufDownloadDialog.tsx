@@ -19,11 +19,15 @@ const qualityTierLabelKey: Record<GgufQuantTier, string> = {
 	Minimal: "minimal",
 };
 
-// jsdom has no scrollIntoView, so the guard keeps every test host that renders this dialog working.
+// Scrolls only the quant list's own container so the row lands mid-list: scrollIntoView would also scroll the dialog
+// body, which carries the title bar out of view and leaves the row under the sticky footer.
 function scrollRowIntoView(row: HTMLTableRowElement | null): void {
-	if (row !== null && "scrollIntoView" in row) {
-		row.scrollIntoView({ block: "nearest" });
+	const list = row?.closest<HTMLElement>("[data-quant-list]");
+	if (row === null || list === null || list === undefined) {
+		return;
 	}
+	const rowTop = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+	list.scrollTop = rowTop - (list.clientHeight - row.offsetHeight) / 2;
 }
 
 interface GgufDownloadDialogProps {
@@ -140,8 +144,8 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 
 				{files.length > 0 ? (
 					<Radio.Group value={selectedFileName} onChange={setPickedFileName}>
-						<Table.ScrollContainer minWidth={480}>
-							<Table verticalSpacing="sm" data-testid="gguf-download-table">
+						<Table.ScrollContainer minWidth={480} maxHeight="50vh" type="native" data-quant-list={true}>
+							<Table verticalSpacing="sm" stickyHeader={true} data-testid="gguf-download-table">
 								<Table.Thead>
 									<Table.Tr>
 										<Table.Th />

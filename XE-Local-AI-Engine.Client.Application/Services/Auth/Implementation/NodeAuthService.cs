@@ -267,6 +267,19 @@ public sealed class NodeAuthService : INodeAuthService
         return result;
     }
 
+    public async Task<NodeAuthTokenResult> IssueSessionAfterVaultUnlockAsync(CancellationToken cancellationToken)
+    {
+        var user = await ResolveLoginUserAsync(email: null, cancellationToken);
+        if (user is null)
+        {
+            _logger.LogWarning("Node session after the vault unlock not issued: no administrator account exists.");
+            return FailedTokenResult();
+        }
+
+        _logger.LogInformation("Node session issued for user {UserId} from the vault unlock ticket.", user.Id);
+        return await CreateTokenResultAsync(user, _timeProvider.GetUtcNow().UtcDateTime, rotated: null, cancellationToken);
+    }
+
     public async Task RevokeRefreshTokensAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
     {
         var user = await _userManager.GetUserAsync(principal);

@@ -1,3 +1,5 @@
+import { t } from "i18next";
+
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
 import { EXTERNAL_PROVIDER, LLAMACPP_PROVIDER } from "@/core/models/LocalModelProviders";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
@@ -9,7 +11,7 @@ type LocalModelDto = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelRespon
 
 export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): ModelOption {
 	const statusLabel = [
-		model.isSelected ? "Node default" : undefined,
+		model.isSelected ? t("pages.chat.nodeDefaultModel", "Node default") : undefined,
 		model.parameterSize ?? undefined,
 		model.quantizationLevel ?? undefined,
 	]

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
 using System.Globalization;
+using System.Text;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
@@ -111,6 +112,12 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     private static long _instanceCounter;
 
     public string Name => _record.Name;
+
+    /// <summary>
+    ///     Why the last session never answered the handshake, captured when it was torn down unanswered (the connect timeout), so the
+    ///     factory can name the exit code, the sandbox warnings and the stderr tail instead of a bare timeout.
+    /// </summary>
+    internal McpServerStartupException? UnansweredStartup { get; private set; }
 
     /// <summary>
     ///     Host roots a read-only bind must never cover, because binding one hands the sandboxed server the operator's
@@ -241,7 +248,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             // second is the one it READS the server's replies from — so they are the child's stdin and stdout.
             var streamTransport = new StreamClientTransport(process.StandardInput, process.StandardOutput, _loggerFactory);
             var inner = await streamTransport.ConnectAsync(cancellationToken);
-            return new SandboxedTransport(_record.Name, inner, process, _provider, handle);
+            return new SandboxedTransport(this, inner, process, handle);
         }
         catch
         {
@@ -590,6 +597,9 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     /// </remarks>
     private sealed class SandboxedTransport : ITransport
     {
+        /// <summary>STATUS_DLL_INIT_FAILED as an exit code: MXC documents it as the sandbox blocking Win32k (<c>Ui.Disable</c>, ADR 0019).</summary>
+        private const int Win32kDeniedExitCode = unchecked((int)0xC0000142);
+
         /// <summary>How long a failed send waits for the relay to learn whether the server died on startup.</summary>
         private static readonly TimeSpan RelaySettleWait = TimeSpan.FromSeconds(5);
 
@@ -601,22 +611,22 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
 
         private readonly SandboxHandle _handle;
         private readonly ITransport _inner;
+        private readonly ILogger _logger;
+        private readonly SandboxedMcpStdioTransport _owner;
         private readonly ISandboxInteractiveProcess _process;
-        private readonly IAgentSandboxRuntimeProvider _provider;
         private readonly Task _relay;
-        private readonly string _serverName;
         private int _disposing;
+        private int _received;
 
-        public SandboxedTransport(string serverName,
+        public SandboxedTransport(SandboxedMcpStdioTransport owner,
             ITransport inner,
             ISandboxInteractiveProcess process,
-            IAgentSandboxRuntimeProvider provider,
             SandboxHandle handle)
         {
-            _serverName = serverName;
+            _owner = owner;
+            _logger = owner._loggerFactory.CreateLogger<SandboxedMcpStdioTransport>();
             _inner = inner;
             _process = process;
-            _provider = provider;
             _handle = handle;
             _relay = RelayAsync();
         }
@@ -654,26 +664,30 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
 
         public async ValueTask DisposeAsync()
         {
-            _ = Interlocked.Exchange(ref _disposing, value: 1);
+            // Torn down before the server ever spoke and with no startup failure reported: the connect timed out. Diagnosed BEFORE the
+            // teardown, while the exit code and warnings are still readable; the tail wait is bounded (GetStandardErrorTailAsync).
+            if (Interlocked.Exchange(ref _disposing, value: 1) == 0 && Volatile.Read(ref _received) == 0 && !_relay.IsCompleted)
+            {
+                _owner.UnansweredStartup = await DiagnoseStartupFailureAsync("did not complete the MCP handshake");
+            }
 
             // Innermost first: stop reading the streams, then kill the process that owns them, then delete the jail.
             await _inner.DisposeAsync();
             await _relay;
             await _process.DisposeAsync();
-            await KillQuietlyAsync(_provider, _handle);
+            await KillQuietlyAsync(_owner._provider, _handle);
         }
 
         // Messages go through a channel of this transport's own: a server that closes stdout before any message died on startup, and
         // the SDK fails the pending initialize with the channel's completion, so McpServerStartupException carrying the tail goes there.
         private async Task RelayAsync()
         {
-            var received = false;
             Exception? error = null;
             try
             {
                 await foreach (var message in _inner.MessageReader.ReadAllAsync(CancellationToken.None))
                 {
-                    received = true;
+                    _ = Interlocked.Exchange(ref _received, value: 1);
                     await _messages.Writer.WriteAsync(message, CancellationToken.None);
                 }
             }
@@ -683,18 +697,48 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
                 error = exception;
             }
 
-            // Only a server that never spoke is a startup failure; a later exit is the session ending, reported as-is. A close
-            // this side initiated is not a failure at all, and the process is being torn down, so its tail is not asked for.
-            if (!received && Volatile.Read(ref _disposing) == 0)
+            // Only a server that never spoke is a startup failure; a later exit is the session ending, reported as-is. A close this
+            // side initiated is diagnosed by DisposeAsync instead, before the process is torn down.
+            if (Volatile.Read(ref _received) == 0 && Volatile.Read(ref _disposing) == 0)
             {
-                var tail = await _process.GetStandardErrorTailAsync();
-                error = new McpServerStartupException(tail is null
-                        ? $"The MCP server '{_serverName}' exited before completing the MCP handshake and wrote nothing to stderr."
-                        : $"The MCP server '{_serverName}' exited before completing the MCP handshake. Its stderr ended with:\n{tail}",
-                    tail);
+                error = await DiagnoseStartupFailureAsync("exited before completing the MCP handshake");
             }
 
             _ = _messages.Writer.TryComplete(error);
+        }
+
+        /// <summary>
+        ///     The startup failure the operator sees: the exit code in hex (as NTSTATUS codes read), the sandbox warnings and the redacted
+        ///     stderr tail. Logged once; the connection manager scrubs it again.
+        /// </summary>
+        private async Task<McpServerStartupException> DiagnoseStartupFailureAsync(string what)
+        {
+            var tail = await _process.GetStandardErrorTailAsync();
+            var exitCode = _process.ExitCode;
+            var warnings = _process.Warnings;
+            var exit = exitCode is { } code ? string.Create(CultureInfo.InvariantCulture, $"0x{unchecked((uint)code):X8}") : null;
+
+            var message = new StringBuilder("The MCP server '").Append(_owner._record.Name).Append("' ").Append(what)
+                                                              .Append(exit is null ? "." : " (exit code " + exit + ").");
+            if (exitCode == Win32kDeniedExitCode)
+            {
+                _ = message.Append(" 0xC0000142 is Windows refusing to initialise the process because the sandbox denies the Win32k UI subsystem: "
+                                   + "run a native executable, a .NET 10 app or PowerShell 7.7+ (pwsh), not Windows PowerShell 5.1 or a .NET Framework program.");
+            }
+
+            if (warnings.Count > 0)
+            {
+                _ = message.Append(" The sandbox reported: ").Append(string.Join("; ", warnings)).Append('.');
+            }
+
+            _ = message.Append(tail is null ? " It wrote nothing to stderr." : " Its stderr ended with:\n" + tail);
+            _logger.LogWarning("Sandboxed MCP server {ServerId} {What}; exit code {ExitCode}, {WarningCount} sandbox warning(s), stderr {Stderr}.",
+                _owner._record.Id,
+                what,
+                exit ?? "none (still running)",
+                warnings.Count,
+                tail is null ? "empty" : "captured");
+            return new McpServerStartupException(message.ToString(), tail);
         }
 
         private void ThrowIfStartupFailed()

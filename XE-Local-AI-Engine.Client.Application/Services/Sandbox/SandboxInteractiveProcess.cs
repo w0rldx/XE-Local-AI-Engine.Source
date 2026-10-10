@@ -34,4 +34,10 @@ public interface ISandboxInteractiveProcess : IAsyncDisposable
     {
         return Task.FromResult<string?>(null);
     }
+
+    /// <summary>The command's exit code once it has exited, or <see langword="null" /> while it runs or after disposal.</summary>
+    int? ExitCode => null;
+
+    /// <summary>The sandbox mechanism's own warnings for this run (MXC's on Windows); empty where the mechanism reports none.</summary>
+    IReadOnlyList<string> Warnings => [];
 }

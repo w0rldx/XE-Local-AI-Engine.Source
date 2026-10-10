@@ -152,6 +152,30 @@ public sealed class McpServerServiceTests
         await store.Received(1).SetEnabledAsync(id, enabled: true, Arg.Any<CancellationToken>());
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>());
         await manager.Received(1).RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await manager.DidNotReceive().RevokeAsync(Arg.Any<Guid>());
+    }
+
+    [Test]
+    public async Task SetEnabledAsync_WhenDisabling_RevokesTheServerBeforeReturning()
+    {
+        // Codex review: the detached refresh left the server callable after the PATCH returned, so the disable revokes first.
+        var service = CreateService(out var store, out var manager);
+        var id = Guid.NewGuid();
+        var existing = CreateRecord(CreateStdioInput(), enabled: true) with
+        {
+            Id = id
+        };
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
+        store.SetEnabledAsync(id, enabled: false, Arg.Any<CancellationToken>()).Returns(existing with
+        {
+            Enabled = false
+        });
+
+        var result = await service.SetEnabledAsync(id, enabled: false);
+
+        AssertEx.False(result!.Enabled);
+        await manager.Received(1).RevokeAsync(id);
+        await manager.Received(1).RefreshAsync(id, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -324,8 +348,7 @@ public sealed class McpServerServiceTests
     public async Task SetEnabledAsync_WhenRefreshFaults_StillReturnsTheCommittedRecord()
     {
         // A refresh fault must never fail an already-committed CRUD mutation: the row is persisted and the next refresh
-        // re-reconciles. The narrowed catch swallows the expected transient faults (here InvalidOperationException) and
-        // logs, so the caller still sees its successful toggle.
+        // re-reconciles. The detached refresh logs the fault, so the caller still sees its successful toggle.
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
         var existing = CreateRecord(CreateStdioInput(), enabled: false) with
@@ -346,23 +369,32 @@ public sealed class McpServerServiceTests
     }
 
     [Test]
-    public async Task SetEnabledAsync_WhenRefreshCancelled_PropagatesCancellation()
+    public async Task UpdateAsync_WhenTheReconnectNeverCompletes_ReturnsAfterPersisting()
     {
-        // OperationCanceledException is rethrown (not swallowed) so a caller-cancelled mutation surfaces the cancellation.
+        // N-3: the PATCH awaited the refresh, which waits out the whole handshake timeout for a server that hangs on startup. The edit is
+        // persisted first; the refresh runs detached (no request token) and the tools endpoint reports its status.
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(), enabled: false) with
+        var existing = CreateRecord(CreateStdioInput(), enabled: true) with
         {
             Id = id
         };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
-        store.SetEnabledAsync(id, enabled: true, Arg.Any<CancellationToken>()).Returns(existing with
+        store.UpdateAsync(id, Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).Returns(existing with
         {
-            Enabled = true
+            Version = existing.Version + 1
         });
-        manager.RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(_ => throw new OperationCanceledException());
+        var neverCompletes = new TaskCompletionSource();
+        manager.RefreshAsync(id, Arg.Any<CancellationToken>()).Returns(neverCompletes.Task);
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.SetEnabledAsync(id, enabled: true));
+        var update = service.UpdateAsync(id, CreateStdioInput());
+        await AssertEx.CompletesAsync(update, TestBudgets.Contended, "the update must return once persisted, without waiting for the reconnect");
+        var updated = await update;
+
+        AssertEx.Equal(existing.Version + 1, updated!.Version);
+        AssertEx.False(neverCompletes.Task.IsCompleted, "the refresh is still in flight while the update has already returned");
+        await manager.Received(1).RefreshAsync(id, CancellationToken.None);
+        await manager.DidNotReceive().RevokeAsync(Arg.Any<Guid>());
     }
 
     [Test]
@@ -379,6 +411,7 @@ public sealed class McpServerServiceTests
         var deleted = await service.DeleteAsync(id);
 
         AssertEx.True(deleted);
+        await manager.Received(1).RevokeAsync(id);
         await manager.Received(1).RefreshAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 

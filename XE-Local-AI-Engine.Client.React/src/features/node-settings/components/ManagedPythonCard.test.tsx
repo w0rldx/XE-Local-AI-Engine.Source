@@ -110,7 +110,7 @@ describe("ManagedPythonCard", () => {
 	});
 
 	// 5.5: on a platform no environment supports, uv is never downloaded; "not downloaded yet" promised otherwise.
-	it("says uv is not available on this platform when every environment is unsupported", async () => {
+	it("says uv is not available and offers no Compute actions when every environment is unsupported", async () => {
 		server.use(
 			jsonRoute(
 				"get",
@@ -128,6 +128,8 @@ describe("ManagedPythonCard", () => {
 
 		expect((await screen.findByTestId("managed-python-uv-badge")).textContent).toBe(copy.uvUnsupported);
 		expect(screen.queryByText(copy.uvMissing)).toBeNull();
+		// Nothing to repair or remove on a platform no environment supports.
+		expect(within(screen.getByTestId("managed-python-environment-compute")).queryByRole("button")).toBeNull();
 	});
 
 	it("keeps saying uv is not downloaded yet while one environment is supported", async () => {
@@ -178,7 +180,11 @@ describe("ManagedPythonCard", () => {
 	it("shows the reason and disables both Compute actions while Compute is unsupported", async () => {
 		const reason = "Compute is disabled on this node (Compute:Enabled=false).";
 		server.use(
-			jsonRoute("get", statusPath, status([environment("compute", { state: "Unsupported", reason, installed: false })])),
+			jsonRoute(
+				"get",
+				statusPath,
+				status([environment("training"), environment("compute", { state: "Unsupported", reason, installed: false })]),
+			),
 		);
 		renderWithProviders(<ManagedPythonCard />, { withRouter: true });
 

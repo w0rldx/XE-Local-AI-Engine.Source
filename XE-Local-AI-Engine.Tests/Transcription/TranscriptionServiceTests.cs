@@ -78,7 +78,6 @@ public sealed class TranscriptionServiceTests
                 }
             ],
             DetectedLanguageCode = "en",
-            DetectedLanguageProbability = 0.99,
             DurationSeconds = 2.25
         };
 
@@ -114,6 +113,34 @@ public sealed class TranscriptionServiceTests
         // The session still exists for a later read; only the audio is gone.
         var reread = AssertEx.NotNull(await harness.Service.GetSessionAsync(sessionId, CancellationToken.None));
         AssertEx.Equal(2, reread.Segments.Count);
+    }
+
+    // A file VAD finds no speech in (the Windows crash of the tester round) is one call and a completed, empty session.
+    [Test]
+    public async Task TranscribeFile_SilentAudio_CompletesWithNoSegmentsAndNoLanguageInOneCall()
+    {
+        await using var harness = await TranscriptionServiceHarness.CreateAsync();
+        harness.Transcriber.Result = new WhisperTranscriptionResult
+        {
+            Text = string.Empty,
+            Segments = [],
+            DetectedLanguageCode = null,
+            DurationSeconds = 3.0
+        };
+
+        var (_, slot) = await harness.BeginAsync(TranscriptionAudioFixtures.Wav);
+        TranscribeFileResult result;
+        await using (slot)
+        {
+            result = await harness.Service.TranscribeFileAsync(slot, CancellationToken.None);
+        }
+
+        AssertEx.Equal(TranscribeFileOutcome.Succeeded, result.Outcome, result.ErrorMessage);
+        AssertEx.Equal(1, harness.Transcriber.CallCount, "Silence is answered once; nothing asks again.");
+        var session = AssertEx.NotNull(result.Session);
+        AssertEx.Equal(TranscriptionSessionStatus.Completed, session.Status);
+        AssertEx.Empty(session.Segments);
+        AssertEx.Null(session.DetectedLanguage);
     }
 
     [Test]
@@ -262,18 +289,17 @@ public sealed class TranscriptionServiceTests
     // Every row here is a session option that only matters if it survives the trip through the encrypted config
     // column and into the runtime request. The fake records what it was handed; nothing else can prove the mapping.
     [Test]
-    [Arguments("override", "de", false, WhisperLanguageMode.Explicit, "de", false, false, "an explicit language is forwarded verbatim and never detected")]
-    [Arguments("auto", null, false, WhisperLanguageMode.Auto, null, false, true, "auto detection carries no code")]
-    [Arguments("auto", null, true, WhisperLanguageMode.Auto, null, true, true, "translation is forwarded")]
-    [Arguments("override", null, false, WhisperLanguageMode.Auto, null, false, true, "override without a code degrades to auto")]
-    [Arguments("override", "   ", false, WhisperLanguageMode.Auto, null, false, true, "override with a blank code degrades to auto")]
+    [Arguments("override", "de", false, WhisperLanguageMode.Explicit, "de", false, "an explicit language is forwarded verbatim")]
+    [Arguments("auto", null, false, WhisperLanguageMode.Auto, null, false, "auto detection carries no code")]
+    [Arguments("auto", null, true, WhisperLanguageMode.Auto, null, true, "translation is forwarded")]
+    [Arguments("override", null, false, WhisperLanguageMode.Auto, null, false, "override without a code degrades to auto")]
+    [Arguments("override", "   ", false, WhisperLanguageMode.Auto, null, false, "override with a blank code degrades to auto")]
     public async Task TranscribeFile_MapsTheSessionLanguageOptionsOntoTheRuntimeRequest(string languageMode,
         string? languageOverride,
         bool translate,
         WhisperLanguageMode expectedMode,
         string? expectedCode,
         bool expectedTranslate,
-        bool expectedDetect,
         string because)
     {
         await using var harness = await TranscriptionServiceHarness.CreateAsync();
@@ -297,7 +323,6 @@ public sealed class TranscriptionServiceTests
         AssertEx.Equal(expectedMode, harness.Transcriber.LastLanguageMode, $"Expected {expectedMode} because {because}.");
         AssertEx.Equal<string?>(expectedCode, harness.Transcriber.LastLanguageCode, $"Expected language code '{expectedCode}' because {because}.");
         AssertEx.Equal(expectedTranslate, harness.Transcriber.LastTranslate, $"Expected translate={expectedTranslate} because {because}.");
-        AssertEx.Equal(expectedDetect, harness.Transcriber.LastDetectLanguage, $"Expected detect-language={expectedDetect} because {because}.");
     }
 
     [Test]

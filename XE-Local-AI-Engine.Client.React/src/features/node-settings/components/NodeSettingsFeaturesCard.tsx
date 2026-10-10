@@ -17,7 +17,7 @@ interface Props {
 }
 
 // The nine node feature switches. Development and Scheduler carry the restart badge (they decide what the host
-// registers); the others apply on the next request, and their descriptions name the part that waits for a restart.
+// registers; Development off applies at once, its hint says so); the others apply on the next request.
 // The tenth entry of featureSwitchFields, execution previews, is edited in the Sandbox & isolation section.
 export function NodeSettingsFeaturesCard({ form, errors, onChange }: Props) {
 	const { t } = useTranslation();
@@ -53,10 +53,17 @@ export function NodeSettingsFeaturesCard({ form, errors, onChange }: Props) {
 					"developmentEnabled",
 					"development",
 					t("pages.nodeSettings.fields.developmentEnabled.label", "Development mode"),
-					t(
+					`${t(
 						"pages.nodeSettings.fields.developmentEnabled.description",
 						"Lets agents change code in registered source folders, each attempt in its own isolated worktree.",
-					),
+					)}${
+						form.developmentEnabled
+							? ""
+							: ` ${t(
+									"pages.nodeSettings.fields.developmentEnabled.offHint",
+									"Turning it off applies immediately; turning it on needs a restart.",
+								)}`
+					}`,
 				)}
 				{featureSwitch(
 					"workSessionsEnabled",

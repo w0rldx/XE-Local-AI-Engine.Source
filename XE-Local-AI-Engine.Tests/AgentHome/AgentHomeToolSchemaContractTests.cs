@@ -103,6 +103,25 @@ public sealed class AgentHomeToolSchemaContractTests
         await Task.CompletedTask;
     }
 
+    /// <summary>
+    ///     The staged conversation folder is the one id a model cannot learn from Node Settings, so the description names it,
+    ///     and the authoritative validator must accept what the description invites.
+    /// </summary>
+    [Test]
+    public void Description_NamesTheAttachmentsFolderId_AndTheValidatorAcceptsIt()
+    {
+        AssertEx.Contains(AgentHomeToolDefinition.Description, "\"attachments\"");
+
+        var errors = AgentHomeRunToolRequestValidator.Validate(new AgentHomeRunToolRequest
+        {
+            Goal = "g",
+            SelectedFolderIds = ["attachments"],
+            AllowedActions = ["read_workspace"]
+        });
+
+        AssertEx.Empty(errors);
+    }
+
     [Test]
     public async Task Validator_BoundsTheAliasAtSixtyFourCharacters()
     {

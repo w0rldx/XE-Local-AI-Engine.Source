@@ -253,6 +253,44 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- Windows tester round on `1.0.0-rc.2.dev.20261009.101`:
+  - After a password unlock of the vault, the desktop build sometimes rejected the stored refresh cookie and landed
+    on the login page. A password unlock now sets a one-time, two-minute unlock ticket cookie that the refresh
+    endpoint trades once for a fresh session when the refresh cookie fails; the recovery-code unlock sets none, and
+    a late refresh carrying a spent ticket no longer clears a refresh cookie another tab just received.
+  - whisper-server no longer crashes (Windows) or answers 500 (Linux) on a silent window: language probabilities are
+    never requested; the detected language comes from the language name every verbose answer carries, and a window
+    with no speech reports no language. The retry arms and the live segmenter's speech gating are gone.
+  - A knowledge document that failed extraction stores the extractor's own reason (the limit it hit) instead of a
+    generic text, one warning names it, and uploading a plain-text file whose size already exceeds the
+    20,000,000-character extraction cap is refused naming the cap.
+  - The model can name the `attachments` folder in `run_in_agent_home` for the conversation's staged attachments; the
+    alias is reserved in folder registration (a stored folder already registered under that id is shadowed while a
+    conversation is set and should be renamed), the tool description names it, and the attachment hint says so. A
+    sandbox-profile refusal of an Agent Home run now reaches the failed turn with its own text instead of a generic
+    message.
+  - Graph workflow validation reports warnings beside errors on an invalid graph, and an Agent node pinned to an
+    uninstalled llama-server model warns (an Ollama-served model never does).
+  - A refused benchmark context budget lists the accepted tiers. The Development isolation table omits the
+    `run_python` row on a node that never offers it.
+  - Chat admissions decided by a caller are logged at Information, as is the supervisor's skip.
+  - The desktop shell exits with code 10 on an access denial before the engine is ready, and re-reads the UI
+    language when the main window loses focus so the tray menu follows a language change.
+  - Model fit: "Refresh" sends one request for the selected use case instead of six. The preselected quant stays
+    visible, Download on an installed tested row is labelled as another quant, Development-mode off says it applies
+    immediately, a turn notice's sentence is separated from its detail, the node-default model label is translated,
+    the Compute card hides Repair and Remove on a host that cannot run them, the tool picker disables the checkbox of
+    a tool this node withholds, and the model-fit page connects to the scheduler hub only while the scheduler is on.
+  - A sandboxed MCP server that dies during its handshake now reports its exit code (with a Win32k hint for
+    0xC0000142), the sandbox's own warnings and its stderr tail in the connection error, also on the timeout path;
+    the engine turns off Windows hard-error dialogs once at start so such a child exits instead of hanging; and
+    saving, enabling or deleting an MCP server returns at once while the reconnect settles in the background (a
+    disabled or deleted server is cut off before the save returns, and a reconnect shows as connecting at once). The
+    docs state that a sandboxed stdio server on Windows must be native, .NET 10 or PowerShell 7.7 or later.
+  - Every scheduler route, hub included, answers 404 while the scheduler switch was off at startup, instead of a 400
+    with a warning stack. The MXC ACL residue sweep
+    logs when it finds nothing, startup logs the unlock-to-host gap and the host build time, and a node-key custody
+    refusal prints its reason without a stack trace.
 - A final answer that is prose starting with `<tool_call>` is no longer reported as a tool call written as text; only an
   unclosed block followed by JSON counts. The agent tool picker names `run_python` as Linux-only only on a node where it
   is withheld, and the "Refresh now" discovery memo drops expired readings on every call instead of past 256 entries.

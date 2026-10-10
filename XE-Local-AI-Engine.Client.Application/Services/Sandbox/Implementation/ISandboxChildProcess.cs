@@ -22,6 +22,12 @@ internal interface ISandboxChildProcess : IDisposable
     /// <summary>The mechanism's OWN timeout fired during the last wait (MXC enforces <c>TimeoutMs</c> inside its wait).</summary>
     bool TimedOut { get; }
 
+    /// <summary>The exit code once the child has exited, else <see langword="null" />. Never waits.</summary>
+    int? ExitCode { get; }
+
+    /// <summary>The mechanism's own warnings for this run (MXC's); empty for a plain child.</summary>
+    IReadOnlyList<string> Warnings { get; }
+
     /// <summary>Writes <paramref name="text" /> to stdin and closes it.</summary>
     Task WriteStandardInputAndCloseAsync(string text, CancellationToken cancellationToken);
 

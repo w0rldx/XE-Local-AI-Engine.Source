@@ -381,14 +381,13 @@ calls into it per lane.
   as a first-attempt timeout, so a window never waits twice the timeout. A second death propagates and fails the lane. No other runtime failure is retried: a timeout would double the
   inference-timeout wait, and "not installed", "busy" or "rejected the audio" cannot succeed on a retry. The final
   flush submits through the same path.
-- **Language probabilities are asked for only on a window that starts over uncommitted speech.** With no forced
-  language the lane asks whisper-server for language probabilities until one window reports a language, but only when
-  the previous window left a non-empty segment in the uncommitted tail; speech it committed is gone from the next
-  window, so a short utterance followed by a pause does not make the next window ask. whisper-server crashes (Windows) or answers 500 (Linux) when a probability
-  request meets a window its VAD finds silent, and the transcriber's fallback retry carries no language, so asking on
-  every silent tick crashed the daemon once per second and pushed the lane into catch-up. The first window of a session
-  never asks; windows overlap the uncommitted speech, so the next window still sees what the tail held. At worst one
-  crash remains, when speech is followed at once by silence. `LiveTranscriptionSegmenterTests` pins it.
+- **Language probabilities are never requested.** Every whisper-server call sends `no_language_probabilities`;
+  the probability path crashed the daemon (Windows) or answered 500 (Linux) on a window its VAD found silent, and
+  the old gating on the uncommitted tail still let one crash through. With no forced language the transcriber
+  reads the `language` name the verbose response always carries and maps it to a code
+  (`WhisperServerTranscriber.ResolveDetectedLanguageCode`). A response with no segments reports no language, because
+  whisper's state defaults to English on silence; the lane keeps asking nothing extra and learns the language from
+  the first window that transcribes speech. `WhisperServerTranscriberTests` and `LiveTranscriptionSegmenterTests` pin it.
 - **The known ceiling: one word may be inserted, dropped or duplicated per forced boundary.** Windows are cut with
   no overlap, so a word straddling a forced cut is the model's guess from a fragment. `LiveSegmenterGoldenTests`
   bounds this — the committed transcript's word-level edit distance against a whole-clip transcript may not exceed

@@ -255,7 +255,7 @@ XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/StableDiffusionCppRuntimeR
 XE-Local-AI-Engine.Tests/Providers/StableDiffusionCpp/StableDiffusionSourceRuntimeFoundationTests.cs|2
 XE-Local-AI-Engine.Tests/Providers/Training/LinuxTrainingProcessGroupTests.cs|9
 XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperManagedRuntimeRelocationTests.cs|2
-XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerTranscriberTests.cs|10
+XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerTranscriberTests.cs|2
 XE-Local-AI-Engine.Tests/Proxy/LocalModelProxyResilienceTests.cs|2
 XE-Local-AI-Engine.Tests/Sandbox/AgentHomeProcessWriteBackLoopTests.cs|2
 XE-Local-AI-Engine.Tests/Sandbox/ProcessSandboxRuntimeProviderTests.cs|7

@@ -168,10 +168,12 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
                     cancellationToken);
                 return;
             case DocumentExtractionStatus.Failed:
+                // Every extractor Error is content-free by design, so it is persisted and logged as the reason.
+                _logger.LogWarning("Knowledge document {DocumentId} failed text extraction: {Reason}", documentId, extraction.Error ?? ExtractionFailedReason);
                 _ = await SetStatusAsync(documentId,
                     revision.ContentHash,
                     KnowledgeDocumentStatus.Failed,
-                    ExtractionFailedReason,
+                    extraction.Error ?? ExtractionFailedReason,
                     cancellationToken);
                 return;
             case DocumentExtractionStatus.Extracted:

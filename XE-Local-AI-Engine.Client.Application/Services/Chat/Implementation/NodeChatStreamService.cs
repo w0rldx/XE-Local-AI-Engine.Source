@@ -752,8 +752,12 @@ public sealed class NodeChatStreamService : INodeChatStreamService
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "AgentHome attachment staging failed for conversation {ConversationId}.", conversationId);
-            error = "The AgentHome workspace could not be prepared for this response.";
+            // This runs on every turn offering AgentHome tools. A node-authored rejection names its remedy (the sandbox
+            // security profile, say); anything else may carry a host path, so it stays generic.
+            _logger.LogWarning(exception, "AgentHome workspace preparation failed for conversation {ConversationId}.", conversationId);
+            error = exception is AgentHomeRequestRejectedException
+                ? exception.Message
+                : "The AgentHome workspace could not be prepared for this response.";
         }
 
         return new SandboxStagingOutcome

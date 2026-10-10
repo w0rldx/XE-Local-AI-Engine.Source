@@ -612,8 +612,7 @@ public sealed class TranscriptionService : ITranscriptionService
                     ContentType = contentType,
                     LanguageMode = explicitLanguage ? WhisperLanguageMode.Explicit : WhisperLanguageMode.Auto,
                     LanguageCode = explicitLanguage ? config.LanguageOverride : null,
-                    Translate = config.Translate,
-                    DetectLanguage = !explicitLanguage
+                    Translate = config.Translate
                 }, cancellationToken);
 
                 detectedLanguage ??= transcribed.DetectedLanguageCode;

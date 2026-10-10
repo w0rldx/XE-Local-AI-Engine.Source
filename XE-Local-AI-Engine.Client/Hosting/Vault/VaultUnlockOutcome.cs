@@ -20,4 +20,7 @@ internal sealed class VaultUnlockOutcome
 
     /// <summary>The rotated recovery code the pre-host already showed; the reset wraps the vault's recovery slot under it.</summary>
     public string? ResetNewRecoveryCode { get; init; }
+
+    /// <summary>Set by a pre-host password unlock: the real host registers it so <c>auth/refresh</c> can trade the <c>node_ut</c> cookie once.</summary>
+    public VaultUnlockTicket? UnlockTicket { get; init; }
 }

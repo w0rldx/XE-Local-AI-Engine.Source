@@ -705,7 +705,7 @@ describe("ModelManagement", () => {
 		expect(queryFns.getModelCatalogInfo).toHaveBeenCalledTimes(1);
 	});
 
-	it("marks a tested model installed when any quant of its repo is installed, keeping Download enabled", async () => {
+	it("marks a tested model installed when any quant of its repo is installed and offers its Download as another quant", async () => {
 		queryFns.listLocalModels.mockResolvedValue({
 			isAvailable: true,
 			items: [
@@ -728,7 +728,12 @@ describe("ModelManagement", () => {
 
 		expect((await screen.findByTestId("model-fit-browse-tested-installed-granite-4.1-3b")).textContent).toBe("Installed");
 		expect(screen.queryByTestId("model-fit-browse-tested-installed-qwen3.5-4b")).toBeNull();
-		expect((screen.getByTestId("model-fit-browse-tested-download-granite-4.1-3b") as HTMLButtonElement).disabled).toBe(false);
+		const installed = screen.getByTestId("model-fit-browse-tested-download-granite-4.1-3b") as HTMLButtonElement;
+		expect(installed.disabled).toBe(false);
+		expect(installed.textContent).toBe("Other quant");
+		const notInstalled = screen.getByTestId("model-fit-browse-tested-download-qwen3.5-4b") as HTMLButtonElement;
+		expect(notInstalled.disabled).toBe(false);
+		expect(notInstalled.textContent).toBe("Download");
 	});
 
 	it("brings the tested list back and hides the results when the search is cleared", async () => {

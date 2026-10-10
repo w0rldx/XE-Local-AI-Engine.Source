@@ -330,6 +330,9 @@ public static class LocalApiRoutes
 
     public static class Scheduler
     {
+        // The family root FeatureSwitchMiddleware gates: every scheduler route, hub included, answers 404 while the switch is off.
+        public const string Root = "scheduler";
+
         // Flat template catalog. Kept separate from job-id routes so templates cannot be parsed as ids.
         public const string Templates = "scheduler/templates";
 

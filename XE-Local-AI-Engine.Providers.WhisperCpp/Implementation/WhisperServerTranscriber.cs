@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -33,14 +32,32 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
     // Enough of the daemon's error text to name the failure in a log line, never a whole HTML page.
     private const int LoggedErrorBodyChars = 300;
 
+    // whisper.cpp's own g_lang table (src/whisper.cpp at the pinned tag): the full name verbose_json reports → the code.
+    private static readonly Dictionary<string, string> LanguageCodesByName = new(StringComparer.Ordinal)
+    {
+        ["english"] = "en", ["chinese"] = "zh", ["german"] = "de", ["spanish"] = "es", ["russian"] = "ru", ["korean"] = "ko",
+        ["french"] = "fr", ["japanese"] = "ja", ["portuguese"] = "pt", ["turkish"] = "tr", ["polish"] = "pl", ["catalan"] = "ca",
+        ["dutch"] = "nl", ["arabic"] = "ar", ["swedish"] = "sv", ["italian"] = "it", ["indonesian"] = "id", ["hindi"] = "hi",
+        ["finnish"] = "fi", ["vietnamese"] = "vi", ["hebrew"] = "he", ["ukrainian"] = "uk", ["greek"] = "el", ["malay"] = "ms",
+        ["czech"] = "cs", ["romanian"] = "ro", ["danish"] = "da", ["hungarian"] = "hu", ["tamil"] = "ta", ["norwegian"] = "no",
+        ["thai"] = "th", ["urdu"] = "ur", ["croatian"] = "hr", ["bulgarian"] = "bg", ["lithuanian"] = "lt", ["latin"] = "la",
+        ["maori"] = "mi", ["malayalam"] = "ml", ["welsh"] = "cy", ["slovak"] = "sk", ["telugu"] = "te", ["persian"] = "fa",
+        ["latvian"] = "lv", ["bengali"] = "bn", ["serbian"] = "sr", ["azerbaijani"] = "az", ["slovenian"] = "sl", ["kannada"] = "kn",
+        ["estonian"] = "et", ["macedonian"] = "mk", ["breton"] = "br", ["basque"] = "eu", ["icelandic"] = "is", ["armenian"] = "hy",
+        ["nepali"] = "ne", ["mongolian"] = "mn", ["bosnian"] = "bs", ["kazakh"] = "kk", ["albanian"] = "sq", ["swahili"] = "sw",
+        ["galician"] = "gl", ["marathi"] = "mr", ["punjabi"] = "pa", ["sinhala"] = "si", ["khmer"] = "km", ["shona"] = "sn",
+        ["yoruba"] = "yo", ["somali"] = "so", ["afrikaans"] = "af", ["occitan"] = "oc", ["georgian"] = "ka", ["belarusian"] = "be",
+        ["tajik"] = "tg", ["sindhi"] = "sd", ["gujarati"] = "gu", ["amharic"] = "am", ["yiddish"] = "yi", ["lao"] = "lo", ["uzbek"] = "uz",
+        ["faroese"] = "fo", ["haitian creole"] = "ht", ["pashto"] = "ps", ["turkmen"] = "tk", ["nynorsk"] = "nn", ["maltese"] = "mt",
+        ["sanskrit"] = "sa", ["luxembourgish"] = "lb", ["myanmar"] = "my", ["tibetan"] = "bo", ["tagalog"] = "tl", ["malagasy"] = "mg",
+        ["assamese"] = "as", ["tatar"] = "tt", ["hawaiian"] = "haw", ["lingala"] = "ln", ["hausa"] = "ha", ["bashkir"] = "ba",
+        ["javanese"] = "jw", ["sundanese"] = "su", ["cantonese"] = "yue"
+    };
+
     private readonly HttpClient _httpClient;
     private readonly ILogger<WhisperServerTranscriber> _logger;
     private readonly WhisperRuntimeOptions _options;
     private readonly IWhisperServerSupervisor _supervisor;
-
-    // One latch per transcriber instance, so a node that runs for weeks warns about silent windows once in its
-    // life. Move to a per-session or time-windowed latch if the first warning scrolling away ever hides a regression.
-    private int _silentWindowFallbackWarned;
 
     public WhisperServerTranscriber(IWhisperServerSupervisor supervisor,
         HttpClient httpClient,
@@ -74,33 +91,13 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
             throw new ArgumentException("An explicit language mode requires a language code.", nameof(request));
         }
 
-        // A forced language is never detected, whatever the caller asked: there is nothing to learn from the probabilities.
-        var languageProbabilities = request.DetectLanguage && request.LanguageMode != WhisperLanguageMode.Explicit;
-        try
-        {
-            return await TranscribeLeasedAsync(modelId, request, languageProbabilities, ct).ConfigureAwait(false);
-        }
-        catch (WhisperRuntimeException exception) when (languageProbabilities && exception.ProcessExited)
-        {
-            // The upstream no-speech bug PostInferenceAsync retries as a 500 kills the Windows build (exit -1073741819) instead.
-            // The dead daemon is torn down, so this respawns it, and without probabilities the window cannot hit the bug again.
-            _logger.LogWarning("whisper-server died on a request that asked for language probabilities; retrying once without them.");
-            return await TranscribeLeasedAsync(modelId, request, languageProbabilities: false, ct).ConfigureAwait(false);
-        }
-    }
-
-    private async Task<WhisperTranscriptionResult> TranscribeLeasedAsync(string modelId,
-        WhisperTranscriptionRequest request,
-        bool languageProbabilities,
-        CancellationToken ct)
-    {
         // Ensure-then-lease is two steps, and the daemon is mutable, so another caller can complete a model switch
         // between them. One retry covers that; a second failure surfaces rather than spinning through a switch storm.
         var (endpoint, lease) = await EnsureLeasedAsync(modelId, ct).ConfigureAwait(false);
 
         using (lease)
         {
-            var result = await PostInferenceAsync(endpoint, request, languageProbabilities, ct).ConfigureAwait(false);
+            var result = await PostInferenceAsync(endpoint, request, ct).ConfigureAwait(false);
             lease.Touch();
             return result;
         }
@@ -121,15 +118,8 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
     }
 
     /// <summary>Posts one window to the daemon and maps its verbose JSON onto the contract.</summary>
-    /// <remarks>
-    ///     A request that asked for language probabilities and was answered 500 is retried ONCE, on the same lease, without
-    ///     them. whisper-server (pinned 927cfce, launched with <c>--vad</c>) throws "basic_string: construction from null is
-    ///     not valid" when VAD finds no speech segment AND probabilities are requested; the same audio answers 200 without
-    ///     them. The retry's result carries no detected language, so a caller that wanted one asks again on a later window.
-    /// </remarks>
     private async Task<WhisperTranscriptionResult> PostInferenceAsync(WhisperServerEndpoint endpoint,
         WhisperTranscriptionRequest request,
-        bool languageProbabilities,
         CancellationToken ct)
     {
         // The client carries an infinite timeout on purpose — one client serves requests whose right budgets differ by four orders of magnitude — so every call site owns its own deadline, linked to
@@ -139,7 +129,7 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
 
         request.Audio.Seek(offset: 0, SeekOrigin.Begin);
 
-        using var content = BuildMultipartContent(request, languageProbabilities);
+        using var content = BuildMultipartContent(request);
 
         HttpResponseMessage response;
         try
@@ -166,24 +156,6 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
                 var body = await response.Content.ReadAsStringAsync(inferenceCts.Token).ConfigureAwait(false);
                 var loggedBody = body.Length > LoggedErrorBodyChars ? body[..LoggedErrorBodyChars] : body;
 
-                if (languageProbabilities && response.StatusCode == HttpStatusCode.InternalServerError)
-                {
-                    // Every silent window under auto-detect lands here until a language is learned, so only the first is a Warning.
-                    if (Interlocked.Exchange(ref _silentWindowFallbackWarned, 1) == 0)
-                    {
-                        _logger.LogWarning(
-                            "whisper-server answered 500 for a window without speech while language probabilities were requested; retrying without them. Later occurrences are logged at Debug. ({Body})",
-                            loggedBody);
-                    }
-                    else
-                    {
-                        _logger.LogDebug("whisper-server answered 500 for a window without speech while language probabilities were requested. ({Body})", loggedBody);
-                    }
-
-                    _logger.LogDebug("Retrying the transcription request once without language probabilities.");
-                    return await PostInferenceAsync(endpoint, request, languageProbabilities: false, ct).ConfigureAwait(false);
-                }
-
                 _logger.LogWarning("whisper-server rejected a transcription request ({StatusCode}): {Body}", (int)response.StatusCode, loggedBody);
 
                 throw new WhisperRuntimeException("The transcription runtime rejected the audio.");
@@ -192,11 +164,11 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
             var payload = await response.Content.ReadFromJsonAsync<VerboseJsonResponse>(ResponseSerializerOptions, inferenceCts.Token).ConfigureAwait(false)
                           ?? throw new WhisperRuntimeException("The transcription runtime returned an empty result.");
 
-            return MapResult(payload);
+            return MapResult(payload, request.LanguageMode);
         }
     }
 
-    private static MultipartFormDataContent BuildMultipartContent(WhisperTranscriptionRequest request, bool languageProbabilities)
+    private static MultipartFormDataContent BuildMultipartContent(WhisperTranscriptionRequest request)
     {
         var content = new MultipartFormDataContent();
         try
@@ -213,9 +185,9 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
             content.Add(new StringContent(request.Translate ? "true" : "false"), "translate");
             content.Add(new StringContent(request.UseVoiceActivityDetection ? "true" : "false"), "vad");
 
-            // The daemon is launched with language probabilities off because computing them is expensive; this is the
-            // per-request switch that turns them back on for the one call that needs a detected language.
-            content.Add(new StringContent(languageProbabilities ? "false" : "true"), "no_language_probabilities");
+            // Never ask for probabilities: the pinned daemon crashes (Windows) or answers 500 when VAD finds no speech in a
+            // request that asked for them. The always-present "language" name carries the detected language instead.
+            content.Add(new StringContent("true"), "no_language_probabilities");
 #pragma warning restore CA2000
 
             return content;
@@ -227,7 +199,7 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         }
     }
 
-    private static WhisperTranscriptionResult MapResult(VerboseJsonResponse payload)
+    private static WhisperTranscriptionResult MapResult(VerboseJsonResponse payload, WhisperLanguageMode languageMode)
     {
         var segments = payload.Segments is null
             ? []
@@ -245,40 +217,21 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         {
             Text = payload.Text?.Trim() ?? string.Empty,
             Segments = segments,
-            DetectedLanguageCode = ResolveDetectedLanguageCode(payload),
-            DetectedLanguageProbability = payload.DetectedLanguageProbability,
+            DetectedLanguageCode = languageMode == WhisperLanguageMode.Explicit || segments.Length == 0 ? null : ResolveDetectedLanguageCode(payload.Language),
             DurationSeconds = payload.Duration
         };
     }
 
     /// <summary>
-    ///     The payload's <c>detected_language</c> is whisper's full English NAME for the language ("english"), not a
-    ///     code.
+    ///     Maps verbose_json's <c>language</c>, whisper's full English NAME ("english"), to its code ("en"); an unknown
+    ///     or missing name yields null.
     /// </summary>
     /// <remarks>
-    ///     The only ISO codes in the response are the keys of the probability map, so the detected code is that map's
-    ///     argmax — and is absent when the caller did not ask for detection.
+    ///     The caller skips this when no segment came back: whisper's language id defaults to English, so a window it
+    ///     never heard speech in still reports "english". A forced language is echoed, not detected, and is skipped too.
     /// </remarks>
-    private static string? ResolveDetectedLanguageCode(VerboseJsonResponse payload)
-    {
-        if (payload.LanguageProbabilities is not { Count: > 0 } probabilities)
-        {
-            return null;
-        }
-
-        string? best = null;
-        var bestProbability = double.NegativeInfinity;
-        foreach (var (code, probability) in probabilities)
-        {
-            if (probability > bestProbability)
-            {
-                bestProbability = probability;
-                best = code;
-            }
-        }
-
-        return best;
-    }
+    private static string? ResolveDetectedLanguageCode(string? languageName) =>
+        languageName is not null && LanguageCodesByName.TryGetValue(languageName, out var code) ? code : null;
 
     /// <summary>
     ///     The daemon reports no confidence field. The average log probability is the closest honest proxy, mapped
@@ -358,11 +311,8 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         [JsonPropertyName("segments")]
         public IReadOnlyList<VerboseJsonSegment>? Segments { get; init; }
 
-        [JsonPropertyName("detected_language_probability")]
-        public double? DetectedLanguageProbability { get; init; }
-
-        [JsonPropertyName("language_probabilities")]
-        public IReadOnlyDictionary<string, double>? LanguageProbabilities { get; init; }
+        [JsonPropertyName("language")]
+        public string? Language { get; init; }
     }
 
     private sealed record VerboseJsonSegment

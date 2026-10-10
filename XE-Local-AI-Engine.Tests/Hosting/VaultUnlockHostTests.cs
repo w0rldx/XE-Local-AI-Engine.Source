@@ -77,6 +77,7 @@ public sealed class VaultUnlockHostTests : IDisposable
                }))
         {
             AssertEx.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
+            AssertEx.Empty(UnlockTicketCookies(wrong), "A failed unlock must not set the unlock ticket.");
         }
 
         AssertEx.True(Stopwatch.GetElapsedTime(started) >= VaultUnlockHost.MinimumFailureLatency, "A failed unlock must not answer faster than the minimum latency.");
@@ -91,18 +92,36 @@ public sealed class VaultUnlockHostTests : IDisposable
 
         AssertEx.False(run.IsCompleted, "A failed unlock must leave the pre-host serving.");
 
+        string ticketCookie;
         using (var right = await client.PostAsJsonAsync(Route(LocalApiRoutes.Auth.VaultUnlock), new
                {
                    password = Password
                }))
         {
             AssertEx.Equal(HttpStatusCode.NoContent, right.StatusCode);
+            var cookies = UnlockTicketCookies(right);
+            AssertEx.Equal(1, cookies.Length, "A password unlock sets exactly one unlock ticket cookie.");
+            ticketCookie = cookies[0];
         }
 
         var outcome = AssertEx.NotNull(await run.WaitAsync(Deadline));
         AssertEx.True(outcome.MasterKey.AsSpan().SequenceEqual(_masterKey), "The pre-host must return the unwrapped master key.");
         AssertEx.Equal(url, outcome.BoundUrl);
         AssertEx.Null(outcome.ResetPassword);
+
+        // The cookie is flagged and scoped like the refresh cookie, expires with the ticket, and carries the value the outcome holds.
+        var attributes = ticketCookie.Split(';', StringSplitOptions.TrimEntries);
+        AssertEx.Contains(attributes, static attribute => attribute.Equals("httponly", StringComparison.OrdinalIgnoreCase));
+        AssertEx.Contains(attributes, static attribute => attribute.Equals("secure", StringComparison.OrdinalIgnoreCase));
+        AssertEx.Contains(attributes, static attribute => attribute.Equals("samesite=strict", StringComparison.OrdinalIgnoreCase));
+        AssertEx.Contains(attributes, static attribute => attribute.Equals($"path={NodeAuthCookie.RefreshCookiePath}", StringComparison.OrdinalIgnoreCase));
+        var ticket = AssertEx.NotNull(outcome.UnlockTicket);
+        var expires = DateTimeOffset.Parse(attributes.Single(static attribute => attribute.StartsWith("expires=", StringComparison.OrdinalIgnoreCase))["expires=".Length..],
+            System.Globalization.CultureInfo.InvariantCulture);
+        AssertEx.Equal(ticket.ExpiresAt.ToUnixTimeSeconds(), expires.ToUnixTimeSeconds());
+        AssertEx.True(ticket.ExpiresAt - TimeProvider.System.GetUtcNow() <= VaultUnlockTicket.Lifetime, "The ticket must live at most its lifetime.");
+        var value = attributes[0][(NodeAuthCookie.UnlockTicketCookieName.Length + 1)..];
+        AssertEx.True(ticket.TryConsume(value, TimeProvider.System.GetUtcNow()), "The cookie must carry the ticket the real host is handed.");
     }
 
     [Test]
@@ -156,6 +175,7 @@ public sealed class VaultUnlockHostTests : IDisposable
                }))
         {
             AssertEx.Equal(HttpStatusCode.OK, right.StatusCode);
+            AssertEx.Empty(UnlockTicketCookies(right), "A recovery reset revokes every session, so it must not hand out an unlock ticket.");
             var body = AssertEx.NotNull(await right.Content.ReadFromJsonAsync<VaultRecoveryUnlockResponse>());
             rotatedCode = body.RecoveryCode;
             AssertEx.True(VaultKdf.TryParseRecoveryCode(rotatedCode, out _), "The response shows a well-formed rotated recovery code.");
@@ -166,6 +186,7 @@ public sealed class VaultUnlockHostTests : IDisposable
         AssertEx.Equal(NewPassword, outcome.ResetPassword);
         AssertEx.Equal(typed, outcome.ResetRecoveryCode);
         AssertEx.Equal(rotatedCode, outcome.ResetNewRecoveryCode, "The real host must wrap the vault under the code the operator was shown.");
+        AssertEx.Null(outcome.UnlockTicket);
     }
 
     [Test]
@@ -192,6 +213,7 @@ public sealed class VaultUnlockHostTests : IDisposable
                }))
         {
             AssertEx.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
+            AssertEx.Empty(UnlockTicketCookies(limited));
         }
 
         AssertEx.False(run.IsCompleted, "A rate-limited attempt must not unlock even with the right password.");
@@ -245,14 +267,18 @@ public sealed class VaultUnlockHostTests : IDisposable
         using var recoveryResponse = responses[1];
 
         var outcome = AssertEx.NotNull(await run.WaitAsync(Deadline));
+        AssertEx.Empty(UnlockTicketCookies(recoveryResponse), "Neither a recovery win nor a 409 sets the unlock ticket.");
         if (passwordResponse.StatusCode == HttpStatusCode.NoContent)
         {
             AssertEx.Equal(HttpStatusCode.Conflict, recoveryResponse.StatusCode);
             AssertEx.Null(outcome.ResetPassword, "A password win must not carry the losing recovery reset.");
+            AssertEx.NotNull(outcome.UnlockTicket);
         }
         else
         {
             AssertEx.Equal(HttpStatusCode.Conflict, passwordResponse.StatusCode);
+            AssertEx.Empty(UnlockTicketCookies(passwordResponse), "A password unlock that lost the race must not set the unlock ticket.");
+            AssertEx.Null(outcome.UnlockTicket);
             AssertEx.Equal(HttpStatusCode.OK, recoveryResponse.StatusCode);
             AssertEx.Equal(NewPassword, outcome.ResetPassword);
         }
@@ -287,6 +313,11 @@ public sealed class VaultUnlockHostTests : IDisposable
             recoveryCode = _recoveryCode,
             newPassword = NewPassword
         });
+
+    private static string[] UnlockTicketCookies(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("Set-Cookie", out var values)
+            ? [.. values.Where(static header => header.StartsWith($"{NodeAuthCookie.UnlockTicketCookieName}=", StringComparison.Ordinal))]
+            : [];
 
     private static Uri Route(string route) =>
         new($"/{LocalApiRoutes.Prefix}/{route}", UriKind.Relative);

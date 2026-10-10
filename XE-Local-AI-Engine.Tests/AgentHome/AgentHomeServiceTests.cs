@@ -7,6 +7,8 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -98,7 +100,7 @@ public sealed class AgentHomeServiceTests : IDisposable
                 RequireEgressDenial = true
             });
 
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(async () =>
+        var exception = await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(async () =>
             await harness.Service.PrepareAsync(new AgentHomePrepareRequest
             {
                 SelectedFolderIds = []
@@ -127,7 +129,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         var provider = new CapabilityOverridingProvider(new FakeSandboxRuntimeProvider(clock), canDenyEgress, canLimitResources, canIsolateFilesystem);
         using var harness = CreateHarness(clock, provider, new FakeSelectedFolderResolver(), profile: SandboxSecurityProfile.High);
 
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(async () =>
+        var exception = await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(async () =>
             await harness.Service.PrepareAsync(new AgentHomePrepareRequest
             {
                 SelectedFolderIds = []
@@ -532,6 +534,76 @@ public sealed class AgentHomeServiceTests : IDisposable
         var eventsAfter = await File.ReadAllTextAsync(firstEvents);
         AssertEx.True(eventsAfter.Length > eventsBefore.Length && eventsAfter.Contains("run_completed", StringComparison.Ordinal),
             "owner A's log must keep appending into its own run directory after owner B's attempt");
+    }
+
+    /// <summary>
+    ///     The tester's case: a model naming the <c>attachments</c> alias, which no stored folder carries, gets the staged
+    ///     conversation folder copied exactly once instead of a "no selected folder is registered" rejection.
+    /// </summary>
+    [Test]
+    public async Task RunLifecycleAsync_WhenTheAttachmentsAliasIsNamed_CopiesTheStagedFolderOnce()
+    {
+        var clock = new ManualTimeProvider(FixedNow);
+        var conversationId = Guid.NewGuid();
+        var store = new FakeConversationUploadedFileStore();
+        store.Add(conversationId, "report.pdf", "# Quarterly report");
+        using var harness = CreateHarness(clock, new FakeSandboxRuntimeProvider(clock), new FakeSelectedFolderResolver(), uploadedFileStore: store);
+
+        var run = await harness.Service.RunLifecycleAsync(new AgentHomeRunLifecycleRequest
+        {
+            SelectedFolderIds = ["attachments"],
+            ConversationId = conversationId,
+            Goal = "g",
+            AllowedActions = ["read_workspace"]
+        });
+
+        AssertEx.Equal(expected: 1, run.FolderSnapshots.Count, "only the staged attachments folder, never a second resolved copy");
+        var copied = run.FolderSnapshots[0];
+        AssertEx.Equal("attachments", copied.Alias);
+        AssertEx.Equal(SelectedFolderCopyStatus.Copied, copied.Status);
+    }
+
+    [Test]
+    public async Task RunLifecycleAsync_WhenTheAttachmentsAliasIsNamedWithoutAttachments_RejectsNamingTheAlias()
+    {
+        var clock = new ManualTimeProvider(FixedNow);
+        using var harness = CreateHarness(clock, new FakeSandboxRuntimeProvider(clock), new FakeSelectedFolderResolver());
+
+        var exception = await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() => harness.Service.RunLifecycleAsync(new AgentHomeRunLifecycleRequest
+        {
+            SelectedFolderIds = ["attachments"],
+            ConversationId = Guid.NewGuid(),
+            Goal = "g",
+            AllowedActions = ["read_workspace"]
+        }));
+
+        AssertEx.Contains(exception.Message, "'attachments'");
+    }
+
+    /// <summary>The same case through the tool gateway the model calls, with the conversation taken from the ambient run context.</summary>
+    [Test]
+    public async Task ToolGateway_WhenTheModelNamesTheAttachmentsAlias_RunsInsteadOfRejecting()
+    {
+        var clock = new ManualTimeProvider(FixedNow);
+        var conversationId = Guid.NewGuid();
+        var store = new FakeConversationUploadedFileStore();
+        store.Add(conversationId, "report.pdf", "# Quarterly report");
+        using var harness = CreateHarness(clock, new FakeSandboxRuntimeProvider(clock), new FakeSelectedFolderResolver(), uploadedFileStore: store);
+        var gateway = new AgentHomeToolGateway(harness.Service, StubNodeRuntimeSettings.Create().WithAgentHomeCommandTimeoutSeconds(300).Build());
+
+        string result;
+        using (AgentRunConversationContext.BeginScope(conversationId))
+        {
+            result = await gateway.ExecuteAsync(new AgentHomeRunToolRequest
+            {
+                Goal = "summarize the report",
+                SelectedFolderIds = ["attachments"],
+                AllowedActions = ["read_workspace"]
+            });
+        }
+
+        AssertEx.False(result.Contains("rejected", StringComparison.OrdinalIgnoreCase), $"the gateway must run, not reject: {result}");
+        AssertEx.Contains(result, "attachments copied 1 file(s)");
     }
 
     [Test]

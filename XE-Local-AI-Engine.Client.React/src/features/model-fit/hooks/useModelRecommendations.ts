@@ -11,7 +11,6 @@ import {
 	type ModelFitLatestRecommendations,
 	type ModelFitRecommendation,
 	type ModelFitUseCase,
-	modelFitUseCases,
 	modelRecommendationCheckTemplateId,
 	recommendationRefreshLimit,
 } from "@/features/model-fit/models/ModelFitModels";
@@ -108,8 +107,8 @@ export function useModelRecommendations(): UseModelRecommendationsResult {
 	// fire id each POST returns and each run event carries: a cron fire or another tab's refresh never counts here.
 	const pendingFireIdsRef = useRef(new Set<string>());
 	const [pendingRuns, setPendingRuns] = useState(0);
-	// A run may finish before its own POST resolved; its id is remembered here until the loop sees that POST's answer.
-	// Cleared when the loop ends, since by then every own id has been reconciled and what is left is foreign.
+	// A run may finish before its own POST resolved; its id is remembered here until the handler sees that POST's answer.
+	// Cleared once the POST settled, since by then the own id has been reconciled and what is left is foreign.
 	const earlyTerminalFireIdsRef = useRef(new Set<string>());
 	const enqueuingRef = useRef(false);
 	const handleTerminalRun = useCallback((manualFireId: string | undefined) => {
@@ -137,37 +136,28 @@ export function useModelRecommendations(): UseModelRecommendationsResult {
 		return () => clearTimeout(timer);
 	}, [pendingRuns]);
 
-	// The refresh-all loop spans several mutations; the mutation's own isPending drops between them, so track the whole run.
-	const [isRefreshingAll, setIsRefreshingAll] = useState(false);
-	const isRefreshing = isRefreshingAll || refreshMutation.isPending || pendingRuns > 0;
+	const isRefreshing = refreshMutation.isPending || pendingRuns > 0;
 	const canRefresh = refreshJob !== undefined && !isRefreshing;
 
-	// Refresh-now refreshes EVERY use case, one POST each (the request contract stays one use case per run). The POSTs are
-	// awaited one after another; the runs share their HuggingFace searches and inspections on the server. The selected use case goes
-	// first so the visible category updates soonest. A failed POST shows the error toast and stops the loop.
+	// Refresh-now refreshes the SELECTED use case only, one POST; the scheduled cron fire refreshes the others.
 	const handleRefresh = async (): Promise<void> => {
 		if (refreshJob === undefined) {
 			return;
 		}
-		const ordered = [useCase, ...modelFitUseCases.filter((candidate) => candidate !== useCase)];
-		setIsRefreshingAll(true);
 		enqueuingRef.current = true;
 		try {
-			for (const candidate of ordered) {
-				// biome-ignore lint/performance/noAwaitInLoops: each POST fires a real HuggingFace discovery run; sequential by design.
-				const response = await refreshMutation.mutateAsync({
-					scheduledJobId: refreshJob.id,
-					useCase: candidate,
-					limit: recommendationRefreshLimit,
-				});
-				// Counted as soon as the POST landed, unless its run already reported a terminal status in the meantime.
-				const fireId = response?.fireId;
-				if (fireId !== undefined && !earlyTerminalFireIdsRef.current.delete(fireId)) {
-					pendingFireIdsRef.current.add(fireId);
-					setPendingRuns(pendingFireIdsRef.current.size);
-				}
+			const response = await refreshMutation.mutateAsync({
+				scheduledJobId: refreshJob.id,
+				useCase,
+				limit: recommendationRefreshLimit,
+			});
+			// Counted as soon as the POST landed, unless its run already reported a terminal status in the meantime.
+			const fireId = response?.fireId;
+			if (fireId !== undefined && !earlyTerminalFireIdsRef.current.delete(fireId)) {
+				pendingFireIdsRef.current.add(fireId);
+				setPendingRuns(pendingFireIdsRef.current.size);
 			}
-			// The refresh enqueues async scheduler runs, so there is no immediate result to show. Confirm the requests landed
+			// The refresh enqueues an async scheduler run, so there is no immediate result to show. Confirm the request landed
 			// with an info toast (stable id so rapid clicks update one toast) — the terminal Succeeded/Failed/Cancelled toasts
 			// arrive later from the scheduler hub (ModelFitRefreshNotifications).
 			toast.info(
@@ -182,7 +172,6 @@ export function useModelRecommendations(): UseModelRecommendationsResult {
 		} finally {
 			enqueuingRef.current = false;
 			earlyTerminalFireIdsRef.current.clear();
-			setIsRefreshingAll(false);
 		}
 	};
 

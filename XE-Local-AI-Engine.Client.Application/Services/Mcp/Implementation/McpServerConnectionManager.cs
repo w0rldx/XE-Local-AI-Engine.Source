@@ -155,7 +155,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
             foreach (var id in stale)
             {
-                await RemoveServerAsync(id);
+                await RevokeAsync(id);
             }
 
             // Servers connect in parallel: each is bounded by its own timeout and isolated from the others' failures.
@@ -182,6 +182,28 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
+        // Marked before waiting for the gate, so a status read right after a Reconnect says connecting: not the old error, and not a
+        // "connected" read off an exited primary. A dead primary is dropped here rather than kept until the gate is taken.
+        ClientSession? deadPrimary = null;
+        lock (_stateLock)
+        {
+            if (_servers.TryGetValue(serverId, out var pending))
+            {
+                pending.LastError = null;
+                pending.Reason = null;
+                pending.ReconnectPending = true;
+                if (pending.Primary is { IsAlive: false })
+                {
+                    deadPrimary = pending.DetachPrimary();
+                }
+            }
+        }
+
+        if (deadPrimary is not null)
+        {
+            await DisposeSessionSafelyAsync(deadPrimary);
+        }
+
         await _refreshGate.WaitAsync(cancellationToken);
         try
         {
@@ -189,7 +211,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             if (enabled.Count == 0)
             {
                 // Deleted or disabled: tear down its sessions and withdraw its tools.
-                await RemoveServerAsync(serverId);
+                await RevokeAsync(serverId);
             }
             else
             {
@@ -197,6 +219,19 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             }
 
             PublishSnapshot();
+        }
+        catch
+        {
+            // A refresh that faults before it reconciles would otherwise leave the server reading as connecting for good.
+            lock (_stateLock)
+            {
+                if (_servers.TryGetValue(serverId, out var faulted))
+                {
+                    faulted.ReconnectPending = false;
+                }
+            }
+
+            throw;
         }
         finally
         {
@@ -439,11 +474,16 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         }
         finally
         {
+            lock (_stateLock)
+            {
+                entry.ReconnectPending = false;
+            }
+
             _ = entry.Gate.Release();
         }
     }
 
-    private async Task RemoveServerAsync(Guid serverId)
+    public async Task RevokeAsync(Guid serverId)
     {
         List<ClientSession> sessions;
         lock (_stateLock)
@@ -454,6 +494,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             }
 
             entry.Removed = true;
+            entry.ReconnectPending = false;
             sessions = entry.DetachAllSessions();
         }
 
@@ -581,11 +622,15 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             _logger.LogWarning(ex, "MCP server {ServerId} failed to connect or list tools ({Reason}); it will contribute no tools.", record.Id, reason);
             return ConnectResult.Failed(DescribeFailure(ex, reason, record), reason);
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
-            // The per-server timeout fired (not a caller cancel). Treat it like any other isolated failure.
+            // The per-server timeout fired (not a caller cancel). Treat it like any other isolated failure; a sandboxed server that never
+            // answered carries its exit code, sandbox warnings and stderr tail (McpClientFactory.CreateAsync), scrubbed like a startup failure.
             _logger.LogWarning("MCP server {ServerId} timed out after {TimeoutSeconds}s; it will contribute no tools.", record.Id, _options.ConnectTimeoutSeconds);
-            return ConnectResult.Failed(SafeMessage(McpConnectionFailureReason.Timeout), McpConnectionFailureReason.Timeout);
+            var message = ex.InnerException is McpServerStartupException startup
+                ? AppendStderrTail(SafeMessage(McpConnectionFailureReason.Timeout) + " " + startup.Message, startup.StderrTail, record)
+                : SafeMessage(McpConnectionFailureReason.Timeout);
+            return ConnectResult.Failed(message, McpConnectionFailureReason.Timeout);
         }
         finally
         {
@@ -1258,6 +1303,9 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
         public bool Removed { get; set; }
 
+        /// <summary>A refresh of this server is queued behind the refresh gate; its status reads as connecting until it settles.</summary>
+        public bool ReconnectPending { get; set; }
+
         public int RelistGeneration { get; set; }
 
         public ClientSession? DetachPrimary()
@@ -1303,7 +1351,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
         public McpServerConnectionStatus ToStatus()
         {
-            var connected = Primary is not null && LastError is null;
+            var connected = Primary is not null && LastError is null && !ReconnectPending;
             IReadOnlyList<McpServerToolInfo> tools = connected
                 ?
                 [

@@ -5,6 +5,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 
@@ -76,9 +77,13 @@ public sealed class MxcAclResidueSweeperWindowsTests
     }
 
     [Test]
-    public async Task Sweep_WhenARootIsMissing_ReturnsZeroAndDoesNotThrow()
+    public async Task Sweep_WhenARootIsMissing_ReturnsZeroAndSaysItFoundNothing()
     {
-        AssertEx.Equal(0, MxcAclResidueSweeper.Sweep([Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))], NullLogger.Instance));
+        // Observation (ii): the sweep logged only a removal, so a clean host's startup log could not show it had run at all.
+        var logger = new CapturingLogger<MxcAclResidueSweepService>();
+
+        AssertEx.Equal(0, MxcAclResidueSweeper.Sweep([Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))], logger));
+        AssertEx.Contains(logger.AllText, "MXC ACL residue sweep checked 0 engine-owned root(s); no AppContainer ACEs found");
         await Task.CompletedTask;
     }
 

@@ -75,6 +75,26 @@ public sealed class BenchmarkProjectServiceTests
         AssertEx.Equal(expected: 200, AssertEx.NotNull(context.CreatedInput).Name.Length);
     }
 
+    /// <summary>A window above the largest tier is refused naming the accepted tiers, so the author learns what to pick instead.</summary>
+    [Test]
+    public async Task Create_WhenTheContextIsNotATier_RefusesListingTheAcceptedTiers()
+    {
+        var context = new ServiceContext();
+
+        var exception = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.CreateAsync(new BenchmarkProjectDraft
+            {
+                Id = ProjectId,
+                Name = "Benchmark",
+                CoreTask = "task",
+                ContextTokens = 200000,
+                AgentDefinitionId = context.AgentId
+            }));
+
+        AssertEx.Contains(exception.Message, "65536");
+        AssertEx.Contains(exception.Message, "2048");
+    }
+
     [Test]
     public async Task Create_RejectsUnsupportedContextAndNonSingleAgentBeforePersistence()
     {

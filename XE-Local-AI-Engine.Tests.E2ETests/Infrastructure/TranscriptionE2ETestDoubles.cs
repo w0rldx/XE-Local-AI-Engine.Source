@@ -147,7 +147,6 @@ internal sealed class FakeJfkWhisperTranscriber : IWhisperTranscriber
                     }
                 ],
                 DetectedLanguageCode = "en",
-                DetectedLanguageProbability = 0.99,
                 DurationSeconds = durationSeconds
             }
             : Rejected(durationSeconds);
@@ -162,7 +161,6 @@ internal sealed class FakeJfkWhisperTranscriber : IWhisperTranscriber
             Text = string.Empty,
             Segments = [],
             DetectedLanguageCode = null,
-            DetectedLanguageProbability = null,
             DurationSeconds = durationSeconds
         };
 

@@ -35,6 +35,21 @@ public sealed class SelectedFolderResolverTests : IDisposable
         AssertEx.True(Guid.TryParse(reference.Id, out _), "The reference id should be a GUID string.");
     }
 
+    /// <summary>AgentHome stages a conversation's attachments under this alias, so a stored folder claiming it would be shadowed.</summary>
+    [Test]
+    public async Task RegisterAsync_WithTheReservedAttachmentsAlias_Throws()
+    {
+        var resolver = CreateResolver();
+
+        var exception = await AssertEx.ThrowsAsync<SelectedFolderValidationException>(() => resolver.RegisterAsync(new SelectedFolderRegistration
+        {
+            Alias = "Attachments",
+            HostPath = TrustedHostPath
+        }));
+
+        AssertEx.Contains(exception.Message, "reserved");
+    }
+
     [Test]
     public async Task RegisterAsync_WithRelativeHostPath_Throws()
     {

@@ -139,8 +139,7 @@ public sealed class WhisperRuntimeLiveSmokeTests
             Audio = audio,
             ContentType = "audio/wav",
             LanguageMode = WhisperLanguageMode.Auto,
-            UseVoiceActivityDetection = true,
-            DetectLanguage = true
+            UseVoiceActivityDetection = true
         }, CancellationToken.None);
 
         if (string.Equals(Environment.GetEnvironmentVariable(RecordEnvironmentVariable), "true", StringComparison.OrdinalIgnoreCase))

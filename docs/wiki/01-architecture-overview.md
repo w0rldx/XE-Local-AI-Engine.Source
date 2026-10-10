@@ -106,8 +106,8 @@ Distinct from the platform link, the React SPA talks to the host over a **loopba
 - Local SignalR hubs, each `RequireAuthorization(NodeAuthorizationPolicies.Operator)`. **The `MapHub`
   block in `Client/Program.cs` is the inventory**, and [API & Hubs §2](09-api-and-hubs.md) is the one page that
   enumerates it — this page does not repeat the list. All of them are mapped unconditionally except
-  `DevelopmentAttemptHub`, which is mapped only when `Development:Enabled` (default `true`). The work-session
-  and workflow hubs are mapped unconditionally on purpose: their feature flags are enforced by request-path
+  `DevelopmentAttemptHub`, which is mapped only when `Development:Enabled` (default `true`). The work-session,
+  workflow and scheduler hubs are mapped unconditionally on purpose: their feature flags are enforced by request-path
   middleware that answers 404 for the whole prefix, hub path included, rather than by leaving a route unmapped.
 - JWT-bearer auth (operator role), antiforgery, per-IP rate limiting, and a
   `LocalApiSecurityMiddleware` that enforces the loopback/`Host`/`Origin` posture

@@ -76,6 +76,9 @@ public sealed class MxcChildProcess : IDisposable
     /// <summary>MXC's warnings for this run, including cleanup steps that failed after exit.</summary>
     public IReadOnlyList<string> Warnings => _process.Warnings;
 
+    /// <summary>The exit code once the child has exited, else <see langword="null" />. Never waits.</summary>
+    public int? ExitCode => _process.TryGetExitCode(out var exitCode) ? exitCode : null;
+
     /// <summary>
     ///     Waits for exit and for every pumped stream to reach end of stream, at most <see cref="PumpDrainBudget" /> after exit; returns
     ///     the exit code.

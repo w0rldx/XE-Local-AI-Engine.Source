@@ -141,6 +141,7 @@ export function GgufBrowsePanel({
 									{testedModels.map((model) => {
 										const fitColor = fitVerdictColor[model.fitVerdict];
 										const fitLabelKey = model.fitVerdict === "Unknown" ? null : fitVerdictLabelKey[model.fitVerdict];
+										const isInstalled = installedRepoIds.has(model.ggufRepo.toLowerCase());
 										return (
 											<Table.Tr key={model.id} data-testid={`model-fit-browse-tested-row-${model.id}`}>
 												<Table.Td>
@@ -148,7 +149,7 @@ export function GgufBrowsePanel({
 														<Text size="sm" fw={500}>
 															{model.displayName}
 														</Text>
-														{installedRepoIds.has(model.ggufRepo.toLowerCase()) ? (
+														{isInstalled ? (
 															<Badge
 																color="teal"
 																variant="light"
@@ -215,7 +216,10 @@ export function GgufBrowsePanel({
 														onClick={() => onDownload({ repoId: model.ggufRepo, preferredQuant: model.testedQuant })}
 														data-testid={`model-fit-browse-tested-download-${model.id}`}
 													>
-														{t("pages.models.gguf.browse.download", "Download")}
+														{/* Installed means some quant of the repo is; the picker can still fetch another one. */}
+														{isInstalled
+															? t("pages.models.gguf.browse.downloadOtherQuant", "Other quant")
+															: t("pages.models.gguf.browse.download", "Download")}
 													</Button>
 												</Table.Td>
 											</Table.Tr>

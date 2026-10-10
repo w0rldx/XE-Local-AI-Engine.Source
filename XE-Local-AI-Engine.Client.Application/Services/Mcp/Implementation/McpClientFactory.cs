@@ -54,12 +54,20 @@ internal sealed class McpClientFactory : IMcpClientFactory
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
     }
 
-    public Task<McpClient> CreateAsync(McpServerRecord record, string? sessionKey, CancellationToken cancellationToken)
+    public async Task<McpClient> CreateAsync(McpServerRecord record, string? sessionKey, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(record);
 
         var transport = BuildTransport(record, sessionKey);
-        return McpClient.CreateAsync(transport, clientOptions: null, _loggerFactory, cancellationToken);
+        try
+        {
+            return await McpClient.CreateAsync(transport, clientOptions: null, _loggerFactory, cancellationToken);
+        }
+        catch (OperationCanceledException exception) when (transport is SandboxedMcpStdioTransport { UnansweredStartup: { } startup })
+        {
+            // Still a cancellation, so a caller's own cancel propagates unchanged; the connection manager reads the diagnosis off a timeout.
+            throw new OperationCanceledException(startup.Message, startup, exception.CancellationToken);
+        }
     }
 
     // Internal for the tier-routing test: which TRANSPORT TYPE a record resolves to is the whole of the "where does

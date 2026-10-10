@@ -241,6 +241,10 @@ describe("ChatNoticeRow", () => {
 			),
 		).toBeTruthy();
 		expect(screen.getByTestId("chat-notice-detail").textContent).toBe("scan.pdf, photo.png, notes.bin");
+		// Copy/paste and screen readers get a separator between the sentence and the file names, not "images.scan.pdf".
+		expect(screen.getByTestId("chat-notice-row").textContent).toBe(
+			"Some attached files were not sent to the model: no text could be read from them, or the model cannot see images. scan.pdf, photo.png, notes.bin",
+		);
 	});
 
 	it("localizes the attachments-not-sent sentence for a turn without the file tools", async () => {

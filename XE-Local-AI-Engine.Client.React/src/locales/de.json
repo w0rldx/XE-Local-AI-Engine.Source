@@ -1318,8 +1318,9 @@
 			"loadingHistory": "Lokaler Chat-Verlauf wird geladen…",
 			"loadingMessages": "Nachrichten werden geladen…",
 			"modelUnavailable": "Nicht verfügbar",
-			"nativeReasoningLabel": "Natives Reasoning",
-			"reasoningLabel": "Reasoning",
+			"nodeDefaultModel": "Node-Standard",
+			"nativeReasoningLabel": "Natives Denken",
+			"reasoningLabel": "Denken",
 			"retryConnection": "Erneut versuchen",
 			"stop": "Stopp",
 			"answerNow": "Jetzt antworten",
@@ -2811,7 +2812,8 @@
 				},
 				"developmentEnabled": {
 					"label": "Entwicklungsmodus",
-					"description": "Lässt Agenten Code in registrierten Quellordnern ändern, jeden Versuch in einem eigenen isolierten Worktree."
+					"description": "Lässt Agenten Code in registrierten Quellordnern ändern, jeden Versuch in einem eigenen isolierten Worktree.",
+					"offHint": "Das Ausschalten wirkt sofort; das Einschalten erfordert einen Neustart."
 				},
 				"workSessionsEnabled": {
 					"label": "Arbeitssitzungen",
@@ -3344,6 +3346,7 @@
 					"untrustedPublisher": "Nicht verifizierter Anbieter",
 					"untrustedPublisherHint": "Dieser Anbieter ist kein bekannter GGUF-Packager – prüfe das Repository vor dem Download.",
 					"download": "Herunterladen",
+					"downloadOtherQuant": "Andere Quantisierung",
 					"noGguf": "Kein GGUF",
 					"clearSearch": "Suche zurücksetzen",
 					"columns": {

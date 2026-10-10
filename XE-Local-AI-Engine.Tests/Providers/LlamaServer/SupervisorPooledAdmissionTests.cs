@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -105,6 +106,25 @@ public sealed class SupervisorPooledAdmissionTests
         AssertEx.Equal(expected: 1, launcher.LaunchCount);
         AssertEx.Equal(expected: 0, hook.ChatCalls, "A second decision would reject on the admission its own caller published.");
         AssertEx.False(registry.Snapshot("chat-model", ModelRole.Chat).HasRequestedKey, "The published admission must have been consumed and released.");
+    }
+
+    /// <summary>The skip is the only supervisor-side trace of a caller-decided chat launch, so it is logged at Information.</summary>
+    [Test]
+    public async Task ChatEnsure_WithAnAdmissionAlreadyPublished_LogsTheSkipAtInformation()
+    {
+        var registry = new ProcessLaunchAdmissionRegistry();
+        var logger = new RecordingLogger<LlamaServerProcessSupervisor>();
+        await using var supervisor = SupervisorFactory.Create(new FakeProcessLauncher(),
+            variantSelector: new FakeVariantSelector(GpuVariant.Cpu),
+            launchAdmissions: registry,
+            pooledLaunchAdmission: new RecordingPooledAdmission(registry),
+            logger: logger);
+
+        AssertEx.True(registry.TryAcquire(RecordingPooledAdmission.Admission("chat-model", ModelRole.Chat), out var consumer));
+        await supervisor.EnsureRunningAsync("chat-model", ModelRole.Chat, CancellationToken.None);
+        consumer!.Dispose();
+
+        AssertEx.True(logger.HasEntry(LogLevel.Information, "uses the admission its caller already published"));
     }
 
     [Test]

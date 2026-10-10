@@ -3,7 +3,10 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
@@ -36,6 +39,7 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
     private readonly string _cacheRoot;
     private readonly HttpClient _httpClient;
     private readonly IWhisperInstalledRuntimeStore? _installedRuntimeStore;
+    private readonly ILogger _logger;
     private readonly IWhisperManagedSourceBuildSignal? _managedSourceSignal;
     private readonly OSPlatform _os;
     private readonly WhisperServerRuntimeOverrideOptions? _overrideOptions;
@@ -50,7 +54,8 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         string? activeTag = null,
         WhisperServerRuntimeOverrideOptions? overrideOptions = null,
         IWhisperInstalledRuntimeStore? installedRuntimeStore = null,
-        IWhisperManagedSourceBuildSignal? managedSourceSignal = null)
+        IWhisperManagedSourceBuildSignal? managedSourceSignal = null,
+        ILogger<WhisperCppBinaryManager>? logger = null)
         : this(httpClient,
             cacheRoot ?? RuntimeCacheDirectory.Resolve(),
             activeTag ?? WhisperCppReleasePins.PinnedTag,
@@ -58,7 +63,8 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
             RuntimeInformation.ProcessArchitecture,
             overrideOptions,
             installedRuntimeStore,
-            managedSourceSignal)
+            managedSourceSignal,
+            logger: logger)
     {
     }
 
@@ -81,8 +87,10 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
         WhisperServerRuntimeOverrideOptions? overrideOptions = null,
         IWhisperInstalledRuntimeStore? installedRuntimeStore = null,
         IWhisperManagedSourceBuildSignal? managedSourceSignal = null,
-        WhisperAssetPin? assetPinOverride = null)
+        WhisperAssetPin? assetPinOverride = null,
+        ILogger? logger = null)
     {
+        _logger = logger ?? NullLogger.Instance;
         _assetPinOverride = assetPinOverride;
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
@@ -155,12 +163,19 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
             };
         }
 
+        // A missing or renamed whisper-server lands here too, so the repair is visible rather than a silent wait.
+        _logger.LogInformation("No cached whisper-server for whisper.cpp {Tag} ({Backend}); downloading the pinned runtime.", _activeTag, backend);
+        var startedAt = Stopwatch.GetTimestamp();
         await DownloadVerifyExtractAsync(WhisperCppReleasePins.DownloadUri(_activeTag, pin.AssetName),
             pin.AssetName,
             pin.Sha256,
             pin.ArchiveKind,
             backendDir,
             ct).ConfigureAwait(false);
+        _logger.LogInformation("Downloaded and verified whisper.cpp {Tag} ({Backend}) in {ElapsedMs} ms.",
+            _activeTag,
+            backend,
+            (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
 
         var serverPath = ResolveServerPath(backendDir, pin)
                          ?? throw new WhisperRuntimeException("The downloaded whisper.cpp runtime did not contain the expected server executable.");

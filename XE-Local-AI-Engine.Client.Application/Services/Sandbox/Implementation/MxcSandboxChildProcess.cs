@@ -29,6 +29,10 @@ internal sealed class MxcSandboxChildProcess : ISandboxChildProcess
 
     public bool TimedOut => _child.TimedOut;
 
+    public int? ExitCode => _child.ExitCode;
+
+    public IReadOnlyList<string> Warnings => _child.Warnings;
+
     public async Task WriteStandardInputAndCloseAsync(string text, CancellationToken cancellationToken)
     {
         await using var stream = StandardInput;

@@ -1001,6 +1001,21 @@ describe("NodeSettingsFieldsCard — feature switches", () => {
 		expect(screen.getByText(/workflow definitions are seeded on the next restart/)).toBeTruthy();
 	});
 
+	it("tells the operator Development off applies at once only while the switch is off, in en and de", () => {
+		const hint = /Turning it off applies immediately; turning it on needs a restart\./;
+		renderCard({ section: "general", form: { ...toNodeSettingsFieldsForm(undefined), developmentEnabled: false } });
+		expect(screen.getByText(hint)).toBeTruthy();
+		cleanup();
+
+		renderCard({ section: "general", form: { ...toNodeSettingsFieldsForm(undefined), developmentEnabled: true } });
+		expect(screen.queryByText(hint)).toBeNull();
+		expect(screen.getByTestId("node-settings-restart-badge-developmentEnabled")).toBeTruthy();
+		const de = nonEnglishLocales.find((locale) => locale.code === "de")?.resource as
+			| { pages: { nodeSettings: { fields: { developmentEnabled: { offHint?: string } } } } }
+			| undefined;
+		expect(de?.pages.nodeSettings.fields.developmentEnabled.offHint).toBeTruthy();
+	});
+
 	it("shows a coupling error on the switch it is blamed on, with both codes in the en and de bundles", () => {
 		renderCard({ section: "general", errors: { devWorkflowsEnabled: "requiresWorkSessions" } });
 

@@ -58,10 +58,18 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
     {
         try
         {
-            // A graph that routes may still have something said about it. Warnings ride out only on this path: they
-            // never block, so the save and start paths below discard them rather than pretend to act on them.
-            var graph = await ValidateAndParseAsync(graphJson, cancellationToken);
-            return GraphWorkflowValidationResult.ValidWith(await WarningsForRuntimeAsync(graph, cancellationToken));
+            // A graph that parsed may still have something said about it, errors or not, so an author fixing one sees both lists.
+            // Warnings ride out only on this path: they never block, so the save and start paths below discard them.
+            var errors = new List<GraphWorkflowValidationError>();
+            var graph = await ParseCollectingErrorsAsync(graphJson, errors, cancellationToken);
+            var warnings = await WarningsForRuntimeAsync(graph, cancellationToken);
+            return errors.Count == 0
+                ? GraphWorkflowValidationResult.ValidWith(warnings)
+                : new GraphWorkflowValidationResult
+                {
+                    Errors = errors,
+                    Warnings = warnings
+                };
         }
         catch (GraphWorkflowValidationException exception)
         {
@@ -133,17 +141,26 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
     /// </remarks>
     private async Task<GraphWorkflowGraph> ValidateAndParseAsync(string graphJson, CancellationToken cancellationToken)
     {
+        var errors = new List<GraphWorkflowValidationError>();
+        var graph = await ParseCollectingErrorsAsync(graphJson, errors, cancellationToken);
+        return errors.Count == 0
+            ? graph
+            : throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(errors));
+    }
+
+    /// <summary>The parse and the tool gate, adding per-node errors to <paramref name="errors" />; whole-document and structural failures still throw.</summary>
+    private async Task<GraphWorkflowGraph> ParseCollectingErrorsAsync(string graphJson,
+        List<GraphWorkflowValidationError> errors,
+        CancellationToken cancellationToken)
+    {
         if (string.IsNullOrWhiteSpace(graphJson))
         {
             throw new GraphWorkflowValidationException("A graph workflow definition needs a graph.");
         }
 
-        var errors = new List<GraphWorkflowValidationError>();
         var graph = GraphWorkflowGraphContract.ValidateAndParse(graphJson, _options.Value.MaxNodesPerDefinition, errors);
         errors.AddRange(await GraphWorkflowToolGate.ErrorsAsync(graph, _tools, _runtimeSettings, cancellationToken));
-        return errors.Count == 0
-            ? graph
-            : throw new GraphWorkflowValidationException(GraphWorkflowValidationResult.Invalid(errors));
+        return graph;
     }
 
     /// <summary>
@@ -189,18 +206,28 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         return uninstalled.Count == 0 ? warnings : [.. warnings, .. uninstalled];
     }
 
-    /// <summary>One warning per LLM call or decision model node pinned to a model a run of that node would refuse.</summary>
+    /// <summary>One warning per model-running node pinned to a model a run of that node would refuse.</summary>
     /// <remarks>
-    ///     Mirrors the executor's admission: a node-local pin is asked through <see cref="NodeLocalModelGate" />, the
-    ///     predicate the run refuses with; a cloud (or unresolved) pin is refused only while unattended cloud runs are
-    ///     off, so the warning names that switch instead. Agent nodes are left out: their run takes any node-local model
-    ///     and refuses a cloud one in its own words. A lookup that faults says nothing, so validation never throws.
+    ///     Mirrors the executor's admission: an LLM call or decision pin is asked through <see cref="NodeLocalModelGate" />; a cloud (or
+    ///     unresolved) one is refused only while unattended cloud runs are off, so the warning names that switch. An Agent run takes any
+    ///     node-local model its provider serves, so its pin warns only when it routes to llama-server and no GGUF is installed (an Ollama
+    ///     model never warns), and it refuses a cloud one in its own words. A lookup that faults says nothing, so validation never throws.
     /// </remarks>
     private async Task<IReadOnlyList<GraphWorkflowValidationError>> UninstalledModelWarningsAsync(GraphWorkflowGraph graph, CancellationToken cancellationToken)
     {
         var warnings = new List<GraphWorkflowValidationError>();
         foreach (var node in graph.Nodes.Values.OrderBy(static node => node.NodeKey, StringComparer.Ordinal))
         {
+            if (node.Config is GraphWorkflowAgentConfig { Model: { } agentModel } && !string.IsNullOrWhiteSpace(agentModel))
+            {
+                if (await IsLocalAsync(agentModel, cancellationToken) && await IsMissingLlamaServerModelAsync(agentModel, cancellationToken))
+                {
+                    warnings.Add(NotInstalledWarning(node.NodeKey, agentModel));
+                }
+
+                continue;
+            }
+
             var model = node.Config switch
             {
                 GraphWorkflowLlmCallConfig { Model: { } llmModel } => llmModel,
@@ -216,9 +243,7 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
             {
                 if (await IsNotInstalledAsync(model, cancellationToken))
                 {
-                    warnings.Add(new GraphWorkflowValidationError(node.NodeKey,
-                        $"Node '{node.NodeKey}' pins model '{model}', which is not an installed node-managed GGUF chat model, so a run will refuse this node. "
-                        + "Install the model or pin another one."));
+                    warnings.Add(NotInstalledWarning(node.NodeKey, model));
                 }
             }
             else if (!(await _trust.ResolveCloudGrantsAsync(model, cancellationToken)).UnattendedRuns
@@ -231,6 +256,30 @@ internal sealed class GraphWorkflowDefinitionService : IGraphWorkflowDefinitionS
         }
 
         return warnings;
+    }
+
+    private static GraphWorkflowValidationError NotInstalledWarning(string nodeKey, string model) =>
+        new(nodeKey,
+            $"Node '{nodeKey}' pins model '{model}', which is not an installed node-managed GGUF chat model, so a run will refuse this node. "
+            + "Install the model or pin another one.");
+
+    /// <summary>Whether <paramref name="model" /> routes to llama-server with no GGUF installed under its name, answering <see langword="false" /> when a lookup cannot say.</summary>
+    private async Task<bool> IsMissingLlamaServerModelAsync(string model, CancellationToken cancellationToken)
+    {
+        if (!await ServedByLlamaServerAsync(model, cancellationToken))
+        {
+            return false;
+        }
+
+        try
+        {
+            return !await _ggufModels.ExistsAsync(model.Trim(), cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Same contract as ServedByLlamaServerAsync: a warning is never worth failing a validation over.
+            return false;
+        }
     }
 
     /// <summary>Whether trust resolves <paramref name="model" /> as node-local, answering <see langword="true" /> when the lookup cannot say so the installed check still runs.</summary>

@@ -9,6 +9,7 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Extraction;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -169,6 +170,35 @@ public sealed class DocumentTextExtractorTests
         AssertEx.Null(result.Document);
         AssertEx.Contains(AssertEx.NotNull(result.Error), "maximum extractable size");
     }
+
+    [Test]
+    public async Task Extractor_WhenStructuredOutputIsExactlyTheCap_Extracts()
+    {
+        // The upload refusal assumes the cap is inclusive: a text file of exactly MaxPlainTextChars bytes must extract.
+        var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance,
+            maxOutputChars: 5_000_000,
+            maxStructuredOutputChars: 1000,
+            maxExpansionRatio: 200,
+            minCharsForExpansionGuard: 1_000_000);
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(new string('a', 1000)));
+
+        var result = await extractor.ExtractStructuredAsync(stream, "edge.md", ".md", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Extracted, result.Status, result.Error);
+        AssertEx.Equal(1000, extractor.MaxPlainTextChars(".md"));
+    }
+
+    [Test]
+    [Arguments(".md", true)]
+    [Arguments("TXT", true)]
+    [Arguments(".cs", true)]
+    [Arguments(".html", false)]
+    [Arguments(".pdf", false)]
+    [Arguments(".docx", false)]
+    [Arguments(".exe", false)]
+    public void MaxPlainTextChars_IsTheStructuredCapOnlyForPlainTextReaders(string extension, bool plainText) =>
+        AssertEx.Equal<int?>(plainText ? DocumentExtractionLimits.DefaultMaxStructuredOutputChars : null, CreateExtractor().MaxPlainTextChars(extension),
+            $"'{extension}' is {(plainText ? "" : "not ")}read as plain text.");
 
     [Test]
     public async Task Extractor_WhenOutputExpandsBeyondRatio_ReturnsFailedWithoutContent()

@@ -8,6 +8,9 @@ using XE_Local_AI_Engine.Client.Persistence;
 /// </summary>
 public sealed class SelectedFolderRegistration
 {
+    /// <summary>The alias AgentHome stages a conversation's attachments under; no registered folder may claim it.</summary>
+    public const string ReservedAttachmentsAlias = "attachments";
+
     public required string Alias { get; init; }
 
     public required string HostPath { get; init; }

@@ -38,7 +38,7 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
     [Test]
     public async Task ValidateAsync_WhenTheNodesModelIsServedByLlamaServer_DropsTheResponseSchemaWarning()
     {
-        var service = BuildService(LocalModel, LlamaServerProviderConstants.ProviderName);
+        var service = BuildService(LocalModel, LlamaServerProviderConstants.ProviderName, installed: true);
 
         var result = await service.ValidateAsync(AgentGraph(LocalModel));
 
@@ -120,7 +120,8 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
         AssertEx.True(result.IsValid);
         var warning = AssertEx.NotNull(result.Warnings.SingleOrDefault(), $"one node, one warning: {string.Join(" | ", result.Warnings)}");
         AssertEx.Equal("agent", warning.Key);
-        await providers.Received(1).ResolveProviderNameForModelAsync(MalformedPin, Arg.Any<CancellationToken>());
+        // Reached by the schema filter and again by the Agent pin's installed check; both swallow the fault.
+        await providers.Received().ResolveProviderNameForModelAsync(MalformedPin, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -131,7 +132,7 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
     [Test]
     public async Task ValidateAsync_WithALocalSchemaNodeAndAPauseSuccessor_KeepsOnlyThePauseWarning()
     {
-        var service = BuildService(LocalModel, LlamaServerProviderConstants.ProviderName);
+        var service = BuildService(LocalModel, LlamaServerProviderConstants.ProviderName, installed: true);
 
         var result = await service.ValidateAsync(PauseSuccessorGraph(LocalModel));
 
@@ -211,6 +212,59 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
             "the executor admits the node under the grant, so validation must not call it unrunnable.");
     }
 
+    /// <summary>
+    ///     The tester's case: an invalid graph used to throw before any warning ran, so the editor saw the error and never learnt the
+    ///     pinned model was missing too. Validate reports both lists; it still refuses the graph.
+    /// </summary>
+    [Test]
+    public async Task ValidateAsync_WhenTheGraphHasErrorsAndAnUninstalledPin_ReportsTheErrorsAndTheWarning()
+    {
+        var service = BuildService(LocalModel, LlamaServerProviderConstants.ProviderName);
+        // A per-node error (joinPolicy 'Any' on a node with one inbound edge), so the graph still parses and has an LLM call to warn about.
+        var graph = LlmCallGraph(LocalModel).Replace("\"kind\": \"LlmCall\",", "\"kind\": \"LlmCall\", \"joinPolicy\": \"Any\",", StringComparison.Ordinal);
+
+        var result = await service.ValidateAsync(graph);
+
+        AssertEx.False(result.IsValid);
+        AssertEx.Contains(result.Errors, error => error.Key == "analyze" && error.Message.Contains("joinPolicy", StringComparison.Ordinal));
+        AssertEx.Contains(result.Warnings, warning => warning.Key == "analyze" && warning.Message.Contains($"'{LocalModel}'", StringComparison.Ordinal),
+            $"the missing-model warning must ride out beside the errors: {string.Join(" | ", result.Warnings)}");
+    }
+
+    [Test]
+    public async Task ValidateAsync_WhenAnAgentPinsAnUninstalledLlamaServerModel_WarnsNamingTheNodeAndTheModel()
+    {
+        var service = BuildService(LocalModel, LlamaServerProviderConstants.ProviderName);
+
+        var result = await service.ValidateAsync(PlainAgentGraph(LocalModel));
+
+        AssertEx.True(result.IsValid, "a missing model is a warning, never an error.");
+        var warning = AssertEx.NotNull(result.Warnings.SingleOrDefault(), $"one node, one warning: {string.Join(" | ", result.Warnings)}");
+        AssertEx.Equal("agent", warning.Key);
+        AssertEx.Contains(warning.Message, $"'{LocalModel}'");
+    }
+
+    [Test]
+    public async Task ValidateAsync_WhenAnAgentPinsAnInstalledLlamaServerModel_DoesNotWarn()
+    {
+        var service = BuildService(LocalModel, LlamaServerProviderConstants.ProviderName, installed: true);
+
+        var result = await service.ValidateAsync(PlainAgentGraph(LocalModel));
+
+        AssertEx.Empty(result.Warnings);
+    }
+
+    /// <summary>An Ollama model is no GGUF in this node's registry, yet the agent run serves it, so it must not be called missing.</summary>
+    [Test]
+    public async Task ValidateAsync_WhenAnAgentPinsAnOllamaModel_DoesNotWarn()
+    {
+        var service = BuildService(LocalModel, "ollama");
+
+        var result = await service.ValidateAsync(PlainAgentGraph(LocalModel));
+
+        AssertEx.Empty(result.Warnings);
+    }
+
     /// <summary>An unpinned LLM call runs the node default, unknown here, so there is nothing to warn about.</summary>
     [Test]
     public async Task ValidateAsync_WhenAnLlmCallPinsNoModel_DoesNotWarn()
@@ -222,15 +276,16 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
         AssertEx.Empty(result.Warnings);
     }
 
-    private static IGraphWorkflowDefinitionService BuildService(string model, string providerName)
+    private static IGraphWorkflowDefinitionService BuildService(string model, string providerName, bool installed = false)
     {
         var providers = Substitute.For<ILocalModelProviderResolver>();
         providers.ResolveProviderNameForModelAsync(model, Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult(providerName));
-        return BuildService(providers);
+        var ggufModels = Substitute.For<IGgufModelStore>();
+        ggufModels.ExistsAsync(model, Arg.Any<CancellationToken>()).Returns(installed);
+        return BuildService(providers, ggufModels);
     }
 
-    // The registry is empty unless a test says otherwise: an Agent node is never asked about it, so the schema tests
-    // above stay single-warning on a node with nothing installed.
+    // The registry is empty unless a test says otherwise.
     private static IGraphWorkflowDefinitionService BuildService(ILocalModelProviderResolver providers,
         IGgufModelStore? ggufModels = null,
         ModelTrustLocality locality = ModelTrustLocality.Local,
@@ -259,6 +314,16 @@ public sealed class GraphWorkflowResponseSchemaWarningTests
                    "edges": [{ "key": "e1", "from": "start", "to": "analyze" }, { "key": "e2", "from": "analyze", "to": "done" }] }
                  """;
     }
+
+    // One Agent node with no response schema, so the only warning it can earn is about its pin.
+    private static string PlainAgentGraph(string model) =>
+        $$"""
+          { "schemaVersion": 1,
+            "nodes": [{ "key": "start", "kind": "Start" },
+                      { "key": "agent", "kind": "Agent", "config": { "model": "{{model}}", "instructions": "Judge it." } },
+                      { "key": "done", "kind": "End", "config": { "outcome": "completed" } }],
+            "edges": [{ "key": "e1", "from": "start", "to": "agent" }, { "key": "e2", "from": "agent", "to": "done" }] }
+          """;
 
     // One Agent node whose schema earns the warning on every count: a relocated keyword, an optional property and an
     // object the runtime would close.

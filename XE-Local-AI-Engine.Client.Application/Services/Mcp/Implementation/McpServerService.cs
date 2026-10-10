@@ -97,7 +97,7 @@ internal sealed class McpServerService : IMcpServerService
         // how it connects. A rename keeps the live session but still refreshes, so status and failure texts carry the new name.
         if (updated.Enabled && (updated.Version != existing.Version || !string.Equals(updated.Name, existing.Name, StringComparison.Ordinal)))
         {
-            await RefreshConnectionsAsync(id, cancellationToken);
+            StartRefresh(id);
         }
 
         return updated;
@@ -117,7 +117,7 @@ internal sealed class McpServerService : IMcpServerService
             // live-looking one, without a store write or Version bump. Disabling a disabled server has nothing to tear down.
             if (enabled)
             {
-                await RefreshConnectionsAsync(id, cancellationToken, reconnect: true);
+                StartRefresh(id, reconnect: true);
             }
 
             return existing;
@@ -131,8 +131,14 @@ internal sealed class McpServerService : IMcpServerService
             return null;
         }
 
-        // The enabled set changed (a server was connected or disconnected), so re-publish the live tool snapshot.
-        await RefreshConnectionsAsync(id, cancellationToken);
+        // A disable is revoked before returning, so no call reaches a server the operator has just turned off; the detached refresh
+        // then republishes the snapshot for either direction.
+        if (!enabled)
+        {
+            await _connectionManager.RevokeAsync(id);
+        }
+
+        StartRefresh(id);
 
         return updated;
     }
@@ -154,7 +160,8 @@ internal sealed class McpServerService : IMcpServerService
         // Removing an enabled server shrinks the connected set; a disabled server had no live connection to tear down.
         if (existing.Enabled)
         {
-            await RefreshConnectionsAsync(id, cancellationToken);
+            await _connectionManager.RevokeAsync(id);
+            StartRefresh(id);
         }
 
         return true;
@@ -406,28 +413,33 @@ internal sealed class McpServerService : IMcpServerService
         }
     }
 
-    private async Task RefreshConnectionsAsync(Guid id, CancellationToken cancellationToken, bool reconnect = false)
+    /// <summary>
+    ///     Starts the connection refresh for one changed registration WITHOUT awaiting it: a connect can wait out the whole handshake
+    ///     timeout, and the mutation is already persisted. The tools endpoint reports the connection status as it settles.
+    /// </summary>
+    private void StartRefresh(Guid id, bool reconnect = false)
+    {
+        _ = RefreshConnectionsAsync(id, reconnect);
+    }
+
+    private async Task RefreshConnectionsAsync(Guid id, bool reconnect)
     {
         try
         {
-            // Only the changed registration reconnects; every other server keeps its live session.
+            // Only the changed registration reconnects; every other server keeps its live session. No request token: this outlives the
+            // request, whose end must not cancel the connect. After a fault the startup connector and the next mutation re-reconcile.
             if (reconnect)
             {
-                await _connectionManager.ReconnectAsync(id, cancellationToken);
+                await _connectionManager.ReconnectAsync(id, CancellationToken.None);
             }
             else
             {
-                await _connectionManager.RefreshAsync(id, cancellationToken);
+                await _connectionManager.RefreshAsync(id, CancellationToken.None);
             }
         }
-        catch (OperationCanceledException)
+        catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            throw;
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException or ObjectDisposedException)
-        {
-            // A refresh failure must not fail the persisted CRUD mutation: the row is committed, and the startup connector and the next
-            // mutation both re-reconcile. The filter mirrors McpServerStartupConnector, so a genuinely unexpected fault still surfaces.
+            // Nothing awaits this task, so every fault is logged here or lost.
             _logger.LogWarning(exception, "MCP connection refresh after a registration change failed; the change is persisted and will reconcile on the next refresh.");
         }
     }

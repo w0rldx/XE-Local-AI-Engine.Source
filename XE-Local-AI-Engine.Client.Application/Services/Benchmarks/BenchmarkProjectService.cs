@@ -690,7 +690,8 @@ public sealed class BenchmarkProjectService : IBenchmarkProjectService
     {
         if (!LlamaServerLaunchPolicyOptions.ChatContextTiers.Contains(contextTokens))
         {
-            throw new BenchmarkValidationException($"The {role} context budget is not supported.");
+            throw new BenchmarkValidationException(
+                $"The {role} context budget must be one of {string.Join(", ", LlamaServerLaunchPolicyOptions.ChatContextTiers)} tokens.");
         }
     }
 

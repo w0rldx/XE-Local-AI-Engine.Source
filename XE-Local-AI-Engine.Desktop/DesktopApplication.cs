@@ -34,6 +34,9 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
     // The shell's own exit code: the owned engine's when it stopped the session, so a launcher and a script see why it ended.
     private int _exitCode;
 
+    // The engine's Program.DataDirectoryUnusableExitCode, duplicated: the shell has no reference to the engine assembly.
+    internal const int DataDirectoryUnusableExitCode = 10;
+
     internal DesktopApplication(DesktopStartupOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -133,6 +136,8 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             var startupWindow = _window!;
             var mainWindow = new DesktopWindow(new DesktopLaunchOptions(_engine.Origin, _options.ProfileDirectory), _options.Debug);
             mainWindow.Closing += OnClosing;
+            // A tray click deactivates the window first, so the flyout it opens already carries the SPA's language.
+            mainWindow.Deactivated += (_, _) => _ = RefreshLanguageAsync();
             _window = mainWindow;
             _desktop!.MainWindow = mainWindow;
             await CreateTrayAsync();
@@ -156,7 +161,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             await Console.Error.WriteLineAsync("Desktop startup failed; inspect the engine log and installed prerequisites.");
             if (_window is DesktopWindow failedWindow) { await failedWindow.DisposeAsync(); }
 
-            _exitCode = exception is DesktopEngineStartupException { ExitCode: { } engineExitCode } ? engineExitCode : 1;
+            _exitCode = StartupFailureExitCode(exception, engineReady);
             string reason;
             if (OperatingSystem.IsLinux() && _window is DesktopWindow) { reason = GtkDesktopBridge.FailureText; }
             else { reason = engineReady ? DesktopText.WindowFailed : DesktopText.StartupFailed; }
@@ -166,6 +171,18 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
                 includeWebViewLink: engineReady && OperatingSystem.IsWindows());
         }
     }
+
+    /// <summary>
+    ///     A failed start's exit code: the engine's own when it reported one, 10 for an access denial before the engine
+    ///     is ready (data or profile directory, instance lock), else 1.
+    /// </summary>
+    internal static int StartupFailureExitCode(Exception exception, bool engineReady) =>
+        exception switch
+        {
+            DesktopEngineStartupException { ExitCode: { } engineExitCode } => engineExitCode,
+            UnauthorizedAccessException when !engineReady => DataDirectoryUnusableExitCode,
+            _ => 1
+        };
 
     private async Task CreateTrayAsync()
     {

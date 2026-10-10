@@ -37,6 +37,10 @@ const askUserToolName = "ask_user";
 
 const EMPTY_TOOL_NAMES: readonly string[] = [];
 
+// The catalog marks a tool this node never offers (run_python off Linux) only in its description, with this exact text
+// from LocalToolOfferProvider's catalog entry: change both together. Such a tool cannot be newly selected.
+const withheldOnNodeMarker = "(Linux only: not available on this node";
+
 // Synthesize a catalog entry for a tool that is selected on the definition but no longer present in the live
 // catalog (e.g. an MCP tool whose server was disabled/removed). It is shown so the user can still see and
 // deselect it; it defaults to requiresApproval=true (the strict default), an unknown source, and the fail-closed
@@ -145,6 +149,8 @@ export function AgentToolSelector({
 				const isAlwaysOffered = !isDefaultAssistant && toolCapable && tool.name === askUserToolName;
 				const isSelected = isAlwaysOffered || checkedToolNameSet.has(tool.name);
 				const locked = !toolCapable || isDefaultAssistant || isAlwaysOffered;
+				// An already-selected withheld tool stays enabled, so the operator can still untick it.
+				const withheld = !isSelected && tool.description.includes(withheldOnNodeMarker);
 				// A custom (user-defined) tool always requires approval at runtime (forced by the tool registry),
 				// so the per-tool approval switch is pinned on and locked — flipping it would be a misleading no-op.
 				const isCustom = tool.source.kind === "custom";
@@ -161,7 +167,7 @@ export function AgentToolSelector({
 							<Group justify="space-between" align="center" wrap="nowrap">
 								<Checkbox
 									checked={isSelected}
-									disabled={locked}
+									disabled={locked || withheld}
 									label={
 										<Group gap="xs" wrap="nowrap" align="center">
 											<Text size="sm" fw={600} ff="monospace">

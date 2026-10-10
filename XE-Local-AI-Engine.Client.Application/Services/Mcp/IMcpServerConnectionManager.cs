@@ -33,6 +33,12 @@ public interface IMcpServerConnectionManager
     Task ReconnectAsync(Guid serverId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Withdraws one server at once, without waiting for a refresh: its sessions are closed and a call to its tools fails
+    ///     typed from then on. The CRUD service awaits it on disable and delete; a later refresh republishes the snapshot.
+    /// </summary>
+    Task RevokeAsync(Guid serverId);
+
+    /// <summary>
     ///     A point-in-time snapshot of each server's connection state for the management UI. <c>LastError</c> is
     ///     redacted (no host paths or secrets); servers no refresh has seen yet are absent.
     /// </summary>

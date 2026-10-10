@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Knowledge.V1;
 
+using System.Globalization;
 using System.Security.Cryptography;
 using FastEndpoints;
 using Microsoft.AspNetCore.Mvc;
@@ -100,6 +101,15 @@ public sealed class UploadKnowledgeDocumentEndpoint : Endpoint<UploadKnowledgeDo
         if (!_extractor.IsSupported(extension))
         {
             AddError($"Files of type '{extension}' are not supported.");
+            await Send.ErrorsAsync(cancellation: ct);
+            return;
+        }
+
+        // Four bytes is the widest encoding of one character the reader decodes, so this many bytes cannot fit the cap; a smaller
+        // file is left to the extractor, whose own reason is stored when it exceeds the cap.
+        if (_extractor.MaxPlainTextChars(extension) is { } maxChars && file.Length > maxChars * 4L)
+        {
+            AddError(string.Create(CultureInfo.InvariantCulture, $"Text files can hold at most {maxChars:N0} characters for indexing; this file is larger."));
             await Send.ErrorsAsync(cancellation: ct);
             return;
         }

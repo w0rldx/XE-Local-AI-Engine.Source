@@ -19,6 +19,7 @@ public sealed class CapacityService : ICapacityService
 {
     // Caller-facing reasons. A rejection names the requested and the loaded models (operator decision: model names
     // are safe to show and are what makes "pick a loaded model" actionable), never a path or a budget figure.
+    private const long Mib = 1024 * 1024;
     private const string ReasonAllow = "Capacity available.";
     private const string ReasonAllowCloud = "Cloud provider selected; no local capacity required.";
     private const string ReasonAllowExternal = "External endpoint configured; no local capacity required.";
@@ -236,12 +237,12 @@ public sealed class CapacityService : ICapacityService
         using var reservation = new AdmissionReservation(_ledger.Reserve(footprint.Resources), footprint.Admission);
         if (!isLlamaServer || !request.PublishLaunchAdmission)
         {
-            return fits ? AllowWithinBudget(modelName, role, reservation, ollamaWarning, published: false) : AllowOverBudget(modelName, role, reservation, ollamaWarning);
+            return fits ? AllowWithinBudget(request, footprint, profile, reservation, ollamaWarning, published: false) : AllowOverBudget(modelName, role, reservation, ollamaWarning);
         }
 
         if (canPublish && committed && footprint.Admission is not null && reservation.TryAttach(_launchAdmissions, footprint.Admission))
         {
-            return fits ? AllowWithinBudget(modelName, role, reservation, ollamaWarning, published: true) : AllowOverBudget(modelName, role, reservation, ollamaWarning);
+            return fits ? AllowWithinBudget(request, footprint, profile, reservation, ollamaWarning, published: true) : AllowOverBudget(modelName, role, reservation, ollamaWarning);
         }
 
         // Only the embedder reaches here with a refused publication: it keeps the ledger bytes and launches unbound, as before it was gated.
@@ -251,11 +252,26 @@ public sealed class CapacityService : ICapacityService
     }
 
     /// <summary>The in-budget Allow; a pooled role's admission is logged at Debug, since its spawn happens below every caller and is otherwise silent.</summary>
-    private CapacityDecision AllowWithinBudget(string modelName, ModelRole role, AdmissionReservation reservation, bool ollamaWarning, bool published)
+    /// <remarks>
+    ///     A chat Allow a caller decided itself (graph node, scheduler, integration, sub-agent) is logged at Information in the supervisor's
+    ///     "Chat admission" vocabulary: the launch it feeds skips the supervisor's own decision, which would otherwise be the only trace.
+    /// </remarks>
+    private CapacityDecision AllowWithinBudget(CapacityRequest request,
+        ModelFootprint footprint,
+        HardwareProfile profile,
+        AdmissionReservation reservation,
+        bool ollamaWarning,
+        bool published)
     {
-        if (role is ModelRole.Embedding or ModelRole.Reranker)
+        if (request.Role is ModelRole.Embedding or ModelRole.Reranker)
         {
-            _logger.LogDebug("Capacity admitted pooled {Model} ({Role}); launch admission published: {Published}.", modelName, role, published);
+            _logger.LogDebug("Capacity admitted pooled {Model} ({Role}); launch admission published: {Published}.", request.ModelName, request.Role, published);
+        }
+        else if (request.Role == ModelRole.Chat && !request.SupervisorEnforcesProcessCap)
+        {
+            _logger.LogInformation(
+                "Chat admission for model {ModelName} (caller decision): Allow; free {FreeVramMiB} MiB VRAM, footprint {FootprintGpuMiB} MiB GPU, window {ContextTokens}, launch admission published: {Published}.",
+                request.ModelName, profile.AvailableVramBytes / Mib, footprint.Resources.GpuBytes / Mib, footprint.Admission?.Allocation.ProcessContextTokens, published);
         }
 
         return reservation.TransferToDecision(ollamaWarning);

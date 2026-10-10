@@ -1110,6 +1110,113 @@ public sealed class McpServerConnectionManagerTests
         return $"Sunny in {city}.";
     }
 
+    [Test]
+    public async Task RevokeAsync_WithdrawsTheServerAtOnce_EvenWhileAnotherServersRefreshHoldsTheGate()
+    {
+        // Codex review: disable and delete returned before the detached refresh removed the server, so calls kept reaching it.
+        await using var pool = new ServerPool();
+        var record = StdioRecord("Counter");
+        var other = StdioRecord("Other");
+        var blocker = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var factory = new FakeMcpClientFactory();
+        factory.SpawnFor(record.Id, () => pool.StartCounterAsync());
+        factory.SpawnFor(other.Id, async () =>
+        {
+            await blocker.Task;
+            throw new IOException("refused");
+        });
+        var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
+        var store = new FakeMcpServerStore(record);
+        await using var manager = CreateManager(registry, factory, store);
+        await manager.RefreshAsync();
+        var executable = Resolve(registry, "mcp__counter__next");
+        store.Upsert(other);
+        var blockedRefresh = manager.RefreshAsync(other.Id);
+        await AssertEx.EventuallyAsync(() => factory.CreateCount(other.Id) == 1, TestBudgets.Contended, "the other server's connect holds the refresh gate");
+
+        await AssertEx.CompletesAsync(manager.RevokeAsync(record.Id), TestBudgets.Contended, "a revoke must not wait for the refresh gate");
+        var result = ResultText(await executable.InvokeAsync(new AIFunctionArguments()));
+
+        AssertEx.Contains(result, McpServerConnectionManager.ServerUnavailableCode);
+        AssertEx.False(blockedRefresh.IsCompleted, "the other refresh is still holding the gate");
+        blocker.SetResult();
+        await blockedRefresh;
+    }
+
+    [Test]
+    public async Task ReconnectAsync_OfAFailedServer_ReportsConnectingBeforeItTakesTheGate()
+    {
+        // Codex review: the old error stayed until the gate was taken, and the SPA, polling only while connecting, stopped there.
+        await using var pool = new ServerPool();
+        var record = StdioRecord("Counter");
+        var park = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempts = 0;
+        var factory = new FakeMcpClientFactory();
+        factory.SpawnFor(record.Id, async () =>
+        {
+            if (Interlocked.Increment(ref attempts) == 1)
+            {
+                throw new IOException("refused");
+            }
+
+            await park.Task;
+            return await pool.StartCounterAsync();
+        });
+        var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
+        await using var manager = CreateManager(registry, factory, new FakeMcpServerStore(record));
+        await manager.RefreshAsync();
+        AssertEx.NotNull(manager.GetStatuses().Single().LastError, "the first connect failed");
+
+        var reconnect = manager.ReconnectAsync(record.Id);
+        var pending = manager.GetStatuses().Single();
+
+        AssertEx.False(pending.Connected);
+        AssertEx.Null(pending.LastError, "a status read right after Reconnect must read as connecting, not as the old error");
+        park.SetResult();
+        await reconnect;
+        AssertEx.True(manager.GetStatuses().Single().Connected, "the reconnect completed");
+    }
+
+    [Test]
+    public async Task ReconnectAsync_OfAServerWhosePrimaryExited_ReadsConnectingWhileQueuedBehindTheGate()
+    {
+        // Codex review: the exited primary stays on the entry, so clearing the error alone read "connected" with the old tools while the
+        // reconnect was still queued, and the SPA stopped polling before it learned the outcome.
+        await using var first = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
+        await using var second = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
+        var record = StdioRecord("Weather");
+        var other = StdioRecord("Other");
+        var blocker = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var factory = new FakeMcpClientFactory();
+        factory.AddClient(record.Id, first.Client);
+        factory.AddClient(record.Id, second.Client);
+        factory.SpawnFor(other.Id, async () =>
+        {
+            await blocker.Task;
+            throw new IOException("refused");
+        });
+        var store = new FakeMcpServerStore(record);
+        await using var manager = CreateManager(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), factory, store);
+        await manager.RefreshAsync();
+        await first.StopServerAsync();
+        await AssertEx.EventuallyAsync(() => manager.GetStatuses().Single().FailureReason == McpConnectionFailureReason.ServerExited,
+            TestBudgets.Contended, "the exited primary put the server into the error state");
+        store.Upsert(other);
+        var blockedRefresh = manager.RefreshAsync(other.Id);
+        await AssertEx.EventuallyAsync(() => factory.CreateCount(other.Id) == 1, TestBudgets.Contended, "the other server's connect holds the refresh gate");
+
+        var reconnect = manager.ReconnectAsync(record.Id);
+        var pending = manager.GetStatuses().Single(status => status.ServerId == record.Id);
+
+        AssertEx.False(pending.Connected, "a reconnect queued behind the gate must not read as connected off the exited primary");
+        AssertEx.Null(pending.LastError, "nor as the old error: the tools view reads this as connecting");
+        AssertEx.False(reconnect.IsCompleted, "the reconnect is still queued behind the other refresh");
+        blocker.SetResult();
+        await blockedRefresh;
+        await reconnect;
+        AssertEx.True(manager.GetStatuses().Single(status => status.ServerId == record.Id).Connected, "the reconnect completed on the next client");
+    }
+
     private static AIFunction Resolve(McpToolRegistry registry, string name)
     {
         AssertEx.True(registry.TryResolve(name, out var tool), $"{name} must stay offered");

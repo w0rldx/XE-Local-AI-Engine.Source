@@ -115,6 +115,34 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
     }
 
     [Test]
+    public async Task RunAsync_WhenExtractionFails_PersistsTheExtractorsContentFreeReason()
+    {
+        // The generic "could not be extracted" hid WHICH limit a document hit (a 20 MB text file over the character cap).
+        const string extractorError = "Document text exceeds the maximum extractable size.";
+        var databasePath = GetDatabasePath("ingestion-extraction-failed.sqlite");
+        var documentId = Guid.NewGuid();
+        await MigrateAsync(databasePath);
+        await SeedPendingDocumentAsync(databasePath, documentId);
+        var extractor = Substitute.For<IDocumentTextExtractor>();
+        extractor.ExtractStructuredAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(new DocumentStructuredExtractionResult
+                 {
+                     Status = DocumentExtractionStatus.Failed,
+                     Document = null,
+                     Error = extractorError
+                 }));
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await CreateService(context, extractor).RunAsync(documentId, CancellationToken.None);
+        }
+
+        var (status, failureReason) = await ReadStatusAsync(databasePath, documentId);
+        AssertEx.Equal(KnowledgeDocumentStatus.Failed.ToString(), status);
+        AssertEx.Equal(extractorError, failureReason);
+    }
+
+    [Test]
     public async Task RunAsync_WhenIngestionStarts_CountsOneAttempt()
     {
         var databasePath = GetDatabasePath("ingestion-attempt-count.sqlite");

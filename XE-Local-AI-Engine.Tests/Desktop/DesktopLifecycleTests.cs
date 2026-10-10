@@ -4,11 +4,13 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Pipes;
+using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Desktop;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 [Category(TestCategories.Integration)]
 public sealed class DesktopLifecycleTests
@@ -256,6 +258,43 @@ public sealed class DesktopLifecycleTests
 
         await using var replacement = DesktopInstance.TryAcquire(directory.Path);
         AssertEx.NotNull(replacement);
+    }
+
+    [Test]
+    public void StartupFailureExitCode_MapsAPreReadyAccessDenialToTheEnginesDataDirectoryCode()
+    {
+        AssertEx.Equal(XE_Local_AI_Engine.Client.Program.DataDirectoryUnusableExitCode, DesktopApplication.DataDirectoryUnusableExitCode,
+            "The shell's duplicate must stay the engine's code.");
+        AssertEx.Equal(10, DesktopApplication.StartupFailureExitCode(new UnauthorizedAccessException("denied"), engineReady: false));
+        AssertEx.Equal(1, DesktopApplication.StartupFailureExitCode(new UnauthorizedAccessException("denied"), engineReady: true),
+            "After the engine is ready an access denial is the window's, not the data directory's.");
+        AssertEx.Equal(1, DesktopApplication.StartupFailureExitCode(new IOException("disk"), engineReady: false));
+        AssertEx.Equal(1, DesktopApplication.StartupFailureExitCode(new InvalidOperationException("other"), engineReady: false));
+        AssertEx.Equal(9, DesktopApplication.StartupFailureExitCode(new DesktopEngineStartupException("engine", 9), engineReady: false));
+        AssertEx.Equal(1, DesktopApplication.StartupFailureExitCode(new DesktopEngineStartupException("engine", null), engineReady: false));
+    }
+
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public void Instance_WhenTheDataDirectoryIsNotWritable_FailsWithTheDataDirectoryExitCode()
+    {
+        if (Environment.IsPrivilegedProcess)
+        {
+            Skip.Test("BLOCKED: a privileged process bypasses the directory mode this test denies the lock file with.");
+        }
+
+        using var directory = new TempDirectory();
+        File.SetUnixFileMode(directory.Path, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            var exception = AssertEx.Throws<UnauthorizedAccessException>(() => DesktopInstance.TryAcquire(directory.Path));
+            AssertEx.Equal(DesktopApplication.DataDirectoryUnusableExitCode, DesktopApplication.StartupFailureExitCode(exception, engineReady: false));
+        }
+        finally
+        {
+            File.SetUnixFileMode(directory.Path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     [Test]

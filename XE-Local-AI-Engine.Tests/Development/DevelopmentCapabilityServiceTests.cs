@@ -83,6 +83,17 @@ public sealed class DevelopmentCapabilityServiceTests
         AssertEx.Equal("development", string.Join(',', response.HighProfileRefusals));
     }
 
+    /// <summary>Off Linux the node never offers <c>run_python</c>, so the isolation summary must not report a role nothing can run.</summary>
+    [Test]
+    public async Task GetAsync_OnAHostThatCannotOfferRunPython_OmitsItsRow()
+    {
+        var service = CreateService(Substitute.For<IDockerDaemonPreflightService>(), "/home/operator", offersRunPython: false);
+
+        var capability = await service.GetAsync();
+
+        AssertEx.Equal("agent-home,mcp-stdio,development,work-session", string.Join(',', capability.Isolation.Select(static row => row.Role)));
+    }
+
     // A backend that serves the Filesystem floor but no ceilings: the floor roles now run under low and are listed, except mcp-stdio while its
     // boundary is withheld for want of a home directory, which refuses every Sandboxed connection whatever the profile.
     [Test]
@@ -103,7 +114,8 @@ public sealed class DevelopmentCapabilityServiceTests
         string home,
         SandboxSecurityProfile profile = SandboxSecurityProfile.Low,
         bool agentKeyRequiresEgressDenial = false,
-        SandboxProviderCapabilities? capabilities = null)
+        SandboxProviderCapabilities? capabilities = null,
+        bool offersRunPython = true)
     {
         var fake = new FakeSandboxRuntimeProvider(TimeProvider.System);
         var probe = Substitute.For<ISandboxContainmentProbe>();
@@ -120,7 +132,8 @@ public sealed class DevelopmentCapabilityServiceTests
             probe,
             preflight,
             StubNodeRuntimeSettings.Create().WithSandboxSecurityProfile(profile).Build(),
-            () => home);
+            () => home,
+            offersRunPython);
     }
 
     // The capability projection reads only the name and the advertised flags, so a substitute advertising a chosen set stands in for a backend.

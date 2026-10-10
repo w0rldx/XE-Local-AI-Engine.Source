@@ -108,8 +108,7 @@ public sealed class WhisperGoldenFixtureRecorder
             ContentType = "audio/wav",
             LanguageMode = WhisperLanguageMode.Auto,
             Translate = false,
-            UseVoiceActivityDetection = true,
-            DetectLanguage = true
+            UseVoiceActivityDetection = true
         }, CancellationToken.None);
 
         return result.Text.Trim();

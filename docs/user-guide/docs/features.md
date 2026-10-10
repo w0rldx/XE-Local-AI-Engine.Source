@@ -213,6 +213,13 @@ Registered servers have their tools offered to your agents.
 > register servers you'd be willing to install and run yourself.
 > [More](privacy-and-data.md#what-connects-to-the-internet)
 
+**On Windows, a sandboxed server must be a program that needs no windowing.** A server registered at the
+default *Sandboxed* tier runs with the Windows UI subsystem (Win32k) switched off. A native program, a
+.NET 10 app and PowerShell 7.7 or later (`pwsh`) start normally. Windows PowerShell 5.1 (`powershell.exe`)
+and older .NET Framework programs do not: they exit at once with code `0xC0000142`, and the server's status
+names that code. The server's program must also live where the sandbox can read it, such as under
+`C:\Program Files` or `C:\Windows\System32`, not in your user folder.
+
 ### Custom tools
 
 **Automation → Custom tools** lets you author either an HTTP fetch or a direct host-program launch and

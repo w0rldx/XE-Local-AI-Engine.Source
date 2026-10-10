@@ -4,7 +4,10 @@ using System.Net;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Implementation;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -18,6 +21,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class KnowledgeUploadEndpointTests
 {
     private const string UploadRoute = "/api/local/v1/knowledge-base/documents";
+
+    private const int SmallCharCap = 1_000;
 
     [Test]
     public async Task Upload_DedupeHitStillPending_ReEnqueuesForIngestion()
@@ -112,10 +117,40 @@ public sealed class KnowledgeUploadEndpointTests
         await blobStore.Received(1).AddAsync(Arg.Is<KnowledgeDocumentInput>(input => input.CollectionId == "PROJECT-A"), Arg.Any<CancellationToken>());
     }
 
+    // A character is at most four bytes, so a file over four times the cap can only fail extraction later: refuse it here.
+    [Test]
+    [Arguments(SmallCharCap * 4 + 1, false)]
+    [Arguments(SmallCharCap * 4, true)]
+    public async Task Upload_MarkdownAgainstTheCharacterCap_RefusesOnlyAboveIt(int bytes, bool accepted)
+    {
+        var dispatcher = new RecordingDispatcher(KnowledgeIngestionEnqueueResult.Accepted);
+        await using var factory = CreateFactory(dispatcher, wasInserted: true, status: KnowledgeDocumentStatus.Pending, Guid.NewGuid(),
+            new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance,
+                maxOutputChars: SmallCharCap,
+                maxStructuredOutputChars: SmallCharCap,
+                maxExpansionRatio: 200,
+                minCharsForExpansionGuard: 1_000_000));
+        using var client = factory.CreateClient();
+
+        using var response = await PostFileAsync(factory, client, content: new byte[bytes], fileName: "notes.md");
+
+        if (accepted)
+        {
+            AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+            return;
+        }
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(await response.Content.ReadAsStringAsync(), "at most 1,000 characters", StringComparison.Ordinal);
+        var blobStore = factory.Services.GetRequiredService<IKnowledgeDocumentBlobStore>();
+        await blobStore.DidNotReceive().AddAsync(Arg.Any<KnowledgeDocumentInput>(), Arg.Any<CancellationToken>());
+    }
+
     private static TestServerWebAppFactory CreateFactory(IKnowledgeIngestionDispatcher dispatcher,
         bool wasInserted,
         KnowledgeDocumentStatus status,
-        Guid documentId)
+        Guid documentId,
+        IDocumentTextExtractor? extractor = null)
     {
         return new TestServerWebAppFactory
         {
@@ -141,28 +176,38 @@ public sealed class KnowledgeUploadEndpointTests
                 services.AddScoped(_ => catalog);
                 services.RemoveAll<IKnowledgeIngestionDispatcher>();
                 services.AddSingleton(dispatcher);
+                if (extractor is not null)
+                {
+                    services.RemoveAll<IDocumentTextExtractor>();
+                    services.AddSingleton(extractor);
+                }
             }
         };
     }
 
-    private static async Task<HttpResponseMessage> PostFileAsync(TestServerWebAppFactory factory, HttpClient client, string? collectionId = null, string query = "")
+    private static async Task<HttpResponseMessage> PostFileAsync(TestServerWebAppFactory factory,
+        HttpClient client,
+        string? collectionId = null,
+        string query = "",
+        byte[]? content = null,
+        string fileName = "doc.txt")
     {
 #pragma warning disable CA2000 // MultipartFormDataContent owns the part content and disposes it when the `using content` scope ends.
-        using var content = new MultipartFormDataContent
+        using var form = new MultipartFormDataContent
         {
             {
-                new ByteArrayContent(Encoding.UTF8.GetBytes("hello knowledge base")), "file", "doc.txt"
+                new ByteArrayContent(content ?? Encoding.UTF8.GetBytes("hello knowledge base")), "file", fileName
             }
         };
         if (collectionId is not null)
         {
-            content.Add(new StringContent(collectionId), "collectionId");
+            form.Add(new StringContent(collectionId), "collectionId");
         }
 #pragma warning restore CA2000
 
         using var request = new HttpRequestMessage(HttpMethod.Post, UploadRoute + query)
         {
-            Content = content
+            Content = form
         };
         factory.AddNodeBearerToken(request);
 

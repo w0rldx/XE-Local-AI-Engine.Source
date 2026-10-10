@@ -28,7 +28,7 @@ const hoisted = vi.hoisted(() => {
 	const builtConnections: FakeConnection[] = [];
 	let lastWithUrl: { url: string; options: { accessTokenFactory?: () => Promise<string> } } | undefined;
 
-	let rejectFirstStart = false;
+	let rejectFirstStart: Error | undefined;
 
 	const makeConnection = (): FakeConnection => {
 		let resolveStart!: () => void;
@@ -36,13 +36,13 @@ const hoisted = vi.hoisted(() => {
 			resolveStart = resolve;
 		});
 		const failFirst = rejectFirstStart;
-		rejectFirstStart = false;
+		rejectFirstStart = undefined;
 		const connection: FakeConnection = {
 			state: "Disconnected",
 			start: failFirst
 				? vi
 						.fn()
-						.mockRejectedValueOnce(new Error("negotiate failed"))
+						.mockRejectedValueOnce(failFirst)
 						.mockImplementation(() => startPromise)
 				: vi.fn(() => startPromise),
 			stop: vi.fn(() => {
@@ -72,9 +72,9 @@ const hoisted = vi.hoisted(() => {
 	return {
 		builtConnections,
 		makeConnection,
-		/** The next built connection's first start() rejects (a failed negotiate); later starts behave normally. */
-		rejectNextStart: () => {
-			rejectFirstStart = true;
+		/** The next built connection's first start() rejects (a failed negotiate) with `error`; later starts behave normally. */
+		rejectNextStart: (error: Error = new Error("negotiate failed")) => {
+			rejectFirstStart = error;
 		},
 		getLastWithUrl: () => lastWithUrl,
 		setLastWithUrl: (value: { url: string; options: { accessTokenFactory?: () => Promise<string> } }) => {
@@ -421,6 +421,36 @@ describe("acquireHubConnection", () => {
 
 		await vi.advanceTimersByTimeAsync(1_000);
 		expect(connection?.start).toHaveBeenCalledTimes(2);
+	});
+
+	// What start() rejects with when negotiate answers 404 (probed against the installed @microsoft/signalr): the HttpError
+	// is wrapped, and the status survives only in the message.
+	const negotiate404 = (): Error =>
+		Object.assign(
+			new Error(
+				"Failed to complete negotiation with the server: Error: Not Found: Status code '404' Either this is not a SignalR endpoint or there is a proxy blocking the connection.",
+			),
+			{ errorType: "FailedToNegotiateWithServerError" },
+		);
+	const httpError = (statusCode: number): Error => Object.assign(new Error(`negotiate ${statusCode}`), { statusCode });
+
+	it("schedules no restart when the start fails with a 404 (the hub's feature is off), but retries a 500", async () => {
+		hoisted.rejectNextStart(negotiate404());
+		acquireHubConnection(HUB);
+		const off = hoisted.builtConnections[0];
+		await flushMicrotasks();
+		expect(vi.getTimerCount()).toBe(0);
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(off?.start).toHaveBeenCalledTimes(1);
+
+		resetSharedHubConnectionsForTest();
+		hoisted.rejectNextStart(httpError(500));
+		acquireHubConnection(HUB);
+		const failing = hoisted.builtConnections[1];
+		await flushMicrotasks();
+		expect(vi.getTimerCount()).toBe(1);
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(failing?.start).toHaveBeenCalledTimes(2);
 	});
 
 	it("does not restart a connection whose last lease was released", async () => {

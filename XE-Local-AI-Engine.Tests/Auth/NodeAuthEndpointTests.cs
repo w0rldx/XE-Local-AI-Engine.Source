@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
+using XE_Local_AI_Engine.Client.Hosting.Vault;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
@@ -105,6 +106,90 @@ public sealed class NodeAuthEndpointTests
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         AssertRefreshCookieCleared(response);
+    }
+
+    [Test]
+    public async Task Refresh_WhenTheRefreshCookieIsUnknownAndTheUnlockTicketIsValid_IssuesAnAdminSessionOnce()
+    {
+        var value = VaultUnlockTicket.NewValue();
+        await using var factory = CreateFactory(new VaultUnlockTicket(value, TimeProvider.System.GetUtcNow() + VaultUnlockTicket.Lifetime));
+        using var client = factory.CreateClient();
+        using (var setupResponse = await SetupAsync(client))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
+        }
+
+        using (var first = await RefreshWithUnlockTicketAsync(client, value))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, first.StatusCode);
+            GetRefreshCookie(first);
+            AssertUnlockTicketCleared(first);
+
+            using var probeRequest = new HttpRequestMessage(HttpMethod.Get, OperatorProbeUrl);
+            probeRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", (await ReadTokenAsync(first)).AccessToken);
+            using var probeResponse = await client.SendAsync(probeRequest);
+            AssertEx.Equal(HttpStatusCode.OK, probeResponse.StatusCode, "The ticket's session must be the admin's.");
+        }
+
+        using var replay = await RefreshWithUnlockTicketAsync(client, value);
+        AssertEx.Equal(HttpStatusCode.Unauthorized, replay.StatusCode, "The unlock ticket is single-use.");
+        AssertRefreshCookieKept(replay);
+        AssertUnlockTicketCleared(replay);
+    }
+
+    [Test]
+    public async Task Refresh_WhenTheUnlockTicketWasAlreadySpent_ReturnsUnauthorizedWithoutClearingTheRefreshCookie()
+    {
+        var value = VaultUnlockTicket.NewValue();
+        var ticket = new VaultUnlockTicket(value, TimeProvider.System.GetUtcNow() + VaultUnlockTicket.Lifetime);
+        AssertEx.True(ticket.TryConsume(value, TimeProvider.System.GetUtcNow()), "The first tab spends the ticket.");
+        await using var factory = CreateFactory(ticket);
+        using var client = factory.CreateClient();
+        using (var setupResponse = await SetupAsync(client))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
+        }
+
+        using var response = await RefreshWithUnlockTicketAsync(client, value);
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertRefreshCookieKept(response);
+        AssertUnlockTicketCleared(response);
+    }
+
+    [Test]
+    public async Task Refresh_WhenTheUnlockTicketHasExpired_ReturnsUnauthorized()
+    {
+        var value = VaultUnlockTicket.NewValue();
+        await using var factory = CreateFactory(new VaultUnlockTicket(value, TimeProvider.System.GetUtcNow() - TimeSpan.FromSeconds(1)));
+        using var client = factory.CreateClient();
+        using (var setupResponse = await SetupAsync(client))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
+        }
+
+        using var response = await RefreshWithUnlockTicketAsync(client, value);
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertRefreshCookieKept(response);
+        AssertUnlockTicketCleared(response);
+    }
+
+    [Test]
+    public async Task Refresh_WhenTheUnlockTicketDoesNotMatch_ReturnsUnauthorized()
+    {
+        await using var factory = CreateFactory(new VaultUnlockTicket(VaultUnlockTicket.NewValue(), TimeProvider.System.GetUtcNow() + VaultUnlockTicket.Lifetime));
+        using var client = factory.CreateClient();
+        using (var setupResponse = await SetupAsync(client))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
+        }
+
+        using var response = await RefreshWithUnlockTicketAsync(client, VaultUnlockTicket.NewValue());
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertRefreshCookieKept(response);
+        AssertUnlockTicketCleared(response);
     }
 
     [Test]
@@ -304,6 +389,22 @@ public sealed class NodeAuthEndpointTests
         };
     }
 
+    /// <summary>The real host as a pre-host password unlock leaves it: the ticket registered, the browser holding a dead refresh cookie.</summary>
+    private static TestServerWebAppFactory CreateFactory(VaultUnlockTicket unlockTicket)
+    {
+        return new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services => services.AddSingleton(unlockTicket)
+        };
+    }
+
+    private static async Task<HttpResponseMessage> RefreshWithUnlockTicketAsync(HttpClient client, string unlockTicket)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/auth/refresh");
+        request.Headers.Add("Cookie", $"{NodeAuthCookie.RefreshCookieName}=a-refresh-token-the-node-never-issued; {NodeAuthCookie.UnlockTicketCookieName}={unlockTicket}");
+        return await client.SendAsync(request);
+    }
+
     private static Task<HttpResponseMessage> SetupAsync(HttpClient client, string email = Email)
     {
         return client.PostAsJsonAsync("/api/local/v1/auth/setup",
@@ -345,6 +446,19 @@ public sealed class NodeAuthEndpointTests
     {
         var setCookieHeaders = GetSetCookieHeaders(response);
         AssertEx.Contains(setCookieHeaders, header => header.StartsWith($"{NodeAuthCookie.RefreshCookieName}=;", StringComparison.Ordinal));
+    }
+
+    /// <summary>A stale tab's 401 that lands after the first tab's 200 must not delete the refresh cookie that 200 set.</summary>
+    private static void AssertRefreshCookieKept(HttpResponseMessage response)
+    {
+        AssertEx.Empty(GetSetCookieHeaders(response).Where(static header => header.StartsWith($"{NodeAuthCookie.RefreshCookieName}=", StringComparison.Ordinal)),
+            "A refresh that carried an unconsumable unlock ticket must not touch the refresh cookie.");
+    }
+
+    private static void AssertUnlockTicketCleared(HttpResponseMessage response)
+    {
+        AssertEx.Contains(GetSetCookieHeaders(response), header => header.StartsWith($"{NodeAuthCookie.UnlockTicketCookieName}=;", StringComparison.Ordinal),
+            "Every refresh that carries the unlock ticket must clear it.");
     }
 
     private static IReadOnlyList<string> GetSetCookieHeaders(HttpResponseMessage response)

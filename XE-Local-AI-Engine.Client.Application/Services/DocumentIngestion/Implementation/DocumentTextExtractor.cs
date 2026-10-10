@@ -86,6 +86,11 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         return _readersByExtension.ContainsKey(NormalizeExtension(extension));
     }
 
+    public int? MaxPlainTextChars(string extension) =>
+        _readersByExtension.TryGetValue(NormalizeExtension(extension), out var reader) && reader is PlaintextDocumentReader
+            ? _maxStructuredOutputChars
+            : null;
+
     public async Task<DocumentExtractionResult> ExtractAsync(Stream content, string fileName, string extension, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(content);

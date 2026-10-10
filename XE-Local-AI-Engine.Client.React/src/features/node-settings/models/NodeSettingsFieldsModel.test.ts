@@ -1729,6 +1729,22 @@ describe("feature switches", () => {
 		expect(touchesRestartGatedField({ workSessionsEnabled: false, externalAppsEnabled: true })).toBe(false);
 	});
 
+	it("needs a restart for Development on, but not for Development off", () => {
+		expect(touchesRestartGatedField({ developmentEnabled: true })).toBe(true);
+		expect(touchesRestartGatedField({ developmentEnabled: false })).toBe(false);
+
+		const loaded = { ...baseline, developmentEnabled: true };
+		const off = { ...loaded, developmentEnabled: false };
+		expect(summarizePendingChanges(buildNodeSettingsRequest(off, loaded, bounds, false), off, loaded).restartRequired).toEqual(
+			[],
+		);
+		const on = { ...baseline, developmentEnabled: true };
+		const onBaseline = { ...baseline, developmentEnabled: false };
+		expect(
+			summarizePendingChanges(buildNodeSettingsRequest(on, onBaseline, bounds, false), on, onBaseline).restartRequired,
+		).toEqual(["developmentEnabled"]);
+	});
+
 	it("refuses development workflows without work sessions, blamed on the switch being turned on", () => {
 		const { body, errors } = buildNodeSettingsRequest({ ...baseline, devWorkflowsEnabled: true }, baseline, bounds, false);
 		expect(errors).toEqual({ devWorkflowsEnabled: "requiresWorkSessions" });

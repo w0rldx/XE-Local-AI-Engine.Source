@@ -20,6 +20,24 @@ internal sealed class ProcessSandboxChildProcess : ISandboxChildProcess
 
     public bool TimedOut => false;
 
+    public int? ExitCode
+    {
+        get
+        {
+            try
+            {
+                return _process.HasExited ? _process.ExitCode : null;
+            }
+            catch (InvalidOperationException)
+            {
+                // Disposed, or never started: there is no exit code to report.
+                return null;
+            }
+        }
+    }
+
+    public IReadOnlyList<string> Warnings => [];
+
     public async Task WriteStandardInputAndCloseAsync(string text, CancellationToken cancellationToken)
     {
         await _process.StandardInput.WriteAsync(text.AsMemory(), cancellationToken);

@@ -142,6 +142,30 @@ describe("AgentToolSelector", () => {
 		expect(checkbox.checked).toBe(true);
 	});
 
+	it("keeps a tool this node withholds unselectable, its label intact, but lets a stored selection be removed", () => {
+		const description = "Runs Python. (Linux only: not available on this node, an agent selecting it gets no tool)";
+		const withheld: ToolCatalogEntry = {
+			name: "run_python",
+			description,
+			requiresApproval: true,
+			source: { kind: "builtin", serverSlug: null },
+			category: "WriteExecute",
+			effectiveRequiresApproval: true,
+			sessionScopeEligible: false,
+		};
+		useToolCatalogMock.mockReturnValue({ data: [...catalog, withheld], isLoading: false, error: null });
+
+		renderSelector();
+		expect((screen.getByTestId("agent-tool-checkbox-run_python") as HTMLInputElement).disabled).toBe(true);
+		expect(screen.getByText(description)).toBeTruthy();
+		expect((screen.getByTestId("agent-tool-checkbox-GetCurrentTime") as HTMLInputElement).disabled).toBe(false);
+		cleanup();
+
+		const { onToggleTool } = renderSelector({ selectedToolNames: ["run_python"] });
+		fireEvent.click(screen.getByTestId("agent-tool-checkbox-run_python"));
+		expect(onToggleTool).toHaveBeenCalledWith("run_python", false);
+	});
+
 	it("shows a loading state while the catalog is fetching", () => {
 		useToolCatalogMock.mockReturnValue({ data: undefined, isLoading: true, error: null });
 

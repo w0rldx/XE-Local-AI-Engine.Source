@@ -38,6 +38,7 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
     private readonly ISandboxContainmentProbe _containmentProbe;
     private readonly IDockerDaemonPreflightService _dockerDaemonPreflight;
     private readonly Func<string> _homeDirectory;
+    private readonly bool _offersRunPython;
 
     public DevelopmentCapabilityService(IOptions<DevelopmentOptions> options,
         IOptions<SandboxOptions> agentSandboxOptions,
@@ -57,11 +58,13 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
             containmentProbe,
             dockerDaemonPreflight,
             runtimeSettings,
-            static () => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile))
+            static () => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            OperatingSystem.IsLinux())
     {
     }
 
     /// <summary>Test seam: <paramref name="homeDirectory" /> stands in for the account's profile directory.</summary>
+    /// <param name="offersRunPython">Whether this host can offer <c>run_python</c> at all: Linux only, as <c>LocalToolOfferProvider</c> decides.</param>
     internal DevelopmentCapabilityService(IOptions<DevelopmentOptions> options,
         IOptions<SandboxOptions> agentSandboxOptions,
         IOptions<DevelopmentSandboxOptions> developmentSandboxOptions,
@@ -71,7 +74,8 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
         ISandboxContainmentProbe containmentProbe,
         IDockerDaemonPreflightService dockerDaemonPreflight,
         INodeRuntimeSettings runtimeSettings,
-        Func<string> homeDirectory)
+        Func<string> homeDirectory,
+        bool offersRunPython)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(agentSandboxOptions);
@@ -92,6 +96,7 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
         _containmentProbe = containmentProbe;
         _dockerDaemonPreflight = dockerDaemonPreflight;
         _homeDirectory = homeDirectory;
+        _offersRunPython = offersRunPython;
     }
 
     public async Task<DevelopmentCapability> GetAsync(CancellationToken cancellationToken = default)
@@ -144,8 +149,10 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
         [
             Row("agent-home", SandboxWorkloads.AgentHome, _agentSandboxRuntimeProvider, containment, agentRequiresDenial, profile),
             // run_python shares AgentHome's provider instance (ComputeToolGateway injects IAgentSandboxRuntimeProvider) and is still its own row: the ONE workload declaring
-            // SandboxIsolationMode.Filesystem, so folding them reports one role's boundary for the other. Reported whether or not Compute:Enabled is set: it answers what a role WOULD get here.
-            Row("run_python", SandboxWorkloads.RunPython, _agentSandboxRuntimeProvider, containment, agentRequiresDenial, profile),
+            // SandboxIsolationMode.Filesystem. Reported whether or not Compute:Enabled is set, but only on a host that can offer the tool at all.
+            .. _offersRunPython
+                ? [Row("run_python", SandboxWorkloads.RunPython, _agentSandboxRuntimeProvider, containment, agentRequiresDenial, profile)]
+                : Array.Empty<DevelopmentIsolationRole>(),
             // A Sandboxed stdio MCP server: served by the agent-role provider instance, its own row for run_python's reason, and the row an operator reads BEFORE registering a server — on a host that
             // cannot isolate, every Sandboxed registration refuses to connect. A PrivilegedHost server has no row: it declares nothing, an explicit per-server host grant.
             Row("mcp-stdio", SandboxWorkloads.McpStdio, _agentSandboxRuntimeProvider, containment, agentRequiresDenial, profile, HomeDirectoryCaveat()),

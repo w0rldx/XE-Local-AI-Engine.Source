@@ -75,7 +75,8 @@ public static class WhisperCppServiceCollectionExtensions
                 activeTag: null,
                 sp.GetRequiredService<WhisperServerRuntimeOverrideOptions>(),
                 sp.GetRequiredService<IWhisperInstalledRuntimeStore>(),
-                sp.GetRequiredService<IWhisperManagedSourceBuildSignal>()));
+                sp.GetRequiredService<IWhisperManagedSourceBuildSignal>(),
+                sp.GetService<ILogger<WhisperCppBinaryManager>>()));
 
         services.AddChildProcessOutputTails();
         services.TryAddSingleton<IWhisperServerProcessLauncher, WhisperServerProcessLauncher>();

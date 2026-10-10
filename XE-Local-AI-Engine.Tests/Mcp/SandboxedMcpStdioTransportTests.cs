@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Mcp;
 
 using System.ComponentModel;
 using System.Globalization;
+using System.IO.Pipelines;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
@@ -422,6 +423,87 @@ public sealed class SandboxedMcpStdioTransportTests
 
             AssertEx.Equal("Error: Cannot find module 'server.js'", exception.StderrTail);
             AssertEx.Contains(exception.Message, "Cannot find module");
+            await provider.ReceivedWithAnyArgs(1).KillAsync(default!, default);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Handshake_WhenTheServerExitsNonZeroWithoutStderr_NamesTheExitCodeInHexAndTheSandboxWarnings()
+    {
+        // N-3: Windows PowerShell 5.1 under the Win32k-denied AppContainer dies with 0xC0000142 and writes nothing; the operator saw only
+        // "wrote nothing to stderr". The exit code, its meaning and MXC's own warnings are what say why.
+        var directory = CreateBindableDirectory("jail-path-");
+        try
+        {
+            var server = CreateExecutable(directory, "xe-server");
+            await using var process = new ScriptedInteractiveProcess(stderrTail: null, unchecked((int)0xC0000142), ["ProcessContainer cleanup skipped"]);
+            var provider = IsolatingProvider();
+            provider.StartInteractiveAsync(Arg.Any<SandboxHandle>(), Arg.Any<SandboxCommandRequest>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult<ISandboxInteractiveProcess>(process));
+            var transport = CreateTransport(StdioRecord(McpTrustTier.Sandboxed) with
+                {
+                    Command = server
+                },
+                provider);
+
+            using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var exception = await AssertEx.ThrowsAsync<McpServerStartupException>(() => McpClient.CreateAsync(transport, clientOptions: null, NullLoggerFactory.Instance, handshake.Token));
+
+            AssertEx.Contains(exception.Message, "exit code 0xC0000142");
+            AssertEx.Contains(exception.Message, "Win32k");
+            AssertEx.Contains(exception.Message, "ProcessContainer cleanup skipped");
+            AssertEx.Contains(exception.Message, "wrote nothing to stderr");
+            AssertEx.Null(exception.StderrTail);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Connect_WhenTheServerNeverAnswersBeforeTheTimeout_StaysACancellationCarryingTheStartupDiagnosis()
+    {
+        // The hard-error dialog keeps the dying process alive, so stdout never closes and the connect timeout is all that fires; the
+        // factory still names what the sandbox knew, as a cancellation so a caller's own cancel keeps propagating.
+        var directory = CreateBindableDirectory("jail-path-");
+        try
+        {
+            var server = CreateExecutable(directory, "xe-server");
+            var neverWritten = new Pipe();
+            await using var process = new ScriptedInteractiveProcess(stderrTail: null, exitCode: null, ["AppContainer profile reused"], neverWritten.Reader.AsStream());
+            var provider = IsolatingProvider();
+            provider.StartInteractiveAsync(Arg.Any<SandboxHandle>(), Arg.Any<SandboxCommandRequest>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult<ISandboxInteractiveProcess>(process));
+            var factory = new McpClientFactory(Options.Create(new McpOptions
+                {
+                    ConnectTimeoutSeconds = 30,
+                    HttpLoopbackHosts = ["127.0.0.1"]
+                }),
+                provider,
+                IdentityProvider(),
+                NodeDataDirectory(),
+                Options.Create(new ComputeOptions()),
+                Options.Create(new LocalContainerOptions()),
+                new StubNodeRuntimeSettings().Build(),
+                NullLoggerFactory.Instance);
+
+            using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+            var exception = await AssertEx.ThrowsAsync<OperationCanceledException>(() => factory.CreateAsync(StdioRecord(McpTrustTier.Sandboxed) with
+                {
+                    Command = server
+                },
+                sessionKey: null,
+                timeout.Token));
+
+            var startup = AssertEx.NotNull(exception.InnerException as McpServerStartupException);
+            AssertEx.Contains(startup.Message, "did not complete the MCP handshake");
+            AssertEx.Contains(startup.Message, "AppContainer profile reused");
+            AssertEx.False(startup.Message.Contains("exit code", StringComparison.Ordinal), "a process still running has no exit code to name");
             await provider.ReceivedWithAnyArgs(1).KillAsync(default!, default);
         }
         finally
@@ -887,19 +969,29 @@ public sealed class SandboxedMcpStdioTransportTests
         return path;
     }
 
-    /// <summary>A server that has already exited: its stdout is at end of stream and its stderr tail is scripted.</summary>
+    /// <summary>
+    ///     A server whose stderr tail, exit code and sandbox warnings are scripted. Its stdout is at end of stream (it has exited) unless
+    ///     a stream that never ends is passed (it hangs, as a process held alive by a Windows hard-error dialog does).
+    /// </summary>
     private sealed class ScriptedInteractiveProcess : ISandboxInteractiveProcess
     {
         private readonly string? _stderrTail;
 
-        public ScriptedInteractiveProcess(string? stderrTail)
+        public ScriptedInteractiveProcess(string? stderrTail, int? exitCode = null, IReadOnlyList<string>? warnings = null, Stream? standardOutput = null)
         {
             _stderrTail = stderrTail;
+            ExitCode = exitCode;
+            Warnings = warnings ?? [];
+            StandardOutput = standardOutput ?? new MemoryStream();
         }
 
         public Stream StandardInput { get; } = Stream.Null;
 
-        public Stream StandardOutput { get; } = new MemoryStream();
+        public Stream StandardOutput { get; }
+
+        public int? ExitCode { get; }
+
+        public IReadOnlyList<string> Warnings { get; }
 
         public Task<string?> GetStandardErrorTailAsync()
         {
