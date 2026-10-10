@@ -6,8 +6,10 @@ using Microsoft.Extensions.Diagnostics.Metrics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Quartz;
+using Quartz.Impl;
 using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -138,6 +140,21 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         AssertEx.NotNull(executor, "ISchedulerDispatchExecutor must resolve as scoped.");
     }
 
+    [Test]
+    public async Task AddNodeScheduler_WhenEnabled_InterruptsRunningJobsOnShutdownAndWaitsForThemToUnwind()
+    {
+        // Windows tester round 3 (N-20): without the interrupt a running scheduled job held the host's whole shutdown budget, so
+        // every service stopped after it reported its drain as cut short. Only the options are read; no scheduler starts.
+        await using var provider = BuildEnabledProvider(GetDatabasePath("scheduler-reg-options.sqlite"));
+
+        var scheduler = provider.GetRequiredService<IOptions<QuartzOptions>>().Value;
+        var hosted = provider.GetRequiredService<IOptions<QuartzHostedServiceOptions>>().Value;
+
+        var interrupt = scheduler[StdSchedulerFactory.PropertySchedulerInterruptJobsOnShutdownWithWait];
+        AssertEx.True(bool.TryParse(interrupt, out var interrupts) && interrupts, $"A host stop must interrupt running scheduled jobs (got '{interrupt}').");
+        AssertEx.True(hosted.WaitForJobsToComplete, "A host stop still waits for the interrupted jobs to unwind.");
+    }
+
     // Durable survive-restart: schedule a job+trigger, dispose, recreate from
     // the same sqlite file, assert job and trigger persisted.
 
@@ -210,6 +227,8 @@ public sealed class NodeSchedulerRegistrationTests : IDisposable
         services.AddScoped<IScheduledJobRunStore>(_ => Substitute.For<IScheduledJobRunStore>());
         services.AddScoped<IScheduledJobRunEventStore>(_ => Substitute.For<IScheduledJobRunEventStore>());
         services.AddSingleton(TimeProvider.System);
+        // The generic host registers the lifetime; the executor reads it to tell a host-stop interrupt from a timeout.
+        services.AddSingleton(Substitute.For<IHostApplicationLifetime>());
 
         var config = BuildConfig(enabled: true, $"Data Source={dbPath}");
         // Quartz resolves the SQLite data source by connection-string NAME ("node-sqlite") from the

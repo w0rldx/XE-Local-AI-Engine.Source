@@ -88,6 +88,47 @@ public sealed class InvocationMonitorEndpointTests
         AssertEx.False(body.Contains("secret", StringComparison.OrdinalIgnoreCase));
     }
 
+    // The stored error stays redacted, but the category picks a fixed sentence, so a missing model no longer reads as the generic failure.
+    [Test]
+    [Arguments(FailureCategory.ModelUnavailable, "The selected model is not installed or not reachable. Install it or choose another model.")]
+    [Arguments(FailureCategory.ModelNotInstalled, "The selected model is not installed or not reachable. Install it or choose another model.")]
+    [Arguments(FailureCategory.ModelLoadFailed, "The model could not be loaded or run on the provider.")]
+    [Arguments(FailureCategory.Timeout, "The operation timed out.")]
+    [Arguments(FailureCategory.ProviderUnreachable, "Invocation ended with a failure. See local logs for details.")]
+    public async Task GetInvocations_WhenAnEntryFailed_ShowsTheFixedSentenceForItsCategory(FailureCategory category, string expectedError)
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        dispatcher.CurrentInvocation.Returns((InvocationState?)null);
+        var history = Substitute.For<IInvocationHistory>();
+        history.Capacity.Returns(50);
+        history.Snapshot().Returns([
+            new InvocationHistoryEntry
+            {
+                InvocationId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                ConversationId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                Status = InvocationStatus.Failed,
+                ModelUsed = "missing-model",
+                StartedAt = FrozenNow.AddMinutes(-5),
+                CompletedAt = FrozenNow.AddMinutes(-4),
+                Error = "llama-server failed at /home/operator/models/missing-model.gguf",
+                FailureCategory = category,
+                StreamedChunkCount = 0,
+                StreamedThinkingChunkCount = 0
+            }
+        ]);
+        await using var factory = CreateFactory(dispatcher, history);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/invocations");
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+        var monitor = Deserialize<InvocationMonitorResponse>(body);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.ContainsSingle(monitor.History, entry => entry.Error == expectedError && entry.FailureCategory == category);
+        AssertEx.False(body.Contains("/home/operator", StringComparison.Ordinal), "the stored error must never reach the monitor");
+    }
+
     // A turn parked on an ask_user question is otherwise indistinguishable from an ordinary running one on this page —
     // no output chunks, no pending approval, nothing to explain the silence. The flag is content-free by design: the
     // question text is operator/model content and must not reach an ops endpoint, so only the boolean is asserted here.

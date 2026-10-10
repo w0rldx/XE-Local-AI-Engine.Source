@@ -29,6 +29,7 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
     private const string OverridableQuantProperty = "quantOverride";
 
     private const string OverridableCtxTargetProperty = "ctxTarget";
+    private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly IScheduledJobDefinitionStore _definitionStore;
     private readonly ISchedulerEventPublisher _eventPublisher;
     private readonly ILogger<SchedulerDispatchExecutor> _logger;
@@ -43,15 +44,18 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         IScheduledJobRunEventStore runEventStore,
         ISchedulerEventPublisher eventPublisher,
         TimeProvider timeProvider,
-        ILogger<SchedulerDispatchExecutor> logger)
+        ILogger<SchedulerDispatchExecutor> logger,
+        IHostApplicationLifetime applicationLifetime)
     {
         ArgumentNullException.ThrowIfNull(definitionStore);
+        ArgumentNullException.ThrowIfNull(applicationLifetime);
         ArgumentNullException.ThrowIfNull(eventPublisher);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(runEventStore);
         ArgumentNullException.ThrowIfNull(runStore);
         ArgumentNullException.ThrowIfNull(templateRegistry);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        _applicationLifetime = applicationLifetime;
         _definitionStore = definitionStore;
         _eventPublisher = eventPublisher;
         _logger = logger;
@@ -163,23 +167,32 @@ internal sealed class SchedulerDispatchExecutor : ISchedulerDispatchExecutor
         {
             var completedMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
-            // Operator cancel stamps CancellationRequestedAtUtc before interrupting; its absence means the only other
-            // token-cancel source — the auto-interrupt max-runtime plugin — fired (graceful shutdown waits for jobs).
+            // Operator cancel stamps CancellationRequestedAtUtc before interrupting; a host stop interrupts running jobs too
+            // (Quartz InterruptJobsOnShutdownWithWait); only the auto-interrupt max-runtime plugin remains as a timeout.
             var latest = await _runStore.GetByIdAsync(run.Id, CancellationToken.None);
             var wasCancelRequested = latest?.CancellationRequestedAtUtc is not null;
-            var status = wasCancelRequested ? ScheduledRunStatus.Cancelled : ScheduledRunStatus.TimedOut;
+            var hostStopping = _applicationLifetime.ApplicationStopping.IsCancellationRequested;
+            var cancelled = wasCancelRequested || hostStopping;
+            var status = cancelled ? ScheduledRunStatus.Cancelled : ScheduledRunStatus.TimedOut;
+            var errorMessage = "Run exceeded its maximum runtime and was interrupted.";
+            if (wasCancelRequested)
+            {
+                errorMessage = "Run was cancelled.";
+            }
+            else if (hostStopping)
+            {
+                errorMessage = "Run was interrupted because the node was shutting down; it fires again on its next schedule.";
+            }
 
             var updated = await _runStore.UpdateLifecycleAsync(run.Id,
                 status,
                 completedMs,
                 completedMs - actualFireMs,
-                errorMessage: wasCancelRequested
-                    ? "Run was cancelled."
-                    : "Run exceeded its maximum runtime and was interrupted.",
+                errorMessage: errorMessage,
                 cancellationToken: CancellationToken.None);
 
             await SafePublishRunAsync(updated ?? run,
-                wasCancelRequested ? SchedulerRunEventKind.Cancelled : SchedulerRunEventKind.Failed,
+                cancelled ? SchedulerRunEventKind.Cancelled : SchedulerRunEventKind.Failed,
                 manualFireId);
 
             // Re-throw so Quartz observes the interrupt / shutdown.

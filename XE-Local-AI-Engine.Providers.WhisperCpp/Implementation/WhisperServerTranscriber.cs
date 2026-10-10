@@ -217,7 +217,7 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
         {
             Text = payload.Text?.Trim() ?? string.Empty,
             Segments = segments,
-            DetectedLanguageCode = languageMode == WhisperLanguageMode.Explicit || segments.Length == 0 ? null : ResolveDetectedLanguageCode(payload.Language),
+            DetectedLanguageCode = languageMode == WhisperLanguageMode.Explicit || segments.All(static segment => segment.Text.Length == 0) ? null : ResolveDetectedLanguageCode(payload.Language),
             DurationSeconds = payload.Duration
         };
     }
@@ -227,8 +227,8 @@ internal sealed class WhisperServerTranscriber : IWhisperTranscriber
     ///     or missing name yields null.
     /// </summary>
     /// <remarks>
-    ///     The caller skips this when no segment came back: whisper's language id defaults to English, so a window it
-    ///     never heard speech in still reports "english". A forced language is echoed, not detected, and is skipped too.
+    ///     The caller skips this when no segment with text came back: whisper's language id defaults to English, so a
+    ///     window it never heard speech in (no segment, or only empty-text ones) still reports "english". A forced language is echoed, not detected, and is skipped too.
     /// </remarks>
     private static string? ResolveDetectedLanguageCode(string? languageName) =>
         languageName is not null && LanguageCodesByName.TryGetValue(languageName, out var code) ? code : null;

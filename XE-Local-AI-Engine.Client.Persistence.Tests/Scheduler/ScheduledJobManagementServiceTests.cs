@@ -130,6 +130,137 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(ValidCronInput(cronExpression)));
     }
 
+    /// <summary>Quartz refuses an end before the start only after the row is stored, so validation must refuse it first.</summary>
+    [Test]
+    [Arguments(ScheduleKind.Cron)]
+    [Arguments(ScheduleKind.SimpleInterval)]
+    public async Task CreateJobAsync_WithEndBeforeStart_ThrowsValidationAndStoresNothing(ScheduleKind kind)
+    {
+        var dbPath = GetDatabasePath("val-end-before-start-" + kind + ".sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath, new SimpleIntervalOnlyHandler());
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var start = NextYearStart();
+
+        var exception = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() =>
+            service.CreateJobAsync(ScheduleInput(kind, start, start.AddHours(-1))));
+
+        AssertEx.True(exception.Message.Contains("before the start time", StringComparison.Ordinal), exception.Message);
+        AssertEx.Empty(await service.ListJobsAsync());
+    }
+
+    /// <summary>Without a start Quartz starts now, so an end in the past fails the same way.</summary>
+    [Test]
+    [Arguments(ScheduleKind.Cron)]
+    [Arguments(ScheduleKind.SimpleInterval)]
+    public async Task CreateJobAsync_WithEndInThePastAndNoStart_ThrowsValidationAndStoresNothing(ScheduleKind kind)
+    {
+        var dbPath = GetDatabasePath("val-end-in-past-" + kind + ".sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath, new SimpleIntervalOnlyHandler());
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+
+        var exception = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() =>
+            service.CreateJobAsync(ScheduleInput(kind, startAt: null, DateTimeOffset.UtcNow.AddHours(-1))));
+
+        AssertEx.True(exception.Message.Contains("before now", StringComparison.Ordinal), exception.Message);
+        AssertEx.Empty(await service.ListJobsAsync());
+    }
+
+    /// <summary>A cron schedule whose first fire falls after its end makes Quartz refuse it as never firing.</summary>
+    [Test]
+    public async Task CreateJobAsync_WithCronThatNeverFiresBeforeItsEnd_ThrowsValidationAndStoresNothing()
+    {
+        var dbPath = GetDatabasePath("val-cron-never-fires.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var input = ScheduleInput(ScheduleKind.Cron, startAt: null, DateTimeOffset.UtcNow.AddDays(30), cronExpression: "0 0 12 1 1 ? 2099");
+
+        var exception = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
+
+        AssertEx.True(exception.Message.Contains("never fires", StringComparison.Ordinal), exception.Message);
+        AssertEx.Empty(await service.ListJobsAsync());
+    }
+
+    /// <summary>An update used to store the row and delete the live trigger before Quartz refused the new end.</summary>
+    [Test]
+    [Arguments(ScheduleKind.Cron)]
+    [Arguments(ScheduleKind.SimpleInterval)]
+    public async Task UpdateJobAsync_WithEndBeforeStart_ThrowsValidationAndKeepsTheStoredJobAndTrigger(ScheduleKind kind)
+    {
+        var dbPath = GetDatabasePath("val-update-end-before-start-" + kind + ".sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath, new SimpleIntervalOnlyHandler());
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var scheduler = await provider.GetRequiredService<ISchedulerFactory>().GetScheduler(CancellationToken.None);
+        var start = NextYearStart();
+        var record = await service.CreateJobAsync(ScheduleInput(kind, start, start.AddDays(1)));
+
+        await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() =>
+            service.UpdateJobAsync(record.Id, ScheduleInput(kind, start, start.AddHours(-1))));
+
+        var stored = AssertEx.NotNull(await service.GetJobAsync(record.Id));
+        AssertEx.Equal(record.EndAtUtc, stored.EndAtUtc);
+        var triggers = await scheduler.GetTriggersOfJob(new JobKey(record.Id.ToString("N"), SchedulerJobKeys.Group), CancellationToken.None);
+        AssertEx.Equal(expected: 1, triggers.Count, "the live trigger must survive a refused update");
+    }
+
+    /// <summary>The cron fires on the hour and the start is an hour boundary, so a fire falls exactly on the end.</summary>
+    [Test]
+    [Arguments(ScheduleKind.Cron)]
+    [Arguments(ScheduleKind.SimpleInterval)]
+    public async Task CreateJobAsync_WithEndEqualToStart_IsAccepted(ScheduleKind kind)
+    {
+        var dbPath = GetDatabasePath("val-end-equals-start-" + kind + ".sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath, new SimpleIntervalOnlyHandler());
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var start = NextYearStart();
+
+        var record = await service.CreateJobAsync(ScheduleInput(kind, start, start));
+
+        AssertEx.Equal(start.ToUnixTimeMilliseconds(), record.EndAtUtc);
+    }
+
+    /// <summary>By design: a one-shot in the past is inert under SkipMissed and fires once under the other policies.</summary>
+    [Test]
+    public async Task CreateJobAsync_WithOneShotInThePast_IsAccepted()
+    {
+        var dbPath = GetDatabasePath("val-oneshot-past.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath);
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var input = ScheduleInput(ScheduleKind.OneShot, new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), endAt: null);
+
+        var record = await service.CreateJobAsync(input);
+
+        AssertEx.Equal(ScheduleKind.OneShot, record.ScheduleKind);
+    }
+
+    /// <summary>TimeSpan.FromSeconds overflowed while scheduling, which surfaced as a 500.</summary>
+    [Test]
+    public async Task CreateJobAsync_WithIntervalBeyondTheCap_ThrowsValidationAndStoresNothing()
+    {
+        var dbPath = GetDatabasePath("val-interval-cap.sqlite");
+        await MigrateAsync(dbPath);
+
+        await using var provider = BuildEnabledProvider(dbPath, new SimpleIntervalOnlyHandler());
+        var service = provider.GetRequiredService<IScheduledJobManagementService>();
+        var input = ScheduleInput(ScheduleKind.SimpleInterval, startAt: null, endAt: null, intervalSeconds: 10_000_000_000_000);
+
+        var exception = await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => service.CreateJobAsync(input));
+
+        AssertEx.True(exception.Message.Contains("at most 366 days", StringComparison.Ordinal), exception.Message);
+        AssertEx.Empty(await service.ListJobsAsync());
+    }
+
     [Test]
     public async Task CreateJobAsync_WithCronYear2099_IsAccepted()
     {
@@ -1283,6 +1414,35 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
             PreventOverlap = preventOverlap,
             MaxRuntimeSeconds = maxRuntimeSeconds,
             Parameters = parameters
+        };
+    }
+
+    // January 1 of next year at midnight UTC: in the future, and a boundary the hourly cron fires on.
+    private static DateTimeOffset NextYearStart() => new(DateTimeOffset.UtcNow.Year + 1, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+    // A schedule on the template that supports the kind: test.echo for Cron and OneShot, the simple-interval test handler otherwise.
+    private static ScheduledJobManagementInput ScheduleInput(ScheduleKind kind,
+        DateTimeOffset? startAt,
+        DateTimeOffset? endAt,
+        string cronExpression = "0 0 * * * ?",
+        long intervalSeconds = 3600)
+    {
+        return new ScheduledJobManagementInput
+        {
+            TemplateId = kind == ScheduleKind.SimpleInterval ? SimpleIntervalOnlyHandler.Id : TestEchoScheduledJobHandler.Id,
+            DisplayName = "Schedule bounds",
+            Description = null,
+            ScheduleKind = kind,
+            CronExpression = kind == ScheduleKind.Cron ? cronExpression : null,
+            IntervalSeconds = kind == ScheduleKind.SimpleInterval ? intervalSeconds : null,
+            RepeatCount = null,
+            StartAtUtc = startAt?.ToUnixTimeMilliseconds(),
+            EndAtUtc = endAt?.ToUnixTimeMilliseconds(),
+            TimeZoneId = "UTC",
+            MisfirePolicy = SchedulerMisfirePolicy.Smart,
+            PreventOverlap = false,
+            MaxRuntimeSeconds = null,
+            Parameters = null
         };
     }
 

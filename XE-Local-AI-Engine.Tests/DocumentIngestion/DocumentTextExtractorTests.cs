@@ -155,20 +155,20 @@ public sealed class DocumentTextExtractorTests
     [Test]
     public async Task Extractor_WhenStructuredOutputExceedsCap_ReturnsFailedWithoutContent()
     {
-        // The structured path returns the document verbatim; bound its aggregate size so a huge document cannot reach
-        // chunking/persistence unbounded. A 1000-char body against a 10-char cap must fail cleanly.
+        // A 1001-char body against a 1000-char cap must fail cleanly, and the reason names the cap (invariant
+        // grouping) so the operator knows the limit; a huge document must never reach chunking unbounded.
         var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance,
             maxOutputChars: 5_000_000,
-            maxStructuredOutputChars: 10,
+            maxStructuredOutputChars: 1_000,
             maxExpansionRatio: 200,
             minCharsForExpansionGuard: 1_000_000);
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(new string('a', 1000)));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(new string('a', 1001)));
 
         var result = await extractor.ExtractStructuredAsync(stream, "big.md", ".md", CancellationToken.None);
 
         AssertEx.Equal(DocumentExtractionStatus.Failed, result.Status);
         AssertEx.Null(result.Document);
-        AssertEx.Contains(AssertEx.NotNull(result.Error), "maximum extractable size");
+        AssertEx.Equal("Document text exceeds the maximum extractable size of 1,000 characters.", result.Error);
     }
 
     [Test]

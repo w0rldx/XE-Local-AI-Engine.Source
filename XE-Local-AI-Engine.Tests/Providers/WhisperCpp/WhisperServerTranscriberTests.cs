@@ -107,6 +107,19 @@ public sealed class WhisperServerTranscriberTests
     }
 
     [Test]
+    public async Task Transcribe_WithOnlyEmptyTextSegments_ReportsNoDetectedCode()
+    {
+        // A VAD blip on room noise yields a segment with no words; whisper still says "english", and nothing was heard.
+        await using var harness = new TranscriberHarness(
+            """{"text":"","duration":1.0,"language":"english","segments":[{"start":0,"end":0.4,"text":"  "}]}""");
+
+        var result = await harness.TranscribeAsync();
+
+        AssertEx.Null(result.DetectedLanguageCode);
+        AssertEx.Equal(1, result.Segments.Count, "The empty segment is still passed through; only the language is withheld.");
+    }
+
+    [Test]
     public async Task Transcribe_WithAnExplicitLanguage_ReportsNoDetectedCode()
     {
         // The daemon echoes a forced language back in "language"; that is the caller's choice, not a detection.

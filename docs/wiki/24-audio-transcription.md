@@ -331,7 +331,7 @@ Server → client:
 | `transcriptionSessionStatusChanged` | `{ sessionId, status, errorCode }`, status one of `Completed`, `Cancelled`, `Abandoned`, `Failed`; `errorCode` is `live-never-attached` for a `NeverAttached` end (whose status reads `Abandoned`), `live-failed` for `Failed`, otherwise null |
 | `transcriptionAdmissionClosed` | `{ sessionId }`: the node stopped accepting audio for this session. Sent once when a graceful end (the buffered-audio cap or `EndSession`) closes admission, before the drain-start `transcriptionCatchUpProgress`, and never for an abort. A frame sent after it is dropped, so the client stops capturing. |
 | `transcriptionCatchUpProgress` | `{ sessionId, bufferedMs }`: the session's queued, untranscribed audio across all lanes. Sent at most once per second of audio a lane consumes while it still has frames queued, once with `0` when the backlog empties after a non-zero report, once at the start of a graceful end whatever the value, and never after the terminal status push. |
-| `transcriptionSourceQuiet` | `{ sessionId, channel, quietMs }`: a lane of a session with an attached in-host producer (per-application capture) has had no frame for `quietMs`. Sent once per second while the lane stays quiet for 10 s or more, once with `0` when a frame arrives again, never for a browser-fed session, and never after the terminal status push. Non-terminal: the session keeps running (see "A quiet source never ends a session"). |
+| `transcriptionSourceQuiet` | `{ sessionId, channel, quietMs }`: a lane of a session with an attached in-host producer (per-application capture) has had no audible frame for `quietMs`. Sent once per second while the lane stays quiet for 10 s or more, once with `0` when an audible frame arrives again, never for a browser-fed session, and never after the terminal status push. Non-terminal: the session keeps running (see "A quiet source never ends a session"). |
 
 Catch-up progress is advisory. It is published under its own gate, never the commit gate, so a lane with nothing to
 commit does not wait behind a sibling's persistence; the gate closes just before the terminal status push, and a failed
@@ -385,9 +385,10 @@ calls into it per lane.
   the probability path crashed the daemon (Windows) or answered 500 (Linux) on a window its VAD found silent, and
   the old gating on the uncommitted tail still let one crash through. With no forced language the transcriber
   reads the `language` name the verbose response always carries and maps it to a code
-  (`WhisperServerTranscriber.ResolveDetectedLanguageCode`). A response with no segments reports no language, because
-  whisper's state defaults to English on silence; the lane keeps asking nothing extra and learns the language from
-  the first window that transcribes speech. `WhisperServerTranscriberTests` and `LiveTranscriptionSegmenterTests` pin it.
+  (`WhisperServerTranscriber.ResolveDetectedLanguageCode`). A response with no segments, or only segments with empty
+  text, reports no language, because whisper's state defaults to English on silence. The lane keeps asking nothing
+  extra and learns the language from the first window that commits a segment, never from a provisional one: a tick
+  holding only the opening "Hey" of a German sentence detects as English. `WhisperServerTranscriberTests` and `LiveTranscriptionSegmenterTests` pin it.
 - **The known ceiling: one word may be inserted, dropped or duplicated per forced boundary.** Windows are cut with
   no overlap, so a word straddling a forced cut is the model's guess from a fragment. `LiveSegmenterGoldenTests`
   bounds this — the committed transcript's word-level edit distance against a whole-clip transcript may not exceed
@@ -614,8 +615,10 @@ microphone a live session captures from is the one it was created with: `Transcr
 `deviceIdBySession`, written by the create path against the id the node just returned and read back here. The device
 is never sent to the node — capture is client-side — so that store is the only record, and a single global slot let
 the session created second decide what the session created first captured from. The
-elapsed counter reads the last committed `endMs`, which is audio time, not wall time: the transcript's own clock is
-the honest one. When a terminal status arrives on the hub the page invalidates the session queries, so the REST rows
+elapsed counter reads the larger of the audio the browser has captured and the last committed `endMs`, both audio
+time, not wall time: the transcript's own clock is the honest one. An application-capture session is the exception:
+the browser pushes no frames there, so `useLiveCapture` ticks the captured time once a second from a browser wall
+clock started when the capture began, and the counter keeps running through a pause in the captured audio. When a terminal status arrives on the hub the page invalidates the session queries, so the REST rows
 take over from the panel with the node's final flush included.
 
 ### Sharing is re-prompted, every time
@@ -760,8 +763,8 @@ operator is still making.
   its detach handle, and it is what `AttachProducer` receives.
 - **Attachment happens before the recorder exists**, and **attaching is what satisfies the producer-attachment
   deadline** — waiting for the first frame does not. `AttachProducer` disposes the session's `AttachmentTimer` inside
-  the session gate, right after the admission check. A native capture of an application that happens to be silent
-  pushes nothing, because WASAPI never yields a silent packet at all, so gating on audio would have reaped a session
+  the session gate, right after the admission check. A native capture of an application that has no open audio
+  stream pushes nothing, because NAudio drops packets flagged silent, so gating on audio would have reaped a session
   with a healthy running recorder as `NeverAttached` once the deadline elapsed. The browser abandonment grace is
   untouched: a closed tab still ends the session whatever else is feeding it.
 - **Attach and stop are one critical section, under `SessionCapture`'s own `Lock`.** The coordinator publishes the
@@ -846,6 +849,10 @@ segmenter tolerates this, and the timestamps stay internally consistent, but the
 start of the recording. Writing silence instead would require the zero-copy `DataAvailable` event, whose buffer is a
 `ReadOnlySpan<byte>` valid only inside the callback and therefore cannot cross an `await`.
 
+Flagged packets are not the only silence. A target that keeps its stream open while it plays nothing (a paused
+browser video) renders zero-valued samples that arrive in ordinary, unflagged packets, so the clock keeps pace
+through that pause and the transcript's next segment lands at its true audio time.
+
 ### An unexpected capture end fails the session
 
 `ProcessAudioCaptureCoordinator.SessionCapture.RunAsync` detaches a recorder that returns or throws without a stop
@@ -919,10 +926,13 @@ path the fallback is supposed to make instant.
   `WaitForExitAsync` (`ProcessAudioCaptureSupport.RunUntilProcessExitsAsync`, which runs on every gate). An exit, or a
   target already gone at start, returns normally, and the coordinator ends the session once through `EndAsync(Failed)`.
   Closing one browser tab does not exit the process: Chromium plays audio from a long-lived utility process.
-- **A quiet source never ends a session.** WASAPI never yields a silent packet, so a paused video and a closed tab look
-  identical, and a silence timeout would end a healthy session. Instead, while an in-host producer is attached, the
-  registry stamps each lane's last frame and a one-second watch publishes `transcriptionSourceQuiet` once a lane has
-  been quiet for 10 s, and `0` when audio returns. The live panel shows "No audio from the captured application for
+- **A quiet source never ends a session.** A quiet target either delivers no packets (its stream is closed, or NAudio
+  drops the silent-flagged ones) or delivers zero-valued ones (a paused video keeps its stream open), and a silence
+  timeout would end a healthy session either way. Instead, while an in-host producer is attached, the registry stamps
+  each lane's last AUDIBLE frame (any 16-bit sample above 32, about -60 dBFS: the calibration knob
+  `AudibleSampleThreshold` in `LiveTranscriptionSessionRegistry`; quiet frames are still transcribed) and a one-second
+  watch publishes `transcriptionSourceQuiet` once a lane has been quiet for 10 s, and `0` when audio returns; both
+  transitions are logged at Information. The live panel shows "No audio from the captured application for
   N s". The watch is armed by `AttachProducer` and disarmed by the producer's detach and by the end of the session.
 - **More than two channels is refused** with a `NotSupportedException`. `StereoToMonoSampleProvider` downmixes two
   channels only, and failing loudly beats interleaving channels into the transcript. Unreachable with NAudio's stereo

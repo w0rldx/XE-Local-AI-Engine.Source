@@ -22,7 +22,7 @@ public sealed record SandboxContainment
     ///     The reason a where-advertised role is not served by an eligible Preview boundary: it serves floor workloads only (ADR 0019).
     /// </summary>
     public const string PreviewServesFloorWorkloadsOnlyReason =
-        "the Windows AppContainer boundary is a Preview mechanism and serves only workloads whose isolation floor is Filesystem (run_python, Sandboxed MCP); this role runs in its working-directory jail on the host filesystem";
+        "the Windows AppContainer boundary is a Preview mechanism and serves only workloads whose isolation floor is Filesystem (Sandboxed MCP); this role runs in its working-directory jail on the host filesystem";
 
     /// <summary>A host that can contain nothing: the plain-child fallback. Used off-Linux and when every probe fails.</summary>
     public static SandboxContainment None { get; } = new();

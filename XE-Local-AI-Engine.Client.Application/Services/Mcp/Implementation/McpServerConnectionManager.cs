@@ -120,10 +120,9 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             _servers.Clear();
         }
 
-        foreach (var session in sessions)
-        {
-            await DisposeSessionSafelyAsync(session);
-        }
+        // Concurrently: each stdio session may wait out its graceful-exit window, and sequential disposal multiplied that wait by the
+        // session count inside the host's shutdown budget. DisposeSessionSafelyAsync swallows each session's own fault.
+        await Task.WhenAll(sessions.Select(session => DisposeSessionSafelyAsync(session).AsTask()));
 
         // The refresh gate and every entry gate are deliberately NOT disposed: an in-flight refresh or call may still hold one and
         // would throw ObjectDisposedException on Release. No AvailableWaitHandle is ever created, so a SemaphoreSlim owns nothing to free.
@@ -619,7 +618,11 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             // A connect or list failure for one server must never abort the refresh or leave the others half-applied, so the catch
             // covers the realistic transport, timeout, schema, TLS and configuration set. Caller cancellation is NOT caught: it propagates.
             var reason = Classify(ex, hasHeaders: record.Headers.Count > 0);
-            _logger.LogWarning(ex, "MCP server {ServerId} failed to connect or list tools ({Reason}); it will contribute no tools.", record.Id, reason);
+            // A startup failure's message is already the diagnosis and the transport logged the facts, so its stack adds only noise.
+            _logger.LogWarning(ex is McpServerStartupException ? null : ex,
+                "MCP server {ServerId} failed to connect or list tools ({Reason}); it will contribute no tools.",
+                record.Id,
+                reason);
             return ConnectResult.Failed(DescribeFailure(ex, reason, record), reason);
         }
         catch (OperationCanceledException ex) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
@@ -905,15 +908,17 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
     private static string Scrub(string text, McpServerRecord? record)
     {
-        // Value-based with an 8-char floor, so "-y" never blanks output (a shorter secret can survive); each long part of a
-        // multi-word value is redacted too. PATH is not a secret, and the FileNotFound hint quotes it.
-        var values = record is null
-            ? Enumerable.Empty<string>()
-            : record.Environment.Where(static pair => !SecretValueRedactor.IsSearchPathKey(pair.Key))
-                    .Select(static pair => pair.Value)
-                    .Concat(record.Headers.Values)
-                    .Concat(record.Arguments);
-        return new SecretValueRedactor(SecretValueRedactor.WithParts(values, minLength: 8)).Redact(text);
+        // Value-based with an 8-char floor, so "-y" never blanks output; secret values are also split into their long parts, arguments
+        // are whole tokens only (splitting a script argument blanked harmless words and paths). PATH is not a secret, the hint quotes it.
+        if (record is null)
+        {
+            return new SecretValueRedactor([]).Redact(text);
+        }
+
+        var secretValues = record.Environment.Where(static pair => !SecretValueRedactor.IsSearchPathKey(pair.Key))
+                                 .Select(static pair => pair.Value)
+                                 .Concat(record.Headers.Values);
+        return new SecretValueRedactor(SecretValueRedactor.ForCommand(secretValues, record.Arguments, minLength: 8)).Redact(text);
     }
 
     /// <summary>

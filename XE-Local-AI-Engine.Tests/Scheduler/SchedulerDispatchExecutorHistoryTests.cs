@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Scheduler;
 
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -377,7 +378,8 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             eventStore,
             publisher,
             TimeProvider.System,
-            NullLogger<SchedulerDispatchExecutor>.Instance);
+            NullLogger<SchedulerDispatchExecutor>.Instance,
+            Substitute.For<IHostApplicationLifetime>());
 
         return (executor, runStore, eventStore, publisher);
     }

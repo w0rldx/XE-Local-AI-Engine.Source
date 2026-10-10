@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Tests.Hosting;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -47,6 +49,74 @@ public sealed class FirstRunModelProvisioningServiceTests
         AssertEx.Equal("Q4_K_M", coordinator.StartCalls[0].Quant);
         AssertEx.Equal(GgufRole.Chat, coordinator.StartCalls[0].Role);
         AssertEx.Equal(DefaultGguf, settingsStore.Saved?.DefaultModelName);
+    }
+
+    [Test]
+    public async Task CleanDesktopState_WarmsTheDeviceAuditWithAForcedRefreshAfterTheRuntimeIsEnsured()
+    {
+        // Windows tester round 3 (N-26): only the banner acquisition warmed the audit, so the first chat after a first-run install paid
+        // the fresh runtime's cold --list-devices probe. The forced refresh matters: a cached pre-install audit describes no binary.
+        var binaryManager = new RecordingBinaryManager();
+        var warmed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var deviceAudit = Substitute.For<IRuntimeDeviceAudit>();
+        deviceAudit.GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                   .Returns(call =>
+                   {
+                       warmed.TrySetResult(call.Arg<bool>() && binaryManager.EnsureCalled);
+                       return new TaskCompletionSource<RuntimeDeviceAuditState>().Task;
+                   });
+        using var service = BuildService(isDesktop: true,
+            [],
+            binaryManager,
+            new FakeDownloadCoordinator(GgufDownloadPhase.Completed),
+            new FakeNodeSettingsStore(new StoredNodeSettings()),
+            deviceAudit: deviceAudit);
+
+        await RunAsync(service).WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.True(await warmed.Task.WaitAsync(TimeSpan.FromSeconds(10)), "the warm must force a refresh, and only after the runtime was ensured");
+    }
+
+    [Test]
+    public async Task CleanDesktopState_WhenTheWarmNeverCompletes_TheDownloadStillRunsAndTheModelIsSelected()
+    {
+        var deviceAudit = Substitute.For<IRuntimeDeviceAudit>();
+        deviceAudit.GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(new TaskCompletionSource<RuntimeDeviceAuditState>().Task);
+        var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
+        var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
+        using var service = BuildService(isDesktop: true,
+            [],
+            new RecordingBinaryManager(),
+            coordinator,
+            settingsStore,
+            deviceAudit: deviceAudit);
+
+        await RunAsync(service).WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(expected: 1, coordinator.StartCalls.Count);
+        AssertEx.Equal(DefaultGguf, settingsStore.Current.DefaultModelName);
+    }
+
+    [Test]
+    public async Task CleanDesktopState_WhenTheWarmThrows_ProvisioningStillSelectsTheModel()
+    {
+        var deviceAudit = Substitute.For<IRuntimeDeviceAudit>();
+        deviceAudit.GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                   .Returns<Task<RuntimeDeviceAuditState>>(static _ => throw new InvalidOperationException("probe spawn failed"));
+        var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
+        var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
+        using var service = BuildService(isDesktop: true,
+            [],
+            new RecordingBinaryManager(),
+            coordinator,
+            settingsStore,
+            deviceAudit: deviceAudit);
+
+        await RunAsync(service).WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(expected: 1, coordinator.StartCalls.Count);
+        AssertEx.Equal(DefaultGguf, settingsStore.Current.DefaultModelName);
+        await AssertEx.EventuallyAsync(() => deviceAudit.ReceivedCalls().Any(), TimeSpan.FromSeconds(10), "the warm must have run and thrown");
     }
 
     [Test]
@@ -418,7 +488,8 @@ public sealed class FirstRunModelProvisioningServiceTests
         TimeSpan? gpuProbeCeiling = null,
         IRuntimeAcquisitionStatusRegistry? acquisitionStatus = null,
         INodeRuntimeSettings? runtimeSettings = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IRuntimeDeviceAudit? deviceAudit = null)
     {
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -440,6 +511,7 @@ public sealed class FirstRunModelProvisioningServiceTests
             runtimeSettings ?? StubNodeRuntimeSettings.Create().Build(),
             timeProvider ?? TimeProvider.System,
             NullLogger<FirstRunModelProvisioningService>.Instance,
+            deviceAudit ?? Substitute.For<IRuntimeDeviceAudit>(),
             isDesktop,
             TimeSpan.FromMilliseconds(5),
             gpuProbeCeiling ?? TimeSpan.FromSeconds(25));

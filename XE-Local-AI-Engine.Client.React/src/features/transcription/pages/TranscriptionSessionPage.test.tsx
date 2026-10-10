@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -314,6 +314,34 @@ describe("TranscriptionSessionPage", () => {
 		expect(await screen.findByTestId("transcription-live-panel")).toBeDefined();
 		pushLiveTranscript(queryClient, liveView("Transcribing"));
 		expect(screen.getByTestId("transcription-capture-elapsed").textContent).toBe("01:05");
+	});
+
+	// An application capture's captured time is the browser clock; a segment committed past it (the node's audio
+	// clock ran ahead) still sets the counter, so the timer never shows less than the transcript already holds.
+	it("times an application capture from the larger of its clock and the last committed segment", async () => {
+		useTranscriptionCaptureStore.setState({ processIdBySession: { [sessionId]: 4242 } });
+		liveCapture.state = "capturing";
+		liveCapture.capturedMs = 12_000;
+		server.use(
+			jsonRoute(
+				"get",
+				`transcription/sessions/${sessionId}`,
+				detail({ status: "Transcribing", sourceKind: "ApplicationProcess" }, []),
+			),
+		);
+		const { queryClient } = renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);
+
+		expect(await screen.findByTestId("transcription-live-panel")).toBeDefined();
+		pushLiveTranscript(queryClient, liveView("Transcribing"));
+		expect(screen.getByTestId("transcription-capture-elapsed").textContent).toBe("00:12");
+
+		pushLiveTranscript(
+			queryClient,
+			liveView("Transcribing", [
+				{ seq: 1, startMs: 40_000, endMs: 47_400, text: "Hey, das ist ein Test.", channel: "others", confidence: null },
+			]),
+		);
+		await waitFor(() => expect(screen.getByTestId("transcription-capture-elapsed").textContent).toBe("00:47"));
 	});
 
 	// M3: two sessions created on two different microphones must each capture from their own. The device is never

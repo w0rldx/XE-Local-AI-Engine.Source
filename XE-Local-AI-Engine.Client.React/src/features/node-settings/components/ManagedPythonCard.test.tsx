@@ -132,6 +132,37 @@ describe("ManagedPythonCard", () => {
 		expect(within(screen.getByTestId("managed-python-environment-compute")).queryByRole("button")).toBeNull();
 	});
 
+	it("translates the node's platform reasons and keeps an unknown reason raw", async () => {
+		const unknown = "Some newer node reason.";
+		server.use(
+			jsonRoute(
+				"get",
+				statusPath,
+				status([
+					environment("training", {
+						state: "Unsupported",
+						reason: "Training is available on Linux x64 only.",
+						installed: false,
+					}),
+					environment("compute", {
+						state: "Unsupported",
+						reason: "The Python compute tool is available on Linux x64 only.",
+						installed: false,
+					}),
+					environment("profile-other", { state: "Unsupported", reason: unknown, installed: false }),
+				]),
+			),
+		);
+		renderWithProviders(<ManagedPythonCard />, { withRouter: true });
+
+		const training = await screen.findByTestId("managed-python-environment-training");
+		expect(within(training).getByText(copy.unsupportedReasons.trainingLinuxX64Only)).toBeTruthy();
+		expect(
+			within(screen.getByTestId("managed-python-environment-compute")).getByText(copy.unsupportedReasons.computeLinuxX64Only),
+		).toBeTruthy();
+		expect(within(screen.getByTestId("managed-python-environment-profile-other")).getByText(unknown)).toBeTruthy();
+	});
+
 	it("keeps saying uv is not downloaded yet while one environment is supported", async () => {
 		server.use(
 			jsonRoute(

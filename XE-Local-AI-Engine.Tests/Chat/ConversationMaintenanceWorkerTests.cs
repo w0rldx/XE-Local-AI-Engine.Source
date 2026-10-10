@@ -111,4 +111,28 @@ public sealed class ConversationMaintenanceWorkerTests
         AssertEx.Contains(harness.Logger.AllText, "interrupted by shutdown");
         AssertEx.Equal(expected: 1, harness.Compactions.Count);
     }
+
+    [Test]
+    public async Task StopAsync_WhenTheHostTokenIsAlreadyCancelled_SaysTheHostBudgetWasSpentNotThatTheDrainExceeded()
+    {
+        // Windows tester round 3 (N-20): a host whose shutdown budget an earlier service had spent stopped this worker on a
+        // cancelled token, and the log claimed the 10 s drain was exceeded although the worker had waited no time at all.
+        var clock = new ManualTimeProvider();
+        await using var harness = new ConversationMaintenanceHarness(timeProvider: clock);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.OnCompact = async (_, token) =>
+        {
+            entered.TrySetResult();
+            await Task.Delay(Timeout.Infinite, token);
+        };
+        await harness.Worker.StartAsync(CancellationToken.None);
+        harness.Dispatcher.Dispatch(ConversationMaintenanceHarness.Job(Guid.NewGuid()));
+        await entered.Task.WaitAsync(Wait);
+
+        await harness.Worker.StopAsync(new CancellationToken(canceled: true)).WaitAsync(Wait);
+
+        // The abandoned count is a real-clock race (the post-deadline grace under load), so only the reason is asserted.
+        AssertEx.Contains(harness.Logger.AllText, "the host shutdown budget was already spent");
+        AssertEx.False(harness.Logger.AllText.Contains("exceeded", StringComparison.Ordinal), harness.Logger.AllText);
+    }
 }

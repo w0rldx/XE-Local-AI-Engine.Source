@@ -41,6 +41,13 @@ const knownMismatches = new Set([
 	"toolchainStore",
 ]);
 
+// The node's English platform reasons (ManagedPythonStatusService) that the card can translate; any other reason, or
+// one a newer node words differently, renders raw.
+const knownUnsupportedReasons: Readonly<Record<string, string>> = {
+	"Training is available on Linux x64 only.": "trainingLinuxX64Only",
+	"The Python compute tool is available on Linux x64 only.": "computeLinuxX64Only",
+};
+
 type ComputeAction = "repair" | "remove";
 
 /**
@@ -69,6 +76,13 @@ export function ManagedPythonCard() {
 		);
 	};
 
+	const reasonText = (environment: ManagedPythonEnvironment): string => {
+		const reason = environment.reason ?? "";
+		return environment.state === "Unsupported" && Object.hasOwn(knownUnsupportedReasons, reason)
+			? t(`${translationPrefix}.unsupportedReasons.${knownUnsupportedReasons[reason]}`)
+			: reason;
+	};
+
 	const stateLabel = (state: string): string =>
 		Object.hasOwn(stateColors, state) ? t(`${translationPrefix}.states.${state}`) : state;
 
@@ -95,7 +109,7 @@ export function ManagedPythonCard() {
 				</Group>
 				{environment.reason ? (
 					<Text size="sm" c="dimmed">
-						{environment.reason}
+						{reasonText(environment)}
 					</Text>
 				) : null}
 				{environment.installed ? (

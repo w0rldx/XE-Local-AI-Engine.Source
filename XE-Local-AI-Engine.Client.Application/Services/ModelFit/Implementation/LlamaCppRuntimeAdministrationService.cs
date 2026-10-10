@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -379,16 +380,7 @@ internal sealed class LlamaCppRuntimeAdministrationService : ILlamaCppRuntimeAdm
             await _binaryManager.EnsureBinaryAsync(variant, lease, applicationStopping);
         }
 
-        // Pay the first --list-devices probe now rather than on the first chat: on a cold Windows CUDA driver it can run
-        // to its full timeout, and the probe remembers a failure, so the chat path no longer waits for it.
-        try
-        {
-            await _deviceAudit.GetAuditAsync(forceRefresh: true, applicationStopping);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            _logger.LogDebug(exception, "Warming the runtime device audit after acquiring {Variant} failed.", variant);
-        }
+        await RuntimeDeviceAuditWarmup.WarmAsync(_deviceAudit, variant, _logger, applicationStopping);
     }
 
     private async Task ObserveOwnedAcquisitionAsync(Task task, GpuVariant variant)

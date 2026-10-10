@@ -7,6 +7,7 @@ import { AppUpdateChannelSelector } from "@/features/app-update/components/AppUp
 import { channelName } from "@/features/app-update/models/AppUpdateChannelCopy";
 import { useAppUpdateStatus, useRefreshAppUpdateStatus } from "@/features/app-update/queries/useAppUpdate";
 
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 /** App-update section rendered inside the About dialog for managed portable desktop builds. */
@@ -36,6 +37,12 @@ export function AppUpdateSection() {
 					</Button>
 				) : null}
 			</Group>
+			{/* The node answers a check inside its cooldown from the cached result; the time shows which one this is. */}
+			{status.isConfigured && status.lastCheckedUtc != null ? (
+				<Text size="xs" c="dimmed" ta="right" data-testid="app-update-last-checked">
+					{t("pages.about.appUpdate.lastChecked", { time: formatTimestamp(status.lastCheckedUtc) })}
+				</Text>
+			) : null}
 
 			<Group gap="xs">
 				<Text size="sm" c="dimmed">

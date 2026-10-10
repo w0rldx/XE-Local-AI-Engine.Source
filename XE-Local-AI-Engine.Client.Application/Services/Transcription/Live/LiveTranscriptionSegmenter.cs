@@ -145,7 +145,7 @@ public sealed class LiveTranscriptionSegmenter
     /// <summary>The watermark: no segment starting before this is ever emitted again.</summary>
     public long CommittedEndMs => _committedEndMs;
 
-    /// <summary>The first language code any window reported, or <see langword="null" /> while it is still unknown.</summary>
+    /// <summary>The language code of the first window that committed a segment, or <see langword="null" /> while it is still unknown.</summary>
     public string? DetectedLanguageCode => _detectedLanguageCode;
 
     /// <summary>Accepts one frame of 16 kHz mono int16 PCM and runs whatever submissions its arrival makes due.</summary>
@@ -274,15 +274,18 @@ public sealed class LiveTranscriptionSegmenter
             result = await RetryWithinBudgetAsync(wav, _timeProvider.GetElapsedTime(startedAt), cancellationToken);
         }
 
-        string? learnedLanguage = null;
-        if (_detectedLanguageCode is null && !string.IsNullOrWhiteSpace(result.DetectedLanguageCode))
+        var commitsBefore = commits.Count;
+        Apply(result, windowStartMs, windowEndMs, atCap, flush, commits);
+
+        // Learned only from a window that committed a segment: a committing window spans the whole utterance plus the
+        // tail guard, while a provisional one may hold a single word ("Hey" in a German sentence detects as English).
+        if (_detectedLanguageCode is null && commits.Count > commitsBefore && !string.IsNullOrWhiteSpace(result.DetectedLanguageCode))
         {
             _detectedLanguageCode = result.DetectedLanguageCode;
-            learnedLanguage = result.DetectedLanguageCode;
+            return result.DetectedLanguageCode;
         }
 
-        Apply(result, windowStartMs, windowEndMs, atCap, flush, commits);
-        return learnedLanguage;
+        return null;
     }
 
     /// <summary>Resubmits a window under what is left of the one inference budget its first attempt started.</summary>

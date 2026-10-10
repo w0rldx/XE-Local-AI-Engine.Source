@@ -24,6 +24,7 @@ vi.mock("@/features/app-update/components/AppUpdateChannelSelector", () => ({
 import { useAppUpdateStatus, useRefreshAppUpdateStatus } from "@/features/app-update/queries/useAppUpdate";
 import { AppUpdateSection } from "./AppUpdateSection";
 import { testMantineTheme } from "@/test/MantineTestRender";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 
 function setup(overrides: Record<string, unknown> = {}) {
 	vi.mocked(useAppUpdateStatus).mockReturnValue({
@@ -86,6 +87,26 @@ describe("AppUpdateSection", () => {
 
 		expect(screen.getByRole("button", { name: /check for updates/i })).toBeTruthy();
 		expect(screen.queryByText(/sign in with github/i)).toBeNull();
+	});
+
+	it("shows when the node last checked, so a cached answer inside the cooldown is visible", () => {
+		setup({ lastCheckedUtc: 1_700_000_000_000 });
+		const { rerender } = render(
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<AppUpdateSection />
+			</MantineProvider>,
+		);
+
+		expect(screen.getByTestId("app-update-last-checked").textContent).toBe(`Last checked ${formatTimestamp(1_700_000_000_000)}`);
+
+		setup({ lastCheckedUtc: null });
+		rerender(
+			<MantineProvider env="test" theme={testMantineTheme}>
+				<AppUpdateSection />
+			</MantineProvider>,
+		);
+
+		expect(screen.queryByTestId("app-update-last-checked")).toBeNull();
 	});
 
 	it("shows the update button when the public feed has an update", () => {

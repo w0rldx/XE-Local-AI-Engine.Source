@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Scheduler;
 
 using System.Text.Json;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -302,6 +303,52 @@ public sealed class SchedulerDispatchExecutorTests
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-cancel", scheduledFireTimeUtc: null, Now, cts.Token));
     }
 
+    // Codex review, tester round 3: Quartz now interrupts running jobs on a host stop, and that cancellation used to be recorded
+    // as "exceeded its maximum runtime"; only the max-runtime plugin's interrupt is a timeout.
+    [Test]
+    [Arguments(true, ScheduledRunStatus.Cancelled, "shutting down")]
+    [Arguments(false, ScheduledRunStatus.TimedOut, "maximum runtime")]
+    public async Task DispatchAsync_WhenTheRunIsInterrupted_RecordsCancelledOnAHostStopAndTimedOutOtherwise(bool hostStopping,
+        ScheduledRunStatus expectedStatus,
+        string expectedMessagePart)
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        var handler = new TestEchoScheduledJobHandler();
+        var store = Substitute.For<IScheduledJobDefinitionStore>();
+        store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
+             .Returns(BuildRecord(enabled: true, deleted: false));
+        var runStore = CreateRunStoreSubstitute();
+        ScheduledRunStatus? terminalStatus = null;
+        string? terminalMessage = null;
+        runStore.UpdateLifecycleAsync(Arg.Any<Guid>(),
+                    Arg.Any<ScheduledRunStatus>(),
+                    Arg.Any<long?>(),
+                    Arg.Any<long?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<string?>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
+                {
+                    var status = callInfo.ArgAt<ScheduledRunStatus>(1);
+                    if (status is ScheduledRunStatus.Cancelled or ScheduledRunStatus.TimedOut)
+                    {
+                        terminalStatus = status;
+                        terminalMessage = callInfo.ArgAt<string?>(6);
+                    }
+
+                    return Task.FromResult<ScheduledJobRunRecord?>(null);
+                });
+        var executor = CreateExecutor(store, new ScheduledJobTemplateRegistry([handler]), runStore, applicationLifetime: new FakeHostApplicationLifetime(hostStopping));
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-interrupt", scheduledFireTimeUtc: null, Now, cts.Token));
+
+        AssertEx.Equal(expectedStatus, terminalStatus);
+        AssertEx.True(terminalMessage!.Contains(expectedMessagePart, StringComparison.Ordinal), terminalMessage);
+    }
+
     [Test]
     public async Task Dispatch_WhenTheSuccessWriteThrowsOnce_RecordsSucceededNotFailed()
     {
@@ -344,7 +391,8 @@ public sealed class SchedulerDispatchExecutorTests
     private static SchedulerDispatchExecutor CreateExecutor(IScheduledJobDefinitionStore store,
         IScheduledJobTemplateRegistry registry,
         IScheduledJobRunStore? runStore = null,
-        IScheduledJobRunEventStore? eventStore = null)
+        IScheduledJobRunEventStore? eventStore = null,
+        IHostApplicationLifetime? applicationLifetime = null)
     {
         runStore ??= CreateRunStoreSubstitute();
         eventStore ??= Substitute.For<IScheduledJobRunEventStore>();
@@ -355,7 +403,29 @@ public sealed class SchedulerDispatchExecutorTests
             eventStore,
             Substitute.For<ISchedulerEventPublisher>(),
             TimeProvider.System,
-            NullLogger<SchedulerDispatchExecutor>.Instance);
+            NullLogger<SchedulerDispatchExecutor>.Instance,
+            applicationLifetime ?? new FakeHostApplicationLifetime(stopping: false));
+    }
+
+    /// <summary>A lifetime whose stopping token is either already signalled or never is; nothing else about it matters here.</summary>
+    private sealed class FakeHostApplicationLifetime : IHostApplicationLifetime
+    {
+        private readonly bool _stopping;
+
+        public FakeHostApplicationLifetime(bool stopping)
+        {
+            _stopping = stopping;
+        }
+
+        public CancellationToken ApplicationStarted => CancellationToken.None;
+
+        public CancellationToken ApplicationStopping => new(_stopping);
+
+        public CancellationToken ApplicationStopped => CancellationToken.None;
+
+        public void StopApplication()
+        {
+        }
     }
 
     // A substitute run store whose idempotent upsert echoes a fresh Running record, so the executor's post-guard

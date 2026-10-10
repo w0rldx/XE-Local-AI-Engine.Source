@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Transcription.Live;
 
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
@@ -38,10 +39,14 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     private static readonly TimeSpan LaneDrainTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ShutdownDrainTimeout = TimeSpan.FromSeconds(3);
 
-    // WASAPI yields no packet while its target is silent, so a quiet in-host source (a paused video) NEVER ends a
-    // session; past this threshold the client is told how long, each check period, and 0 when audio returns.
+    // A quiet in-host source (no packets, or a paused video's zero-valued ones) NEVER ends a session; past this threshold
+    // the client is told how long, each check period, and 0 when an audible frame returns. Wiki 24 has the two cases.
     private static readonly TimeSpan SourceQuietThreshold = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan SourceQuietCheckPeriod = TimeSpan.FromSeconds(1);
+
+    // Calibration knob: a frame is audible when any 16-bit sample exceeds this (32 is about -60 dBFS). Raise it if a
+    // paused source's noise floor keeps the quiet notice away.
+    private const int AudibleSampleThreshold = 32;
 
     // Catch-up progress is reported at most once per this much audio consumed while behind.
     private const long CatchUpReportBytes = 1_000L * WavPcm16.BytesPerMillisecond;
@@ -184,7 +189,12 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             // memory cap ends it, gracefully, and the frame that crossed the cap is still queued, so nothing admitted is dropped.
             session.PendingBytes += owned.Length;
             session.ReceivedBytes += owned.Length;
-            lane.LastFrameTimestamp = _timeProvider.GetTimestamp();
+            if (IsAudible(owned))
+            {
+                // Only an audible frame refreshes the quiet watch; a silent one is still queued and transcribed, so audio time stays exact.
+                lane.LastFrameTimestamp = _timeProvider.GetTimestamp();
+            }
+
             lane.QueuedBytes += owned.Length;
             lane.Chain = ConsumeAsync(session, lane, owned, lane.Chain);
             if (session.PendingBytes > _maxBufferedBytes && !session.BufferCapReached)
@@ -230,14 +240,14 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
                 throw new InvalidOperationException($"Transcription session {sessionId} is not live.");
             }
 
-            // Attaching satisfies the producer-attachment deadline; waiting for the first FRAME does not: a native capture of a silent application pushes nothing (WASAPI never
-            // yields a silent packet), so a healthy running recorder would be reaped as NeverAttached. The browser abandonment grace is untouched: a closed tab ends the session whatever feeds it.
+            // Attaching satisfies the producer-attachment deadline; waiting for the first FRAME does not: a native capture of an application that never opened
+            // an audio stream pushes nothing, so a healthy running recorder would be reaped as NeverAttached. The browser abandonment grace is untouched: a closed tab ends the session whatever feeds it.
             session.AttachmentTimer?.Dispose();
             session.AttachmentTimer = null;
 
             session.Producer = producer;
 
-            // Only an in-host producer can fall silent without a trace; a browser streams frames, silent or not. The watch
+            // Only an in-host producer is watched; a browser streams frames whatever the microphone hears. The watch
             // starts now, so a capture of an application that never plays is reported quiet too.
             var now = _timeProvider.GetTimestamp();
             foreach (var lane in session.Lanes.Values)
@@ -375,7 +385,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
     }
 
     /// <summary>
-    ///     Tells the client how long each lane has gone without a frame once that passes <see cref="SourceQuietThreshold" />,
+    ///     Tells the client how long each lane has gone without an audible frame once that passes <see cref="SourceQuietThreshold" />,
     ///     and <c>0</c> once a quiet lane hears audio again. Advisory: it never ends the session.
     /// </summary>
     /// <remarks>
@@ -398,11 +408,20 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
                     var quiet = _timeProvider.GetElapsedTime(lane.LastFrameTimestamp);
                     if (quiet >= SourceQuietThreshold)
                     {
+                        if (!lane.QuietReported)
+                        {
+                            _logger.LogInformation("The {Channel} source of transcription session {SessionId} has been quiet for {QuietMs} ms.",
+                                lane.Channel,
+                                session.Id,
+                                (long)quiet.TotalMilliseconds);
+                        }
+
                         lane.QuietReported = true;
                         reports.Add(new KeyValuePair<TranscriptChannel, long>(lane.Channel, (long)quiet.TotalMilliseconds));
                     }
                     else if (lane.QuietReported)
                     {
+                        _logger.LogInformation("The {Channel} source of transcription session {SessionId} is audible again.", lane.Channel, session.Id);
                         lane.QuietReported = false;
                         reports.Add(new KeyValuePair<TranscriptChannel, long>(lane.Channel, 0));
                     }
@@ -414,6 +433,19 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
                 await _publisher.PublishSourceQuietAsync(session.Id, report.Key, report.Value, CancellationToken.None);
             }
         }, "source quiet");
+
+    private static bool IsAudible(byte[] pcm16)
+    {
+        foreach (var sample in MemoryMarshal.Cast<byte, short>(pcm16))
+        {
+            if (sample is > AudibleSampleThreshold or < -AudibleSampleThreshold)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static void EndOnTimer(object? state)
     {
@@ -1057,7 +1089,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         /// <summary>Read and written only from this lane's own chain.</summary>
         public string LastPartial { get; set; } = string.Empty;
 
-        /// <summary>When this lane last admitted a frame, from the registry's clock. Guarded by the owning session's <c>Gate</c>.</summary>
+        /// <summary>When this lane last admitted an audible frame, from the registry's clock. Guarded by the owning session's <c>Gate</c>.</summary>
         public long LastFrameTimestamp { get; set; }
 
         /// <summary>Whether a non-zero quiet report was sent and the <c>0</c> is still owed. Guarded by the owning session's <c>Gate</c>.</summary>

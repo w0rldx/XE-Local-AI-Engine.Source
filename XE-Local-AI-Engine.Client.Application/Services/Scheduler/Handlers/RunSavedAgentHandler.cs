@@ -10,9 +10,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -108,6 +110,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         var packageBuilder = services.GetRequiredService<ILocalChatRuntimePackageBuilder>();
         var invocationRunner = services.GetRequiredService<IInvocationRunner>();
         var eventDispatcher = services.GetRequiredService<IWorkerEventDispatcher>();
+        var localModelProviderResolver = services.GetRequiredService<ILocalModelProviderResolver>();
+        var ggufModelStore = services.GetRequiredService<IGgufModelStore>();
 
         // 1. Load the saved agent. A missing (or since-deleted) definition fails with a sanitized reason — there is no
         //    "disabled" flag on an AgentDefinition, so "missing" is the only unavailable state.
@@ -140,12 +144,18 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
                 "Scheduled agent runs are restricted to node-local models. This agent is configured to use a cloud model, so it will not run unattended. Turn on 'Let cloud models run unattended' in Node Settings → Privacy & updates, or grant unattended runs on the model's external connection when it has one, to allow it.");
         }
 
+        // 3a. INSTALLED GATE: a llama-server model with no GGUF installed would reach capacity and read as a capacity problem; Ollama and external pins
+        //     pass. The refusal is thrown under the slot (step 5) so the monitor records it, and it wins over the tool gate below.
+        var missingModelRefusal = !effectiveModelIsCloud && await IsMissingLlamaServerModelAsync(effectiveModel, localModelProviderResolver, ggufModelStore, cancellationToken)
+            ? $"The agent '{definition.Name}' is pinned to model '{effectiveModel}', which is not installed on this node. Install the model or re-pin the agent."
+            : null;
+
         // 3b. CAPABILITY GATE: a tool-requiring agent on a model without tool calling would "succeed" having called nothing.
         var toolRefusal = AgentModelRequirements.ToolRefusal(definition.Name,
             effectiveModel,
             supportsTools,
             AgentModelRequirements.RequiresTools(definition.AllowedToolNames, definition.Kind));
-        if (toolRefusal is not null)
+        if (toolRefusal is not null && missingModelRefusal is null)
         {
             throw new ScheduledJobExecutionException(toolRefusal);
         }
@@ -175,7 +185,19 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
 
         // 5. Take the shared invocation slot, THEN decide capacity, then run headless. Deciding before the slot let a second fire for the same
         //    cold model see the first fire's footprint reservation and be refused instead of queueing (F-32); the integration path uses this order.
-        await RunAndSummarizeAsync(eventDispatcher, capacityService, invocationRunner, package, context, effectiveModel, cancellationToken);
+        await RunAndSummarizeAsync(eventDispatcher, capacityService, invocationRunner, package, context, effectiveModel, missingModelRefusal, cancellationToken);
+    }
+
+    /// <summary>Whether llama-server would serve <paramref name="model" /> while no GGUF is installed under its name.</summary>
+    private static async Task<bool> IsMissingLlamaServerModelAsync(string model,
+        ILocalModelProviderResolver localModelProviderResolver,
+        IGgufModelStore ggufModelStore,
+        CancellationToken cancellationToken)
+    {
+        var canonicalName = model.Trim();
+        var providerName = await localModelProviderResolver.ResolveProviderNameForModelAsync(canonicalName, cancellationToken);
+        return string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
+               && !await ggufModelStore.ExistsAsync(canonicalName, cancellationToken);
     }
 
     /// <summary>
@@ -265,6 +287,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         RuntimePackage package,
         ScheduledJobExecutionContext context,
         string effectiveModel,
+        string? missingModelRefusal,
         CancellationToken cancellationToken)
     {
         // Captured through a reference holder rather than a plain local: the terminal is assigned only inside the event handler below,
@@ -284,14 +307,23 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         // aborts the wait here (OperationCanceledException propagates to the dispatcher as Cancelled/TimedOut).
         var lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken);
         IDisposable? reservation = null;
+        var failureCategory = FailureCategory.Unexpected;
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         try
         {
+            if (missingModelRefusal is not null)
+            {
+                failureCategory = FailureCategory.ModelUnavailable;
+                throw new ScheduledJobExecutionException(missingModelRefusal);
+            }
+
             // RejectInsufficient fails with the sanitized reason; a local Allow carries a footprint reservation that MUST be disposed, or later
             // spawns are wrongly rejected; QueueSameModel reuses a resident model and carries none.
             var decision = await capacityService.DecideAsync(effectiveModel, ModelRole.Chat, cancellationToken);
             if (decision.Verdict == CapacityVerdict.RejectInsufficient)
             {
+                // The category the chat path gives a capacity refusal of a model launch.
+                failureCategory = FailureCategory.ModelLoadFailed;
                 throw new ScheduledJobExecutionException(decision.Reason);
             }
 
@@ -305,7 +337,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             // (drafting reads it as busy, the monitor shows a stuck run), so the terminal is reported here with a sanitized message.
             await eventDispatcher.ReportInvocationFailedAsync(package.InvocationId,
                 exception is ScheduledJobExecutionException sanitized ? sanitized.Message : "The scheduled agent run could not start.",
-                exception is OperationCanceledException ? FailureCategory.Cancelled : FailureCategory.ModelUnavailable);
+                exception is OperationCanceledException ? FailureCategory.Cancelled : failureCategory);
             throw;
         }
         finally

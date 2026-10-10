@@ -597,8 +597,23 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     /// </remarks>
     private sealed class SandboxedTransport : ITransport
     {
-        /// <summary>STATUS_DLL_INIT_FAILED as an exit code: MXC documents it as the sandbox blocking Win32k (<c>Ui.Disable</c>, ADR 0019).</summary>
-        private const int Win32kDeniedExitCode = unchecked((int)0xC0000142);
+        /// <summary>
+        ///     What an exit code means under the Windows sandbox, which denies the Win32k UI subsystem (<c>Ui.Disable</c>, ADR 0019): anything that
+        ///     loads user32 fails to initialise, so only native console programs start. Codes not listed get no hint.
+        /// </summary>
+        private static readonly Dictionary<uint, string> ExitCodeHints = new()
+        {
+            // STATUS_DLL_INIT_FAILED: an executable that imports user32 dies in the loader; MXC documents it as Win32k blocked.
+            [0xC0000142] = "0xC0000142 is Windows refusing to initialise the process because the sandbox denies the Win32k UI subsystem: "
+                           + "only programs that never load user32 start (native console executables), not Windows PowerShell, PowerShell 7, "
+                           + ".NET Framework or .NET apps, because coreclr.dll needs the UI subsystem the sandbox denies.",
+            // The delay-load helper's failed-LoadLibrary exception: user32 under the mitigation, or a DLL the AppContainer cannot read.
+            [0xC06D007E] = "0xC06D007E means a DLL loaded on demand failed to load: under the sandbox this is usually the UI subsystem it denies, "
+                           + "or a DLL in a folder the sandbox cannot read.",
+            // hostfxr's CoreCLR init failure: coreclr.dll statically imports user32, whose initialisation the mitigation fails.
+            [0x80008089] = "0x80008089 means the .NET runtime could not start: coreclr.dll needs the UI subsystem the sandbox denies; "
+                           + "use a native build or the Privileged host tier."
+        };
 
         /// <summary>How long a failed send waits for the relay to learn whether the server died on startup.</summary>
         private static readonly TimeSpan RelaySettleWait = TimeSpan.FromSeconds(5);
@@ -720,10 +735,9 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
 
             var message = new StringBuilder("The MCP server '").Append(_owner._record.Name).Append("' ").Append(what)
                                                               .Append(exit is null ? "." : " (exit code " + exit + ").");
-            if (exitCode == Win32kDeniedExitCode)
+            if (exitCode is { } failed && ExitCodeHints.TryGetValue(unchecked((uint)failed), out var hint))
             {
-                _ = message.Append(" 0xC0000142 is Windows refusing to initialise the process because the sandbox denies the Win32k UI subsystem: "
-                                   + "run a native executable, a .NET 10 app or PowerShell 7.7+ (pwsh), not Windows PowerShell 5.1 or a .NET Framework program.");
+                _ = message.Append(' ').Append(hint);
             }
 
             if (warnings.Count > 0)

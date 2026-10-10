@@ -213,11 +213,13 @@ Registered servers have their tools offered to your agents.
 > register servers you'd be willing to install and run yourself.
 > [More](privacy-and-data.md#what-connects-to-the-internet)
 
-**On Windows, a sandboxed server must be a program that needs no windowing.** A server registered at the
-default *Sandboxed* tier runs with the Windows UI subsystem (Win32k) switched off. A native program, a
-.NET 10 app and PowerShell 7.7 or later (`pwsh`) start normally. Windows PowerShell 5.1 (`powershell.exe`)
-and older .NET Framework programs do not: they exit at once with code `0xC0000142`, and the server's status
-names that code. The server's program must also live where the sandbox can read it, such as under
+**On Windows, a sandboxed server must be a native program that never loads the UI subsystem.** A server
+registered at the default *Sandboxed* tier runs with the Windows UI subsystem (Win32k) switched off, so only
+programs that never load user32 start: native console executables. Windows PowerShell, PowerShell 7,
+.NET Framework and .NET apps do not, because the .NET runtime (`coreclr.dll`) needs the UI subsystem. They exit
+at once, with code `0xC0000142` for an executable, `0x80008089` for a .NET app or `0xC06D007E` for a DLL loaded
+on demand, and the server's status names the code and what it means. Register such a server at the *Privileged host*
+tier instead. The server's program must also live where the sandbox can read it, such as under
 `C:\Program Files` or `C:\Windows\System32`, not in your user folder.
 
 ### Custom tools

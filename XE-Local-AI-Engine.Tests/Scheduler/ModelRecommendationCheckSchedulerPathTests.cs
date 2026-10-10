@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Scheduler;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -118,7 +119,8 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             eventStore,
             Substitute.For<ISchedulerEventPublisher>(),
             TimeProvider.System,
-            NullLogger<SchedulerDispatchExecutor>.Instance);
+            NullLogger<SchedulerDispatchExecutor>.Instance,
+            Substitute.For<IHostApplicationLifetime>());
     }
 
     private static ModelFitRefreshService BuildAdvisor(InMemoryModelFitSnapshotStore snapshotStore)

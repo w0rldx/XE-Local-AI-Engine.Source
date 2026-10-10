@@ -103,6 +103,9 @@ internal sealed class McpClientFactory : IMcpClientFactory
         };
     }
 
+    /// <summary>How long a PrivilegedHost stdio server gets to exit on its own after its session closes, before it is killed.</summary>
+    internal static readonly TimeSpan StdioShutdownTimeout = TimeSpan.FromSeconds(2);
+
     // Internal for the transport-hardening test: asserts the built options never inherit the parent env.
     internal static StdioClientTransportOptions BuildStdioTransportOptions(McpServerRecord record)
     {
@@ -128,7 +131,10 @@ internal sealed class McpClientFactory : IMcpClientFactory
             Arguments = [.. record.Arguments],
             WorkingDirectory = string.IsNullOrWhiteSpace(record.WorkingDirectory) ? null : record.WorkingDirectory,
             InheritEnvironmentVariables = false,
-            EnvironmentVariables = environment
+            EnvironmentVariables = environment,
+            // The SDK waits 5 s by default for the child to exit after stdin closes, and that wait is paid on every disable and
+            // inside the host's shutdown budget. A server that flushes on end of input finishes well inside 2 s.
+            ShutdownTimeout = StdioShutdownTimeout
         };
     }
 

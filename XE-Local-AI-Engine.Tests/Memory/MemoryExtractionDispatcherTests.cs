@@ -328,6 +328,48 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
     }
 
     [Test]
+    public async Task StopAsync_WhenTheHostTokenIsAlreadyCancelled_SaysTheHostBudgetWasSpentNotThatTheDrainExceeded()
+    {
+        // Windows tester round 3 (N-20): a host whose budget was spent stopped this worker on a cancelled token, and the log
+        // claimed the drain was exceeded. The window here is a minute, so only the cancelled token can end the drain in time.
+        var agentId = Guid.NewGuid();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var extraction = Substitute.For<IMemoryExtractionService>();
+        extraction.ExtractAsync(Arg.Any<MemoryExtractionRunInput>(), Arg.Any<CancellationToken>())
+                  .Returns(async callInfo =>
+                  {
+                      entered.TrySetResult();
+                      await Task.Delay(Timeout.Infinite, callInfo.Arg<CancellationToken>());
+                      return MemoryExtractionOutcome.NoModelConfigured();
+                  });
+
+        await using var provider = await BuildProviderAsync("exec-log-host-budget.sqlite", extraction);
+        var logger = new CapturingLogger<MemoryExtractionWorker>();
+        var optionsAccessor = Options.Create(new MemoryExtractionOptions
+        {
+            MaxConcurrentExtractions = 1,
+            ShutdownDrainTimeoutSeconds = 60
+        });
+        var dispatcher = new MemoryExtractionDispatcher(optionsAccessor, NullLogger<MemoryExtractionDispatcher>.Instance);
+        var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
+            dispatcher,
+            optionsAccessor,
+            logger);
+        await worker.StartAsync(CancellationToken.None);
+
+        dispatcher.Dispatch(Telemetry(agentId), Run(agentId, Guid.NewGuid(), Guid.NewGuid()));
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await worker.StopAsync(new CancellationToken(canceled: true)).WaitAsync(TimeSpan.FromSeconds(15));
+        worker.Dispose();
+
+        var log = logger.AllText;
+        // The abandoned count is a real-clock race (the post-deadline grace under load), so only the reason is asserted.
+        AssertEx.True(log.Contains("the host shutdown budget was already spent", StringComparison.Ordinal), log);
+        AssertEx.False(log.Contains("shutdown drain exceeded", StringComparison.Ordinal), log);
+    }
+
+    [Test]
     public async Task StopAsync_WhenJobIgnoresCancellation_AbandonsWithinBoundsLogsCountAndSurvivesRelease()
     {
         var agentId = Guid.NewGuid();

@@ -54,6 +54,9 @@ public static class NodeSchedulerServiceCollectionExtensions
             });
             q.UseTimeZoneConverter();
             q.UseJobAutoInterrupt(o => o.DefaultMaxRunTime = TimeSpan.FromMinutes(options.DefaultMaxRuntimeMinutes));
+            // The hosted service shuts down waiting for jobs, so interrupt them first: a running scheduled job then observes
+            // cancellation instead of holding the host's shutdown budget until it finishes on its own.
+            q.InterruptJobsOnShutdownWithWait = true;
         });
         builder.Services.AddQuartzHostedService(o => o.WaitForJobsToComplete = true);
 

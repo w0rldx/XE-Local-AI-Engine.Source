@@ -8,10 +8,12 @@ using System.Security.Authentication;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -23,6 +25,7 @@ using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 // System.ComponentModel declares its own CategoryAttribute, and a file-scoped using beats the global one.
@@ -381,6 +384,22 @@ public sealed class McpServerConnectionManagerTests
     }
 
     [Test]
+    public async Task RefreshAsync_TheScrubbedTailKeepsScriptWordsAndPathArguments_ButStillRedactsAWholeArgumentToken()
+    {
+        // Tester round 3 (REPORT-3 §6.5, N-16): whitespace-splitting a cmd /c script argument blanked "[canary]" and the probe DLL path.
+        var dll = OperatingSystem.IsWindows() ? @"C:\probe\probe-mcp.dll" : "/opt/probe/probe-mcp.dll";
+        var status = await RefreshWithFailureAsync(
+            () => new McpServerStartupException("The MCP server 'Broken' exited before completing the MCP handshake.",
+                $"[canary] STEP1canary\nThe application '{dll}' does not exist\nkey arg-secret-9f8e7d6c rejected"),
+            arguments: ["/c", "echo [canary] & echo STEP1canary", dll, "arg-secret-9f8e7d6c"]);
+
+        AssertEx.True(status.LastError!.Contains("[canary] STEP1canary", StringComparison.Ordinal), status.LastError);
+        AssertEx.True(status.LastError.Contains(dll, StringComparison.Ordinal), status.LastError);
+        AssertEx.False(status.LastError.Contains("arg-secret-9f8e7d6c", StringComparison.Ordinal), status.LastError);
+        AssertEx.True(status.LastError.Contains("key [REDACTED] rejected", StringComparison.Ordinal), status.LastError);
+    }
+
+    [Test]
     public async Task RefreshAsync_StartupExceptionWhoseMessageAlreadyQuotesTheTail_DoesNotRepeatIt()
     {
         const string tail = "node: not found";
@@ -389,6 +408,23 @@ public sealed class McpServerConnectionManagerTests
 
         AssertEx.Equal(McpConnectionFailureReason.ServerStartupFailed, status.FailureReason);
         AssertEx.Equal($"The MCP server 'Broken' exited before completing the MCP handshake. Its stderr ended with:\n{tail}", status.LastError);
+    }
+
+    [Test]
+    public async Task RefreshAsync_StartupException_LogsTheWarningWithoutTheExceptionStack()
+    {
+        // Windows tester round 3 (observation i): one failed sandboxed start printed three stacks. The startup exception's message is
+        // already the diagnosis and the transport logged the facts, so the manager's line carries no exception object.
+        var record = StdioRecord("Broken");
+        var factory = new FakeMcpClientFactory();
+        factory.FailFor(record.Id, static () => new McpServerStartupException("The MCP server 'Broken' exited before completing the MCP handshake.", "node: not found"));
+        var logger = new CapturingLogger<McpServerConnectionManager>();
+        await using var manager = CreateManager(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), factory, new FakeMcpServerStore(record), logger: logger);
+
+        await manager.RefreshAsync();
+
+        AssertEx.Contains(logger.AllText, "failed to connect or list tools (ServerStartupFailed)");
+        AssertEx.False(logger.AllText.Contains(nameof(McpServerStartupException), StringComparison.Ordinal), logger.AllText);
     }
 
     [Test]
@@ -436,11 +472,12 @@ public sealed class McpServerConnectionManagerTests
     }
 
     private static async Task<McpServerConnectionStatus> RefreshWithFailureAsync(Func<Exception> failure, IAgentSandboxRuntimeProvider? sandboxProvider = null,
-        Dictionary<string, string>? environment = null, SandboxSecurityProfile profile = SandboxSecurityProfile.Low)
+        Dictionary<string, string>? environment = null, SandboxSecurityProfile profile = SandboxSecurityProfile.Low, string[]? arguments = null)
     {
         var record = StdioRecord("Broken") with
         {
-            Environment = environment ?? new Dictionary<string, string>()
+            Environment = environment ?? new Dictionary<string, string>(),
+            Arguments = arguments ?? []
         };
         var factory = new FakeMcpClientFactory();
         factory.FailFor(record.Id, failure);
@@ -1014,6 +1051,40 @@ public sealed class McpServerConnectionManagerTests
     }
 
     [Test]
+    public async Task DisposeAsync_DisposesEverySessionConcurrently()
+    {
+        // Windows tester round 3 (N-20): sessions were disposed one after another, so each stdio server's graceful-exit wait was
+        // paid in sequence inside the host's shutdown budget. Neither gated dispose can finish until both have started.
+        await using var alpha = await InProcMcpServer.StartAsync("alpha", AIFunctionFactory.Create(GetForecast, "get_forecast"));
+        await using var bravo = await InProcMcpServer.StartAsync("bravo", AIFunctionFactory.Create(GetForecast, "get_forecast"));
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var alphaClient = new GatedDisposeClient(alpha.Client, gate.Task);
+        await using var bravoClient = new GatedDisposeClient(bravo.Client, gate.Task);
+        var alphaRecord = StdioRecord("Alpha");
+        var bravoRecord = StdioRecord("Bravo");
+        var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
+        var factory = new FakeMcpClientFactory();
+        factory.AddClient(alphaRecord.Id, alphaClient);
+        factory.AddClient(bravoRecord.Id, bravoClient);
+        var manager = CreateManager(registry, factory, alphaRecord, bravoRecord);
+        await manager.RefreshAsync();
+        AssertEx.Equal(expected: 2, manager.GetStatuses().Count(static status => status.Connected));
+
+        var dispose = manager.DisposeAsync().AsTask();
+        try
+        {
+            await Task.WhenAll(alphaClient.DisposeEntered, bravoClient.DisposeEntered).WaitAsync(TimeSpan.FromSeconds(10));
+            AssertEx.False(dispose.IsCompleted, "Disposal waits for both gated sessions.");
+        }
+        finally
+        {
+            gate.TrySetResult();
+        }
+
+        await dispose.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Test]
     public async Task RefreshAsync_WhenTheCallerCancelsAfterTheClientConnected_DisposesTheClient()
     {
         // A cancel between connect and list was not caught, so the connected client — a child process or sandbox jail — was orphaned.
@@ -1265,12 +1336,13 @@ public sealed class McpServerConnectionManagerTests
     }
 
     private static McpServerConnectionManager CreateManager(McpToolRegistry registry, FakeMcpClientFactory factory, IMcpServerStore store, IAgentSandboxRuntimeProvider? sandboxProvider = null,
-        TimeProvider? timeProvider = null, McpOptions? mcpOptions = null, SandboxSecurityProfile profile = SandboxSecurityProfile.Low)
+        TimeProvider? timeProvider = null, McpOptions? mcpOptions = null, SandboxSecurityProfile profile = SandboxSecurityProfile.Low,
+        ILogger<McpServerConnectionManager>? logger = null)
     {
         return new McpServerConnectionManager(BuildScopeFactory(store), registry, factory, sandboxProvider ?? new FakeSandboxRuntimeProvider(TimeProvider.System),
             new StubNodeRuntimeSettings().WithSandboxSecurityProfile(profile).Build(),
             mcpOptions is null ? Options() : Microsoft.Extensions.Options.Options.Create(mcpOptions),
-            Microsoft.Extensions.Options.Options.Create(new AgentToolPipelineOptions()), timeProvider ?? TimeProvider.System, NullLogger<McpServerConnectionManager>.Instance);
+            Microsoft.Extensions.Options.Options.Create(new AgentToolPipelineOptions()), timeProvider ?? TimeProvider.System, logger ?? NullLogger<McpServerConnectionManager>.Instance);
     }
 
     // The manager resolves the (Scoped) store through a scope, so the test wraps the fake store in a real service
@@ -1504,6 +1576,58 @@ public sealed class McpServerConnectionManagerTests
             {
                 _failures[id] = exceptionFactory;
             }
+        }
+    }
+
+    /// <summary>Delegates to a real client, but its dispose signals that it started and then waits on a gate before disposing it.</summary>
+    private sealed class GatedDisposeClient : McpClient
+    {
+        private readonly TaskCompletionSource _disposeEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly Task _gate;
+        private readonly McpClient _inner;
+
+        // The SDK marks McpClient's protected constructor experimental; this test-only fake is the one way to gate a real session's
+        // dispose, and an SDK change to it fails this test build, never a product path.
+#pragma warning disable MCPEXP002
+        public GatedDisposeClient(McpClient inner, Task gate)
+#pragma warning restore MCPEXP002
+        {
+            _inner = inner;
+            _gate = gate;
+        }
+
+        public Task DisposeEntered => _disposeEntered.Task;
+
+        public override ServerCapabilities ServerCapabilities => _inner.ServerCapabilities;
+
+        public override Implementation ServerInfo => _inner.ServerInfo;
+
+        public override string? ServerInstructions => _inner.ServerInstructions;
+
+        public override Task<ClientCompletionDetails> Completion => _inner.Completion;
+
+        public override string? SessionId => _inner.SessionId;
+
+        public override string? NegotiatedProtocolVersion => _inner.NegotiatedProtocolVersion;
+
+        public override ValueTask<IDictionary<string, InputResponse>> ResolveInputRequestsAsync(IDictionary<string, InputRequest> inputRequests,
+            CancellationToken cancellationToken) =>
+            _inner.ResolveInputRequestsAsync(inputRequests, cancellationToken);
+
+        public override Task<JsonRpcResponse> SendRequestAsync(JsonRpcRequest request, CancellationToken cancellationToken = default) =>
+            _inner.SendRequestAsync(request, cancellationToken);
+
+        public override Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default) =>
+            _inner.SendMessageAsync(message, cancellationToken);
+
+        public override IAsyncDisposable RegisterNotificationHandler(string method, Func<JsonRpcNotification, CancellationToken, ValueTask> handler) =>
+            _inner.RegisterNotificationHandler(method, handler);
+
+        public override async ValueTask DisposeAsync()
+        {
+            _disposeEntered.TrySetResult();
+            await _gate;
+            await _inner.DisposeAsync();
         }
     }
 

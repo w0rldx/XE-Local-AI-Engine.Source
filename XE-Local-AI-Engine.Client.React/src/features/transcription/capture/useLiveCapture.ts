@@ -69,7 +69,8 @@ export interface LiveCaptureHandle {
 	/**
 	 * Audio forwarded to the node by the current capture, in milliseconds, whether or not it held speech: the capture
 	 * timer counts it because silence commits no segment. The longest lane, never their sum, so two sources running
-	 * side by side count once. Zero again when a new capture starts.
+	 * side by side count once. Zero again when a new capture starts. An application capture forwards no frame, so for
+	 * it this is browser wall-clock time since the node's recorder attached, ticked once a second.
 	 */
 	readonly capturedMs: number;
 	/**
@@ -126,6 +127,8 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 	const [capturedMs, setCapturedMs] = useState(0);
 	// Samples forwarded per lane since the current start.
 	const capturedSamplesRef = useRef<Partial<Record<CaptureChannel, number>>>({});
+	// The once-a-second clock of an application capture, which pushes no frame to count.
+	const wallClockRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const mountedRef = useRef(true);
 
 	// The state machine is read from inside promise continuations that outlive a render, so it is mirrored in a ref:
@@ -261,6 +264,10 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 	const stopSources = useCallback(async (): Promise<void> => {
 		startGenerationRef.current += 1;
 		forwardingRef.current = false;
+		if (wallClockRef.current !== null) {
+			clearInterval(wallClockRef.current);
+			wallClockRef.current = null;
+		}
 		const sources = sourcesRef.current;
 		sourcesRef.current = [];
 		await Promise.allSettled(sources.map((source) => source.stop()));
@@ -408,6 +415,14 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 					// No frame ever reaches `onFrame` for this kind; the flag is set anyway so "capturing implies
 					// forwarding" holds for every request kind.
 					forwardingRef.current = true;
+					// The node's audio clock is not pushed here, so the timer runs on a monotonic browser clock and keeps
+					// counting through a pause in the captured application. Every stop path clears it in `stopSources`.
+					const startedAt = performance.now();
+					wallClockRef.current = setInterval(() => {
+						if (mountedRef.current) {
+							setCapturedMs(Math.round(performance.now() - startedAt));
+						}
+					}, 1000);
 					setPhase("capturing");
 					return;
 				}

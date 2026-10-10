@@ -432,15 +432,19 @@ public sealed class SandboxedMcpStdioTransportTests
     }
 
     [Test]
-    public async Task Handshake_WhenTheServerExitsNonZeroWithoutStderr_NamesTheExitCodeInHexAndTheSandboxWarnings()
+    [Arguments(0xC0000142u, "exit code 0xC0000142", "only programs that never load user32 start")]
+    [Arguments(0xC06D007Eu, "exit code 0xC06D007E", "a DLL loaded on demand failed to load")]
+    [Arguments(0x80008089u, "exit code 0x80008089", "the .NET runtime could not start")]
+    [Arguments(0x00000001u, "exit code 0x00000001", null)]
+    public async Task Handshake_WhenTheServerExitsNonZeroWithoutStderr_NamesTheExitCodeInHexAndTheSandboxWarnings(uint exitCode, string expectedCode, string? expectedHint)
     {
-        // N-3: Windows PowerShell 5.1 under the Win32k-denied AppContainer dies with 0xC0000142 and writes nothing; the operator saw only
-        // "wrote nothing to stderr". The exit code, its meaning and MXC's own warnings are what say why.
+        // N-3, N-16, N-17: a Win32k-denied child dies silently (0xC0000142, a .NET app 0x80008089, a failed delay-load 0xC06D007E); the exit
+        // code, its meaning and MXC's warnings say why. A code with no known meaning gets no hint.
         var directory = CreateBindableDirectory("jail-path-");
         try
         {
             var server = CreateExecutable(directory, "xe-server");
-            await using var process = new ScriptedInteractiveProcess(stderrTail: null, unchecked((int)0xC0000142), ["ProcessContainer cleanup skipped"]);
+            await using var process = new ScriptedInteractiveProcess(stderrTail: null, unchecked((int)exitCode), ["ProcessContainer cleanup skipped"]);
             var provider = IsolatingProvider();
             provider.StartInteractiveAsync(Arg.Any<SandboxHandle>(), Arg.Any<SandboxCommandRequest>(), Arg.Any<CancellationToken>())
                     .Returns(Task.FromResult<ISandboxInteractiveProcess>(process));
@@ -453,8 +457,18 @@ public sealed class SandboxedMcpStdioTransportTests
             using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var exception = await AssertEx.ThrowsAsync<McpServerStartupException>(() => McpClient.CreateAsync(transport, clientOptions: null, NullLoggerFactory.Instance, handshake.Token));
 
-            AssertEx.Contains(exception.Message, "exit code 0xC0000142");
-            AssertEx.Contains(exception.Message, "Win32k");
+            AssertEx.Contains(exception.Message, expectedCode);
+            if (expectedHint is null)
+            {
+                // Nothing between the code and the warnings: an unmapped code gets no hint.
+                AssertEx.Contains(exception.Message, $"({expectedCode}). The sandbox reported:");
+            }
+            else
+            {
+                AssertEx.Contains(exception.Message, expectedHint);
+                AssertEx.Contains(exception.Message, "UI subsystem");
+            }
+
             AssertEx.Contains(exception.Message, "ProcessContainer cleanup skipped");
             AssertEx.Contains(exception.Message, "wrote nothing to stderr");
             AssertEx.Null(exception.StderrTail);

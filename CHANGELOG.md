@@ -253,6 +253,37 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- Windows tester round on `1.0.0-rc.2.dev.20261010.102`:
+  - The Windows sandbox startup hint for exit code 0xC0000142 wrongly said .NET 10 apps and PowerShell 7.7+ run under
+    the Sandboxed tier. Only native console programs that never load user32 start; Windows PowerShell, PowerShell 7,
+    .NET Framework and .NET apps do not, because coreclr.dll itself needs the UI subsystem the sandbox denies. The hint,
+    the user guide and the sandbox reference now say so, and a startup failure also explains exit codes 0xC06D007E (a
+    DLL loaded on demand failed) and 0x80008089 (the .NET runtime could not start). The stderr tail and the connection
+    error of a sandboxed command no longer blank every long word of a script argument or a full path argument; whole
+    argument tokens and environment secrets are still redacted. A failed server start logs one warning without a
+    duplicate stack trace, and the Preview-boundary footnote on Windows no longer names `run_python`.
+  - Live transcription with automatic language reports the language of the first committed segment, so a German session
+    that opens with "Hey" is no longer recorded as English.
+  - Per-application capture: the elapsed timer keeps counting while the captured application is paused, and the "No
+    audio from the captured application" notice appears about 10 s into a pause (a paused player's silent audio no longer
+    counts as audio); the node logs when a source goes quiet and when it is audible again.
+  - A host stop interrupts a running scheduled job instead of letting it hold the whole shutdown budget; the
+    conversation-maintenance and memory-extraction workers no longer report a drain as exceeded when the host had already
+    spent its budget; disabling or shutting down unsandboxed (Privileged host) stdio MCP servers waits at most 2 s per
+    server for a graceful exit (was 5 s) and closes all sessions in parallel.
+  - The first chat after a first-run install no longer pays the fresh llama.cpp runtime's device probe: the probe runs
+    during the starter-model download, through the same warm-up every runtime install path now uses.
+  - A scheduled job whose end time is before its start time, before now, or before a cron schedule's first fire is
+    refused with a 400 and nothing is stored (before, the request failed with a server error and left the job behind, and
+    an update deleted the live trigger); intervals above 366 days are refused too.
+  - A scheduled agent pinned to a model that is not installed fails with a message naming the agent and the model
+    instead of an "insufficient capacity" refusal, and the invocation monitor shows a fixed reason for an unavailable
+    model, a model that failed to load and a timeout instead of the generic failure line.
+  - A knowledge document refused for size names the limit ("maximum extractable size of 20,000,000 characters").
+  - Node Settings: the Thinking budgets and Answer length cards have a "Reset to defaults" button; the Managed Python card
+    shows the "Linux x64 only" reasons in the selected language; the "Default results" description says it applies to
+    the model's knowledge searches. About: the update section shows when the node last checked, so a cached result is
+    recognisable.
 - Windows tester round on `1.0.0-rc.2.dev.20261009.101`:
   - After a password unlock of the vault, the desktop build sometimes rejected the stored refresh cookie and landed
     on the login page. A password unlock now sets a one-time, two-minute unlock ticket cookie that the refresh
@@ -286,7 +317,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
     the engine turns off Windows hard-error dialogs once at start so such a child exits instead of hanging; and
     saving, enabling or deleting an MCP server returns at once while the reconnect settles in the background (a
     disabled or deleted server is cut off before the save returns, and a reconnect shows as connecting at once). The
-    docs state that a sandboxed stdio server on Windows must be native, .NET 10 or PowerShell 7.7 or later.
+    docs stated that a sandboxed stdio server on Windows must be native, .NET 10 or PowerShell 7.7 or later (corrected
+    by the round-3 entry above: native only).
   - Every scheduler route, hub included, answers 404 while the scheduler switch was off at startup, instead of a 400
     with a warning stack. The MXC ACL residue sweep
     logs when it finds nothing, startup logs the unlock-to-host gap and the host build time, and a node-key custody

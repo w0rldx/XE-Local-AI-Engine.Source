@@ -46,7 +46,7 @@ internal static class InvocationFailureClassifier
 
     // A provider HTTP 500 means the model was reached but failed to load OR run (an Ollama build too old for the architecture, an out-of-memory at load).
     // Phrased to cover both, so it never falsely asserts a permanent model defect while staying far more actionable than the generic "Provider unreachable.".
-    private const string ModelLoadFailedMessage = "The model could not be loaded or run on the provider.";
+    private const string ModelLoadFailedMessage = InvocationFailureMessages.ModelLoadFailed;
 
     // A "Local runtime default" send found no installed GGUF chat model to route to. Surfaced instead of the generic
     // "Provider unreachable." so the operator gets an actionable next step (pull a GGUF model) rather than a dead-end.
@@ -54,7 +54,7 @@ internal static class InvocationFailureClassifier
 
     // A generic (non-inter-chunk) timeout: the invocation-level cancel-after or an HTTP client timeout. Its framework
     // message can name hosts/paths and is unbounded, so a fixed, path-free constant is surfaced in its place.
-    private const string TimedOutMessage = "The operation timed out.";
+    private const string TimedOutMessage = InvocationFailureMessages.TimedOut;
 
     // A provider or gateway HTTP 404: nothing is installed locally, so the node's "not installed" text would mislead.
     private const string ProviderModelNotOfferedMessage = "The provider does not offer the selected model. Check the model id on the connection.";

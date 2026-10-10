@@ -777,6 +777,7 @@
 			"appUpdate": {
 				"title": "Updates",
 				"checkForUpdates": "Nach Updates suchen",
+				"lastChecked": "Zuletzt geprüft: {{time}}",
 				"updateNow": "Jetzt aktualisieren",
 				"restarting": "Neustart…",
 				"applyError": "Update fehlgeschlagen. Bitte erneut versuchen.",
@@ -2423,6 +2424,7 @@
 				"useDefault": "Standard verwenden",
 				"defaultValue": "Standard: {{value}}",
 				"defaultOption": "Standard ({{value}})",
+				"resetCard": "Auf Standardwerte zurücksetzen",
 				"agentHomeMaxRunSeconds": {
 					"label": "AgentHome-Laufzeitlimit",
 					"description": "Die maximale Dauer eines ganzen Laufs; mindestens das Befehls-Timeout. Gilt ab dem nächsten Lauf."
@@ -2516,7 +2518,7 @@
 				},
 				"knowledgeSearchDefaultResults": {
 					"label": "Standardanzahl der Treffer",
-					"description": "Trefferzahl, wenn das Modell keine Anzahl angibt. Höchstens das Maximum darunter."
+					"description": "Trefferzahl für die Wissenssuchen des Modells, wenn es keine Anzahl angibt. Höchstens das Maximum darunter."
 				},
 				"knowledgeSearchMaxResults": {
 					"label": "Maximale Trefferzahl"
@@ -2877,6 +2879,10 @@
 				"uvPresent": "Installiert",
 				"uvMissing": "Noch nicht heruntergeladen",
 				"uvUnsupported": "Auf dieser Plattform nicht verfügbar",
+				"unsupportedReasons": {
+					"trainingLinuxX64Only": "Training ist nur unter Linux x64 verfügbar.",
+					"computeLinuxX64Only": "Das Python-Rechenwerkzeug ist nur unter Linux x64 verfügbar."
+				},
 				"pythonInstallsTitle": "Installierte Python-Interpreter",
 				"noPythonInstalls": "Noch keine installiert.",
 				"pythonMinor": "Python {{version}}",

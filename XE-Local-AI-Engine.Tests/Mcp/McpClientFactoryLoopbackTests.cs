@@ -127,6 +127,15 @@ public sealed class McpClientFactoryLoopbackTests
         }
     }
 
+    [Test]
+    public void BuildStdioTransportOptions_GivesTheServerTwoSecondsToExitAfterItsSessionCloses()
+    {
+        // Windows tester round 3 (N-20): the SDK's 5 s default was paid on every disable and inside the host's shutdown budget.
+        var options = McpClientFactory.BuildStdioTransportOptions(StdioRecord(new Dictionary<string, string>(StringComparer.Ordinal)));
+
+        AssertEx.Equal(TimeSpan.FromSeconds(2), options.ShutdownTimeout);
+    }
+
     private static async Task AssertThrowsInvalidOperationAsync(Func<Task> action)
     {
         try

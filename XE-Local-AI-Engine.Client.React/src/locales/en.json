@@ -777,6 +777,7 @@
 			"appUpdate": {
 				"title": "Updates",
 				"checkForUpdates": "Check for updates",
+				"lastChecked": "Last checked {{time}}",
 				"updateNow": "Update now",
 				"restarting": "Restarting…",
 				"applyError": "Update failed. Please try again.",
@@ -2423,6 +2424,7 @@
 				"useDefault": "Use default",
 				"defaultValue": "Default: {{value}}",
 				"defaultOption": "Default ({{value}})",
+				"resetCard": "Reset to defaults",
 				"agentHomeMaxRunSeconds": {
 					"label": "AgentHome run time limit",
 					"description": "The longest a whole run may take; at least the command timeout. Applies to the next run."
@@ -2516,7 +2518,7 @@
 				},
 				"knowledgeSearchDefaultResults": {
 					"label": "Default results",
-					"description": "Results returned when the model does not ask for a number. At most the maximum below."
+					"description": "Results for the model's knowledge searches when it does not ask for a number. At most the maximum below."
 				},
 				"knowledgeSearchMaxResults": {
 					"label": "Maximum results"
@@ -2877,6 +2879,10 @@
 				"uvPresent": "Installed",
 				"uvMissing": "Not downloaded yet",
 				"uvUnsupported": "Not available on this platform",
+				"unsupportedReasons": {
+					"trainingLinuxX64Only": "Training is available on Linux x64 only.",
+					"computeLinuxX64Only": "The Python compute tool is available on Linux x64 only."
+				},
 				"pythonInstallsTitle": "Installed Python interpreters",
 				"noPythonInstalls": "None installed yet.",
 				"pythonMinor": "Python {{version}}",

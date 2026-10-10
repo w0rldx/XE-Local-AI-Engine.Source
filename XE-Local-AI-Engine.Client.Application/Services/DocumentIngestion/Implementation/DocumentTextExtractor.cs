@@ -555,7 +555,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
     {
         if (outputChars > _maxStructuredOutputChars)
         {
-            return "Document text exceeds the maximum extractable size.";
+            return string.Create(CultureInfo.InvariantCulture, $"Document text exceeds the maximum extractable size of {_maxStructuredOutputChars:N0} characters.");
         }
 
         return EvaluateExpansion(inputBytes, outputChars);

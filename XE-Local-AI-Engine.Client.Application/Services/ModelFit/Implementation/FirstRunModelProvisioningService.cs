@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
+using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -22,6 +24,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
     private static readonly TimeSpan DefaultGpuProbeCeiling = TimeSpan.FromSeconds(25);
 
     private readonly IConfiguration _configuration;
+    private readonly IRuntimeDeviceAudit _deviceAudit;
     private readonly IGgufDownloadCoordinator _downloadCoordinator;
     private readonly IGgufModelStore _ggufModelStore;
     private readonly TimeSpan _gpuProbeCeiling;
@@ -41,7 +44,8 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         INodeRuntimeSettings nodeRuntimeSettings,
         TimeProvider timeProvider,
         ILogger<FirstRunModelProvisioningService> logger,
-        NodeLaunchContext launchContext)
+        NodeLaunchContext launchContext,
+        IRuntimeDeviceAudit deviceAudit)
         : this(configuration,
             ggufModelStore,
             downloadCoordinator,
@@ -50,6 +54,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             nodeRuntimeSettings,
             timeProvider,
             logger,
+            deviceAudit,
             (launchContext ?? throw new ArgumentNullException(nameof(launchContext))).IsLocalMode,
             TimeSpan.FromSeconds(2),
             DefaultGpuProbeCeiling)
@@ -66,6 +71,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         INodeRuntimeSettings nodeRuntimeSettings,
         TimeProvider timeProvider,
         ILogger<FirstRunModelProvisioningService> logger,
+        IRuntimeDeviceAudit deviceAudit,
         bool isLocalMode,
         TimeSpan pollInterval,
         TimeSpan gpuProbeCeiling)
@@ -78,6 +84,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _deviceAudit = deviceAudit ?? throw new ArgumentNullException(nameof(deviceAudit));
         _isLocalMode = isLocalMode;
         _pollInterval = pollInterval;
         _gpuProbeCeiling = gpuProbeCeiling;
@@ -194,6 +201,10 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             repoId.Trim());
         var binary = await _runtime.EnsureBinaryAsync(variant, ct);
         _logger.LogInformation("First-run provisioning ensured the llama.cpp runtime ({Variant}, version {Version}).", variant, binary.Version);
+
+        // Detached on the pool: the fresh runtime's first device probe overlaps the download instead of delaying the first chat,
+        // and the download never waits for it. The helper swallows its own failure, so the discarded task never faults unobserved.
+        _ = Task.Run(() => RuntimeDeviceAuditWarmup.WarmAsync(_deviceAudit, variant, _logger, ct), CancellationToken.None);
 
         // Download the default GGUF through the coordinator's detached path, so progress/cancel AND the llamacpp model_provider_map
         // write happen through the SAME code as an operator-initiated download (FRR-2), under the canonical {repo:quant} identity.

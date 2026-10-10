@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Transcription;
 
+using System.Buffers.Binary;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
@@ -413,9 +414,9 @@ public sealed class LiveTranscriptionSessionRegistryTests
     [Test]
     public async Task AttachingAProducer_DisarmsTheAttachmentDeadlineWithoutASingleFrame()
     {
-        // The positive control for the test above. A native capture of an application that happens to be silent
-        // pushes nothing at all — WASAPI never yields a silent packet — so a deadline that only the first FRAME
-        // disarmed would reap a session whose recorder was running perfectly well.
+        // The positive control for the test above. A native capture of an application with no open audio stream pushes
+        // nothing at all (NAudio drops packets flagged silent), so a deadline that only the first FRAME disarmed would
+        // reap a session whose recorder was running perfectly well.
         var transcriber = new ScriptedWhisperTranscriber(OneSegment);
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
@@ -442,8 +443,8 @@ public sealed class LiveTranscriptionSessionRegistryTests
     [Test]
     public async Task SourceQuiet_AnAttachedProducerWithNoAudio_IsReportedAndNeverEndsTheSession()
     {
-        // WASAPI yields no packet while its target is silent: a paused video and a closed tab look the same. The session
-        // must say the source is quiet and keep running, however long the quiet lasts.
+        // The ABSENCE case (no packet arrives); zero-valued frames are SourceQuiet_ZeroValuedFrames_AreReportedQuiet. The
+        // session must say the source is quiet and keep running, however long the quiet lasts.
         var transcriber = new ScriptedWhisperTranscriber(OneSegment);
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
@@ -493,6 +494,82 @@ public sealed class LiveTranscriptionSessionRegistryTests
             await AssertEx.EventuallyAsync(() => Snapshot(quiet).Count == 2, TestBudgets.Contended, "Audio returning is reported.");
             await AssertEx.SettleAsync();
             AssertEx.Equal("Others:10000,Others:0", string.Join(',', Snapshot(quiet)), "One zero, then nothing while audio flows again.");
+        }
+    }
+
+    [Test]
+    public async Task SourceQuiet_ZeroValuedFrames_AreReportedQuiet()
+    {
+        // The field case: a paused browser video keeps its stream open and WASAPI keeps delivering packets of digital
+        // silence. Frames arriving is not audio arriving; they are still transcribed, but they never reset the watch.
+        var transcriber = new FakeWhisperTranscriber
+        {
+            Result = NoSpeech
+        };
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var statuses = fixture.RecordStatuses();
+        var quiet = fixture.RecordSourceQuiet();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(sourceKind: TranscriptionSourceKind.ApplicationProcess,
+            channels: [TranscriptChannel.Others]), CancellationToken.None);
+        var registration = fixture.Registry.AttachProducer(sessionId, new SilentProducer());
+        using (registration.Detach)
+        {
+            for (var second = 1; second <= 11; second++)
+            {
+                await PushConsumedAsync(fixture, transcriber, sessionId, ConstantPcm(0, durationMs: 1_000));
+                fixture.Time.Advance(TimeSpan.FromSeconds(1));
+                await AssertEx.SettleAsync();
+            }
+
+            await AssertEx.EventuallyAsync(() => Snapshot(quiet).Count >= 2, TestBudgets.Contended, "Each check past the threshold reports.");
+            AssertEx.Equal("Others:10000,Others:11000", string.Join(',', Snapshot(quiet).Take(2)), $"Eleven seconds of silent frames read as eleven quiet seconds: {string.Join(',', Snapshot(quiet))}");
+            await AssertEx.EventuallyAsync(() => transcriber.CallCount > 0, TestBudgets.Contended, "The silent frames were still queued and transcribed.");
+            AssertEx.True(fixture.Registry.IsLive(sessionId), "A quiet source never ends the session.");
+            AssertEx.Empty(Snapshot(statuses), "No end of any kind happened.");
+            AssertEx.Equal(1, fixture.Logger.CountContaining("has been quiet for 10000 ms", LogLevel.Information), "The quiet transition is logged once.");
+        }
+    }
+
+    [Test]
+    public async Task SourceQuiet_AudibleFramesAfterSilence_ReportZero()
+    {
+        var transcriber = new FakeWhisperTranscriber
+        {
+            Result = NoSpeech
+        };
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var quiet = fixture.RecordSourceQuiet();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(sourceKind: TranscriptionSourceKind.ApplicationProcess,
+            channels: [TranscriptChannel.Others]), CancellationToken.None);
+        var registration = fixture.Registry.AttachProducer(sessionId, new SilentProducer());
+        using (registration.Detach)
+        {
+            for (var second = 1; second <= 10; second++)
+            {
+                await PushConsumedAsync(fixture, transcriber, sessionId, ConstantPcm(0, durationMs: 1_000));
+                fixture.Time.Advance(TimeSpan.FromSeconds(1));
+                await AssertEx.SettleAsync();
+            }
+
+            await AssertEx.EventuallyAsync(() => Snapshot(quiet).Count == 1, TestBudgets.Contended, $"The lane went quiet: {string.Join(',', Snapshot(quiet))}");
+
+            // At the threshold, not above it: a noise floor of exactly 32 is still quiet.
+            await PushConsumedAsync(fixture, transcriber, sessionId, ConstantPcm(-32, durationMs: 1_000));
+            fixture.Time.Advance(TimeSpan.FromSeconds(1));
+            await AssertEx.EventuallyAsync(() => Snapshot(quiet).Count == 2, TestBudgets.Contended, "A frame at the threshold is still quiet.");
+
+            await PushConsumedAsync(fixture, transcriber, sessionId, ConstantPcm(33, durationMs: 1_000));
+            fixture.Time.Advance(TimeSpan.FromSeconds(1));
+            await AssertEx.EventuallyAsync(() => Snapshot(quiet).Count == 3, TestBudgets.Contended, "Audio returning is reported.");
+
+            fixture.Time.Advance(TimeSpan.FromSeconds(3));
+            await AssertEx.SettleAsync();
+            AssertEx.Equal("Others:10000,Others:11000,Others:0", string.Join(',', Snapshot(quiet)), "One zero after the first audible frame, then nothing.");
+            AssertEx.Equal(1, fixture.Logger.CountContaining("is audible again", LogLevel.Information), "The return is logged once.");
         }
     }
 
@@ -1735,6 +1812,36 @@ public sealed class LiveTranscriptionSessionRegistryTests
             Confidence = 0.9
         }
     ];
+
+    /// <summary>What whisper answers for a window it heard nothing in.</summary>
+    private static readonly WhisperTranscriptionResult NoSpeech = new()
+    {
+        Text = string.Empty,
+        Segments = [],
+        DetectedLanguageCode = null,
+        DurationSeconds = 1.0
+    };
+
+    /// <summary>Pushes one second onto the Others lane and waits until the lane has submitted it, so no quiet check queues behind it.</summary>
+    private static async Task PushConsumedAsync(RegistryFixture fixture, FakeWhisperTranscriber transcriber, Guid sessionId, byte[] pcm)
+    {
+        var before = transcriber.CallCount;
+        await fixture.Registry.PushAudioAsync(sessionId, TranscriptChannel.Others, pcm, CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => transcriber.CallCount > before, TestBudgets.Contended, "The lane submitted the frame's window.");
+        await AssertEx.SettleAsync();
+    }
+
+    /// <summary>16 kHz mono int16 PCM whose every sample is <paramref name="sample" />.</summary>
+    private static byte[] ConstantPcm(short sample, int durationMs)
+    {
+        var pcm = new byte[durationMs * 32];
+        for (var offset = 0; offset < pcm.Length; offset += sizeof(short))
+        {
+            BinaryPrimitives.WriteInt16LittleEndian(pcm.AsSpan(offset), sample);
+        }
+
+        return pcm;
+    }
 
     /// <summary>A producer that never pushes and records whether it was asked to stop.</summary>
     private sealed class SilentProducer : ILiveAudioProducer

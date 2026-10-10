@@ -86,7 +86,9 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
             }
             catch (Exception exception) when (exception is TimeoutException or OperationCanceledException)
             {
-                abandoned = !await CancelAfterDeadlineAsync(readLoop);
+                // A host token already cancelled means the host's own shutdown budget ran out (often before this service was even
+                // asked to stop), so the drain window did not elapse and reporting it as exceeded would blame the wrong party.
+                abandoned = !await CancelAfterDeadlineAsync(readLoop, hostBudgetSpent: cancellationToken.IsCancellationRequested);
             }
         }
 
@@ -231,7 +233,7 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
     }
 
     /// <summary>Cancels the running job after the drain window elapsed; false when it ignored cancellation past the grace.</summary>
-    private async Task<bool> CancelAfterDeadlineAsync(Task readLoop)
+    private async Task<bool> CancelAfterDeadlineAsync(Task readLoop, bool hostBudgetSpent)
     {
         await _drainDeadline.CancelAsync();
 
@@ -251,10 +253,20 @@ public sealed class ConversationMaintenanceWorker : BackgroundService
             dropped++;
         }
 
-        _logger.LogWarning("Conversation maintenance worker shutdown drain exceeded {DrainSeconds:F0}s; abandoned {Abandoned} running and dropped {Dropped} queued job(s).",
-            _drainTimeout.TotalSeconds,
-            unwound ? 0 : 1,
-            dropped);
+        if (hostBudgetSpent)
+        {
+            _logger.LogWarning("Conversation maintenance worker stopped without draining: the host shutdown budget was already spent; abandoned {Abandoned} running and dropped {Dropped} queued job(s).",
+                unwound ? 0 : 1,
+                dropped);
+        }
+        else
+        {
+            _logger.LogWarning("Conversation maintenance worker shutdown drain exceeded {DrainSeconds:F0}s; abandoned {Abandoned} running and dropped {Dropped} queued job(s).",
+                _drainTimeout.TotalSeconds,
+                unwound ? 0 : 1,
+                dropped);
+        }
+
         return unwound;
     }
 

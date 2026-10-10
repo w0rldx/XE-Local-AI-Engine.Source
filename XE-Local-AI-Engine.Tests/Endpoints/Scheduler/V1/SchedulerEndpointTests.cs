@@ -443,6 +443,26 @@ public sealed class SchedulerEndpointTests
         AssertEx.Contains(payload, "the end of year 2099");
     }
 
+    [Test]
+    public async Task CreateJob_WhenTheEndIsBeforeTheStart_ReturnsBadRequestRatherThanAServerError()
+    {
+        // Quartz refused the end only after the row was stored, so the request answered 500 and left the job behind.
+        var start = new DateTimeOffset(DateTimeOffset.UtcNow.Year + 1, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var payload = await PostJobExpectingBadRequestAsync(new
+        {
+            templateId = "run-benchmark-batch",
+            displayName = "End before start",
+            scheduleKind = "Cron",
+            cronExpression = "0 0 * * * ?",
+            startAtUtc = start.ToUnixTimeMilliseconds(),
+            endAtUtc = start.AddHours(-1).ToUnixTimeMilliseconds(),
+            timeZoneId = "UTC",
+            parameters = """{"projectId":"6b88994a-5afe-4be8-8486-407d05ca58eb","models":["m"]}"""
+        });
+
+        AssertEx.Contains(payload, "End time must not be before the start time.");
+    }
+
     private async Task<string> PostJobExpectingBadRequestAsync(object body)
     {
         using var client = Factory.CreateClient();

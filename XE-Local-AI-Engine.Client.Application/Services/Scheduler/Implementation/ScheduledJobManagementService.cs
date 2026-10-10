@@ -444,6 +444,9 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         }
     }
 
+    /// <summary>The longest accepted simple interval, 366 days in seconds.</summary>
+    private const long MaxIntervalSeconds = 366L * 24 * 60 * 60;
+
     private static readonly long LatestScheduleTimeUtcMs =
         new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds() - 1;
 
@@ -472,8 +475,9 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
             throw new ScheduledJobValidationException($"Template '{input.TemplateId}' does not support the '{input.ScheduleKind}' schedule kind.");
         }
 
-        ValidateScheduleFields(input);
-        ValidateTimeZone(input.TimeZoneId);
+        // The time zone first: the cron end-time check reads the schedule in it.
+        var timeZone = ValidateTimeZone(input.TimeZoneId);
+        ValidateScheduleFields(input, timeZone);
 
         if (!string.IsNullOrWhiteSpace(input.Parameters))
         {
@@ -500,7 +504,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         return descriptor;
     }
 
-    private static void ValidateScheduleFields(ScheduledJobManagementInput input)
+    private void ValidateScheduleFields(ScheduledJobManagementInput input, TimeZoneInfo timeZone)
     {
         // Out of range, DateTimeOffset.FromUnixTimeMilliseconds throws while scheduling, which surfaced as a 500 (F-60).
         ValidateUnixMilliseconds(input.StartAtUtc, "Start time");
@@ -519,6 +523,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
                     throw new ScheduledJobValidationException("The cron expression is not valid.");
                 }
 
+                ValidateEndAt(input, timeZone);
                 break;
 
             case ScheduleKind.SimpleInterval:
@@ -527,11 +532,18 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
                     throw new ScheduledJobValidationException("A positive interval in seconds is required for a simple-interval schedule.");
                 }
 
+                // TimeSpan.FromSeconds overflows long before a long does, which surfaced as a 500 while scheduling.
+                if (input.IntervalSeconds > MaxIntervalSeconds)
+                {
+                    throw new ScheduledJobValidationException("The interval must be at most 366 days (31622400 seconds).");
+                }
+
                 if (input.RepeatCount is < 0)
                 {
                     throw new ScheduledJobValidationException("Repeat count, when set, must be zero or greater (omit it to repeat forever).");
                 }
 
+                ValidateEndAt(input, timeZone);
                 break;
 
             case ScheduleKind.OneShot:
@@ -549,6 +561,40 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
 
             default:
                 throw new ScheduledJobValidationException($"Schedule kind '{input.ScheduleKind}' is not supported.");
+        }
+    }
+
+    /// <summary>
+    ///     Rejects an end time Quartz would refuse only after the row is stored, which surfaced as a 500: one before the
+    ///     start (or before now, which Quartz uses without a start), and one before a cron schedule's first fire.
+    /// </summary>
+    /// <remarks>A one-shot start in the past stays accepted by design: its misfire policy decides whether it runs.</remarks>
+    private void ValidateEndAt(ScheduledJobManagementInput input, TimeZoneInfo timeZone)
+    {
+        if (input.EndAtUtc is not { } endAtMs)
+        {
+            return;
+        }
+
+        var end = DateTimeOffset.FromUnixTimeMilliseconds(endAtMs);
+        var start = input.StartAtUtc is { } startAtMs ? DateTimeOffset.FromUnixTimeMilliseconds(startAtMs) : _timeProvider.GetUtcNow();
+        if (end < start)
+        {
+            throw new ScheduledJobValidationException(input.StartAtUtc is null
+                ? "End time must not be before now."
+                : "End time must not be before the start time.");
+        }
+
+        if (input.ScheduleKind != ScheduleKind.Cron)
+        {
+            return;
+        }
+
+        // Quartz computes a cron trigger's first fire from one second before its start.
+        var cron = new CronExpression(input.CronExpression!) { TimeZone = timeZone };
+        if (cron.GetTimeAfter(start.AddSeconds(-1)) is not { } firstFire || firstFire > end)
+        {
+            throw new ScheduledJobValidationException("The schedule never fires before its end time.");
         }
     }
 
@@ -593,7 +639,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
         }
     }
 
-    private static void ValidateTimeZone(string timeZoneId)
+    private static TimeZoneInfo ValidateTimeZone(string timeZoneId)
     {
         if (string.IsNullOrWhiteSpace(timeZoneId))
         {
@@ -602,7 +648,7 @@ public sealed class ScheduledJobManagementService : IScheduledJobManagementServi
 
         try
         {
-            _ = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+            return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
         }
         catch (Exception exception) when (exception is TimeZoneNotFoundException or InvalidTimeZoneException)
         {

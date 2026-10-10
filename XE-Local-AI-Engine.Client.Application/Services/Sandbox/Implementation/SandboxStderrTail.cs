@@ -25,20 +25,25 @@ internal sealed class SandboxStderrTail
     private int _characters;
 
     public SandboxStderrTail(IEnumerable<string>? secretValues)
+        : this(new SecretValueRedactor(SecretValueRedactor.WithParts(secretValues ?? [], MinSecretLength)))
     {
-        _redactor = new SecretValueRedactor(SecretValueRedactor.WithParts(secretValues ?? [], MinSecretLength));
+    }
+
+    private SandboxStderrTail(SecretValueRedactor redactor)
+    {
+        _redactor = redactor;
     }
 
     /// <summary>
     ///     A tail redacting what <paramref name="request" /> itself carries: every environment value but the search path, and
-    ///     every argument, since a server's token is as often a command-line flag as a variable.
+    ///     every argument but a fully qualified path, since a server's token is as often a command-line flag as a variable.
     /// </summary>
     public static SandboxStderrTail For(SandboxCommandRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         var environment = (request.Environment ?? new Dictionary<string, string>(StringComparer.Ordinal)).Where(static pair => !SecretValueRedactor.IsSearchPathKey(pair.Key))
                                                                                                          .Select(static pair => pair.Value);
-        return new SandboxStderrTail(environment.Concat(request.Arguments));
+        return new SandboxStderrTail(new SecretValueRedactor(SecretValueRedactor.ForCommand(environment, request.Arguments, MinSecretLength)));
     }
 
     /// <summary>Appends one redacted line, evicting the oldest until both bounds hold again.</summary>

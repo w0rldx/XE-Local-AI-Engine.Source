@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -22,6 +23,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -113,6 +115,40 @@ public sealed class RunSavedAgentHandlerTests
 
         AssertEx.Equal(expected: 1, harness.RunCount);
         AssertEx.Equal("pinned-local-model", harness.CapturedPackage!.ModelProfile!);
+        await harness.Gguf.Received(1).ExistsAsync("pinned-local-model", Arg.Any<CancellationToken>());
+    }
+
+    // A missing GGUF used to reach capacity, whose unknown footprint read as "insufficient capacity". The refusal names the model and is
+    // reported under the slot, so the invocation monitor records it as ModelUnavailable.
+    [Test]
+    public async Task ExecuteAsync_WhenThePinnedLlamaModelIsNotInstalled_RefusesNamingTheModelBeforeCapacity()
+    {
+        using var harness = new Harness();
+        harness.Store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(BuildDefinition(modelProfile: "missing-model"));
+        harness.Gguf.ExistsAsync("missing-model", Arg.Any<CancellationToken>()).Returns(false);
+
+        var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None));
+
+        AssertEx.Equal("The agent 'Log Summarizer' is pinned to model 'missing-model', which is not installed on this node. Install the model or re-pin the agent.",
+            exception.Message);
+        AssertEx.Equal(expected: 0, harness.RunCount);
+        await harness.Capacity.DidNotReceive().DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
+        await harness.Dispatcher.Received(1).ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>());
+        await harness.Dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), exception.Message, FailureCategory.ModelUnavailable);
+    }
+
+    // Ollama owns its own model store, so a pin it serves is never refused for a missing GGUF.
+    [Test]
+    public async Task ExecuteAsync_WhenThePinnedModelRoutesToOllama_RunsWithoutAGguf()
+    {
+        using var harness = new Harness();
+        harness.Store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(BuildDefinition(modelProfile: "qwen3:8b"));
+        harness.Providers.ResolveProviderNameForModelAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns("ollama");
+        harness.Gguf.ExistsAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns(false);
+
+        await harness.Handler.ExecuteAsync(Context(ValidParams()), CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, harness.RunCount);
     }
 
     [Test]
@@ -266,6 +302,8 @@ public sealed class RunSavedAgentHandlerTests
         AssertEx.Contains(exception.Message, "Insufficient capacity");
         AssertEx.Equal(expected: 0, harness.RunCount);
         AssertEx.False(harness.ReservationDisposed, "a reject carries no reservation to dispose.");
+        // A capacity refusal is not a missing model: it carries the category the chat path gives a refused model launch.
+        await harness.Dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), exception.Message, FailureCategory.ModelLoadFailed);
     }
 
     // Capacity is decided with the node-wide invocation slot HELD. Deciding first let a second fire for the same cold
@@ -561,6 +599,8 @@ public sealed class RunSavedAgentHandlerTests
             LocalDefault.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(EffectiveLocalModel);
             Store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(BuildDefinition(modelProfile: null));
             Capability.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false));
+            Providers.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(LlamaServerProviderConstants.ProviderName);
+            Gguf.ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
             Capacity
                 .DecideAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>())
                 .Returns(new CapacityDecision
@@ -600,6 +640,8 @@ public sealed class RunSavedAgentHandlerTests
             services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
             services.AddSingleton(Runner);
             services.AddSingleton(Dispatcher);
+            services.AddSingleton(Providers);
+            services.AddSingleton(Gguf);
             var provider = services.BuildServiceProvider();
 
             Handler = new RunSavedAgentHandler(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<RunSavedAgentHandler>.Instance);
@@ -621,6 +663,12 @@ public sealed class RunSavedAgentHandlerTests
         public INodeRuntimeSettings RuntimeSettings { get; } = StubNodeRuntimeSettings.Create().Build();
 
         public ICapacityService Capacity { get; } = Substitute.For<ICapacityService>();
+
+        /// <summary>Routes every model to llama-server until a test remaps one.</summary>
+        public ILocalModelProviderResolver Providers { get; } = Substitute.For<ILocalModelProviderResolver>();
+
+        /// <summary>Reports every model installed until a test removes one.</summary>
+        public IGgufModelStore Gguf { get; } = Substitute.For<IGgufModelStore>();
 
         public IInvocationRunner Runner { get; } = Substitute.For<IInvocationRunner>();
 

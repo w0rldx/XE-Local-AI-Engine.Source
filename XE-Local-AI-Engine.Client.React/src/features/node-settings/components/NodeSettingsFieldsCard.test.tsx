@@ -743,6 +743,49 @@ describe("NodeSettingsFieldsCard — chat knobs", () => {
 		expect(screen.queryByTestId("node-settings-reasoning-budget-medium-use-default")).toBeNull();
 	});
 
+	it("resets every thinking-budget field of the card to its default with one click", () => {
+		const { onChange } = renderCard({
+			section: "chat",
+			form: {
+				...toNodeSettingsFieldsForm(undefined),
+				defaultReasoningEffort: "high",
+				reasoningBudgetMinimalTokens: 256,
+				reasoningBudgetLowTokens: 512,
+				reasoningBudgetMediumTokens: 4096,
+				reasoningBudgetHighTokens: 8192,
+			},
+		});
+		const card = screen.getByTestId("node-settings-reasoning-budgets-card");
+
+		fireEvent.click(within(card).getByTestId("node-settings-reasoning-budgets-card-reset"));
+
+		expect(within(card).getByTestId("node-settings-reasoning-budgets-card-reset").textContent).toBe("Reset to defaults");
+		for (const field of [
+			"defaultReasoningEffort",
+			"reasoningBudgetMinimalTokens",
+			"reasoningBudgetLowTokens",
+			"reasoningBudgetMediumTokens",
+			"reasoningBudgetHighTokens",
+		]) {
+			expect(onChange).toHaveBeenCalledWith(field, "");
+		}
+		expect(onChange).toHaveBeenCalledTimes(5);
+	});
+
+	it("resets the answer-length mode and ceiling to their defaults with one click", () => {
+		const { onChange } = renderCard({
+			section: "chat",
+			form: { ...toNodeSettingsFieldsForm(undefined), chatOutputCapMode: "off", chatOutputCapMaxTokens: 2048 },
+		});
+		const card = screen.getByTestId("node-settings-output-cap-card");
+
+		fireEvent.click(within(card).getByTestId("node-settings-output-cap-card-reset"));
+
+		expect(onChange).toHaveBeenCalledWith("chatOutputCapMode", "");
+		expect(onChange).toHaveBeenCalledWith("chatOutputCapMaxTokens", "");
+		expect(onChange).toHaveBeenCalledTimes(2);
+	});
+
 	it("keeps the same input mounted when an unset thinking budget gets its first digit", () => {
 		const field = (form: NodeSettingsFieldsForm) => (
 			<MantineProvider env="test" theme={testMantineTheme}>
@@ -770,7 +813,7 @@ describe("NodeSettingsFieldsCard — chat knobs", () => {
 		expect(screen.getByTestId("budget-use-default")).toBeTruthy();
 	});
 
-	it("ships the use-default and slow-hardware timeout strings in en and de", () => {
+	it("ships the use-default, card-reset and slow-hardware timeout strings in en and de", () => {
 		const de = nonEnglishLocales.find((locale) => locale.code === "de")?.resource;
 		const lookup = (bundle: unknown, key: string) =>
 			key.split(".").reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], bundle);
@@ -778,6 +821,7 @@ describe("NodeSettingsFieldsCard — chat knobs", () => {
 			["pages.nodeSettings.fields.useDefault", "Use default", "Standard verwenden"],
 			["pages.nodeSettings.fields.defaultValue", "Default: {{value}}", "Standard: {{value}}"],
 			["pages.nodeSettings.fields.defaultOption", "Default ({{value}})", "Standard ({{value}})"],
+			["pages.nodeSettings.fields.resetCard", "Reset to defaults", "Auf Standardwerte zurücksetzen"],
 			[
 				"pages.nodeSettings.fields.chatOutputCapMaxTokens.timeoutHint",
 				"On slow hardware a long answer can reach the message request timeout (Local chat runtime) before this limit. If answers end in a timeout, raise that timeout.",

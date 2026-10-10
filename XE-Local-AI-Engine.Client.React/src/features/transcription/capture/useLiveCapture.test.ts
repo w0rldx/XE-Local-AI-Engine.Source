@@ -881,6 +881,56 @@ describe("useLiveCapture", () => {
 		expect(result.current.state).toBe("idle");
 	});
 
+	// An application capture pushes no frame, so a timer counted from frames sat at the last committed segment's end:
+	// frozen through a pause, then jumping when the next segment committed. It runs on the browser's clock instead.
+	it("ticks the captured time once a second from the browser clock during an application capture", async () => {
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "performance"] });
+		try {
+			liveStartOk();
+			processCaptureOk([]);
+			const { factory } = harness();
+			const { result } = renderCapture();
+
+			await startCapture(result, { kind: "process", processId }, factory);
+			expect(result.current.capturedMs).toBe(0);
+
+			act(() => {
+				vi.advanceTimersByTime(3000);
+			});
+			expect(result.current.capturedMs).toBe(3000);
+
+			await act(async () => {
+				await result.current.stop();
+			});
+			act(() => {
+				vi.advanceTimersByTime(5000);
+			});
+			expect(result.current.capturedMs).toBe(3000);
+			expect(vi.getTimerCount()).toBe(0);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	// Unmount is the one stop path with no state left to read: the clock must not outlive the page.
+	it("stops the application-capture clock on unmount", async () => {
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "performance"] });
+		try {
+			liveStartOk();
+			processCaptureOk([]);
+			const { factory } = harness();
+			const { result, unmount } = renderCapture();
+
+			await startCapture(result, { kind: "process", processId }, factory);
+			expect(vi.getTimerCount()).toBe(1);
+
+			unmount();
+			expect(vi.getTimerCount()).toBe(0);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	// Regression: `endSession` resolves false when there is no connected hub, and that used to end the run silently —
 	// the UI went idle, the reconnect re-subscribed and disarmed the node's abandonment grace, and the node kept the
 	// session open. For an ApplicationProcess session that means the node goes on recording the operator's

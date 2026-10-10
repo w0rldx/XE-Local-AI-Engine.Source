@@ -1,4 +1,4 @@
-import { Card, Group, Select, Stack, Switch, Title } from "@mantine/core";
+import { Button, Card, Group, Select, Stack, Switch, Title } from "@mantine/core";
 import {
 	IconArrowsMinimize,
 	IconBox,
@@ -42,13 +42,17 @@ function TunableCard({
 	title,
 	icon,
 	testId,
+	onReset,
 	children,
 }: {
 	readonly title: string;
 	readonly icon: ReactNode;
 	readonly testId: string;
+	// Optional card-level reset: blanks every field of the card back to the shipped default (the save sends the clear).
+	readonly onReset?: () => void;
 	readonly children: ReactNode;
 }) {
+	const { t } = useTranslation();
 	return (
 		<Card withBorder={true} radius="md" p="lg" data-testid={testId}>
 			<Stack gap="md">
@@ -56,7 +60,14 @@ function TunableCard({
 					<Title order={2} size="h4">
 						{title}
 					</Title>
-					{icon}
+					<Group gap="xs" wrap="nowrap">
+						{onReset !== undefined && (
+							<Button variant="subtle" size="compact-sm" onClick={onReset} data-testid={`${testId}-reset`}>
+								{t("pages.nodeSettings.fields.resetCard", "Reset to defaults")}
+							</Button>
+						)}
+						{icon}
+					</Group>
 				</Group>
 				{children}
 			</Stack>
@@ -120,6 +131,13 @@ export function NodeSettingsReasoningBudgetsCard({ bounds, ...field }: NodeSetti
 			title={t("pages.nodeSettings.fields.reasoningBudgets.title", "Thinking budgets")}
 			icon={<IconBulb size={20} />}
 			testId="node-settings-reasoning-budgets-card"
+			onReset={() => {
+				field.onChange("defaultReasoningEffort", "");
+				field.onChange("reasoningBudgetMinimalTokens", "");
+				field.onChange("reasoningBudgetLowTokens", "");
+				field.onChange("reasoningBudgetMediumTokens", "");
+				field.onChange("reasoningBudgetHighTokens", "");
+			}}
 		>
 			<Select
 				label={nodeSettingsFieldLabel(
@@ -195,6 +213,10 @@ export function NodeSettingsOutputCapCard({ bounds, ...field }: NodeSettingsTuna
 			title={t("pages.nodeSettings.fields.chatOutputCap.title", "Answer length")}
 			icon={<IconRuler size={20} />}
 			testId="node-settings-output-cap-card"
+			onReset={() => {
+				field.onChange("chatOutputCapMode", "");
+				field.onChange("chatOutputCapMaxTokens", "");
+			}}
 		>
 			<Select
 				label={nodeSettingsFieldLabel(
@@ -316,7 +338,7 @@ export function NodeSettingsKnowledgeSearchCard({ bounds, ...field }: NodeSettin
 				label={t("pages.nodeSettings.fields.knowledgeSearchDefaultResults.label", "Default results")}
 				description={t(
 					"pages.nodeSettings.fields.knowledgeSearchDefaultResults.description",
-					"Results returned when the model does not ask for a number. At most the maximum below.",
+					"Results for the model's knowledge searches when it does not ask for a number. At most the maximum below.",
 				)}
 				bounds={bounds.tunables.knowledgeSearchDefaultResults}
 				testId="node-settings-knowledge-default-results"

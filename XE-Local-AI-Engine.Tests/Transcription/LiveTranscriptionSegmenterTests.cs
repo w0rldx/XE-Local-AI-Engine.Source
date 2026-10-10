@@ -547,14 +547,15 @@ public sealed class LiveTranscriptionSegmenterTests
     [Test]
     public async Task DetectedLanguage_AWindowThatReportsNone_IsLearnedFromALaterOne()
     {
-        // A window can report no language (no speech in it); the session keeps the first code a later window reports.
+        // A window can report no language (no speech in it); the session keeps the first code a later committing window
+        // reports. ContinuousSpeech ends every segment at the window end, inside the tail guard, so only the 5 s cap commits.
         var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
 
         var before = await PushAsync(segmenter, 0, 2_500, 500);
         AssertEx.Null(segmenter.DetectedLanguageCode, "No window has reported a language yet.");
         transcriber.DetectedLanguageCode = "en";
-        var after = await PushAsync(segmenter, 2_500, 4_500, 500);
+        var after = await PushAsync(segmenter, 2_500, 5_500, 500);
 
         AssertEx.Equal("en", segmenter.DetectedLanguageCode);
         AssertEx.ContainsSingle(before.Concat(after), tick => tick.DetectedLanguage == "en", "It is reported once, on the call that learned it.");
@@ -586,10 +587,36 @@ public sealed class LiveTranscriptionSegmenterTests
         };
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
 
-        var ticks = await PushAsync(segmenter, 0, 3_000, 500);
+        // Past the 5 s cap, so the cap window commits and a later tick window reports the same code again.
+        var ticks = await PushAsync(segmenter, 0, 7_000, 500);
 
-        AssertEx.Equal("en", segmenter.DetectedLanguageCode, "The first code any window reports is the session's.");
+        AssertEx.NotEmpty(ticks.SelectMany(static tick => tick.Commits), "The cap window committed, so a language could be learned.");
+        AssertEx.Equal("en", segmenter.DetectedLanguageCode, "The first code a committing window reports is the session's.");
         AssertEx.ContainsSingle(ticks, tick => tick.DetectedLanguage == "en", "It is reported once, on the call that learned it.");
+    }
+
+    [Test]
+    public async Task DetectedLanguage_AWindowWhoseSegmentStaysProvisional_IsNotLearned()
+    {
+        // The field case: the first speech tick holds only "Hey" of a German sentence, is detected as English, and its
+        // segment ends inside the tail guard. The window that commits the whole sentence is detected as German.
+        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech)
+        {
+            DetectedLanguageCode = "en"
+        };
+        var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
+
+        var provisional = await PushAsync(segmenter, 0, 4_500, 500);
+        AssertEx.NotEmpty(transcriber.Windows, "The ticks submitted windows that reported a language.");
+        AssertEx.Empty(provisional.SelectMany(static tick => tick.Commits), "Every tick's segment stayed inside the tail guard.");
+        AssertEx.Null(segmenter.DetectedLanguageCode, "A window that committed nothing teaches no language.");
+
+        transcriber.DetectedLanguageCode = "de";
+        var committing = await PushAsync(segmenter, 4_500, 5_500, 500);
+
+        AssertEx.NotEmpty(committing.SelectMany(static tick => tick.Commits), "The cap window committed the sentence.");
+        AssertEx.Equal("de", segmenter.DetectedLanguageCode, "The committing window's language is the session's.");
+        AssertEx.ContainsSingle(committing, tick => tick.DetectedLanguage == "de", "It is reported once, on the committing call.");
     }
 
     [Test]

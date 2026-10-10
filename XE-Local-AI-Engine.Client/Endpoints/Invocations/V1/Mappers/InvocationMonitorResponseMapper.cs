@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Invocations.V1.Mappers;
 
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Invocation;
 
 internal static class InvocationMonitorResponseMapper
 {
@@ -70,8 +71,18 @@ internal static class InvocationMonitorResponseMapper
             return null;
         }
 
-        return status == InvocationStatus.Cancelled || failureCategory == FailureCategory.Cancelled
-            ? CancelledOperatorMessage
-            : FailedOperatorMessage;
+        if (status == InvocationStatus.Cancelled || failureCategory == FailureCategory.Cancelled)
+        {
+            return CancelledOperatorMessage;
+        }
+
+        // The stored error can carry paths or provider text, so only a fixed sentence keyed by the category is ever shown.
+        return failureCategory switch
+        {
+            FailureCategory.ModelUnavailable or FailureCategory.ModelNotInstalled => InvocationFailureMessages.ModelUnavailable,
+            FailureCategory.ModelLoadFailed => InvocationFailureMessages.ModelLoadFailed,
+            FailureCategory.Timeout => InvocationFailureMessages.TimedOut,
+            _ => FailedOperatorMessage
+        };
     }
 }

@@ -115,7 +115,7 @@ public sealed class MemoryExtractionWorker : BackgroundService
         {
             // 3. The window (or the host's own shutdown deadline) elapsed before the drain finished. Cancel the drain
             //    token, wait briefly for the read loop and stragglers to unwind, and account for the rest as dropped.
-            await AbandonAfterDeadlineAsync();
+            await AbandonAfterDeadlineAsync(hostBudgetSpent: cancellationToken.IsCancellationRequested);
         }
 
         // 4. Let the base observe ExecuteAsync's completion (it has already returned) and signal the stopping token.
@@ -181,7 +181,7 @@ public sealed class MemoryExtractionWorker : BackgroundService
             cancellationToken);
     }
 
-    private async Task AbandonAfterDeadlineAsync()
+    private async Task AbandonAfterDeadlineAsync(bool hostBudgetSpent)
     {
         // Cancel the shared drain token so the read loop returns and every in-flight job unwinds. Awaiting it BEFORE
         // returning is what keeps Dispose from tearing down the CTS and semaphore under a still-running job.
@@ -220,10 +220,20 @@ public sealed class MemoryExtractionWorker : BackgroundService
         // down the CTS and semaphore beneath it. The count is snapshotted so the deliberate trade is never silent.
         var abandoned = _inFlight.Count;
 
-        _logger.LogWarning("Memory extraction worker shutdown drain exceeded {DrainSeconds:F0}s; abandoned {Abandoned} in-flight and dropped {Dropped} queued extraction(s).",
-            _drainTimeout.TotalSeconds,
-            abandoned,
-            dropped);
+        // A cancelled host token means the host's budget, not this window, ran out, so the log must not say "exceeded".
+        if (hostBudgetSpent)
+        {
+            _logger.LogWarning("Memory extraction worker stopped without draining: the host shutdown budget was already spent; abandoned {Abandoned} in-flight and dropped {Dropped} queued extraction(s).",
+                abandoned,
+                dropped);
+        }
+        else
+        {
+            _logger.LogWarning("Memory extraction worker shutdown drain exceeded {DrainSeconds:F0}s; abandoned {Abandoned} in-flight and dropped {Dropped} queued extraction(s).",
+                _drainTimeout.TotalSeconds,
+                abandoned,
+                dropped);
+        }
 
         if (abandoned > 0)
         {
