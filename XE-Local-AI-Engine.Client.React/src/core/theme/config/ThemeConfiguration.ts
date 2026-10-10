@@ -37,11 +37,8 @@ const defaultBreakpoints = {
 	xl: 1280,
 };
 
-export type ThemeMode = "light" | "dark";
-
 export interface ThemeConfiguration {
 	palette: {
-		mode: ThemeMode;
 		primary: {
 			main: string;
 			hover: string;
@@ -97,10 +94,6 @@ function readScale(value: unknown, fallback: readonly string[]): string[] {
 	return entries;
 }
 
-function readMode(value: unknown): ThemeMode {
-	return value === "dark" ? "dark" : "light";
-}
-
 function readPalette(input: Record<string, unknown>): ThemeConfiguration["palette"] {
 	const palette = isRecord(input["palette"]) ? input["palette"] : {};
 	const primary = isRecord(palette["primary"]) ? palette["primary"] : {};
@@ -127,7 +120,6 @@ function readPalette(input: Record<string, unknown>): ThemeConfiguration["palett
 	normalizedSecondaryScale[9] = secondaryHover;
 
 	return {
-		mode: readMode(palette["mode"]),
 		primary: {
 			main: primaryMain,
 			hover: primaryHover,
@@ -165,7 +157,7 @@ function readBreakpoints(input: Record<string, unknown>) {
 	};
 }
 
-export function normalizeThemeConfiguration(input: unknown): ThemeConfiguration {
+function normalizeThemeConfiguration(input: unknown): ThemeConfiguration {
 	const source = isRecord(input) ? input : {};
 
 	return {

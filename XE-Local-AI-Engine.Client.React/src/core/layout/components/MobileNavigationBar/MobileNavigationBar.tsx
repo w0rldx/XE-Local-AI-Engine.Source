@@ -148,7 +148,7 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 					<MobileNavigationLanguageMenu menuItemStyle={menuItemStyle} setDrawerOpen={setDrawerOpen} width={width} />
 
 					{/* Report problem + About + Logout live in the desktop HeaderBar; on mobile the drawer is the
-				    only chrome, so it must offer them too. ThemeConfigurator stays desktop-only (palette editor). */}
+				    only chrome, so it must offer them too. */}
 					<SidebarMenu menuItemStyles={menuItemStyle}>
 						<div className="h-17 flex items-center justify-center">
 							<SidebarMenuItem

@@ -11,9 +11,8 @@ const AboutDialog = lazy(async () => {
 
 /**
  * Self-contained About trigger for the HeaderBar action cluster. Owns its own
- * open state and lazy-loads the {@link AboutDialog} on first open. Follows the
- * same pattern as ThemeConfiguratorDialogButton so new header dialogs can be
- * added by dropping another such button into the cluster.
+ * open state and lazy-loads the {@link AboutDialog} on first open, so new header
+ * dialogs can be added by dropping another such button into the cluster.
  */
 export function AboutDialogButton() {
 	const { t } = useTranslation();

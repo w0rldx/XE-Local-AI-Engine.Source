@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
-import { Alert, Table, useMantineTheme } from "@mantine/core";
+import { Alert, Table, useMantineColorScheme, useMantineTheme } from "@mantine/core";
 import { cleanup, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { sourceThemeConfiguration } from "@/core/theme/config/ThemeConfiguration";
 import { ThemeProvider } from "@/core/theme/provider/ThemeProvider";
+import { useThemeStore } from "@/core/theme/stores/ThemeStore";
 import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
 
 describe("ThemeProvider table scroll affordance", () => {
@@ -139,5 +141,44 @@ describe("ThemeProvider alert close button", () => {
 		);
 
 		expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+	});
+});
+
+describe("ThemeProvider accent colour", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+		useThemeStore.setState({ accentColor: null });
+	});
+
+	// Mantine owns the scheme now: with nothing stored it must follow the OS ("auto"), not a value forced by the app.
+	it("defaults the colour scheme to auto", () => {
+		localStorage.removeItem("mantine-color-scheme");
+
+		const { result } = renderHook(() => useMantineColorScheme(), { wrapper: ThemeProvider });
+
+		expect(result.current.colorScheme).toBe("auto");
+	});
+
+	// A user who never picks an accent must see exactly the shipped theme.json primary scale.
+	it("uses the shipped primary scale when no accent is chosen", () => {
+		useThemeStore.setState({ accentColor: null });
+
+		const { result } = renderHook(() => useMantineTheme(), { wrapper: ThemeProvider });
+
+		expect(result.current.colors["primary"]).toEqual(sourceThemeConfiguration.palette.primary.scale);
+	});
+
+	it("generates a full ten-shade primary scale from a chosen accent", () => {
+		useThemeStore.setState({ accentColor: "#1c7ed6" });
+
+		const { result } = renderHook(() => useMantineTheme(), { wrapper: ThemeProvider });
+		const primary = result.current.colors["primary"];
+
+		expect(primary).toHaveLength(10);
+		expect(primary?.[6]).not.toBe(sourceThemeConfiguration.palette.primary.scale[6]);
 	});
 });

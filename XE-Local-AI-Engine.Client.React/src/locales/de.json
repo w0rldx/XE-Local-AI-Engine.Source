@@ -142,6 +142,7 @@
 		"title": "Design",
 		"light": "Hell",
 		"dark": "Dunkel",
+		"system": "System",
 		"switchToLight": "Zum hellen Modus wechseln",
 		"switchToDark": "Zum dunklen Modus wechseln",
 		"toggleColorScheme": "Farbschema umschalten"
@@ -2918,7 +2919,19 @@
 			"developerOnlyNote": "Die AgentHome-Limits sind Entwicklereinstellungen. Aktiviere den Entwicklermodus unter Allgemein, um sie zu ändern.",
 			"browserPreferences": {
 				"title": "Dieser Browser",
-				"languageLabel": "Sprache"
+				"languageLabel": "Sprache",
+				"colorScheme": {
+					"label": "Farbschema",
+					"light": "Hell",
+					"dark": "Dunkel",
+					"system": "System"
+				},
+				"accentColor": {
+					"label": "Akzentfarbe",
+					"description": "Wird in diesem Browser für Schaltflächen, Links und Hervorhebungen verwendet.",
+					"useDefault": "Standard verwenden",
+					"eyeDropper": "Farbe vom Bildschirm aufnehmen"
+				}
 			},
 			"integrationLinks": {
 				"title": "Verwandte Einstellungen",
@@ -5019,42 +5032,6 @@
 			"title": "Benutzereinstellungen",
 			"changePassword": "Passwort ändern",
 			"accountInformation": "Account Informationen",
-			"themeConfigurator": {
-				"title": "Theme Konfigurator",
-				"description": "Aktives Theme temporär anpassen, direkt in der Anwendung testen und als JSON exportieren.",
-				"developerHint": "Entwickler können die exportierte JSON in src/theme/theme.json ersetzen und deployen.",
-				"generatorHint": "Generiere komplette Primär- und Sekundär-Farbskalen aus einer Basisfarbe.",
-				"mode": "Modus",
-				"fontFamily": "Schriftfamilie",
-				"breakpoints": "Umbruchpunkte",
-				"baseColor": "Basisfarbe",
-				"generatedScale": "Generierte Skala",
-				"invalidColor": "Bitte eine gültige Farbe eingeben (#RRGGBB oder rgb(r,g,b)).",
-				"primaryPalette": "Primärpalette",
-				"primaryPaletteDescription": "Wähle eine Basisfarbe und generiere die Primärabstufungen automatisch.",
-				"secondaryPalette": "Sekundärpalette",
-				"secondaryPaletteDescription": "Wähle eine Basisfarbe und generiere die Sekundärabstufungen automatisch.",
-				"primaryMain": "Primärfarbe",
-				"primaryHover": "Primärfarbe Hover",
-				"secondaryMain": "Sekundärfarbe",
-				"secondaryHover": "Sekundärfarbe Hover",
-				"variantsPreview": "Variantenvorschau",
-				"variantsPrimary": "Primäre Button-Varianten",
-				"variantsSecondary": "Sekundäre Button-Varianten",
-				"variantFilled": "Gefüllt",
-				"variantLight": "Leicht",
-				"variantOutline": "Outline",
-				"variantSubtle": "Subtil",
-				"applyPreview": "Vorschau anwenden",
-				"resetToSource": "Auf Quelle zurücksetzen",
-				"exportJson": "JSON exportieren",
-				"importJson": "JSON importieren",
-				"previewApplied": "Theme Vorschau angewendet",
-				"previewReset": "Theme Vorschau auf Quelle zurückgesetzt",
-				"exported": "Theme JSON exportiert",
-				"imported": "Theme JSON importiert und angewendet",
-				"importError": "Ungültige JSON Datei"
-			},
 			"passwordAndSecurity": "Passwort und Sicherheit",
 			"deviceSessions": "Gerätesitzungen",
 			"editProfile": "Profil bearbeiten",

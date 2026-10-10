@@ -106,8 +106,7 @@ Do not assume these exist or "restore" retired designs.
 - **No RAG over chat attachments,** no image/OCR ingestion. **STT ships** (whisper.cpp, wiki 24); TTS is browser Web
   Speech and Kokoro is not shipped.
 - **Open Canvas (Preview) is removed** and not coming back (wiki 21 §9); do not restore `PreviewWorkflow*`,
-  `features/preview/`, `preview/*` routes or `canvas_workflows`. Desktop-only ThemeConfigurator stays outside the
-  mobile-responsive scope.
+  `features/preview/`, `preview/*` routes or `canvas_workflows`.
 
 ## 7. Agentic support / MCP-only mode
 

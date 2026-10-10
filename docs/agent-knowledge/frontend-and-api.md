@@ -304,6 +304,6 @@ Superseded claims; the entries above are the active rules.
 | Stale belief | Current correction |
 |---|---|
 | `nodeCapabilities.preview` gates a route. | The flag, the route and the feature are gone; `graphWorkflows` is the successor and is on by default (§5). |
-| Desktop-only ThemeConfigurator/Open Canvas are outside the mobile-responsive scope. | Open Canvas is gone; only ThemeConfigurator carries that exclusion (§6). |
+| Desktop-only ThemeConfigurator/Open Canvas are outside the mobile-responsive scope. | Both are gone; no surface is excluded from the mobile-responsive scope (§6). Theme is Mantine-native, with scheme and accent in the node-settings "This browser" card. |
 | A capped route's 413 comes in FastEndpoints' `errors[]` shape when the endpoint refuses it itself. | Both the host's and the endpoint's refusal write the same ASP.NET `ProblemDetails` body via `RequestBodyTooLargeProblem` (§5). |
 | Date sites outside `formatTimestamp` were deliberately left on the browser locale. | No site is. S7-C moved the last four — the chat clock, the conversation-list day, the model-fit catalog release date and the usage dashboard's day label — onto `formatTimestamp`/`formatTime` through their optional `Intl.DateTimeFormatOptions` parameter (§5, wiki 10). |

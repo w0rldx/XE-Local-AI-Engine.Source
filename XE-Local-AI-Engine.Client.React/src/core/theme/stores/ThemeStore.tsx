@@ -1,72 +1,41 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import {
-	normalizeThemeConfiguration,
-	sourceThemeConfiguration,
-	type ThemeConfiguration,
-	type ThemeMode,
-} from "@/core/theme/config/ThemeConfiguration";
-import type { ThemeState } from "@/core/theme/models/ThemeModels";
-
-function copyThemeConfiguration(configuration: ThemeConfiguration): ThemeConfiguration {
-	return structuredClone(configuration);
+interface ThemeState {
+	accentColor: string | null;
+	setAccentColor: (_hex: string | null) => void;
 }
 
-function readPersistedMode(value: unknown, fallback: ThemeMode): ThemeMode {
-	if (value === "dark" || value === "light") {
-		return value;
+// The localStorage key the ThemeProvider's colour-scheme manager is built with; the colour scheme lives there now,
+// not here. Pinned explicitly because Mantine's default key has changed between minor versions.
+export const colorSchemeStorageKey = "mantine-color-scheme";
+
+function readAccentColor(value: unknown): string | null {
+	return typeof value === "string" && /^#[0-9a-f]{6}$/iu.test(value) ? value.toLowerCase() : null;
+}
+
+// Before the scheme moved to Mantine this store persisted `mode`; carry an explicit light/dark choice over once,
+// never over a scheme the user has already picked through Mantine. Storage can throw (private mode, quota).
+function migratePersistedMode(value: unknown) {
+	if (value !== "dark" && value !== "light") {
+		return;
 	}
 
-	return fallback;
+	try {
+		if (window.localStorage.getItem(colorSchemeStorageKey) === null) {
+			window.localStorage.setItem(colorSchemeStorageKey, value);
+		}
+	} catch {
+		// Without storage there is nothing to migrate into; Mantine falls back to the OS scheme.
+	}
 }
 
 export const useThemeStore = create<ThemeState>()(
 	persist(
 		(set) => ({
-			mode: sourceThemeConfiguration.palette.mode,
-			themeConfiguration: copyThemeConfiguration(sourceThemeConfiguration),
-			setMode: (mode) => {
-				set((state) => ({
-					mode,
-					themeConfiguration: {
-						...state.themeConfiguration,
-						palette: {
-							...state.themeConfiguration.palette,
-							mode,
-						},
-					},
-				}));
-			},
-			toggleColorMode: () => {
-				set((state) => {
-					const mode = state.mode === "light" ? "dark" : "light";
-
-					return {
-						mode,
-						themeConfiguration: {
-							...state.themeConfiguration,
-							palette: {
-								...state.themeConfiguration.palette,
-								mode,
-							},
-						},
-					};
-				});
-			},
-			applyThemeConfiguration: (configuration) => {
-				const normalizedConfiguration = normalizeThemeConfiguration(configuration);
-				set({
-					themeConfiguration: normalizedConfiguration,
-					mode: normalizedConfiguration.palette.mode,
-				});
-			},
-			resetThemeConfiguration: () => {
-				const resetConfiguration = copyThemeConfiguration(sourceThemeConfiguration);
-				set({
-					themeConfiguration: resetConfiguration,
-					mode: resetConfiguration.palette.mode,
-				});
+			accentColor: null,
+			setAccentColor: (hex) => {
+				set({ accentColor: readAccentColor(hex) });
 			},
 		}),
 		{
@@ -75,13 +44,11 @@ export const useThemeStore = create<ThemeState>()(
 				const persistedRecord =
 					typeof persistedState === "object" && persistedState !== null ? (persistedState as Record<string, unknown>) : {};
 
-				const normalizedConfiguration = normalizeThemeConfiguration(persistedRecord["themeConfiguration"]);
-				const mode = readPersistedMode(persistedRecord["mode"], normalizedConfiguration.palette.mode);
+				migratePersistedMode(persistedRecord["mode"]);
 
 				return {
 					...currentState,
-					mode,
-					themeConfiguration: normalizedConfiguration,
+					accentColor: readAccentColor(persistedRecord["accentColor"]),
 				};
 			},
 		},

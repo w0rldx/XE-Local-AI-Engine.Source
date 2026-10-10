@@ -142,6 +142,7 @@
 		"title": "Theme",
 		"light": "Light",
 		"dark": "Dark",
+		"system": "System",
 		"switchToLight": "Switch to light mode",
 		"switchToDark": "Switch to dark mode",
 		"toggleColorScheme": "Toggle color scheme"
@@ -2918,7 +2919,19 @@
 			"developerOnlyNote": "The AgentHome limits are developer settings. Turn on developer mode under General to change them.",
 			"browserPreferences": {
 				"title": "This browser",
-				"languageLabel": "Language"
+				"languageLabel": "Language",
+				"colorScheme": {
+					"label": "Colour scheme",
+					"light": "Light",
+					"dark": "Dark",
+					"system": "System"
+				},
+				"accentColor": {
+					"label": "Accent colour",
+					"description": "Used for buttons, links and highlights in this browser.",
+					"useDefault": "Use default",
+					"eyeDropper": "Pick a colour from the screen"
+				}
 			},
 			"integrationLinks": {
 				"title": "Related settings",
@@ -5019,42 +5032,6 @@
 			"title": "User Settings",
 			"changePassword": "Change Password",
 			"accountInformation": "Account Information",
-			"themeConfigurator": {
-				"title": "Theme Configurator",
-				"description": "Temporarily change the active theme, test it in the app, and export the result as JSON.",
-				"developerHint": "Developers can replace src/theme/theme.json with the exported JSON and deploy.",
-				"generatorHint": "Generate complete primary and secondary color scales from a single base color.",
-				"mode": "Mode",
-				"fontFamily": "Font family",
-				"breakpoints": "Breakpoints",
-				"baseColor": "Base color",
-				"generatedScale": "Generated scale",
-				"invalidColor": "Please enter a valid color (#RRGGBB or rgb(r,g,b)).",
-				"primaryPalette": "Primary palette",
-				"primaryPaletteDescription": "Pick a base color and auto-generate the primary shades.",
-				"secondaryPalette": "Secondary palette",
-				"secondaryPaletteDescription": "Pick a base color and auto-generate the secondary shades.",
-				"primaryMain": "Primary color",
-				"primaryHover": "Primary hover color",
-				"secondaryMain": "Secondary color",
-				"secondaryHover": "Secondary hover color",
-				"variantsPreview": "Variants preview",
-				"variantsPrimary": "Primary button variants",
-				"variantsSecondary": "Secondary button variants",
-				"variantFilled": "Filled",
-				"variantLight": "Light",
-				"variantOutline": "Outline",
-				"variantSubtle": "Subtle",
-				"applyPreview": "Apply Preview",
-				"resetToSource": "Reset To Source",
-				"exportJson": "Export JSON",
-				"importJson": "Import JSON",
-				"previewApplied": "Theme preview applied",
-				"previewReset": "Theme preview reset to source",
-				"exported": "Theme JSON exported",
-				"imported": "Theme JSON imported and applied",
-				"importError": "Invalid JSON file"
-			},
 			"passwordAndSecurity": "Password and Security",
 			"deviceSessions": "Device Sessions",
 			"editProfile": "Edit Profile",

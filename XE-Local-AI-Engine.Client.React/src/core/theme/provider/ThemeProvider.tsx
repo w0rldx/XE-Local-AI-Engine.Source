@@ -1,10 +1,12 @@
+import { generateColors } from "@mantine/colors-generator";
 import {
 	Alert,
 	alpha,
 	Card,
-	createTheme,
 	type CSSVariablesResolver,
+	createTheme,
 	defaultVariantColorsResolver,
+	localStorageColorSchemeManager,
 	MantineProvider,
 	parseThemeColor,
 	ScrollArea,
@@ -13,10 +15,12 @@ import {
 	type VariantColorsResolver,
 } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useThemeStore } from "@/core/theme/stores/ThemeStore";
+import { sourceThemeConfiguration } from "@/core/theme/config/ThemeConfiguration";
 import type { ThemeProviderProperties } from "@/core/theme/provider/ThemeProvider.types";
+import { colorSchemeStorageKey, useThemeStore } from "@/core/theme/stores/ThemeStore";
 
 // Mantine's light-mode `--mantine-color-dimmed` is gray-6 (#868e96), which is about 3.3:1 on white — under the
 // 4.5:1 WCAG 1.4.3 floor, and it is the colour of the size="sm"/"xs" secondary text that carries real meaning on
@@ -32,12 +36,16 @@ const cssVariablesResolver: CSSVariablesResolver = () => ({
 	dark: {},
 });
 
+// One manager for the app's lifetime, on the key the store's one-shot migration writes to.
+const colorSchemeManager = localStorageColorSchemeManager({ key: colorSchemeStorageKey });
+
 export function ThemeProvider({ children }: ThemeProviderProperties) {
 	// The theme object is rebuilt on every render (it always was), so the translated defaults below follow a
 	// language switch: useTranslation re-renders this provider, which hands MantineProvider a fresh theme.
 	const { t } = useTranslation();
-	const mode = useThemeStore((state) => state.mode);
-	const themeConfiguration = useThemeStore((state) => state.themeConfiguration);
+	const accentColor = useThemeStore((state) => state.accentColor);
+	const accentScale = useMemo(() => (accentColor === null ? null : generateColors(accentColor)), [accentColor]);
+	const themeConfiguration = sourceThemeConfiguration;
 	const primaryScale = themeConfiguration.palette.primary.scale;
 	const secondaryScale = themeConfiguration.palette.secondary.scale;
 	const primaryMain = themeConfiguration.palette.primary.main;
@@ -128,7 +136,7 @@ export function ThemeProvider({ children }: ThemeProviderProperties) {
 			}),
 		},
 		colors: {
-			primary: [
+			primary: accentScale ?? [
 				primaryScale[0] ?? primaryMain,
 				primaryScale[1] ?? primaryMain,
 				primaryScale[2] ?? primaryMain,
@@ -163,7 +171,12 @@ export function ThemeProvider({ children }: ThemeProviderProperties) {
 	});
 
 	return (
-		<MantineProvider theme={theme} forceColorScheme={mode} cssVariablesResolver={cssVariablesResolver}>
+		<MantineProvider
+			theme={theme}
+			defaultColorScheme="auto"
+			colorSchemeManager={colorSchemeManager}
+			cssVariablesResolver={cssVariablesResolver}
+		>
 			<Notifications position="top-right" autoClose={5000} />
 			{children}
 		</MantineProvider>

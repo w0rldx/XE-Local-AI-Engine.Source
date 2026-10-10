@@ -181,9 +181,10 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { useThemeStore } from "@/core/theme/stores/ThemeStore";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
-import { NodeSettings } from "@/features/node-settings/pages/NodeSettings";
 import type { NodeSettingsSectionId } from "@/features/node-settings/models/NodeSettingsSections";
+import { NodeSettings } from "@/features/node-settings/pages/NodeSettings";
 import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
 import { testMantineTheme } from "@/test/MantineTestRender";
 
@@ -275,6 +276,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		installJsdomEnvironmentMocks();
+		useThemeStore.setState({ accentColor: null });
 		generatedMock.getNodeSettingsOptions.mockReturnValue({
 			queryKey: ["getNodeSettings"],
 			queryFn: async () => settingsResponse,
@@ -805,6 +807,54 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		expect(within(card).getByTestId("developer-mode-switch")).toBeTruthy();
 		expect(within(card).getByTestId("node-settings-browser-only-badge").textContent).toBe("This browser only");
 		expect(screen.getByTestId("node-settings-ui-mode-card")).toBeTruthy();
+	});
+
+	it("puts the colour scheme and accent colour controls in the this-browser card", () => {
+		renderPage("general");
+
+		const card = screen.getByTestId("node-settings-browser-preferences-card");
+		expect(within(card).getByTestId("node-settings-color-scheme-control")).toBeTruthy();
+		expect(within(card).getByTestId("node-settings-accent-color-input")).toBeTruthy();
+		expect(within(card).queryByTestId("node-settings-accent-color-reset")).toBeNull();
+	});
+
+	it("switches Mantine's colour scheme from the scheme control", () => {
+		renderPage("general");
+
+		fireEvent.click(within(screen.getByTestId("node-settings-color-scheme-control")).getByText("Dark"));
+
+		expect(document.documentElement.getAttribute("data-mantine-color-scheme")).toBe("dark");
+	});
+
+	it("stores a complete accent hex, ignores partial input, and resets to the shipped default", () => {
+		renderPage("general");
+		const input = screen.getByTestId("node-settings-accent-color-input");
+
+		fireEvent.change(input, { target: { value: "#1c7" } });
+		expect(useThemeStore.getState().accentColor).toBeNull();
+
+		fireEvent.change(input, { target: { value: "#1c7ed6" } });
+		expect(useThemeStore.getState().accentColor).toBe("#1c7ed6");
+
+		fireEvent.click(screen.getByTestId("node-settings-accent-color-reset"));
+		expect(useThemeStore.getState().accentColor).toBeNull();
+		expect(screen.queryByTestId("node-settings-accent-color-reset")).toBeNull();
+	});
+
+	// A key or conditional wrapper on the accent input would remount it on the first choice and again on reset, which
+	// closes the picker mid-drag and drops focus mid-edit. A change event cannot see a remount; element identity can.
+	it("keeps the same accent input mounted across the first choice and a reset", () => {
+		renderPage("general");
+		const input = screen.getByTestId("node-settings-accent-color-input");
+
+		fireEvent.change(input, { target: { value: "#1c7ed6" } });
+		expect(useThemeStore.getState().accentColor).toBe("#1c7ed6");
+		expect(screen.getByTestId("node-settings-accent-color-input")).toBe(input);
+
+		fireEvent.click(screen.getByTestId("node-settings-accent-color-reset"));
+		expect(useThemeStore.getState().accentColor).toBeNull();
+		expect(screen.getByTestId("node-settings-accent-color-input")).toBe(input);
+		expect((input as HTMLInputElement).value).toBe("#de0a1b");
 	});
 
 	it("puts the route-supplied update-channel picker into Privacy & updates", () => {

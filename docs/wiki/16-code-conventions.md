@@ -574,8 +574,7 @@ Two sanctioned exceptions:
   memoization — keep the inner function named so stack traces and Devtools still say `Foo`. Reference:
   `features/chat/components/MessageParts.tsx`, `core/ui/components/CodeBlock/CodeBlock.tsx`.
 - **A Zustand store hook stays `export const useFooStore = create<T>()(…)`** — it is a factory invocation,
-  not a declaration; do not "fix" one back to `function`. Every other hook is `export function useFoo()`
-  (the one stray const hook is `core/theme/hooks/useTheme.ts`).
+  not a declaration; do not "fix" one back to `function`. Every other hook is `export function useFoo()`.
 
 ### Props are an `interface <Component>Props`, colocated
 
@@ -711,9 +710,8 @@ order of magnitude. Escalate only when they cannot express the thing:
    static inline style object is a Mantine prop that has not been written yet, and such sites are the app's largest
    style drift.
 
-**UnoCSS utility classNames are not this app's convention.** They belong to the standalone
-`src/core/theme/theme-configurator/` and to the app shell's static layout classes
-(`core/layout/components/Layout/Layout.tsx`). Do not introduce them in a feature.
+**UnoCSS utility classNames are not this app's convention.** They belong only to the app
+shell's static layout classes (`core/layout/components/Layout/Layout.tsx`). Do not introduce them in a feature.
 
 ### Responsive layout: breakpoints come from `LayoutBreakpoints.ts`
 
