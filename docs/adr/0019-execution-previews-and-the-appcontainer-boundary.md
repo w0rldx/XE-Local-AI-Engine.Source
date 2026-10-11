@@ -2,6 +2,7 @@
 
 - **Status:** Accepted (2026-10-07) — drafted with the S2b slice, completed with the MXC integration slice (S3). Windows live
   evidence on the operator's box is still owed before the branch merges (see "Still owed").
+  Amended 2026-10-11: Win32k is allowed inside the boundary (see "Amendment (2026-10-11)").
 - **Date:** 2026-10-07
 - **Scope:** How a sandbox launch MECHANISM's maturity is recorded, who may enable a Preview mechanism, and what the
   `SandboxIsolationMode.Filesystem` floor means on Windows when the Microsoft MXC SDK (`Microsoft.Mxc.Sdk` 1.0.0) serves it
@@ -99,8 +100,9 @@ does not do.
   with no CPU, memory or process-count ceiling. The per-command timeout is the only bound; the setting description and
   the confirmation dialog say so. Both roles send no ceiling on Windows and are served, but a create request that carries
   explicit ceilings is refused rather than run with them silently dropped.
-- **Host path names are visible, and OS system trees are readable.** The boundary denies the user profile, node data and
-  engine directory, and grants only engine-owned trees; it does not hide the shape of the host.
+- **Host path names are visible, and OS system trees are readable.** The boundary grants only engine-owned trees and
+  rests on the AppContainer default deny. The explicit profile deny is usually dropped (Decision 9), so a folder that
+  carries an `ALL APPLICATION PACKAGES` ACE is readable wherever it sits. It does not hide the shape of the host.
 - **The switch is writable by anything that holds an Operator session (compare the SF1 note in the plan).** A stored
   setting has an API path that a configuration file does not: a browser session with Operator rights can enable
   previews, and the server cannot tell a confirmed request from an unconfirmed one. The mitigations are that it is
@@ -130,3 +132,45 @@ does not do.
 - The operator's Windows live round: `run_python` and a Sandboxed MCP server under the boundary with the canary absent and
   the network denied, the residue sweep after a forced kill, and the capability page reading `PreviewIsolated`.
 - The pinned Windows UBR the round ran on, recorded with that evidence.
+
+## Amendment (2026-10-11): Win32k is allowed inside the boundary
+
+**What changed.** The locked MXC policy (`MxcPolicyMapper`) sets `Ui.Disable = false`, so a contained child may load
+user32 and make Win32k system calls. Everything else in the policy is unchanged: clipboard access stays `None`, input
+injection stays off, the ProcessContainer UI isolation stays `Container` with desktop system control, system settings and
+IME off, egress, ingress and host loopback stay denied, no capabilities are granted, and the filesystem grants, deny roots
+and grant clearing are as in Decision 8 and 9. `MxcPolicyGuard` no longer requires `Ui.Disable`; it still refuses a
+missing `Ui`, any clipboard access and input injection. Either `Disable` value passes the guard; `true` is the stricter.
+
+**Why.** The Windows tester round on build 104 ran real MCP servers under the boundary with `Ui.Disable = true`. The
+embeddable CPython and native console programs started and completed the MCP handshake. node.js 24 died in the loader
+with `0xC0000142`, a .NET 10 app with `0x80008089` and a .NET Framework app with `0xC06D007E`, because `node.exe` and
+`coreclr.dll` import user32 and its initialisation fails under the mitigation. Windows PowerShell and PowerShell 7 fail
+for the same reason. The Sandboxed tier was therefore unusable for most MCP servers people actually install, which pushed
+them to the Privileged host tier with no boundary at all. The operator decided that running node.js, PowerShell and .NET
+servers inside the AppContainer is worth more than the Win32k surface reduction.
+
+**Accepted residual risk.** A contained child can now reach the user32 and win32k kernel attack surface, which the
+mitigation removed. That surface has a long history of local privilege-escalation bugs. A kernel exploit through it
+escapes the AppContainer entirely, so the boundary now depends on that code being correct. The child can also create
+windows on the user's desktop. It could show a convincing prompt, such as a fake credential dialog, and send what the user
+types to its MCP client over stdout. Unless the Windows round proves otherwise, assume it can read screen pixels and
+observe the input state of the desktop. MXC's Container UI isolation, AppContainer Low integrity and UIPI are expected to
+block the clipboard, synthetic input, foreign window handles and messages to other processes' windows. This project has
+proven none of that beyond MXC's own description. The probe refuses a host where MXC reports it cannot block clipboard
+access or input injection, and warns when it does not report those facts. The change applies to every sandboxed child, including native and CPython servers that never
+needed it, and there is no per-server setting. The mechanism stays Preview, operator-enabled and off by default
+(Decisions 2, 6 and 7), and the confirmation dialog names this risk.
+
+**Re-proof owed.** Nothing about this amendment can be proven on Linux. The next Windows round re-runs the canary,
+profile-write, network and jail-write proofs with the new policy, and records which of node.js, CPython, PowerShell 7,
+.NET 10, Windows PowerShell 5.1 and .NET Framework servers start inside the boundary and which exit codes the rest report.
+It also records every `CanBlock` flag MXC reports in `Probes.UiCapabilities`, with the Windows build and UBR, and
+probes each UI risk above from a sandboxed server:
+
+- clipboard read and write from inside fail;
+- `SendInput` into a host Notepad has no effect;
+- what `EnumWindows` and `GetWindowText` return, and whether `PostMessage(WM_CLOSE)` closes a host Notepad;
+- whether a `BitBlt` from `GetDC(NULL)` returns black or real pixels;
+- whether a low-level keyboard hook or `GetAsyncKeyState` sees host keystrokes;
+- whether a window or message box the child creates is visible on the desktop.

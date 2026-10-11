@@ -61,7 +61,7 @@ export function NodeSettingsExternalAccessCard({ form, onChange, onApplyPreset, 
 				<Text c="dimmed" size="sm" data-testid="node-settings-external-access-does-not-block">
 					{t(
 						"pages.externalAccess.offline.doesNotBlock",
-						"This is not a network switch. It does not block the connection to the C0re platform, MCP servers you have configured, or model-catalog lookups.",
+						"This is not a network switch. It does not block the connection to the platform, MCP servers you have configured, or model-catalog lookups.",
 					)}
 				</Text>
 				<Switch

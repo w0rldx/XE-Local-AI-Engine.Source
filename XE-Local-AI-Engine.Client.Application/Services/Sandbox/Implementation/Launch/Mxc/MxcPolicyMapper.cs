@@ -3,12 +3,12 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 using Microsoft.Mxc.Sdk.V1;
 
 /// <summary>
-///     Maps an <see cref="MxcLaunchRequest" /> onto the one MXC policy the engine runs: Windows ProcessContainer, enforcing, no network,
-///     no UI, a single writable jail, engine-granted read-only trees, explicit deny roots and a clean environment.
+///     Maps an <see cref="MxcLaunchRequest" /> onto the one MXC policy: ProcessContainer, no network, Win32k allowed but no clipboard or
+///     input injection, one writable jail, read-only trees, deny roots, a clean environment.
 /// </summary>
 /// <remarks>
 ///     Pure object construction; nothing here calls the native library, so it is platform-neutral and unit-tested on Linux. Every
-///     request it builds passes <see cref="MxcPolicyGuard.Assert" />, which <see cref="MxcSandboxRuntime" /> runs again before spawning.
+///     request it builds passes <see cref="MxcPolicyGuard.Assert" /> (the probe request <see cref="MxcPolicyGuard.AssertProbe" />), which <see cref="MxcSandboxRuntime" /> runs again before spawning.
 /// </remarks>
 public static class MxcPolicyMapper
 {
@@ -92,9 +92,10 @@ public static class MxcPolicyMapper
                     HostLoopback = NetworkAction.Deny
                 },
             },
+            // Win32k allowed so node.js and CoreCLR children start (ADR 0019 amendment, round-4 evidence); clipboard and input injection stay denied.
             Ui = new UiPolicy
             {
-                Disable = true,
+                Disable = false,
                 Clipboard = ClipboardPolicy.None,
                 AllowInputInjection = false
             },

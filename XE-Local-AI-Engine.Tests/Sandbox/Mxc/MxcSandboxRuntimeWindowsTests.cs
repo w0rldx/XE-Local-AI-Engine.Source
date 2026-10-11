@@ -46,8 +46,13 @@ public sealed class MxcSandboxRuntimeWindowsTests
 
         AssertEx.True(probe.Tier is not null ^ probe.Error is not null, "MXC must report exactly one of a tier and an error");
         var measured = MxcProbe.Measure(runtime);
-        AssertEx.Equal(probe.Tier is not null, measured.Supported);
-        AssertEx.Equal<string?>(probe.Tier?.ToString(), measured.Tier);
+        // Win32k is allowed, so a tier alone is not enough: MXC must not report that it cannot block the clipboard or input injection.
+        var ui = probe.Probes?.UiCapabilities;
+        var uiBlocked = ui is null or { CanBlockClipboardRead: true, CanBlockClipboardWrite: true, CanBlockInputInjection: true };
+        AssertEx.Equal(probe.Tier is not null && uiBlocked, measured.Supported,
+            $"tier {probe.Tier}, clipboard read/write {ui?.CanBlockClipboardRead}/{ui?.CanBlockClipboardWrite}, input injection {ui?.CanBlockInputInjection}");
+        // A refused boundary carries no tier, whatever the SDK reported.
+        AssertEx.Equal<string?>(measured.Supported ? probe.Tier?.ToString() : null, measured.Tier);
         await Task.CompletedTask;
     }
 

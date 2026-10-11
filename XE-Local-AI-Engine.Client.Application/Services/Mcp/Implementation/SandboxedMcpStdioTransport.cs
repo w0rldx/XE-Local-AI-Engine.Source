@@ -57,7 +57,14 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         // gcloud, gh, and most CLI credential stores live here.
         ".config",
         ".docker",
-        ".kube"
+        ".kube",
+        // Windows profile stores: DPAPI master keys and Credential Manager (Microsoft), browser profiles. Their parents AppData,
+        // AppData\Roaming and AppData\Local are refused by the ancestor rule; AppData\Roaming\npm and similar stay bindable.
+        Path.Combine("AppData", "Roaming", "Microsoft"),
+        Path.Combine("AppData", "Local", "Microsoft"),
+        Path.Combine("AppData", "Local", "Google"),
+        Path.Combine("AppData", "Local", "Mozilla"),
+        Path.Combine("AppData", "Roaming", "Mozilla")
     ];
 
     /// <summary>System roots that are never a server's package tree, and always somebody's credentials or state.</summary>
@@ -598,21 +605,22 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     private sealed class SandboxedTransport : ITransport
     {
         /// <summary>
-        ///     What an exit code means under the Windows sandbox, which denies the Win32k UI subsystem (<c>Ui.Disable</c>, ADR 0019): anything that
-        ///     loads user32 fails to initialise, so only native console programs start. Codes not listed get no hint.
+        ///     What an exit code means under the Windows sandbox, which allows Win32k but reads only System32, Program Files and granted
+        ///     folders (ADR 0019): startup failures are mostly unreadable files. Codes not listed get no hint.
         /// </summary>
         private static readonly Dictionary<uint, string> ExitCodeHints = new()
         {
-            // STATUS_DLL_INIT_FAILED: an executable that imports user32 dies in the loader; MXC documents it as Win32k blocked.
-            [0xC0000142] = "0xC0000142 is Windows refusing to initialise the process because the sandbox denies the Win32k UI subsystem: "
-                           + "only programs that never load user32 start (native console executables), not Windows PowerShell, PowerShell 7, "
-                           + ".NET Framework or .NET apps, because coreclr.dll needs the UI subsystem the sandbox denies.",
-            // The delay-load helper's failed-LoadLibrary exception: user32 under the mitigation, or a DLL the AppContainer cannot read.
-            [0xC06D007E] = "0xC06D007E means a DLL loaded on demand failed to load: under the sandbox this is usually the UI subsystem it denies, "
-                           + "or a DLL in a folder the sandbox cannot read.",
-            // hostfxr's CoreCLR init failure: coreclr.dll statically imports user32, whose initialisation the mitigation fails.
-            [0x80008089] = "0x80008089 means the .NET runtime could not start: coreclr.dll needs the UI subsystem the sandbox denies; "
-                           + "use a native build or the Privileged host tier."
+            // STATUS_DLL_INIT_FAILED: a DLL's initialiser failed in the loader.
+            [0xC0000142] = "0xC0000142 means a DLL failed to initialise while the process started: under the sandbox this is usually "
+                           + "a library in a folder the sandbox cannot read, or a program that needs a desktop session.",
+            // The delay-load helper's failed-LoadLibrary exception.
+            [0xC06D007E] = "0xC06D007E means a DLL loaded on demand failed to load: it is missing or sits in a folder the sandbox cannot read.",
+            // hostfxr's CoreCLR init failure.
+            [0x80008089] = "0x80008089 means the .NET runtime could not start: the runtime's or the app's folder is a folder the sandbox cannot read; "
+                           + "move the server under Program Files or a folder the sandbox is granted.",
+            // hostfxr's "app does not exist": the application DLL path is missing or unreadable from inside the AppContainer.
+            [0x8000809B] = "0x8000809B means the .NET host could not find or read the application DLL: under the sandbox it is usually in "
+                           + "a folder the sandbox cannot read; move the server under Program Files or a folder the sandbox is granted."
         };
 
         /// <summary>How long a failed send waits for the relay to learn whether the server died on startup.</summary>

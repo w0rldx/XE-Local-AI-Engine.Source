@@ -63,6 +63,7 @@ tier; the MCP settings page shows the fixed `SandboxRefused` message, which name
 |---|---|
 | the operator's home directory | binding it exposes every credential store beneath it |
 | `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.config`, `~/.docker`, `~/.kube` | credential and CLI-token stores; `~/.config` is where gcloud, gh and most others keep theirs |
+| `AppData\Roaming\Microsoft`, `AppData\Local\Microsoft`, `AppData\Local\Google`, `AppData\Local\Mozilla`, `AppData\Roaming\Mozilla` under the home directory | Windows DPAPI master keys, Credential Manager and browser profiles; the ancestor rule refuses `AppData`, `AppData\Roaming` and `AppData\Local` too, while `AppData\Roaming\npm` stays bindable |
 | the node data directory (`INodeDataDirectory.Root`) | the node database, its key material, every sandbox jail, the workspace manifests that are deliberately never mounted |
 | the engine's own install directory (`AppContext.BaseDirectory`) | the assemblies doing the sandboxing, and whatever ships beside them |
 | `/root`, `/etc`, `/var`, `/` | never a server's package tree, always somebody's credentials or state |

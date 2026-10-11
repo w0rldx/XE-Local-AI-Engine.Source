@@ -620,6 +620,25 @@ public sealed class ReasoningEffortDispatcherTests
     }
 
     [Test]
+    public async Task Fast_WhenAnotherCallersAdmissionIsStillLoadingTheFastModel_NeverSwaps()
+    {
+        // Capacity queues on a published admission before the process registers: no lease exists yet, so the turn stays put.
+        var decision = await DispatchAsync(Request("thanks, noted", allowAutoModelSwap: true),
+            fastModelName: FastModel,
+            fastModelLocality: ModelTrustLocality.Local,
+            capacityDecision: new CapacityDecision
+            {
+                Verdict = CapacityVerdict.QueueSameModel,
+                Reason = "Model is loading; the request will share that load.",
+                OllamaEvictionWarning = false
+            },
+            leaseAcquisition: LlamaServerLeaseAcquisition.NotRunning);
+
+        AssertEx.Equal(ResolvedModel, decision.Model);
+        AssertEx.Equal(ReasoningDispatchReasons.FastModelUnavailable, decision.ReasonCode);
+    }
+
+    [Test]
     public async Task Fast_WhenQueueSameModelAndLeaseIsGranted_SwapsAndDisposesTheProbeLease()
     {
         // The probe lease is a refcount over the running process; the send takes its own, so this one is released the

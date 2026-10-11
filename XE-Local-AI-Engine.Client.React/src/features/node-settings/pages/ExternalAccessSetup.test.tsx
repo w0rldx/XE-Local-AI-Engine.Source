@@ -80,7 +80,7 @@ describe("ExternalAccessSetup", () => {
 
 		// The honesty clause, in the SAME card, naming the three things it does not block.
 		expect(text).toContain("This is not a network switch.");
-		expect(text).toContain("the C0re platform");
+		expect(text).toContain("the platform");
 		expect(text).toContain("MCP servers you have configured");
 		expect(text).toContain("model-catalog lookups");
 

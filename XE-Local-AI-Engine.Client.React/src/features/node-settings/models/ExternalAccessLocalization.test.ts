@@ -17,7 +17,8 @@ describe("external-access localization", () => {
 		// One key, two surfaces: the first-run Offline card and the Node Settings external-access card both render it.
 		const doesNotBlockEn = en.pages.externalAccess.offline.doesNotBlock;
 		expect(doesNotBlockEn).toContain("This is not a network switch.");
-		expect(doesNotBlockEn).toContain("the C0re platform");
+		expect(doesNotBlockEn).toContain("the platform");
+		expect(doesNotBlockEn).not.toContain("C0re");
 		expect(doesNotBlockEn).toContain("MCP servers you have configured");
 		expect(doesNotBlockEn).toContain("model-catalog lookups");
 
@@ -29,7 +30,8 @@ describe("external-access localization", () => {
 
 		const doesNotBlockDe = de.pages.externalAccess.offline.doesNotBlock;
 		expect(doesNotBlockDe).toContain("Dies schaltet nicht den gesamten Netzwerkzugriff ab.");
-		expect(doesNotBlockDe).toContain("C0re-Plattform");
+		expect(doesNotBlockDe).toContain("zur Plattform");
+		expect(doesNotBlockDe).not.toContain("C0re");
 		expect(doesNotBlockDe).toContain("MCP-Server");
 		expect(doesNotBlockDe).toContain("Abfragen des Modellkatalogs");
 	});

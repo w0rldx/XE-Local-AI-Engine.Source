@@ -101,6 +101,7 @@
 		"refreshing": "Refreshing...",
 		"filterReset": "Reset Filters",
 		"close": "Close",
+		"togglePasswordVisibility": "Toggle password visibility",
 		"confirm": "Confirm",
 		"cancel": "Cancel",
 		"ok": "Ok",
@@ -2184,7 +2185,7 @@
 				"revoke": "Revoke key",
 				"regenerateWarning": "Regenerating replaces the key immediately — any client still configured with the old one stops working."
 			},
-			"saved": "Node settings saved. Capability reporting was requested for the worker connection.",
+			"saved": "Node settings saved.",
 			"savedRestartRequired": "Node settings saved. Some of the changed settings only take effect after the node restarts.",
 			"fields": {
 				"validationError": "Some settings are invalid. Fix the highlighted fields.",
@@ -2973,7 +2974,7 @@
 			},
 			"executionPreviewsConfirm": {
 				"title": "Turn on execution previews?",
-				"description": "Preview sandbox mechanisms will run Python and sandboxed MCP servers. On Windows that is the AppContainer boundary: the code cannot read your user profile or the engine's data, but it runs with no CPU, memory or process-count limit (only the time limit stops it), and it can see host path names. Turn this on only if you accept that.",
+				"description": "Preview sandbox mechanisms will run Python and sandboxed MCP servers. On Windows that is the AppContainer boundary. The code cannot read the engine's data or your files unless a folder allows all app packages. It can show windows and use the Windows UI kernel interface, but not the clipboard or simulated input. It runs with no CPU, memory or process-count limit, only the time limit, and it can see host path names. Turn this on only if you accept that.",
 				"confirm": "Turn on",
 				"cancel": "Cancel"
 			},
@@ -7881,7 +7882,7 @@
 			"offline": {
 				"title": "Offline / Manual",
 				"disables": "Turns off three things the engine would otherwise do by itself: application update checks, llama.cpp runtime update checks, and the first-run model and runtime download. You can still start every one of them yourself, at any time.",
-				"doesNotBlock": "This is not a network switch. It does not block the connection to the C0re platform, MCP servers you have configured, or model-catalog lookups.",
+				"doesNotBlock": "This is not a network switch. It does not block the connection to the platform, MCP servers you have configured, or model-catalog lookups.",
 				"choose": "Use offline / manual"
 			},
 			"custom": {
@@ -8031,6 +8032,7 @@
 			"session": {
 				"untitled": "Untitled recording",
 				"subtitle": "The committed transcript for this recording.",
+				"back": "Back to transcriptions",
 				"loadFailed": "Could not load the transcription session.",
 				"model": "Model: {{model}}",
 				"detectedLanguage": "Detected language: {{language}}",
@@ -8061,6 +8063,7 @@
 			"capture": {
 				"start": "Start capture",
 				"stop": "Stop capture",
+				"stopFailed": "Could not stop the transcription. Check the connection to this node and try again.",
 				"finalizing": "Finalizing transcript…",
 				"behind": "Transcribing… {{seconds}} s behind",
 				"finishing": "Finishing the last {{seconds}} s…",

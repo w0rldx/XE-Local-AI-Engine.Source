@@ -334,7 +334,15 @@ public sealed class NodeChatDbContext : DbContext
     private async Task SampleEntitySetAsync<T>(CancellationToken cancellationToken)
         where T : class
     {
-        _ = await Set<T>().AsNoTracking().Take(3).ToListAsync(cancellationToken);
+        // Any three rows will do, so the read stops after three instead of using Take: an unordered Take warns once per entity type.
+        var seen = 0;
+        await foreach (var _ in Set<T>().AsNoTracking().AsAsyncEnumerable().WithCancellation(cancellationToken))
+        {
+            if (++seen == 3)
+            {
+                break;
+            }
+        }
     }
 
     private NodeKeyCustodyException NodeKeyMismatch(Exception? innerException)

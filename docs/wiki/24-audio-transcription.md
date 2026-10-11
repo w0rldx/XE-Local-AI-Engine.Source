@@ -386,9 +386,12 @@ calls into it per lane.
   the old gating on the uncommitted tail still let one crash through. With no forced language the transcriber
   reads the `language` name the verbose response always carries and maps it to a code
   (`WhisperServerTranscriber.ResolveDetectedLanguageCode`). A response with no segments, or only segments with empty
-  text, reports no language, because whisper's state defaults to English on silence. The lane keeps asking nothing
-  extra and learns the language from the first window that commits a segment, never from a provisional one: a tick
-  holding only the opening "Hey" of a German sentence detects as English. `WhisperServerTranscriberTests` and `LiveTranscriptionSegmenterTests` pin it.
+  text, reports no language, because whisper's state defaults to English on silence. The lane asks nothing extra:
+  each commit carries its window's language (`LiveCommit.LanguageCode`), so a provisional window tags nothing.
+  The registry sums committed milliseconds per language across every lane (`NoteProgress`), and the session reports
+  the language with the most committed speech; ties keep the earliest. A short opener cannot pin it: a German session
+  that opens with "Hey." (detected as English) reports German. `WhisperServerTranscriberTests`,
+  `LiveTranscriptionSegmenterTests` and `LiveTranscriptionSessionRegistryTests` pin it.
 - **The known ceiling: one word may be inserted, dropped or duplicated per forced boundary.** Windows are cut with
   no overlap, so a word straddling a forced cut is the model's guess from a fragment. `LiveSegmenterGoldenTests`
   bounds this — the committed transcript's word-level edit distance against a whole-clip transcript may not exceed
@@ -911,8 +914,9 @@ ending the session as `Abandoned`) survives as the backstop for the one case no 
 **dies without running teardown at all** — a crash, a killed process, power loss. In that window the node keeps
 capturing the target application, because the recorder lives on the node and has no idea the browser is gone. The
 clock starts at the **disconnect**, not at the unmount, so the exposure is at most a minute and often less. The
-Windows round should still record what lands in the transcript after a tab is closed mid-capture, since that is the
-path the fallback is supposed to make instant.
+Windows round should still record what lands in the transcript after the XE tab that drove the session is closed
+mid-capture, since that is the path the fallback is supposed to make instant. Closing the captured media tab is a
+different case: see "Known limitations".
 
 ### Known limitations
 
@@ -926,6 +930,9 @@ path the fallback is supposed to make instant.
   `WaitForExitAsync` (`ProcessAudioCaptureSupport.RunUntilProcessExitsAsync`, which runs on every gate). An exit, or a
   target already gone at start, returns normally, and the coordinator ends the session once through `EndAsync(Failed)`.
   Closing one browser tab does not exit the process: Chromium plays audio from a long-lived utility process.
+- **Capturing a browser captures every tab of that browser.** The target is the browser's audio process (Chromium
+  plays audio from one long-lived utility process), not one tab. Closing one tab does not end the session: it keeps
+  running with the quiet notice until Stop or Cancel. Closing the browser does, as a captured process exit (`Failed`).
 - **A quiet source never ends a session.** A quiet target either delivers no packets (its stream is closed, or NAudio
   drops the silent-flagged ones) or delivers zero-valued ones (a paused video keeps its stream open), and a silence
   timeout would end a healthy session either way. Instead, while an in-host producer is attached, the registry stamps

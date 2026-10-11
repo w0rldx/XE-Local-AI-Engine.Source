@@ -47,6 +47,7 @@ type NavigationCapabilityKey =
 	| "integrations"
 	| "externalApps"
 	| "transcription"
+	| "agentHome"
 	| "invocationMonitor";
 
 type NavigationIcon = ForwardRefExoticComponent<IconProps & RefAttributes<SVGSVGElement>>;
@@ -167,7 +168,7 @@ export const allNavigationLinks: INavigationLink[] = [
 			{ translationKey: "navigation.tools", to: nodeRoutePaths.tools, simple: false },
 			// Advanced-only, appended rather than placed among the authoring surfaces above: this is operator
 			// forensics over what an agent already did on this computer, not another thing to author.
-			{ translationKey: "navigation.agentRuns", to: nodeRoutePaths.agentRuns, simple: false },
+			{ translationKey: "navigation.agentRuns", to: nodeRoutePaths.agentRuns, capability: "agentHome", simple: false },
 		],
 	},
 	// External Integrations group: every child carries the same `integrations` capability, so the generic
@@ -380,7 +381,7 @@ export function filterNavigationLinksByDisabledCapabilities(
 		.filter((link) => !link.links || link.links.length > 0);
 }
 
-// The node-settings switch behind each nav capability that has one. Compute and AgentHome have no nav entry of their own.
+// The node-settings switch behind each nav capability that has one. Compute has no nav entry of its own.
 const featureSwitchByCapability = {
 	development: "developmentEnabled",
 	workSessions: "workSessionsEnabled",
@@ -389,6 +390,7 @@ const featureSwitchByCapability = {
 	externalApps: "externalAppsEnabled",
 	transcription: "transcriptionEnabled",
 	scheduler: "schedulerEnabled",
+	agentHome: "agentHomeEnabled",
 } as const satisfies Partial<Record<NavigationCapabilityKey, keyof NodeSettingsResponse>>;
 
 const NO_DISABLED_CAPABILITIES: ReadonlySet<NavigationCapabilityKey> = new Set<NavigationCapabilityKey>();

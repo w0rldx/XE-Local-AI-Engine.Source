@@ -88,7 +88,9 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 						</Text>
 						<Group gap="xs">
 							<Text c="dimmed">{t("pages.about.version", "Version")}</Text>
-							<Badge variant="light">{applicationInfo.version}</Badge>
+							<Badge variant="light" tt="none">
+								{applicationInfo.version}
+							</Badge>
 						</Group>
 						<Text>{applicationInfo.description}</Text>
 						{applicationInfo.websiteUrl ? (

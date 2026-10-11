@@ -29,6 +29,67 @@ public sealed class MxcProbeTests
     }
 
     [Test]
+    public async Task Measure_WhenMxcCanBlockEveryUiChannel_IsSupportedWithNoUiWarning()
+    {
+        var result = MxcProbe.Measure(Runtime(Probe(IsolationTier.AppContainerDacl)));
+
+        AssertEx.True(result.Supported);
+        AssertEx.Empty(result.Warnings);
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    [Arguments("CanBlockClipboardRead")]
+    [Arguments("CanBlockClipboardWrite")]
+    [Arguments("CanBlockInputInjection")]
+    public async Task Measure_WhenMxcReportsItCannotBlockClipboardOrInputInjection_RefusesTheBoundary(string missing)
+    {
+        // Win32k is allowed, so these denials are the UI boundary: a host that reports it cannot enforce them must not serve the floor.
+        var probe = Probe(IsolationTier.AppContainerDacl, ui: UiBlockingExcept(missing));
+
+        var result = MxcProbe.Measure(Runtime(probe));
+
+        AssertEx.False(result.Supported);
+        AssertEx.Equal(MxcProbe.UiBoundaryUnenforceableReason, result.Reason);
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    [Arguments("ProbesMissing")]
+    [Arguments("UiCapabilitiesMissing")]
+    public async Task Measure_WhenMxcDoesNotReportItsUiFacts_StaysSupportedAndWarns(string absent)
+    {
+        // A missing field on a real host is no evidence of weakness: a Preview mechanism warns rather than switching itself off.
+        var probe = new ProbeOutput
+        {
+            Tier = IsolationTier.AppContainerDacl,
+            Warnings = [],
+            Probes = absent == "ProbesMissing" ? null! : new ProbeFacts { UiCapabilities = null! },
+        };
+
+        var result = MxcProbe.Measure(Runtime(probe));
+
+        AssertEx.True(result.Supported);
+        AssertEx.Equal(MxcProbe.UiFactsNotReportedWarning, result.Warnings.Single());
+        AssertEx.False(result.HostPrepMissing);
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    [Arguments("CanBlockExternalUiObjects")]
+    [Arguments("CanBlockGlobalUiNamespace")]
+    [Arguments("CanBlockDesktopSwitching")]
+    public async Task Measure_WhenMxcCannotEnforceAUiIsolationFlag_StaysSupportedAndWarnsNamingIt(string flag)
+    {
+        var result = MxcProbe.Measure(Runtime(Probe(IsolationTier.AppContainerDacl, ui: UiBlockingExcept(flag))));
+
+        AssertEx.True(result.Supported);
+        AssertEx.Contains(result.Warnings.Single(), flag);
+        AssertEx.False(result.HostPrepMissing);
+        await Task.CompletedTask;
+    }
+
+    [Test]
     public async Task Measure_ProbesTheExactPolicyEveryLaunchUses()
     {
         var runtime = Runtime(Probe(IsolationTier.AppContainerDacl));
@@ -126,7 +187,7 @@ public sealed class MxcProbeTests
         return runtime;
     }
 
-    private static ProbeOutput Probe(IsolationTier? tier, string? error = null, IReadOnlyList<string>? warnings = null) =>
+    private static ProbeOutput Probe(IsolationTier? tier, string? error = null, IReadOnlyList<string>? warnings = null, UiCapabilitySupport? ui = null) =>
         new()
         {
             Tier = tier,
@@ -134,7 +195,23 @@ public sealed class MxcProbeTests
             Warnings = warnings ?? [],
             Probes = new ProbeFacts
             {
-                UiCapabilities = new UiCapabilitySupport()
+                UiCapabilities = ui ?? UiBlockingExcept(notBlocked: "")
             },
+        };
+
+    /// <summary>MXC's UI facts with every channel blockable except the one named (by property name).</summary>
+    private static UiCapabilitySupport UiBlockingExcept(string notBlocked) =>
+        new()
+        {
+            CanBlockClipboardRead = notBlocked != nameof(UiCapabilitySupport.CanBlockClipboardRead),
+            CanBlockClipboardWrite = notBlocked != nameof(UiCapabilitySupport.CanBlockClipboardWrite),
+            CanBlockInputInjection = notBlocked != nameof(UiCapabilitySupport.CanBlockInputInjection),
+            CanBlockInputMethodChanges = true,
+            CanBlockExternalUiObjects = notBlocked != nameof(UiCapabilitySupport.CanBlockExternalUiObjects),
+            CanBlockGlobalUiNamespace = notBlocked != nameof(UiCapabilitySupport.CanBlockGlobalUiNamespace),
+            CanBlockDesktopSwitching = notBlocked != nameof(UiCapabilitySupport.CanBlockDesktopSwitching),
+            CanBlockLogoffOrShutdown = true,
+            CanBlockSystemParameterChanges = true,
+            CanBlockDisplaySettingsChanges = true,
         };
 }

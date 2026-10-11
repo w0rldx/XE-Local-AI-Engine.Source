@@ -161,6 +161,20 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Windows sandbox allows the UI subsystem (ADR 0019 amendment)** — a Sandboxed MCP server on Windows now runs with
+  Win32k allowed, so node.js, PowerShell 7 and .NET servers can start inside the AppContainer instead of dying with
+  `0xC0000142`, `0x80008089` or `0xC06D007E`. Clipboard access, input injection, network and filesystem limits are
+  unchanged. The startup hints for those three exit codes now point at files in a folder the sandbox cannot read, the
+  common cause once user32 loads. The Windows tester round re-proves the new policy.
+  - The Windows boundary is now reported unavailable on a host where MXC says it cannot block clipboard access or input
+    injection. It carries a warning where MXC does not report those facts, or cannot block external UI objects, the
+    global UI namespace or desktop switching.
+  - A Sandboxed MCP server may no longer bind `AppData`, `AppData\Roaming` or `AppData\Local` as its command or working
+    folder, or the Microsoft, Google and Mozilla stores beneath them. Those hold DPAPI keys, Credential Manager data and
+    browser profiles. `AppData\Roaming\npm` still works.
+  - The execution-previews confirmation now says that sandboxed code can show windows and use the Windows UI kernel
+    interface. It also says that a folder allowing all app packages is readable.
+  - Every Windows sandbox launch must now carry exactly one writable folder, the jail, with its grants cleared on exit.
 - **MCP tools are no longer offered to cloud models by default.** They used to reach every tool-capable model,
   cloud-hosted ones included, with no locality check. A cloud (or unresolved) model now gets them only after the
   operator turns on "Let cloud models use MCP tools" in Node Settings → Privacy. Local models are unaffected.
@@ -253,6 +267,33 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- Windows tester round on `1.0.0-rc.2.dev.20261011.104`:
+  - Parallel graph nodes, scheduled runs, integrations and sub-agents that ask for a model another request is still
+    loading now share that load instead of being refused with "not enough free memory" (N-31). A capacity refusal lists
+    loaded and loading models separately, never names the requested model, offers the eject hint only when a model is
+    loaded, and a launch still in flight is refused as "another model is still loading" rather than as a memory shortfall.
+  - A rejected knowledge upload logs one warning naming the document instead of two (N-33).
+  - A healthy runtime device audit now logs the inference backend once at Information, so the warm-up is visible in the
+    node log (N-34).
+  - The Windows network-isolation reason in Node settings no longer shows the internal name
+    `SandboxIsolationMode.Filesystem`; it says the boundary serves only workloads whose isolation floor is Filesystem.
+  - A sandboxed MCP server that exits with 0x8000809B now gets a hint: the .NET host could not find or read the
+    application DLL, usually because the sandbox cannot read its folder.
+  - The node-key check on a fresh database no longer logs one Entity Framework "row limiting without OrderBy" warning
+    per entity type.
+  - N-30: switching Agent Home off in Node Settings now also hides the "Agent runs" navigation entry; the page stays
+    reachable by its address.
+  - N-35: a running per-application capture opened in a second browser no longer shows "This browser no longer
+    remembers which application…"; the notice now appears only for a session this browser would have to start. A
+    running session opened in a page that is not capturing it (another browser, or after a reload) also shows Stop, the
+    timer and the backlog readout; Start is hidden only where this browser can never start the capture.
+  - N-36: a transcription session page has a "Back to transcriptions" button.
+  - Wording: the external-access notice says "the platform" instead of the stale pre-rename product name; the
+    password eye button is named in the UI language (German "Passwort-Sichtbarkeit umschalten"); the German unlock and
+    recovery subtitles use the formal "Sie"; the save toast reads "Node settings saved."; the About dialog shows the
+    version in its own case.
+  - Live transcription with automatic language reports the language with the most committed speech (ties keep the
+    earliest), so a mostly German session that opens with a short "Hey." detected as English is recorded as German (N-21).
 - Chat polish from the Windows tester rounds:
   - Markdown tables in a chat answer (and every other Markdown view) rendered their header row with the browser's
     centred default, offset from the left-aligned values below; table parts now go through the shared table component,
@@ -272,8 +313,8 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
     error of a sandboxed command no longer blank every long word of a script argument or a full path argument; whole
     argument tokens and environment secrets are still redacted. A failed server start logs one warning without a
     duplicate stack trace, and the Preview-boundary footnote on Windows no longer names `run_python`.
-  - Live transcription with automatic language reports the language of the first committed segment, so a German session
-    that opens with "Hey" is no longer recorded as English.
+  - Live transcription with automatic language no longer learns the language from a provisional window; the rule was
+    superseded by the committed-speech majority of the build 104 round (N-21).
   - Per-application capture: the elapsed timer keeps counting while the captured application is paused, and the "No
     audio from the captured application" notice appears about 10 s into a pause (a paused player's silent audio no longer
     counts as audio); the node logs when a source goes quiet and when it is audible again.

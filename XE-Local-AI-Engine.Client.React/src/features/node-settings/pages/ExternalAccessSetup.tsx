@@ -100,7 +100,7 @@ export function ExternalAccessSetup() {
 							<Text c="dimmed">
 								{t(
 									"pages.externalAccess.offline.doesNotBlock",
-									"This is not a network switch. It does not block the connection to the C0re platform, MCP servers you have configured, or model-catalog lookups.",
+									"This is not a network switch. It does not block the connection to the platform, MCP servers you have configured, or model-catalog lookups.",
 								)}
 							</Text>
 							<Button

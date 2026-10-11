@@ -249,8 +249,8 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
                 // reservation books the model's bytes and one loaded-process slot; the RUNNER owns releasing it.
                 CapacityVerdict.Allow => SwapResolution.Admitted(fastModel, capacity.Reservation),
 
-                // A process exists, but the snapshot does not filter profiling-owned or draining ones, so "running" is
-                // not "can serve this turn". The lease answers that; take it, read the shape, release — the send re-takes.
+                // The model is resident or another caller's admission is loading it, and neither means "can serve this turn".
+                // The lease answers that; take it, read the shape, release — the send re-takes. A load still in flight has no lease.
                 CapacityVerdict.QueueSameModel => ProbeRunningProcess(fastModel),
                 _ => SwapResolution.Refused(ReasoningDispatchReasons.FastModelNoCapacity)
             };
@@ -281,7 +281,7 @@ public sealed class DefaultReasoningEffortDispatcher : IReasoningEffortDispatche
 
         acquisition.Lease.Dispose();
 
-        // QueueSameModel carries no reservation: nothing is being loaded, so there is nothing to book or release.
+        // QueueSameModel carries no reservation: the model is resident or another caller's admission is loading it.
         return SwapResolution.Admitted(fastModel, reservation: null);
     }
 

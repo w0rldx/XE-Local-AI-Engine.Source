@@ -66,7 +66,16 @@ describe("useServerDisabledNavigationCapabilities", () => {
 
 		await waitFor(() =>
 			expect([...result.current].sort()).toEqual(
-				["development", "devWorkflows", "externalApps", "graphWorkflows", "scheduler", "transcription", "workSessions"].sort(),
+				[
+					"agentHome",
+					"development",
+					"devWorkflows",
+					"externalApps",
+					"graphWorkflows",
+					"scheduler",
+					"transcription",
+					"workSessions",
+				].sort(),
 			),
 		);
 	});

@@ -342,6 +342,95 @@ public sealed class LiveTranscriptionSessionRegistryTests
     }
 
     [Test]
+    public async Task DetectedLanguage_IsTheLanguageWithTheMostCommittedSpeech()
+    {
+        // The field case: a 600 ms "Hey." detected as English opens twelve seconds of German.
+        var transcriber = new ScriptedWhisperTranscriber(static window => window.StartMs == 0
+            ? [new WhisperTranscriptSegment { StartSeconds = 0.0, EndSeconds = 0.6, Text = "Hey.", Confidence = 0.9 }]
+            : OneSegment(window))
+        {
+            DetectedLanguageCode = "en"
+        };
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var published = fixture.RecordSegments();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
+        AssertEx.Equal("1|Mono|0-600|Hey.", Describe((await WaitForSegmentsAsync(published, count: 1))[0]), "The short opener committed first, as English.");
+        transcriber.DetectedLanguageCode = "de";
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 1_000, toMs: 13_000);
+
+        // Ending drains every queued frame and flushes the lane before the row is completed.
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
+
+        await ReceivedCompletionWithLanguageAsync(fixture, sessionId, "de");
+    }
+
+    [Test]
+    public async Task DetectedLanguage_ATie_KeepsTheLanguageThatGotThereFirst()
+    {
+        var transcriber = new ScriptedWhisperTranscriber(OneSegment)
+        {
+            DetectedLanguageCode = "en"
+        };
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var published = fixture.RecordSegments();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 1_000);
+        _ = await WaitForSegmentsAsync(published, count: 1);
+        transcriber.DetectedLanguageCode = "de";
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 1_000, toMs: 2_000);
+        _ = await WaitForSegmentsAsync(published, count: 2);
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
+
+        await ReceivedCompletionWithLanguageAsync(fixture, sessionId, "en");
+    }
+
+    [Test]
+    public async Task DetectedLanguage_NoCommitCarryingALanguage_IsNull()
+    {
+        var transcriber = new ScriptedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var published = fixture.RecordSegments();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Mono, fromMs: 0, toMs: 2_000);
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
+
+        AssertEx.NotEmpty(Snapshot(published), "The windows committed speech, so a language could have been reported.");
+        await ReceivedCompletionWithLanguageAsync(fixture, sessionId, expected: null);
+    }
+
+    [Test]
+    public async Task DetectedLanguage_SumsCommittedSpeechAcrossBothLanes()
+    {
+        // Each lane alone would say otherwise: You holds a 1 s English and 1 s German tie (English first), Others 1 s German.
+        var transcriber = new ScriptedWhisperTranscriber(OneSegment)
+        {
+            DetectedLanguageCode = "en"
+        };
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var published = fixture.RecordSegments();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(channels: TwoLanes), CancellationToken.None);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.You, fromMs: 0, toMs: 1_000);
+        _ = await WaitForSegmentsAsync(published, count: 1);
+        transcriber.DetectedLanguageCode = "de";
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.Others, fromMs: 0, toMs: 1_000);
+        _ = await WaitForSegmentsAsync(published, count: 2);
+        await PushAsync(fixture.Registry, sessionId, TranscriptChannel.You, fromMs: 1_000, toMs: 2_000);
+        _ = await WaitForSegmentsAsync(published, count: 3);
+        await fixture.Registry.EndAsync(sessionId, LiveEndReason.Completed, CancellationToken.None);
+
+        await ReceivedCompletionWithLanguageAsync(fixture, sessionId, "de");
+    }
+
+    [Test]
     public async Task EndAsync_ViaCancelAndDelete_TakesTheSameTerminationPath()
     {
         var registry = Substitute.For<ILiveTranscriptionSessionRegistry>();
@@ -1911,6 +2000,16 @@ public sealed class LiveTranscriptionSessionRegistryTests
             $"Expected {count} published commits; a frame is queued onto its lane, so its effect lands after the push returns.");
         return Snapshot(recorded);
     }
+
+    private static async Task ReceivedCompletionWithLanguageAsync(RegistryFixture fixture, Guid sessionId, string? expected) =>
+        await fixture.Service.Received(1)
+                     .CompleteLiveAsync(sessionId,
+                         TranscriptionSessionStatus.Completed,
+                         Arg.Any<long>(),
+                         Arg.Is<string?>(language => language == expected),
+                         Arg.Any<string?>(),
+                         Arg.Any<string?>(),
+                         Arg.Any<CancellationToken>());
 
     private static string Describe(PublishedSegment segment) =>
         $"{segment.Seq}|{segment.Channel}|{segment.StartMs}-{segment.EndMs}|{segment.Text}";

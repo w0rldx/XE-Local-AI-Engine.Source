@@ -357,6 +357,10 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             {
                 _logger.LogWarning("Runtime device audit could not determine the inference backend: {Reason}", undetermined);
             }
+            else
+            {
+                _logger.LogInformation("Runtime device audit: inference backend {Backend}.", state.InferenceBackend);
+            }
 
             return;
         }

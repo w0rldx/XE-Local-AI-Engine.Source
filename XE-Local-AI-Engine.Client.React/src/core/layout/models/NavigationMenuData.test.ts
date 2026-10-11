@@ -283,6 +283,16 @@ describe("navigationLinks", () => {
 		expect(filterNavigationLinksByDisabledCapabilities(navigationLinks, new Set())).toEqual(navigationLinks);
 	});
 
+	it("drops the Agent runs child from Automation when the server reports AgentHome switched off", () => {
+		const automationTargets = (links: readonly { readonly id: string; readonly links?: readonly { readonly to: string }[] }[]) =>
+			links.find((link) => link.id === "automation")?.links?.map((nestedLink) => nestedLink.to) ?? [];
+
+		expect(automationTargets(navigationLinks)).toContain(nodeRoutePaths.agentRuns);
+		const filtered = filterNavigationLinksByDisabledCapabilities(navigationLinks, new Set(["agentHome"]));
+		expect(automationTargets(filtered)).not.toContain(nodeRoutePaths.agentRuns);
+		expect(automationTargets(filtered)).toContain(nodeRoutePaths.tools);
+	});
+
 	it("drops a group whose every child the server reports switched off", () => {
 		const icon = allNavigationLinks.find((link) => link.id === "graphWorkflows")?.icon;
 		if (icon === undefined) {

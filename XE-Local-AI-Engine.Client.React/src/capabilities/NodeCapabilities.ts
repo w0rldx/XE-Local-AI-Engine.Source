@@ -89,6 +89,9 @@ export interface NodeCapabilityConfig {
 	// ALSO has its own `Transcription:Enabled` switch, which 404s the API — this flag only decides whether the surface
 	// is offered, and it is compile-time.
 	readonly transcription: boolean;
+	// AgentHome run history (operator forensics). Gates only the "Agent runs" nav entry, so the backend
+	// `AgentHome:Enabled` switch can hide it; the /agent-runs route stays reachable by URL either way.
+	readonly agentHome: boolean;
 }
 
 export const nodeCapabilities: NodeCapabilityConfig = {
@@ -172,6 +175,7 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// On by default so the Preview group offers it; the backend `Transcription:Enabled` switch remains the operational
 	// kill switch.
 	transcription: true,
+	agentHome: true,
 };
 
 export const nodeRoutePaths = {

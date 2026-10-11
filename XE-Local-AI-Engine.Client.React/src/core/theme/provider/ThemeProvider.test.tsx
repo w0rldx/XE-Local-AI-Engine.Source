@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
-import { Alert, Table, useMantineColorScheme, useMantineTheme } from "@mantine/core";
+import { Alert, PasswordInput, Table, useMantineColorScheme, useMantineTheme } from "@mantine/core";
 import { cleanup, render, renderHook, screen } from "@testing-library/react";
+import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { sourceThemeConfiguration } from "@/core/theme/config/ThemeConfiguration";
 import { ThemeProvider } from "@/core/theme/provider/ThemeProvider";
 import { useThemeStore } from "@/core/theme/stores/ThemeStore";
+import de from "@/locales/de.json";
 import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
 
 describe("ThemeProvider table scroll affordance", () => {
@@ -141,6 +143,31 @@ describe("ThemeProvider alert close button", () => {
 		);
 
 		expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+	});
+});
+
+describe("ThemeProvider password visibility toggle", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(async () => {
+		cleanup();
+		await i18next.changeLanguage("en");
+	});
+
+	// Mantine names the eye button in English whatever the UI language; the theme default carries the translation.
+	it("names the eye button in the operator's language", async () => {
+		i18next.addResourceBundle("de", "translation", de, true, true);
+		await i18next.changeLanguage("de");
+
+		render(
+			<ThemeProvider>
+				<PasswordInput label="Passwort" />
+			</ThemeProvider>,
+		);
+
+		expect(screen.getByRole("button", { name: "Passwort-Sichtbarkeit umschalten" })).toBeTruthy();
 	});
 });
 

@@ -136,7 +136,8 @@
 		"retry": "Erneut versuchen",
 		"actions": "Aktionen",
 		"unknown": "Unbekannt",
-		"back": "Zurück"
+		"back": "Zurück",
+		"togglePasswordVisibility": "Passwort-Sichtbarkeit umschalten"
 	},
 	"theme": {
 		"title": "Design",
@@ -2184,7 +2185,7 @@
 				"revoke": "Schlüssel widerrufen",
 				"regenerateWarning": "Beim Neuerzeugen wird der Schlüssel sofort ersetzt — jeder Client, der noch mit dem alten konfiguriert ist, funktioniert dann nicht mehr."
 			},
-			"saved": "Node-Einstellungen gespeichert. Die Fähigkeitsabfrage wurde für die Worker-Verbindung angefordert.",
+			"saved": "Node-Einstellungen gespeichert.",
 			"savedRestartRequired": "Node-Einstellungen gespeichert. Einige der geänderten Einstellungen werden erst nach einem Neustart des Nodes wirksam.",
 			"fields": {
 				"validationError": "Einige Einstellungen sind ungültig. Bitte die markierten Felder korrigieren.",
@@ -2973,7 +2974,7 @@
 			},
 			"executionPreviewsConfirm": {
 				"title": "Ausführungs-Vorschauen einschalten?",
-				"description": "Sandbox-Verfahren, die noch in der Vorschau sind, führen dann Python und abgeschottete MCP-Server aus. Unter Windows ist das die AppContainer-Schutzgrenze: Der Code kann weder Ihr Benutzerprofil noch die Daten der Engine lesen. Er läuft aber ohne Grenze für CPU, Arbeitsspeicher oder Prozessanzahl, nur das Zeitlimit stoppt ihn. Außerdem sieht er die Pfadnamen des Hosts. Schalten Sie das nur ein, wenn Sie das in Kauf nehmen.",
+				"description": "Sandbox-Verfahren, die noch in der Vorschau sind, führen dann Python und abgeschottete MCP-Server aus. Unter Windows ist das die AppContainer-Schutzgrenze: Der Code kann die Daten der Engine und Ihre Dateien nicht lesen, außer ein Ordner erlaubt den Zugriff für alle App-Pakete. Er kann Fenster anzeigen und die Windows-UI-Kernelschnittstelle nutzen, aber nicht die Zwischenablage oder simulierte Eingaben. Er läuft ohne Grenze für CPU, Arbeitsspeicher oder Prozessanzahl, nur das Zeitlimit stoppt ihn. Außerdem sieht er die Pfadnamen des Hosts. Schalten Sie das nur ein, wenn Sie das in Kauf nehmen.",
 				"confirm": "Einschalten",
 				"cancel": "Abbrechen"
 			},
@@ -7881,7 +7882,7 @@
 			"offline": {
 				"title": "Offline / Manuell",
 				"disables": "Schaltet drei Dinge ab, die die Engine sonst von selbst tut: die Suche nach Anwendungs-Updates, die Suche nach Updates der llama.cpp-Laufzeit und den Download von Modell und Laufzeit beim ersten Start. Sie können jedes davon jederzeit selbst starten.",
-				"doesNotBlock": "Dies schaltet nicht den gesamten Netzwerkzugriff ab. Es blockiert weder die Verbindung zur C0re-Plattform noch von Ihnen eingerichtete MCP-Server noch Abfragen des Modellkatalogs.",
+				"doesNotBlock": "Dies schaltet nicht den gesamten Netzwerkzugriff ab. Es blockiert weder die Verbindung zur Plattform noch von Ihnen eingerichtete MCP-Server noch Abfragen des Modellkatalogs.",
 				"choose": "Offline / Manuell verwenden"
 			},
 			"custom": {
@@ -8039,7 +8040,8 @@
 				"cancel": "Abbrechen",
 				"cancelFailed": "Die Transkription konnte nicht abgebrochen werden.",
 				"sendToChat": "An den Chat senden",
-				"processMissing": "Dieser Browser weiß nicht mehr, für welche Anwendung diese Sitzung erstellt wurde; die Aufnahme kann nicht gestartet werden. Erstellen Sie eine neue Sitzung und wählen Sie die Anwendung erneut aus."
+				"processMissing": "Dieser Browser weiß nicht mehr, für welche Anwendung diese Sitzung erstellt wurde; die Aufnahme kann nicht gestartet werden. Erstellen Sie eine neue Sitzung und wählen Sie die Anwendung erneut aus.",
+				"back": "Zurück zu den Transkriptionen"
 			},
 			"segment": {
 				"edit": "Segmenttext bearbeiten",
@@ -8089,7 +8091,8 @@
 					"start-timeout": "Das Mikrofon ist innerhalb von 20 Sekunden nicht gestartet. Prüfen Sie die Berechtigungsabfrage des Browsers oder der Desktop-App und starten Sie erneut.",
 					"live-never-attached": "Der Node hat kein Audio empfangen. Prüfen Sie die Mikrofonberechtigung und das Eingabegerät und starten Sie dann erneut."
 				},
-				"notConnected": "Verbindung zu diesem Node wird aufgebaut — Starten ist möglich, sobald die Live-Verbindung steht."
+				"notConnected": "Verbindung zu diesem Node wird aufgebaut — Starten ist möglich, sobald die Live-Verbindung steht.",
+				"stopFailed": "Die Transkription konnte nicht beendet werden. Prüfen Sie die Verbindung zu diesem Knoten und versuchen Sie es erneut."
 			}
 		}
 	},

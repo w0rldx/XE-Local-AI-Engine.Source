@@ -21,6 +21,8 @@ function renderControls(overrides: Partial<Parameters<typeof CaptureControls>[0]
 			elapsedMs={0}
 			bufferedMs={null}
 			runtimeState={null}
+			capturedElsewhere={false}
+			startUnavailable={false}
 			onStart={onStart}
 			onStop={onStop}
 			onCancel={onCancel}
@@ -106,6 +108,32 @@ describe("CaptureControls", () => {
 
 		expect(screen.getByTestId("transcription-capture-behind").textContent).toBe("Transcribing… 5 s behind");
 		expect(screen.queryByTestId("transcription-capture-error")).toBeNull();
+	});
+
+	// N-35: a running session this page does not capture (another browser, or a reload) gets Stop and the readouts
+	// beside Start, which resumes capture after a reload.
+	it("offers stop and the readouts beside start for a session captured elsewhere", () => {
+		const { onStop, onStart } = renderControls({ capturedElsewhere: true, elapsedMs: 47_000, bufferedMs: 2100 });
+
+		expect(screen.getByTestId("transcription-capture-start")).toBeDefined();
+		expect(screen.getByTestId("transcription-capture-elapsed").textContent).toBe("00:47");
+		expect(screen.getByTestId("transcription-capture-behind").textContent).toBe("Transcribing… 3 s behind");
+		fireEvent.click(screen.getByTestId("transcription-capture-stop"));
+		expect(onStop).toHaveBeenCalledTimes(1);
+		expect(onStart).not.toHaveBeenCalled();
+	});
+
+	it("offers no start when this page can never start the capture", () => {
+		renderControls({ capturedElsewhere: true, startUnavailable: true });
+
+		expect(screen.queryByTestId("transcription-capture-start")).toBeNull();
+		expect(screen.getByTestId("transcription-capture-stop")).toBeDefined();
+	});
+
+	it("holds an elsewhere stop until the hub is up, since the end travels over it", () => {
+		renderControls({ capturedElsewhere: true, connected: false });
+
+		expect((screen.getByTestId("transcription-capture-stop") as HTMLButtonElement).disabled).toBe(true);
 	});
 
 	it("shows no behind counter once the node has caught up", () => {

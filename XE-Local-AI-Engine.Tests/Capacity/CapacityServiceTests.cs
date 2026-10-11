@@ -290,7 +290,7 @@ public sealed class CapacityServiceTests
     }
 
     [Test]
-    public async Task Capacity_RegistryConflictRejectsWithoutTentativeReservation()
+    public async Task Capacity_WhileTheSameModelHasAPublishedAdmission_QueuesOnItWithoutBooking()
     {
         var harness = new Harness
         {
@@ -303,9 +303,109 @@ public sealed class CapacityServiceTests
 
         var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
 
+        AssertEx.Equal(CapacityVerdict.QueueSameModel, decision.Verdict);
+        AssertEx.Null(decision.Reservation);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+        await harness.FootprintProvider.DidNotReceive()
+                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<int?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        existing!.Dispose();
+    }
+
+    [Test]
+    public async Task Capacity_ConcurrentDecisionsForOneColdModel_AdmitOnceAndQueueTheRest()
+    {
+        // Three spellings of one model race; the ledger decision gate serializes them, so exactly one wins whatever the order.
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb)
+        };
+        var service = harness.Build();
+
+        var decisions = await Task.WhenAll(service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None),
+            service.DecideAsync(Model.ToUpperInvariant(), ModelRole.Chat, CancellationToken.None),
+            service.DecideAsync("Bartowski/model-gguf:q4_K_m", ModelRole.Chat, CancellationToken.None));
+
+        var allowed = decisions.Where(static decision => decision.Verdict == CapacityVerdict.Allow).ToArray();
+        AssertEx.Equal(1, allowed.Length);
+        var winner = allowed[0];
+        var queued = decisions.Where(static decision => decision.Verdict == CapacityVerdict.QueueSameModel).ToArray();
+        AssertEx.Equal(2, queued.Length);
+        foreach (var decision in queued)
+        {
+            AssertEx.Null(decision.Reservation);
+        }
+
+        AssertEx.Equal(1 * Gb, harness.Ledger.Reserved.GpuBytes);
+        winner.Reservation!.Dispose();
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+        var afterRelease = await service.DecideAsync(Model.ToUpperInvariant(), ModelRole.Chat, CancellationToken.None);
+        AssertEx.Equal(CapacityVerdict.Allow, afterRelease.Verdict);
+        afterRelease.Reservation!.Dispose();
+    }
+
+    [Test]
+    public async Task Capacity_RejectListsLoadingModelsApartFromLoadedOnes()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb),
+            MaxLoadedProcesses = 2,
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "running/a:Q4_K_M",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
+            ]
+        };
+        var service = harness.Build();
+        var first = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        var second = await service.DecideAsync("model/b", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, first.Verdict);
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, second.Verdict);
+        AssertEx.Equal("Insufficient capacity for 'model/b' (Chat): the maximum number of concurrent models is already loaded. "
+                       + $"Loaded now: 'running/a:Q4_K_M' (Chat). Loading now: '{Model}' (Chat). Eject one of them or pick a loaded model.",
+            second.Reason);
+        first.Reservation!.Dispose();
+    }
+
+    [Test]
+    public async Task Capacity_UnboundLaunchInFlight_RejectsAsLoadingWithoutTheEjectHint()
+    {
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = GpuFootprint(1 * Gb),
+            RunningLlama =
+            [
+                new LlamaServerProcessHealth
+                {
+                    ModelName = "running/a:Q4_K_M",
+                    Role = ModelRole.Chat,
+                    IsResponsive = true,
+                    Detail = "ok"
+                }
+            ]
+        };
+        AssertEx.True(harness.LaunchAdmissions.TryBeginLaunch("direct/x:Q4_K_M", ModelRole.Chat, out _, out var ticket));
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
         AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
         AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
-        existing!.Dispose();
+        AssertEx.Equal($"Insufficient capacity for '{Model}' (Chat): another model is still loading; try again when it finishes. "
+                       + "Loaded now: 'running/a:Q4_K_M' (Chat).",
+            decision.Reason);
+        AssertRejectionLogged(harness, "still loading", "'running/a:Q4_K_M' (Chat)");
+        ticket!.Dispose();
     }
 
     [Test]

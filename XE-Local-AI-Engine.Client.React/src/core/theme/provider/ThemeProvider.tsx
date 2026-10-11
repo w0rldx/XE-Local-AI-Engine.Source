@@ -8,6 +8,7 @@ import {
 	defaultVariantColorsResolver,
 	localStorageColorSchemeManager,
 	MantineProvider,
+	PasswordInput,
 	parseThemeColor,
 	ScrollArea,
 	ScrollAreaAutosize,
@@ -132,6 +133,13 @@ export function ThemeProvider({ children }: ThemeProviderProperties) {
 			Alert: Alert.extend({
 				defaultProps: {
 					closeButtonLabel: t("common.close"),
+				},
+			}),
+			// Mantine hardcodes the English "Toggle password visibility" on the eye button, so a German operator heard
+			// English. Defaulted here for every PasswordInput; a call site that passes its own props replaces it.
+			PasswordInput: PasswordInput.extend({
+				defaultProps: {
+					visibilityToggleButtonProps: { "aria-label": t("common.togglePasswordVisibility") },
 				},
 			}),
 		},

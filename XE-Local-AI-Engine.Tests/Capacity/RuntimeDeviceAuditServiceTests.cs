@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Capacity;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
@@ -277,6 +278,29 @@ public sealed class RuntimeDeviceAuditServiceTests
         // make the existing fallback banner claim the GPU is unused.
         AssertEx.False(afterLoad.CpuFallback);
         AssertEx.Equal("cuda", afterLoad.InferenceBackend);
+    }
+
+    [Test]
+    public async Task GetAudit_HealthyBackend_LogsItOnce_NotOnAnIdenticalSecondAudit()
+    {
+        // A healthy audit used to be silent, so a tester could not tell from the log that the warm-up ran at all.
+        var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
+        probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(WithDevices(GpuVariant.Cuda)));
+        var profiler = Substitute.For<IHardwareProfiler>();
+        profiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(GpuProfile(GpuVendor.Nvidia)));
+        var selector = Substitute.For<IGpuVariantSelector>();
+        selector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(GpuVariant.Cuda));
+        var logger = new RecordingLogger<RuntimeDeviceAuditService>();
+        using var service = new RuntimeDeviceAuditService(profiler, selector, probe, logger);
+
+        _ = await service.GetAuditAsync(forceRefresh: true, CancellationToken.None);
+        _ = await service.GetAuditAsync(forceRefresh: true, CancellationToken.None);
+
+        var lines = logger.Entries.Where(static entry => entry.Message.StartsWith("Runtime device audit", StringComparison.Ordinal)).ToArray();
+        AssertEx.Equal(1, lines.Length);
+        AssertEx.Equal(LogLevel.Information, lines[0].Level);
+        AssertEx.Equal("Runtime device audit: inference backend cuda.", lines[0].Message);
+        await probe.Received(2).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

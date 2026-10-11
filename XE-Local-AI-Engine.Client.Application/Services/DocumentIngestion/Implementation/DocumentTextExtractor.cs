@@ -197,7 +197,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
             var boundsReason = EvaluateStructuredBounds(inputBytes, totalChars);
             if (boundsReason is not null)
             {
-                _logger.LogWarning("Structured document extraction rejected a {Extension} upload: {Reason}", normalizedExtension, boundsReason);
+                _logger.LogDebug("Structured document extraction rejected a {Extension} upload: {Reason}", normalizedExtension, boundsReason);
                 return new DocumentStructuredExtractionResult
                 {
                     Status = DocumentExtractionStatus.Failed,
@@ -220,7 +220,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         catch (DocumentPreflightRejectedException rejected)
         {
             // Rejected up front by the pre-parse preflight; the message is content-free and safe to surface.
-            _logger.LogWarning("Structured document extraction rejected a {Extension} upload at preflight: {Reason}", normalizedExtension, rejected.Message);
+            _logger.LogDebug("Structured document extraction rejected a {Extension} upload at preflight: {Reason}", normalizedExtension, rejected.Message);
             return new DocumentStructuredExtractionResult
             {
                 Status = DocumentExtractionStatus.Failed,

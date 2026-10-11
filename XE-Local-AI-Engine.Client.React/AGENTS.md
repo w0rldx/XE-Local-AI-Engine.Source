@@ -44,6 +44,7 @@ pnpm audit --prod --audit-level=high
 - Forms are manual: Mantine + `useState` + Zod on submit. No form library.
 - UnoCSS stays on `presetWind3()`, never wind4; the comment in `uno.config.ts` says why.
 - User-facing strings go through react-i18next keys. Adding a language: [`docs/translating.md`](../docs/translating.md).
+- German strings use the formal "Sie" form.
 - Some lint suppressions are load-bearing (the SignalR hub hooks and chat adapters; listed in wiki 16). Do not "fix" them.
 - An `await import()` inside `it()` counts against `testTimeout`; hoist imports.
 - i18n is initialised suite-wide: `src/i18n.ts` is the first vitest `setupFiles` entry, so every test file — hand-rolled

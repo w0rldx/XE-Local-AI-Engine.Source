@@ -35,7 +35,7 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
 
     /// <summary>Why a Windows host has no SEPARATE egress mechanism: denial is part of the AppContainer boundary.</summary>
     internal const string WindowsNetworkIsolationReason =
-        "Windows has no egress-denial mechanism of its own: the network is denied only inside the MXC AppContainer boundary, which serves only SandboxIsolationMode.Filesystem";
+        "Windows has no egress-denial mechanism of its own: the network is denied only inside the MXC AppContainer boundary, which serves only workloads whose isolation floor is Filesystem (Sandboxed MCP)";
 
     // Standard locations for the wrapper binaries. PATH is consulted first; these are the fallback because the worker's
     // own PATH can be minimal under a service manager.

@@ -127,7 +127,15 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
             Warnings = warnings ?? [],
             Probes = new ProbeFacts
             {
-                UiCapabilities = new UiCapabilitySupport()
+                UiCapabilities = new UiCapabilitySupport
+                {
+                    CanBlockClipboardRead = true,
+                    CanBlockClipboardWrite = true,
+                    CanBlockInputInjection = true,
+                    CanBlockExternalUiObjects = true,
+                    CanBlockGlobalUiNamespace = true,
+                    CanBlockDesktopSwitching = true,
+                }
             }
         };
 }

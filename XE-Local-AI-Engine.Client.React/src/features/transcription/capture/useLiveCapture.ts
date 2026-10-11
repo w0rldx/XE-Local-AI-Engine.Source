@@ -83,6 +83,12 @@ export interface LiveCaptureHandle {
 	start(request: LiveCaptureRequest, createSource?: CaptureSourceFactory): Promise<void>;
 	stop(): Promise<void>;
 	cancel(): Promise<void>;
+	/**
+	 * Gracefully ends a running session this page is not capturing: one started in another browser, or one whose
+	 * capture this tab lost on a reload. Only the hub's `EndSession`, which any connection may send; no local source
+	 * is touched. False when the hub was not connected, so nothing was sent.
+	 */
+	endElsewhere(): Promise<boolean>;
 }
 
 const defaultCaptureSourceFactory: CaptureSourceFactory = (kind, channel, deviceId) =>
@@ -531,5 +537,6 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 		start,
 		stop,
 		cancel,
+		endElsewhere: endSession,
 	};
 }

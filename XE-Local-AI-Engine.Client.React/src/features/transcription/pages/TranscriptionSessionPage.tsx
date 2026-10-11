@@ -1,5 +1,5 @@
 import { Badge, Button, Group, Skeleton, Stack, Text } from "@mantine/core";
-import { IconMessage, IconMicrophone } from "@tabler/icons-react";
+import { IconArrowLeft, IconMessage, IconMicrophone } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
@@ -140,6 +140,14 @@ function TranscriptionSessionContent({ sessionId }: TranscriptionSessionPageProp
 				subtitle={t("pages.transcription.session.subtitle")}
 				actions={
 					<Group gap="sm">
+						<Button
+							variant="subtle"
+							leftSection={<IconArrowLeft size={16} />}
+							onClick={() => navigate({ to: nodeRoutePaths.transcription })}
+							data-testid="transcription-session-back"
+						>
+							{t("pages.transcription.session.back")}
+						</Button>
 						{transcript.length === 0 ? null : (
 							<Button
 								variant="light"
@@ -216,7 +224,9 @@ function TranscriptionSessionContent({ sessionId }: TranscriptionSessionPageProp
 						/>
 					) : null}
 
-					{isLive && processMissing ? (
+					{/* Only a Created session still needs this browser's pid to start. A running capture is recorded on the
+					    node, and the pid store is per browser, so a second client watching it has nothing missing. */}
+					{isLive && processMissing && !isTranscribing ? (
 						<InlineErrorAlert
 							message={t("pages.transcription.session.processMissing")}
 							variant="light"
@@ -224,7 +234,9 @@ function TranscriptionSessionContent({ sessionId }: TranscriptionSessionPageProp
 						/>
 					) : null}
 
-					{isLive && !processMissing ? (
+					{/* A running session gets its controls whether or not this browser knows the process: Stop and the
+					    readouts need nothing from the pid store. */}
+					{isLive && (!processMissing || isTranscribing) ? (
 						<CaptureControls
 							sourceKind={sourceKind}
 							state={capture.state}
@@ -239,6 +251,10 @@ function TranscriptionSessionContent({ sessionId }: TranscriptionSessionPageProp
 							)}
 							bufferedMs={liveView?.bufferedMs ?? null}
 							runtimeState={runtimeQuery.data?.state ?? null}
+							capturedElsewhere={isTranscribing && capture.state === "idle"}
+							// Only an application session without its pid can never start here. A browser-fed session keeps
+							// Start, which resumes capture after a reload within the hub grace.
+							startUnavailable={processMissing}
 							// Start is called straight out of the click, with nothing awaited in between, or the browser
 							// refuses to open the screen-share picker.
 							onStart={() => {
@@ -252,7 +268,15 @@ function TranscriptionSessionContent({ sessionId }: TranscriptionSessionPageProp
 								capture.start(request).catch(() => undefined);
 							}}
 							onStop={() => {
-								capture.stop().catch(() => undefined);
+								if (capture.state !== "idle") {
+									capture.stop().catch(() => undefined);
+									return;
+								}
+								const failed = () => toast.error(t("pages.transcription.capture.stopFailed"));
+								capture
+									.endElsewhere()
+									.then((sent) => (sent ? undefined : failed()))
+									.catch(failed);
 							}}
 							onCancel={() => {
 								capture.cancel().catch(() => undefined);

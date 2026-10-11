@@ -1176,11 +1176,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 				body: { enableTools: false, maxMessageRequestTimeoutSeconds: 600 },
 			}),
 		);
-		await waitFor(() =>
-			expect(toastMock.success).toHaveBeenCalledWith(
-				"Node settings saved. Capability reporting was requested for the worker connection.",
-			),
-		);
+		await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Node settings saved."));
 	});
 
 	it("saves the web-access switch and a cleared SearXNG URL", async () => {

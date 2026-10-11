@@ -50,6 +50,7 @@ const liveCapture = vi.hoisted(() => ({
 	start: vi.fn(() => Promise.resolve()),
 	stop: vi.fn(() => Promise.resolve()),
 	cancel: vi.fn(() => Promise.resolve()),
+	endElsewhere: vi.fn(() => Promise.resolve(true)),
 	setError: vi.fn() as (error: LiveCaptureErrorCode | null) => void,
 }));
 
@@ -69,6 +70,7 @@ vi.mock("@/features/transcription/capture/useLiveCapture", async () => {
 				start: liveCapture.start,
 				stop: liveCapture.stop,
 				cancel: liveCapture.cancel,
+				endElsewhere: liveCapture.endElsewhere,
 			};
 		},
 	};
@@ -139,6 +141,8 @@ describe("TranscriptionSessionPage", () => {
 	beforeEach(() => {
 		navigate.mockClear();
 		liveCapture.start.mockClear();
+		liveCapture.stop.mockClear();
+		liveCapture.endElsewhere.mockClear();
 		liveCapture.state = "idle";
 		liveCapture.capturedMs = 0;
 		usePendingComposerTextStore.setState({ pendingText: "" });
@@ -379,6 +383,7 @@ describe("TranscriptionSessionPage", () => {
 	// Regression: `isLive` used to be derived from the capture REQUEST, and an
 	// application-capture session has none — the node records the application. The session rendered as if it had
 	// finished, with the persisted rows and no controls, while it was still transcribing.
+	// A page that is not driving a running capture (a reload) offers Stop beside Start.
 	it("renders the live panel and the capture controls for an application-capture session", async () => {
 		useTranscriptionCaptureStore.setState({ processIdBySession: { [sessionId]: 4242 } });
 		server.use(
@@ -391,6 +396,7 @@ describe("TranscriptionSessionPage", () => {
 		renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);
 
 		expect(await screen.findByTestId("transcription-live-panel")).toBeDefined();
+		expect(screen.getByTestId("transcription-capture-stop")).toBeDefined();
 		expect(screen.getByTestId("transcription-capture-start")).toBeDefined();
 		expect(screen.queryByTestId("transcript-segment-list")).toBeNull();
 	});
@@ -430,6 +436,57 @@ describe("TranscriptionSessionPage", () => {
 		expect(await screen.findByTestId("transcription-session-process-missing")).toBeDefined();
 		expect(screen.queryByTestId("transcription-capture-start")).toBeNull();
 		expect(liveCapture.start).not.toHaveBeenCalled();
+	});
+
+	// N-35: the pid store is per browser, so a second client opening a RUNNING application capture has no entry. The
+	// capture lives on the node and needs nothing from this browser: no error, no Start, just the live transcript.
+	it("watches a running application capture from a browser that never remembered its process", async () => {
+		server.use(
+			jsonRoute(
+				"get",
+				`transcription/sessions/${sessionId}`,
+				detail({ status: "Transcribing", sourceKind: "ApplicationProcess" }, []),
+			),
+		);
+		const { queryClient } = renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);
+
+		expect(await screen.findByTestId("transcription-live-panel")).toBeDefined();
+		pushLiveTranscript(queryClient, {
+			...liveView("Transcribing", [
+				{ seq: 1, startMs: 40_000, endMs: 47_400, text: "Hey, das ist ein Test.", channel: "others", confidence: null },
+			]),
+			bufferedMs: 2500,
+		});
+		await waitFor(() => expect(screen.getByTestId("transcription-capture-elapsed").textContent).toBe("00:47"));
+		expect(screen.queryByTestId("transcription-session-process-missing")).toBeNull();
+		expect(screen.queryByTestId("transcription-capture-start")).toBeNull();
+		expect((await screen.findByTestId("transcription-capture-behind")).textContent).toBe("Transcribing… 3 s behind");
+
+		// Stop from this client is the graceful hub end, not the local stop of a capture it never ran.
+		fireEvent.click(screen.getByTestId("transcription-capture-stop"));
+		expect(liveCapture.endElsewhere).toHaveBeenCalledTimes(1);
+		expect(liveCapture.stop).not.toHaveBeenCalled();
+	});
+
+	// A browser-fed session keeps Start (resume after a reload within the hub grace) and gains Stop.
+	it("offers stop beside start for a microphone session this page is not capturing", async () => {
+		server.use(
+			jsonRoute("get", `transcription/sessions/${sessionId}`, detail({ status: "Transcribing", sourceKind: "Microphone" }, [])),
+		);
+		renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);
+
+		expect(await screen.findByTestId("transcription-capture-stop")).toBeDefined();
+		expect(screen.getByTestId("transcription-capture-start")).toBeDefined();
+	});
+
+	// N-36: the session page had no way back to the list.
+	it("goes back to the transcription list", async () => {
+		server.use(jsonRoute("get", `transcription/sessions/${sessionId}`, detail()));
+		renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);
+
+		fireEvent.click(await screen.findByRole("button", { name: "Back to transcriptions" }));
+
+		expect(navigate).toHaveBeenCalledWith({ to: "/transcription" });
 	});
 
 	it("keeps the persisted transcript for a live session that already finished", async () => {

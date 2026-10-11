@@ -1004,7 +1004,21 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         lock (session.Gate)
         {
             session.AudioEndMs = Math.Max(session.AudioEndMs, lane.Segmenter.AudioEndMs);
-            session.DetectedLanguage ??= tick.DetectedLanguage;
+            foreach (var commit in tick.Commits)
+            {
+                if (commit.LanguageCode is not { } code)
+                {
+                    continue;
+                }
+
+                var total = CollectionsMarshal.GetValueRefOrAddDefault(session.CommittedMsByLanguage, code, out _) += Math.Max(0, commit.EndMs - commit.StartMs);
+
+                // Strictly greater: a tie keeps the language that got there first.
+                if (session.DetectedLanguage is null || total > session.CommittedMsByLanguage[session.DetectedLanguage])
+                {
+                    session.DetectedLanguage = code;
+                }
+            }
         }
     }
 
@@ -1181,6 +1195,10 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
         /// <summary>How much audio the furthest lane has received; the session's duration when it ends.</summary>
         public long AudioEndMs { get; set; }
 
+        /// <summary>The language with the most committed speech so far; a tie keeps the earlier leader. Guarded by <see cref="Gate" />.</summary>
         public string? DetectedLanguage { get; set; }
+
+        /// <summary>Committed milliseconds per detected language, across every lane. Guarded by <see cref="Gate" />.</summary>
+        public Dictionary<string, long> CommittedMsByLanguage { get; } = new(StringComparer.Ordinal);
     }
 }

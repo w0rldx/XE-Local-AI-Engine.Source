@@ -66,7 +66,7 @@ public sealed class MxcPolicyMapperTests
     }
 
     [Test]
-    public async Task Build_DeniesAllNetworkAndUi()
+    public async Task Build_DeniesAllNetworkClipboardAndInputInjection_AndAllowsWin32k()
     {
         var request = MxcPolicyMapper.Build(Request());
 
@@ -77,7 +77,7 @@ public sealed class MxcPolicyMapperTests
         AssertEx.Equal<NetworkAction?>(NetworkAction.Deny, network.Ingress!.HostLoopback);
         AssertEx.Null(network.RuntimeConfig);
         var ui = AssertEx.NotNull(request.Ui);
-        AssertEx.True(ui.Disable);
+        AssertEx.False(ui.Disable);
         AssertEx.Equal(ClipboardPolicy.None, ui.Clipboard);
         AssertEx.False(ui.AllowInputInjection);
         await Task.CompletedTask;
@@ -134,7 +134,7 @@ public sealed class MxcPolicyMapperTests
     public async Task EveryBuiltRequest_PassesTheGuard()
     {
         AssertEx.DoesNotThrow(() => MxcPolicyGuard.Assert(MxcPolicyMapper.Build(Request())), "the launch request must pass the guard");
-        AssertEx.DoesNotThrow(() => MxcPolicyGuard.Assert(MxcPolicyMapper.BuildProbeRequest()), "the probe request must pass the guard");
+        AssertEx.DoesNotThrow(() => MxcPolicyGuard.AssertProbe(MxcPolicyMapper.BuildProbeRequest()), "the probe request must pass the guard");
         await Task.CompletedTask;
     }
 

@@ -22,6 +22,9 @@ public sealed class LiveCommit
 
     /// <summary>The model's confidence, passed through untouched from the provider.</summary>
     public required double? Confidence { get; init; }
+
+    /// <summary>The language its window detected, or <see langword="null" /> for an explicit language or none detected.</summary>
+    public required string? LanguageCode { get; init; }
 }
 
 /// <summary>What one call into a lane produced.</summary>
@@ -32,12 +35,6 @@ public sealed class LiveTick
 
     /// <summary>The segments that became durable during this call, in commit order.</summary>
     public required IReadOnlyList<LiveCommit> Commits { get; init; }
-
-    /// <summary>
-    ///     The language code this call learned, or <see langword="null" /> when it learned none. It is reported once,
-    ///     on the call that first sees it; <see cref="LiveTranscriptionSegmenter.DetectedLanguageCode" /> holds it after.
-    /// </summary>
-    public required string? DetectedLanguage { get; init; }
 }
 
 /// <summary>
@@ -99,7 +96,6 @@ public sealed class LiveTranscriptionSegmenter
     private readonly IWhisperTranscriber _transcriber;
     private long _audioEndMs;
     private long _committedEndMs;
-    private string? _detectedLanguageCode;
     private long _lastSubmittedBoundaryMs = -1;
     private long _nextTickMs;
     private int _noProgressSubmissions;
@@ -145,9 +141,6 @@ public sealed class LiveTranscriptionSegmenter
     /// <summary>The watermark: no segment starting before this is ever emitted again.</summary>
     public long CommittedEndMs => _committedEndMs;
 
-    /// <summary>The language code of the first window that committed a segment, or <see langword="null" /> while it is still unknown.</summary>
-    public string? DetectedLanguageCode => _detectedLanguageCode;
-
     /// <summary>Accepts one frame of 16 kHz mono int16 PCM and runs whatever submissions its arrival makes due.</summary>
     /// <param name="pcm16">Raw little-endian samples. Any length is accepted, including one that is not a whole millisecond.</param>
     /// <param name="cancellationToken">Cancels an in-flight submission.</param>
@@ -168,7 +161,6 @@ public sealed class LiveTranscriptionSegmenter
         cancellationToken.ThrowIfCancellationRequested();
 
         var commits = new List<LiveCommit>();
-        string? learnedLanguage = null;
         var remaining = pcm16;
 
         while (true)
@@ -192,10 +184,7 @@ public sealed class LiveTranscriptionSegmenter
                     _noProgressSubmissions = 0;
                 }
 
-                learnedLanguage = await SubmitAsync(atCap: _audioEndMs - _tailStartMs >= _maxWindowMs,
-                    flush: false,
-                    commits,
-                    cancellationToken) ?? learnedLanguage;
+                await SubmitAsync(atCap: _audioEndMs - _tailStartMs >= _maxWindowMs, flush: false, commits, cancellationToken);
 
                 // Set from the caller and not inside the submission, so a submission that declines to run (an
                 // ordinary tick with less than a tick of new audio) still moves the boundary and cannot spin.
@@ -218,8 +207,7 @@ public sealed class LiveTranscriptionSegmenter
         return new LiveTick
         {
             Partial = _partial,
-            Commits = commits,
-            DetectedLanguage = learnedLanguage
+            Commits = commits
         };
     }
 
@@ -233,29 +221,28 @@ public sealed class LiveTranscriptionSegmenter
     public async ValueTask<LiveTick> FlushAsync(CancellationToken cancellationToken)
     {
         var commits = new List<LiveCommit>();
-        var learnedLanguage = await SubmitAsync(atCap: false, flush: true, commits, cancellationToken);
+        await SubmitAsync(atCap: false, flush: true, commits, cancellationToken);
         return new LiveTick
         {
             Partial = _partial,
-            Commits = commits,
-            DetectedLanguage = learnedLanguage
+            Commits = commits
         };
     }
 
-    private async ValueTask<string?> SubmitAsync(bool atCap, bool flush, List<LiveCommit> commits, CancellationToken cancellationToken)
+    private async ValueTask SubmitAsync(bool atCap, bool flush, List<LiveCommit> commits, CancellationToken cancellationToken)
     {
         var windowStartMs = _tailStartMs;
         var uncommittedMs = _audioEndMs - windowStartMs;
         if (uncommittedMs <= 0)
         {
-            return null;
+            return;
         }
 
         // A tick that fires with less than a tick of new audio has nothing new to say. A cap or a flush submission
         // has no such minimum: the cap must clear the buffer, and a flush is the last chance this audio ever gets.
         if (!atCap && !flush && uncommittedMs < _settings.TickMs)
         {
-            return null;
+            return;
         }
 
         var windowEndMs = _audioEndMs;
@@ -274,18 +261,7 @@ public sealed class LiveTranscriptionSegmenter
             result = await RetryWithinBudgetAsync(wav, _timeProvider.GetElapsedTime(startedAt), cancellationToken);
         }
 
-        var commitsBefore = commits.Count;
         Apply(result, windowStartMs, windowEndMs, atCap, flush, commits);
-
-        // Learned only from a window that committed a segment: a committing window spans the whole utterance plus the
-        // tail guard, while a provisional one may hold a single word ("Hey" in a German sentence detects as English).
-        if (_detectedLanguageCode is null && commits.Count > commitsBefore && !string.IsNullOrWhiteSpace(result.DetectedLanguageCode))
-        {
-            _detectedLanguageCode = result.DetectedLanguageCode;
-            return result.DetectedLanguageCode;
-        }
-
-        return null;
     }
 
     /// <summary>Resubmits a window under what is left of the one inference budget its first attempt started.</summary>
@@ -395,7 +371,8 @@ public sealed class LiveTranscriptionSegmenter
                 StartMs = segment.StartMs,
                 EndMs = segment.EndMs,
                 Text = segment.Text,
-                Confidence = segment.Confidence
+                Confidence = segment.Confidence,
+                LanguageCode = string.IsNullOrWhiteSpace(result.DetectedLanguageCode) ? null : result.DetectedLanguageCode
             });
             watermarkMs = Math.Max(watermarkMs, segment.EndMs);
             committedEndMs = watermarkMs;

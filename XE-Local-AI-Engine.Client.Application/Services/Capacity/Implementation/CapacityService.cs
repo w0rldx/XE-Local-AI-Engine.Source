@@ -24,9 +24,11 @@ public sealed class CapacityService : ICapacityService
     private const string ReasonAllowCloud = "Cloud provider selected; no local capacity required.";
     private const string ReasonAllowExternal = "External endpoint configured; no local capacity required.";
     private const string ReasonQueueSameModel = "Model already running; the spawn will share that process.";
+    private const string ReasonQueueSameModelLoading = "Model is loading; the request will share that load.";
     private const string ReasonRejectFootprintUnknown = "the model's memory footprint could not be determined.";
     private const string ReasonRejectByteBudget = "not enough free memory for another model.";
     private const string ReasonRejectProcessCap = "the maximum number of concurrent models is already loaded.";
+    private const string ReasonRejectLaunchBlocker = "another model is still loading; try again when it finishes.";
 
     private readonly IActiveCloudChatClientFactory _cloudFactory;
     private readonly IModelFootprintProvider _footprintProvider;
@@ -151,10 +153,6 @@ public sealed class CapacityService : ICapacityService
             };
         }
 
-        // Pooled roles (embedder, reranker) are spawned below every caller; the embedder is booked but never refused on budget.
-        var isPooledRole = role is ModelRole.Embedding or ModelRole.Reranker;
-        var neverReject = request.NeverRejectOnBudget;
-        var ollamaWarning = isOllama && running.Count > 0;
         var launchSnapshot = isLlamaServer
             ? _launchAdmissions.Snapshot(modelName, role)
             : new ProcessLaunchAdmissionSnapshot
@@ -163,10 +161,27 @@ public sealed class CapacityService : ICapacityService
                 HasRequestedKey = false,
                 HasGlobalBlocker = false
             };
-        var canPublish = !launchSnapshot.HasRequestedKey && !launchSnapshot.HasGlobalBlocker;
+
+        // Admitted and still loading for this (model, role): the launch joins that admission, so it books nothing and is never refused. Pooled roles too, and a
+        // leaked lease whose process exited also lands here: the next ensure relaunches on that admission with no fresh budget check, under "Model is loading".
+        if (launchSnapshot.HasRequestedKey)
+        {
+            return new CapacityDecision
+            {
+                Verdict = CapacityVerdict.QueueSameModel,
+                Reason = ReasonQueueSameModelLoading,
+                OllamaEvictionWarning = false
+            };
+        }
+
+        // Pooled roles (embedder, reranker) are spawned below every caller; the embedder is booked but never refused on budget.
+        var isPooledRole = role is ModelRole.Embedding or ModelRole.Reranker;
+        var neverReject = request.NeverRejectOnBudget;
+        var ollamaWarning = isOllama && running.Count > 0;
+        var canPublish = !launchSnapshot.HasGlobalBlocker;
         if (!canPublish && !neverReject)
         {
-            return Reject(ReasonRejectByteBudget, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
+            return Reject(ReasonRejectLaunchBlocker, modelName, role, runningSnapshot, launchSnapshot, ollamaWarning);
         }
 
         // INVARIANT: the forced refresh runs UNDER the gate, never before it. The free-VRAM baseline nets out every resident model, so two racing decisions
@@ -300,19 +315,30 @@ public sealed class CapacityService : ICapacityService
         bool isMemoryShortfall = false,
         ProcessLaunchAdmission? shortfallAdmission = null)
     {
-        var resident = runningSnapshot.Keys
-                                      .Concat(launchSnapshot.AdmittedKeys.Select(static key => new RunningKey(key.ModelName, key.Role)))
-                                      .Distinct()
-                                      .Select(static key => $"'{key.ModelName}' ({key.Role})")
-                                      .ToArray();
-        var loaded = "The loaded models could not be listed.";
+        // A refusal never names the requested (model, role) itself: asking to eject the model being loaded is no advice.
+        var requested = new RunningKey(modelName, role);
+        var resident = runningSnapshot.Keys.Where(key => !key.Equals(requested)).ToArray();
+        var loading = launchSnapshot.AdmittedKeys
+                                    .Select(static key => new RunningKey(key.ModelName, key.Role))
+                                    .Where(key => !key.Equals(requested) && !runningSnapshot.Keys.Contains(key))
+                                    .Distinct()
+                                    .ToArray();
+        var loaded = loading.Length == 0 ? "The loaded models could not be listed." : $"The loaded models could not be listed. Loading now: {Describe(loading)}.";
         if (runningSnapshot.IsKnown)
         {
-            loaded = resident.Length == 0 ? "No model is loaded." : $"Loaded now: {string.Join(", ", resident)}.";
+            loaded = (resident.Length, loading.Length) switch
+            {
+                (0, 0) => "No model is loaded.",
+                (_, 0) => $"Loaded now: {Describe(resident)}.",
+                (0, _) => $"Loading now: {Describe(loading)}.",
+                _ => $"Loaded now: {Describe(resident)}. Loading now: {Describe(loading)}."
+            };
         }
 
-        // Ejecting frees memory and a process slot; it cannot make an unknown footprint known.
-        var hint = runningSnapshot.IsKnown && resident.Length > 0 && !string.Equals(detail, ReasonRejectFootprintUnknown, StringComparison.Ordinal)
+        // Only a loaded model can be ejected; ejecting cannot make an unknown footprint known, and a launch blocker clears on its own.
+        var hint = runningSnapshot.IsKnown && resident.Length > 0
+                                           && !string.Equals(detail, ReasonRejectFootprintUnknown, StringComparison.Ordinal)
+                                           && !string.Equals(detail, ReasonRejectLaunchBlocker, StringComparison.Ordinal)
             ? " Eject one of them or pick a loaded model."
             : string.Empty;
         var reason = $"Insufficient capacity for '{modelName}' ({role}): {detail} {loaded}{hint}";
@@ -327,6 +353,8 @@ public sealed class CapacityService : ICapacityService
             Admission = shortfallAdmission
         };
     }
+
+    private static string Describe(IEnumerable<RunningKey> keys) => string.Join(", ", keys.Select(static key => $"'{key.ModelName}' ({key.Role})"));
 
     /// <summary>Whether the footprint fits every non-zero resource axis of the live free baseline, less the in-flight ledger reservations.</summary>
     /// <remarks>

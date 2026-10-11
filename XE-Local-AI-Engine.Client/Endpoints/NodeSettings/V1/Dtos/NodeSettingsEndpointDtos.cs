@@ -68,7 +68,7 @@ public sealed record NodeSettingsResponse
     ///     A RECORD of the choice, never the authority — the three switches below are what every gate reads — and
     ///     <c>custom</c> and <c>pending</c> are engine-written, the server being their only writer. Honesty rule both
     ///     surfaces must render: Offline disables exactly the three checks named below and NOTHING else. It does not
-    ///     block the connection to the C0re platform, MCP servers the operator has configured, or model-catalog
+    ///     block the connection to the platform, MCP servers the operator has configured, or model-catalog
     ///     lookups. Copy that implies a network kill switch is a privacy misrepresentation.
     /// </remarks>
     public string? ExternalAccessProfile { get; init; }

@@ -2,11 +2,17 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Capacity.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -106,6 +112,33 @@ public sealed class SupervisorPooledAdmissionTests
         AssertEx.Equal(expected: 1, launcher.LaunchCount);
         AssertEx.Equal(expected: 0, hook.ChatCalls, "A second decision would reject on the admission its own caller published.");
         AssertEx.False(registry.Snapshot("chat-model", ModelRole.Chat).HasRequestedKey, "The published admission must have been consumed and released.");
+    }
+
+    [Test]
+    public async Task LeakedAdmissionOfAnExitedProcess_QueuesThenRelaunchesBoundToIt_WithoutASecondBooking()
+    {
+        // A caller's consumer lease outlives its process: capacity queues on it, and the next ensure reaps the corpse and relaunches on that admission.
+        var launcher = new FakeProcessLauncher();
+        var registry = new ProcessLaunchAdmissionRegistry();
+        var hook = new RecordingPooledAdmission(registry);
+        await using var supervisor = Create(launcher, registry, hook);
+        using var ledger = new PendingFootprintLedger();
+        var capacity = CapacityOver(supervisor, registry, ledger);
+        AssertEx.True(registry.TryAcquire(RecordingPooledAdmission.Admission("chat-model", ModelRole.Chat), out var leaked));
+        await supervisor.EnsureRunningAsync("chat-model", ModelRole.Chat, CancellationToken.None);
+        launcher.Handles.Single().SimulateExit();
+
+        var decision = await capacity.DecideAsync("chat-model", ModelRole.Chat, CancellationToken.None);
+        await supervisor.EnsureRunningAsync("chat-model", ModelRole.Chat, CancellationToken.None);
+        leaked!.Dispose();
+
+        AssertEx.Equal(CapacityVerdict.QueueSameModel, decision.Verdict);
+        AssertEx.Null(decision.Reservation);
+        AssertEx.Equal(ResourceFootprint.Zero, ledger.Reserved);
+        AssertEx.Equal(expected: 2, launcher.LaunchCount, "the dead process is replaced by exactly one spawn");
+        AssertEx.Equal(expected: 0, hook.ChatCalls, "the relaunch binds the held admission instead of deciding again");
+        var relaunch = launcher.Launches.Last().Arguments;
+        AssertEx.Equal("2048", relaunch[relaunch.ToList().IndexOf(LlamaServerManagedFlags.ContextSize) + 1]);
     }
 
     /// <summary>The skip is the only supervisor-side trace of a caller-decided chat launch, so it is logged at Information.</summary>
@@ -252,6 +285,32 @@ public sealed class SupervisorPooledAdmissionTests
 
         AssertEx.Equal(expected: 2, launcher.LaunchCount, "the evicted reranker must have been spawned again");
         AssertEx.Equal(expected: 2, hook.Calls, "Every cold launch is admitted, including one after a reap.");
+    }
+
+    private static CapacityService CapacityOver(ILlamaServerProcessSupervisor supervisor, ProcessLaunchAdmissionRegistry registry, PendingFootprintLedger ledger)
+    {
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(LlamaServerProviderConstants.ProviderName));
+        resolver.MaxLoadedProcesses.Returns(3);
+        var audit = Substitute.For<IRuntimeDeviceAudit>();
+        audit.GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult(new RuntimeDeviceAuditState
+             {
+                 InferenceBackend = "cpu",
+                 GpuExpected = false,
+                 CpuFallback = false
+             }));
+        return new CapacityService(Substitute.For<IActiveCloudChatClientFactory>(),
+            resolver,
+            audit,
+            supervisor,
+            Substitute.For<IOllamaModelService>(),
+            Substitute.For<IModelFootprintProvider>(),
+            ledger,
+            registry,
+            new LlamaServerExternalEndpointOptions(),
+            new LlamaServerSupervisorOptions(),
+            NullLogger<CapacityService>.Instance);
     }
 
     private static LlamaServerProcessSupervisor Create(FakeProcessLauncher launcher,

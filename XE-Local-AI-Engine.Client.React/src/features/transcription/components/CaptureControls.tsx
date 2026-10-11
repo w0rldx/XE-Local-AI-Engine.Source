@@ -22,6 +22,13 @@ interface CaptureControlsProps {
 	readonly bufferedMs: number | null;
 	/** The runtime's state while a start is pending; null when unknown. Only read while `state` is `starting`. */
 	readonly runtimeState: TranscriptionRuntimeView["state"] | null;
+	/**
+	 * The session is running but this page is not the one capturing it (another browser, or a reload). Stop is offered
+	 * beside Start then, and ends the session gracefully on the node.
+	 */
+	readonly capturedElsewhere: boolean;
+	/** This page can never start capture (an application session whose process this browser does not know). */
+	readonly startUnavailable: boolean;
 	readonly onStart: () => void;
 	readonly onStop: () => void;
 	readonly onCancel: () => void;
@@ -78,6 +85,8 @@ export function CaptureControls({
 	elapsedMs,
 	bufferedMs,
 	runtimeState,
+	capturedElsewhere,
+	startUnavailable,
 	onStart,
 	onStop,
 	onCancel,
@@ -85,7 +94,8 @@ export function CaptureControls({
 	const { t } = useTranslation();
 	// While a start is still acquiring devices the Start button stays in place and busy: offering Stop there would
 	// race the acquisition it is meant to undo.
-	const canStop = state === "capturing";
+	const stopsElsewhere = capturedElsewhere && state === "idle";
+	const canStop = state === "capturing" || stopsElsewhere;
 	const behindSeconds = bufferedMs === null ? 0 : Math.ceil(bufferedMs / 1000);
 
 	return (
@@ -101,28 +111,35 @@ export function CaptureControls({
 						{t("pages.transcription.capture.cancel")}
 					</Button>
 				</>
-			) : canStop ? (
-				<Button
-					variant="light"
-					color="red"
-					leftSection={<IconPlayerStopFilled size={16} />}
-					onClick={onStop}
-					data-testid="transcription-capture-stop"
-				>
-					{t("pages.transcription.capture.stop")}
-				</Button>
 			) : (
-				// Gated on the subscription, not just on the state machine: a capture begun before the hub is up
-				// acquires the devices, then fails on its first frame a quarter of a second later.
-				<Button
-					leftSection={<IconPlayerRecordFilled size={16} />}
-					loading={state === "starting"}
-					disabled={state === "starting" || !connected}
-					onClick={onStart}
-					data-testid="transcription-capture-start"
-				>
-					{t("pages.transcription.capture.start")}
-				</Button>
+				<>
+					{state === "capturing" || startUnavailable ? null : (
+						// Gated on the subscription, not just on the state machine: a capture begun before the hub is up
+						// acquires the devices, then fails on its first frame a quarter of a second later.
+						<Button
+							leftSection={<IconPlayerRecordFilled size={16} />}
+							loading={state === "starting"}
+							disabled={state === "starting" || !connected}
+							onClick={onStart}
+							data-testid="transcription-capture-start"
+						>
+							{t("pages.transcription.capture.start")}
+						</Button>
+					)}
+					{canStop ? (
+						<Button
+							variant="light"
+							color="red"
+							leftSection={<IconPlayerStopFilled size={16} />}
+							// From another client the end travels over the hub, so it cannot be sent while that is down.
+							disabled={stopsElsewhere && !connected}
+							onClick={onStop}
+							data-testid="transcription-capture-stop"
+						>
+							{t("pages.transcription.capture.stop")}
+						</Button>
+					) : null}
+				</>
 			)}
 
 			{state === "starting" ? (
@@ -131,7 +148,7 @@ export function CaptureControls({
 				</Text>
 			) : null}
 
-			{state === "capturing" && behindSeconds > 0 ? (
+			{canStop && behindSeconds > 0 ? (
 				<Text size="sm" c="dimmed" data-testid="transcription-capture-behind">
 					{t("pages.transcription.capture.behind", { seconds: behindSeconds })}
 				</Text>

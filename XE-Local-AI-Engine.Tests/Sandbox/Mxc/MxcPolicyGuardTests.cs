@@ -20,12 +20,18 @@ public sealed class MxcPolicyGuardTests
     [Arguments("CaptureDenialsAllow")]
     [Arguments("ContainerUiMissing")]
     [Arguments("ContainerUiIsolation")]
+    [Arguments("ContainerUiIsolationHandles")]
+    [Arguments("ContainerUiIsolationAtoms")]
     [Arguments("ContainerUiDesktopSystemControl")]
     [Arguments("ContainerUiIme")]
     [Arguments("ContainerUiSystemSettings")]
     [Arguments("EnumeratePaths")]
     [Arguments("AllowedProxyPeer")]
     [Arguments("ClearPolicyOnExitFalse")]
+    [Arguments("ClearPolicyOnExitUnset")]
+    [Arguments("FilesystemMissing")]
+    [Arguments("NoReadwritePath")]
+    [Arguments("SecondReadwritePath")]
     [Arguments("NetworkMissing")]
     [Arguments("EgressDefaultAllow")]
     [Arguments("EgressDefaultUnset")]
@@ -34,8 +40,9 @@ public sealed class MxcPolicyGuardTests
     [Arguments("HostLoopbackAllow")]
     [Arguments("NetworkProxy")]
     [Arguments("UiMissing")]
-    [Arguments("UiEnabled")]
     [Arguments("Clipboard")]
+    [Arguments("ClipboardWrite")]
+    [Arguments("ClipboardAll")]
     [Arguments("InputInjection")]
     [Arguments("EnvironmentNull")]
     [Arguments("InheritDefaultEnvironment")]
@@ -49,12 +56,26 @@ public sealed class MxcPolicyGuardTests
     }
 
     [Test]
-    public async Task Assert_AcceptsTheMappersRequest_WithClearPolicyOnExitLeftAtItsTrueDefault()
+    public async Task AssertProbe_AcceptsTheProbeRequest_AndRejectsOneThatCarriesFilesystemGrants()
     {
-        var request = SafeRequest();
-        request.Filesystem!.ClearPolicyOnExit = null;
+        var probe = MxcPolicyMapper.BuildProbeRequest();
+        AssertEx.DoesNotThrow(() => MxcPolicyGuard.AssertProbe(probe), "the probe request grants nothing");
 
-        AssertEx.DoesNotThrow(() => MxcPolicyGuard.Assert(request), "an unset ClearPolicyOnExit defaults to true in MXC");
+        probe.Filesystem = SafeRequest().Filesystem;
+        AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => MxcPolicyGuard.AssertProbe(probe), "a probe must not carry grants");
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task Assert_AcceptsEitherUiDisableValue_SinceWin32kIsAllowed(bool disable)
+    {
+        // ADR 0019 amendment: Win32k may be allowed (the mapper's choice) or denied (stricter); only clipboard and input injection are refused.
+        var request = SafeRequest();
+        request.Ui!.Disable = disable;
+
+        AssertEx.DoesNotThrow(() => MxcPolicyGuard.Assert(request), $"Ui.Disable = {disable}");
         await Task.CompletedTask;
     }
 
@@ -100,6 +121,12 @@ public sealed class MxcPolicyGuardTests
             case "ContainerUiIsolation":
                 container.Ui!.Isolation = ProcessContainerUiIsolation.Desktop;
                 break;
+            case "ContainerUiIsolationHandles":
+                container.Ui!.Isolation = ProcessContainerUiIsolation.Handles;
+                break;
+            case "ContainerUiIsolationAtoms":
+                container.Ui!.Isolation = ProcessContainerUiIsolation.Atoms;
+                break;
             case "ContainerUiDesktopSystemControl":
                 container.Ui!.DesktopSystemControl = true;
                 break;
@@ -123,6 +150,18 @@ public sealed class MxcPolicyGuardTests
                 break;
             case "ClearPolicyOnExitFalse":
                 request.Filesystem!.ClearPolicyOnExit = false;
+                break;
+            case "ClearPolicyOnExitUnset":
+                request.Filesystem!.ClearPolicyOnExit = null;
+                break;
+            case "FilesystemMissing":
+                request.Filesystem = null;
+                break;
+            case "NoReadwritePath":
+                request.Filesystem!.ReadwritePaths.Clear();
+                break;
+            case "SecondReadwritePath":
+                request.Filesystem!.ReadwritePaths.Add(@"C:\Users\me");
                 break;
             case "NetworkMissing":
                 request.Network = null;
@@ -157,11 +196,14 @@ public sealed class MxcPolicyGuardTests
             case "UiMissing":
                 request.Ui = null;
                 break;
-            case "UiEnabled":
-                request.Ui!.Disable = false;
-                break;
             case "Clipboard":
                 request.Ui!.Clipboard = ClipboardPolicy.Read;
+                break;
+            case "ClipboardWrite":
+                request.Ui!.Clipboard = ClipboardPolicy.Write;
+                break;
+            case "ClipboardAll":
+                request.Ui!.Clipboard = ClipboardPolicy.All;
                 break;
             case "InputInjection":
                 request.Ui!.AllowInputInjection = true;

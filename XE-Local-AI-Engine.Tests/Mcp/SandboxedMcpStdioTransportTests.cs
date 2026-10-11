@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Mcp;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO.Pipelines;
+using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
@@ -432,14 +433,28 @@ public sealed class SandboxedMcpStdioTransportTests
     }
 
     [Test]
-    [Arguments(0xC0000142u, "exit code 0xC0000142", "only programs that never load user32 start")]
-    [Arguments(0xC06D007Eu, "exit code 0xC06D007E", "a DLL loaded on demand failed to load")]
+    public void ExitCodeHints_NeverSteerTheOperatorToThePrivilegedHostTier()
+    {
+        // A startup hint is read at the moment a server failed in the sandbox; "use Privileged" there would teach operators to drop the
+        // boundary instead of fixing the folder. Read by reflection so a row added later is covered without a matching test row.
+        var transport = typeof(SandboxedMcpStdioTransport).GetNestedType("SandboxedTransport", BindingFlags.NonPublic);
+        var field = transport?.GetField("ExitCodeHints", BindingFlags.NonPublic | BindingFlags.Static);
+        var hints = AssertEx.NotNull(field?.GetValue(null) as IReadOnlyDictionary<uint, string>);
+
+        AssertEx.NotEmpty(hints);
+        AssertEx.Empty(hints.Where(entry => entry.Value.Contains("Privileged", StringComparison.OrdinalIgnoreCase)), "no exit-code hint may name the Privileged tier");
+    }
+
+    [Test]
+    [Arguments(0xC0000142u, "exit code 0xC0000142", "a DLL failed to initialise while the process started")]
+    [Arguments(0xC06D007Eu, "exit code 0xC06D007E", "it is missing or sits in a folder")]
     [Arguments(0x80008089u, "exit code 0x80008089", "the .NET runtime could not start")]
     [Arguments(0x00000001u, "exit code 0x00000001", null)]
+    [Arguments(0x8000809Bu, "exit code 0x8000809B", "could not find or read the application DLL")]
     public async Task Handshake_WhenTheServerExitsNonZeroWithoutStderr_NamesTheExitCodeInHexAndTheSandboxWarnings(uint exitCode, string expectedCode, string? expectedHint)
     {
-        // N-3, N-16, N-17: a Win32k-denied child dies silently (0xC0000142, a .NET app 0x80008089, a failed delay-load 0xC06D007E); the exit
-        // code, its meaning and MXC's warnings say why. A code with no known meaning gets no hint.
+        // N-3, N-16, N-17 and the 0x8000809B row (.NET host cannot read the app DLL): a child that cannot start dies silently; the exit code,
+        // its meaning and MXC's warnings say why. A code with no known meaning gets no hint.
         var directory = CreateBindableDirectory("jail-path-");
         try
         {
@@ -466,7 +481,7 @@ public sealed class SandboxedMcpStdioTransportTests
             else
             {
                 AssertEx.Contains(exception.Message, expectedHint);
-                AssertEx.Contains(exception.Message, "UI subsystem");
+                AssertEx.Contains(exception.Message, "a folder the sandbox cannot read");
             }
 
             AssertEx.Contains(exception.Message, "ProcessContainer cleanup skipped");
@@ -645,6 +660,60 @@ public sealed class SandboxedMcpStdioTransportTests
 
         AssertEx.Contains(exception.Message, "Sandboxed");
         AssertEx.Contains(exception.Message, Path.TrimEndingDirectorySeparator(denied));
+    }
+
+    [Test]
+    [Arguments("AppData")]
+    [Arguments("AppData/Roaming")]
+    [Arguments("AppData/Local")]
+    [Arguments("AppData/Roaming/Microsoft")]
+    [Arguments("AppData/Local/Microsoft")]
+    [Arguments("AppData/Local/Google")]
+    [Arguments("AppData/Local/Mozilla")]
+    [Arguments("AppData/Roaming/Mozilla")]
+    public void ResolveReadOnlyTrees_ForAWorkingDirectoryThatIsOrHoldsAWindowsProfileStore_IsRefused(string relative)
+    {
+        // The exit-code hints steer operators to "a granted folder": AppData as that folder would hand the server DPAPI master keys,
+        // Credential Manager and browser profiles. The parents are refused by the ancestor rule.
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var denied = Path.Combine([home, .. relative.Split('/')]);
+        var record = StdioRecord(McpTrustTier.Sandboxed) with
+        {
+            Command = "/usr/bin/server-binary",
+            WorkingDirectory = denied
+        };
+
+        var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots()),
+            $"binding '{denied}' would hand the server the operator's Windows profile stores.");
+
+        AssertEx.Contains(exception.Message, Path.TrimEndingDirectorySeparator(denied));
+    }
+
+    [Test]
+    public void ResolveReadOnlyTrees_ForAnNpmGlobalFolderUnderAppDataRoaming_IsAllowed()
+    {
+        // The other half: a global npm install lives in AppData\Roaming\npm, beside the stores but holding none of them.
+        var home = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"home-{Guid.NewGuid():N}"));
+        try
+        {
+            var npm = Directory.CreateDirectory(Path.Combine(home.FullName, "AppData", "Roaming", "npm"));
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "npx",
+                WorkingDirectory = null
+            };
+
+            var trees = SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record,
+                _ => Path.Combine(npm.FullName, "npx"),
+                SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, () => home.FullName));
+
+            AssertEx.Equal(expected: 1, trees.Count);
+            AssertEx.Equal(Path.TrimEndingDirectorySeparator(npm.FullName), trees[0]);
+        }
+        finally
+        {
+            home.Delete(recursive: true);
+        }
     }
 
     [Test]
