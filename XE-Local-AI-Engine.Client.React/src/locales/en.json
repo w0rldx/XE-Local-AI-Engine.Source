@@ -1503,7 +1503,6 @@
 			},
 			"webAutoAccept": {
 				"label": "Auto-accept web content",
-				"needsConversation": "Send a first message to choose how web content is handled",
 				"on": "Web content reaches the model without review",
 				"off": "Web content is shown to you for review first",
 				"noticeTitle": "Auto-accept web content?",

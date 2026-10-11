@@ -78,4 +78,15 @@ describe("MarkdownView", () => {
 		// remark-gfm wraps in <del>; text content should still be accessible
 		expect(screen.getByText("deleted")).toBeTruthy();
 	});
+
+	it("renders GFM table parts as Mantine table parts, keeping column alignment", () => {
+		// biome-ignore lint/style/useConsistentCurlyBraces: \n must be a real newline — JSX string attribute would treat it as literal backslash-n
+		renderWithProviders(<MarkdownView content={"| A | B |\n|---|--:|\n| 1 | 2 |"} />);
+
+		const header = screen.getByRole("columnheader", { name: "A" });
+		expect(header.classList.contains("mantine-Table-th")).toBe(true);
+		expect(screen.getByRole("cell", { name: "1" }).classList.contains("mantine-Table-td")).toBe(true);
+		expect(screen.getByRole("cell", { name: "2" }).style.textAlign).toBe("right");
+		expect(header.hasAttribute("node")).toBe(false);
+	});
 });

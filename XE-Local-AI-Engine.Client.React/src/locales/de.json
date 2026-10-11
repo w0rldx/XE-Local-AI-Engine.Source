@@ -1503,7 +1503,6 @@
 			},
 			"webAutoAccept": {
 				"label": "Webinhalte automatisch übernehmen",
-				"needsConversation": "Senden Sie eine erste Nachricht, um festzulegen, wie Webinhalte behandelt werden",
 				"on": "Webinhalte gehen ungeprüft an das Modell",
 				"off": "Webinhalte werden Ihnen zuerst zur Prüfung angezeigt",
 				"noticeTitle": "Webinhalte automatisch übernehmen?",

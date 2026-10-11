@@ -253,6 +253,16 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- Chat polish from the Windows tester rounds:
+  - Markdown tables in a chat answer (and every other Markdown view) rendered their header row with the browser's
+    centred default, offset from the left-aligned values below; table parts now go through the shared table component,
+    so headers, cells, padding and column alignment line up.
+  - A changed accent colour now reaches the selection highlights that still used the stock blue: the auto-accept web
+    content toggle, selected rows in the benchmark and scheduler panels, selected workflow nodes, and the usage chart.
+    Informational notices and status colours keep their semantic blue.
+  - The auto-accept web content toggle was disabled on a draft conversation ("send a first message") but enabled at once
+    after "New conversation"; a draft now holds the choice and carries it onto the conversation its first send creates.
+
 - Windows tester round on `1.0.0-rc.2.dev.20261010.102`:
   - The Windows sandbox startup hint for exit code 0xC0000142 wrongly said .NET 10 apps and PowerShell 7.7+ run under
     the Sandboxed tier. Only native console programs that never load user32 start; Windows PowerShell, PowerShell 7,

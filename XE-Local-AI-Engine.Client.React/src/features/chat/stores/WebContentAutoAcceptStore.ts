@@ -4,6 +4,8 @@ import { create } from "zustand";
 
 // Per-conversation web content review mode (ADR 0017, D8). Off = every web_fetch/web_search result is shown for review
 // before the model reads it; on = it reaches the model directly. Every conversation starts off, so only "true" is stored.
+// The empty id is the draft that has no conversation yet: its choice lives in memory only until
+// adoptWebContentAutoAcceptDraft moves it onto the conversation created at its first send.
 const storageKeyPrefix = "xe-node-chat-web-auto:";
 
 function readStored(conversationId: string): boolean {
@@ -15,6 +17,9 @@ function readStored(conversationId: string): boolean {
 }
 
 function writeStored(conversationId: string, value: boolean): void {
+	if (!conversationId) {
+		return;
+	}
 	try {
 		if (value) {
 			globalThis.localStorage?.setItem(`${storageKeyPrefix}${conversationId}`, "true");
@@ -53,6 +58,16 @@ export function isWebContentAutoAccepted(conversationId: string): boolean {
 	return useWebContentAutoAcceptStore.getState().byConversation[conversationId] ?? readStored(conversationId);
 }
 
+/** Moves the draft's choice onto the conversation just created for it, and clears the draft. */
+export function adoptWebContentAutoAcceptDraft(conversationId: string): void {
+	const { "": draft, ...rest } = useWebContentAutoAcceptStore.getState().byConversation;
+	if (draft === undefined) {
+		return;
+	}
+	writeStored(conversationId, draft);
+	useWebContentAutoAcceptStore.setState({ byConversation: { ...rest, [conversationId]: draft } });
+}
+
 /** Drops a deleted conversation's choice, so its storage key does not outlive it. */
 export function forgetWebContentAutoAccept(conversationId: string): void {
 	writeStored(conversationId, false);
@@ -63,8 +78,8 @@ export function forgetWebContentAutoAccept(conversationId: string): void {
 }
 
 export function useWebContentAutoAccept(conversationId: string): boolean {
-	const inMemory = useWebContentAutoAcceptStore((state) => (conversationId ? state.byConversation[conversationId] : false));
-	return inMemory ?? readStored(conversationId);
+	const inMemory = useWebContentAutoAcceptStore((state) => state.byConversation[conversationId]);
+	return inMemory ?? (conversationId ? readStored(conversationId) : false);
 }
 
 export function useSetWebContentAutoAccept(): (conversationId: string, value: boolean) => void {

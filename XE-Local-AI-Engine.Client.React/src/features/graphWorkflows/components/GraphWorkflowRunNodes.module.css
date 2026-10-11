@@ -15,7 +15,7 @@
    win the cascade and leave the selected card looking like every other one. */
 
 .node-selected {
-	outline: 2px solid var(--mantine-color-blue-5);
+	outline: 2px solid var(--mantine-primary-color-filled);
 	outline-offset: 1px;
 }
 

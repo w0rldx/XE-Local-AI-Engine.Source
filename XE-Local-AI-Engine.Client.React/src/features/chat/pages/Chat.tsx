@@ -35,7 +35,7 @@ import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
-import { forgetWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
+import { adoptWebContentAutoAcceptDraft, forgetWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
 import { useChatWorkflow } from "@/features/chat/workflow/useChatWorkflow";
 import { useCommands } from "@/features/commands/queries/useCommands";
 import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
@@ -187,6 +187,8 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 			// A new conversation must not inherit the previous thread's pinned agent — clear the
 			// selection so the composer starts clean. Model stays sticky (intentional UX).
 			clearSelectedAgent();
+			// Nor the draft's web content choice: that belonged to the draft the user was typing in, not to a clean thread.
+			forgetWebContentAutoAccept("");
 			// List reconciliation only: the created conversation's detail was just primed via setQueryData with the
 			// authoritative create response — the broad `conversations()` prefix would immediately re-mark it (and
 			// every other cached detail) stale for no new information.
@@ -256,6 +258,8 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 			}
 
 			const created = await nodeChatAdapter.createConversation({ title: titleFromContent(content) });
+			// The draft's web content choice belongs to the conversation it just became.
+			adoptWebContentAutoAcceptDraft(created.id);
 			cacheConversation(created);
 			setRequestedConversationId(created.id);
 			return created;

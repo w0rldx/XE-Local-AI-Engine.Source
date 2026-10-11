@@ -12,7 +12,7 @@
    has to keep looking selected rather than losing the cascade to it. */
 
 .node-selected {
-	outline: 2px solid var(--mantine-color-blue-5);
+	outline: 2px solid var(--mantine-primary-color-filled);
 	outline-offset: 1px;
 }
 

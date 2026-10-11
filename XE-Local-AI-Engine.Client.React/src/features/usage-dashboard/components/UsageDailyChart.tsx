@@ -29,7 +29,7 @@ export function UsageDailyChart({ daily }: { readonly daily: readonly UsageDaily
 						dataKey="day"
 						withDots={chartData.length <= 31}
 						valueFormatter={formatTokensCompact}
-						series={[{ name: "totalTokens", label: t("pages.usage.daily.seriesLabel", "Total tokens"), color: "blue.6" }]}
+						series={[{ name: "totalTokens", label: t("pages.usage.daily.seriesLabel", "Total tokens"), color: "primary.6" }]}
 						curveType="monotone"
 						data-testid="usage-daily-area"
 					/>

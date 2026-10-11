@@ -115,7 +115,7 @@ export function BenchmarkProjectWorkspace({ controller }: { readonly controller:
 							>
 								<Card
 									withBorder={true}
-									bg={project.id === selectedProjectId ? "var(--mantine-color-blue-light)" : undefined}
+									bg={project.id === selectedProjectId ? "var(--mantine-primary-color-light)" : undefined}
 									padding="sm"
 								>
 									<Group justify="space-between">

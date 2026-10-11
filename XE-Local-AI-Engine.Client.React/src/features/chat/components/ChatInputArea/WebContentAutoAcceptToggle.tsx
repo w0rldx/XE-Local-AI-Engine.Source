@@ -25,8 +25,8 @@ interface WebContentAutoAcceptToggleProps {
 
 /**
  * The composer's per-conversation "Auto-accept web content" switch. Rendered only when the node allows web access; the
- * caller shows it only while local tools are on. A conversation without an id yet (a draft before its first send) keeps
- * the switch disabled: every conversation starts in review mode, so nothing is lost by choosing after the first turn.
+ * caller shows it only while local tools are on. A draft without an id yet holds its choice in memory, and Chat carries
+ * it onto the conversation created at the first send (adoptWebContentAutoAcceptDraft).
  */
 export function WebContentAutoAcceptToggle({ conversationId, disabled }: WebContentAutoAcceptToggleProps) {
 	const { t } = useTranslation();
@@ -47,7 +47,6 @@ export function WebContentAutoAcceptToggle({ conversationId, disabled }: WebCont
 	const acknowledged =
 		acknowledgedHere ||
 		tutorialState.data?.entries.some((entry) => entry.key === autoAcceptNoticeKey && entry.status === "completed") === true;
-	const hasConversation = conversationId.length > 0;
 	const label = t("pages.chat.webAutoAccept.label", "Auto-accept web content");
 
 	const handleClick = () => {
@@ -79,19 +78,17 @@ export function WebContentAutoAcceptToggle({ conversationId, disabled }: WebCont
 		<>
 			<Tooltip
 				label={
-					!hasConversation
-						? t("pages.chat.webAutoAccept.needsConversation", "Send a first message to choose how web content is handled")
-						: autoAccept
-							? t("pages.chat.webAutoAccept.on", "Web content reaches the model without review")
-							: t("pages.chat.webAutoAccept.off", "Web content is shown to you for review first")
+					autoAccept
+						? t("pages.chat.webAutoAccept.on", "Web content reaches the model without review")
+						: t("pages.chat.webAutoAccept.off", "Web content is shown to you for review first")
 				}
 			>
 				<ActionIcon
 					size={36}
 					variant={autoAccept ? "light" : "subtle"}
-					color={autoAccept ? "orange" : "gray"}
+					color={autoAccept ? "primary" : "gray"}
 					// Held while the acknowledgement loads, so a click never re-asks a user who already answered.
-					disabled={disabled || !hasConversation || tutorialState.isPending}
+					disabled={disabled || tutorialState.isPending}
 					onClick={handleClick}
 					aria-label={label}
 					aria-pressed={autoAccept}

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, renderHook, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +11,7 @@ import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { forgetWebContentAutoAccept, useSetWebContentAutoAccept } from "@/features/chat/stores/WebContentAutoAcceptStore";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
@@ -150,6 +151,7 @@ describe("Chat web content review mode on the wire", () => {
 
 	afterEach(() => {
 		cleanup();
+		forgetWebContentAutoAccept("");
 		localStorage.clear();
 		useNodeChatPreferencesStore.setState({ selectedConversationId: "" });
 	});
@@ -171,6 +173,29 @@ describe("Chat web content review mode on the wire", () => {
 		await waitFor(() => expect(adapter.sendMessage).toHaveBeenCalledTimes(1));
 		expect(adapter.sendMessage.mock.calls[0]?.[0].conversationId).toBe(conversationId);
 		expect(adapter.sendMessage.mock.calls[0]?.[0].autoAcceptWebContent).toBe(expected);
+	});
+
+	it("a draft's first send carries the draft's choice into the conversation it creates", async () => {
+		// No conversation to open, so the composer is a true draft.
+		adapter.listConversations.mockResolvedValue({ conversations: [] });
+		const created = { ...conversationWith("conversation-from-draft"), messages: [] };
+		adapter.createConversation.mockResolvedValue(created);
+		adapter.getConversation.mockResolvedValue(created);
+		adapter.sendMessage.mockImplementation(completedStream(created.id));
+		const setAutoAccept = renderHook(() => useSetWebContentAutoAccept()).result.current;
+		act(() => setAutoAccept("", true));
+		renderChat("");
+
+		const input = await screen.findByTestId("chat-input");
+		fireEvent.change(input, { target: { value: "hello" } });
+		const send = screen.getByTestId<HTMLButtonElement>("chat-send-button");
+		await waitFor(() => expect(send.disabled).toBe(false));
+		fireEvent.click(send);
+
+		await waitFor(() => expect(adapter.sendMessage).toHaveBeenCalledTimes(1));
+		expect(adapter.sendMessage.mock.calls[0]?.[0].conversationId).toBe(created.id);
+		expect(adapter.sendMessage.mock.calls[0]?.[0].autoAcceptWebContent).toBe(true);
+		expect(localStorage.getItem("xe-node-chat-web-auto:conversation-from-draft")).toBe("true");
 	});
 
 	it.each([

@@ -9,7 +9,7 @@ import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WebContentAutoAcceptToggle } from "@/features/chat/components/ChatInputArea/WebContentAutoAcceptToggle";
-import { isWebContentAutoAccepted } from "@/features/chat/stores/WebContentAutoAcceptStore";
+import { adoptWebContentAutoAcceptDraft, isWebContentAutoAccepted } from "@/features/chat/stores/WebContentAutoAcceptStore";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { createTestQueryClient, renderWithProviders } from "@/test/RenderWithProviders";
@@ -79,14 +79,20 @@ describe("WebContentAutoAcceptToggle", () => {
 		expect(screen.queryByTestId("chat-web-auto-accept-toggle")).toBeNull();
 	});
 
-	it("starts off and stays disabled for a draft that has no conversation yet", async () => {
+	it("lets a draft choose before its first send and hands the choice to the conversation it becomes", async () => {
 		server.use(tutorialState([]));
+		recordTutorialSaves();
 		renderWithProviders(<WebContentAutoAcceptToggle conversationId="" disabled={false} />);
 
-		const toggle = await findToggle();
-		expect(toggle.getAttribute("aria-label")).toBe("Auto-accept web content");
+		const toggle = await findArmedToggle();
 		expect(toggle.getAttribute("aria-pressed")).toBe("false");
-		expect(toggle.disabled).toBe(true);
+		fireEvent.click(toggle);
+		fireEvent.click(await screen.findByRole("button", { name: "Enable auto-accept" }));
+
+		await waitFor(async () => expect((await findToggle()).getAttribute("aria-pressed")).toBe("true"));
+		adoptWebContentAutoAcceptDraft("conv-from-draft");
+		expect(isWebContentAutoAccepted("conv-from-draft")).toBe(true);
+		expect(localStorage.getItem("xe-node-chat-web-auto:conv-from-draft")).toBe("true");
 	});
 
 	it("shows the risk notice on the first enable and records the acknowledgement", async () => {

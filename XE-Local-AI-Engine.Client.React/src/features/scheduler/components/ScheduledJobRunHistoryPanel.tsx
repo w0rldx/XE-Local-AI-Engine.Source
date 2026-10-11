@@ -141,7 +141,7 @@ export function ScheduledJobRunHistoryPanel({
 										<Table.Tr
 											key={run.id}
 											data-testid={`scheduler-run-row-${run.id}`}
-											bg={isSelected ? "var(--mantine-color-blue-light)" : undefined}
+											bg={isSelected ? "var(--mantine-primary-color-light)" : undefined}
 										>
 											<Table.Td>
 												<Badge color={scheduledRunStatusColor(run.status)} variant="light">
