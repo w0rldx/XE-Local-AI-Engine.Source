@@ -1,6 +1,8 @@
 import { Badge, Group, List, Radio, Stack, Text, Title } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { sandboxRoleLabel } from "@/core/models/SandboxRoles";
+
 export type SandboxSecurityProfile = "low" | "high";
 
 interface Props {
@@ -74,7 +76,7 @@ export function SandboxProfileRadioCards({ value, onChange, recommended, highRef
 									</Text>
 									<List size="sm">
 										{highRefusals.map((role) => (
-											<List.Item key={role}>{role}</List.Item>
+											<List.Item key={role}>{sandboxRoleLabel(t, role)}</List.Item>
 										))}
 									</List>
 								</Stack>

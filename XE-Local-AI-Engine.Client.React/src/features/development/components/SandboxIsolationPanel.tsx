@@ -2,6 +2,7 @@ import { Badge, Stack, Table, Text } from "@mantine/core";
 import { IconShieldLock } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { sandboxRoleLabel } from "@/core/models/SandboxRoles";
 import type { XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse as SandboxIsolation } from "@/core/api/generated/types.gen";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 
@@ -57,21 +58,21 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 				testId: `sandbox-isolation-reason-${role.role}`,
 				label: t("pages.development.isolation.filesystem", "Filesystem"),
 				text: role.filesystemIsolationUnavailableReason ?? "",
-				role: role.role ?? "",
+				role: sandboxRoleLabel(t, role.role ?? ""),
 			},
 			{
 				key: `${role.role}-network`,
 				testId: `sandbox-isolation-network-reason-${role.role}`,
 				label: t("pages.development.isolation.network", "Network"),
 				text: role.networkIsolationUnavailableReason ?? "",
-				role: role.role ?? "",
+				role: sandboxRoleLabel(t, role.role ?? ""),
 			},
 			{
 				key: `${role.role}-limits`,
 				testId: `sandbox-isolation-limits-reason-${role.role}`,
 				label: t("pages.development.isolation.limits", "Resource limits"),
 				text: role.resourceLimitsUnavailableReason ?? "",
-				role: role.role ?? "",
+				role: sandboxRoleLabel(t, role.role ?? ""),
 			},
 		])
 		.filter((reason) => reason.text !== "");
@@ -128,7 +129,7 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 								// A row whose required boundaries this host does not serve is a workload that refuses to start.
 								bg={role.satisfied === false ? "var(--mantine-color-red-light)" : undefined}
 							>
-								<Table.Th scope="row">{role.role}</Table.Th>
+								<Table.Th scope="row">{sandboxRoleLabel(t, role.role ?? "")}</Table.Th>
 								<Table.Td data-testid={`sandbox-isolation-provider-${role.role}`}>{role.provider}</Table.Td>
 								<Table.Td data-testid={`sandbox-isolation-backend-${role.role}`}>{role.backend}</Table.Td>
 								<Table.Td style={nowrapCell}>

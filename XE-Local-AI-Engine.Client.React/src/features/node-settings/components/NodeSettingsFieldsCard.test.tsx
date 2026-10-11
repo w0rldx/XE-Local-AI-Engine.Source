@@ -867,7 +867,7 @@ describe("NodeSettingsFieldsCard — chat knobs", () => {
 			key.split(".").reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], bundle);
 		const key = "pages.nodeSettings.fields.defaultReasoningEffort.label";
 		expect(i18next.getFixedT("en")(key)).toBe("Budget when no effort is chosen");
-		expect(lookup(de, key)).toBe("Budget ohne gewählte Denkintensität");
+		expect(lookup(de, key)).toBe("Budget ohne gewählten Reasoning-Aufwand");
 	});
 
 	it("badges only the restart-gated tool-pipeline limits", () => {

@@ -262,7 +262,7 @@ describe("ChatNoticeRow", () => {
 
 		expect(
 			screen.getByText(
-				"Einige angehängte Dateien wurden nicht an das Modell gesendet: Dieser Zug bietet Werkzeuge, aber nicht die Dateiwerkzeuge an, deshalb bleibt der Anhangstext außen vor, oder das Modell kann keine Bilder sehen.",
+				"Einige angehängte Dateien wurden nicht an das Modell gesendet: Diese Anfrage bietet Tools an, aber nicht die Datei-Tools, deshalb wird der Anhangstext weggelassen, oder das Modell kann keine Bilder sehen.",
 			),
 		).toBeTruthy();
 	});

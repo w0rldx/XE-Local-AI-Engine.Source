@@ -3006,6 +3006,13 @@
 			"high": {
 				"title": "High",
 				"body": "Every boundary a workload asks for becomes a requirement: filesystem isolation, resource limits and denied network access. A workload this host cannot isolate that way refuses to start instead of running with less. Resource limits add a little start-up overhead, and some workloads may not run on this host."
+			},
+			"roles": {
+				"agent-home": "AgentHome",
+				"run_python": "Python compute tool",
+				"mcp-stdio": "Sandboxed MCP servers",
+				"development": "Development mode",
+				"work-session": "Work sessions"
 			}
 		},
 		"cloudSettings": {

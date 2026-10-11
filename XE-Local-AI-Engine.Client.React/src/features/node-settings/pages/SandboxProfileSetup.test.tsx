@@ -111,8 +111,18 @@ describe("SandboxProfileSetup", () => {
 		const refusals = screen.getByTestId("sandbox-profile-refusals");
 		expect(highCard.contains(refusals)).toBe(true);
 		expect(refusals.textContent).toContain("These workloads will refuse on this host:");
-		expect(refusals.textContent).toContain("run_python");
-		expect(refusals.textContent).toContain("mcp-stdio");
+		expect(refusals.textContent).toContain("Python compute tool");
+		expect(refusals.textContent).toContain("Sandboxed MCP servers");
+		expect(refusals.textContent).not.toContain("run_python");
+	});
+
+	it("lists a role the client has no label for by its raw ID", async () => {
+		capability(["development", "future-role"]);
+		renderWithProviders(<SandboxProfileSetup />);
+
+		const refusals = await screen.findByTestId("sandbox-profile-refusals");
+		const items = Array.from(refusals.querySelectorAll("li"), (item) => item.textContent);
+		expect(items).toEqual(["Development mode", "future-role"]);
 	});
 
 	it("still offers both profiles, without a badge, when the capability read fails", async () => {

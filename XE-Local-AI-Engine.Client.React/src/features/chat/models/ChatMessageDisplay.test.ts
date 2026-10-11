@@ -37,7 +37,7 @@ describe("deriveChatMessageDisplay role label", () => {
 		i18next.addResourceBundle("de", "translation", de, true, true);
 		await i18next.changeLanguage("de");
 		expect(labelFor("user")).toBe(de.pages.chat.roles.you);
-		expect(labelFor("user")).toBe("Du");
+		expect(labelFor("user")).toBe("Sie");
 		expect(labelFor("assistant")).toBe("Assistent");
 	});
 });

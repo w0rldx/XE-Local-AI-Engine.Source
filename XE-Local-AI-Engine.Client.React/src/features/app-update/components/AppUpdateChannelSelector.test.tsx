@@ -166,6 +166,6 @@ describe("channel copy", () => {
 		expect(enCopy.recommendedVersion).toBe("Recommended (stable) version: {{version}}");
 		expect(deCopy.recommendedVersion).toBe("Empfohlene Version (stabil): {{version}}");
 		expect(enCopy.channelChangeError).toBe("Couldn't change the update channel. Please try again.");
-		expect(deCopy.channelChangeError).toBe("Der Update-Kanal konnte nicht geändert werden. Bitte versuche es erneut.");
+		expect(deCopy.channelChangeError).toBe("Der Update-Kanal konnte nicht geändert werden. Bitte versuchen Sie es erneut.");
 	});
 });

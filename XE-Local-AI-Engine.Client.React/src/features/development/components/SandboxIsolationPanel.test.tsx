@@ -4,8 +4,13 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// One role label is resolved so the Role column can be told apart from the raw role ID; every other key returns its
+// in-code default, which for a role label is the raw ID.
 vi.mock("react-i18next", () => ({
-	useTranslation: () => ({ t: (_key: string, fallback?: string) => fallback ?? _key }),
+	useTranslation: () => ({
+		t: (key: string, fallback?: string) =>
+			key === "pages.sandboxProfile.roles.run_python" ? "Python compute tool" : (fallback ?? key),
+	}),
 }));
 
 import type { XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse as SandboxIsolation } from "@/core/api/generated/types.gen";
@@ -92,6 +97,8 @@ describe("SandboxIsolationPanel", () => {
 		expect(screen.getByTestId("sandbox-isolation-backend-run_python").textContent).toBe("process");
 		expect(screen.getByTestId("sandbox-isolation-filesystem-run_python").textContent).toBe("No");
 		expect(screen.getByTestId("sandbox-isolation-reason-run_python").textContent).toContain("the host is not Linux");
+		// The reason line names the role by its label; its test id keeps the raw ID.
+		expect(screen.getByTestId("sandbox-isolation-reason-run_python").textContent).toMatch(/^Python compute tool · Filesystem: /);
 	});
 
 	// This fixture is what the backend actually returns on a Linux host with a working bubblewrap chain — verbatim
@@ -190,6 +197,12 @@ describe("SandboxIsolationPanel", () => {
 		expect(screen.getByTestId("sandbox-isolation-filesystem-run_python").textContent).toBe("Yes");
 		expect(screen.getByTestId("sandbox-isolation-level-run_python").textContent).toBe("Isolated");
 		expect(screen.getByTestId("sandbox-isolation-backend-run_python").textContent).toBe("bwrap");
+
+		// The Role column shows the label; a role without one shows its raw ID. Test ids keep the raw ID either way.
+		const rowHeader = (role: string) =>
+			screen.getByTestId(`sandbox-isolation-row-${role}`).querySelector("th[scope='row']")?.textContent;
+		expect(rowHeader("run_python")).toBe("Python compute tool");
+		expect(rowHeader("mcp-stdio")).toBe("mcp-stdio");
 
 		// Two roles on one provider, both isolated, differing on the ceilings axis alone.
 		expect(screen.getByTestId("sandbox-isolation-filesystem-mcp-stdio").textContent).toBe("Yes");
