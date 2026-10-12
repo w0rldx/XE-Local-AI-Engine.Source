@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox.Mxc;
 
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Mxc.Sdk.V1;
 using NSubstitute;
@@ -10,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -341,7 +343,212 @@ public sealed class ProcessSandboxMxcExecutionTests
         await provider.KillAsync(handle);
     }
 
-    private static ProcessSandboxRuntimeProvider Provider(IMxcSandboxRuntime? mxcRuntime)
+    [Test]
+    public async Task Execute_WithAWorkingDirectoryEqualToAGrantedTree_StartsTheChildInThatTree()
+    {
+        var tree = Directory.CreateTempSubdirectory("xe-mxc-tree-").FullName;
+        try
+        {
+            var runtime = Runtime(Child());
+            using var provider = Provider(runtime);
+            var handle = await provider.CreateOrAttachAsync(IsolatedRequest() with
+            {
+                ReadOnlyTrees = [tree]
+            });
+
+            // The trailing separator proves the match is made after canonicalization, as the transport's own form may differ.
+            _ = await provider.ExecuteAsync(handle, Command("node.exe", "dist/index.js") with
+            {
+                WorkingDirectory = tree + Path.DirectorySeparatorChar
+            });
+
+            await runtime.Received(1).SpawnAsync(Arg.Is<ContainerRequest>(request => request.WorkingDirectory == tree), Arg.Any<CancellationToken>());
+            await provider.KillAsync(handle);
+        }
+        finally
+        {
+            Directory.Delete(tree, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Execute_WithAWorkingDirectoryOutsideTheJailThatIsNoGrantedTree_IsRefused()
+    {
+        var tree = Directory.CreateTempSubdirectory("xe-mxc-tree-").FullName;
+        var sibling = Directory.CreateTempSubdirectory("xe-mxc-sibling-").FullName;
+        try
+        {
+            var runtime = Runtime(Child());
+            using var provider = Provider(runtime);
+            var handle = await provider.CreateOrAttachAsync(IsolatedRequest() with
+            {
+                ReadOnlyTrees = [tree]
+            });
+
+            // A granted tree opens exactly itself: a path that leaves the jail for anywhere else is still the jail guard's refusal.
+            _ = await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.ExecuteAsync(handle, Command("node.exe") with
+            {
+                WorkingDirectory = Path.GetRelativePath(AssertEx.NotNull(handle.WorkingRoot), sibling)
+            }));
+            await runtime.DidNotReceive().SpawnAsync(Arg.Any<ContainerRequest>(), Arg.Any<CancellationToken>());
+            await provider.KillAsync(handle);
+        }
+        finally
+        {
+            Directory.Delete(tree, recursive: true);
+            Directory.Delete(sibling, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Execute_WhenMxcReportsWarningsForTheSpawn_LogsTheCount_AndTheTextsOnlyRedacted()
+    {
+        var child = Child();
+        child.Warnings.Returns(["read-only grant for G:\\tools skipped", "spawned node.exe --token abcdef0123456789"]);
+        child.WaitAsync(Arg.Any<CancellationToken>()).Returns(new WaitResult
+        {
+            ExitCode = 0
+        });
+        var logger = new CapturingLogger<ProcessSandboxRuntimeProvider>();
+        using var provider = Provider(Runtime(child), logger);
+        var handle = await provider.CreateOrAttachAsync(IsolatedRequest());
+
+        _ = await provider.ExecuteAsync(handle, Command("node.exe", "--token", "abcdef0123456789"));
+
+        AssertEx.Contains(logger.AllText, "reported 2 warning(s) for the sandbox launch of node.exe");
+        AssertEx.Contains(logger.AllText, "read-only grant for G:\\tools skipped | spawned node.exe --token [REDACTED]");
+        // MXC may echo the command line: an argument secret reaches no log line, at Warning or at Debug.
+        AssertEx.False(logger.AllText.Contains("abcdef0123456789", StringComparison.Ordinal), $"the argument secret leaked into the log:\n{logger.AllText}");
+        await provider.KillAsync(handle);
+    }
+
+    [Test]
+    public async Task Dispose_WhileAKilledServerIsStillExiting_WaitsForTheExit_ThenRemovesTheJail()
+    {
+        // MXC's kill returns before the tree is gone, and on Windows a jail deleted under a dying MCP server (its cwd) survives emptied.
+        // This child exits only once someone waits for it after the kill, so a teardown that does not wait deletes while it still runs.
+        var exited = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var exit = new TaskCompletionSource<WaitResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var killed = false;
+        string? jail = null;
+        var child = Child();
+        child.StandardInput.Returns(new MemoryStream());
+        child.When(process => process.Kill()).Do(_ => killed = true);
+        child.WaitAsync(Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            if (Volatile.Read(ref killed))
+            {
+                exited.TrySetResult(Directory.Exists(jail));
+                exit.TrySetResult(new WaitResult
+                {
+                    ExitCode = -1
+                });
+            }
+
+            return exit.Task.WaitAsync(call.Arg<CancellationToken>());
+        });
+        var provider = Provider(Runtime(child));
+        var handle = await provider.CreateOrAttachAsync(IsolatedRequest());
+        jail = handle.WorkingRoot;
+        var interactive = await provider.StartInteractiveAsync(handle, Command("server.exe"));
+
+        provider.Dispose();
+
+        AssertEx.True(exited.Task.IsCompleted, "the teardown must wait for the killed server to exit before it deletes the jail");
+        AssertEx.True(await exited.Task, "the jail must still exist while the killed server is exiting");
+        AssertEx.False(Directory.Exists(jail), "the jail must be gone once the server has exited");
+        await interactive.DisposeAsync();
+    }
+
+    [Test]
+    public async Task Dispose_WhenWaitingForAKilledServerThrows_StillRemovesEveryJail()
+    {
+        // A server disposed under the teardown's wait (its own scope ended concurrently) must not strand its jail or the next one.
+        var runtime = Runtime([
+            KilledServer(_ => throw new ObjectDisposedException(nameof(IMxcProcess))),
+            KilledServer(_ => throw new ObjectDisposedException(nameof(IMxcProcess)))
+        ]);
+        var provider = Provider(runtime);
+        var jails = await StartServersAsync(provider, count: 2);
+
+        provider.Dispose();
+
+        foreach (var jail in jails)
+        {
+            AssertEx.False(Directory.Exists(jail), $"the jail {jail} must be removed although waiting for its server threw");
+        }
+    }
+
+    [Test]
+    public async Task Dispose_WithThreeServersThatNeverExit_WaitsOneSharedBudgetForAllOfThem()
+    {
+        var never = new TaskCompletionSource<WaitResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var time = new ExitBudgetTimeProvider();
+        var runtime = Runtime([
+            KilledServer(token => never.Task.WaitAsync(token)),
+            KilledServer(token => never.Task.WaitAsync(token)),
+            KilledServer(token => never.Task.WaitAsync(token))
+        ]);
+        using var provider = Provider(runtime, timeProvider: time); // Dispose is idempotent; the test drives the first call itself
+        var jails = await StartServersAsync(provider, count: 3);
+        time.CountFromHere();
+
+        var dispose = Task.Run(provider.Dispose);
+        var budget = await time.FirstBudget.WaitAsync(TestBudgets.Contended);
+        budget.Fire();
+
+        // A per-jail budget would arm a second timer here that nothing fires, and the shutdown would hang on it.
+        await AssertEx.CompletesAsync(dispose, TestBudgets.Contended, "terminate-all must be bounded by one budget for every jail");
+        AssertEx.Equal(1, time.BudgetsArmed);
+        foreach (var jail in jails)
+        {
+            AssertEx.False(Directory.Exists(jail), $"the jail {jail} must be removed once the shared budget ran out");
+        }
+
+        never.SetResult(new WaitResult
+        {
+            ExitCode = -1
+        });
+    }
+
+    private static async Task<List<string>> StartServersAsync(ProcessSandboxRuntimeProvider provider, int count)
+    {
+        var jails = new List<string>();
+        for (var index = 0; index < count; index++)
+        {
+            var handle = await provider.CreateOrAttachAsync(IsolatedRequest());
+            jails.Add(AssertEx.NotNull(handle.WorkingRoot));
+            _ = await provider.StartInteractiveAsync(handle, Command("server.exe"));
+        }
+
+        return jails;
+    }
+
+    // Keeps running after Kill() until a wait decides its fate, as a contained tree that MXC is still tearing down.
+    private static IMxcProcess KilledServer(Func<CancellationToken, Task<WaitResult>> waitAfterKill)
+    {
+        var running = new TaskCompletionSource<WaitResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var killed = 0;
+        var child = Child();
+        child.StandardInput.Returns(new MemoryStream());
+        child.When(process => process.Kill()).Do(_ => Volatile.Write(ref killed, 1));
+        child.WaitAsync(Arg.Any<CancellationToken>()).Returns(call => Volatile.Read(ref killed) == 1
+            ? waitAfterKill(call.Arg<CancellationToken>())
+            : running.Task.WaitAsync(call.Arg<CancellationToken>()));
+        return child;
+    }
+
+    private static IMxcSandboxRuntime Runtime(IMxcProcess[] children)
+    {
+        var runtime = Substitute.For<IMxcSandboxRuntime>();
+        runtime.SpawnAsync(Arg.Any<ContainerRequest>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult(children[0]), [.. children.Skip(1).Select(Task.FromResult)]);
+        return runtime;
+    }
+
+    private static ProcessSandboxRuntimeProvider Provider(IMxcSandboxRuntime? mxcRuntime,
+        ILogger<ProcessSandboxRuntimeProvider>? logger = null,
+        TimeProvider? timeProvider = null)
     {
         var containment = SandboxContainment.None with
         {
@@ -354,8 +561,8 @@ public sealed class ProcessSandboxMxcExecutionTests
             }
         };
         return new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()),
-            TimeProvider.System,
-            logger: null,
+            timeProvider ?? TimeProvider.System,
+            logger,
             new SandboxLauncher(new StubProbe(containment), deniedRootCandidates: []),
             previewPolicy: new PreviewsOn(),
             mxcRuntime: mxcRuntime);
@@ -419,6 +626,62 @@ public sealed class ProcessSandboxMxcExecutionTests
             NetworkPolicy = SandboxNetworkPolicy.None,
             Isolation = SandboxIsolationMode.Filesystem
         };
+
+    /// <summary>Hands out a manually fired timer for every teardown exit budget and the real one for everything else.</summary>
+    private sealed class ExitBudgetTimeProvider : TimeProvider
+    {
+        private int _budgetsArmed;
+        private TaskCompletionSource<ManualTimer> _first = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<ManualTimer> FirstBudget => Volatile.Read(ref _first).Task;
+
+        public int BudgetsArmed => Volatile.Read(ref _budgetsArmed);
+
+        /// <summary>Forgets the budgets armed so far (setup's), so the counts describe what follows.</summary>
+        public void CountFromHere()
+        {
+            Volatile.Write(ref _first, new TaskCompletionSource<ManualTimer>(TaskCreationOptions.RunContinuationsAsynchronously));
+            Volatile.Write(ref _budgetsArmed, 0);
+        }
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            if (dueTime != SandboxLifecycleRegistry.InFlightExitBudget)
+            {
+                return System.CreateTimer(callback, state, dueTime, period);
+            }
+
+            var timer = new ManualTimer(callback, state);
+            Interlocked.Increment(ref _budgetsArmed);
+            Volatile.Read(ref _first).TrySetResult(timer);
+            return timer;
+        }
+    }
+
+    private sealed class ManualTimer : ITimer
+    {
+        private readonly TimerCallback _callback;
+        private readonly object? _state;
+
+        public ManualTimer(TimerCallback callback, object? state)
+        {
+            _callback = callback;
+            _state = state;
+        }
+
+        public void Fire() =>
+            _callback(_state);
+
+        public bool Change(TimeSpan dueTime, TimeSpan period) =>
+            true;
+
+        public void Dispose()
+        {
+        }
+
+        public ValueTask DisposeAsync() =>
+            ValueTask.CompletedTask;
+    }
 
     private sealed class PreviewsOn : IExecutionPreviewPolicy
     {

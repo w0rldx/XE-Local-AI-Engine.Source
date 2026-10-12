@@ -2974,7 +2974,7 @@
 			},
 			"executionPreviewsConfirm": {
 				"title": "Ausführungs-Vorschauen einschalten?",
-				"description": "Sandbox-Verfahren, die noch in der Vorschau sind, führen dann Python und abgeschottete MCP-Server aus. Unter Windows ist das die AppContainer-Schutzgrenze: Der Code kann die Daten der Engine und Ihre Dateien nicht lesen, außer ein Ordner erlaubt den Zugriff für alle App-Pakete. Er kann Fenster anzeigen und die Windows-UI-Kernelschnittstelle nutzen, aber nicht die Zwischenablage oder simulierte Eingaben. Er läuft ohne Grenze für CPU, Arbeitsspeicher oder Prozessanzahl, nur das Zeitlimit stoppt ihn. Außerdem sieht er die Pfadnamen des Hosts. Schalten Sie das nur ein, wenn Sie das in Kauf nehmen.",
+				"description": "Sandbox-Verfahren, die noch in der Vorschau sind, führen dann Python und abgeschottete MCP-Server aus. Unter Windows ist das die AppContainer-Schutzgrenze: Der Code kann die Daten der Engine und Ihre Dateien nicht lesen, außer ein Ordner erlaubt den Zugriff für alle App-Pakete. Er kann Fenster anzeigen, die Windows-UI-Kernelschnittstelle nutzen und den Bildschirminhalt lesen, aber nicht die Zwischenablage oder simulierte Eingaben. Er läuft ohne Grenze für CPU, Arbeitsspeicher oder Prozessanzahl, nur das Zeitlimit stoppt ihn. Außerdem sieht er die Pfadnamen des Hosts. Schalten Sie das nur ein, wenn Sie das in Kauf nehmen.",
 				"confirm": "Einschalten",
 				"cancel": "Abbrechen"
 			},

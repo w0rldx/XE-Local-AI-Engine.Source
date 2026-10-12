@@ -727,7 +727,9 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                     PublishSnapshot();
                     lock (_stateLock)
                     {
-                        return entry.Primary!;
+                        // A server that exits right after the handshake is already detached by its completion watch: fail typed, not null.
+                        return entry.Primary
+                               ?? throw McpServerUnavailableException.NotConnected(record.Name, entry.LastError ?? SafeMessage(McpConnectionFailureReason.Unknown));
                     }
                 }
 
@@ -829,8 +831,8 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     }
 
     /// <summary>
-    ///     Waits for a session's client to complete and, unless this node closed it, records why: a dead shared session
-    ///     puts the server into the error state (its tools stay offered), a dead conversation session is forgotten.
+    ///     Waits for a session's client to complete and, unless this node closed it, records why and disposes it: a dead shared
+    ///     session puts the server into the error state (its tools stay offered), a dead conversation session is forgotten.
     /// </summary>
     private async Task WatchCompletionAsync(ServerEntry entry, ClientSession session)
     {
@@ -850,18 +852,26 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         _logger.LogWarning(details.Exception, "MCP server {ServerId} session ended ({Reason}); its tools stay offered and the next call reconnects.", record.Id, reason);
         lock (_stateLock)
         {
-            if (ReferenceEquals(entry.Primary, session))
+            // A reconnect, refresh or abandon between the two locks already detached and disposed this session: never dispose it twice.
+            if (session.Closing)
             {
-                entry.LastError = detail;
-                entry.Reason = reason;
                 return;
             }
 
-            entry.RemoveConversationSession(session);
+            if (ReferenceEquals(entry.Primary, session))
+            {
+                _ = entry.DetachPrimary();
+                entry.LastError = detail;
+                entry.Reason = reason;
+            }
+            else
+            {
+                entry.RemoveConversationSession(session);
+            }
         }
 
-        // Nothing else holds a forgotten conversation session, so it is disposed here: that releases its sandbox jail and execution id,
-        // which the conversation's next session reuses.
+        // Nothing else holds the dead session once detached, so it is disposed here: that releases its sandbox jail (and a conversation's
+        // execution id, which its next session reuses). The tools stay offered; the next call reconnects.
         await DisposeSessionSafelyAsync(session);
     }
 
@@ -1200,7 +1210,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                 ? "This node cannot isolate the MCP server from the host filesystem. On Windows that needs the MXC AppContainer boundary (Preview) available and execution previews enabled in Node settings, or move the server to the Privileged host tier."
                 : "This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.",
             McpConnectionFailureReason.SandboxRefused =>
-                "The sandbox refused to start the MCP server: its command or working directory overlaps a protected location, or the sandbox boundary could not be established. Point it at the directory holding the server's own files.",
+                "The sandbox refused to start the MCP server: its command or working directory is, or lies inside, a protected folder (a credential store, the engine's data or install folder), or the sandbox boundary could not be established. Point it at the folder holding the server's own files; the engine log names the path.",
             McpConnectionFailureReason.SandboxRefusedByProfile =>
                 "The node's sandbox security profile is 'high', and this node's sandbox cannot impose the CPU, memory and process-count ceilings that profile requires for a Sandboxed MCP server. Install the missing mechanism the sandbox isolation summary names, or "
                 + SandboxSecurityProfilePolicy.Remedy + ".",

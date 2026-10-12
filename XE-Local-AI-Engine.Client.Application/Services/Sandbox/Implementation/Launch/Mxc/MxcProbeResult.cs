@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 
+using Microsoft.Mxc.Sdk.V1;
+
 /// <summary>What <see cref="MxcProbe.Measure" /> found on this host.</summary>
 public sealed class MxcProbeResult
 {
@@ -14,6 +16,9 @@ public sealed class MxcProbeResult
 
     /// <summary>MXC's warnings verbatim, including host-prep recommendations.</summary>
     public required IReadOnlyList<string> Warnings { get; init; }
+
+    /// <summary>MXC's UI facts as reported; null when the probe never reached them or MXC did not report them. Logged, never serialized.</summary>
+    public UiCapabilitySupport? UiFacts { get; init; }
 
     /// <summary>Why the mechanism is unavailable, when it is.</summary>
     public string? Reason { get; init; }

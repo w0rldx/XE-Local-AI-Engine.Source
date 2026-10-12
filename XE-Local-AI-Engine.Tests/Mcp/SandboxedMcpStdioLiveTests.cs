@@ -116,9 +116,9 @@ public sealed class SandboxedMcpStdioLiveTests
             // it. Either alone is weak — a jail with no mounts would also report the canary absent.
             AssertEx.Contains(text, "INSIDE=PRESENT");
             AssertEx.Contains(text, "CANARY=ABSENT");
-            // The working directory is the jail, which inside the sandbox is /work and nothing else — the configured
-            // WorkingDirectory is bound READ-ONLY rather than being made the cwd.
-            AssertEx.Contains(text, "CWD=/work");
+            // The configured WorkingDirectory is a read-only tree bound at its own host path, and it is also the cwd, so a relative script
+            // path resolves; the jail stays /work and stays the only writable root.
+            AssertEx.Contains(text, $"CWD={fixture.DirectoryPath}");
             // No route out of the empty network namespace — not to the LAN, not to the cloud metadata endpoint.
             AssertEx.Contains(text, "NET=DENIED");
         }
@@ -388,6 +388,9 @@ public sealed class SandboxedMcpStdioLiveTests
         }
 
         public string ScriptPath { get; }
+
+        /// <summary>The fixture directory, the registration's working directory.</summary>
+        public string DirectoryPath => _directory.FullName;
 
         /// <summary>A file INSIDE the bound working directory, so the probe has a positive control.</summary>
         public string MarkerPath { get; }

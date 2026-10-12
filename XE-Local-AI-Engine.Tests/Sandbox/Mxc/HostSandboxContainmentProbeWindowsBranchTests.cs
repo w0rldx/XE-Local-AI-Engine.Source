@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox.Mxc;
 
+using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using Microsoft.Mxc.Sdk.V1;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -34,6 +37,31 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
         AssertEx.False(containment.SupportsNetworkIsolation);
         AssertEx.Contains(containment.ResourceLimitsUnavailableReason, "bounded only by its timeout");
         AssertEx.Contains(containment.NetworkIsolationUnavailableReason, "AppContainer boundary");
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task TheProbeLine_NamesMxcsSixUiFacts_AndTheOsVersion()
+    {
+        // N-46: the facts the boundary decision reads were invisible; the log line is their only record (no contract carries them).
+        var logger = new CapturingLogger<HostSandboxContainmentProbe>();
+        _ = Measure(Runtime(Probe(IsolationTier.AppContainerDacl, canBlockDesktopSwitching: false)), logger);
+
+        AssertEx.Contains(logger.AllText,
+            "MXC UI facts: CanBlockClipboardRead true, CanBlockClipboardWrite true, CanBlockInputInjection true, CanBlockExternalUiObjects true, CanBlockGlobalUiNamespace true, CanBlockDesktopSwitching false;");
+        AssertEx.Contains(logger.AllText, $"OS {RuntimeInformation.OSDescription};");
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task TheProbeLine_SaysNotReported_WhenMxcNeverReachedTheUiFacts()
+    {
+        var logger = new CapturingLogger<HostSandboxContainmentProbe>();
+
+        _ = Measure(mxcRuntime: null, logger);
+
+        AssertEx.Contains(logger.AllText, "CanBlockClipboardRead not reported,");
+        AssertEx.Contains(logger.AllText, "CanBlockDesktopSwitching not reported;");
         await Task.CompletedTask;
     }
 
@@ -98,10 +126,10 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
         await Task.CompletedTask;
     }
 
-    private static SandboxContainment Measure(IMxcSandboxRuntime? mxcRuntime)
+    private static SandboxContainment Measure(IMxcSandboxRuntime? mxcRuntime, ILogger<HostSandboxContainmentProbe>? logger = null)
     {
         // The filesystem probe must never run on the Windows branch: it would start a bwrap chain.
-        var probe = new HostSandboxContainmentProbe(logger: null,
+        var probe = new HostSandboxContainmentProbe(logger,
             _ => throw new InvalidOperationException("the bwrap probe must not run on the Windows branch"),
             mxcRuntime,
             isWindows: static () => true);
@@ -120,7 +148,7 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
         return runtime;
     }
 
-    private static ProbeOutput Probe(IsolationTier tier, IReadOnlyList<string>? warnings = null) =>
+    private static ProbeOutput Probe(IsolationTier tier, IReadOnlyList<string>? warnings = null, bool canBlockDesktopSwitching = true) =>
         new()
         {
             Tier = tier,
@@ -134,7 +162,7 @@ public sealed class HostSandboxContainmentProbeWindowsBranchTests
                     CanBlockInputInjection = true,
                     CanBlockExternalUiObjects = true,
                     CanBlockGlobalUiNamespace = true,
-                    CanBlockDesktopSwitching = true,
+                    CanBlockDesktopSwitching = canBlockDesktopSwitching,
                 }
             }
         };

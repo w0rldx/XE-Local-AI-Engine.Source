@@ -121,10 +121,11 @@ public sealed class SandboxedMcpStdioTransportTests
             NullLoggerFactory.Instance);
 
         var request = transport.BuildCreateRequest(new AgentHomeOwnerIdentity
-        {
-            OwnerUserId = "owner",
-            NodeId = "node"
-        });
+            {
+                OwnerUserId = "owner",
+                NodeId = "node"
+            },
+            readOnlyTrees: []);
 
         AssertEx.Equal(SandboxIsolationMode.Filesystem, request.Isolation);
         AssertEx.Equal(SandboxNetworkPolicy.None, request.NetworkPolicy);
@@ -212,6 +213,28 @@ public sealed class SandboxedMcpStdioTransportTests
         _ = await AssertEx.ThrowsAsync<FileNotFoundException>(() => transport.ConnectAsync());
 
         _ = await provider.DidNotReceiveWithAnyArgs().CreateOrAttachAsync(default!, default);
+    }
+
+    [Test]
+    public async Task ConnectAsync_MissingAbsoluteCommand_SaysItDoesNotExistOrIsNotReadable_AndNeverPrintsThePath()
+    {
+        // An absolute command never consults PATH, and the message reaches the UI: printing PATH would leak this node's directory names.
+        var marker = Path.Combine(FixtureRoot, $"path-marker-{Guid.NewGuid():N}");
+        var transport = CreateTransport(StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "/nonexistent/xe-mcp-missing-server",
+                Environment = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["PATH"] = marker
+                }
+            },
+            IsolatingProvider());
+
+        var exception = await AssertEx.ThrowsAsync<FileNotFoundException>(() => transport.ConnectAsync());
+
+        AssertEx.Contains(exception.Message, "'/nonexistent/xe-mcp-missing-server' does not exist or is not readable");
+        AssertEx.False(exception.Message.Contains(marker, StringComparison.Ordinal), "the registration's PATH must not be printed");
+        AssertEx.False(exception.Message.Contains("PATH", StringComparison.Ordinal), "an absolute command has nothing to do with PATH");
     }
 
     [Test]
@@ -446,6 +469,53 @@ public sealed class SandboxedMcpStdioTransportTests
     }
 
     [Test]
+    public void ExitCodeHints_AndTheUnlistedCodeHint_EachNameTheUnreadableFolderAndTheRemedy()
+    {
+        // Read by reflection so a row added later is held to both phrases without a matching test row.
+        var transport = AssertEx.NotNull(typeof(SandboxedMcpStdioTransport).GetNestedType("SandboxedTransport", BindingFlags.NonPublic));
+        var hints = AssertEx.NotNull(transport.GetField("ExitCodeHints", BindingFlags.NonPublic | BindingFlags.Static)?.GetValue(null) as IReadOnlyDictionary<uint, string>);
+        var unlisted = AssertEx.NotNull(transport.GetField("UnlistedExitHint", BindingFlags.NonPublic | BindingFlags.Static)?.GetValue(null) as string);
+
+        foreach (var hint in hints.Values.Append(unlisted))
+        {
+            AssertEx.Contains(hint, "a folder the sandbox cannot read");
+            AssertEx.Contains(hint, "Program Files or a folder the sandbox is granted");
+            AssertEx.False(hint.Contains("Win32k", StringComparison.OrdinalIgnoreCase), $"a shipped hint must not name Win32k: {hint}");
+            AssertEx.False(hint.Contains("Privileged", StringComparison.OrdinalIgnoreCase), $"a hint must not steer to the Privileged tier: {hint}");
+        }
+    }
+
+    [Test]
+    public async Task Handshake_WhenTheServerExitsWithAnUnlistedCodeUnderTheAppContainer_NamesTheGrantedFolderRemedy()
+    {
+        // Node's EPERM exit is 1: no row of its own, yet under the AppContainer boundary it is still most often an unreadable folder.
+        var directory = CreateBindableDirectory("jail-path-");
+        try
+        {
+            var server = CreateExecutable(directory, "xe-server");
+            await using var process = new ScriptedInteractiveProcess(stderrTail: null, exitCode: 1);
+            var provider = IsolatingProvider(SandboxIsolatedPaths.ForHostJail(Path.Combine(directory.FullName, "jail")));
+            provider.StartInteractiveAsync(Arg.Any<SandboxHandle>(), Arg.Any<SandboxCommandRequest>(), Arg.Any<CancellationToken>())
+                    .Returns(Task.FromResult<ISandboxInteractiveProcess>(process));
+            var transport = CreateTransport(StdioRecord(McpTrustTier.Sandboxed) with
+                {
+                    Command = server
+                },
+                provider);
+
+            using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var exception = await AssertEx.ThrowsAsync<McpServerStartupException>(() => McpClient.CreateAsync(transport, clientOptions: null, NullLoggerFactory.Instance, handshake.Token));
+
+            AssertEx.Contains(exception.Message, "(exit code 0x00000001). Under the sandbox an early exit is often a file in a folder the sandbox cannot read");
+            AssertEx.Contains(exception.Message, "Program Files or a folder the sandbox is granted (its command or working directory, on an NTFS volume)");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Test]
     [Arguments(0xC0000142u, "exit code 0xC0000142", "a DLL failed to initialise while the process started")]
     [Arguments(0xC06D007Eu, "exit code 0xC06D007E", "it is missing or sits in a folder")]
     [Arguments(0x80008089u, "exit code 0x80008089", "the .NET runtime could not start")]
@@ -482,6 +552,7 @@ public sealed class SandboxedMcpStdioTransportTests
             {
                 AssertEx.Contains(exception.Message, expectedHint);
                 AssertEx.Contains(exception.Message, "a folder the sandbox cannot read");
+                AssertEx.Contains(exception.Message, "Program Files or a folder the sandbox is granted");
             }
 
             AssertEx.Contains(exception.Message, "ProcessContainer cleanup skipped");
@@ -717,6 +788,138 @@ public sealed class SandboxedMcpStdioTransportTests
     }
 
     [Test]
+    [Arguments(".ssh/keys")]
+    [Arguments(".config/gh")]
+    [Arguments("AppData/Roaming/Microsoft/Protect")]
+    [Arguments("AppData/Roaming/Microsoft/Credentials")]
+    [Arguments("AppData/Roaming/Mozilla/Firefox/Profiles")]
+    [Arguments("AppData/Local/Microsoft/Windows")]
+    [Arguments("AppData/Local/Microsoft/WindowsApps-lookalike")]
+    public void ResolveReadOnlyTrees_ForATreeBeneathASubtreeDeniedStore_IsRefused(string relative)
+    {
+        // A folder inside a credential store is still the store: the round-5 tester read key4.db through a Firefox Profiles grant.
+        var home = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"home-{Guid.NewGuid():N}"));
+        try
+        {
+            var inside = Directory.CreateDirectory(Path.Combine([home.FullName, .. relative.Split('/')]));
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "/usr/bin/server-binary",
+                WorkingDirectory = inside.FullName
+            };
+
+            var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record,
+                    path => path,
+                    SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, () => home.FullName)),
+                $"'{relative}' lies inside a credential store.");
+
+            AssertEx.Contains(exception.Message, Path.TrimEndingDirectorySeparator(inside.FullName));
+            AssertEx.Contains(exception.Message, "lies inside the sensitive host path");
+        }
+        finally
+        {
+            home.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    [Arguments(@"\\?\C:\Users\u\AppData\Roaming\Mozilla\Firefox\Profiles\x")]
+    [Arguments(@"\\.\C:\Users\u\AppData\Roaming\Mozilla\Firefox\Profiles\x")]
+    [Arguments(@"\\?\Volume{0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0}\Users\u\AppData\Roaming\Mozilla")]
+    [Arguments(@"\\?\GLOBALROOT\Device\HarddiskVolume3\Users\u\AppData\Roaming\Mozilla")]
+    [Arguments(@"\\?\UNC\server\share\Users\u")]
+    [Arguments(@"\\server\share\Users\u")]
+    [Arguments(@"C:\Users\u\AppData\Roaming\Mozilla::$INDEX_ALLOCATION\Firefox\Profiles")]
+    [Arguments(@"C:\Users\u\AppData\Roaming\Mozilla:$I30:$INDEX_ALLOCATION")]
+    [Arguments(@"C:")]
+    [Arguments(@"C:relative\folder")]
+    [Arguments(@"1:\folder")]
+    public void IsPlainDriveLetterPath_RefusesEveryDeviceVolumeShareAndStreamSpelling(string spelling)
+    {
+        // Each names a store without starting with its drive-letter path, so a Windows tree spelled this way is refused before any comparison.
+        AssertEx.False(SandboxedMcpStdioTransport.IsPlainDriveLetterPath(spelling), $"'{spelling}' must not count as a plain drive-letter path.");
+    }
+
+    [Test]
+    [Arguments(@"C:\Program Files\nodejs")]
+    [Arguments(@"c:\Users\u\AppData\Roaming\npm")]
+    [Arguments(@"G:\")]
+    public void IsPlainDriveLetterPath_AcceptsAnOrdinaryFolderPath(string path)
+    {
+        AssertEx.True(SandboxedMcpStdioTransport.IsPlainDriveLetterPath(path), $"'{path}' is an ordinary folder path.");
+    }
+
+    [Test]
+    public void ResolveReadOnlyTrees_ForACommandBeneathASubtreeDeniedStore_IsRefused()
+    {
+        // The command axis passes the same gate: a binary inside AppData\Roaming\Microsoft would grant its folder of that store.
+        var home = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"home-{Guid.NewGuid():N}"));
+        try
+        {
+            var bin = Directory.CreateDirectory(Path.Combine(home.FullName, "AppData", "Roaming", "Microsoft", "Tools"));
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "server",
+                WorkingDirectory = null
+            };
+
+            var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record,
+                _ => Path.Combine(bin.FullName, "server.exe"),
+                SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, () => home.FullName)));
+
+            AssertEx.Contains(exception.Message, Path.TrimEndingDirectorySeparator(bin.FullName));
+        }
+        finally
+        {
+            home.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    public void ResolveReadOnlyTrees_ForATreeBeneathTheNodeDataRoot_IsRefused()
+    {
+        var record = StdioRecord(McpTrustTier.Sandboxed) with
+        {
+            Command = "/usr/bin/server-binary",
+            WorkingDirectory = Path.Combine(NodeDataRoot, "sandboxes", "jail")
+        };
+
+        var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots()),
+            "the node database, keys and every jail live beneath the data root.");
+
+        AssertEx.Contains(exception.Message, Path.TrimEndingDirectorySeparator(NodeDataRoot));
+    }
+
+    [Test]
+    public void ResolveReadOnlyTrees_ForTheWindowsAppsAliasFolder_IsAllowed()
+    {
+        // The Store execution-alias folder holds alias stubs and no secrets; it and its package folders stay bindable.
+        var home = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"home-{Guid.NewGuid():N}"));
+        try
+        {
+            var aliases = Directory.CreateDirectory(Path.Combine(home.FullName, "AppData", "Local", "Microsoft", "WindowsApps"));
+            var package = Directory.CreateDirectory(Path.Combine(aliases.FullName, "Microsoft.PowerShell_8wekyb3d8bbwe"));
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "pwsh.exe",
+                WorkingDirectory = package.FullName
+            };
+
+            var trees = SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record,
+                _ => Path.Combine(aliases.FullName, "pwsh.exe"),
+                SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, () => home.FullName));
+
+            AssertEx.Equal(expected: 2, trees.Count);
+            AssertEx.Equal(Path.TrimEndingDirectorySeparator(aliases.FullName), trees[0]);
+            AssertEx.Equal(Path.TrimEndingDirectorySeparator(package.FullName), trees[1]);
+        }
+        finally
+        {
+            home.Delete(recursive: true);
+        }
+    }
+
+    [Test]
     public void ResolveReadOnlyTrees_ForAWorkingDirectoryThatIsTheNodeDataDirectory_IsRefused()
     {
         // The node database, its key material and every sandbox jail live under this root, including the workspace
@@ -855,7 +1058,11 @@ public sealed class SandboxedMcpStdioTransportTests
             // which roots are on the list.
             var roots = new[]
             {
-                Path.Combine(account.FullName, ".ssh")
+                new SandboxedMcpStdioTransport.SensitiveHostRoot
+                {
+                    HostPath = Path.Combine(account.FullName, ".ssh"),
+                    DeniesSubtree = false
+                }
             };
 
             var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, roots),
@@ -941,19 +1148,104 @@ public sealed class SandboxedMcpStdioTransportTests
     }
 
     [Test]
-    public void BuildSensitiveHostRoots_WithAHomeDirectory_CarriesEveryCredentialStore()
+    public void BuildSensitiveHostRoots_WithAHomeDirectory_CarriesEveryCredentialStore_InItsClass()
     {
-        var roots = SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, static () => "/srv/accounts/xe");
+        var home = Path.GetFullPath("/srv/accounts/xe");
+        var roots = SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, () => home);
 
-        foreach (var expected in new[]
-                 {
-                     "/srv/accounts/xe",
-                     "/srv/accounts/xe/.ssh",
-                     "/srv/accounts/xe/.aws",
-                     "/srv/accounts/xe/.kube"
-                 })
+        string Under(params string[] parts) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine([home, .. parts])));
+        void Expect(string path, bool deniesSubtree) =>
+            AssertEx.True(roots.Any(root => root.HostPath == Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)) && root.DeniesSubtree == deniesSubtree),
+                $"'{path}' must be on the list with DeniesSubtree = {deniesSubtree}.");
+
+        Expect(home, deniesSubtree: false);
+        Expect("/", deniesSubtree: false);
+        foreach (var store in new[] { ".ssh", ".gnupg", ".aws", ".azure", ".config", ".docker", ".kube", ".mozilla", ".thunderbird", ".password-store", ".pki" })
         {
-            AssertEx.Contains(roots, expected);
+            Expect(Under(store), deniesSubtree: true);
+        }
+
+        Expect(Under(".local", "share", "keyrings"), deniesSubtree: true);
+        foreach (var store in new[] { "Microsoft", "Mozilla", "Thunderbird", "Opera Software", "gnupg", "GitHub CLI", "gcloud" })
+        {
+            Expect(Under("AppData", "Roaming", store), deniesSubtree: true);
+        }
+
+        foreach (var store in new[] { "Google", "Mozilla", "BraveSoftware", "Vivaldi" })
+        {
+            Expect(Under("AppData", "Local", store), deniesSubtree: true);
+        }
+
+        Expect(NodeDataRoot, deniesSubtree: true);
+        Expect(AppContext.BaseDirectory, deniesSubtree: true);
+        Expect("/root", deniesSubtree: true);
+        Expect("/etc", deniesSubtree: true);
+        Expect("/var", deniesSubtree: true);
+        AssertEx.Contains(roots, new SandboxedMcpStdioTransport.SensitiveHostRoot
+        {
+            HostPath = Under("AppData", "Local", "Microsoft"),
+            DeniesSubtree = true,
+            AllowedBeneath = Under("AppData", "Local", "Microsoft", "WindowsApps")
+        });
+        AssertEx.Empty(roots.Where(root => root.AllowedBeneath is not null
+                                           && !string.Equals(root.AllowedBeneath, Path.Combine(root.HostPath, "WindowsApps"), StringComparison.Ordinal)),
+            "a carve-out is only ever the store's own WindowsApps folder");
+        var localMicrosoft = new[]
+        {
+            Under("AppData", "Local", "Microsoft"),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft")))
+        };
+        AssertEx.Empty(roots.Where(root => root.AllowedBeneath is not null && !localMicrosoft.Contains(root.HostPath, StringComparer.Ordinal)),
+            "the WindowsApps carve-out belongs to the local Microsoft store alone");
+    }
+
+    [Test]
+    public void BuildSensitiveHostRoots_AlsoDeniesTheStoresAtTheProfileFoldersActualLocation()
+    {
+        // Folder redirection moves AppData away from the home directory; its stores must stay denied where they really are.
+        var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(roaming) || string.IsNullOrWhiteSpace(local))
+        {
+            throw new SkipTestException("this host reports no application-data folders to re-root the stores at.");
+        }
+
+        var roots = SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, static () => Path.GetFullPath("/srv/accounts/xe"));
+
+        foreach (var store in new[] { Path.Combine(roaming, "Microsoft"), Path.Combine(roaming, "Mozilla"), Path.Combine(local, "Google"), Path.Combine(local, "Microsoft") })
+        {
+            var lexical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(store));
+            AssertEx.True(roots.Any(root => root.HostPath == lexical && root.DeniesSubtree), $"'{lexical}' must be denied with its subtree.");
+        }
+    }
+
+    [Test]
+    public void BuildSensitiveHostRoots_WhenWindowsAppsIsALink_DropsTheCarveOut()
+    {
+        // A junction from WindowsApps into Credentials would otherwise move the exception onto the store it points at.
+        RequireSymlinks();
+        var home = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"home-{Guid.NewGuid():N}"));
+        try
+        {
+            var microsoft = Directory.CreateDirectory(Path.Combine(home.FullName, "AppData", "Local", "Microsoft"));
+            var credentials = Directory.CreateDirectory(Path.Combine(microsoft.FullName, "Credentials"));
+            var aliases = Path.Combine(microsoft.FullName, "WindowsApps");
+            Directory.CreateSymbolicLink(aliases, credentials.FullName);
+            var roots = SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, () => home.FullName);
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "/usr/bin/server-binary",
+                WorkingDirectory = aliases
+            };
+
+            AssertEx.Empty(roots.Where(root => root.HostPath == Path.TrimEndingDirectorySeparator(microsoft.FullName) && root.AllowedBeneath is not null),
+                "a linked WindowsApps must not carry the carve-out");
+            var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, roots));
+            AssertEx.Contains(exception.Message, Path.TrimEndingDirectorySeparator(credentials.FullName));
+        }
+        finally
+        {
+            home.Delete(recursive: true);
         }
     }
 
@@ -995,7 +1287,7 @@ public sealed class SandboxedMcpStdioTransportTests
     }
 
     /// <summary>The real denylist, so these cases exercise what production composes rather than a stand-in.</summary>
-    private static IReadOnlyList<string> SensitiveRoots()
+    private static IReadOnlyList<SandboxedMcpStdioTransport.SensitiveHostRoot> SensitiveRoots()
     {
         return SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot);
     }
@@ -1016,7 +1308,7 @@ public sealed class SandboxedMcpStdioTransportTests
         return Directory.CreateDirectory(path);
     }
 
-    private static IAgentSandboxRuntimeProvider IsolatingProvider()
+    private static IAgentSandboxRuntimeProvider IsolatingProvider(SandboxIsolatedPaths? isolatedPaths = null)
     {
         var provider = Substitute.For<IAgentSandboxRuntimeProvider>();
         provider.ProviderName.Returns("process");
@@ -1028,7 +1320,9 @@ public sealed class SandboxedMcpStdioTransportTests
                     SandboxId = "sandbox",
                     AttachKey = call.Arg<SandboxCreateRequest>().AttachKey,
                     CreatedAt = DateTimeOffset.UnixEpoch,
-                    ManifestVersion = 1
+                    ManifestVersion = 1,
+                    Isolation = isolatedPaths is null ? default : SandboxIsolationMode.Filesystem,
+                    IsolatedPaths = isolatedPaths
                 }));
         return provider;
     }
@@ -1129,6 +1423,63 @@ public sealed class SandboxedMcpStdioTransportTests
 
         AssertEx.Equal(hostJail.Home, environment["HOME"]);
         AssertEx.Equal(hostJail.Temp, environment["TMPDIR"]);
+    }
+
+    [Test]
+    public void BuildEnvironment_UnderAHostPathView_PreservesNodeSymlinks_UnlessTheRegistrationSetsNodeOptions()
+    {
+        // Node realpaths its script and modules, stat-ing every ancestor; the AppContainer cannot stat C:\Users, so that walk is skipped.
+        var hostJail = SandboxIsolatedPaths.ForHostJail(Path.Combine(FixtureRoot, "jail"));
+        var empty = new Dictionary<string, string>(StringComparer.Ordinal);
+        var own = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["NODE_OPTIONS"] = "--max-old-space-size=512"
+        };
+
+        var defaulted = AssertEx.NotNull(SandboxedMcpStdioTransport.BuildEnvironment(IsolatedHandle(hostJail), empty));
+        var overridden = AssertEx.NotNull(SandboxedMcpStdioTransport.BuildEnvironment(IsolatedHandle(hostJail), own));
+        var posix = SandboxedMcpStdioTransport.BuildEnvironment(IsolatedHandle(SandboxIsolatedPaths.Posix), empty);
+
+        AssertEx.Equal("--preserve-symlinks --preserve-symlinks-main", defaulted["NODE_OPTIONS"]);
+        AssertEx.Equal("--max-old-space-size=512", overridden["NODE_OPTIONS"], "the registration's own value wins");
+        var mixedCase = AssertEx.NotNull(SandboxedMcpStdioTransport.BuildEnvironment(IsolatedHandle(hostJail), new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Node_Options"] = "--inspect=0"
+        }));
+        AssertEx.Equal(expected: 1, mixedCase.Keys.Count(key => string.Equals(key, "NODE_OPTIONS", StringComparison.OrdinalIgnoreCase)),
+            "Windows reads environment names case-insensitively, so a differently cased key must replace the default");
+        AssertEx.Equal("--inspect=0", mixedCase["NODE_OPTIONS"]);
+        AssertEx.Null(posix, "the bwrap view resolves through a namespace that can stat its ancestors, so it gets no default");
+    }
+
+    [Test]
+    public void BuildCommandRequest_UsesTheRegisteredWorkingDirectoryAsTheCwd_OnlyWhenItIsAGrantedTree()
+    {
+        // A relative script path resolves against the cwd, so the granted working directory is the cwd; anything not granted leaves the jail.
+        var packages = CreateBindableDirectory("xe-mcp-cwd-");
+        try
+        {
+            var handle = IsolatedHandle(SandboxIsolatedPaths.Posix);
+            string? CwdFor(string? workingDirectory, IReadOnlyList<string>? granted = null)
+            {
+                var record = StdioRecord(McpTrustTier.Sandboxed) with
+                {
+                    WorkingDirectory = workingDirectory
+                };
+                var trees = granted ?? SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, static _ => null, SensitiveRoots());
+                return CreateTransport(record, IsolatingProvider()).BuildCommandRequest(handle, trees).WorkingDirectory;
+            }
+
+            AssertEx.Equal(Path.TrimEndingDirectorySeparator(packages.FullName), CwdFor(packages.FullName + Path.DirectorySeparatorChar + "."));
+            AssertEx.Null(CwdFor(null), "no registered working directory: the jail is the cwd");
+            AssertEx.Null(CwdFor(Path.Combine(packages.FullName, "missing")), "a directory that is not granted is never the cwd");
+            AssertEx.Null(CwdFor("/usr"), "a tree the chain owns is dropped from the grants, so it is not the cwd either");
+            AssertEx.Null(CwdFor(packages.FullName, granted: []), "only the trees the sandbox was created with count, never a second resolution");
+        }
+        finally
+        {
+            packages.Delete(recursive: true);
+        }
     }
 
     [Test]

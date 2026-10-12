@@ -253,7 +253,7 @@ public sealed class McpServerConnectionManagerTests
     }
 
     private const string SandboxRefusedMessage =
-        "The sandbox refused to start the MCP server: its command or working directory overlaps a protected location, or the sandbox boundary could not be established. Point it at the directory holding the server's own files.";
+        "The sandbox refused to start the MCP server: its command or working directory is, or lies inside, a protected folder (a credential store, the engine's data or install folder), or the sandbox boundary could not be established. Point it at the folder holding the server's own files; the engine log names the path.";
 
     private const string SandboxUnavailableMessage =
         "This node cannot isolate the MCP server from the host filesystem. Install bubblewrap (bwrap) with user-namespace support, or move the server to the Privileged host tier.";
@@ -642,6 +642,78 @@ public sealed class McpServerConnectionManagerTests
             "[tool error: server_unavailable] MCP server 'Weather' is not connected: The connection to the MCP server failed or closed. The next call retries; use Reconnect on the MCP page if it keeps failing.",
             result);
         AssertEx.Equal(expected: 2, factory.CreateCount(record.Id), "the call reconnects exactly once before failing");
+    }
+
+    [Test]
+    public async Task SessionEnds_DisposesTheDeadPrimary_SoItsTransportReleasesTheJail()
+    {
+        // N-44a: an exited primary stayed attached until a reconnect or disable, so its transport never removed its sandbox jail.
+        await using var server = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
+        await using var client = new GatedDisposeClient(server.Client, Task.CompletedTask);
+        var record = StdioRecord("Weather");
+        var factory = new FakeMcpClientFactory();
+        factory.AddClient(record.Id, client);
+        var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
+        await using var manager = CreateManager(registry, factory, record);
+        await manager.RefreshAsync();
+
+        await server.StopServerAsync();
+
+        await client.DisposeEntered.WaitAsync(TestBudgets.Contended);
+        var status = manager.GetStatuses().Single();
+        AssertEx.False(status.Connected);
+        AssertEx.Equal(McpConnectionFailureReason.ServerExited, status.FailureReason);
+        _ = Resolve(registry, "mcp__weather__get_forecast");
+    }
+
+    [Test]
+    public async Task SessionEnds_ThenTheReconnectedPrimaryEndsBeforeTheCall_FailsTyped()
+    {
+        // Review of N-44a: the completion watch detaches a primary that ends right after its handshake, so the call path must fail typed
+        // instead of dereferencing a primary that is already gone.
+        await using var first = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
+        await using var second = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
+        await using var endedAtHandshake = new GatedDisposeClient(second.Client, Task.CompletedTask, Task.FromResult(new ClientCompletionDetails()));
+        var record = StdioRecord("Weather");
+        var factory = new FakeMcpClientFactory();
+        factory.AddClient(record.Id, first.Client);
+        factory.AddClient(record.Id, endedAtHandshake);
+        var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
+        await using var manager = CreateManager(registry, factory, record);
+        await manager.RefreshAsync();
+        await first.StopServerAsync();
+        await AssertEx.EventuallyAsync(() => manager.GetStatuses().Single().FailureReason == McpConnectionFailureReason.ServerExited,
+            TestBudgets.Contended, "the first primary ended");
+
+        var result = ResultText(await Resolve(registry, "mcp__weather__get_forecast").InvokeAsync(Arguments()));
+
+        AssertEx.True(result.StartsWith("[tool error: server_unavailable] MCP server 'Weather' is not connected:", StringComparison.Ordinal), result);
+        AssertEx.Equal(expected: 2, factory.CreateCount(record.Id));
+    }
+
+    [Test]
+    public async Task SessionEnds_WhileAReconnectDetachesIt_IsDisposedOnce()
+    {
+        // Review of N-44a: a reconnect that detaches the dead primary between the watch's two locks has already disposed it. A client whose
+        // completion is already done runs the watch synchronously inside RefreshAsync, and its warning is where the reconnect cuts in.
+        await using var first = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
+        await using var second = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
+        await using var ended = new GatedDisposeClient(first.Client, Task.CompletedTask, Task.FromResult(new ClientCompletionDetails()));
+        var record = StdioRecord("Weather");
+        var factory = new FakeMcpClientFactory();
+        factory.AddClient(record.Id, ended);
+        factory.AddClient(record.Id, second.Client);
+        McpServerConnectionManager? target = null;
+        Task? reconnect = null;
+        var logger = new OnWarningLogger<McpServerConnectionManager>("session ended", () => reconnect = target!.ReconnectAsync(record.Id));
+        await using var manager = CreateManager(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), factory, new FakeMcpServerStore(record), logger: logger);
+        target = manager;
+
+        await manager.RefreshAsync();
+
+        await AssertEx.NotNull(reconnect).WaitAsync(TestBudgets.Contended);
+        AssertEx.Equal(expected: 1, ended.DisposeCount, "the reconnect disposed the dead primary; the watch must not dispose it again");
+        AssertEx.True(manager.GetStatuses().Single().Connected, "the reconnect connected the next client");
     }
 
     [Test]
@@ -1579,24 +1651,29 @@ public sealed class McpServerConnectionManagerTests
         }
     }
 
-    /// <summary>Delegates to a real client, but its dispose signals that it started and then waits on a gate before disposing it.</summary>
+    /// <summary>Delegates to a real client, but its dispose signals that it started and then waits on a gate; its completion can be overridden.</summary>
     private sealed class GatedDisposeClient : McpClient
     {
         private readonly TaskCompletionSource _disposeEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Task _gate;
         private readonly McpClient _inner;
+        private readonly Task<ClientCompletionDetails>? _completion;
+        private int _disposeCount;
 
         // The SDK marks McpClient's protected constructor experimental; this test-only fake is the one way to gate a real session's
         // dispose, and an SDK change to it fails this test build, never a product path.
 #pragma warning disable MCPEXP002
-        public GatedDisposeClient(McpClient inner, Task gate)
+        public GatedDisposeClient(McpClient inner, Task gate, Task<ClientCompletionDetails>? completion = null)
 #pragma warning restore MCPEXP002
         {
             _inner = inner;
             _gate = gate;
+            _completion = completion;
         }
 
         public Task DisposeEntered => _disposeEntered.Task;
+
+        public int DisposeCount => Volatile.Read(ref _disposeCount);
 
         public override ServerCapabilities ServerCapabilities => _inner.ServerCapabilities;
 
@@ -1604,7 +1681,7 @@ public sealed class McpServerConnectionManagerTests
 
         public override string? ServerInstructions => _inner.ServerInstructions;
 
-        public override Task<ClientCompletionDetails> Completion => _inner.Completion;
+        public override Task<ClientCompletionDetails> Completion => _completion ?? _inner.Completion;
 
         public override string? SessionId => _inner.SessionId;
 
@@ -1625,9 +1702,35 @@ public sealed class McpServerConnectionManagerTests
 
         public override async ValueTask DisposeAsync()
         {
+            _ = Interlocked.Increment(ref _disposeCount);
             _disposeEntered.TrySetResult();
             await _gate;
             await _inner.DisposeAsync();
+        }
+    }
+
+    /// <summary>Runs a callback, on the logging thread, when a warning containing the given text is logged.</summary>
+    private sealed class OnWarningLogger<T> : ILogger<T>
+    {
+        private readonly string _contains;
+        private readonly Action _onWarning;
+
+        public OnWarningLogger(string contains, Action onWarning)
+        {
+            _contains = contains;
+            _onWarning = onWarning;
+        }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning && formatter(state, exception).Contains(_contains, StringComparison.Ordinal))
+            {
+                _onWarning();
+            }
         }
     }
 

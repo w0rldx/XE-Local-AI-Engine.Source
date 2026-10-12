@@ -55,21 +55,28 @@ installed through npm, npx, uv, uvx, mise, nvm or a venv generally need `Privile
 and interpreters is a deliberate non-goal of this tier.
 
 **Neither tree may cover a sensitive host root.** Both go through one gate
-(`SandboxedMcpStdioTransport.AddBindableTree`), and a tree that **equals or contains** any of the following is
+(`SandboxedMcpStdioTransport.AddBindableTree`), and a tree that **equals, contains or lies inside** any of the following is
 **refused** — the connection fails rather than mounting it. The Warning in the server log names the path and the
 tier; the MCP settings page shows the fixed `SandboxRefused` message, which names no path:
 
 | Denied root | Why |
 |---|---|
 | the operator's home directory | binding it exposes every credential store beneath it |
-| `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.config`, `~/.docker`, `~/.kube` | credential and CLI-token stores; `~/.config` is where gcloud, gh and most others keep theirs |
-| `AppData\Roaming\Microsoft`, `AppData\Local\Microsoft`, `AppData\Local\Google`, `AppData\Local\Mozilla`, `AppData\Roaming\Mozilla` under the home directory | Windows DPAPI master keys, Credential Manager and browser profiles; the ancestor rule refuses `AppData`, `AppData\Roaming` and `AppData\Local` too, while `AppData\Roaming\npm` stays bindable |
+| `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.config`, `~/.docker`, `~/.kube`, `~/.mozilla`, `~/.thunderbird`, `~/.local/share/keyrings`, `~/.password-store`, `~/.pki` | credential and CLI-token stores, keyrings and browser or mail profiles; `~/.config` is where gcloud, gh and most others keep theirs |
+| `AppData\Roaming\Microsoft`, `AppData\Local\Microsoft`, `AppData\Local\Google`, `AppData\Local\Mozilla`, `AppData\Roaming\Mozilla`, the `AppData` stores of Thunderbird, BraveSoftware, Opera Software, Vivaldi, gnupg, GitHub CLI and gcloud under the home directory | Windows DPAPI master keys, Credential Manager and browser profiles; the ancestor rule refuses `AppData`, `AppData\Roaming` and `AppData\Local` too, while `AppData\Roaming\npm` stays bindable |
 | the node data directory (`INodeDataDirectory.Root`) | the node database, its key material, every sandbox jail, the workspace manifests that are deliberately never mounted |
 | the engine's own install directory (`AppContext.BaseDirectory`) | the assemblies doing the sandboxing, and whatever ships beside them |
 | `/root`, `/etc`, `/var`, `/` | never a server's package tree, always somebody's credentials or state |
 
-The rule is **equals-or-ancestor, not "is under"**, and that asymmetry is the design. A tree *beneath* one of these is
-fine: `~/.nvm/versions/node/v22/bin` exposes a node install, while `$HOME` exposes the operator. Refusing every
+In short: the server's command folder and working directory are granted read-only unless they are, contain, or lie inside a protected root: the home credential stores (`.ssh`, `.gnupg`, `.aws`, `.azure`, `.config`, `.docker`, `.kube`), the Windows profile stores (`AppData\Roaming\Microsoft`, `AppData\Local\Microsoft`, `AppData\Local\Google`, `AppData\Local\Mozilla`, `AppData\Roaming\Mozilla`, the `AppData` stores of Thunderbird, BraveSoftware, Opera Software, Vivaldi, gnupg, GitHub CLI and gcloud), the Linux stores `~/.mozilla`, `~/.thunderbird`, `~/.local/share/keyrings`, `~/.password-store`, `~/.pki`, the engine's data and install folders, `/etc`, `/root` and `/var`. The home directory, `AppData`, `Roaming`, `Local` and `/` themselves are refused, but their other subfolders bind (`AppData\Roaming\npm` works). `AppData\Local\Microsoft\WindowsApps` (Store app aliases) is allowed when that folder is not a link. A `\?\`, `\.\`, volume-GUID, stream or `subst` spelling of an existing folder is resolved to its real drive-letter name and then judged by the denylist, so a `subst` drive into a store is refused as the store. A spelling that resolves to a network share, or whose real name cannot be read, is never granted: the folder is dropped and the server's start failure carries the "folder the sandbox cannot read" hint. A non-existent non-drive-letter spelling is refused by name.
+
+This is a denylist with known residue, not a complete inventory: app token stores such as Slack, Discord or editor keychains under `AppData` stay bindable unless a folder above them is denied.
+`/etc`, `/root` and `/var` refuse every folder beneath them. An account whose home directory lies under `/root` or `/var` (for example the engine run as root) has every Sandboxed-tier server refused; use a regular user account or the Privileged host tier.
+
+The home directory itself, `AppData`, `Roaming`, `Local` and `/` are refused as roots, but a tree beneath them that is not
+a credential or profile store is fine: `~/.nvm/versions/node/v22/bin` exposes a node install, while `$HOME` exposes the
+operator. (A subfolder of a credential store was bindable before the round-5 Windows run found Firefox profile data
+readable through one; it is refused now.) Refusing every
 subtree of home would make `npx`- and `uvx`-based servers unusable at the default tier, which is how a security
 control gets switched off. Both sides are compared after normalization and full link resolution — every ancestor, not just the final
 component, because the kernel resolves the whole chain when bwrap binds by descriptor. A symlink anywhere in
@@ -174,3 +181,11 @@ Responses also **mask values on the way out**: the
 update that sends the placeholder back keeps the stored value. A secret that only ever travels inbound cannot be read
 back out of the node by anything holding a session. An HTTP registration's `HeadersJson` follows the same pattern
 (AAD column name `headers`, masked in responses); see [Security & Privacy §7.2](../wiki/12-security-and-privacy.md#72-outbound-mcp-servers-run-under-a-declared-trust-tier).
+
+**Windows node.js.** The Windows sandbox sets `NODE_OPTIONS=--preserve-symlinks --preserve-symlinks-main` by default. That
+default can break pnpm or other linked installs: a package reached through a symlink cannot find its non-hoisted
+dependencies (`MODULE_NOT_FOUND`). Setting `NODE_OPTIONS` in the registration replaces the default (a harmless value such as `--no-warnings` is enough).
+
+**Working directory.** On Linux and Windows a registered working directory that is granted becomes the child's current
+directory, so relative script paths resolve. Relative writes now fail on both, because the jail stays the only writable
+root; `HOME`, `TMP` and `TEMP` stay in the jail. Folders named only in the arguments are never granted.

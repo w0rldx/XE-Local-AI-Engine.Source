@@ -161,6 +161,9 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- The execution-previews confirmation now also says that sandboxed code can read what is on your screen, after the
+  Windows round on `1.0.0-rc.2.dev.20261011.106` showed it can (N-39). The operator kept Win32k allowed; ADR 0019 records
+  the round-5 evidence.
 - **Windows sandbox allows the UI subsystem (ADR 0019 amendment)** — a Sandboxed MCP server on Windows now runs with
   Win32k allowed, so node.js, PowerShell 7 and .NET servers can start inside the AppContainer instead of dying with
   `0xC0000142`, `0x80008089` or `0xC06D007E`. Clipboard access, input injection, network and filesystem limits are
@@ -267,6 +270,25 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- Windows tester round on `1.0.0-rc.2.dev.20261011.106`:
+  - A Sandboxed MCP server's command or working folder is now refused when it lies inside a protected root as well as
+    when it is or contains one, so subfolders of the browser and Windows credential stores (a Firefox profile,
+    `Roaming\Microsoft\Protect`) can no longer be granted read-only (N-40). The home directory, `AppData`, `Roaming`,
+    `Local` and `/` are still refused as roots, `AppData\Roaming\npm` still binds, and the Store app alias folder
+    `AppData\Local\Microsoft\WindowsApps` is allowed. An account whose home directory lies under `/root` or `/var` (for example the engine run as root) has every Sandboxed-tier server refused; use a regular user account or the Privileged host tier.
+    The Windows stores of Thunderbird, BraveSoftware, Opera Software, Vivaldi, gnupg, GitHub CLI and gcloud and the Linux stores `.mozilla`, `.thunderbird`, `.local/share/keyrings`, `.password-store`, `.pki` and redirected AppData
+    profile folders are now covered too, and non-drive-letter Windows spellings are handled precisely: a `\\?\`, `\\.\`, volume-GUID, stream or `subst` spelling of an existing folder is resolved to its real drive-letter name and then judged by the denylist, so a `subst` drive into a store is refused as the store. A spelling that resolves to a network share, or whose real name cannot be read, is never granted: the folder is dropped and the server's start failure carries the "folder the sandbox cannot read" hint. A non-existent non-drive-letter spelling is refused by name.
+  - node.js servers whose script sits under the user profile now start: the Windows sandbox sets `NODE_OPTIONS` to
+    `--preserve-symlinks --preserve-symlinks-main` unless the registration sets its own; the default can break pnpm or
+    linked installs, and setting `NODE_OPTIONS` in the registration replaces it (a harmless value such as `--no-warnings` is enough) (N-41).
+  - A server that exits at once now gets the spawn warnings, a warning when the folder is not on NTFS, and a hint for
+    the fallback (N-42). The not-found message omits the sandbox `PATH` for path-qualified commands (N-42).
+  - A granted working directory becomes the child's current directory on Linux and Windows, so relative script paths resolve;
+    relative writes now fail on both, since the jail stays the only writable root (N-43).
+  - A sandboxed server that exited on its own releases its jail, and deleting a jail waits for the child to end; the wait applies to MXC only and is capped at 2 s in total (N-44).
+  - The startup probe, hint and refusal wording no longer mentions Win32k, names the Program Files or unreadable-folder
+    cause for `0xC0000142`, and says which kind of protected folder was refused (N-45, N-47, N-48). The probe log line
+    now carries the MXC UI facts and the Windows version (N-46).
 - Windows tester round on `1.0.0-rc.2.dev.20261011.104`:
   - Parallel graph nodes, scheduled runs, integrations and sub-agents that ask for a model another request is still
     loading now share that load instead of being refused with "not enough free memory" (N-31). A capacity refusal lists

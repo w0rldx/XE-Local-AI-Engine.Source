@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
@@ -131,7 +132,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
         // The registry owns the live sandbox set rooted at that container directory; this provider reaches every jail
         // through it rather than keeping a second dictionary.
-        _registry = new SandboxLifecycleRegistry(_jailRoot, _launcher, _timeProvider, _previewPolicy);
+        _registry = new SandboxLifecycleRegistry(_jailRoot, _launcher, _timeProvider, _previewPolicy, _logger);
     }
 
     public void Dispose()
@@ -153,13 +154,10 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 Directory.Delete(_jailRoot, recursive: true);
             }
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            // Best-effort teardown.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Best-effort teardown.
+            // Best-effort teardown, but a root left behind is named so it can be found.
+            _logger.LogInformation("The sandbox container root {JailRoot} could not be removed: {Reason}", _jailRoot, exception.Message);
         }
     }
 
@@ -774,6 +772,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             }
 
             var spawned = await _mxcRuntime.SpawnAsync(mxcRequest, cancellationToken);
+            // MXC reports what it could not apply (an unreadable grant, a skipped cleanup) only here; unlogged, a failed start has no cause.
+            if (spawned.Warnings is { Count: > 0 } warnings)
+            {
+                LogSpawnWarnings(startInfo, warnings);
+            }
+
             return new MxcSandboxChildProcess(new MxcChildProcess(spawned,
                 _timeProvider,
                 onStandardOutputLine is null ? null : line => onStandardOutputLine(line),
@@ -1237,6 +1241,23 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         }
     }
 
+    // The count at Warning; the texts only at Debug and redacted, because MXC may echo the command line and with it an argument secret.
+    private void LogSpawnWarnings(ProcessStartInfo startInfo, IReadOnlyList<string> warnings)
+    {
+        _logger.LogWarning("The MXC AppContainer boundary reported {Count} warning(s) for the sandbox launch of {Executable}; the texts are logged at Debug.",
+            warnings.Count,
+            startInfo.FileName);
+        if (!_logger.IsEnabled(LogLevel.Debug))
+        {
+            return;
+        }
+
+        var secretValues = startInfo.Environment.Where(static pair => pair.Value is not null && !SecretValueRedactor.IsSearchPathKey(pair.Key))
+                                    .Select(static pair => pair.Value!);
+        var redactor = new SecretValueRedactor(SecretValueRedactor.ForCommand(secretValues, startInfo.ArgumentList, minLength: 8));
+        _logger.LogDebug("MXC launch warnings for {Executable}: {Warnings}", startInfo.FileName, string.Join(" | ", warnings.Select(redactor.Redact)));
+    }
+
     private static string ResolveWorkingDirectory(JailState state, string? requestedWorkingDirectory)
     {
         if (requestedWorkingDirectory is null)
@@ -1244,9 +1265,29 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             return state.JailRoot;
         }
 
+        // A granted read-only tree is the one outside-jail path a command may start in: it is already visible to the child at its own
+        // host path (bwrap binds it there, MXC grants it), and only EQUAL to the tree, never beneath it, so nothing new becomes reachable.
+        if (MatchReadOnlyTree(state.LaunchPolicy.ReadOnlyTrees, requestedWorkingDirectory) is { } tree)
+        {
+            return tree;
+        }
+
         var canonicalPath = SandboxJailPathGuard.ResolveJailPath(state.JailRoot, requestedWorkingDirectory);
         SandboxJailPathGuard.EnsureNoSymlinkComponentsUnderJail(state.JailRoot, canonicalPath, requestedWorkingDirectory);
         return canonicalPath;
+    }
+
+    /// <summary>The granted read-only tree <paramref name="path" /> names exactly, after canonicalization, else <see langword="null" />.</summary>
+    internal static string? MatchReadOnlyTree(IReadOnlyList<string> readOnlyTrees, string path)
+    {
+        if (readOnlyTrees.Count == 0 || !Path.IsPathFullyQualified(path))
+        {
+            return null;
+        }
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var canonical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        return readOnlyTrees.FirstOrDefault(tree => string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(tree)), canonical, comparison));
     }
 
     /// <summary>

@@ -445,6 +445,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 
 		await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
 		expect(String(confirmMock.mock.calls[0]?.[0]?.description)).toContain("no CPU, memory or process-count limit");
+		expect(String(confirmMock.mock.calls[0]?.[0]?.description)).toContain("read what is on your screen");
 		expect(generatedMock.saveFn).not.toHaveBeenCalled();
 
 		confirmMock.mockResolvedValueOnce(true);

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 
+using System.Globalization;
 using Microsoft.Mxc.Sdk.V1;
 
 /// <summary>Measures MXC ProcessContainer availability without launching anything. Never throws.</summary>
@@ -59,6 +60,7 @@ public static class MxcProbe
                     Supported = false,
                     Warnings = warnings,
                     Reason = UiBoundaryUnenforceableReason,
+                    UiFacts = ui
                 };
             }
 
@@ -66,7 +68,8 @@ public static class MxcProbe
             {
                 Supported = true,
                 Tier = tier.ToString(),
-                Warnings = [.. warnings, .. UiIsolationWarnings(ui)]
+                Warnings = [.. warnings, .. UiIsolationWarnings(ui)],
+                UiFacts = ui
             };
         }
         catch (MxcException exception)
@@ -86,10 +89,24 @@ public static class MxcProbe
 
     internal const string UiFactsNotReportedWarning =
         "MXC did not report its UI capability facts (CanBlockClipboardRead, CanBlockClipboardWrite, CanBlockInputInjection) on this host, "
-        + "so whether the sandbox, which allows Win32k, blocks clipboard access and input injection is unverified.";
+        + "so whether the sandbox, which allows the Windows UI kernel interface, blocks clipboard access and input injection is unverified.";
 
     internal const string UiBoundaryUnenforceableReason =
-        "MXC cannot block clipboard access or input injection on this host, and the sandbox allows Win32k.";
+        "MXC cannot block clipboard access or input injection on this host, and the sandbox relies on that denial to contain its use of the Windows UI kernel interface.";
+
+    /// <summary>The six UI facts the boundary decision reads, for the containment log line: <c>true</c>, <c>false</c> or <c>not reported</c>.</summary>
+    internal static string DescribeUiFacts(UiCapabilitySupport? ui)
+    {
+        return string.Create(CultureInfo.InvariantCulture,
+            $"CanBlockClipboardRead {Fact(ui?.CanBlockClipboardRead)}, CanBlockClipboardWrite {Fact(ui?.CanBlockClipboardWrite)}, CanBlockInputInjection {Fact(ui?.CanBlockInputInjection)}, CanBlockExternalUiObjects {Fact(ui?.CanBlockExternalUiObjects)}, CanBlockGlobalUiNamespace {Fact(ui?.CanBlockGlobalUiNamespace)}, CanBlockDesktopSwitching {Fact(ui?.CanBlockDesktopSwitching)}");
+
+        static string Fact(bool? value) => value switch
+        {
+            true => "true",
+            false => "false",
+            null => "not reported"
+        };
+    }
 
     /// <summary>UI isolation MXC cannot enforce on this host: weaker containment worth naming, not a reason to refuse the boundary.</summary>
     private static IEnumerable<string> UiIsolationWarnings(UiCapabilitySupport ui)
@@ -111,7 +128,7 @@ public static class MxcProbe
     }
 
     private static string UiIsolationWarning(string flag) =>
-        $"MXC reports {flag} = false on this host: the sandbox allows Win32k, so this UI isolation is not enforced.";
+        $"MXC reports {flag} = false on this host: the sandbox allows the Windows UI kernel interface, so this UI isolation is not enforced.";
 
     private static MxcProbeResult Unavailable(string reason) =>
         new()

@@ -121,7 +121,7 @@ public sealed class SandboxLauncher : ISandboxLauncher
             new SandboxIsolationLaunchRequest
             {
                 JailRoot = jailRoot,
-                WorkingDirectory = ResolveSandboxWorkingDirectory(startInfo.WorkingDirectory, jailRoot),
+                WorkingDirectory = ResolveSandboxWorkingDirectory(startInfo.WorkingDirectory, jailRoot, policy.ReadOnlyTrees),
                 AdditionalEnvironment = context.CommandEnvironment ?? new Dictionary<string, string>(StringComparer.Ordinal),
                 Executable = startInfo.FileName,
                 Arguments = [.. startInfo.ArgumentList],
@@ -149,9 +149,9 @@ public sealed class SandboxLauncher : ISandboxLauncher
     /// <remarks>
     ///     The policy was resolved at create time to the boundary it carries (ADR 0019), so this never re-reads eligibility. Fails closed with
     ///     <see cref="SandboxIsolationUnavailableException" /> like the bwrap branch. The child sees host path names, so the working directory
-    ///     stays the host path the provider resolved inside the jail. Applied flags mirror <c>SandboxLaunchPlan.CreateIsolated</c>: the
-    ///     boundary denies egress, ingress and host loopback itself, so network isolation is applied; there is no process group, scope unit
-    ///     or ceiling (no Job Object; Q3: timeout-bounded only).
+    ///     stays the host path the provider resolved: inside the jail, or a granted read-only tree. Applied flags mirror
+    ///     <c>SandboxLaunchPlan.CreateIsolated</c>: the boundary denies egress, ingress and host loopback itself, so network isolation is
+    ///     applied; there is no process group, scope unit or ceiling (no Job Object; Q3: timeout-bounded only).
     /// </remarks>
     private SandboxLaunchDescriptor CreateAppContainerDescriptor(ProcessStartInfo startInfo, SandboxLaunchPolicy policy, SandboxLaunchContext? context)
     {
@@ -185,6 +185,19 @@ public sealed class SandboxLauncher : ISandboxLauncher
                 DeniedRoots = ResolveDeniedRoots(_deniedRootCandidates, jail, policy.ReadOnlyTrees),
                 Timeout = context.CommandTimeout is { } timeout && timeout > TimeSpan.Zero ? timeout : null
             });
+            if (OperatingSystem.IsWindows())
+            {
+                foreach (var tree in policy.ReadOnlyTrees)
+                {
+                    if (NonNtfsVolumeFormat(tree) is { } format)
+                    {
+                        _logger.LogWarning("The sandbox may not be able to read the granted folder {Folder}: it lies on a {Format} volume, not NTFS, where the AppContainer grant may not take effect. Move the server to an NTFS folder if it fails to start.",
+                            tree,
+                            format);
+                    }
+                }
+            }
+
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("MXC AppContainer launch for jail {Jail}: explicit deny roots [{DeniedRoots}], read-only trees [{ReadOnlyTrees}].",
@@ -301,6 +314,21 @@ public sealed class SandboxLauncher : ISandboxLauncher
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
     }
 
+    /// <summary>The file system format of the volume holding <paramref name="path" /> when it is not NTFS; <see langword="null" /> for NTFS or unknown.</summary>
+    internal static string? NonNtfsVolumeFormat(string path)
+    {
+        try
+        {
+            var format = new DriveInfo(path).DriveFormat;
+            return string.Equals(format, "NTFS", StringComparison.OrdinalIgnoreCase) ? null : format;
+        }
+        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            // A UNC share, a vanished drive or a denied query: unknown, and a warning built on a guess would mislead.
+            return null;
+        }
+    }
+
     /// <summary>The user profile, the node data root and the engine directory: what the AppContainer boundary must never reach.</summary>
     private static IReadOnlyList<string> DefaultDeniedRootCandidates(INodeDataDirectory? nodeDataDirectory)
     {
@@ -322,9 +350,10 @@ public sealed class SandboxLauncher : ISandboxLauncher
     /// </summary>
     /// <remarks>
     ///     The jail is <c>/work</c> there and never reachable at its host name, so a chain keeping the host path would chdir to a directory
-    ///     that does not exist and the command would not start.
+    ///     that does not exist and the command would not start. A granted read-only tree is bound at its own host path, so a working
+    ///     directory equal to one passes through unchanged.
     /// </remarks>
-    private static string ResolveSandboxWorkingDirectory(string? hostWorkingDirectory, string jailRoot)
+    private static string ResolveSandboxWorkingDirectory(string? hostWorkingDirectory, string jailRoot, IReadOnlyList<string> readOnlyTrees)
     {
         if (string.IsNullOrEmpty(hostWorkingDirectory))
         {
@@ -336,6 +365,11 @@ public sealed class SandboxLauncher : ISandboxLauncher
         if (string.Equals(canonical, canonicalJail, StringComparison.Ordinal))
         {
             return SandboxIsolatedChain.WorkPath;
+        }
+
+        if (readOnlyTrees.Any(tree => string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(tree)), canonical, StringComparison.Ordinal)))
+        {
+            return canonical;
         }
 
         if (!canonical.StartsWith(canonicalJail + Path.DirectorySeparatorChar, StringComparison.Ordinal))

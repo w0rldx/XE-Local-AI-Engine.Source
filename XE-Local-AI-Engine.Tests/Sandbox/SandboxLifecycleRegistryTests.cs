@@ -1,9 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
+using System.Runtime.Versioning;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
+using OS = TUnit.Core.Enums.OS;
 
 /// <summary>
 ///     Unit coverage for <see cref="SandboxLifecycleRegistry" /> — which jails exist, on its own, with no child
@@ -233,11 +237,38 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
         AssertEx.Equal(ceilings.Min(), registry.GetAliveState(created).MaxJailDiskBytes!.Value);
     }
 
-    private SandboxLifecycleRegistry CreateRegistry()
+    [Test]
+    [ExcludeOn(OS.Windows)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task RemoveAndTerminate_WhenTheJailCannotBeDeleted_LogsThePathItLeftBehind()
+    {
+        Skip.When(Environment.IsPrivilegedProcess, "BLOCKED: a privileged process deletes through the directory mode this test relies on.");
+        var logger = new CapturingLogger<SandboxLifecycleRegistryTests>();
+        var registry = CreateRegistry(logger);
+        var handle = await registry.CreateOrAttachAsync(CreateRequest(Key()));
+        var jail = AssertEx.NotNull(handle.WorkingRoot);
+        var locked = Directory.CreateDirectory(Path.Combine(jail, "locked")).FullName;
+        await File.WriteAllTextAsync(Path.Combine(locked, "file.txt"), "kept");
+        File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            registry.RemoveAndTerminate(handle.SandboxId);
+
+            AssertEx.True(Directory.Exists(jail), "the fixture must make the delete fail");
+            AssertEx.Contains(logger.AllText, $"The sandbox jail {jail} could not be removed");
+        }
+        finally
+        {
+            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    private SandboxLifecycleRegistry CreateRegistry(ILogger? logger = null)
     {
         return new SandboxLifecycleRegistry(_jailRoot,
             new SandboxLauncher(new NoContainmentProbe()),
-            TimeProvider.System);
+            TimeProvider.System,
+            logger: logger);
     }
 
     private string CreateTempDirectory(string prefix)

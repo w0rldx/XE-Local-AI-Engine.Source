@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
@@ -227,9 +228,12 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
                 : "the Windows filesystem boundary is the MXC AppContainer boundary (Preview); it serves a role only while execution previews are enabled"
         };
 
-        _logger.LogInformation("Sandbox containment probe (Windows): AppContainer boundary {Available}{Detail}; resource limits unavailable; separate network isolation unavailable.",
+        _logger.LogInformation(
+            "Sandbox containment probe (Windows): AppContainer boundary {Available}{Detail}; MXC UI facts: {UiFacts}; OS {OsVersion}; resource limits unavailable; separate network isolation unavailable.",
             boundary is not null,
-            boundary is null ? $" ({reason})" : $" (mechanism {boundary.Mechanism}, tier {boundary.Tier}, maturity {boundary.Maturity}, {boundary.Warnings.Count} warning(s))");
+            boundary is null ? $" ({reason})" : $" (mechanism {boundary.Mechanism}, tier {boundary.Tier}, maturity {boundary.Maturity}, {boundary.Warnings.Count} warning(s))",
+            MxcProbe.DescribeUiFacts(result.UiFacts),
+            RuntimeInformation.OSDescription);
 
         return containment;
     }

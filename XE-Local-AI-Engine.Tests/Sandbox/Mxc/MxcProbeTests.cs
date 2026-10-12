@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox.Mxc;
 
+using System.Reflection;
 using Microsoft.Mxc.Sdk.V1;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -72,6 +73,7 @@ public sealed class MxcProbeTests
         AssertEx.True(result.Supported);
         AssertEx.Equal(MxcProbe.UiFactsNotReportedWarning, result.Warnings.Single());
         AssertEx.False(result.HostPrepMissing);
+        AssertEx.Null(result.UiFacts);
         await Task.CompletedTask;
     }
 
@@ -86,6 +88,33 @@ public sealed class MxcProbeTests
         AssertEx.True(result.Supported);
         AssertEx.Contains(result.Warnings.Single(), flag);
         AssertEx.False(result.HostPrepMissing);
+        // N-46: the facts ride to the containment log line as MXC reported them.
+        var facts = AssertEx.NotNull(result.UiFacts);
+        AssertEx.True(facts.CanBlockClipboardRead && facts.CanBlockClipboardWrite && facts.CanBlockInputInjection);
+        AssertEx.Equal(flag != nameof(UiCapabilitySupport.CanBlockDesktopSwitching), facts.CanBlockDesktopSwitching);
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task NoShippedText_NamesWin32k()
+    {
+        // N-45: the reason and warnings reach the isolation panel, which speaks of "the Windows UI kernel interface", never "Win32k".
+        string[] flags =
+        [
+            "", nameof(UiCapabilitySupport.CanBlockClipboardRead), nameof(UiCapabilitySupport.CanBlockClipboardWrite),
+            nameof(UiCapabilitySupport.CanBlockInputInjection), nameof(UiCapabilitySupport.CanBlockExternalUiObjects),
+            nameof(UiCapabilitySupport.CanBlockGlobalUiNamespace), nameof(UiCapabilitySupport.CanBlockDesktopSwitching)
+        ];
+        var produced = flags.Select(flag => MxcProbe.Measure(Runtime(Probe(IsolationTier.AppContainerDacl, ui: UiBlockingExcept(flag)))))
+                            .Append(MxcProbe.Measure(Runtime(new ProbeOutput { Tier = IsolationTier.AppContainerDacl, Warnings = [], Probes = null! })))
+                            .SelectMany(static result => result.Warnings.Append(result.Reason ?? string.Empty));
+        var constants = typeof(MxcProbe).GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+                                        .Where(static field => field.FieldType == typeof(string))
+                                        .Select(static field => (string)field.GetValue(null)!)
+                                        .ToList();
+
+        AssertEx.NotEmpty(constants);
+        AssertEx.Empty(constants.Concat(produced).Where(static text => text.Contains("Win32k", StringComparison.OrdinalIgnoreCase)));
         await Task.CompletedTask;
     }
 

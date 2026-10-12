@@ -193,6 +193,39 @@ public sealed class SandboxLauncherAppContainerTests : IDisposable
         await Task.CompletedTask;
     }
 
+    [Test]
+    public async Task Apply_WithAWorkingDirectoryEqualToAGrantedTree_ForwardsItAsTheContainerWorkingDirectory()
+    {
+        var jail = Directory.CreateDirectory(Path.Combine(_root, "jail")).FullName;
+        var tree = Directory.CreateDirectory(Path.Combine(_root, "server")).FullName;
+
+        var descriptor = Launcher([]).Apply(StartInfo(tree, "node.exe", "dist/index.js"), Policy(tree), new SandboxLaunchContext
+        {
+            JailRoot = jail
+        });
+
+        var request = AssertEx.NotNull(descriptor.MxcRequest);
+        AssertEx.Equal(tree, request.WorkingDirectory);
+        // Only the working directory moves: the jail stays the one writable root, and HOME/TEMP stay inside it.
+        AssertEx.Equal(jail, request.Filesystem!.ReadwritePaths.Single());
+        AssertEx.Equal(SandboxIsolatedPaths.ForHostJail(jail).Home, request.Environment!["USERPROFILE"]);
+        AssertEx.Equal(SandboxIsolatedPaths.ForHostJail(jail).Temp, request.Environment["TEMP"]);
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task NonNtfsVolumeFormat_NamesTheFormatOfANonNtfsVolume_AndIsSilentWhenUnknown()
+    {
+        Skip.When(OperatingSystem.IsWindows(), "The temp volume is NTFS on a Windows host, so no non-NTFS volume is at hand to measure.");
+
+        var format = AssertEx.NotNull(SandboxLauncher.NonNtfsVolumeFormat(_root));
+
+        AssertEx.Equal(new DriveInfo(_root).DriveFormat, format);
+        // A path whose volume cannot be measured yields no warning: one built on a guess would mislead.
+        AssertEx.Null(SandboxLauncher.NonNtfsVolumeFormat(Path.Combine(_root, "missing", "x")));
+        await Task.CompletedTask;
+    }
+
     private static SandboxLauncher Launcher(IReadOnlyList<string> deniedRootCandidates) =>
         new(new StubProbe(SandboxContainment.None with
         {

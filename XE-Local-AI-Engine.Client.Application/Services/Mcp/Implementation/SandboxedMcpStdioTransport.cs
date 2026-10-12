@@ -1,9 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
 using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Text;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
+using Microsoft.Win32.SafeHandles;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -44,10 +47,22 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     /// </remarks>
     private const int SandboxGeneration = 1;
 
+    /// <summary>The variable node reads extra command-line options from.</summary>
+    internal const string NodeOptionsVariable = "NODE_OPTIONS";
+
+    /// <summary>Node options that skip the realpath of the main script and of every module, so no unreadable ancestor is stat-ed.</summary>
+    internal const string PreserveNodeSymlinks = "--preserve-symlinks --preserve-symlinks-main";
+
+    /// <summary>FILE_FLAG_BACKUP_SEMANTICS: lets CreateFileW open a directory, with no access requested.</summary>
+    private const uint FileFlagBackupSemantics = 0x02000000;
+
+    /// <summary>FILE_NAME_NORMALIZED | VOLUME_NAME_DOS: the long, link-resolved name on its drive letter.</summary>
+    private const uint FileNameNormalizedVolumeNameDos = 0;
+
     /// <summary>Link hops followed before a path is treated as a cycle. The kernel's own ELOOP limit is 40.</summary>
     private const int MaxLinkHops = 40;
 
-    /// <summary>Credential and configuration stores under the operator's home directory.</summary>
+    /// <summary>Credential and configuration stores under the operator's home directory, each denied with its whole subtree.</summary>
     private static readonly string[] SensitiveHomeSubdirectories =
     [
         ".ssh",
@@ -58,23 +73,44 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         ".config",
         ".docker",
         ".kube",
-        // Windows profile stores: DPAPI master keys and Credential Manager (Microsoft), browser profiles. Their parents AppData,
-        // AppData\Roaming and AppData\Local are refused by the ancestor rule; AppData\Roaming\npm and similar stay bindable.
+        // Browser and mail profiles, the Secret Service keyrings, pass and the NSS certificate database.
+        ".mozilla",
+        ".thunderbird",
+        Path.Combine(".local", "share", "keyrings"),
+        ".password-store",
+        ".pki",
+        // Windows profile stores: DPAPI master keys and Credential Manager (Microsoft), browser, mail and CLI profiles. Their parents
+        // AppData, AppData\Roaming and AppData\Local are refused as ancestors; AppData\Roaming\npm and similar stay bindable.
         Path.Combine("AppData", "Roaming", "Microsoft"),
         Path.Combine("AppData", "Local", "Microsoft"),
         Path.Combine("AppData", "Local", "Google"),
         Path.Combine("AppData", "Local", "Mozilla"),
-        Path.Combine("AppData", "Roaming", "Mozilla")
+        Path.Combine("AppData", "Roaming", "Mozilla"),
+        Path.Combine("AppData", "Roaming", "Thunderbird"),
+        Path.Combine("AppData", "Local", "BraveSoftware"),
+        Path.Combine("AppData", "Roaming", "Opera Software"),
+        Path.Combine("AppData", "Local", "Vivaldi"),
+        Path.Combine("AppData", "Roaming", "gnupg"),
+        Path.Combine("AppData", "Roaming", "GitHub CLI"),
+        Path.Combine("AppData", "Roaming", "gcloud")
     ];
 
-    /// <summary>System roots that are never a server's package tree, and always somebody's credentials or state.</summary>
-    private static readonly string[] SensitiveAbsoluteRoots =
+    /// <summary>The home-relative roaming profile folder, which folder redirection can move elsewhere.</summary>
+    private static readonly string RoamingProfile = Path.Combine("AppData", "Roaming");
+
+    /// <summary>The home-relative local profile folder, which folder redirection can move elsewhere.</summary>
+    private static readonly string LocalProfile = Path.Combine("AppData", "Local");
+
+    /// <summary>System roots that are never a server's package tree, and always somebody's credentials or state, subtree included.</summary>
+    private static readonly string[] SensitiveAbsoluteSubtrees =
     [
         "/root",
         "/etc",
-        "/var",
-        "/"
+        "/var"
     ];
+
+    /// <summary>The store whose <c>WindowsApps</c> subfolder (Store alias stubs only) stays bindable.</summary>
+    private static readonly string LocalMicrosoftStore = Path.Combine("AppData", "Local", "Microsoft");
 
     private static StringComparison PathComparison => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
@@ -120,6 +156,19 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
 
     public string Name => _record.Name;
 
+    /// <summary>A host path no read-only tree may expose: the path itself and its ancestors always, and its subtree when it denies one.</summary>
+    internal sealed record SensitiveHostRoot
+    {
+        /// <summary>The canonical host path.</summary>
+        public required string HostPath { get; init; }
+
+        /// <summary>Whether a tree beneath <see cref="HostPath" /> is refused too, not only the path and its ancestors.</summary>
+        public required bool DeniesSubtree { get; init; }
+
+        /// <summary>A carve-out beneath a subtree-denied root: a tree at or beneath it stays bindable.</summary>
+        public string? AllowedBeneath { get; init; }
+    }
+
     /// <summary>
     ///     Why the last session never answered the handshake, captured when it was torn down unanswered (the connect timeout), so the
     ///     factory can name the exit code, the sandbox warnings and the stderr tail instead of a bare timeout.
@@ -127,17 +176,15 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     internal McpServerStartupException? UnansweredStartup { get; private set; }
 
     /// <summary>
-    ///     Host roots a read-only bind must never cover, because binding one hands the sandboxed server the operator's
+    ///     Host roots a read-only bind must never expose, because binding one hands the sandboxed server the operator's
     ///     credentials — the abuse case (threat model AB3) the Sandboxed tier exists to close.
     /// </summary>
     /// <remarks>
-    ///     The rule is EQUALS-or-ANCESTOR, not "is under": a tree is refused when it IS one of these roots or CONTAINS
-    ///     one, while a tree merely beneath one is fine. Binding the home directory exposes <c>~/.ssh</c>, whereas
-    ///     binding <c>~/.nvm/versions/node/vX/bin</c> exposes a node install and nothing else, and refusing that would
-    ///     make every <c>npx</c>- or <c>uvx</c>-based server unusable at the default tier, which is how a security
-    ///     control gets turned off. The list is code-owned: one a registration could edit would be no denylist at all.
+    ///     Two classes. The home directory and <c>/</c> are ANCESTOR-ONLY: a tree that is or contains one is refused, a tree beneath
+    ///     one is fine, or every <c>npx</c>- or <c>uvx</c>-based server would be refused and the control turned off. Every other root
+    ///     DENIES ITS SUBTREE as well, since a folder inside a credential store is still the store. Code-owned, so no registration edits it.
     /// </remarks>
-    internal static IReadOnlyList<string> BuildSensitiveHostRoots(string nodeDataRoot, Func<string>? resolveHome = null)
+    internal static IReadOnlyList<SensitiveHostRoot> BuildSensitiveHostRoots(string nodeDataRoot, Func<string>? resolveHome = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(nodeDataRoot);
 
@@ -151,30 +198,46 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
                 + "Run the engine as an account with a home directory (set HOME), or move the server to the Privileged host tier deliberately.");
         }
 
-        var roots = new List<string>(16);
+        var roots = new List<SensitiveHostRoot>(32);
 
-        // The home directory itself, and each credential store under it by name. The second half is not redundant: the
-        // equals-or-ancestor rule catches a working directory of the home itself through the first entry, and one inside .ssh only here.
-        AddRoot(roots, home);
+        // The home directory itself, and each credential store under it by name: the first entry refuses home and its ancestors, the
+        // others refuse anything inside a store.
+        AddRoot(roots, home, deniesSubtree: false);
+        var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         foreach (var relative in SensitiveHomeSubdirectories)
         {
-            AddRoot(roots, Path.Combine(home, relative));
+            // Each AppData store also at the profile folder's real location, so a redirected AppData keeps its stores denied.
+            foreach (var store in new[] { Path.Combine(home, relative), Redirected(relative, RoamingProfile, roaming), Redirected(relative, LocalProfile, local) }.OfType<string>())
+            {
+                AddRoot(roots, store, deniesSubtree: true, string.Equals(relative, LocalMicrosoftStore, StringComparison.Ordinal) ? Path.Combine(store, "WindowsApps") : null);
+            }
         }
 
         // The engine's own state: the node database, its key material, every sandbox jail, the workspace manifests
         // that are deliberately never mounted into any sandbox.
-        AddRoot(roots, nodeDataRoot);
+        AddRoot(roots, nodeDataRoot, deniesSubtree: true);
 
         // The engine's own install directory. A server that could read it could read the assemblies it is being
         // sandboxed BY, plus whatever sits beside them.
-        AddRoot(roots, AppContext.BaseDirectory);
+        AddRoot(roots, AppContext.BaseDirectory, deniesSubtree: true);
 
-        foreach (var absolute in SensitiveAbsoluteRoots)
+        foreach (var absolute in SensitiveAbsoluteSubtrees)
         {
-            AddRoot(roots, absolute);
+            AddRoot(roots, absolute, deniesSubtree: true);
         }
 
+        // On Windows "/" is the root of the process's current drive, and refusing its subtree would refuse every server on that drive.
+        AddRoot(roots, "/", deniesSubtree: false);
         return roots;
+    }
+
+    /// <summary>A home-relative store under <paramref name="profilePrefix" />, re-rooted at that profile folder's actual location.</summary>
+    private static string? Redirected(string relative, string profilePrefix, string profileFolder)
+    {
+        return string.IsNullOrWhiteSpace(profileFolder) || !relative.StartsWith(profilePrefix + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            ? null
+            : Path.Combine(profileFolder, relative[(profilePrefix.Length + 1)..]);
     }
 
     /// <summary>
@@ -184,13 +247,13 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     /// <remarks>
     ///     They are engine-derived from the registration and nothing else, then filtered twice. A tree under a mount
     ///     point the isolated chain owns is DROPPED, since the chain refuses it as shadowed and everything under
-    ///     <c>/usr</c> is already bound read-only there, so nothing is lost. A tree that equals or contains a
+    ///     <c>/usr</c> is already bound read-only there, so nothing is lost. A tree that would expose a
     ///     <see cref="BuildSensitiveHostRoots" /> entry is REFUSED loudly, naming the path and the tier, because it is
     ///     an operator mistake whose silent drop would leave a server that starts and cannot find its files.
     /// </remarks>
     internal static IReadOnlyList<string> ResolveReadOnlyTrees(McpServerRecord record,
         Func<string, string?> resolveExecutablePath,
-        IReadOnlyList<string> sensitiveRoots)
+        IReadOnlyList<SensitiveHostRoot> sensitiveRoots)
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(resolveExecutablePath);
@@ -239,17 +302,24 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         var jailPath = JailSearchPath(_record);
         if (ResolveExecutablePath(_record.Command, jailPath, ExecutableExtensions(_record, OperatingSystem.IsWindows())) is null)
         {
-            throw new FileNotFoundException($"The MCP server '{_record.Name}' command '{_record.Command}' was not found on the sandbox PATH ({jailPath}). "
-                                            + "The sandbox does not see this node's PATH: use an absolute path, or set PATH in the server's environment to include the directory holding the command.");
+            // A command naming a directory never consults PATH, and printing it would leak this node's directory names to the UI.
+            throw new FileNotFoundException(IsPathCommand(_record.Command)
+                ? $"The MCP server '{_record.Name}' command '{_record.Command}' does not exist or is not readable."
+                : $"The MCP server '{_record.Name}' command '{_record.Command}' was not found on the sandbox PATH ({jailPath}). "
+                  + "The sandbox does not see this node's PATH: use an absolute path, or set PATH in the server's environment to include the directory holding the command.");
         }
 
         var identity = await _identityProvider.GetAsync(cancellationToken);
-        var handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity), cancellationToken);
+        // Resolved once, so the cwd is checked against exactly the trees the sandbox was created with.
+        var trees = ResolveReadOnlyTrees(_record,
+            command => ResolveExecutablePath(command, jailPath, ExecutableExtensions(_record, OperatingSystem.IsWindows())),
+            BuildSensitiveHostRoots(_nodeDataDirectory.Root));
+        var handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity, trees), cancellationToken);
 
         ISandboxInteractiveProcess? process = null;
         try
         {
-            process = await _provider.StartInteractiveAsync(handle, BuildCommandRequest(handle), cancellationToken);
+            process = await _provider.StartInteractiveAsync(handle, BuildCommandRequest(handle, trees), cancellationToken);
 
             // StreamClientTransport's first argument is the stream the client WRITES to reach the server, and the
             // second is the one it READS the server's replies from — so they are the child's stdin and stdout.
@@ -275,7 +345,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     ///     configured working directory route here, so the denylist cannot be bypassed by whichever of the two an
     ///     operator sets.
     /// </summary>
-    private static void AddBindableTree(List<string> trees, string path, IReadOnlyList<string> sensitiveRoots, string serverName)
+    private static void AddBindableTree(List<string> trees, string path, IReadOnlyList<SensitiveHostRoot> sensitiveRoots, string serverName)
     {
         if (Canonicalize(path) is not { } canonical)
         {
@@ -284,13 +354,23 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             return;
         }
 
-        // BEFORE the chain-owned check, deliberately: the root and /etc are denied roots the chain-owned predicate would drop
-        // silently, and the operator needs the refusal rather than a server that starts without the tree it asked for.
-        if (sensitiveRoots.FirstOrDefault(root => CoversRoot(canonical, root)) is { } covered)
+        // A device, volume-GUID, UNC or stream spelling names a store without starting with its drive-letter path, so no comparison would match.
+        if (OperatingSystem.IsWindows() && !IsPlainDriveLetterPath(canonical))
         {
             throw new SandboxCapabilityNotSupportedException(
-                $"The MCP server '{serverName}' is registered at the Sandboxed trust tier and would bind '{canonical}' into its sandbox, which contains the sensitive host path '{covered}'. "
-                + "Point the server's command or working directory at the directory holding its own files instead — a subdirectory is fine, it is the root itself that cannot be bound.");
+                $"The MCP server '{serverName}' is registered at the Sandboxed trust tier and would bind '{canonical}' into its sandbox, which is not a plain drive-letter folder path. "
+                + "Spell the server's command and working directory as an ordinary path such as C:\\Program Files\\<server>.");
+        }
+
+        // BEFORE the chain-owned check, deliberately: the root and /etc are denied roots the chain-owned predicate would drop
+        // silently, and the operator needs the refusal rather than a server that starts without the tree it asked for.
+        if (sensitiveRoots.FirstOrDefault(root => Exposes(canonical, root)) is { } covered)
+        {
+            throw new SandboxCapabilityNotSupportedException(covered.DeniesSubtree
+                ? $"The MCP server '{serverName}' is registered at the Sandboxed trust tier and would bind '{canonical}' into its sandbox, which is, contains or lies inside the sensitive host path '{covered.HostPath}'. "
+                  + "That path is a credential store or the engine's own state, protected with everything beneath it: point the server's command or working directory at the directory holding its own files instead."
+                : $"The MCP server '{serverName}' is registered at the Sandboxed trust tier and would bind '{canonical}' into its sandbox, which contains the sensitive host path '{covered.HostPath}'. "
+                  + "Point the server's command or working directory at the directory holding its own files instead — a subdirectory is fine, it is the root itself that cannot be bound.");
         }
 
         // The chain-owned mount points are a bwrap fact: the Windows AppContainer boundary grants a tree in place and owns none (ADR 0019).
@@ -305,13 +385,32 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     }
 
     /// <summary>
-    ///     Whether binding <paramref name="tree" /> would expose <paramref name="root" /> — true when they are the
-    ///     same directory, or when <paramref name="root" /> lies beneath <paramref name="tree" />.
+    ///     Whether binding <paramref name="tree" /> would expose <paramref name="root" />: it is or contains the root, or it lies beneath
+    ///     a subtree-denied root outside that root's carve-out.
     /// </summary>
-    private static bool CoversRoot(string tree, string root)
+    private static bool Exposes(string tree, SensitiveHostRoot root)
     {
-        return string.Equals(tree, root, PathComparison)
-               || root.StartsWith(tree.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, PathComparison);
+        return IsAtOrBeneath(root.HostPath, tree)
+               || (root.DeniesSubtree
+                   && IsAtOrBeneath(tree, root.HostPath)
+                   && !(root.AllowedBeneath is { } allowed && IsAtOrBeneath(tree, allowed)));
+    }
+
+    /// <summary>Whether a Windows path is a plain <c>X:\…</c> folder path: no device, volume, UNC prefix and no second colon (stream syntax).</summary>
+    internal static bool IsPlainDriveLetterPath(string path)
+    {
+        return path.Length >= 3
+               && char.IsAsciiLetter(path[0])
+               && path[1] == ':'
+               && path[2] == '\\'
+               && path.IndexOf(':', 2) < 0;
+    }
+
+    /// <summary>Whether <paramref name="path" /> is <paramref name="ancestor" /> or lies beneath it.</summary>
+    private static bool IsAtOrBeneath(string path, string ancestor)
+    {
+        return string.Equals(path, ancestor, PathComparison)
+               || path.StartsWith(ancestor.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, PathComparison);
     }
 
     /// <summary>
@@ -329,6 +428,12 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             // EVERY ancestor, not just the leaf: Path.GetFullPath is lexical and Directory.ResolveLinkTarget follows only a link that
             // IS the final component, so a path through a linked ancestor matches no denied root while bwrap would still mount it.
             var current = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+            if (OperatingSystem.IsWindows() && (Directory.Exists(current) || File.Exists(current)))
+            {
+                // The file object's own name collapses 8.3 names, junctions, subst drives and device or volume spellings into one.
+                return FinalPathOfExisting(current);
+            }
+
             for (var hop = 0; hop < MaxLinkHops; hop++)
             {
                 var resolved = ResolveOneLevel(current);
@@ -396,20 +501,56 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     }
 
     /// <summary>
+    ///     The normalized drive-letter name of an existing Windows file or directory, read from an opened handle; null when it cannot be
+    ///     opened or lives on a network share, so it contributes no tree.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static string? FinalPathOfExisting(string path)
+    {
+        using var handle = CreateFile(path, desiredAccess: 0, FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open, FileFlagBackupSemantics, IntPtr.Zero);
+        if (handle.IsInvalid)
+        {
+            return null;
+        }
+
+        var buffer = new char[32_768];
+        var length = GetFinalPathNameByHandle(handle, buffer, (uint)buffer.Length, FileNameNormalizedVolumeNameDos);
+        if (length == 0 || length >= (uint)buffer.Length)
+        {
+            return null;
+        }
+
+        const string devicePrefix = @"\\?\";
+        var final = new string(buffer, 0, (int)length);
+        if (final.StartsWith(devicePrefix + @"UNC\", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return Path.TrimEndingDirectorySeparator(final.StartsWith(devicePrefix, StringComparison.Ordinal) ? final[devicePrefix.Length..] : final);
+    }
+
+    /// <summary>
     ///     Adds a denied root in its resolved form, and — when resolution gives up (a link cycle) — in its lexical one
     ///     as well. A root that resolution dropped would be a hole; carrying both spellings can only ever refuse more.
     /// </summary>
-    private static void AddRoot(List<string> roots, string path)
+    private static void AddRoot(List<SensitiveHostRoot> roots, string path, bool deniesSubtree, string? allowedBeneath = null)
     {
+        // A carve-out that is itself a link (a junction from WindowsApps into Credentials) would move the exception onto its target.
+        var allowed = allowedBeneath is not null && TryLexical(allowedBeneath) is { } lexical
+                      && string.Equals(Canonicalize(allowedBeneath), lexical, PathComparison)
+            ? lexical
+            : null;
         foreach (var candidate in new[]
                  {
                      Canonicalize(path),
                      TryLexical(path)
                  })
         {
-            if (candidate is { } value && !roots.Contains(value, StringComparer.Ordinal))
+            // Equality covers the class too, so a path on the list twice keeps its subtree-denied entry (home = /root on a root account).
+            if (candidate is { } value && new SensitiveHostRoot { HostPath = value, DeniesSubtree = deniesSubtree, AllowedBeneath = allowed } is var root && !roots.Contains(root))
             {
-                roots.Add(value);
+                roots.Add(root);
             }
         }
     }
@@ -446,7 +587,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
 
     // Internal so its ceilings and posture can be asserted without standing up a real isolated chain — the same
     // drift guard every other sandbox create site has.
-    internal SandboxCreateRequest BuildCreateRequest(AgentHomeOwnerIdentity identity)
+    internal SandboxCreateRequest BuildCreateRequest(AgentHomeOwnerIdentity identity, IReadOnlyList<string> readOnlyTrees)
     {
         return new SandboxCreateRequest
         {
@@ -463,9 +604,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             // Unconditional: ConnectAsync already refused the connection if this provider cannot honour it. Unlike a
             // resource ceiling this is not a preference a provider may quietly drop.
             Isolation = SandboxIsolationMode.Filesystem,
-            ReadOnlyTrees = ResolveReadOnlyTrees(_record,
-                command => ResolveExecutablePath(command, JailSearchPath(_record), ExecutableExtensions(_record, OperatingSystem.IsWindows())),
-                BuildSensitiveHostRoots(_nodeDataDirectory.Root)),
+            ReadOnlyTrees = readOnlyTrees,
             // Stated though the isolated chain's --unshare-net is what enforces it, so the intent is legible at the
             // one place a reader looks for it.
             NetworkPolicy = SandboxNetworkPolicy.None,
@@ -539,8 +678,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         string? Probe(string candidate) =>
             suffixes.Select(suffix => candidate + suffix).FirstOrDefault(File.Exists) is { } found ? Path.GetFullPath(found) : null;
 
-        if (command.Contains(Path.DirectorySeparatorChar, StringComparison.Ordinal)
-            || command.Contains(Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
+        if (IsPathCommand(command))
         {
             return Probe(command);
         }
@@ -556,36 +694,61 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         return null;
     }
 
-    internal SandboxCommandRequest BuildCommandRequest(SandboxHandle handle)
+    /// <summary>Whether a command names a file by path rather than a name looked up on <c>PATH</c>.</summary>
+    private static bool IsPathCommand(string command)
+    {
+        return command.Contains(Path.DirectorySeparatorChar, StringComparison.Ordinal)
+               || command.Contains(Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
+    }
+
+    internal SandboxCommandRequest BuildCommandRequest(SandboxHandle handle, IReadOnlyList<string> readOnlyTrees)
     {
         return new SandboxCommandRequest
         {
             ExecutionId = _sessionIdentity,
             Executable = _record.Command!,
             Arguments = [.. _record.Arguments],
-            // No working directory: the jail IS the working directory, and the configured one is bound READ-ONLY instead (see
-            // ResolveReadOnlyTrees), since a third-party server has no reason to write into the tree it was installed from.
+            WorkingDirectory = GrantedWorkingDirectory(readOnlyTrees),
             Environment = BuildEnvironment(handle, _record.Environment)
         };
     }
 
     /// <summary>
+    ///     The registered working directory in its canonical form when it is one of the granted read-only trees, so a relative script
+    ///     path resolves; otherwise none, and the jail is the cwd. HOME and TEMP stay in the jail, the only writable root.
+    /// </summary>
+    private string? GrantedWorkingDirectory(IReadOnlyList<string> readOnlyTrees)
+    {
+        if (string.IsNullOrWhiteSpace(_record.WorkingDirectory) || Canonicalize(_record.WorkingDirectory) is not { } canonical)
+        {
+            return null;
+        }
+
+        return readOnlyTrees.Contains(canonical, StringComparer.Ordinal) ? canonical : null;
+    }
+
+    /// <summary>
     ///     The server's environment: this sandbox's reported scratch paths (<see cref="SandboxHandle.IsolatedPaths" />), then the
-    ///     registration's own variables on top, so an operator can still override <c>HOME</c>.
+    ///     registration's own variables on top, so an operator can still override <c>HOME</c> or <c>NODE_OPTIONS</c>.
     /// </summary>
     /// <remarks>
-    ///     The scratch overlay applies only to a host-path view (the Windows AppContainer boundary), where nothing else would give the
-    ///     server a jail-backed <c>HOME</c>. The chain-served <see cref="SandboxIsolatedPaths.Posix" /> view gets none: bwrap's chain
-    ///     already sets those four variables, and repeating them would emit duplicate <c>--setenv</c> arguments.
+    ///     The overlay applies only to a host-path view (the Windows AppContainer boundary), where nothing else gives the server a
+    ///     jail-backed <c>HOME</c>, and where node's realpath of its script stats every ancestor the sandbox cannot read: the default
+    ///     <c>NODE_OPTIONS</c> skips it. The <see cref="SandboxIsolatedPaths.Posix" /> view gets none: bwrap's chain sets the four scratch
+    ///     variables itself, and repeating them would emit duplicate <c>--setenv</c> arguments.
     /// </remarks>
     internal static IReadOnlyDictionary<string, string>? BuildEnvironment(SandboxHandle handle, IReadOnlyDictionary<string, string> registered)
     {
-        if (SandboxIsolatedPaths.Of(handle) is not { } paths || paths == SandboxIsolatedPaths.Posix)
+        if (!IsHostPathView(handle) || SandboxIsolatedPaths.Of(handle) is not { } paths)
         {
             return registered.Count == 0 ? null : registered;
         }
 
-        var environment = new Dictionary<string, string>(paths.ToEnvironment(), StringComparer.Ordinal);
+        // Windows environment names are case-insensitive: a registration's Node_Options must replace the default, not sit beside it.
+        var environment = new Dictionary<string, string>(paths.ToEnvironment(), StringComparer.OrdinalIgnoreCase)
+        {
+            [NodeOptionsVariable] = PreserveNodeSymlinks
+        };
         foreach (var (name, value) in registered)
         {
             environment[name] = value;
@@ -593,6 +756,30 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
 
         return environment;
     }
+
+    /// <summary>Whether the sandbox presents the jail's host paths (the Windows AppContainer boundary) rather than a namespace of its own.</summary>
+    private static bool IsHostPathView(SandboxHandle handle)
+    {
+        return SandboxIsolatedPaths.Of(handle) is { } paths && paths != SandboxIsolatedPaths.Posix;
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern SafeFileHandle CreateFile(string fileName,
+        uint desiredAccess,
+        FileShare shareMode,
+        IntPtr securityAttributes,
+        FileMode creationDisposition,
+        uint flagsAndAttributes,
+        IntPtr templateFile);
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern uint GetFinalPathNameByHandle(SafeFileHandle file,
+        [Out]
+        char[] filePath,
+        uint filePathSize,
+        uint flags);
 
     /// <summary>
     ///     The live transport handed to <c>McpClient</c>: the SDK's stream transport for the protocol, plus ownership
@@ -605,16 +792,18 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     private sealed class SandboxedTransport : ITransport
     {
         /// <summary>
-        ///     What an exit code means under the Windows sandbox, which allows Win32k but reads only System32, Program Files and granted
-        ///     folders (ADR 0019): startup failures are mostly unreadable files. Codes not listed get no hint.
+        ///     What an exit code means under the Windows sandbox, which reads only System32, Program Files and granted folders (ADR 0019):
+        ///     startup failures are mostly unreadable files. A code not listed gets <see cref="UnlistedExitHint" /> there instead.
         /// </summary>
         private static readonly Dictionary<uint, string> ExitCodeHints = new()
         {
             // STATUS_DLL_INIT_FAILED: a DLL's initialiser failed in the loader.
             [0xC0000142] = "0xC0000142 means a DLL failed to initialise while the process started: under the sandbox this is usually "
-                           + "a library in a folder the sandbox cannot read, or a program that needs a desktop session.",
+                           + "a library in a folder the sandbox cannot read, or a program that needs a desktop session; "
+                           + "move the server under Program Files or a folder the sandbox is granted.",
             // The delay-load helper's failed-LoadLibrary exception.
-            [0xC06D007E] = "0xC06D007E means a DLL loaded on demand failed to load: it is missing or sits in a folder the sandbox cannot read.",
+            [0xC06D007E] = "0xC06D007E means a DLL loaded on demand failed to load: it is missing or sits in a folder the sandbox cannot read; "
+                           + "move the server under Program Files or a folder the sandbox is granted.",
             // hostfxr's CoreCLR init failure.
             [0x80008089] = "0x80008089 means the .NET runtime could not start: the runtime's or the app's folder is a folder the sandbox cannot read; "
                            + "move the server under Program Files or a folder the sandbox is granted.",
@@ -622,6 +811,10 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             [0x8000809B] = "0x8000809B means the .NET host could not find or read the application DLL: under the sandbox it is usually in "
                            + "a folder the sandbox cannot read; move the server under Program Files or a folder the sandbox is granted."
         };
+
+        /// <summary>The hint for a non-zero exit before the handshake under the Windows sandbox whose code has no row of its own.</summary>
+        private const string UnlistedExitHint = "Under the sandbox an early exit is often a file in a folder the sandbox cannot read; move the server under "
+                                                + "Program Files or a folder the sandbox is granted (its command or working directory, on an NTFS volume).";
 
         /// <summary>How long a failed send waits for the relay to learn whether the server died on startup.</summary>
         private static readonly TimeSpan RelaySettleWait = TimeSpan.FromSeconds(5);
@@ -746,6 +939,10 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             if (exitCode is { } failed && ExitCodeHints.TryGetValue(unchecked((uint)failed), out var hint))
             {
                 _ = message.Append(' ').Append(hint);
+            }
+            else if (exitCode is not (null or 0) && IsHostPathView(_handle))
+            {
+                _ = message.Append(' ').Append(UnlistedExitHint);
             }
 
             if (warnings.Count > 0)

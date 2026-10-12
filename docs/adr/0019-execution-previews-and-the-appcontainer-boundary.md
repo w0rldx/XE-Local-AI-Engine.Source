@@ -174,3 +174,12 @@ probes each UI risk above from a sandboxed server:
 - whether a `BitBlt` from `GetDC(NULL)` returns black or real pixels;
 - whether a low-level keyboard hook or `GetAsyncKeyState` sees host keystrokes;
 - whether a window or message box the child creates is visible on the desktop.
+
+**Round-5 evidence (2026-10-12, Windows 11 25H2 26200.9457, BaseContainer).** All seven runtimes started inside the
+boundary: node.js, CPython, PowerShell 7, Windows PowerShell 5.1, .NET 10, .NET Framework and native console programs.
+Clipboard access in both directions, input injection, foreign window handles (`EnumWindows`, `FindWindow`,
+`PostMessage`), desktop switching, the global object namespace and low-level key observation were all blocked. The
+child can read the real screen (`BitBlt` from `GetDC(NULL)` returned the desktop's pixels) and can show windows on the
+user's desktop. All six MXC `CanBlock` facts for clipboard read and write, input injection, external UI objects, the
+global UI namespace and desktop switching were true. The operator kept the amendment. The residual risk stands as
+stated above: a contained child can read what is on the screen and can spoof UI, and the consent text now says so.

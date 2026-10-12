@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
@@ -20,19 +21,28 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation
 /// </remarks>
 internal sealed class SandboxLifecycleRegistry
 {
+    /// <summary>How long one teardown call (one jail, an eviction or terminate-all) waits in total for killed MXC children to exit.</summary>
+    internal static readonly TimeSpan InFlightExitBudget = TimeSpan.FromSeconds(2);
+
     private readonly string _jailRoot;
     private readonly ISandboxLauncher _launcher;
+    private readonly ILogger _logger;
     private readonly IExecutionPreviewPolicy? _previewPolicy;
     private readonly ConcurrentDictionary<string, JailState> _sandboxes = new(StringComparer.Ordinal);
     private readonly Lock _sync = new();
     private readonly TimeProvider _timeProvider;
 
-    public SandboxLifecycleRegistry(string jailRoot, ISandboxLauncher launcher, TimeProvider timeProvider, IExecutionPreviewPolicy? previewPolicy = null)
+    public SandboxLifecycleRegistry(string jailRoot,
+        ISandboxLauncher launcher,
+        TimeProvider timeProvider,
+        IExecutionPreviewPolicy? previewPolicy = null,
+        ILogger? logger = null)
     {
         _jailRoot = jailRoot ?? throw new ArgumentNullException(nameof(jailRoot));
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _previewPolicy = previewPolicy;
+        _logger = logger ?? NullLogger.Instance;
     }
 
     public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
@@ -131,7 +141,8 @@ internal sealed class SandboxLifecycleRegistry
         {
             if (_sandboxes.TryRemove(sandboxId, out var state))
             {
-                TerminateState(state, SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation));
+                using var exitBudget = NewExitBudget();
+                TerminateState(state, SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation), exitBudget.Token);
             }
         }
     }
@@ -142,9 +153,11 @@ internal sealed class SandboxLifecycleRegistry
     /// </summary>
     public void TerminateAll()
     {
+        // ONE budget for every jail, so a shutdown blocks at most InFlightExitBudget however many sandboxes are live.
+        using var exitBudget = NewExitBudget();
         foreach (var state in _sandboxes.Values)
         {
-            TerminateState(state, SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation));
+            TerminateState(state, SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation), exitBudget.Token);
         }
 
         _sandboxes.Clear();
@@ -370,11 +383,17 @@ internal sealed class SandboxLifecycleRegistry
                         .Select(entry => entry.Key)
                         .ToList();
 
+        if (conflicts.Count == 0)
+        {
+            return;
+        }
+
+        using var exitBudget = NewExitBudget();
         foreach (var sandboxId in conflicts)
         {
             if (_sandboxes.TryRemove(sandboxId, out var state))
             {
-                TerminateState(state, SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation));
+                TerminateState(state, SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation), exitBudget.Token);
             }
         }
     }
@@ -404,7 +423,10 @@ internal sealed class SandboxLifecycleRegistry
         return builder.Length == 0 ? "node" : builder.ToString();
     }
 
-    private static void TerminateState(JailState state, SandboxScopeUnitKiller? scopeKiller)
+    private CancellationTokenSource NewExitBudget() =>
+        new(InFlightExitBudget, _timeProvider);
+
+    private void TerminateState(JailState state, SandboxScopeUnitKiller? scopeKiller, CancellationToken exitBudget)
     {
         lock (state.Sync)
         {
@@ -433,7 +455,9 @@ internal sealed class SandboxLifecycleRegistry
             inFlight.Process.Kill();
         }
 
+        var killedMxcChildren = state.InFlight.Values.Select(static inFlight => inFlight.Process).OfType<MxcSandboxChildProcess>().ToList();
         state.InFlight.Clear();
+        WaitForExits(killedMxcChildren, exitBudget);
 
         try
         {
@@ -442,13 +466,36 @@ internal sealed class SandboxLifecycleRegistry
                 Directory.Delete(state.JailRoot, recursive: true);
             }
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            // Best-effort jail teardown; a locked file does not fail the kill.
+            // Best-effort: a locked file does not fail the kill, but a jail left behind is named so it can be found.
+            _logger.LogInformation("The sandbox jail {JailRoot} could not be removed: {Reason}", state.JailRoot, exception.Message);
         }
-        catch (UnauthorizedAccessException)
+    }
+
+    /// <summary>
+    ///     MXC's kill is asynchronous, and on Windows a directory still in use by a dying child (its working directory) survives the delete
+    ///     emptied; so the teardown waits for the killed children first, until <paramref name="exitBudget" /> fires.
+    /// </summary>
+    /// <remarks>
+    ///     Synchronous because every caller tears down synchronously; remove and evict do so under the registry lock, terminate-all runs on
+    ///     dispose without it. Each call shares one budget across all its jails, so any lock is held at most <see cref="InFlightExitBudget" />.
+    /// </remarks>
+    private void WaitForExits(List<MxcSandboxChildProcess> killedChildren, CancellationToken exitBudget)
+    {
+        foreach (var child in killedChildren)
         {
-            // Best-effort jail teardown.
+            try
+            {
+#pragma warning disable MA0045 // forced sync: see the remarks
+                _ = child.TryWaitForExitAsync(exitBudget).GetAwaiter().GetResult();
+#pragma warning restore MA0045
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                // A child disposed under the wait (its own scope ended concurrently) is gone either way; the jail delete still runs.
+                _logger.LogDebug(exception, "Waiting for a killed sandbox child to exit failed; removing its jail anyway.");
+            }
         }
     }
 }

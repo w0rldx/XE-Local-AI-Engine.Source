@@ -307,7 +307,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 				title: t("pages.nodeSettings.executionPreviewsConfirm.title", "Turn on execution previews?"),
 				description: t(
 					"pages.nodeSettings.executionPreviewsConfirm.description",
-					"Preview sandbox mechanisms will run Python and sandboxed MCP servers. On Windows that is the AppContainer boundary. The code cannot read the engine's data or your files unless a folder allows all app packages. It can show windows and use the Windows UI kernel interface, but not the clipboard or simulated input. It runs with no CPU, memory or process-count limit, only the time limit, and it can see host path names. Turn this on only if you accept that.",
+					"Preview sandbox mechanisms will run Python and sandboxed MCP servers. On Windows that is the AppContainer boundary. The code cannot read the engine's data or your files unless a folder allows all app packages. It can show windows, use the Windows UI kernel interface and read what is on your screen, but not the clipboard or simulated input. It runs with no CPU, memory or process-count limit, only the time limit, and it can see host path names. Turn this on only if you accept that.",
 				),
 				confirmationText: t("pages.nodeSettings.executionPreviewsConfirm.confirm", "Turn on"),
 				cancellationText: t("pages.nodeSettings.executionPreviewsConfirm.cancel", "Cancel"),

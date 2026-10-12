@@ -221,7 +221,8 @@ with code `0xC0000142` (a library failed to initialise), `0xC06D007E` (a library
 unreadable), `0x80008089` (the .NET runtime could not start) or `0x8000809B` (the .NET host could not find or read the
 app), and the server's status names the code and what it means. Move such a server under `C:\Program Files`, or
 register it at the *Privileged host* tier instead, which runs it with no sandbox boundary at all. Clipboard access and
-simulated keyboard or mouse input stay blocked inside the sandbox.
+simulated keyboard or mouse input stay blocked inside the sandbox, but sandboxed code can read what is on your
+screen and show windows on your desktop.
 
 ### Custom tools
 
