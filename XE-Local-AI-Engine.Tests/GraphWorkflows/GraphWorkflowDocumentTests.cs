@@ -280,9 +280,70 @@ public sealed class GraphWorkflowDocumentTests
     {
         var input = GraphWorkflowDocuments.ComposeInput("""{"topic":"latency"}""", []);
 
-        AssertEx.Equal("""{"run":{"input":{"topic":"latency"}},"upstream":{},"input":null}""",
+        AssertEx.Equal("""{"run":{"input":{"topic":"latency"},"previous":null},"upstream":{},"input":null}""",
             input,
-            "which is what the Start node sees: a run input, no upstream, and nothing to shortcut to.");
+            "which is what the Start node sees: a run input, no previous run, no upstream, and nothing to shortcut to.");
+    }
+
+    /// <summary>
+    ///     <c>run.previous</c> is written on every run: an explicit null on the first one, so a binding to it resolves there
+    ///     too, and the pinned object afterwards, parsed rather than carried as an escaped string.
+    /// </summary>
+    [Test]
+    public void ComposeInput_CarriesThePinnedPreviousRun()
+    {
+        var runId = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        var previous = GraphWorkflowDocuments.PreviousRun(runId, completedAtUtcMilliseconds: 1_760_263_200_123, """{"report":"| a | b |"}""");
+
+        AssertEx.Equal("""{"runId":"11111111-2222-3333-4444-555555555555","completedAtUtc":"2025-10-12T10:00:00.123Z","output":{"report":"| a | b |"}}""", previous);
+
+        var input = GraphWorkflowDocuments.ComposeInput("""{"topic":"latency"}""", [], previous);
+
+        AssertEx.Equal("""{"run":{"input":{"topic":"latency"},"previous":{"runId":"11111111-2222-3333-4444-555555555555","completedAtUtc":"2025-10-12T10:00:00.123Z","output":{"report":"| a | b |"}}},"upstream":{},"input":null}""",
+            input);
+        AssertEx.Equal("| a | b |", GraphWorkflowDocuments.Resolve(input, "run.previous.output.report")?.GetString());
+        AssertEx.Equal<JsonValueKind?>(JsonValueKind.Null,
+            GraphWorkflowDocuments.Resolve(GraphWorkflowDocuments.ComposeInput(runInputJson: null, []), "run.previous")?.ValueKind,
+            "a first run resolves run.previous to an explicit null, not to a missing path.");
+    }
+
+    /// <summary>
+    ///     The default End result is the input document minus <c>run.previous</c>, so a run never carries the one before it;
+    ///     an explicit path still reaches the previous run.
+    /// </summary>
+    [Test]
+    public void EndOutput_WithNoResultPath_OmitsRunPrevious_AndAnExplicitPathStillReachesIt()
+    {
+        var previous = GraphWorkflowDocuments.PreviousRun(Guid.NewGuid(), completedAtUtcMilliseconds: 0, "\"last report\"");
+        var document = GraphWorkflowDocuments.ComposeInput("""{"topic":"latency"}""",
+            [
+                new GraphWorkflowUpstreamDocument
+                {
+                    NodeKey = "analyze",
+                    OutputDocumentJson = AnalyzeDocument
+                }
+            ],
+            previous);
+        using var composed = JsonDocument.Parse(document);
+
+        var result = GraphWorkflowDocuments.EndOutput("completed", resultPath: null, document).GetProperty("result");
+
+        AssertEx.False(result.GetProperty("run").TryGetProperty("previous", out _), "the default result drops run.previous.");
+        AssertEx.Equal(composed.RootElement.GetProperty("run").GetProperty("input").GetRawText(), result.GetProperty("run").GetProperty("input").GetRawText());
+        AssertEx.Equal(composed.RootElement.GetProperty("upstream").GetRawText(), result.GetProperty("upstream").GetRawText());
+        AssertEx.Equal(composed.RootElement.GetProperty("input").GetRawText(), result.GetProperty("input").GetRawText());
+        AssertEx.Equal("last report",
+            GraphWorkflowDocuments.EndOutput("completed", "run.previous.output", document).GetProperty("result").GetString(),
+            "an explicit path still resolves the previous run.");
+    }
+
+    /// <summary>A completed run that resolved no result still pins its id and instant; its output is null.</summary>
+    [Test]
+    public void PreviousRun_OfARunWithoutAResult_WritesANullOutput()
+    {
+        var previous = GraphWorkflowDocuments.PreviousRun(Guid.Empty, completedAtUtcMilliseconds: 0, outputJson: null);
+
+        AssertEx.Equal("""{"runId":"00000000-0000-0000-0000-000000000000","completedAtUtc":"1970-01-01T00:00:00Z","output":null}""", previous);
     }
 
     /// <summary>

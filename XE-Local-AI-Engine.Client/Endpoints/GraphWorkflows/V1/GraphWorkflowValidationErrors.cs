@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 ///     Replays a runtime validation refusal onto an endpoint's failure list.
 /// </summary>
 /// <remarks>
-///     Both write routes catch the same exception for the same reason — the global single-message handler could only
+///     The write routes catch the same exception for the same reason — the global single-message handler could only
 ///     report ONE of the complaints, and an author fixing a canvas wants every one of them at once — so the replay
-///     lives here rather than twice.
+///     lives here rather than once per route.
 /// </remarks>
 internal static class GraphWorkflowValidationErrors
 {

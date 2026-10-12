@@ -590,6 +590,130 @@ public sealed class GraphWorkflowRunServiceTests
         AssertEx.NotEqual(GraphWorkflowGraph.Parse(GraphWorkflowGraphs.BranchOnJson).Nodes.Count, GraphWorkflowGraph.Parse(detail.Run.GraphJson).Nodes.Count);
     }
 
+    /// <summary>A first run has no previous answer to see, and says so with a null rather than a missing pin.</summary>
+    [Test]
+    public async Task StartAsync_OnTheFirstRunOfADefinition_PinsNoPreviousRun()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+
+        var started = await StartAsync(definitionId, Guid.NewGuid());
+
+        AssertEx.Null((await ReadRunAsync(started.Run.Id)).PreviousJson);
+    }
+
+    /// <summary>
+    ///     The last Completed run is read at start and pinned onto the new row, so every tick of the new run reads the same
+    ///     <c>run.previous</c> however many runs complete meanwhile.
+    /// </summary>
+    [Test]
+    public async Task StartAsync_AfterACompletedRun_PinsItsIdCompletionInstantAndOutput()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var first = await StartAsync(definitionId, Guid.NewGuid());
+        var completed = await SettleAsync(first.Run.Id, GraphWorkflowRunStatus.Completed, """{"report":"one"}""");
+
+        var second = await StartAsync(definitionId, Guid.NewGuid());
+
+        using var previous = JsonDocument.Parse(AssertEx.NotNull((await ReadRunAsync(second.Run.Id)).PreviousJson));
+        AssertEx.Equal(first.Run.Id, previous.RootElement.GetProperty("runId").GetGuid());
+        var completedAt = previous.RootElement.GetProperty("completedAtUtc").GetDateTimeOffset();
+        AssertEx.Equal<long?>(completed.CompletedAtUtc, completedAt.ToUnixTimeMilliseconds(), "the completion instant, to the millisecond the row stores.");
+        AssertEx.Equal(TimeSpan.Zero, completedAt.Offset, "written as UTC.");
+        AssertEx.Equal("one", previous.RootElement.GetProperty("output").GetProperty("report").GetString(), "the run's output as JSON, not as an escaped string.");
+    }
+
+    /// <summary>A failed run gave no answer, so the run after it still sees the last one that did.</summary>
+    [Test]
+    public async Task StartAsync_WhenTheLastRunFailed_PinsTheOlderCompletedRun()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var completed = await StartAsync(definitionId, Guid.NewGuid());
+        _ = await SettleAsync(completed.Run.Id, GraphWorkflowRunStatus.Completed, "\"kept\"");
+        var failed = await StartAsync(definitionId, Guid.NewGuid());
+        _ = await SettleAsync(failed.Run.Id, GraphWorkflowRunStatus.Failed, outputJson: null);
+
+        var next = await StartAsync(definitionId, Guid.NewGuid());
+
+        using var previous = JsonDocument.Parse(AssertEx.NotNull((await ReadRunAsync(next.Run.Id)).PreviousJson));
+        AssertEx.Equal(completed.Run.Id, previous.RootElement.GetProperty("runId").GetGuid(), "the failed run is skipped.");
+        AssertEx.Equal("kept", previous.RootElement.GetProperty("output").GetString());
+    }
+
+    /// <summary>
+    ///     A chat run's result may quote its conversation, so a bound start pins the previous run of its OWN conversation only,
+    ///     and an unbound start never adopts a chat run.
+    /// </summary>
+    [Test]
+    public async Task StartAsync_BoundToAConversation_PinsOnlyThatConversationsPreviousRun()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var conversationA = await GraphWorkflowChatTestSupport.CreateConversationAsync(Host.Factory.Services);
+        var conversationB = await GraphWorkflowChatTestSupport.CreateConversationAsync(Host.Factory.Services);
+        var inA = await StartBoundAsync(definitionId, conversationA);
+        _ = await SettleAsync(inA.Run.Id, GraphWorkflowRunStatus.Completed, "\"quotes chat A\"");
+        var page = await StartAsync(definitionId, Guid.NewGuid());
+        _ = await SettleAsync(page.Run.Id, GraphWorkflowRunStatus.Completed, "\"page\"");
+
+        var firstInB = await StartBoundAsync(definitionId, conversationB);
+        AssertEx.Null((await ReadRunAsync(firstInB.Run.Id)).PreviousJson, "B's first run sees neither A's run nor the unbound one.");
+        _ = await SettleAsync(firstInB.Run.Id, GraphWorkflowRunStatus.Completed, "\"b\"");
+
+        var secondInB = await StartBoundAsync(definitionId, conversationB);
+        var unbound = await StartAsync(definitionId, Guid.NewGuid());
+
+        AssertEx.Equal(firstInB.Run.Id, PreviousRunId(await ReadRunAsync(secondInB.Run.Id)), "B's next run sees B's own last run.");
+        AssertEx.Equal(page.Run.Id, PreviousRunId(await ReadRunAsync(unbound.Run.Id)), "an unbound start sees the unbound run, never a chat run.");
+    }
+
+    private static Guid PreviousRunId(GraphWorkflowRunSnapshot run)
+    {
+        using var previous = JsonDocument.Parse(AssertEx.NotNull(run.PreviousJson));
+        return previous.RootElement.GetProperty("runId").GetGuid();
+    }
+
+    private async Task<GraphWorkflowRunDetail> StartBoundAsync(Guid definitionId, Guid conversationId)
+    {
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>()
+                          .StartAsync(definitionId,
+                              Guid.NewGuid(),
+                              inputJson: null,
+                              definitionVersion: null,
+                              new GraphWorkflowRunBinding
+                              {
+                                  ConversationId = conversationId,
+                                  TriggerMessageId = Guid.NewGuid()
+                              });
+    }
+
+    private async Task<GraphWorkflowRunSnapshot> ReadRunAsync(Guid runId)
+    {
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().GetRunAsync(runId);
+    }
+
+    /// <summary>Moves a Pending run through Running to a terminal status through the store, which is what the dispatcher would do.</summary>
+    private async Task<GraphWorkflowRunSnapshot> SettleAsync(Guid runId, GraphWorkflowRunStatus terminal, string? outputJson)
+    {
+        await using var scope = Host.Factory.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
+        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+        {
+            RunId = runId,
+            ExpectedVersion = (await store.GetRunAsync(runId)).Version,
+            TargetStatus = GraphWorkflowRunStatus.Running
+        });
+        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+        {
+            RunId = runId,
+            ExpectedVersion = (await store.GetRunAsync(runId)).Version,
+            TargetStatus = terminal,
+            FailureClass = terminal == GraphWorkflowRunStatus.Failed ? GraphWorkflowFailureClass.ValidationFailed : null,
+            OutputJson = outputJson
+        });
+        return await store.GetRunAsync(runId);
+    }
+
     private RecordingGraphWorkflowDispatcherSignal Signals => (RecordingGraphWorkflowDispatcherSignal)Host.Factory.Services.GetRequiredService<IGraphWorkflowDispatcherSignal>();
 
     private Task<Guid> SeedDefinitionAsync(string graphJson) =>
@@ -779,6 +903,9 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
 
     public Task<GraphWorkflowRunSnapshot?> FindRunByRequestAsync(Guid requestId, CancellationToken cancellationToken = default) =>
         _inner.FindRunByRequestAsync(requestId, cancellationToken);
+
+    public Task<GraphWorkflowRunSnapshot?> FindLatestCompletedRunAsync(Guid definitionId, Guid? conversationId, CancellationToken cancellationToken = default) =>
+        _inner.FindLatestCompletedRunAsync(definitionId, conversationId, cancellationToken);
 
     public Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null,
         int limit = 50,

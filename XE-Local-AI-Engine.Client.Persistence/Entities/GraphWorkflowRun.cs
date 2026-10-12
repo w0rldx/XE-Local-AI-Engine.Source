@@ -33,6 +33,12 @@ internal sealed class GraphWorkflowRun
     public byte[]? OutputJson { get; set; }
 
     /// <summary>
+    ///     The last Completed run of the same definition as the start found it, <c>{ runId, completedAtUtc, output }</c>, or
+    ///     null when there was none. Pinned at start so every tick and every restart reads the same <c>run.previous</c>.
+    /// </summary>
+    public byte[]? PreviousJson { get; set; }
+
+    /// <summary>
     ///     The run's single monotonic change watermark. Every node-run and event insert takes a fresh value from here
     ///     inside the transaction that owns the run row, so one number answers "what changed since?" for the subtree.
     /// </summary>

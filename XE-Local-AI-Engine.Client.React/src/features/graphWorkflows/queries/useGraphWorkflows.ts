@@ -10,8 +10,9 @@
 import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-	listGraphWorkflowRunEvents,
+	exportGraphWorkflowDefinition,
 	type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse as LocalModelResponse,
+	listGraphWorkflowRunEvents,
 } from "@/core/api/generated";
 import {
 	cancelGraphWorkflowRunMutation,
@@ -22,6 +23,7 @@ import {
 	getGraphWorkflowDefinitionOptions,
 	getGraphWorkflowNodeRunOptions,
 	getGraphWorkflowRunOptions,
+	importGraphWorkflowDefinitionMutation,
 	listAgentDefinitionsOptions,
 	listGraphWorkflowConversationRunsOptions,
 	listGraphWorkflowDefinitionsOptions,
@@ -337,6 +339,26 @@ export function useCreateGraphWorkflowDefinition() {
 	return useMutation({
 		...withResponseValidation(createGraphWorkflowDefinitionMutation()),
 		onSuccess: () => refresh(),
+	});
+}
+
+/** A definition created from a share file; like a create, only the list can be stale. */
+export function useImportGraphWorkflowDefinition() {
+	const refresh = useDefinitionRefresh();
+	return useMutation({
+		...withResponseValidation(importGraphWorkflowDefinitionMutation()),
+		onSuccess: () => refresh(),
+	});
+}
+
+/**
+ * The SAVED definition as a share file. A mutation rather than a query: it runs once per click, and caching a
+ * download would hand back an export of a version that has since been saved over.
+ */
+export function useExportGraphWorkflowDefinition() {
+	return useMutation({
+		mutationFn: async (options: { readonly path: { readonly definitionId: string } }) =>
+			(await callWithResponseValidation(exportGraphWorkflowDefinition({ path: options.path, throwOnError: true }))).data,
 	});
 }
 

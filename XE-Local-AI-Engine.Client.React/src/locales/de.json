@@ -6791,7 +6791,8 @@
 			"tab": {
 				"editor": "Editor",
 				"runs": "Läufe",
-				"events": "Ereignisse"
+				"events": "Ereignisse",
+				"result": "Ergebnis"
 			},
 			"nodeKind": {
 				"Start": "Start",
@@ -7129,7 +7130,8 @@
 				"descriptionLabel": "Beschreibung",
 				"descriptionPlaceholder": "Wozu dieser Workflow dient.",
 				"meta_one": "{{count}} Knoten · v{{version}} · aktualisiert {{updated}}",
-				"meta_other": "{{count}} Knoten · v{{version}} · aktualisiert {{updated}}"
+				"meta_other": "{{count}} Knoten · v{{version}} · aktualisiert {{updated}}",
+				"import": "Importieren…"
 			},
 			"run": {
 				"label": "Graph des Laufs",
@@ -7234,7 +7236,12 @@
 				"validate": "Prüfen",
 				"validationFailed": "Der Graph konnte nicht geprüft werden.",
 				"validationPassed": "Dieser Graph hat die Prüfung bestanden.",
-				"validationPassedWithWarnings": "Dieser Graph ist gültig. Prüfen Sie vor dem Start die Hinweise unten."
+				"validationPassedWithWarnings": "Dieser Graph ist gültig. Prüfen Sie vor dem Start die Hinweise unten.",
+				"export": "Exportieren",
+				"exportSaveFirst": "Erst speichern — ein Export enthält den gespeicherten Workflow, nicht die Arbeitsfläche.",
+				"exportFailed": "Der Workflow konnte nicht exportiert werden.",
+				"importTitle": "Workflow importieren",
+				"import": "Importieren"
 			},
 			"settings": {
 				"open": "Workflow-Einstellungen",
@@ -7271,6 +7278,19 @@
 					"name": "Agent-Recherche mit Prüfung",
 					"description": "Ein Agent beantwortet eine Frage mit seinen Tools und nennt seine Quellen, ein zweites Modell prüft die Antwort, und eine Person gibt sie frei."
 				}
+			},
+			"runResult": {
+				"copy": "Ergebnis kopieren",
+				"copied": "Kopiert"
+			},
+			"importFile": {
+				"tooLarge": "Dieser Workflow ist größer als 1 MiB, das Maximum für einen Import.",
+				"notJson": "Diese Datei ist kein JSON.",
+				"wrongFormat": "Diese Datei ist kein Workflow-Export.",
+				"unsupportedVersion": "Dieser Workflow-Export hat eine nicht unterstützte Formatversion.",
+				"graphNotObject": "Dieser Workflow-Export enthält keinen Graphen.",
+				"graphMalformed": "Der Graph dieses Workflow-Exports enthält keine Knoten- oder Verbindungsliste.",
+				"fetchesUnder": "Dieser Workflow ruft Seiten unter diesen Adressen ab: {{urls}}"
 			}
 		},
 		"integrations": {

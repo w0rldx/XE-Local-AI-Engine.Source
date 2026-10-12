@@ -496,6 +496,8 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 graphRun.InputJson = DecryptIfPresent(graphRun.InputJson, context.NodeEncryptionKey.Span, graphRun.DefinitionId, graphRun.Id, "graph_workflow_run_input_json");
                 graphRun.OutputJson =
                     DecryptIfPresent(graphRun.OutputJson, context.NodeEncryptionKey.Span, graphRun.DefinitionId, graphRun.Id, "graph_workflow_run_output_json");
+                graphRun.PreviousJson =
+                    DecryptIfPresent(graphRun.PreviousJson, context.NodeEncryptionKey.Span, graphRun.DefinitionId, graphRun.Id, "graph_workflow_run_previous_json");
                 break;
             case GraphWorkflowNodeRun graphNodeRun:
                 graphNodeRun.InputJson =

@@ -187,9 +187,9 @@ export type GraphWorkflowEventType = (typeof graphWorkflowEventTypes)[number];
 
 /**
  * The page's tab selection, carried in the `?tab=` search param. `editor` authors the definition, `runs` shows the
- * pinned graph and its node runs, `events` the run trail.
+ * pinned graph and its node runs, `events` the run trail, `result` the run's own End-node output.
  */
-export const graphWorkflowTabs = ["editor", "runs", "events"] as const;
+export const graphWorkflowTabs = ["editor", "runs", "events", "result"] as const;
 export type GraphWorkflowTab = (typeof graphWorkflowTabs)[number];
 
 /**

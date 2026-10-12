@@ -81,7 +81,12 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 	}),
 }));
 
+// The download itself is the browser's; what the page owes is the bytes and the name it hands over.
+const saveBlobMock = vi.hoisted(() => vi.fn((_blob: Blob, _fileName: string) => undefined));
+vi.mock("@/core/api/utils/DownloadBlob", () => ({ saveBlob: saveBlobMock }));
+
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
+import { toast } from "@/core/ui/notifications/Toast";
 import type { GraphWorkflowGraph, GraphWorkflowSelection } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { GraphWorkflowsPage } from "@/features/graphWorkflows/pages/GraphWorkflowsPage";
 import { GRAPH_WORKFLOW_SAMPLES } from "@/features/graphWorkflows/samples/GraphWorkflowSamples";
@@ -512,5 +517,169 @@ describe("GraphWorkflowsPage", () => {
 		fireEvent.click(chip);
 
 		expect(onSelectionChange).not.toHaveBeenCalled();
+	});
+
+	describe("Import and export", () => {
+		const sharedGraph: GraphWorkflowGraph = {
+			schemaVersion: 1,
+			nodes: [
+				{ key: "start", kind: "Start", position: { x: 0, y: 0 }, config: { inputSchema: null, defaultInput: null } },
+				{
+					key: "fetch",
+					kind: "Tool",
+					position: { x: 0, y: 160 },
+					config: { toolName: "web_fetch", arguments: {}, allowedUrls: ["https://www.example.com/listings/"] },
+				},
+				{ key: "end", kind: "End", position: { x: 0, y: 320 }, config: { outcome: "done", resultPath: null } },
+			],
+			edges: [
+				{ key: "e1", from: "start", to: "fetch" },
+				{ key: "e2", from: "fetch", to: "end" },
+			],
+		};
+		const shareFile = {
+			format: "xe-graph-workflow",
+			formatVersion: 1,
+			name: "Listings report",
+			description: "Fetches one listing page.",
+			graph: sharedGraph,
+		};
+
+		function pickFile(text: string): void {
+			fireEvent.change(screen.getByTestId("gw-definition-import-file"), {
+				target: { files: [new File([text], "shared.graph-workflow.json", { type: "application/json" })] },
+			});
+		}
+
+		function importRoute(status = 201): { readonly posted: () => Record<string, unknown> | undefined } {
+			let body: Record<string, unknown> | undefined;
+			server.use(
+				http.post(localApiPath("graph-workflows/definitions/import"), async ({ request }) => {
+					body = (await request.json()) as Record<string, unknown>;
+					return status === 201
+						? HttpResponse.json(graphWorkflowDefinition({ name: String(body["name"]), graph: sharedGraph }), { status })
+						: HttpResponse.json({ title: "Web access is off.", status }, { status });
+				}),
+			);
+			return { posted: () => body };
+		}
+
+		it("prefills the dialog from the file, names the allowlist, and posts the file with the edited name", async () => {
+			server.use(...editorRoutes());
+			const { posted } = importRoute();
+			const { onSelectionChange } = renderPage({});
+
+			await screen.findByTestId("gw-definition-import");
+			pickFile(JSON.stringify(shareFile));
+
+			const name = await screen.findByTestId<HTMLInputElement>("gw-definition-meta-name");
+			expect(name.value).toBe("Listings report");
+			expect(screen.getByTestId<HTMLTextAreaElement>("gw-definition-meta-description").value).toBe("Fetches one listing page.");
+			expect(screen.getByTestId("gw-definition-meta-fetches-under").textContent).toBe(
+				"This workflow fetches pages under: https://www.example.com/listings/",
+			);
+			// No sample picker: an import already has its graph.
+			expect(screen.queryByTestId("gw-definition-meta-sample")).toBeNull();
+
+			fireEvent.change(name, { target: { value: "My listings" } });
+			fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
+
+			await waitFor(() => {
+				expect(onSelectionChange).toHaveBeenCalledWith({ definitionId });
+			});
+			expect(posted()).toEqual({ ...shareFile, name: "My listings" });
+		});
+
+		it("keeps the dialog open and opens nothing when the server refuses the import", async () => {
+			server.use(...editorRoutes());
+			importRoute(400);
+			const { onSelectionChange } = renderPage({});
+
+			await screen.findByTestId("gw-definition-import");
+			pickFile(JSON.stringify(shareFile));
+			fireEvent.click(await screen.findByTestId("gw-definition-meta-submit"));
+
+			await waitFor(() => {
+				expect(screen.getByTestId<HTMLButtonElement>("gw-definition-meta-submit").dataset["loading"]).toBeUndefined();
+			});
+			expect(screen.getByTestId("gw-definition-meta-dialog")).toBeDefined();
+			expect(onSelectionChange).not.toHaveBeenCalled();
+		});
+
+		it("refuses a file that is not a workflow export without opening the dialog", async () => {
+			server.use(...editorRoutes());
+			const { posted } = importRoute();
+			const toastError = vi.spyOn(toast, "error");
+			renderPage({});
+
+			await screen.findByTestId("gw-definition-import");
+			pickFile(JSON.stringify({ format: "something-else" }));
+
+			await waitFor(() => {
+				expect(toastError).toHaveBeenCalledWith("This file is not a workflow export.");
+			});
+			toastError.mockRestore();
+			expect(screen.queryByTestId("gw-definition-meta-dialog")).toBeNull();
+			expect(posted()).toBeUndefined();
+		});
+
+		it("refuses a workflow whose compact import request is over the 1 MiB cap", async () => {
+			server.use(...editorRoutes());
+			const toastError = vi.spyOn(toast, "error");
+			renderPage({});
+
+			await screen.findByTestId("gw-definition-import");
+			pickFile(JSON.stringify({ ...shareFile, description: "x".repeat(1024 * 1024) }));
+
+			await waitFor(() => {
+				expect(toastError).toHaveBeenCalledWith("This workflow is over 1 MiB, the most an import accepts.");
+			});
+			expect(screen.queryByTestId("gw-definition-meta-dialog")).toBeNull();
+			toastError.mockRestore();
+		});
+
+		it("downloads the saved definition's export under its slug, and refuses while the canvas is dirty", async () => {
+			saveBlobMock.mockClear();
+			server.use(
+				...editorRoutes(),
+				jsonRoute("get", `graph-workflows/definitions/${definitionId}/export`, { ...shareFile, name: "Analyze → review → read" }),
+			);
+			renderPage({ definitionId });
+
+			const exportButton = await screen.findByTestId<HTMLButtonElement>("gw-page-export");
+			await waitFor(() => {
+				expect(exportButton.disabled).toBe(false);
+			});
+			fireEvent.click(exportButton);
+
+			await waitFor(() => {
+				expect(saveBlobMock).toHaveBeenCalledTimes(1);
+			});
+			const [blob, fileName] = saveBlobMock.mock.calls[0] as [Blob, string];
+			expect(fileName).toBe("analyze-review-read.graph-workflow.json");
+			expect(JSON.parse(await blob.text())).toEqual({ ...shareFile, name: "Analyze → review → read" });
+
+			await openAndDirty();
+			expect(screen.getByTestId<HTMLButtonElement>("gw-page-export").disabled).toBe(true);
+		});
+	});
+
+	it("offers a Result tab only once the run carries its End node's result, and renders it there", async () => {
+		// Listed first: the first matching handler answers.
+		server.use(jsonRoute("get", `graph-workflows/runs/${runId}`, graphWorkflowRun({ output: "# Bericht" })), ...runViewRoutes());
+
+		renderPage({ definitionId, runId, tab: "result" });
+
+		expect((await screen.findByTestId("graph-workflow-run-result-markdown")).querySelector("h1")?.textContent).toBe("Bericht");
+		expect(screen.getByTestId("gw-page-tab-result")).toBeDefined();
+	});
+
+	it("falls back to the graph when a result link opens a run with no output yet", async () => {
+		server.use(...runViewRoutes());
+
+		renderPage({ definitionId, runId, tab: "result" });
+
+		expect(await screen.findByTestId("graph-workflow-node-run-table")).toBeDefined();
+		expect(screen.queryByTestId("gw-page-tab-result")).toBeNull();
 	});
 });

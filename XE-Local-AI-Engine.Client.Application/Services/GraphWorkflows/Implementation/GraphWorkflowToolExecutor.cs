@@ -457,7 +457,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     {
         var byKey = (await store.ListNodeRunsAsync(run.Id, cancellationToken))
             .ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
-        return GraphWorkflowDocuments.ComposeInput(run.InputJson, GraphWorkflowInlineExecutor.Upstream(graph, node, byKey));
+        return GraphWorkflowDocuments.ComposeInput(run, GraphWorkflowInlineExecutor.Upstream(graph, node, byKey));
     }
 
     /// <summary>Moves the row to <c>Running</c>, which for a tool call is the moment it holds its lane slot.</summary>

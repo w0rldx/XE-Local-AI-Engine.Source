@@ -16,7 +16,13 @@ const second = graphWorkflowDefinitionSummary({ id: "def-2", name: "Release note
 describe("GraphWorkflowDefinitionList", () => {
 	it("lists every definition it was given", () => {
 		renderWithProviders(
-			<GraphWorkflowDefinitionList definitions={[first, second]} onSelect={vi.fn()} onCreate={vi.fn()} onDelete={vi.fn()} />,
+			<GraphWorkflowDefinitionList
+				definitions={[first, second]}
+				onSelect={vi.fn()}
+				onCreate={vi.fn()}
+				onImportFile={vi.fn()}
+				onDelete={vi.fn()}
+			/>,
 		);
 
 		expect(screen.getByTestId("gw-definition-name-def-1").textContent).toBe("Nightly triage");
@@ -29,7 +35,13 @@ describe("GraphWorkflowDefinitionList", () => {
 	it("marks a Chat definition with a Chat badge and leaves a Standard one unmarked", () => {
 		const chat = graphWorkflowDefinitionSummary({ id: "def-3", name: "Support triage", kind: "Chat" });
 		renderWithProviders(
-			<GraphWorkflowDefinitionList definitions={[first, chat]} onSelect={vi.fn()} onCreate={vi.fn()} onDelete={vi.fn()} />,
+			<GraphWorkflowDefinitionList
+				definitions={[first, chat]}
+				onSelect={vi.fn()}
+				onCreate={vi.fn()}
+				onImportFile={vi.fn()}
+				onDelete={vi.fn()}
+			/>,
 		);
 
 		expect(screen.getByTestId("gw-definition-chat-badge-def-3").textContent).toBe("Chat");
@@ -38,7 +50,13 @@ describe("GraphWorkflowDefinitionList", () => {
 
 	it("summarises nodes, version and update time on one meta line, the name carrying its full text as a title", () => {
 		renderWithProviders(
-			<GraphWorkflowDefinitionList definitions={[first, second]} onSelect={vi.fn()} onCreate={vi.fn()} onDelete={vi.fn()} />,
+			<GraphWorkflowDefinitionList
+				definitions={[first, second]}
+				onSelect={vi.fn()}
+				onCreate={vi.fn()}
+				onImportFile={vi.fn()}
+				onDelete={vi.fn()}
+			/>,
 		);
 
 		expect(screen.getByTestId("gw-definition-meta-def-1").textContent).toMatch(/^8 nodes · v3 · updated /);
@@ -52,6 +70,7 @@ describe("GraphWorkflowDefinitionList", () => {
 				selectedId="def-2"
 				onSelect={vi.fn()}
 				onCreate={vi.fn()}
+				onImportFile={vi.fn()}
 				onDelete={vi.fn()}
 			/>,
 		);
@@ -65,7 +84,13 @@ describe("GraphWorkflowDefinitionList", () => {
 		const onSelect = vi.fn();
 		const onDelete = vi.fn();
 		renderWithProviders(
-			<GraphWorkflowDefinitionList definitions={[first, second]} onSelect={onSelect} onCreate={vi.fn()} onDelete={onDelete} />,
+			<GraphWorkflowDefinitionList
+				definitions={[first, second]}
+				onSelect={onSelect}
+				onCreate={vi.fn()}
+				onImportFile={vi.fn()}
+				onDelete={onDelete}
+			/>,
 		);
 
 		fireEvent.click(screen.getByTestId("gw-definition-open-def-2"));
@@ -78,7 +103,13 @@ describe("GraphWorkflowDefinitionList", () => {
 	it("asks the page to open the meta dialog for a new definition", () => {
 		const onCreate = vi.fn();
 		renderWithProviders(
-			<GraphWorkflowDefinitionList definitions={[]} onSelect={vi.fn()} onCreate={onCreate} onDelete={vi.fn()} />,
+			<GraphWorkflowDefinitionList
+				definitions={[]}
+				onSelect={vi.fn()}
+				onCreate={onCreate}
+				onImportFile={vi.fn()}
+				onDelete={vi.fn()}
+			/>,
 		);
 
 		fireEvent.click(screen.getByTestId("gw-definition-create"));
@@ -88,7 +119,13 @@ describe("GraphWorkflowDefinitionList", () => {
 
 	it("shows the empty state rather than an empty list", () => {
 		renderWithProviders(
-			<GraphWorkflowDefinitionList definitions={[]} onSelect={vi.fn()} onCreate={vi.fn()} onDelete={vi.fn()} />,
+			<GraphWorkflowDefinitionList
+				definitions={[]}
+				onSelect={vi.fn()}
+				onCreate={vi.fn()}
+				onImportFile={vi.fn()}
+				onDelete={vi.fn()}
+			/>,
 		);
 
 		expect(screen.getByTestId("gw-definition-list-empty").textContent).toBe("No workflows yet. Create one to start authoring.");
@@ -102,10 +139,35 @@ describe("GraphWorkflowDefinitionList", () => {
 				error={new Error("boom")}
 				onSelect={vi.fn()}
 				onCreate={vi.fn()}
+				onImportFile={vi.fn()}
 				onDelete={vi.fn()}
 			/>,
 		);
 
 		expect(screen.getByTestId("gw-definition-list-error")).toBeTruthy();
+	});
+
+	it("opens a JSON file picker from Import… and hands the picked file to the page", () => {
+		const onImportFile = vi.fn();
+		renderWithProviders(
+			<GraphWorkflowDefinitionList
+				definitions={[]}
+				onSelect={vi.fn()}
+				onCreate={vi.fn()}
+				onImportFile={onImportFile}
+				onDelete={vi.fn()}
+			/>,
+		);
+		const input = screen.getByTestId<HTMLInputElement>("gw-definition-import-file");
+		const click = vi.spyOn(input, "click");
+
+		fireEvent.click(screen.getByTestId("gw-definition-import"));
+		expect(click).toHaveBeenCalledTimes(1);
+		expect(input.accept).toBe(".json,application/json");
+
+		const picked = new File(["{}"], "shared.graph-workflow.json", { type: "application/json" });
+		fireEvent.change(input, { target: { files: [picked] } });
+
+		expect(onImportFile).toHaveBeenCalledWith(picked);
 	});
 });

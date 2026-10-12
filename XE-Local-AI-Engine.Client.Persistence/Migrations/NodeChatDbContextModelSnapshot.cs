@@ -4074,6 +4074,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("BLOB")
                         .HasColumnName("output_json");
 
+                    b.Property<byte[]>("PreviousJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("previous_json");
+
                     b.Property<Guid>("RequestId")
                         .HasColumnType("TEXT")
                         .HasColumnName("request_id");

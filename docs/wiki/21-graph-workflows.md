@@ -358,6 +358,16 @@ transaction, re-reading the definition inside it so a delete racing the start ca
 of the pinned graph therefore has a row from the moment the run begins — a `Pending` row means "not yet judged", not
 "not yet reached". Editing or deleting the definition afterwards never rewrites a run.
 
+Before that insert, `StartAsync` reads the newest `Completed` run of the same definition, of any graph version
+(`IGraphWorkflowStore.FindLatestCompletedRunAsync`), and pins it onto the new row as the encrypted `previous_json`
+column: `{ "runId", "completedAtUtc", "output" }`, where `output` is that run's stored result and `completedAtUtc` is
+ISO-8601 UTC, or null when there is none. `Failed` and `Cancelled` runs never count. The previous run never crosses a
+conversation, because a chat run's result may quote its chat: a run bound to a conversation (§3.6) sees only that
+conversation's runs, and an unbound run sees only runs that were never chat-started. A run whose conversation was
+purged keeps its trigger message id, so it stays out of both. Pinning at
+start, rather than reading at dispatch, keeps every tick and every restart of the run reading the same
+`run.previous` (§4) however many runs complete meanwhile. A replayed start keeps the pin of the run it replays.
+
 Two checks happen again at start rather than being trusted from save time, because the world moves in between: the
 graph is re-parsed with the same parser, and every `Tool` node's tool is re-checked against the live catalog (§4.3).
 The run also refuses a graph over `MaxNodeRunsPerRun` and an input over `MaxRunInputBytes`.
@@ -607,11 +617,20 @@ any of those is a way for an executor to disagree with the routing the dispatche
 **The input document** — what an executor is handed:
 
 ```jsonc
-{ "run":      { "input": /* the run's start payload */ },
+{ "run":      { "input":    /* the run's start payload */,
+                "previous": { "runId": …, "completedAtUtc": "…Z", "output": /* that run's result */ } | null },
   "upstream": { "<nodeKey>": /* that node's output envelope */ },
   "input":    /* the single satisfied predecessor's whole envelope, the upstream map when there
                  is more than one, or null when there is none — which is what Start sees */ }
 ```
+
+`run.previous` is the last Completed run of the same definition in the same conversation (for an unbound run, the last unbound one),
+pinned at start (§3.1). It is always present, as an
+explicit `null` on a first run, so a binding to `run.previous` resolves on every run and an `LlmCall` binds the null as
+a value; `run.previous.output` is the previous run's result, which is the End node's resolved `resultPath`, not its
+`{ outcome, result }` envelope. An `Agent` prompt does not inline it: `includeUpstreamOutputs` inlines the `upstream`
+map only (a Chat graph's Agent also gets `run.input.message`, nothing else of `run.input`), so a node that needs the
+previous result binds it in an `LlmCall`. The default End result omits it, so repeated runs do not nest.
 
 `branch` is written even when null, so a reader can tell "no branch fired" from "this document predates branches".
 An unconditional out-edge never names a branch: it accepts everything, so it says nothing about which way the run
@@ -920,6 +939,8 @@ replayed.
 | `publishToChat` | Defaults true in a `Chat` graph, false otherwise; `true` is refused outside a `Chat` graph (§2.1). |
 
 Output: `{ "outcome": …, "result": … }` — the resolved path, or the whole input document when the author named none.
+That default result omits `run.previous` (§4), so a run's result never carries the run before it; an explicit
+`resultPath` such as `run.previous.output` still reaches it.
 A path the document does not carry resolves to `null`; failing the node instead would end a run that did all of its
 work over a projection nobody reads.
 
@@ -993,6 +1014,8 @@ Every route is Operator-gated.
 | `graph-workflows/definitions` | GET lists **without** the graph blob (it is the encrypted column), each row carrying its denormalised `kind`; POST creates. |
 | `graph-workflows/definitions/{definitionId}` | GET / PUT with the version it was edited from / DELETE, which 409s while a live run pins the definition. |
 | `graph-workflows/definitions/validate` | POST a graph and get its errors **and warnings** back without saving. The editor asks the runtime's own parser. `valid` is still zero ERRORS: a graph that only warns passes here and saves. |
+| `graph-workflows/definitions/{definitionId}/export` | GET the definition as a share file `{ format: "xe-graph-workflow", formatVersion: 1, name, description, graph }`, the graph exactly as the detail read returns it, with `Content-Disposition: attachment; filename="<slug>.graph-workflow.json"`. |
+| `graph-workflows/definitions/import` | POST a share file → 201 with the new definition. A foreign `format` or a `formatVersion` other than 1 is a 400 keyed to that member; the rest is create's path (same parser, tool gate, name rules and 1 MiB cap). |
 | `graph-workflows/tools` | The Tool node picker's feed (§4.3). |
 | `graph-workflows/definitions/{definitionId}/runs` | POST start → 202 with the run id; `requestId` is the idempotency key. |
 | `graph-workflows/runs` | The run list, newest first, `?status=&limit=` with `limit` required and capped at 200. |
@@ -1094,10 +1117,10 @@ component is a thin adapter; `GraphWorkflowsPage` itself is router-free and is r
 
 | Directory | Holds |
 |---|---|
-| `models/` | `GraphWorkflowModels.ts` (the one file naming generated DTOs, plus the closed vocabularies and narrowers), `GraphWorkflowCanvasModels.ts` (the discriminated node union and the `graphToCanvas` / `canvasToGraph` round trip), `GraphWorkflowLayout.ts`, `GraphWorkflowValidation.ts` (the client mirror of the graph rules), `GraphWorkflowRunGraph.ts`. |
+| `models/` | `GraphWorkflowModels.ts` (the one file naming generated DTOs, plus the closed vocabularies and narrowers), `GraphWorkflowCanvasModels.ts` (the discriminated node union and the `graphToCanvas` / `canvasToGraph` round trip), `GraphWorkflowLayout.ts`, `GraphWorkflowValidation.ts` (the client mirror of the graph rules), `GraphWorkflowRunGraph.ts`, `GraphWorkflowExportFormat.ts` (the share-file envelope and its shape check, see **Export and import** below). |
 | `queries/` | Every read and mutation over the generated adapters, including the forward-paged events feed, the several-node-runs read (`useSettledGraphWorkflowNodeRuns`) and the two chat routes (`useGraphWorkflowConversationRuns`, `useSendGraphWorkflowChatMessage`). |
 | `hooks/` | `useGraphWorkflowEditor` (controlled React Flow state, per-handle connect prefill, refusal of a second unconditional edge, and the `context` edge added around a Pause or ChatInput on connect — §4.6) and `useGraphWorkflowRunHub`. |
-| `components/` | Editor: the per-kind node cards, the canvas with its palette and Auto-arrange, the validation strip, the node and edge config panels (the DecisionModel body and the input-bindings list shared with LlmCall under `config/`), the workflow settings popover (graph `kind` and the `chat` block, saved with the graph), the definition list and meta dialog. Run view: the status badge, the read-only run graph, the node-run table, the run list, the events tab, the node panel and the decision panel (Approve/Reject buttons for a Pause, a text-answer form for a ChatInput). |
+| `components/` | Editor: the per-kind node cards, the canvas with its palette and Auto-arrange, the validation strip, the node and edge config panels (the DecisionModel body and the input-bindings list shared with LlmCall under `config/`), the workflow settings popover (graph `kind` and the `chat` block, saved with the graph), the definition list and meta dialog. Run view: the status badge, the read-only run graph, the node-run table, the run list, the events tab, the node panel, the decision panel (Approve/Reject buttons for a Pause, a text-answer form for a ChatInput) and the run result panel. |
 | `samples/` | The sample graphs the New workflow dialog can start from, and their index `GraphWorkflowSamples.ts` (see **Samples** below). |
 | `pages/` | `GraphWorkflowsPage` — editor mode without a `runId`, run mode with one. |
 | `api/` | `GraphWorkflowConflict.ts`, which reads the `NodeConflictProblemType` members by name — the three run/definition/gate refusals and the three chat-send ones (`GraphWorkflowRunBusy`, `GraphWorkflowRerunConfirmationRequired`, `GraphWorkflowAttachmentsNotAccepted`). |
@@ -1131,6 +1154,24 @@ holds the client half (validator, lossless canvas round trip, bundle keys), and
 `XE-Local-AI-Engine.Tests/GraphWorkflows/GraphWorkflowSampleContractTests.cs` parses every file through the real
 `GraphWorkflowGraph.Parse` and also refuses any warning, so a sample never opens with a note the operator did not cause.
 
+**Export and import.** A definition travels as one JSON file, `<slug>.graph-workflow.json`, shaped
+`{ "format": "xe-graph-workflow", "formatVersion": 1, "name", "description", "graph" }` where `graph` is the wire graph
+(§2). The editor toolbar's **Export** button calls the export route (§5) for the **saved** definition and downloads the
+body under the name `graphWorkflowExportFileName` spells the same way the route's `Content-Disposition` does; it is
+disabled while the canvas is dirty, because the file is the saved workflow, not the canvas. The definition list's
+**Import…** button opens a file picker. A file over 8 MiB is refused before it is read; `parseGraphWorkflowExportFile`
+in `models/GraphWorkflowExportFormat.ts` refuses a file that is not JSON, not this format, another `formatVersion`,
+carries no graph object, or whose graph has no `nodes` or `edges` list, each with its own toast; and a parsed file whose
+**compact** request (`graphWorkflowImportRequestBytes`, what the page posts) is over the route's 1 MiB cap is refused
+too. The cap is judged on the request rather than the file because an export is pretty-printed, so a workflow near the
+cap would otherwise be refused by its own export.
+A file that passes opens the meta dialog prefilled with the file's name and description, and Import posts the envelope
+with the edited name and description to the import route, which validates it exactly as a create does; a refusal is a
+toast like a create error, and success opens the new definition. When a Tool node in the file carries `allowedUrls`,
+the dialog shows one dimmed line, "This workflow fetches pages under: …", listing every prefix before anything is
+created. `GraphWorkflowExportFormat.test.ts` pins the refusals and the lossless file → canvas → wire round trip of every
+sample.
+
 `useUnsavedChangesGuard` is set with `allowSameRoute`, so writing a search param — selecting a node or a tab — does
 not trigger the leave prompt, while a real route change still does.
 
@@ -1147,7 +1188,13 @@ draw less. Nodes only, auto-laid-out, is what remains for a response that carrie
 disagrees with the definition on screen, because drawing today's edges over an older run would be a lie about routing.
 The Pause decision panel reads its prompt, its allowed answers and `requireComment` off the pinned graph for the same
 reason: a definition edited since could offer a decision this run's gate would refuse. The view also lists the node
-runs, shows a selected node's input, output and error documents, and renders the event trail. The events feed pages
+runs, shows a selected node's input, output and error documents, and renders the event trail. Once the run carries
+its own `output`, which is the succeeded End node's resolved `result` value (§4.7; the outcome stays on that node
+run), a **Result** tab appears: `GraphWorkflowRunResultPanel` renders a string result as Markdown through the shared
+`MarkdownView`, any other result in the node panel's read-only JSON view, and a copy button copies the raw result.
+The Markdown is model output, often built from a fetched page, so the panel passes `images="link"`: an image is
+written as its alt text and URL in plain text and never fetched, because an image `src` is requested on render and
+could carry data to whoever owns that URL. The events feed pages
 **forward** from `afterSeq: 0`, so `replayTruncated` means the **newest** events are missing, and the banner says
 exactly that.
 
@@ -1211,7 +1258,7 @@ node settings (**Node Settings → Workspaces**, applied on restart); their keys
 | `MaxNodeRunsPerRun` | 200 | Node runs one run may instantiate. Never below `MaxNodesPerDefinition` — a run that could not instantiate the definition it started from would fail halfway through a graph the operator was allowed to save. |
 | `MaxTotalAttempts` | 50 | Every attempt one run may spend across all its nodes. The guard against a retry storm. |
 | `DefaultNodeTimeoutSeconds` | 600 | One node run's attempt, when its node names no `timeoutSeconds`. Unlike Dev Workflows, a node that declares nothing still has a deadline. |
-| `MaxOutputJsonBytes` | 262 144 | One node run's composed output document, in UTF-8 bytes, checked before it is encrypted and stored. |
+| `MaxOutputJsonBytes` | 262 144 | One node run's composed output document, in UTF-8 bytes, checked before it is encrypted and stored. It also bounds `run.previous` (§3.1): the previous run's result is an End node's output, so the pin adds at most this much to the run row and to each node run's stored input document. |
 | `DispatchIntervalMilliseconds` | 5000 | The safety-sweep cadence when nothing wakes the dispatcher; commands, lane landings and run ends wake it at once (§3.4). Floored at 100 ms. |
 | `MaxConcurrentRuns` | 4 | Executing runs at once — a run parked on a person holds no slot (§3.4) — and the size of both the shared Agent/LLM Call/DecisionModel invocation lane and the Tool lane. Runs above the cap **wait**; they are not refused. |
 | `MaxRunInputBytes` | 65 536 | A run-start input document, checked in `GraphWorkflowRunService.StartAsync` (§3.1) rather than at the endpoint, so every caller of the service is held to it. Also the budget for the inlined `upstream` map in an Agent prompt and the complete user prompt with bound JSON data in an LLM Call. |

@@ -12171,6 +12171,73 @@
         ]
       }
     },
+    "/api/local/v1/graph-workflows/definitions/import": {
+      "post": {
+        "tags": [
+          "Graph-Workflows"
+        ],
+        "operationId": "importGraphWorkflowDefinition",
+        "requestBody": {
+          "x-name": "ImportGraphWorkflowDefinitionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1ImportGraphWorkflowDefinitionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/graph-workflows/definitions/validate": {
       "post": {
         "tags": [
@@ -12412,6 +12479,54 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/graph-workflows/definitions/{definitionId}/export": {
+      "get": {
+        "tags": [
+          "Graph-Workflows"
+        ],
+        "operationId": "exportGraphWorkflowDefinition",
+        "parameters": [
+          {
+            "name": "definitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowExportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
           }
         },
         "security": [
@@ -36266,6 +36381,36 @@
           "value": {}
         }
       },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowExportResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "format",
+          "formatVersion",
+          "name",
+          "description",
+          "graph"
+        ],
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "formatVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "graph": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph": {
         "type": "object",
         "additionalProperties": false,
@@ -36754,6 +36899,41 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1ImportGraphWorkflowDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "format",
+          "formatVersion",
+          "name",
+          "graph"
+        ],
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "formatVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 0,
+            "nullable": false
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 0,
+            "nullable": true
+          },
+          "graph": {
+            "nullable": false,
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph"
           }
         }
       },

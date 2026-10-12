@@ -6791,7 +6791,8 @@
 			"tab": {
 				"editor": "Editor",
 				"runs": "Runs",
-				"events": "Events"
+				"events": "Events",
+				"result": "Result"
 			},
 			"nodeKind": {
 				"Start": "Start",
@@ -7129,7 +7130,8 @@
 				"descriptionLabel": "Description",
 				"descriptionPlaceholder": "What this workflow is for.",
 				"meta_one": "{{count}} node · v{{version}} · updated {{updated}}",
-				"meta_other": "{{count}} nodes · v{{version}} · updated {{updated}}"
+				"meta_other": "{{count}} nodes · v{{version}} · updated {{updated}}",
+				"import": "Import…"
 			},
 			"run": {
 				"label": "Run graph",
@@ -7234,7 +7236,12 @@
 				"validate": "Check",
 				"validationFailed": "The graph could not be checked.",
 				"validationPassed": "This graph passed validation.",
-				"validationPassedWithWarnings": "This graph is valid. Check the notes below before you run it."
+				"validationPassedWithWarnings": "This graph is valid. Check the notes below before you run it.",
+				"export": "Export",
+				"exportSaveFirst": "Save first — an export is the saved workflow, not the canvas.",
+				"exportFailed": "The workflow could not be exported.",
+				"importTitle": "Import a workflow",
+				"import": "Import"
 			},
 			"settings": {
 				"open": "Workflow settings",
@@ -7271,6 +7278,19 @@
 					"name": "Agent research with check",
 					"description": "An agent answers a question with its tools and lists its sources, a second model checks the answer, and a person approves it."
 				}
+			},
+			"runResult": {
+				"copy": "Copy result",
+				"copied": "Copied"
+			},
+			"importFile": {
+				"tooLarge": "This workflow is over 1 MiB, the most an import accepts.",
+				"notJson": "This file is not JSON.",
+				"wrongFormat": "This file is not a workflow export.",
+				"unsupportedVersion": "This workflow export has an unsupported format version.",
+				"graphNotObject": "This workflow export carries no graph.",
+				"graphMalformed": "This workflow export's graph has no node or edge list.",
+				"fetchesUnder": "This workflow fetches pages under: {{urls}}"
 			}
 		},
 		"integrations": {

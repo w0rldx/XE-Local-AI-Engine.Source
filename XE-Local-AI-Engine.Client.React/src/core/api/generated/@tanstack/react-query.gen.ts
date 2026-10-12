@@ -147,6 +147,7 @@ import {
 	exploreInferenceProfile,
 	exportBenchmarkProject,
 	exportBenchmarkProjectCsv,
+	exportGraphWorkflowDefinition,
 	exportTrainingDataset,
 	freezeInferenceProfile,
 	generateIntegrationApiKey,
@@ -264,6 +265,7 @@ import {
 	getWorkSessionCapability,
 	harvestGoldenConversations,
 	importAgentTemplates,
+	importGraphWorkflowDefinition,
 	importKnowledgeRepository,
 	inspectGgufRepository,
 	inspectImageRepository,
@@ -833,6 +835,8 @@ import type {
 	ExportBenchmarkProjectData,
 	ExportBenchmarkProjectError,
 	ExportBenchmarkProjectResponse,
+	ExportGraphWorkflowDefinitionData,
+	ExportGraphWorkflowDefinitionResponse,
 	ExportTrainingDatasetData,
 	ExportTrainingDatasetResponse,
 	FreezeInferenceProfileData,
@@ -1092,6 +1096,9 @@ import type {
 	HarvestGoldenConversationsResponse,
 	ImportAgentTemplatesData,
 	ImportAgentTemplatesResponse,
+	ImportGraphWorkflowDefinitionData,
+	ImportGraphWorkflowDefinitionError,
+	ImportGraphWorkflowDefinitionResponse,
 	ImportKnowledgeRepositoryData,
 	ImportKnowledgeRepositoryError,
 	ImportKnowledgeRepositoryResponse,
@@ -6400,6 +6407,30 @@ export const createGraphWorkflowDefinitionMutation = (
 	return mutationOptions;
 };
 
+export const importGraphWorkflowDefinitionMutation = (
+	options?: Partial<Options<ImportGraphWorkflowDefinitionData>>,
+): UseMutationOptions<
+	ImportGraphWorkflowDefinitionResponse,
+	AxiosError<ImportGraphWorkflowDefinitionError>,
+	Options<ImportGraphWorkflowDefinitionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ImportGraphWorkflowDefinitionResponse,
+		AxiosError<ImportGraphWorkflowDefinitionError>,
+		Options<ImportGraphWorkflowDefinitionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await importGraphWorkflowDefinition({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const validateGraphWorkflowDefinitionMutation = (
 	options?: Partial<Options<ValidateGraphWorkflowDefinitionData>>,
 ): UseMutationOptions<
@@ -6493,6 +6524,28 @@ export const updateGraphWorkflowDefinitionMutation = (
 	};
 	return mutationOptions;
 };
+
+export const exportGraphWorkflowDefinitionQueryKey = (options: Options<ExportGraphWorkflowDefinitionData>) =>
+	createQueryKey("exportGraphWorkflowDefinition", options);
+
+export const exportGraphWorkflowDefinitionOptions = (options: Options<ExportGraphWorkflowDefinitionData>) =>
+	queryOptions<
+		ExportGraphWorkflowDefinitionResponse,
+		AxiosError<DefaultError>,
+		ExportGraphWorkflowDefinitionResponse,
+		ReturnType<typeof exportGraphWorkflowDefinitionQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await exportGraphWorkflowDefinition({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: exportGraphWorkflowDefinitionQueryKey(options),
+	});
 
 export const startGraphWorkflowRunMutation = (
 	options?: Partial<Options<StartGraphWorkflowRunData>>,

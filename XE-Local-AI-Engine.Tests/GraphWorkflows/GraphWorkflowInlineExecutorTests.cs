@@ -1,6 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.GraphWorkflows;
 
+using System.Text;
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -97,6 +100,46 @@ public sealed class GraphWorkflowInlineExecutorTests
         AssertEx.Equal("""{"status":"succeeded","attempt":1,"branch":null,"output":{"outcome":"completed","result":{"input":{"seed":4}}}}""",
             (await harness.ReadNodeRunAsync(runId, "done")).OutputJson);
     }
+
+    /// <summary>
+    ///     The regression the default End result would cause if it carried <c>run.previous</c>: each run's result would embed
+    ///     the one before it, growing until the output cap or the JSON depth killed the run. Three runs, no growth.
+    /// </summary>
+    [Test]
+    public async Task End_WithNoResultPath_DoesNotNestThePreviousRunAcrossRepeatedRuns()
+    {
+        await using var harness = new GraphWorkflowHarness(Host);
+        var definitionId = await harness.SeedDefinitionAsync("""
+                                                             {
+                                                               "schemaVersion": 1,
+                                                               "nodes": [
+                                                                 { "key": "start", "kind": "Start" },
+                                                                 { "key": "done", "kind": "End", "config": { "outcome": "completed" } }
+                                                               ],
+                                                               "edges": [ { "key": "e1", "from": "start", "to": "done" } ]
+                                                             }
+                                                             """);
+        var runs = new List<GraphWorkflowRunSnapshot>();
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var runId = await harness.StartRunOfAsync(definitionId);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId);
+            var run = await harness.ReadRunAsync(runId);
+            AssertEx.Equal(GraphWorkflowRunStatus.Completed, run.Status);
+            runs.Add(run);
+        }
+
+        using var third = JsonDocument.Parse(AssertEx.NotNull(runs[2].PreviousJson));
+        AssertEx.Equal(runs[1].Id, third.RootElement.GetProperty("runId").GetGuid());
+        AssertEx.False(third.RootElement.GetProperty("output").GetProperty("run").TryGetProperty("previous", out _),
+            "the pinned result of run 2 carries no run.previous of its own.");
+        AssertEx.Equal(Bytes(runs[1].OutputJson), Bytes(runs[2].OutputJson), "a run's result does not grow with the number of runs before it.");
+        AssertEx.True(Math.Abs(Bytes(runs[2].PreviousJson) - Bytes(runs[1].PreviousJson)) <= 4,
+            "the pin grows by nothing but the timestamp's trimmed fraction digits.");
+    }
+
+    private static int Bytes(string? json) =>
+        Encoding.UTF8.GetByteCount(AssertEx.NotNull(json));
 
     /// <summary>
     ///     With no <c>resultPath</c> the result is the End node's WHOLE input document. Failing the node over a

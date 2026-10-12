@@ -50,6 +50,22 @@ public sealed class UpdateGraphWorkflowDefinitionRequest
     public GraphWorkflowGraph? Graph { get; init; }
 }
 
+/// <summary>A share file to create a definition from: the export envelope, checked for its format and version first.</summary>
+public sealed class ImportGraphWorkflowDefinitionRequest
+{
+    /// <summary>Must be <c>xe-graph-workflow</c>.</summary>
+    public required string Format { get; init; }
+
+    /// <summary>Must be 1, the only version this node writes.</summary>
+    public required int FormatVersion { get; init; }
+
+    public string Name { get; init; } = string.Empty;
+
+    public string? Description { get; init; }
+
+    public GraphWorkflowGraph Graph { get; init; } = GraphWorkflowGraph.Empty;
+}
+
 /// <summary>A graph to judge without saving. Persists nothing — the answer is a report, not a write.</summary>
 public sealed class ValidateGraphWorkflowDefinitionRequest
 {
@@ -152,6 +168,20 @@ public sealed class GraphWorkflowDefinitionResponse
     public required long CreatedAtUtc { get; init; }
 
     public required long UpdatedAtUtc { get; init; }
+}
+
+/// <summary>A definition as a portable share file; the import route takes the same shape back.</summary>
+public sealed class GraphWorkflowExportResponse
+{
+    public required string Format { get; init; }
+
+    public required int FormatVersion { get; init; }
+
+    public required string Name { get; init; }
+
+    public required string? Description { get; init; }
+
+    public required GraphWorkflowGraph Graph { get; init; }
 }
 
 /// <summary>One row of the definition list. No graph: the node count is a column, so listing never decrypts a blob.</summary>

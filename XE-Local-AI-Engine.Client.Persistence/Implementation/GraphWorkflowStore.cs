@@ -297,6 +297,7 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
                 FailureClass = GraphWorkflowFailureClass.None,
                 GraphJson = Utf8(command.GraphJson),
                 InputJson = Utf8OrNull(command.InputJson),
+                PreviousJson = Utf8OrNull(command.PreviousJson),
                 ConversationId = command.ConversationId,
                 TriggerMessageId = command.TriggerMessageId,
                 Seq = 0,
@@ -359,6 +360,19 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
     {
         var run = await _dbContext.GraphWorkflowRuns.AsNoTracking()
                                   .SingleOrDefaultAsync(entity => entity.RequestId == requestId, cancellationToken);
+        return run is null ? null : RunSnapshot(run);
+    }
+
+    public async Task<GraphWorkflowRunSnapshot?> FindLatestCompletedRunAsync(Guid definitionId, Guid? conversationId, CancellationToken cancellationToken = default)
+    {
+        var runs = _dbContext.GraphWorkflowRuns.AsNoTracking()
+                             .Where(entity => entity.DefinitionId == definitionId && entity.Status == GraphWorkflowRunStatus.Completed);
+        runs = conversationId is { } bound
+            ? runs.Where(entity => entity.ConversationId == bound)
+            : runs.Where(entity => entity.ConversationId == null && entity.TriggerMessageId == null);
+        var run = await runs.OrderByDescending(entity => entity.CompletedAtUtc)
+                            .ThenByDescending(entity => entity.CreatedAtUtc)
+                            .FirstOrDefaultAsync(cancellationToken);
         return run is null ? null : RunSnapshot(run);
     }
 
@@ -1172,6 +1186,7 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
             GraphJson = Text(run.GraphJson),
             InputJson = TextOrNull(run.InputJson),
             OutputJson = TextOrNull(run.OutputJson),
+            PreviousJson = TextOrNull(run.PreviousJson),
             Seq = run.Seq,
             Version = run.Version,
             CancelRequestedAtUtc = run.CancelRequestedAtUtc,

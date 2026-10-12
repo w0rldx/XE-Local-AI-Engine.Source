@@ -16,6 +16,7 @@ import { GraphWorkflowSettingsPopover } from "@/features/graphWorkflows/componen
 import { GraphWorkflowStartRunDialog } from "@/features/graphWorkflows/components/GraphWorkflowStartRunDialog";
 import { GraphWorkflowValidationStrip } from "@/features/graphWorkflows/components/GraphWorkflowValidationStrip";
 import { useGraphWorkflowEditorPage } from "@/features/graphWorkflows/hooks/useGraphWorkflowEditorPage";
+import { graphWorkflowAllowedUrls } from "@/features/graphWorkflows/models/GraphWorkflowExportFormat";
 import type { GraphWorkflowSelection } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 
 export interface GraphWorkflowEditorModeProps {
@@ -40,6 +41,11 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 		createMutation,
 		updateMutation,
 		validateMutation,
+		importMutation,
+		exportMutation,
+		importEnvelope,
+		handleImportFile,
+		handleExport,
 		selectedEdgeId,
 		setSelectedEdgeId,
 		metaDialog,
@@ -78,6 +84,7 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 				error={definitionsQuery.error}
 				onSelect={(id) => onSelectionChange({ definitionId: id })}
 				onCreate={() => setMetaDialog("create")}
+				onImportFile={handleImportFile}
 				onDelete={handleDelete}
 			/>
 			{deleteError ? <InlineErrorAlert variant="light" message={deleteError} data-testid="gw-page-delete-error" /> : null}
@@ -100,6 +107,8 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 			}}
 			onSaveAs={() => setMetaDialog("saveAs")}
 			onStartRun={() => setStartOpened(true)}
+			onExport={handleExport}
+			isExporting={exportMutation.isPending}
 			settings={
 				<GraphWorkflowSettingsPopover
 					settings={editor.settings}
@@ -254,20 +263,31 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 
 			<GraphWorkflowDefinitionMetaDialog
 				opened={metaDialog !== undefined}
-				initial={metaDialog === "rename" ? { name: definition?.name ?? "", description: definition?.description } : undefined}
+				initial={
+					metaDialog === "rename"
+						? { name: definition?.name ?? "", description: definition?.description }
+						: metaDialog === "import"
+							? { name: importEnvelope?.name ?? "", description: importEnvelope?.description }
+							: undefined
+				}
+				fetchesUnder={metaDialog === "import" && importEnvelope ? graphWorkflowAllowedUrls(importEnvelope.graph) : undefined}
 				title={
 					metaDialog === "rename"
 						? t("pages.graphWorkflows.page.renameTitle", "Rename this workflow")
 						: metaDialog === "saveAs"
 							? t("pages.graphWorkflows.page.saveAsTitle", "Save as a new workflow")
-							: t("pages.graphWorkflows.page.createTitle", "New workflow")
+							: metaDialog === "import"
+								? t("pages.graphWorkflows.page.importTitle", "Import a workflow")
+								: t("pages.graphWorkflows.page.createTitle", "New workflow")
 				}
 				submitLabel={
 					metaDialog === "rename"
 						? t("pages.graphWorkflows.page.rename", "Rename")
-						: t("pages.graphWorkflows.page.create", "Create")
+						: metaDialog === "import"
+							? t("pages.graphWorkflows.page.import", "Import")
+							: t("pages.graphWorkflows.page.create", "Create")
 				}
-				isSubmitting={createMutation.isPending || updateMutation.isPending}
+				isSubmitting={createMutation.isPending || updateMutation.isPending || importMutation.isPending}
 				offerSamples={metaDialog === "create"}
 				onSubmit={handleMetaSubmit}
 				onClose={() => setMetaDialog(undefined)}

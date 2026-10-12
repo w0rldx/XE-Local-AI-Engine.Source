@@ -7,12 +7,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { saveBlob } from "@/core/api/utils/DownloadBlob";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { graphWorkflowConflictTypes, readGraphWorkflowConflict } from "@/features/graphWorkflows/api/GraphWorkflowConflict";
 import { useGraphWorkflowEditor } from "@/features/graphWorkflows/hooks/useGraphWorkflowEditor";
 import { graphWorkflowsEqual } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+import {
+	GRAPH_WORKFLOW_IMPORT_MAX_BYTES,
+	GRAPH_WORKFLOW_IMPORT_READ_LIMIT_BYTES,
+	graphWorkflowImportRequestBytes,
+	type GraphWorkflowExportEnvelope,
+	graphWorkflowExportFileName,
+	parseGraphWorkflowExportFile,
+} from "@/features/graphWorkflows/models/GraphWorkflowExportFormat";
 import type { GraphWorkflowGraph, GraphWorkflowSelection } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import {
 	type GraphWorkflowGraphIssue,
@@ -22,12 +31,14 @@ import {
 import {
 	useCreateGraphWorkflowDefinition,
 	useDeleteGraphWorkflowDefinition,
+	useExportGraphWorkflowDefinition,
 	useGraphWorkflowAgentOptions,
 	useGraphWorkflowDefinition,
 	useGraphWorkflowDefinitions,
 	useGraphWorkflowLlmModelOptions,
 	useGraphWorkflowModelOptions,
 	useGraphWorkflowTools,
+	useImportGraphWorkflowDefinition,
 	useUpdateGraphWorkflowDefinition,
 	useValidateGraphWorkflowDefinition,
 } from "@/features/graphWorkflows/queries/useGraphWorkflows";
@@ -49,7 +60,7 @@ const EMPTY_GRAPH: GraphWorkflowGraph = { schemaVersion: 1, nodes: [], edges: []
 /** Referentially stable, so `issues` only changes when an issue actually does. */
 const NO_ISSUES: readonly GraphWorkflowGraphIssue[] = [];
 
-export type GraphWorkflowMetaDialogMode = "create" | "rename" | "saveAs";
+export type GraphWorkflowMetaDialogMode = "create" | "rename" | "saveAs" | "import";
 
 export function useGraphWorkflowEditorPage(
 	selection: GraphWorkflowSelection,
@@ -78,9 +89,13 @@ export function useGraphWorkflowEditorPage(
 	const updateMutation = useUpdateGraphWorkflowDefinition();
 	const deleteMutation = useDeleteGraphWorkflowDefinition();
 	const validateMutation = useValidateGraphWorkflowDefinition();
+	const importMutation = useImportGraphWorkflowDefinition();
+	const exportMutation = useExportGraphWorkflowDefinition();
 
 	const [selectedEdgeId, setSelectedEdgeId] = useState<string | undefined>(undefined);
 	const [metaDialog, setMetaDialog] = useState<GraphWorkflowMetaDialogMode | undefined>(undefined);
+	// The checked share file behind an open "import" dialog; the dialog only adds the name and description.
+	const [importEnvelope, setImportEnvelope] = useState<GraphWorkflowExportEnvelope | undefined>(undefined);
 	const [startOpened, setStartOpened] = useState(false);
 	const [saveConflict, setSaveConflict] = useState(false);
 	const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
@@ -238,6 +253,22 @@ export function useGraphWorkflowEditorPage(
 		const failed = (error: unknown): void => {
 			toast.error(apiErrorMessage(error, t("pages.graphWorkflows.page.saveFailed", "The workflow could not be saved.")));
 		};
+		if (mode === "import") {
+			if (importEnvelope === undefined) {
+				return;
+			}
+			importMutation
+				.mutateAsync({ body: { ...importEnvelope, name: values.name, description: values.description } })
+				.then((created) => {
+					done();
+					setImportEnvelope(undefined);
+					if (created.id) {
+						onSelectionChange({ definitionId: created.id });
+					}
+				})
+				.catch(failed);
+			return;
+		}
 		if (mode === "rename") {
 			if (definition?.id === undefined) {
 				return;
@@ -264,6 +295,52 @@ export function useGraphWorkflowEditorPage(
 				}
 			})
 			.catch(failed);
+	};
+
+	/** A picked file is shape-checked here; only a share file opens the dialog, anything else says why it was refused. */
+	const handleImportFile = (file: File): void => {
+		if (file.size > GRAPH_WORKFLOW_IMPORT_READ_LIMIT_BYTES) {
+			toast.error(t("pages.graphWorkflows.importFile.tooLarge", "This workflow is over 1 MiB, the most an import accepts."));
+			return;
+		}
+		file
+			.text()
+			.then((text) => {
+				const parsed = parseGraphWorkflowExportFile(text);
+				if (!parsed.ok) {
+					toast.error(t(`pages.graphWorkflows.importFile.${parsed.reason}`, "This file is not a workflow export."));
+					return;
+				}
+				// The route caps the compact body, and an export is pretty-printed: judge what will be posted, not the file.
+				if (graphWorkflowImportRequestBytes(parsed.envelope) > GRAPH_WORKFLOW_IMPORT_MAX_BYTES) {
+					toast.error(t("pages.graphWorkflows.importFile.tooLarge", "This workflow is over 1 MiB, the most an import accepts."));
+					return;
+				}
+				setImportEnvelope(parsed.envelope);
+				setMetaDialog("import");
+			})
+			.catch(() => {
+				toast.error(t("pages.graphWorkflows.importFile.notJson", "This file is not JSON."));
+			});
+	};
+
+	/** The SAVED definition, fetched from the export route and saved under the same name the route suggests. */
+	const handleExport = (): void => {
+		if (definition?.id === undefined || editor.isDirty) {
+			return;
+		}
+		const name = definition.name ?? "";
+		exportMutation
+			.mutateAsync({ path: { definitionId: definition.id } })
+			.then((envelope) => {
+				saveBlob(
+					new Blob([`${JSON.stringify(envelope, null, 2)}\n`], { type: "application/json" }),
+					graphWorkflowExportFileName(name),
+				);
+			})
+			.catch((error: unknown) => {
+				toast.error(apiErrorMessage(error, t("pages.graphWorkflows.page.exportFailed", "The workflow could not be exported.")));
+			});
 	};
 
 	const handleDelete = (id: string): void => {
@@ -335,6 +412,11 @@ export function useGraphWorkflowEditorPage(
 		createMutation,
 		updateMutation,
 		validateMutation,
+		importMutation,
+		exportMutation,
+		importEnvelope,
+		handleImportFile,
+		handleExport,
 		selectedEdgeId,
 		setSelectedEdgeId,
 		metaDialog,

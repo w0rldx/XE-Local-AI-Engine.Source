@@ -52,6 +52,9 @@ internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
     public Task<GraphWorkflowRunSnapshot?> FindRunByRequestAsync(Guid requestId, CancellationToken cancellationToken = default) =>
         _inner.FindRunByRequestAsync(requestId, cancellationToken);
 
+    public Task<GraphWorkflowRunSnapshot?> FindLatestCompletedRunAsync(Guid definitionId, Guid? conversationId, CancellationToken cancellationToken = default) =>
+        _inner.FindLatestCompletedRunAsync(definitionId, conversationId, cancellationToken);
+
     public Task<GraphWorkflowRunSnapshot> GetRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
         _inner.GetRunAsync(runId, cancellationToken);
 

@@ -172,6 +172,9 @@ public sealed class GraphWorkflowRunSnapshot
 
     public required string? OutputJson { get; init; }
 
+    /// <summary>The previous Completed run of this definition, pinned at start as <c>{ runId, completedAtUtc, output }</c>; null when there was none.</summary>
+    public string? PreviousJson { get; init; }
+
     public required long Seq { get; init; }
 
     public required long Version { get; init; }
@@ -268,6 +271,9 @@ public sealed class StartGraphWorkflowRunCommand
     public required string GraphJson { get; init; }
 
     public required string? InputJson { get; init; }
+
+    /// <summary>What <c>run.previous</c> reads for the whole run: <c>{ runId, completedAtUtc, output }</c>, or null on a first run.</summary>
+    public string? PreviousJson { get; init; }
 
     public required IReadOnlyList<GraphWorkflowNodeRunSeed> NodeRuns { get; init; }
 
@@ -565,6 +571,16 @@ public interface IGraphWorkflowStore
 
     /// <summary>The run a caller-minted request id already started, or <see langword="null" />. Never throws for an unknown id.</summary>
     Task<GraphWorkflowRunSnapshot?> FindRunByRequestAsync(Guid requestId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The newest <c>Completed</c> run of <paramref name="definitionId" /> (any graph version) in the same conversation as
+    ///     the new run, or <see langword="null" />. Failed and cancelled runs never count.
+    /// </summary>
+    /// <remarks>
+    ///     A bound start sees only runs of <paramref name="conversationId" />. An unbound start (null) sees only runs that were
+    ///     never chat-started: a purge nulls a run's conversation but keeps its trigger message, so its chat stays out.
+    /// </remarks>
+    Task<GraphWorkflowRunSnapshot?> FindLatestCompletedRunAsync(Guid definitionId, Guid? conversationId, CancellationToken cancellationToken = default);
 
     Task<GraphWorkflowRunSnapshot> GetRunAsync(Guid runId, CancellationToken cancellationToken = default);
 

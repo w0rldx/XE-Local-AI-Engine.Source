@@ -101,6 +101,45 @@ public sealed class GraphWorkflowAgentExecutorTests
         AssertEx.Equal("yes", Output(analyze).GetProperty("json").GetProperty("answer").GetString());
     }
 
+    /// <summary>
+    ///     <c>run.previous</c> through the real lane: the binding resolves to an explicit null on the first run of a definition
+    ///     (a valid bound value, not a missing path) and to the first run's pinned result on the second.
+    /// </summary>
+    [Test]
+    public async Task ALlmCall_BindingRunPrevious_SeesNullOnTheFirstRunAndTheLastCompletedResultOnTheSecond()
+    {
+        const string prompt = "llm-run-previous-binding";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var definitionId = await harness.SeedDefinitionAsync($$"""
+                                                               {
+                                                                 "schemaVersion": 1,
+                                                                 "nodes": [
+                                                                   { "key": "start", "kind": "Start" },
+                                                                   { "key": "analyze", "kind": "LlmCall",
+                                                                     "config": { "prompt": "{{prompt}}", "model": "pinned-chat.gguf", "inputBindings": { "previous": "run.previous" } } },
+                                                                   { "key": "done", "kind": "End", "config": { "outcome": "report", "resultPath": "input.output.text" } }
+                                                                 ],
+                                                                 "edges": [
+                                                                   { "key": "e1", "from": "start", "to": "analyze" },
+                                                                   { "key": "e2", "from": "analyze", "to": "done" }
+                                                                 ]
+                                                               }
+                                                               """);
+
+        var firstRunId = await RunToTheEndAsync(harness, definitionId);
+        var firstRun = await harness.ReadRunAsync(firstRunId);
+        AssertEx.Equal(GraphWorkflowRunStatus.Completed, firstRun.Status);
+        var secondRunId = await RunToTheEndAsync(harness, definitionId);
+        AssertEx.Equal(GraphWorkflowRunStatus.Completed, (await harness.ReadRunAsync(secondRunId)).Status);
+
+        var bound = harness.Invocations.Packages.Where(package => Prompt(package).Contains(prompt, StringComparison.Ordinal)).Select(BoundPrevious).ToList();
+        AssertEx.Equal(expected: 2, bound.Count, "one turn per run.");
+        AssertEx.Equal(JsonValueKind.Null, bound[0].ValueKind, "the first run binds an explicit null rather than failing the binding.");
+        AssertEx.Equal(firstRunId, bound[1].GetProperty("runId").GetGuid());
+        AssertEx.Equal<long?>(firstRun.CompletedAtUtc, bound[1].GetProperty("completedAtUtc").GetDateTimeOffset().ToUnixTimeMilliseconds());
+        AssertEx.Equal("the fake agent answered", bound[1].GetProperty("output").GetString(), "the first run's result, the End node's resolved text.");
+    }
+
     [Test]
     public async Task ALlmCall_TheCapacityServiceRefuses_FailsOnceAsCapacityRejectedWithItsReason()
     {
@@ -1475,6 +1514,26 @@ public sealed class GraphWorkflowAgentExecutorTests
     {
         using var document = JsonDocument.Parse(AssertEx.NotNull(nodeRun.OutputJson, "a settled agent node always carries its output document."));
         return document.RootElement.GetProperty("output").Clone();
+    }
+
+    /// <summary>Starts a run of <paramref name="definitionId" /> and ticks it until the run itself is terminal.</summary>
+    private static async Task<Guid> RunToTheEndAsync(GraphWorkflowHarness harness, Guid definitionId)
+    {
+        var runId = await harness.StartRunOfAsync(definitionId);
+        await harness.AdvanceUntilAsync(runId,
+            async () => GraphWorkflowStateMachine.IsTerminal((await harness.ReadRunAsync(runId)).Status),
+            "the run was expected to finish.");
+        return runId;
+    }
+
+    /// <summary>The <c>previous</c> member of the "Named input data" block a bound LLM call appends to its prompt.</summary>
+    private static JsonElement BoundPrevious(RuntimePackage package)
+    {
+        var prompt = Prompt(package);
+        var start = prompt.IndexOf("```json\n", StringComparison.Ordinal) + "```json\n".Length;
+        var end = prompt.IndexOf("\n```", start, StringComparison.Ordinal);
+        using var bound = JsonDocument.Parse(prompt[start..end]);
+        return bound.RootElement.GetProperty("previous").Clone();
     }
 
     private static string Prompt(RuntimePackage package) =>

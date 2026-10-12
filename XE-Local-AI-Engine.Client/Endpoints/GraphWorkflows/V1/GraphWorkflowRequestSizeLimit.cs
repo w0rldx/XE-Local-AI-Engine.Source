@@ -4,7 +4,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Http.Metadata;
 
 /// <summary>
-///     The request-body cap for the four routes that carry a document — create, update and validate, which carry a
+///     The request-body cap for the routes that carry a document — create, import, update and validate, which carry a
 ///     graph, and start-run, which carries an input.
 /// </summary>
 /// <remarks>

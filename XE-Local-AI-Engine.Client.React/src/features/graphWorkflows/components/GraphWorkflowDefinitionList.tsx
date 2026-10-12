@@ -3,7 +3,8 @@
 // is copy-adapted from (features never import each other).
 
 import { ActionIcon, Badge, Button, Group, Loader, Paper, Stack, Text, UnstyledButton } from "@mantine/core";
-import { IconPlus, IconTrash } from "@tabler/icons-react";
+import { IconPlus, IconTrash, IconUpload } from "@tabler/icons-react";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -20,6 +21,8 @@ export interface GraphWorkflowDefinitionListProps {
 	readonly onSelect: (definitionId: string) => void;
 	/** The page opens the meta dialog for a NEW definition. */
 	readonly onCreate: () => void;
+	/** The file the operator picked to import; the page reads, checks and confirms it. */
+	readonly onImportFile: (file: File) => void;
 	/** The page confirms and mutates; the list just says which row. */
 	readonly onDelete: (definitionId: string) => void;
 }
@@ -31,23 +34,51 @@ export function GraphWorkflowDefinitionList({
 	error,
 	onSelect,
 	onCreate,
+	onImportFile,
 	onDelete,
 }: GraphWorkflowDefinitionListProps) {
 	const { t } = useTranslation();
+	const fileInput = useRef<HTMLInputElement>(null);
 
 	return (
 		<Stack gap="xs" data-testid="gw-definition-list">
 			<Group justify="space-between" wrap="wrap" w="100%">
 				<Text fw={600}>{t("pages.graphWorkflows.definitions.title", "Workflows")}</Text>
-				<Button
-					size="xs"
-					variant="light"
-					leftSection={<IconPlus size={14} />}
-					onClick={onCreate}
-					data-testid="gw-definition-create"
-				>
-					{t("pages.graphWorkflows.definitions.create", "New workflow")}
-				</Button>
+				<Group gap={4}>
+					<Button
+						size="xs"
+						variant="default"
+						leftSection={<IconUpload size={14} />}
+						onClick={() => fileInput.current?.click()}
+						data-testid="gw-definition-import"
+					>
+						{t("pages.graphWorkflows.definitions.import", "Import…")}
+					</Button>
+					<Button
+						size="xs"
+						variant="light"
+						leftSection={<IconPlus size={14} />}
+						onClick={onCreate}
+						data-testid="gw-definition-create"
+					>
+						{t("pages.graphWorkflows.definitions.create", "New workflow")}
+					</Button>
+				</Group>
+				<input
+					ref={fileInput}
+					type="file"
+					accept=".json,application/json"
+					hidden={true}
+					onChange={(event) => {
+						const file = event.currentTarget.files?.[0];
+						// Cleared so picking the same file again still fires a change.
+						event.currentTarget.value = "";
+						if (file) {
+							onImportFile(file);
+						}
+					}}
+					data-testid="gw-definition-import-file"
+				/>
 			</Group>
 
 			{error !== undefined && error !== null ? (

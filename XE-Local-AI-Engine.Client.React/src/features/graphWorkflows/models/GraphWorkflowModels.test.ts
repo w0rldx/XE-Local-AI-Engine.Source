@@ -61,7 +61,7 @@ describe("graph-workflow vocabularies", () => {
 		expect(graphWorkflowFailureClasses).toHaveLength(10);
 		expect(graphWorkflowConditionOperators).toEqual(["Eq", "Ne", "Gt", "Gte", "Lt", "Lte", "Exists", "NotExists"]);
 		expect(graphWorkflowEventTypes).toHaveLength(20);
-		expect(graphWorkflowTabs).toEqual(["editor", "runs", "events"]);
+		expect(graphWorkflowTabs).toEqual(["editor", "runs", "events", "result"]);
 	});
 
 	it("has no duplicate member in any vocabulary", () => {

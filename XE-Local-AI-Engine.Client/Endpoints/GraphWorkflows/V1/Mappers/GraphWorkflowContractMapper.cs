@@ -94,6 +94,19 @@ internal static class GraphWorkflowContractMapper
         };
     }
 
+    public static GraphWorkflowExportResponse ToExportResponse(this GraphWorkflowDefinitionSnapshot value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return new GraphWorkflowExportResponse
+        {
+            Format = GraphWorkflowShareFile.Format,
+            FormatVersion = GraphWorkflowShareFile.FormatVersion,
+            Name = value.Name,
+            Description = value.Description,
+            Graph = ToWireGraph(value.GraphJson)
+        };
+    }
+
     public static GraphWorkflowDefinitionSummaryResponse ToResponse(this GraphWorkflowDefinitionSummary value)
     {
         ArgumentNullException.ThrowIfNull(value);

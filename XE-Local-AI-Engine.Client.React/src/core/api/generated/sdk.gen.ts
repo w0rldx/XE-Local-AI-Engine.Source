@@ -418,6 +418,9 @@ import type {
 	ExportBenchmarkProjectData,
 	ExportBenchmarkProjectErrors,
 	ExportBenchmarkProjectResponses,
+	ExportGraphWorkflowDefinitionData,
+	ExportGraphWorkflowDefinitionErrors,
+	ExportGraphWorkflowDefinitionResponses,
 	ExportTrainingDatasetData,
 	ExportTrainingDatasetErrors,
 	ExportTrainingDatasetResponses,
@@ -769,6 +772,9 @@ import type {
 	ImportAgentTemplatesData,
 	ImportAgentTemplatesErrors,
 	ImportAgentTemplatesResponses,
+	ImportGraphWorkflowDefinitionData,
+	ImportGraphWorkflowDefinitionErrors,
+	ImportGraphWorkflowDefinitionResponses,
 	ImportKnowledgeRepositoryData,
 	ImportKnowledgeRepositoryErrors,
 	ImportKnowledgeRepositoryResponses,
@@ -1550,6 +1556,7 @@ import {
 	zExploreInferenceProfileResponse,
 	zExportBenchmarkProjectCsvResponse,
 	zExportBenchmarkProjectResponse,
+	zExportGraphWorkflowDefinitionResponse,
 	zExportTrainingDatasetResponse,
 	zFreezeInferenceProfileResponse,
 	zGenerateIntegrationApiKeyResponse,
@@ -1667,6 +1674,7 @@ import {
 	zGetWorkSessionResponse,
 	zHarvestGoldenConversationsResponse,
 	zImportAgentTemplatesResponse,
+	zImportGraphWorkflowDefinitionResponse,
 	zImportKnowledgeRepositoryResponse,
 	zInspectGgufRepositoryResponse,
 	zInspectImageRepositoryResponse,
@@ -6804,6 +6812,32 @@ export const createGraphWorkflowDefinition = <ThrowOnError extends boolean = fal
 		},
 	});
 
+export const importGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+	options: Options<ImportGraphWorkflowDefinitionData, ThrowOnError>,
+): RequestResult<ImportGraphWorkflowDefinitionResponses, ImportGraphWorkflowDefinitionErrors, ThrowOnError> =>
+	(options.client ?? client).post<ImportGraphWorkflowDefinitionResponses, ImportGraphWorkflowDefinitionErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zImportGraphWorkflowDefinitionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/definitions/import",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const validateGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
 	options: Options<ValidateGraphWorkflowDefinitionData, ThrowOnError>,
 ): RequestResult<ValidateGraphWorkflowDefinitionResponses, ValidateGraphWorkflowDefinitionErrors, ThrowOnError> =>
@@ -6897,6 +6931,28 @@ export const updateGraphWorkflowDefinition = <ThrowOnError extends boolean = fal
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const exportGraphWorkflowDefinition = <ThrowOnError extends boolean = false>(
+	options: Options<ExportGraphWorkflowDefinitionData, ThrowOnError>,
+): RequestResult<ExportGraphWorkflowDefinitionResponses, ExportGraphWorkflowDefinitionErrors, ThrowOnError> =>
+	(options.client ?? client).get<ExportGraphWorkflowDefinitionResponses, ExportGraphWorkflowDefinitionErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zExportGraphWorkflowDefinitionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/definitions/{definitionId}/export",
+		...options,
 	});
 
 export const startGraphWorkflowRun = <ThrowOnError extends boolean = false>(

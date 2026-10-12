@@ -26,6 +26,7 @@ internal sealed class GraphWorkflowRunConfiguration : IEntityTypeConfiguration<G
         builder.Property(entity => entity.GraphJson).HasColumnName("graph_json").IsRequired();
         builder.Property(entity => entity.InputJson).HasColumnName("input_json");
         builder.Property(entity => entity.OutputJson).HasColumnName("output_json");
+        builder.Property(entity => entity.PreviousJson).HasColumnName("previous_json");
         builder.Property(entity => entity.Seq).HasColumnName("seq");
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
         builder.Property(entity => entity.CancelRequestedAtUtc).HasColumnName("cancel_requested_at_utc");

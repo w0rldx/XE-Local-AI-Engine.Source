@@ -1001,6 +1001,12 @@ public static class LocalApiRoutes
         /// </summary>
         public const string DefinitionsValidate = "graph-workflows/definitions/validate";
 
+        /// <summary>GET one definition as the portable share file: format, format version, name, description and graph.</summary>
+        public const string DefinitionExport = "graph-workflows/definitions/{definitionId}/export";
+
+        /// <summary>POST a share file to create a definition from it, through the same parser and tool gate as create.</summary>
+        public const string DefinitionsImport = "graph-workflows/definitions/import";
+
         /// <summary>
         ///     The Tool node's picker feed: every tool a Tool node may actually run, already filtered server-side to
         ///     the invocation envelope by the same service the runtime invokes through, so the picker cannot offer a name the

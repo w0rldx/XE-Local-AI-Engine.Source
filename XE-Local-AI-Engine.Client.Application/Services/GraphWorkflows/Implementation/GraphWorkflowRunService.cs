@@ -108,6 +108,12 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
                                                        + "one run may instantiate.");
         }
 
+        // Read BEFORE the start and pinned onto the row, so every tick and restart reads the same run.previous. Scoped to the
+        // run's own conversation: a chat run's result may quote that chat, and must never reach another one.
+        var previous = await _store.FindLatestCompletedRunAsync(definitionId, binding?.ConversationId, cancellationToken) is { CompletedAtUtc: { } completedAtUtc } last
+            ? GraphWorkflowDocuments.PreviousRun(last.Id, completedAtUtc, last.OutputJson)
+            : null;
+
         // ONE call. The run row, one Pending node run per graph node and the run.created event commit together, and the
         // definition is re-read inside that same transaction so a delete racing this start cannot leave an orphan run.
         var run = await _store.StartRunAsync(new StartGraphWorkflowRunCommand
@@ -119,6 +125,7 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
                 GraphHash = definition.GraphHash,
                 GraphJson = definition.GraphJson,
                 InputJson = inputJson,
+                PreviousJson = previous,
                 NodeRuns =
                 [
                     .. graph.Nodes.Values.Select(static node => new GraphWorkflowNodeRunSeed

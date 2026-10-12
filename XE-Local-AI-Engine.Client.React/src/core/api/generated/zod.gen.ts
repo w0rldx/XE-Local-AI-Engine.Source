@@ -3336,6 +3336,17 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinit
 	updatedAtUtc: z.int(),
 });
 
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowExportResponse = z.object({
+	format: z.string(),
+	formatVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	name: z.string(),
+	description: z.string().nullable(),
+	graph: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph,
+});
+
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse = z.object({
@@ -3453,6 +3464,17 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolRes
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse = z.object({
 	key: z.string().nullable(),
 	message: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ImportGraphWorkflowDefinitionRequest = z.object({
+	format: z.string(),
+	formatVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	name: z.string().min(0).max(200),
+	description: z.string().min(0).max(1024).nullish(),
+	graph: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph,
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowConversationRunsRequest = z.record(
@@ -11553,6 +11575,15 @@ export const zCreateGraphWorkflowDefinitionBody =
 export const zCreateGraphWorkflowDefinitionResponse =
 	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse;
 
+export const zImportGraphWorkflowDefinitionBody =
+	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ImportGraphWorkflowDefinitionRequest;
+
+/**
+ * Created
+ */
+export const zImportGraphWorkflowDefinitionResponse =
+	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse;
+
 export const zValidateGraphWorkflowDefinitionBody =
 	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionRequest;
 
@@ -11592,6 +11623,15 @@ export const zUpdateGraphWorkflowDefinitionPath = z.object({
  */
 export const zUpdateGraphWorkflowDefinitionResponse =
 	zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse;
+
+export const zExportGraphWorkflowDefinitionPath = z.object({
+	definitionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zExportGraphWorkflowDefinitionResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowExportResponse;
 
 export const zStartGraphWorkflowRunBody = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunRequest;
 

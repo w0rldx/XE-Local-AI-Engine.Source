@@ -2940,6 +2940,14 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowEdgeCondi
 	value?: unknown;
 };
 
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowExportResponse = {
+	format: string;
+	formatVersion: number;
+	name: string;
+	description: string | null;
+	graph: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
+};
+
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph = {
 	schemaVersion?: number | null;
 	nodes?: Array<XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraphNode>;
@@ -3075,6 +3083,14 @@ export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolRespo
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse = {
 	key: string | null;
 	message: string;
+};
+
+export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ImportGraphWorkflowDefinitionRequest = {
+	format: string;
+	formatVersion: number;
+	name: string;
+	description?: string | null;
+	graph: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph;
 };
 
 export type XeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowConversationRunsRequest = {
@@ -14199,6 +14215,41 @@ export type CreateGraphWorkflowDefinitionResponses = {
 export type CreateGraphWorkflowDefinitionResponse =
 	CreateGraphWorkflowDefinitionResponses[keyof CreateGraphWorkflowDefinitionResponses];
 
+export type ImportGraphWorkflowDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1ImportGraphWorkflowDefinitionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions/import";
+};
+
+export type ImportGraphWorkflowDefinitionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ImportGraphWorkflowDefinitionError = ImportGraphWorkflowDefinitionErrors[keyof ImportGraphWorkflowDefinitionErrors];
+
+export type ImportGraphWorkflowDefinitionResponses = {
+	/**
+	 * Created
+	 */
+	201: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinitionResponse;
+};
+
+export type ImportGraphWorkflowDefinitionResponse =
+	ImportGraphWorkflowDefinitionResponses[keyof ImportGraphWorkflowDefinitionResponses];
+
 export type ValidateGraphWorkflowDefinitionData = {
 	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionRequest;
 	path?: never;
@@ -14346,6 +14397,40 @@ export type UpdateGraphWorkflowDefinitionResponses = {
 
 export type UpdateGraphWorkflowDefinitionResponse =
 	UpdateGraphWorkflowDefinitionResponses[keyof UpdateGraphWorkflowDefinitionResponses];
+
+export type ExportGraphWorkflowDefinitionData = {
+	body?: never;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/graph-workflows/definitions/{definitionId}/export";
+};
+
+export type ExportGraphWorkflowDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type ExportGraphWorkflowDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowExportResponse;
+};
+
+export type ExportGraphWorkflowDefinitionResponse =
+	ExportGraphWorkflowDefinitionResponses[keyof ExportGraphWorkflowDefinitionResponses];
 
 export type StartGraphWorkflowRunData = {
 	body: XeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunRequest;

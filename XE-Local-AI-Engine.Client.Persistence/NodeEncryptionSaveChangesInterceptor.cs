@@ -714,6 +714,8 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
             EncryptOptionalProperty(entry, entry.Property(entity => entity.OutputJson), entry.Entity.DefinitionId, entry.Entity.Id, "graph_workflow_run_output_json",
                 trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.PreviousJson), entry.Entity.DefinitionId, entry.Entity.Id, "graph_workflow_run_previous_json",
+                trackedProperties);
         }
 
         // Five distinct AAD column names on one row, and not cosmetically: an edge condition routes on output_json, so if these shared a name a database writer

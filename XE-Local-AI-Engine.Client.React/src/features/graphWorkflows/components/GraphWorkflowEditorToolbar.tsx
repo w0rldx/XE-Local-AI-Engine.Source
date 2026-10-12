@@ -1,4 +1,4 @@
-import { Button, Text } from "@mantine/core";
+import { Button, Text, Tooltip } from "@mantine/core";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -17,6 +17,9 @@ export interface GraphWorkflowEditorToolbarProps {
 	readonly onSave: () => void;
 	readonly onSaveAs: () => void;
 	readonly onStartRun: () => void;
+	/** Downloads the SAVED definition as a share file; offered only on a clean canvas. */
+	readonly onExport: () => void;
+	readonly isExporting: boolean;
 	/** The graph-level settings control, rendered beside Check. */
 	readonly settings?: ReactNode;
 }
@@ -35,6 +38,8 @@ export function GraphWorkflowEditorToolbar({
 	onSave,
 	onSaveAs,
 	onStartRun,
+	onExport,
+	isExporting,
 	settings,
 }: GraphWorkflowEditorToolbarProps) {
 	const { t } = useTranslation();
@@ -67,6 +72,24 @@ export function GraphWorkflowEditorToolbar({
 			<Button size="xs" variant="light" disabled={!hasDefinition || isDirty} onClick={onStartRun} data-testid="gw-page-start-run">
 				{t("pages.graphWorkflows.page.startRun", "Start run")}
 			</Button>
+			<Tooltip
+				label={t("pages.graphWorkflows.page.exportSaveFirst", "Save first — an export is the saved workflow, not the canvas.")}
+				disabled={!isDirty}
+			>
+				{/* Wrapped: a disabled button fires no pointer events, so the tooltip needs an element that does. */}
+				<span>
+					<Button
+						size="xs"
+						variant="default"
+						loading={isExporting}
+						disabled={!hasDefinition || isDirty}
+						onClick={onExport}
+						data-testid="gw-page-export"
+					>
+						{t("pages.graphWorkflows.page.export", "Export")}
+					</Button>
+				</span>
+			</Tooltip>
 			{isDirty ? (
 				layoutIsUnsaved ? (
 					<Text size="xs" c="dimmed" data-testid="gw-page-unsaved-layout">

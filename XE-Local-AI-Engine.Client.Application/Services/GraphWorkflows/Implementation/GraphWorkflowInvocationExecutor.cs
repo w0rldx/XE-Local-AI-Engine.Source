@@ -1266,7 +1266,7 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
     {
         var byKey = (await store.ListNodeRunsAsync(run.Id, cancellationToken))
             .ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
-        return GraphWorkflowDocuments.ComposeInput(run.InputJson, GraphWorkflowInlineExecutor.Upstream(graph, node, byKey));
+        return GraphWorkflowDocuments.ComposeInput(run, GraphWorkflowInlineExecutor.Upstream(graph, node, byKey));
     }
 
     /// <summary>Moves the row to <c>Running</c> and stamps the invocation id the node logs correlate on.</summary>

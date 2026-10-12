@@ -261,7 +261,7 @@ export function GraphWorkflowNodePanel({ runId, nodeKey, runStatus, pauseConfig,
 }
 
 /** One document as read-only pretty JSON, or a line saying the runtime recorded none. */
-function Document({ value, testId }: { readonly value: unknown; readonly testId: string }) {
+export function Document({ value, testId }: { readonly value: unknown; readonly testId: string }) {
 	const { t } = useTranslation();
 	const text = prettyJson(value);
 	if (text.length === 0) {

@@ -2,7 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>One upstream node's full output document, keyed by the node it came from.</summary>
 internal sealed class GraphWorkflowUpstreamDocument
@@ -92,14 +94,24 @@ internal static class GraphWorkflowDocuments
         return bytes <= maxOutputJsonBytes ? document : throw new GraphWorkflowOutputTooLargeException(node.NodeKey, bytes, maxOutputJsonBytes);
     }
 
-    /// <summary>The input document an executor is handed: <c>{ run: { input }, upstream: { … }, input: … }</c>.</summary>
+    /// <summary>The input document a node of <paramref name="run" /> is handed, carrying the run's input and its pinned <c>run.previous</c>.</summary>
+    public static string ComposeInput(GraphWorkflowRunSnapshot run, IReadOnlyList<GraphWorkflowUpstreamDocument> upstream)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return ComposeInput(run.InputJson, upstream, run.PreviousJson);
+    }
+
+    /// <summary>
+    ///     The input document an executor is handed: <c>{ run: { input, previous }, upstream: { … }, input: … }</c>.
+    ///     <c>previous</c> is always written, null on a first run, so a binding to it resolves.
+    /// </summary>
     /// <remarks>
     ///     <c>input</c> is the shortcut for the common shape — the single satisfied predecessor's whole output
     ///     document — and falls back to the <c>upstream</c> map when there is more than one, so a node with two
     ///     inbound edges still has one place to read them all from. With no predecessor at all it is
     ///     <see langword="null" />, which is what the <c>Start</c> node sees.
     /// </remarks>
-    public static string ComposeInput(string? runInputJson, IReadOnlyList<GraphWorkflowUpstreamDocument> upstream)
+    public static string ComposeInput(string? runInputJson, IReadOnlyList<GraphWorkflowUpstreamDocument> upstream, string? runPreviousJson = null)
     {
         ArgumentNullException.ThrowIfNull(upstream);
 
@@ -120,12 +132,25 @@ internal static class GraphWorkflowDocuments
         {
             Run = new RunInput
             {
-                Input = ValueOf(runInputJson)
+                Input = ValueOf(runInputJson),
+                Previous = ValueOf(runPreviousJson)
             },
             Upstream = upstreamElement,
             Input = input
         });
     }
+
+    /// <summary>
+    ///     What a new run pins as <c>run.previous</c>: <c>{ runId, completedAtUtc, output }</c>, where <c>output</c> is that
+    ///     run's stored result (the succeeded <c>End</c> node's resolved value) and <c>completedAtUtc</c> is ISO-8601 UTC.
+    /// </summary>
+    public static string PreviousRun(Guid runId, long completedAtUtcMilliseconds, string? outputJson) =>
+        Serialize(new PreviousRunPayload
+        {
+            RunId = runId,
+            CompletedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(completedAtUtcMilliseconds).UtcDateTime,
+            Output = ValueOf(outputJson)
+        });
 
     /// <summary><c>Start</c>: the run's own input, handed to everything downstream.</summary>
     public static JsonElement StartOutput(string? runInputJson) =>
@@ -229,7 +254,7 @@ internal static class GraphWorkflowDocuments
 
     /// <summary>
     ///     <c>End</c>: the declared outcome and the run's result — <paramref name="resultPath" /> resolved against the
-    ///     End node's input document, or that whole document when the author named no path.
+    ///     End node's input document, or, with no path, that document minus <c>run.previous</c>, so repeated runs never nest.
     /// </summary>
     /// <remarks>
     ///     A path that is not a dot path, or that the document does not carry, resolves to <c>null</c>. Failing the
@@ -239,13 +264,29 @@ internal static class GraphWorkflowDocuments
     {
         var input = Read(inputDocumentJson);
         var result = resultPath is null
-            ? input ?? NullValue
+            ? WithoutPreviousRun(input) ?? NullValue
             : Resolve(input, resultPath) ?? NullValue;
         return JsonSerializer.SerializeToElement(new EndOutputPayload
         {
             Outcome = outcome,
             Result = result
         }, JsonOptions);
+    }
+
+    /// <summary>The input document with <c>run.previous</c> removed and every other member as it was; any other shape unchanged.</summary>
+    private static JsonElement? WithoutPreviousRun(JsonElement? input)
+    {
+        if (input is not { ValueKind: JsonValueKind.Object } document
+            || !document.TryGetProperty("run", out var run)
+            || run.ValueKind != JsonValueKind.Object
+            || !run.TryGetProperty("previous", out _))
+        {
+            return input;
+        }
+
+        var copy = JsonObject.Create(document);
+        _ = (copy?["run"] as JsonObject)?.Remove("previous");
+        return JsonSerializer.SerializeToElement(copy, JsonOptions);
     }
 
     /// <summary>
@@ -336,6 +377,17 @@ internal static class GraphWorkflowDocuments
     private sealed record RunInput
     {
         public required JsonElement Input { get; init; }
+
+        public required JsonElement Previous { get; init; }
+    }
+
+    private sealed record PreviousRunPayload
+    {
+        public required Guid RunId { get; init; }
+
+        public required DateTime CompletedAtUtc { get; init; }
+
+        public required JsonElement Output { get; init; }
     }
 
     private sealed record StartOutputPayload

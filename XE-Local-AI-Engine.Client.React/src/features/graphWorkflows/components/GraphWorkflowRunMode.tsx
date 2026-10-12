@@ -10,6 +10,7 @@ import { GraphWorkflowNodePanel } from "@/features/graphWorkflows/components/Gra
 import { GraphWorkflowNodeRunTable } from "@/features/graphWorkflows/components/GraphWorkflowNodeRunTable";
 import { GraphWorkflowRunGraphView } from "@/features/graphWorkflows/components/GraphWorkflowRunGraphView";
 import { GraphWorkflowRunList } from "@/features/graphWorkflows/components/GraphWorkflowRunList";
+import { GraphWorkflowRunResultPanel } from "@/features/graphWorkflows/components/GraphWorkflowRunResultPanel";
 import { GraphWorkflowRunToolbar } from "@/features/graphWorkflows/components/GraphWorkflowRunToolbar";
 import { useGraphWorkflowRunHub } from "@/features/graphWorkflows/hooks/useGraphWorkflowRunHub";
 import type { GraphWorkflowSelection } from "@/features/graphWorkflows/models/GraphWorkflowModels";
@@ -83,7 +84,11 @@ export function GraphWorkflowRunMode({ selection, onSelectionChange, isNarrow }:
 		[onSelectionChange, selection],
 	);
 
-	const tab = selection.tab === "events" ? "events" : "runs";
+	const runOutput = runQuery.data?.output;
+	// The End node's result value itself; the run endpoint answers null until a run has one.
+	const hasResult = runOutput !== null && runOutput !== undefined;
+	// `?tab=result` on a run that has not ended (or a link from one that has) falls back to the graph, never a blank tab.
+	const tab = selection.tab === "events" ? "events" : selection.tab === "result" && hasResult ? "result" : "runs";
 
 	const main = runQuery.isPending ? (
 		<Loader size="sm" data-testid="gw-page-run-loading" />
@@ -110,7 +115,7 @@ export function GraphWorkflowRunMode({ selection, onSelectionChange, isNarrow }:
 			/>
 			<Tabs
 				value={tab}
-				onChange={(value) => select({ tab: value === "events" ? "events" : "runs" })}
+				onChange={(value) => select({ tab: value === "events" || value === "result" ? value : "runs" })}
 				style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
 				data-testid="gw-page-run-tabs"
 			>
@@ -121,6 +126,11 @@ export function GraphWorkflowRunMode({ selection, onSelectionChange, isNarrow }:
 					<Tabs.Tab value="events" data-testid="gw-page-tab-events">
 						{t("pages.graphWorkflows.tab.events", "Events")}
 					</Tabs.Tab>
+					{hasResult ? (
+						<Tabs.Tab value="result" data-testid="gw-page-tab-result">
+							{t("pages.graphWorkflows.tab.result", "Result")}
+						</Tabs.Tab>
+					) : null}
 				</Tabs.List>
 				<Tabs.Panel
 					value="runs"
@@ -145,6 +155,11 @@ export function GraphWorkflowRunMode({ selection, onSelectionChange, isNarrow }:
 				<Tabs.Panel value="events" pt="xs" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
 					<GraphWorkflowEventsTab runId={runId} />
 				</Tabs.Panel>
+				{hasResult ? (
+					<Tabs.Panel value="result" pt="xs" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+						<GraphWorkflowRunResultPanel output={runOutput} />
+					</Tabs.Panel>
+				) : null}
 			</Tabs>
 		</Stack>
 	);

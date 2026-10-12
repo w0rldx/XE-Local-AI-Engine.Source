@@ -2,7 +2,7 @@
 // a workflow and to rename one ("Save as" reuses it with a different title and submit label), so it owns no mutation
 // and no query: the page decides which of the two a submit means.
 
-import { Button, Group, Select, Stack, Textarea, TextInput } from "@mantine/core";
+import { Button, Group, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
@@ -31,6 +31,8 @@ export interface GraphWorkflowDefinitionMetaDialogProps {
 	readonly isSubmitting?: boolean;
 	/** Shows the "Start from" sample picker. Only a create has no graph of its own to start from. */
 	readonly offerSamples?: boolean;
+	/** An imported graph's web_fetch allowlist, named before create so the operator sees what it will fetch. */
+	readonly fetchesUnder?: readonly string[];
 	readonly onSubmit: (values: { name: string; description: string | null; sampleId: string | null }) => void;
 	readonly onClose: () => void;
 }
@@ -42,6 +44,7 @@ export function GraphWorkflowDefinitionMetaDialog({
 	submitLabel,
 	isSubmitting = false,
 	offerSamples = false,
+	fetchesUnder = [],
 	onSubmit,
 	onClose,
 }: GraphWorkflowDefinitionMetaDialogProps) {
@@ -154,6 +157,13 @@ export function GraphWorkflowDefinitionMetaDialog({
 					onChange={(event) => setDescription(event.currentTarget.value)}
 					data-testid="gw-definition-meta-description"
 				/>
+				{fetchesUnder.length > 0 ? (
+					<Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }} data-testid="gw-definition-meta-fetches-under">
+						{t("pages.graphWorkflows.importFile.fetchesUnder", "This workflow fetches pages under: {{urls}}", {
+							urls: fetchesUnder.join(", "),
+						})}
+					</Text>
+				) : null}
 			</Stack>
 		</DialogShell>
 	);

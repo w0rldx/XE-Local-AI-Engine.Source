@@ -54,7 +54,7 @@ internal sealed class GraphWorkflowInlineExecutor
         ArgumentNullException.ThrowIfNull(byKey);
 
         var upstream = Upstream(graph, node, byKey);
-        var inputJson = GraphWorkflowDocuments.ComposeInput(run.InputJson, upstream);
+        var inputJson = GraphWorkflowDocuments.ComposeInput(run, upstream);
 
         GraphWorkflowStateMachine.EnsureLegal(nodeRun.Status, GraphWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
         _ = await store.TransitionNodeRunAsync(new TransitionGraphWorkflowNodeRunCommand
