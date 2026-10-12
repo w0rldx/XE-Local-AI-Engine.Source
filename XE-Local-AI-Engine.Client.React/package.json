@@ -106,7 +106,7 @@
 		"postcss": "^8.5.29",
 		"postcss-preset-mantine": "^1.18.0",
 		"postcss-simple-vars": "^7.0.1",
-		"react-doctor": "0.9.14",
+		"react-doctor": "0.9.17",
 		"stylelint": "^17.16.0",
 		"stylelint-config-standard": "^40.0.0",
 		"typescript": "^6.0.3",
