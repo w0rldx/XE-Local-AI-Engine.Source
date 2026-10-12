@@ -20,9 +20,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </remarks>
 public sealed partial class LlamaListDevicesProcessVramBudgetProbe : IProcessVramBudgetProbe
 {
-    // Hard cap for the short-lived --list-devices probe. A wedged GPU driver could otherwise stall the invalidation hot
-    // path; on overrun the child is killed (entire tree) and the figure degrades to "unknown".
-    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(15);
+    // Hard cap on --list-devices so a wedged driver cannot stall invalidation; overrun kills the tree, figure "unknown".
+    // 30 s, not 15: a cold CUDA start plus a concurrent download's disk load overran 15 s on a small machine.
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(30);
 
     private readonly ILlamaCppBinaryManager _binaryManager;
     private readonly ILogger<LlamaListDevicesProcessVramBudgetProbe> _logger;

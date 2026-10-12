@@ -21,9 +21,9 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
 {
     private const long BytesPerMib = 1024L * 1024L;
 
-    // Hard cap for the short-lived --list-devices probe (mirrors the available-VRAM probe). A wedged GPU driver could
-    // otherwise stall the audit; on overrun the child is killed and the result degrades to "unknown".
-    private static readonly TimeSpan DefaultProbeTimeout = TimeSpan.FromSeconds(15);
+    // Hard cap on --list-devices (mirrors the VRAM-budget probe): on overrun the child is killed, the result is "unknown".
+    // 30 s, not 15: a cold CUDA start plus a concurrent download's disk load overran 15 s on a small machine.
+    private static readonly TimeSpan DefaultProbeTimeout = TimeSpan.FromSeconds(30);
 
     internal static readonly TimeSpan FailedProbeRetryAfter = TimeSpan.FromSeconds(60);
 

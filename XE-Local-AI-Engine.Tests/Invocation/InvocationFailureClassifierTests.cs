@@ -25,14 +25,29 @@ public sealed class InvocationFailureClassifierTests
     [Arguments(429, "Wed, 21 Oct 2026 07:28:00 GMT", FailureCategory.ProviderRateLimited,
         "The provider rate-limited this request, retry after Wed, 21 Oct 2026 07:28:00 GMT.")]
     [Arguments(429, "30\r\nX-Injected: <script>", FailureCategory.ProviderRateLimited, "The provider rate-limited this request.")]
-    [Arguments(500, null, FailureCategory.ProviderUnreachable, "Provider unreachable.")]
-    [Arguments(503, "30", FailureCategory.ProviderUnreachable, "Provider unreachable.")]
+    [Arguments(500, null, FailureCategory.ProviderUnreachable, "The provider returned a server error (HTTP 500). Retry, or check the connection's gateway.")]
+    [Arguments(503, "30", FailureCategory.ProviderUnreachable, "The provider returned a server error (HTTP 503). Retry, or check the connection's gateway.")]
     public void MapFailure_ProviderStatus_NamesCategoryWithFixedMessage(int status, string? retryAfter, FailureCategory expectedCategory, string expectedMessage)
     {
         var classification = InvocationFailureClassifier.MapFailure(CreateClientResultException(status, retryAfter));
 
         AssertEx.Equal(expectedCategory, classification.Category);
         AssertEx.Equal(expectedMessage, classification.Message);
+    }
+
+    // A plain reason phrase is quoted; one carrying CR/LF, markup or too many characters is dropped, and the body never appears.
+    [Test]
+    [Arguments(500, "Internal Server Error", "HTTP 500 Internal Server Error")]
+    [Arguments(502, "Bad Gateway (upstream_timeout)", "HTTP 502 Bad Gateway (upstream_timeout)")]
+    [Arguments(500, "Internal Server Error\r\nX-Injected: yes", "HTTP 500")]
+    [Arguments(503, "<script>alert(1)</script>", "HTTP 503")]
+    [Arguments(504, "Gateway Timeout Gateway Timeout Gateway Timeout Gateway Timeout Gateway", "HTTP 504")]
+    public void MapFailure_ServerErrorReasonPhrase_IsQuotedOnlyWhenPlain(int status, string reasonPhrase, string expectedStatusText)
+    {
+        var classification = InvocationFailureClassifier.MapFailure(CreateClientResultException(status, retryAfter: null, reasonPhrase));
+
+        AssertEx.Equal(FailureCategory.ProviderUnreachable, classification.Category);
+        AssertEx.Equal($"The provider returned a server error ({expectedStatusText}). Retry, or check the connection's gateway.", classification.Message);
     }
 
     [Test]
@@ -132,28 +147,29 @@ public sealed class InvocationFailureClassifierTests
         AssertEx.Equal("unrelated failure", classification.Message);
     }
 
-    private static ClientResultException CreateClientResultException(int status, string? retryAfter)
+    private static ClientResultException CreateClientResultException(int status, string? retryAfter, string reasonPhrase = "")
     {
         // The fake owns nothing (its Dispose is empty), so the exception may keep reading it after this scope.
-        using var response = new FakePipelineResponse(status, BinaryData.FromString("""{"error":{"message":"body-sentinel"}}"""), retryAfter);
+        using var response = new FakePipelineResponse(status, BinaryData.FromString("""{"error":{"message":"body-sentinel"}}"""), retryAfter, reasonPhrase);
         return new ClientResultException(response, innerException: null);
     }
 
-    // A PipelineResponse with a fixed status, JSON body and optional Retry-After header, so GetRawResponse() is the real read path.
+    // A PipelineResponse with a fixed status, reason phrase, JSON body and optional Retry-After header, so GetRawResponse() is the real read path.
     private sealed class FakePipelineResponse : PipelineResponse
     {
         private readonly FakeHeaders _headers;
 
-        public FakePipelineResponse(int status, BinaryData content, string? retryAfter)
+        public FakePipelineResponse(int status, BinaryData content, string? retryAfter, string reasonPhrase)
         {
             Status = status;
             Content = content;
+            ReasonPhrase = reasonPhrase;
             _headers = new FakeHeaders(retryAfter);
         }
 
         public override int Status { get; }
 
-        public override string ReasonPhrase => string.Empty;
+        public override string ReasonPhrase { get; }
 
         public override Stream? ContentStream { get; set; }
 

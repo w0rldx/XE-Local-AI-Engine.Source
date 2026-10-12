@@ -409,11 +409,114 @@ public sealed class BinaryManagerCudartAtomicPublishTests
         var stagingDir = Directory.CreateDirectory($"{variantDir}.staged.tmp").FullName;
         await File.WriteAllTextAsync(Path.Combine(stagingDir, "new.dll"), "new");
 
-        LlamaCppBinaryManager.PublishStagedVariant(stagingDir, variantDir);
+        await LlamaCppBinaryManager.PublishStagedVariantAsync(stagingDir, variantDir, CancellationToken.None);
 
         AssertEx.Equal(expected: "new", await File.ReadAllTextAsync(Path.Combine(variantDir, "new.dll")));
         AssertEx.False(File.Exists(Path.Combine(variantDir, "old.dll")), "The old contents must be fully replaced.");
         AssertEx.Empty(Directory.EnumerateDirectories(Path.GetDirectoryName(variantDir)!, "cuda*").Where(IsVariantSibling));
+    }
+
+    [Test]
+    public async Task PublishStagedVariant_WhenTheMoveInIsDeniedTwice_RetriesOnScheduleAndPublishesTheStagedTree()
+    {
+        // The Windows tester case: an antivirus handle on fresh files denies the rename for a moment, then lets go.
+        using var cache = new TempDir();
+        var variantDir = Path.Combine(cache.Path, "llama.cpp", Tag, "cuda");
+        var stagingDir = await StageOverExistingVariantAsync(variantDir);
+        var deniedMoveIns = 0;
+        var delays = new List<TimeSpan>();
+
+        await LlamaCppBinaryManager.PublishStagedVariantAsync(stagingDir, variantDir, CancellationToken.None,
+            move: (source, destination) =>
+            {
+                if (source == stagingDir && deniedMoveIns++ < 2)
+                {
+                    throw new IOException($"Access to the path '{source}' is denied.");
+                }
+
+                Directory.Move(source, destination);
+            },
+            delay: (pause, _) =>
+            {
+                delays.Add(pause);
+                return Task.CompletedTask;
+            });
+
+        AssertEx.Equal(expected: "new", await File.ReadAllTextAsync(Path.Combine(variantDir, "new.dll")));
+        AssertEx.False(File.Exists(Path.Combine(variantDir, "old.dll")), "The old contents must be fully replaced.");
+        AssertEx.Equal(expected: Schedule(LlamaCppBinaryManager.PublishRenameRetryDelays.Take(2)), Schedule(delays));
+        AssertEx.Empty(Directory.EnumerateDirectories(Path.GetDirectoryName(variantDir)!, "cuda*").Where(IsVariantSibling));
+    }
+
+    [Test]
+    public async Task PublishStagedVariant_WhenTheMoveInIsDeniedOnEveryAttempt_RestoresTheExistingVariantDirAndThrows()
+    {
+        using var cache = new TempDir();
+        var variantDir = Path.Combine(cache.Path, "llama.cpp", Tag, "cuda");
+        var stagingDir = await StageOverExistingVariantAsync(variantDir);
+        var moveInAttempts = 0;
+        var delays = new List<TimeSpan>();
+
+        var thrown = await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => LlamaCppBinaryManager.PublishStagedVariantAsync(stagingDir, variantDir,
+            CancellationToken.None,
+            move: (source, destination) =>
+            {
+                if (source == stagingDir)
+                {
+                    moveInAttempts++;
+                    throw new UnauthorizedAccessException($"Access to the path '{source}' is denied.");
+                }
+
+                Directory.Move(source, destination);
+            },
+            delay: (pause, _) =>
+            {
+                delays.Add(pause);
+                return Task.CompletedTask;
+            }));
+
+        AssertEx.Contains(thrown.Message, "is denied");
+        AssertEx.Equal(LlamaCppBinaryManager.PublishRenameRetryDelays.Count + 1, moveInAttempts);
+        AssertEx.Equal(expected: Schedule(LlamaCppBinaryManager.PublishRenameRetryDelays), Schedule(delays));
+        AssertEx.Equal(expected: "old", await File.ReadAllTextAsync(Path.Combine(variantDir, "old.dll")));
+        AssertEx.Equal(expected: "new", await File.ReadAllTextAsync(Path.Combine(stagingDir, "new.dll")));
+        AssertEx.Empty(Directory.EnumerateDirectories(Path.GetDirectoryName(variantDir)!, "cuda*").Where(d => d.EndsWith(".aside", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task PublishStagedVariant_WhenTheAsideRenameIsDeniedOnce_RetriesItAndPublishes()
+    {
+        using var cache = new TempDir();
+        var variantDir = Path.Combine(cache.Path, "llama.cpp", Tag, "cuda");
+        var stagingDir = await StageOverExistingVariantAsync(variantDir);
+        var deniedAsides = 0;
+        var delays = new List<TimeSpan>();
+
+        await LlamaCppBinaryManager.PublishStagedVariantAsync(stagingDir, variantDir, CancellationToken.None,
+            move: (source, destination) =>
+            {
+                if (source == variantDir && deniedAsides++ < 1)
+                {
+                    throw new IOException($"Access to the path '{source}' is denied.");
+                }
+
+                Directory.Move(source, destination);
+            },
+            delay: (pause, _) =>
+            {
+                delays.Add(pause);
+                return Task.CompletedTask;
+            });
+
+        AssertEx.Equal(expected: "new", await File.ReadAllTextAsync(Path.Combine(variantDir, "new.dll")));
+        AssertEx.Equal(expected: Schedule(LlamaCppBinaryManager.PublishRenameRetryDelays.Take(1)), Schedule(delays));
+        AssertEx.Empty(Directory.EnumerateDirectories(Path.GetDirectoryName(variantDir)!, "cuda*").Where(IsVariantSibling));
+    }
+
+    [Test]
+    public void PublishRenameRetryDelays_BackOffFrom250MillisecondsToTwoSecondsOverFiveAttempts()
+    {
+        AssertEx.Equal(expected: "00:00:00.2500000, 00:00:00.5000000, 00:00:01, 00:00:02", Schedule(LlamaCppBinaryManager.PublishRenameRetryDelays));
     }
 
     [Test]
@@ -426,11 +529,29 @@ public sealed class BinaryManagerCudartAtomicPublishTests
         await File.WriteAllTextAsync(Path.Combine(variantDir, "build", "bin", "llama-server.exe"), "old-server");
         await File.WriteAllTextAsync(Path.Combine(variantDir, "build", "bin", "cudart64_12.dll"), "old-cudart");
 
-        AssertEx.Throws<IOException>(() => LlamaCppBinaryManager.PublishStagedVariant($"{variantDir}.missing.tmp", variantDir));
+        // A missing source never appears, so it is not retried: the injected delay throws if a retry is attempted.
+        await AssertEx.ThrowsAsync<DirectoryNotFoundException>(() => LlamaCppBinaryManager.PublishStagedVariantAsync($"{variantDir}.missing.tmp", variantDir,
+            CancellationToken.None,
+            delay: (_, _) => throw new InvalidOperationException("A missing staging dir must not be retried.")));
 
         AssertEx.Equal(expected: "old-server", await File.ReadAllTextAsync(Path.Combine(variantDir, "build", "bin", "llama-server.exe")));
         AssertEx.Equal(expected: "old-cudart", await File.ReadAllTextAsync(Path.Combine(variantDir, "build", "bin", "cudart64_12.dll")));
         AssertEx.Empty(Directory.EnumerateDirectories(Path.GetDirectoryName(variantDir)!, "cuda*").Where(IsVariantSibling));
+    }
+
+    // Fills an existing variant dir with old.dll and returns a staged sibling holding new.dll.
+    private static async Task<string> StageOverExistingVariantAsync(string variantDir)
+    {
+        Directory.CreateDirectory(variantDir);
+        await File.WriteAllTextAsync(Path.Combine(variantDir, "old.dll"), "old");
+        var stagingDir = Directory.CreateDirectory($"{variantDir}.staged.tmp").FullName;
+        await File.WriteAllTextAsync(Path.Combine(stagingDir, "new.dll"), "new");
+        return stagingDir;
+    }
+
+    private static string Schedule(IEnumerable<TimeSpan> delays)
+    {
+        return string.Join(", ", delays);
     }
 
     // A staging (.tmp) or publish-aside (.aside) sibling of the cuda variant dir, never the variant dir itself.

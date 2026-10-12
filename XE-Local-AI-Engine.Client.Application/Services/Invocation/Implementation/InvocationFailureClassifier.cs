@@ -68,6 +68,9 @@ internal static class InvocationFailureClassifier
     // Longer Retry-After values are dropped rather than cut: an HTTP-date is 29 characters, delta-seconds far fewer.
     private const int MaxRetryAfterLength = 64;
 
+    // A 5xx reason phrase longer than this is dropped rather than cut.
+    private const int MaxReasonPhraseLength = 64;
+
     private static readonly Regex FrameworkExceptionNamePattern =
         new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant,
             TimeSpan.FromSeconds(2));
@@ -143,8 +146,9 @@ internal static class InvocationFailureClassifier
                 new FailureClassification(FailureCategory.ModelCapabilityUnsupported, capabilityMessage),
             _ when ReportsModelLoadFailure(exception) =>
                 new FailureClassification(FailureCategory.ModelLoadFailed, ModelLoadFailedMessage),
-            _ when FindProviderClientResult(exception) is { Status: >= 500 and <= 599 } =>
-                new FailureClassification(FailureCategory.ProviderUnreachable, ProviderUnavailableMessage),
+            // The provider answered with a 5xx, so "unreachable" would mislead: name the status. The category stays ProviderUnreachable for the UI contract.
+            _ when FindProviderClientResult(exception) is { Status: >= 500 and <= 599 } serverError =>
+                new FailureClassification(FailureCategory.ProviderUnreachable, BuildServerErrorMessage(serverError)),
             HttpRequestException => new FailureClassification(FailureCategory.ProviderUnreachable, ProviderUnavailableMessage),
             _ when IsAgentRuntimeException(exception) => new FailureClassification(FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(exception.Message)),
             _ => new FailureClassification(FailureCategory.Unexpected, TruncateUnexpectedMessage(exception.Message))
@@ -267,6 +271,23 @@ internal static class InvocationFailureClassifier
                || !retryAfter.All(static c => char.IsAsciiLetterOrDigit(c) || c is ' ' or ',' or ':' or '+' or '-' or '.')
             ? $"{ProviderRateLimitedMessage}."
             : $"{ProviderRateLimitedMessage}, retry after {retryAfter}.";
+    }
+
+    /// <summary>A fixed server-error message naming the HTTP status, plus the response reason phrase when it is short and plain.</summary>
+    /// <remarks>
+    ///     The phrase is quoted only when it fits <see cref="MaxReasonPhraseLength" /> and holds ASCII letters, digits,
+    ///     spaces and <c>.,:-_()</c>; anything else is dropped. The body and URL are never surfaced.
+    /// </remarks>
+    private static string BuildServerErrorMessage(ClientResultException exception)
+    {
+        var reasonPhrase = exception.GetRawResponse()?.ReasonPhrase?.Trim();
+        var statusText = string.IsNullOrEmpty(reasonPhrase)
+                         || reasonPhrase.Length > MaxReasonPhraseLength
+                         || !reasonPhrase.All(static c => char.IsAsciiLetterOrDigit(c) || c is ' ' or '.' or ',' or ':' or '-' or '_' or '(' or ')')
+            ? $"HTTP {exception.Status}"
+            : $"HTTP {exception.Status} {reasonPhrase}";
+
+        return $"The provider returned a server error ({statusText}). Retry, or check the connection's gateway.";
     }
 
     private static string RedactAgentRuntimeMessage(string message)
