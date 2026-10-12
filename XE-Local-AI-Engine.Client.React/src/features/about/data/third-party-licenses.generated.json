@@ -82,49 +82,49 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/charts@9.6.2",
+			"id": "frontend:@mantine/charts@9.7.0",
 			"name": "@mantine/charts",
-			"version": "9.6.2",
+			"version": "9.7.0",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev/",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/colors-generator@9.6.2",
+			"id": "frontend:@mantine/colors-generator@9.7.0",
 			"name": "@mantine/colors-generator",
-			"version": "9.6.2",
+			"version": "9.7.0",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/core@9.6.2",
+			"id": "frontend:@mantine/core@9.7.0",
 			"name": "@mantine/core",
-			"version": "9.6.2",
+			"version": "9.7.0",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev/",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/hooks@9.6.2",
+			"id": "frontend:@mantine/hooks@9.7.0",
 			"name": "@mantine/hooks",
-			"version": "9.6.2",
+			"version": "9.7.0",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/notifications@9.6.2",
+			"id": "frontend:@mantine/notifications@9.7.0",
 			"name": "@mantine/notifications",
-			"version": "9.6.2",
+			"version": "9.7.0",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@mantine/store@9.6.2",
+			"id": "frontend:@mantine/store@9.7.0",
 			"name": "@mantine/store",
-			"version": "9.6.2",
+			"version": "9.7.0",
 			"license": "MIT",
 			"homepageUrl": "https://mantine.dev",
 			"source": "frontend"
@@ -146,17 +146,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@rrweb/types@2.1.6",
+			"id": "frontend:@rrweb/types@2.1.7",
 			"name": "@rrweb/types",
-			"version": "2.1.6",
+			"version": "2.1.7",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/@rrweb/types#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@rrweb/utils@2.1.6",
+			"id": "frontend:@rrweb/utils@2.1.7",
 			"name": "@rrweb/utils",
-			"version": "2.1.6",
+			"version": "2.1.7",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/@rrweb/utils#readme",
 			"source": "frontend"
@@ -186,17 +186,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tabler/icons@3.47.0",
+			"id": "frontend:@tabler/icons@3.48.0",
 			"name": "@tabler/icons",
-			"version": "3.47.0",
+			"version": "3.48.0",
 			"license": "MIT",
 			"homepageUrl": "https://tabler.io/icons",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tabler/icons-react@3.47.0",
+			"id": "frontend:@tabler/icons-react@3.48.0",
 			"name": "@tabler/icons-react",
-			"version": "3.47.0",
+			"version": "3.48.0",
 			"license": "MIT",
 			"homepageUrl": "https://tabler.io/icons",
 			"source": "frontend"
@@ -210,33 +210,33 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/query-core@5.103.2",
+			"id": "frontend:@tanstack/query-core@5.104.1",
 			"name": "@tanstack/query-core",
-			"version": "5.103.2",
+			"version": "5.104.1",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-query@5.103.2",
+			"id": "frontend:@tanstack/react-query@5.104.1",
 			"name": "@tanstack/react-query",
-			"version": "5.103.2",
+			"version": "5.104.1",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/query",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-router@1.170.38",
+			"id": "frontend:@tanstack/react-router@1.170.41",
 			"name": "@tanstack/react-router",
-			"version": "1.170.38",
+			"version": "1.170.41",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-store@0.11.1",
+			"id": "frontend:@tanstack/react-store@0.11.2",
 			"name": "@tanstack/react-store",
-			"version": "0.11.1",
+			"version": "0.11.2",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/store",
 			"source": "frontend"
@@ -250,17 +250,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/router-core@1.171.32",
+			"id": "frontend:@tanstack/router-core@1.171.34",
 			"name": "@tanstack/router-core",
-			"version": "1.171.32",
+			"version": "1.171.34",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/store@0.11.1",
+			"id": "frontend:@tanstack/store@0.11.2",
 			"name": "@tanstack/store",
-			"version": "0.11.1",
+			"version": "0.11.2",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/store",
 			"source": "frontend"
@@ -506,17 +506,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@xyflow/react@12.11.6",
+			"id": "frontend:@xyflow/react@12.12.0",
 			"name": "@xyflow/react",
-			"version": "12.11.6",
+			"version": "12.12.0",
 			"license": "MIT",
 			"homepageUrl": "https://reactflow.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@xyflow/system@0.0.82",
+			"id": "frontend:@xyflow/system@0.0.83",
 			"name": "@xyflow/system",
-			"version": "0.0.82",
+			"version": "0.0.83",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/xyflow/xyflow#readme",
 			"source": "frontend"
@@ -554,9 +554,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Avalonia@12.1.2",
+			"id": "backend:Avalonia@12.1.4",
 			"name": "Avalonia",
-			"version": "12.1.2",
+			"version": "12.1.4",
 			"license": "MIT",
 			"homepageUrl": "https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link",
 			"source": "backend"
@@ -578,89 +578,89 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Avalonia.Controls.WebView@12.1.0",
+			"id": "backend:Avalonia.Controls.WebView@12.1.1",
 			"name": "Avalonia.Controls.WebView",
-			"version": "12.1.0",
+			"version": "12.1.1",
 			"license": "MIT",
 			"homepageUrl": "https://avaloniaui.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Avalonia.Desktop@12.1.2",
+			"id": "backend:Avalonia.Desktop@12.1.4",
 			"name": "Avalonia.Desktop",
-			"version": "12.1.2",
+			"version": "12.1.4",
 			"license": "MIT",
 			"homepageUrl": "https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Avalonia.FreeDesktop@12.1.2",
+			"id": "backend:Avalonia.FreeDesktop@12.1.4",
 			"name": "Avalonia.FreeDesktop",
-			"version": "12.1.2",
+			"version": "12.1.4",
 			"license": "MIT",
 			"homepageUrl": "https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Avalonia.FreeDesktop.AtSpi@12.1.2",
+			"id": "backend:Avalonia.FreeDesktop.AtSpi@12.1.4",
 			"name": "Avalonia.FreeDesktop.AtSpi",
-			"version": "12.1.2",
+			"version": "12.1.4",
 			"license": "MIT",
 			"homepageUrl": "https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Avalonia.HarfBuzz@12.1.2",
+			"id": "backend:Avalonia.HarfBuzz@12.1.4",
 			"name": "Avalonia.HarfBuzz",
-			"version": "12.1.2",
+			"version": "12.1.4",
 			"license": "MIT",
 			"homepageUrl": "https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Avalonia.Native@12.1.2",
+			"id": "backend:Avalonia.Native@12.1.4",
 			"name": "Avalonia.Native",
-			"version": "12.1.2",
+			"version": "12.1.4",
 			"license": "MIT",
 			"homepageUrl": "https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Avalonia.Remote.Protocol@12.1.2",
+			"id": "backend:Avalonia.Remote.Protocol@12.1.4",
 			"name": "Avalonia.Remote.Protocol",
-			"version": "12.1.2",
+			"version": "12.1.4",
 			"license": "MIT",
 			"homepageUrl": "https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Avalonia.Skia@12.1.2",
+			"id": "backend:Avalonia.Skia@12.1.4",
 			"name": "Avalonia.Skia",
-			"version": "12.1.2",
+			"version": "12.1.4",
 			"license": "MIT",
 			"homepageUrl": "https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Avalonia.Themes.Fluent@12.1.2",
+			"id": "backend:Avalonia.Themes.Fluent@12.1.4",
 			"name": "Avalonia.Themes.Fluent",
-			"version": "12.1.2",
+			"version": "12.1.4",
 			"license": "MIT",
 			"homepageUrl": "https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Avalonia.Win32@12.1.2",
+			"id": "backend:Avalonia.Win32@12.1.4",
 			"name": "Avalonia.Win32",
-			"version": "12.1.2",
+			"version": "12.1.4",
 			"license": "MIT",
 			"homepageUrl": "https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Avalonia.X11@12.1.2",
+			"id": "backend:Avalonia.X11@12.1.4",
 			"name": "Avalonia.X11",
-			"version": "12.1.2",
+			"version": "12.1.4",
 			"license": "MIT",
 			"homepageUrl": "https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link",
 			"source": "backend"
@@ -1298,9 +1298,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:framer-motion@13.4.0",
+			"id": "frontend:framer-motion@14.0.0",
 			"name": "framer-motion",
-			"version": "13.4.0",
+			"version": "14.0.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
@@ -2250,9 +2250,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.AI.Abstractions@10.10.0",
+			"id": "backend:Microsoft.Extensions.AI.Abstractions@10.10.1",
 			"name": "Microsoft.Extensions.AI.Abstractions",
-			"version": "10.10.0",
+			"version": "10.10.1",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2594,41 +2594,41 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Identity.Client@4.90.0",
+			"id": "backend:Microsoft.Identity.Client@4.90.1",
 			"name": "Microsoft.Identity.Client",
-			"version": "4.90.0",
+			"version": "4.90.1",
 			"license": "MIT",
 			"homepageUrl": "https://go.microsoft.com/fwlink/?linkid=844761",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Identity.Client.Extensions.Msal@4.90.0",
+			"id": "backend:Microsoft.Identity.Client.Extensions.Msal@4.90.1",
 			"name": "Microsoft.Identity.Client.Extensions.Msal",
-			"version": "4.90.0",
+			"version": "4.90.1",
 			"license": "MIT",
 			"homepageUrl": "https://go.microsoft.com/fwlink/?linkid=844761",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.Abstractions@8.22.0",
+			"id": "backend:Microsoft.IdentityModel.Abstractions@8.23.0",
 			"name": "Microsoft.IdentityModel.Abstractions",
-			"version": "8.22.0",
+			"version": "8.23.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.JsonWebTokens@8.22.0",
+			"id": "backend:Microsoft.IdentityModel.JsonWebTokens@8.23.0",
 			"name": "Microsoft.IdentityModel.JsonWebTokens",
-			"version": "8.22.0",
+			"version": "8.23.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.Logging@8.22.0",
+			"id": "backend:Microsoft.IdentityModel.Logging@8.23.0",
 			"name": "Microsoft.IdentityModel.Logging",
-			"version": "8.22.0",
+			"version": "8.23.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
@@ -2650,9 +2650,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.Tokens@8.22.0",
+			"id": "backend:Microsoft.IdentityModel.Tokens@8.23.0",
 			"name": "Microsoft.IdentityModel.Tokens",
-			"version": "8.22.0",
+			"version": "8.23.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
@@ -2746,17 +2746,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:motion-dom@13.3.0",
+			"id": "frontend:motion-dom@14.0.0",
 			"name": "motion-dom",
-			"version": "13.3.0",
+			"version": "14.0.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:motion-utils@13.3.0",
+			"id": "frontend:motion-utils@14.0.0",
 			"name": "motion-utils",
-			"version": "13.3.0",
+			"version": "14.0.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
@@ -2914,9 +2914,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:OllamaSharp@5.4.30",
+			"id": "backend:OllamaSharp@5.5.0",
 			"name": "OllamaSharp",
-			"version": "5.4.30",
+			"version": "5.5.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/awaescher/OllamaSharp",
 			"source": "backend"
@@ -2930,9 +2930,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry@1.18.0",
+			"id": "backend:OpenTelemetry@1.19.1",
 			"name": "OpenTelemetry",
-			"version": "1.18.0",
+			"version": "1.19.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
@@ -2946,49 +2946,57 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Api.ProviderBuilderExtensions@1.18.0",
+			"id": "backend:OpenTelemetry.Api@1.19.1",
+			"name": "OpenTelemetry.Api",
+			"version": "1.19.1",
+			"license": "Apache-2.0",
+			"homepageUrl": "https://opentelemetry.io/",
+			"source": "backend"
+		},
+		{
+			"id": "backend:OpenTelemetry.Api.ProviderBuilderExtensions@1.19.1",
 			"name": "OpenTelemetry.Api.ProviderBuilderExtensions",
-			"version": "1.18.0",
+			"version": "1.19.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Exporter.OpenTelemetryProtocol@1.18.0",
+			"id": "backend:OpenTelemetry.Exporter.OpenTelemetryProtocol@1.19.1",
 			"name": "OpenTelemetry.Exporter.OpenTelemetryProtocol",
-			"version": "1.18.0",
+			"version": "1.19.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Extensions.Hosting@1.18.0",
+			"id": "backend:OpenTelemetry.Extensions.Hosting@1.19.1",
 			"name": "OpenTelemetry.Extensions.Hosting",
-			"version": "1.18.0",
+			"version": "1.19.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.AspNetCore@1.18.0",
+			"id": "backend:OpenTelemetry.Instrumentation.AspNetCore@1.19.0",
 			"name": "OpenTelemetry.Instrumentation.AspNetCore",
-			"version": "1.18.0",
+			"version": "1.19.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.Http@1.18.0",
+			"id": "backend:OpenTelemetry.Instrumentation.Http@1.19.0",
 			"name": "OpenTelemetry.Instrumentation.Http",
-			"version": "1.18.0",
+			"version": "1.19.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.Runtime@1.18.0",
+			"id": "backend:OpenTelemetry.Instrumentation.Runtime@1.19.0",
 			"name": "OpenTelemetry.Instrumentation.Runtime",
-			"version": "1.18.0",
+			"version": "1.19.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
@@ -3186,9 +3194,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:react-i18next@17.0.14",
+			"id": "frontend:react-i18next@17.0.15",
 			"name": "react-i18next",
-			"version": "17.0.14",
+			"version": "17.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/i18next/react-i18next",
 			"source": "frontend"
@@ -3378,33 +3386,33 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrdom@2.1.6",
+			"id": "frontend:rrdom@2.1.7",
 			"name": "rrdom",
-			"version": "2.1.6",
+			"version": "2.1.7",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/rrdom#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrweb@2.1.6",
+			"id": "frontend:rrweb@2.1.7",
 			"name": "rrweb",
-			"version": "2.1.6",
+			"version": "2.1.7",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:rrweb-snapshot@2.1.6",
+			"id": "frontend:rrweb-snapshot@2.1.7",
 			"name": "rrweb-snapshot",
-			"version": "2.1.6",
+			"version": "2.1.7",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/rrweb-io/rrweb/tree/main/packages/rrweb-snapshot#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Scalar.AspNetCore@2.17.4",
+			"id": "backend:Scalar.AspNetCore@2.17.14",
 			"name": "Scalar.AspNetCore",
-			"version": "2.17.4",
+			"version": "2.17.14",
 			"license": "MIT",
 			"homepageUrl": "https://scalar.com/",
 			"source": "backend"
@@ -3546,17 +3554,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:seroval@1.6.3",
+			"id": "frontend:seroval@1.6.8",
 			"name": "seroval",
-			"version": "1.6.3",
+			"version": "1.6.8",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/lxsmnsyc/seroval/tree/main/packages/seroval",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:seroval-plugins@1.6.3",
+			"id": "frontend:seroval-plugins@1.6.8",
 			"name": "seroval-plugins",
-			"version": "1.6.3",
+			"version": "1.6.8",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/lxsmnsyc/seroval/tree/main/packages/plugins",
 			"source": "frontend"
@@ -3906,9 +3914,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:type-fest@5.8.0",
+			"id": "frontend:type-fest@5.10.0",
 			"name": "type-fest",
-			"version": "5.8.0",
+			"version": "5.10.0",
 			"license": "(MIT OR CC0-1.0)",
 			"homepageUrl": "https://github.com/sindresorhus/type-fest#readme",
 			"source": "frontend"

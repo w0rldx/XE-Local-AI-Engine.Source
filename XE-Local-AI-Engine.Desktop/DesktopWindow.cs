@@ -31,6 +31,12 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
         MinHeight = 600;
 
         _webView = new NativeWebView();
+        // WPE is unsupported on Linux; never set this on Windows, where a WebKitGtk-only list leaves no adapter.
+        if (OperatingSystem.IsLinux())
+        {
+            _webView.AdapterPreference = [WebViewAdapterType.WebKitGtk];
+        }
+
         _webView.EnvironmentRequested += OnEnvironmentRequested;
         _webView.AdapterCreated += OnAdapterCreated;
         _webView.WebMessageReceived += (_, args) => _linux?.ReceiveMessage(args.Body);
@@ -55,11 +61,6 @@ internal sealed class DesktopWindow : Window, IAsyncDisposable
                 gtk.ApplicationNameForUserAgent = GtkDocumentPolicy.UserAgentMarker;
                 gtk.BaseDataDirectory = _options.ProfileDirectory;
                 gtk.BaseCacheDirectory = cacheDirectory;
-                break;
-            case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe:
-                wpe.PreferWebKitGtkInstead = true;
-                wpe.DataDirectory = _options.ProfileDirectory;
-                wpe.CacheDirectory = cacheDirectory;
                 break;
             default:
                 throw new PlatformNotSupportedException("The selected WebView adapter cannot use the required explicit profile directory.");

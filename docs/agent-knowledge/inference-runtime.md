@@ -59,7 +59,7 @@ control 200: GBNF skipped or upstream moved the limit; re-measure). Residual fai
 
 ### OllamaSharp wraps HTTP **400 only** into `OllamaException` — every other status is a bare `HttpRequestException`
 
-**Rule:** on the pinned OllamaSharp 5.4.30, `EnsureSuccessStatusCodeAsync` builds an `OllamaException` only for 400; every
+**Rule:** on the pinned OllamaSharp 5.5.0 (verified identical to 5.4.30), `EnsureSuccessStatusCodeAsync` builds an `OllamaException` only for 400; every
 other failure is an `HttpRequestException` with `StatusCode` set. Catch on the status, never a message substring.
 **Prevents:** a `catch (OllamaException)` filtered on "not found" that never runs for a 404. **Authority:** OllamaSharp
 `OllamaApiClient.EnsureSuccessStatusCodeAsync` (decompiled at the pin).

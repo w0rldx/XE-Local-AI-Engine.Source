@@ -9,6 +9,14 @@ updates:
       timezone: Europe/Berlin
     target-branch: develop
     open-pull-requests-limit: 3
+    ignore:
+      # Quartz 4 needs a schema migration on user databases: Plans/deps-round-2026-10-12/PLAN.md §1 D5.
+      - dependency-name: "Quartz"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "Quartz.*"
+        update-types:
+          - "version-update:semver-major"
     groups:
       aspire-coupled:
         patterns:
@@ -65,6 +73,10 @@ updates:
           - ">=7"
       # Keep the type surface aligned with the supported Node 22 runtime until that baseline moves.
       - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
+      # msw 3 rewrites the test server setup across the suite: Plans/deps-round-2026-10-12/PLAN.md §1 D3.
+      - dependency-name: msw
         update-types:
           - "version-update:semver-major"
     groups:

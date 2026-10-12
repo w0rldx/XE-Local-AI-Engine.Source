@@ -51,7 +51,7 @@ public sealed class OllamaModelServiceTests
     {
         // Ollama answers /api/generate for an UNKNOWN model with 404 "model '<name>' not found, try pulling it first".
         // That reaches the caller as a bare HttpRequestException carrying the status, NOT an OllamaException: OllamaSharp
-        // 5.4.30's EnsureSuccessStatusCodeAsync parses the body only for HTTP 400 and lets every other status fall
+        // 5.5.0's EnsureSuccessStatusCodeAsync parses the body only for HTTP 400 and lets every other status fall
         // through to HttpResponseMessage.EnsureSuccessStatusCode(). Eject is documented idempotent on both surfaces that
         // share OllamaModelUnloader, and a model this runtime does not know is already in the requested state, so the
         // call must complete. The fake answers for any name and cannot produce a 404, hence the substituted client.
