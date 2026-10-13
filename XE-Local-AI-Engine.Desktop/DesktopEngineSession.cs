@@ -143,7 +143,17 @@ internal sealed class DesktopEngineSession : IAsyncDisposable
                     // The candidate lost a startup race or exited before readiness.
                 }
 
-                // Read before the finally disposes the session: this is the only surviving trace of why it died.
+                // WaitForExitAsync does not wait for a manually read stderr pipe: drain it (bounded) before reading
+                // the tail, before the finally disposes the session; this is the only surviving trace of why it died.
+                try
+                {
+                    await session._errors.WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None);
+                }
+                catch (TimeoutException)
+                {
+                    // A descendant still holds the pipe open; whatever was captured so far is what the report gets.
+                }
+
                 return new OwnedStart(null, session.ErrorTail, process.ExitCode);
             }
 
