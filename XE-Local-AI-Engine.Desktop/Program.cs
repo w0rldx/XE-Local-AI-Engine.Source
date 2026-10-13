@@ -31,6 +31,12 @@ internal static class Program
 #pragma warning restore MA0045
             }
 
+            // Only the shell names itself; the windowless engine child keeps the default ID.
+            if (OperatingSystem.IsWindows())
+            {
+                DesktopWindowsShell.NameProcess();
+            }
+
             var options = DesktopStartupOptions.Parse(args, Environment.GetEnvironmentVariable("XE_DATA_DIR"),
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
             return AppBuilder.Configure(() => new DesktopApplication(options))

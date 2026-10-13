@@ -104,7 +104,7 @@ public sealed class NativeDesktopContractTests
     }
 
     [Test]
-    public void TrayIcon_UsesTheHighContrastAsset_WhileTheWindowKeepsTheFavicon()
+    public void TrayIcon_UsesTheHighContrastAsset_WithTheFaviconAsFallback()
     {
         // The favicon's dark outline vanished on a dark taskbar; the tray takes a white glyph with a dark stroke.
         var project = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "XE-Local-AI-Engine.Desktop.csproj"));
@@ -114,7 +114,38 @@ public sealed class NativeDesktopContractTests
         AssertEx.True(File.Exists(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "Assets", "TrayIcon.png")));
         AssertEx.Contains(source, "GetManifestResourceStream(\"TrayIcon.png\")");
         AssertEx.Contains(source, "Icon = trayStream is null ? icon : new WindowIcon(trayStream),");
-        AssertEx.Contains(source, "_window!.Icon = icon;");
+    }
+
+    [Test]
+    public void WindowIcon_UsesTheFilledHighContrastAsset_WithTheFaviconAsFallback()
+    {
+        // The outline favicon was low-contrast on the title bar and taskbar button; the window takes the filled hexagon.
+        var project = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "XE-Local-AI-Engine.Desktop.csproj"));
+        var source = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "DesktopApplication.cs"));
+
+        AssertEx.Contains(project, "<EmbeddedResource Include=\"Assets/WindowIcon.png\" LogicalName=\"WindowIcon.png\" />");
+        AssertEx.True(File.Exists(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "Assets", "WindowIcon.png")));
+        AssertEx.Contains(source, "GetManifestResourceStream(\"WindowIcon.png\")");
+        AssertEx.Contains(source, "_window!.Icon = windowStream is null ? icon : new WindowIcon(windowStream);");
+    }
+
+    [Test]
+    public void Program_NamesTheProcessForTheWindowsShell_BeforeAnyWindowExists()
+    {
+        // Without an explicit AppUserModelID the taskbar groups the dotnet-hosted shell as ".NET Host".
+        var program = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "Program.cs"));
+        var shell = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "DesktopWindowsShell.cs"));
+        var engine = program.IndexOf("DesktopEngineCommand.RunAsync(args)", StringComparison.Ordinal);
+        var guarded = program.IndexOf("if (OperatingSystem.IsWindows())", StringComparison.Ordinal);
+        var named = program.IndexOf("DesktopWindowsShell.NameProcess();", StringComparison.Ordinal);
+
+        AssertEx.Equal("XE.LocalAIEngine.Desktop", DesktopWindowsShell.AppUserModelId);
+        AssertEx.True(engine >= 0 && guarded > engine, "The windowless engine child returns before the shell names itself.");
+        AssertEx.True(named > guarded, "The setter runs inside the Windows guard.");
+        AssertEx.True(named < program.IndexOf("AppBuilder.Configure", StringComparison.Ordinal), "The ID is set before Avalonia starts.");
+        AssertEx.Contains(shell, "[LibraryImport(\"shell32.dll\"");
+        AssertEx.Contains(shell, "SetCurrentProcessExplicitAppUserModelID(string appId)");
+        AssertEx.Contains(shell, "[SupportedOSPlatform(\"windows\")]");
     }
 
     [Test]
@@ -129,6 +160,9 @@ public sealed class NativeDesktopContractTests
         AssertEx.Equal(3, new[] { DesktopText.Settings, DesktopText.Quit, DesktopText.CloseTitle }.Distinct(StringComparer.Ordinal).Count());
         AssertEx.Contains(source, "Text = DesktopText.Current(Label(current)),");
         AssertEx.Contains(source, "IsDefault = isDefault,");
+        AssertEx.Contains(source, "if (isDefault)");
+        AssertEx.Contains(source, "button.Classes.Add(\"accent\");");
+        AssertEx.Equal(1, source.Split("Classes.Add(", StringSplitOptions.None).Length - 1, "Only the default choice carries the accent.");
         AssertEx.Contains(DesktopText.Current("Keep running in the tray"), "Keep running in the tray");
     }
 

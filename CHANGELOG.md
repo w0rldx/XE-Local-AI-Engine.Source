@@ -304,6 +304,19 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   external connection. It now writes through the same atomic temp-file-and-rename path as the other credential stores.
 - The playbook "Approve" button never showed why it was disabled; the tooltip's wrapper was missing.
 - The German playbook behaviour placeholder used the informal form.
+- Windows tester round on `1.0.0-rc.2.dev.20261013.109` (tray, dialogs, unlock page, first-run chooser):
+  - After an update, the desktop window and any browser with a cached copy kept the previous build's web app: the
+    shell page is served for revalidation, but its validator was derived from the file's modification time and length,
+    the installer stores every file with a 1980 timestamp, and the shell's byte length does not change between builds
+    (only the content-hashed bundle name inside it does), so the server answered "not modified". The validator of
+    every file that is not a content-hashed asset is now derived from the file's content, and all of those files are
+    served for revalidation, so the first start after an update loads the new app (N-57).
+  - The desktop settings dialog draws the stored choice as the accent button (N-58).
+  - The shell registers an explicit application identity on Windows, so the taskbar groups and names the window as
+    XE Local AI Engine instead of ".NET Host", and the window and taskbar use a filled high-contrast icon; the tray
+    keeps its own icon (N-59).
+  - The first-run sandbox-profile chooser's recommendation on a Windows host was read for the first time: Low, with
+    the three workloads High would refuse listed, closing the ADR 0020 item.
 - Windows tester round on `1.0.0-rc.2.dev.20261013.108` (sandbox + tray):
   - The vault unlock page now notices an unlock performed elsewhere (another browser, the REST API) and moves on by
     itself: while idle it polls the auth status every 5 s for a minute, then every 15 s. Before, the desktop window sat

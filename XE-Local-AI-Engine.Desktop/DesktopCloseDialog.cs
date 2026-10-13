@@ -101,6 +101,12 @@ internal sealed class DesktopCloseDialog : Window
             IsEnabled = enabled,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
+        if (isDefault)
+        {
+            // IsDefault only binds Enter; the Fluent theme draws the accent from this class.
+            button.Classes.Add("accent");
+        }
+
         button.Click += (_, _) => Close(new DesktopCloseChoice
         {
             Action = action,

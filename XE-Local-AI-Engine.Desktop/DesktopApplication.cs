@@ -193,8 +193,10 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         }
 
         var icon = new WindowIcon(iconStream);
-        _window!.Icon = icon;
-        // A white glyph with a dark stroke reads on light and dark trays; the window keeps the coloured favicon.
+        // The filled hexagon with a white glyph reads on light and dark title bars; the favicon is only the fallback.
+        await using var windowStream = typeof(DesktopApplication).Assembly.GetManifestResourceStream("WindowIcon.png");
+        _window!.Icon = windowStream is null ? icon : new WindowIcon(windowStream);
+        // A white glyph with a dark stroke reads on light and dark trays.
         await using var trayStream = typeof(DesktopApplication).Assembly.GetManifestResourceStream("TrayIcon.png");
         _tray = new TrayIcon
         {
