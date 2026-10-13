@@ -60,7 +60,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     private const uint FileNameNormalizedVolumeNameDos = 0;
 
     /// <summary>Link hops followed before a path is treated as a cycle. The kernel's own ELOOP limit is 40.</summary>
-    private const int MaxLinkHops = 40;
+    internal const int MaxLinkHops = 40;
 
     /// <summary>Credential and configuration stores under the operator's home directory, each denied with its whole subtree.</summary>
     private static readonly string[] SensitiveHomeSubdirectories =
@@ -180,9 +180,9 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     ///     credentials — the abuse case (threat model AB3) the Sandboxed tier exists to close.
     /// </summary>
     /// <remarks>
-    ///     Two classes. The home directory and <c>/</c> are ANCESTOR-ONLY: a tree that is or contains one is refused, a tree beneath
-    ///     one is fine, or every <c>npx</c>- or <c>uvx</c>-based server would be refused and the control turned off. Every other root
-    ///     DENIES ITS SUBTREE as well, since a folder inside a credential store is still the store. Code-owned, so no registration edits it.
+    ///     Two classes. The home directory is ANCESTOR-ONLY: a tree that is or contains it is refused, a tree beneath it is fine, or
+    ///     every <c>npx</c>- or <c>uvx</c>-based server would be refused. Every other root DENIES ITS SUBTREE as well, since a folder
+    ///     inside a store is still the store. Volume roots are refused by <see cref="IsVolumeRoot" />. Code-owned: no registration edits it.
     /// </remarks>
     internal static IReadOnlyList<SensitiveHostRoot> BuildSensitiveHostRoots(string nodeDataRoot, Func<string>? resolveHome = null)
     {
@@ -227,8 +227,6 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             AddRoot(roots, absolute, deniesSubtree: true);
         }
 
-        // On Windows "/" is the root of the process's current drive, and refusing its subtree would refuse every server on that drive.
-        AddRoot(roots, "/", deniesSubtree: false);
         return roots;
     }
 
@@ -349,8 +347,17 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     {
         if (Canonicalize(path) is not { } canonical)
         {
-            // An unreadable or malformed path contributes no tree. The server will fail to start and say so, which is
-            // a better diagnosis than a refusal here that names a path the operator typed.
+            // A folder that exists but has no readable real name (a network share, an unopenable handle) is refused, not dropped: a drop
+            // starts a server without its files. A malformed or missing path contributes no tree, and the server fails to start.
+            if (TryLexical(path) is { } lexical && (Directory.Exists(lexical) || File.Exists(lexical)))
+            {
+                throw new SandboxCapabilityNotSupportedException(
+                    $"The MCP server '{serverName}' is registered at the Sandboxed trust tier and would bind '{lexical}' into its sandbox, which is "
+                    + (OperatingSystem.IsWindows()
+                        ? "a network share or a folder whose real name cannot be read. The Sandboxed tier binds only local NTFS folders: point the server at a local folder holding its own files."
+                        : "a link chain too deep to resolve or a folder whose real name cannot be read. The Sandboxed tier binds only folders it can resolve: point the server at a plain folder holding its own files."));
+            }
+
             return;
         }
 
@@ -362,15 +369,19 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
                 + "Spell the server's command and working directory as an ordinary path such as C:\\Program Files\\<server>.");
         }
 
-        // BEFORE the chain-owned check, deliberately: the root and /etc are denied roots the chain-owned predicate would drop
-        // silently, and the operator needs the refusal rather than a server that starts without the tree it asked for.
-        if (sensitiveRoots.FirstOrDefault(root => Exposes(canonical, root)) is { } covered)
+        // BEFORE the chain-owned check, deliberately: / and /etc are denied trees the chain-owned predicate would drop silently, and the
+        // operator needs the refusal rather than a server that starts without the tree it asked for. Canonical, so a subst drive is its target.
+        if (IsVolumeRoot(canonical))
         {
-            throw new SandboxCapabilityNotSupportedException(covered.DeniesSubtree
-                ? $"The MCP server '{serverName}' is registered at the Sandboxed trust tier and would bind '{canonical}' into its sandbox, which is, contains or lies inside the sensitive host path '{covered.HostPath}'. "
-                  + "That path is a credential store or the engine's own state, protected with everything beneath it: point the server's command or working directory at the directory holding its own files instead."
-                : $"The MCP server '{serverName}' is registered at the Sandboxed trust tier and would bind '{canonical}' into its sandbox, which contains the sensitive host path '{covered.HostPath}'. "
-                  + "Point the server's command or working directory at the directory holding its own files instead — a subdirectory is fine, it is the root itself that cannot be bound.");
+            throw new SandboxCapabilityNotSupportedException(
+                $"The MCP server '{serverName}' is registered at the Sandboxed trust tier and would bind '{canonical}' into its sandbox, which is a volume root. "
+                + "A volume root exposes everything on that drive; point the server at the folder holding its own files.");
+        }
+
+        var exposed = sensitiveRoots.Where(root => Exposes(canonical, root)).ToList();
+        if (exposed.Count > 0)
+        {
+            throw new SandboxCapabilityNotSupportedException(ExposureRefusal(serverName, canonical, exposed));
         }
 
         // The chain-owned mount points are a bwrap fact: the Windows AppContainer boundary grants a tree in place and owns none (ADR 0019).
@@ -382,6 +393,35 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         }
 
         trees.Add(canonical);
+    }
+
+    /// <summary>The refusal for a tree that exposes <paramref name="exposed" />, worded by relation: inside a store, holding the home, holding stores.</summary>
+    private static string ExposureRefusal(string serverName, string canonical, List<SensitiveHostRoot> exposed)
+    {
+        var prefix = $"The MCP server '{serverName}' is registered at the Sandboxed trust tier and would bind '{canonical}' into its sandbox, which ";
+        const string remedy = "point the server's command or working directory at the directory holding its own files instead";
+        if (exposed.FirstOrDefault(root => root.DeniesSubtree && IsAtOrBeneath(canonical, root.HostPath)) is { } store)
+        {
+            return prefix + $"is, contains or lies inside the sensitive host path '{store.HostPath}'. "
+                   + $"That path is a credential store or the engine's own state, protected with everything beneath it: {remedy}.";
+        }
+
+        if (exposed.FirstOrDefault(root => !root.DeniesSubtree) is { } home)
+        {
+            return prefix + $"is or contains the home directory '{home.HostPath}'. The home directory holds the operator's credentials: {remedy}; a folder beneath it is fine.";
+        }
+
+        var count = exposed.Select(root => root.HostPath).Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal).Count();
+        return count == 1
+            ? prefix + $"contains the protected folder '{exposed[0].HostPath}'. That is a credential store or the engine's own state: {remedy}."
+            : prefix + $"contains {count.ToString(CultureInfo.InvariantCulture)} protected folders (first: '{exposed[0].HostPath}'). "
+              + $"Those are credential stores or the engine's own state: {remedy}.";
+    }
+
+    /// <summary>A volume root (<c>/</c>, <c>D:\</c>): binding one exposes the whole drive. Checked on the canonical path, so a subst drive is its target.</summary>
+    internal static bool IsVolumeRoot(string canonical)
+    {
+        return canonical is "/" || (canonical.Length == 3 && IsPlainDriveLetterPath(canonical));
     }
 
     /// <summary>
@@ -446,8 +486,8 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
                 current = resolved;
             }
 
-            // A cycle, or a chain deeper than the kernel would follow. Refusing to answer is the fail-closed reading: a null tree
-            // contributes nothing, while a null ROOT would be a hole, so BuildSensitiveHostRoots keeps the lexical form (see AddRoot).
+            // A cycle, or a chain deeper than this walk follows. Fail closed: AddBindableTree refuses an existing null tree, and a null
+            // ROOT would be a hole, so BuildSensitiveHostRoots keeps the lexical form as well (see AddRoot).
             return null;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
@@ -502,7 +542,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
 
     /// <summary>
     ///     The normalized drive-letter name of an existing Windows file or directory, read from an opened handle; null when it cannot be
-    ///     opened or lives on a network share, so it contributes no tree.
+    ///     opened or lives on a network share, so the tree is refused.
     /// </summary>
     [SupportedOSPlatform("windows")]
     private static string? FinalPathOfExisting(string path)

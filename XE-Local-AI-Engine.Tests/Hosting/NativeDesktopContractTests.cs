@@ -93,6 +93,17 @@ public sealed class NativeDesktopContractTests
     }
 
     [Test]
+    public void TrayIcon_IsAttachedToTheApplication_SoThePlatformIconExists()
+    {
+        // Avalonia 12.1.4 creates the platform tray only on attach; an unattached icon left the tray preference unusable.
+        var source = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "DesktopApplication.cs"));
+
+        AssertEx.Contains(source, "_tray = new TrayIcon");
+        AssertEx.Contains(source, "TrayIcon.SetIcons(this, new TrayIcons { _tray });");
+        AssertEx.Contains(source, "_tray?.Dispose();");
+    }
+
+    [Test]
     public void ShellWindows_UseOneProductTitle()
     {
         var desktop = RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop");

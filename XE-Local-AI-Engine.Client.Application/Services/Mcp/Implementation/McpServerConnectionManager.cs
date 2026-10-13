@@ -140,6 +140,9 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
+        // The gate covers slug assignment, the stale-revoke pass and registration only; connects run outside it, so one
+        // server's slow handshake never delays another server's start.
+        List<ServerEntry> entries;
         await _refreshGate.WaitAsync(cancellationToken);
         try
         {
@@ -157,14 +160,16 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                 await RevokeAsync(id);
             }
 
-            // Servers connect in parallel: each is bounded by its own timeout and isolated from the others' failures.
-            await Task.WhenAll(enabled.Select((record, order) => ReconcileAsync(record, order, cancellationToken)));
-            PublishSnapshot();
+            entries = [.. enabled.Select((record, order) => Register(record, order))];
         }
         finally
         {
             _ = _refreshGate.Release();
         }
+
+        // Servers connect in parallel: each is bounded by its own timeout and isolated from the others' failures.
+        await Task.WhenAll(entries.Select(entry => ReconcileAsync(entry, cancellationToken)));
+        PublishSnapshot();
     }
 
     public Task RefreshAsync(Guid serverId, CancellationToken cancellationToken = default)
@@ -203,18 +208,32 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             await DisposeSessionSafelyAsync(deadPrimary);
         }
 
-        await _refreshGate.WaitAsync(cancellationToken);
         try
         {
-            var enabled = await LoadEnabledWithSlugsAsync(serverId, cancellationToken);
-            if (enabled.Count == 0)
+            ServerEntry? entry = null;
+            await _refreshGate.WaitAsync(cancellationToken);
+            try
             {
-                // Deleted or disabled: tear down its sessions and withdraw its tools.
-                await RevokeAsync(serverId);
+                var enabled = await LoadEnabledWithSlugsAsync(serverId, cancellationToken);
+                if (enabled.Count == 0)
+                {
+                    // Deleted or disabled: tear down its sessions and withdraw its tools.
+                    await RevokeAsync(serverId);
+                }
+                else
+                {
+                    entry = Register(enabled[0], order: null);
+                }
             }
-            else
+            finally
             {
-                await ReconcileAsync(enabled[0], order: null, cancellationToken, force);
+                _ = _refreshGate.Release();
+            }
+
+            // Outside the refresh gate: a connect queues only behind this server's own gate.
+            if (entry is not null)
+            {
+                await ReconcileAsync(entry, cancellationToken, force);
             }
 
             PublishSnapshot();
@@ -231,10 +250,6 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             }
 
             throw;
-        }
-        finally
-        {
-            _ = _refreshGate.Release();
         }
     }
 
@@ -410,20 +425,14 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     }
 
     /// <summary>
-    ///     Brings one enabled registration's shared session up to date: a live session at the same Version is kept
-    ///     (only the display record is refreshed), anything else reconnects.
+    ///     Adds or finds the server's entry and records <paramref name="record" /> as the config its next connect uses.
+    ///     Must run under the refresh gate, so registration order follows load order.
     /// </summary>
-    /// <remarks>
-    ///     A config change (Version bump) closes every session of the server and drops its old tools; <paramref name="force" />
-    ///     closes every session and reconnects even a live one. A reconnect of an unchanged server that fails keeps the tools
-    ///     it had, so they stay offered and fail typed.
-    /// </remarks>
-    private async Task ReconcileAsync(McpServerRecord record, int? order, CancellationToken cancellationToken, bool force = false)
+    private ServerEntry Register(McpServerRecord record, int? order)
     {
-        ServerEntry entry;
         lock (_stateLock)
         {
-            if (!_servers.TryGetValue(record.Id, out entry!))
+            if (!_servers.TryGetValue(record.Id, out var entry))
             {
                 entry = new ServerEntry(record, order ?? _servers.Count);
                 _servers[record.Id] = entry;
@@ -432,14 +441,37 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             {
                 entry.Order = order.Value;
             }
-        }
 
+            entry.Desired = record;
+            return entry;
+        }
+    }
+
+    /// <summary>
+    ///     Brings one enabled registration's shared session up to date: a live session at the same Version is kept
+    ///     (only the display record is refreshed), anything else reconnects.
+    /// </summary>
+    /// <remarks>
+    ///     A config change (Version bump) closes every session of the server and drops its old tools; <paramref name="force" />
+    ///     closes every session and reconnects even a live one. A reconnect of an unchanged server that fails keeps the tools
+    ///     it had, so they stay offered and fail typed.
+    /// </remarks>
+    private async Task ReconcileAsync(ServerEntry entry, CancellationToken cancellationToken, bool force = false)
+    {
         await entry.Gate.WaitAsync(cancellationToken);
         try
         {
             List<ClientSession> toDispose = [];
             lock (_stateLock)
             {
+                // Revoked or disposed while queued: nothing to connect. Otherwise the newest registered record wins, so an
+                // older refresh that reaches the gate last never reconnects a stale config.
+                if (entry.Removed || _disposed)
+                {
+                    return;
+                }
+
+                var record = entry.Desired;
                 var versionChanged = entry.Record.Version != record.Version;
                 var alive = entry.Primary is { IsAlive: true } && entry.LastError is null;
                 entry.Record = record;
@@ -1297,12 +1329,16 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         public ServerEntry(McpServerRecord record, int order)
         {
             Record = record;
+            Desired = record;
             Order = order;
         }
 
         public SemaphoreSlim Gate { get; } = new(initialCount: 1, maxCount: 1);
 
         public McpServerRecord Record { get; set; }
+
+        /// <summary>The newest record a refresh registered; the connect path reads it under <see cref="Gate" />.</summary>
+        public McpServerRecord Desired { get; set; }
 
         public int Order { get; set; }
 
@@ -1318,7 +1354,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
         public bool Removed { get; set; }
 
-        /// <summary>A refresh of this server is queued behind the refresh gate; its status reads as connecting until it settles.</summary>
+        /// <summary>A refresh of this server is queued; its status reads as connecting until it settles.</summary>
         public bool ReconnectPending { get; set; }
 
         public int RelistGeneration { get; set; }

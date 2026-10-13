@@ -850,6 +850,157 @@ public sealed class SandboxedMcpStdioTransportTests
     }
 
     [Test]
+    [Arguments(@"D:\", true)]
+    [Arguments(@"C:\", true)]
+    [Arguments("/", true)]
+    [Arguments(@"C:\xe\sub", false)]
+    [Arguments(@"D:\x", false)]
+    [Arguments("/usr", false)]
+    public void IsVolumeRoot_IsTrueOnlyForTheRootOfADrive(string canonical, bool expected)
+    {
+        // Round 6 read a whole data drive through a D:\ working directory: no denied root lay on D:, so nothing matched.
+        AssertEx.Equal(expected, SandboxedMcpStdioTransport.IsVolumeRoot(canonical), $"'{canonical}'");
+    }
+
+    [Test]
+    public void ResolveReadOnlyTrees_ForTheFilesystemRoot_IsRefusedAsAVolumeRoot()
+    {
+        var record = StdioRecord(McpTrustTier.Sandboxed) with
+        {
+            Command = "/usr/bin/server-binary",
+            WorkingDirectory = "/"
+        };
+
+        var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots()));
+
+        AssertEx.Contains(exception.Message, "which is a volume root");
+        AssertEx.False(exception.Message.Contains("home directory", StringComparison.Ordinal), "the volume-root guard runs before the denylist.");
+    }
+
+    [Test]
+    public void ResolveReadOnlyTrees_ForAnExistingFolderWhoseRealNameCannotBeRead_IsRefusedNotDropped()
+    {
+        // A chain of MaxLinkHops links resolves for the OS but exhausts the walk, the Linux twin of an existing UNC share whose final
+        // path is refused: the folder exists, its real name is unknown, and a silent drop started the server without it.
+        if (!OperatingSystem.IsLinux())
+        {
+            throw new SkipTestException("drives the null-canonical path through a symlink chain; directory symlinks are privileged on Windows.");
+        }
+
+        var chain = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"chain-{Guid.NewGuid():N}"));
+        try
+        {
+            var target = Directory.CreateDirectory(Path.Combine(chain.FullName, "real")).FullName;
+            // Linux follows at most 40 links (ELOOP beyond), so this chain stays resolvable only while MaxLinkHops is at most 40.
+            for (var hop = 1; hop <= SandboxedMcpStdioTransport.MaxLinkHops; hop++)
+            {
+                var link = Path.Combine(chain.FullName, $"l{hop.ToString(CultureInfo.InvariantCulture)}");
+                Directory.CreateSymbolicLink(link, target);
+                target = link;
+            }
+
+            AssertEx.True(Directory.Exists(target), "the OS still resolves a chain of MaxLinkHops links.");
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "/usr/bin/server-binary",
+                WorkingDirectory = target
+            };
+
+            var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots()));
+
+            AssertEx.Contains(exception.Message, target);
+            AssertEx.Contains(exception.Message, "a link chain too deep to resolve or a folder whose real name cannot be read");
+            AssertEx.Contains(exception.Message, "binds only folders it can resolve");
+            AssertEx.False(exception.Message.Contains("NTFS", StringComparison.Ordinal), "the Windows wording must not reach a Linux operator.");
+        }
+        finally
+        {
+            chain.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    public void ResolveReadOnlyTrees_ForAFolderHoldingSeveralStores_NamesTheContainedStoresNotLiesInside()
+    {
+        // %APPDATA% holds seven stores: the refusal says it contains them, not that it "lies inside" the first one listed.
+        var home = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"home-{Guid.NewGuid():N}"));
+        try
+        {
+            var roaming = Directory.CreateDirectory(Path.Combine(home.FullName, "AppData", "Roaming"));
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "/usr/bin/server-binary",
+                WorkingDirectory = roaming.FullName
+            };
+
+            var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record,
+                path => path,
+                SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, () => home.FullName)));
+
+            AssertEx.Contains(exception.Message, $"protected folders (first: '{Path.Combine(roaming.FullName, "Microsoft")}')");
+            AssertEx.False(exception.Message.Contains("lies inside", StringComparison.Ordinal), exception.Message);
+            AssertEx.False(exception.Message.Contains("home directory", StringComparison.Ordinal), exception.Message);
+        }
+        finally
+        {
+            home.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    public void ResolveReadOnlyTrees_ForAFolderHoldingOneStore_NamesThatStore()
+    {
+        // ~/.local/share holds exactly one store (the keyrings), so the refusal names it instead of counting "1 protected folder".
+        var home = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"home-{Guid.NewGuid():N}"));
+        try
+        {
+            var share = Directory.CreateDirectory(Path.Combine(home.FullName, ".local", "share"));
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "/usr/bin/server-binary",
+                WorkingDirectory = share.FullName
+            };
+
+            var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record,
+                path => path,
+                SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, () => home.FullName)));
+
+            AssertEx.Contains(exception.Message, $"contains the protected folder '{Path.Combine(share.FullName, "keyrings")}'");
+            AssertEx.False(exception.Message.Contains("first:", StringComparison.Ordinal), exception.Message);
+        }
+        finally
+        {
+            home.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    public void ResolveReadOnlyTrees_ForAFolderHoldingTheHomeDirectory_SaysItContainsTheHomeDirectory()
+    {
+        var parent = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"users-{Guid.NewGuid():N}"));
+        try
+        {
+            var home = Directory.CreateDirectory(Path.Combine(parent.FullName, "operator"));
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "/usr/bin/server-binary",
+                WorkingDirectory = parent.FullName
+            };
+
+            var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record,
+                path => path,
+                SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, () => home.FullName)));
+
+            AssertEx.Contains(exception.Message, $"is or contains the home directory '{home.FullName}'");
+            AssertEx.False(exception.Message.Contains("root itself", StringComparison.Ordinal), exception.Message);
+        }
+        finally
+        {
+            parent.Delete(recursive: true);
+        }
+    }
+
+    [Test]
     public void ResolveReadOnlyTrees_ForACommandBeneathASubtreeDeniedStore_IsRefused()
     {
         // The command axis passes the same gate: a binary inside AppData\Roaming\Microsoft would grant its folder of that store.
@@ -1159,7 +1310,6 @@ public sealed class SandboxedMcpStdioTransportTests
                 $"'{path}' must be on the list with DeniesSubtree = {deniesSubtree}.");
 
         Expect(home, deniesSubtree: false);
-        Expect("/", deniesSubtree: false);
         foreach (var store in new[] { ".ssh", ".gnupg", ".aws", ".azure", ".config", ".docker", ".kube", ".mozilla", ".thunderbird", ".password-store", ".pki" })
         {
             Expect(Under(store), deniesSubtree: true);

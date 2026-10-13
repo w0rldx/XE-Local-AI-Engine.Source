@@ -1254,36 +1254,101 @@ public sealed class McpServerConnectionManagerTests
     }
 
     [Test]
-    public async Task RevokeAsync_WithdrawsTheServerAtOnce_EvenWhileAnotherServersRefreshHoldsTheGate()
+    public async Task RevokeAsync_WithdrawsTheServerAtOnce_EvenWhileAnotherRefreshHoldsTheRefreshGate()
     {
         // Codex review: disable and delete returned before the detached refresh removed the server, so calls kept reaching it.
         await using var pool = new ServerPool();
         var record = StdioRecord("Counter");
         var other = StdioRecord("Other");
-        var blocker = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var park = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var factory = new FakeMcpClientFactory();
         factory.SpawnFor(record.Id, () => pool.StartCounterAsync());
-        factory.SpawnFor(other.Id, async () =>
-        {
-            await blocker.Task;
-            throw new IOException("refused");
-        });
+        factory.SpawnFor(other.Id, () => pool.StartCounterAsync());
         var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
         var store = new FakeMcpServerStore(record);
         await using var manager = CreateManager(registry, factory, store);
         await manager.RefreshAsync();
         var executable = Resolve(registry, "mcp__counter__next");
         store.Upsert(other);
+        store.ParkNextList(park.Task);
         var blockedRefresh = manager.RefreshAsync(other.Id);
-        await AssertEx.EventuallyAsync(() => factory.CreateCount(other.Id) == 1, TestBudgets.Contended, "the other server's connect holds the refresh gate");
+        await AssertEx.EventuallyAsync(() => store.ListCount == 2, TestBudgets.Contended, "the other refresh is parked inside slug assignment, holding the refresh gate");
 
         await AssertEx.CompletesAsync(manager.RevokeAsync(record.Id), TestBudgets.Contended, "a revoke must not wait for the refresh gate");
         var result = ResultText(await executable.InvokeAsync(new AIFunctionArguments()));
 
         AssertEx.Contains(result, McpServerConnectionManager.ServerUnavailableCode);
-        AssertEx.False(blockedRefresh.IsCompleted, "the other refresh is still holding the gate");
-        blocker.SetResult();
+        AssertEx.False(manager.GetStatuses().Any(status => status.ServerId == record.Id), "the revoked server is withdrawn from the statuses");
+        AssertEx.False(blockedRefresh.IsCompleted, "the other refresh still holds the refresh gate");
+        AssertEx.Equal(expected: 0, factory.CreateCount(other.Id), "the parked refresh has not reached its connect");
+        park.SetResult();
         await blockedRefresh;
+    }
+
+    [Test]
+    public async Task RefreshAsync_QueuedBehindTheServersOwnGate_DoesNotSpawnAfterTheServerIsRevoked()
+    {
+        // The connect runs outside the refresh gate, so a refresh queued on the server's own gate must notice a revoke that landed meanwhile.
+        await using var pool = new ServerPool();
+        var record = StdioRecord("Counter");
+        var park = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var factory = new FakeMcpClientFactory();
+        factory.SpawnFor(record.Id, async () =>
+        {
+            await park.Task;
+            return await pool.StartCounterAsync();
+        });
+        var store = new FakeMcpServerStore(record);
+        await using var manager = CreateManager(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), factory, store);
+        var parkedRefresh = manager.RefreshAsync(record.Id);
+        await AssertEx.EventuallyAsync(() => factory.CreateCount(record.Id) == 1, TestBudgets.Contended, "the first connect is parked on the server's gate");
+        var queuedReconnect = manager.ReconnectAsync(record.Id);
+        AssertEx.Equal(expected: 2, store.ListCount, "the queued reconnect loaded and registered before it waits on the server's gate");
+
+        await manager.RevokeAsync(record.Id);
+        park.SetResult();
+        await parkedRefresh;
+        await queuedReconnect;
+
+        AssertEx.Equal(expected: 1, factory.CreateCount(record.Id), "the reconnect queued before the revoke must not spawn the server again");
+        AssertEx.Empty(manager.GetStatuses(), "the revoked server stays absent");
+    }
+
+    [Test]
+    public async Task RefreshAsync_TwoQueuedRefreshesAcrossAConfigChange_ConnectOnceOnTheNewestVersion()
+    {
+        // Whichever queued refresh takes the server's gate first reads the newest registered record, so an older one never reconnects a stale config.
+        await using var pool = new ServerPool();
+        var record = StdioRecord("Counter");
+        var park = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempts = 0;
+        var factory = new FakeMcpClientFactory();
+        factory.SpawnFor(record.Id, async () =>
+        {
+            if (Interlocked.Increment(ref attempts) == 2)
+            {
+                await park.Task;
+            }
+
+            return await pool.StartCounterAsync();
+        });
+        var store = new FakeMcpServerStore(record);
+        await using var manager = CreateManager(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), factory, store);
+        await manager.RefreshAsync();
+        var parkedReconnect = manager.ReconnectAsync(record.Id);
+        await AssertEx.EventuallyAsync(() => factory.CreateCount(record.Id) == 2, TestBudgets.Contended, "a reconnect holds the server's gate");
+
+        var olderRefresh = manager.RefreshAsync(record.Id);
+        store.Upsert(record with
+        {
+            Version = 2
+        });
+        var newerRefresh = manager.RefreshAsync(record.Id);
+        park.SetResult();
+        await Task.WhenAll(parkedReconnect, olderRefresh, newerRefresh);
+
+        AssertEx.Equal("1,1,2", string.Join(",", factory.Versions(record.Id)), "one connect on the newest Version, none back onto the stale one");
+        AssertEx.True(manager.GetStatuses().Single().Connected, "the server is connected on the newest Version");
     }
 
     [Test]
@@ -1321,43 +1386,113 @@ public sealed class McpServerConnectionManagerTests
     }
 
     [Test]
-    public async Task ReconnectAsync_OfAServerWhosePrimaryExited_ReadsConnectingWhileQueuedBehindTheGate()
+    public async Task ReconnectAsync_OfAServerWhosePrimaryExited_ReadsConnectingWhileQueuedBehindItsOwnGate()
     {
         // Codex review: the exited primary stays on the entry, so clearing the error alone read "connected" with the old tools while the
         // reconnect was still queued, and the SPA stopped polling before it learned the outcome.
         await using var first = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
         await using var second = await InProcMcpServer.StartAsync("weather", AIFunctionFactory.Create(GetForecast, "get_forecast"));
         var record = StdioRecord("Weather");
-        var other = StdioRecord("Other");
-        var blocker = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var park = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempts = 0;
         var factory = new FakeMcpClientFactory();
-        factory.AddClient(record.Id, first.Client);
-        factory.AddClient(record.Id, second.Client);
-        factory.SpawnFor(other.Id, async () =>
+        factory.SpawnFor(record.Id, async () =>
         {
-            await blocker.Task;
-            throw new IOException("refused");
+            var attempt = Interlocked.Increment(ref attempts);
+            if (attempt == 1)
+            {
+                return first.Client;
+            }
+
+            if (attempt == 2)
+            {
+                await park.Task;
+                throw new IOException("refused");
+            }
+
+            return second.Client;
         });
-        var store = new FakeMcpServerStore(record);
-        await using var manager = CreateManager(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), factory, store);
+        await using var manager = CreateManager(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), factory, new FakeMcpServerStore(record));
         await manager.RefreshAsync();
         await first.StopServerAsync();
         await AssertEx.EventuallyAsync(() => manager.GetStatuses().Single().FailureReason == McpConnectionFailureReason.ServerExited,
             TestBudgets.Contended, "the exited primary put the server into the error state");
-        store.Upsert(other);
-        var blockedRefresh = manager.RefreshAsync(other.Id);
-        await AssertEx.EventuallyAsync(() => factory.CreateCount(other.Id) == 1, TestBudgets.Contended, "the other server's connect holds the refresh gate");
+        var parkedReconnect = manager.ReconnectAsync(record.Id);
+        await AssertEx.EventuallyAsync(() => factory.CreateCount(record.Id) == 2, TestBudgets.Contended, "the first reconnect holds the server's own gate");
 
         var reconnect = manager.ReconnectAsync(record.Id);
-        var pending = manager.GetStatuses().Single(status => status.ServerId == record.Id);
+        var pending = manager.GetStatuses().Single();
 
-        AssertEx.False(pending.Connected, "a reconnect queued behind the gate must not read as connected off the exited primary");
+        AssertEx.False(pending.Connected, "a reconnect queued behind the server's gate must not read as connected off the exited primary");
         AssertEx.Null(pending.LastError, "nor as the old error: the tools view reads this as connecting");
-        AssertEx.False(reconnect.IsCompleted, "the reconnect is still queued behind the other refresh");
-        blocker.SetResult();
-        await blockedRefresh;
+        AssertEx.False(reconnect.IsCompleted, "the reconnect is still queued behind the parked one");
+        park.SetResult();
+        await parkedReconnect;
         await reconnect;
-        AssertEx.True(manager.GetStatuses().Single(status => status.ServerId == record.Id).Connected, "the reconnect completed on the next client");
+        AssertEx.True(manager.GetStatuses().Single().Connected, "the queued reconnect ran its own connect on the next client");
+        AssertEx.Equal(expected: 3, factory.CreateCount(record.Id));
+    }
+
+    [Test]
+    public async Task RefreshAsync_ById_ConnectsAnotherServer_WhileTheFirstServersSpawnIsParked()
+    {
+        // N-51: one server's hanging handshake held a manager-wide gate, so every other enable waited out its timeout.
+        await using var pool = new ServerPool();
+        var parked = StdioRecord("Parked");
+        var quick = StdioRecord("Quick");
+        var park = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var factory = new FakeMcpClientFactory();
+        factory.SpawnFor(parked.Id, async () =>
+        {
+            await park.Task;
+            return await pool.StartCounterAsync();
+        });
+        factory.SpawnFor(quick.Id, () => pool.StartCounterAsync());
+        var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
+        await using var manager = CreateManager(registry, factory, new FakeMcpServerStore(parked, quick));
+        var parkedRefresh = manager.RefreshAsync(parked.Id);
+        await AssertEx.EventuallyAsync(() => factory.CreateCount(parked.Id) == 1, TestBudgets.Contended, "the parked server's spawn has started");
+
+        await AssertEx.CompletesAsync(manager.RefreshAsync(quick.Id), TestBudgets.Contended, "another server's connect must not wait for the parked spawn");
+
+        var quickStatus = manager.GetStatuses().Single(status => status.ServerId == quick.Id);
+        var parkedStatus = manager.GetStatuses().Single(status => status.ServerId == parked.Id);
+        AssertEx.True(quickStatus.Connected, "the quick server connected while the other spawn was parked");
+        AssertEx.Contains(registry.GetDescriptors().Select(static d => d.Name), "mcp__quick__next");
+        AssertEx.False(parkedStatus.Connected, "the parked server is still connecting");
+        AssertEx.Null(parkedStatus.LastError, "connecting, not failed");
+        AssertEx.False(parkedRefresh.IsCompleted, "the parked spawn has not been released");
+        park.SetResult();
+        await parkedRefresh;
+        AssertEx.True(manager.GetStatuses().Single(status => status.ServerId == parked.Id).Connected, "the parked server connected once released");
+        AssertEx.Contains(registry.GetDescriptors().Select(static d => d.Name), "mcp__parked__next");
+    }
+
+    [Test]
+    public async Task RefreshAsync_ConcurrentRefreshesOfCollidingNames_AssignDistinctSlugs()
+    {
+        // Slug assignment stays under the refresh gate: a second refresh must not load while the first is still assigning.
+        await using var pool = new ServerPool();
+        var first = StdioRecord("Server");
+        var second = StdioRecord("Server!");
+        var park = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var factory = new FakeMcpClientFactory();
+        factory.SpawnFor(first.Id, () => pool.StartCounterAsync());
+        factory.SpawnFor(second.Id, () => pool.StartCounterAsync());
+        var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
+        var store = new FakeMcpServerStore(first, second);
+        store.ParkNextList(park.Task);
+        await using var manager = CreateManager(registry, factory, store);
+
+        var firstRefresh = manager.RefreshAsync(first.Id);
+        var secondRefresh = manager.RefreshAsync(second.Id);
+
+        AssertEx.Equal(expected: 1, store.ListCount, "the second refresh waits for the first one's slug assignment");
+        park.SetResult();
+        await Task.WhenAll(firstRefresh, secondRefresh);
+        AssertEx.Equal("server", store.SlugOf(first.Id));
+        AssertEx.Equal("server-2", store.SlugOf(second.Id));
+        AssertEx.Equal("mcp__server-2__next,mcp__server__next", string.Join(",", registry.GetDescriptors().Select(static d => d.Name)));
     }
 
     private static AIFunction Resolve(McpToolRegistry registry, string name)
@@ -1438,6 +1573,8 @@ public sealed class McpServerConnectionManagerTests
     private sealed class FakeMcpServerStore : IMcpServerStore
     {
         private readonly Lock _gate = new();
+        private int _lists;
+        private Task? _parkNextList;
         private List<McpServerRecord> _records;
 
         public FakeMcpServerStore(params McpServerRecord[] records)
@@ -1453,11 +1590,25 @@ public sealed class McpServerConnectionManagerTests
             }
         }
 
-        public Task<IReadOnlyList<McpServerRecord>> ListAsync(CancellationToken cancellationToken = default)
+        public int ListCount => Volatile.Read(ref _lists);
+
+        /// <summary>The next <see cref="ListAsync" /> (only that one) waits on <paramref name="park" />, parking its refresh inside slug assignment.</summary>
+        public void ParkNextList(Task park)
         {
+            Volatile.Write(ref _parkNextList, park);
+        }
+
+        public async Task<IReadOnlyList<McpServerRecord>> ListAsync(CancellationToken cancellationToken = default)
+        {
+            _ = Interlocked.Increment(ref _lists);
+            if (Interlocked.Exchange(ref _parkNextList, null) is { } park)
+            {
+                await park;
+            }
+
             lock (_gate)
             {
-                return Task.FromResult<IReadOnlyList<McpServerRecord>>([.. _records]);
+                return [.. _records];
             }
         }
 
@@ -1555,6 +1706,7 @@ public sealed class McpServerConnectionManagerTests
         private readonly Dictionary<Guid, Func<Exception>> _failures = [];
         private readonly Lock _gate = new();
         private readonly Dictionary<Guid, Func<Task<McpClient>>> _spawners = [];
+        private readonly Dictionary<Guid, List<long>> _versions = [];
         private readonly List<string?> _sessionKeys = [];
 
         /// <summary>Runs after a client was handed out, before the manager lists its tools.</summary>
@@ -1585,6 +1737,12 @@ public sealed class McpServerConnectionManagerTests
             lock (_gate)
             {
                 _creates[record.Id] = _creates.GetValueOrDefault(record.Id) + 1;
+                if (!_versions.TryGetValue(record.Id, out var versions))
+                {
+                    _versions[record.Id] = versions = [];
+                }
+
+                versions.Add(record.Version);
                 _sessionKeys.Add(sessionKey);
                 if (_failures.TryGetValue(record.Id, out var exceptionFactory))
                 {
@@ -1612,6 +1770,15 @@ public sealed class McpServerConnectionManagerTests
             lock (_gate)
             {
                 return _creates.GetValueOrDefault(id);
+            }
+        }
+
+        /// <summary>The record Version each connect of this server was made with, in call order.</summary>
+        public IReadOnlyList<long> Versions(Guid id)
+        {
+            lock (_gate)
+            {
+                return [.. _versions.GetValueOrDefault(id) ?? []];
             }
         }
 

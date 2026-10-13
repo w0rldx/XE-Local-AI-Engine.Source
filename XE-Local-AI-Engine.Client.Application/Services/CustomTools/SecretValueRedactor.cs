@@ -41,7 +41,7 @@ internal sealed partial class SecretValueRedactor
 
     /// <summary>
     ///     The values to redact for a launched command: <paramref name="secretValues" /> (environment or header values) with their
-    ///     whitespace parts, but each argument only as a whole token plus its after-<c>=</c> tail, and never a fully qualified path.
+    ///     whitespace parts, but each argument only as a whole token plus its after-<c>=</c> tail; never a fully qualified path or flag name.
     /// </summary>
     /// <remarks>
     ///     An argument is already a token, so splitting it would blank every long word of a <c>cmd /c</c> script (Windows tester round 3);
@@ -51,10 +51,20 @@ internal sealed partial class SecretValueRedactor
     {
         ArgumentNullException.ThrowIfNull(arguments);
         return WithParts(secretValues, minLength)
-            .Concat(arguments.SelectMany(static argument => Path.IsPathFullyQualified(argument) ? CredentialLikeParts(argument) : CredentialLikeParts(argument).Prepend(argument))
+            .Concat(arguments.SelectMany(static argument => Path.IsPathFullyQualified(argument) || IsFlagName(argument) ? CredentialLikeParts(argument) : CredentialLikeParts(argument).Prepend(argument))
                              .SelectMany(WithAssignedValueOfAToken)
                              .Where(value => value.Length >= minLength));
     }
+
+    // PowerShell host switches a stdio MCP registration commonly carries; any other single-dash argument may glue a value ("-pMyPassword").
+    private static readonly string[] PowerShellSwitches = ["-NoProfile", "-NonInteractive", "-NoLogo", "-NoExit", "-ExecutionPolicy", "-Command", "-File", "-Sta", "-Mta", "-EncodedCommand",
+        "-WindowStyle", "-Version", "-InputFormat", "-OutputFormat", "-ConfigurationName"];
+
+    // A bare "--" flag name or a listed PowerShell switch is not a secret; its value is a separate argument and still redacted.
+    // A digit, '=' or ':' means a glued value ("--token=x"), so the whole argument stays a secret.
+    private static bool IsFlagName(string argument) =>
+        PowerShellSwitches.Contains(argument, StringComparer.OrdinalIgnoreCase)
+        || (argument.Length > 2 && argument.StartsWith("--", StringComparison.Ordinal) && argument.All(static c => char.IsAsciiLetter(c) || c is '-' or '_'));
 
     // A multi-word script keeps its whole-argument entry only: splitting it at its first '=' would turn the rest of the
     // script into one "secret"; its own `--key=value` parts are handled by CredentialLikeParts.

@@ -3,7 +3,9 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Win32;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Mxc;
 
@@ -233,9 +235,27 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             boundary is not null,
             boundary is null ? $" ({reason})" : $" (mechanism {boundary.Mechanism}, tier {boundary.Tier}, maturity {boundary.Maturity}, {boundary.Warnings.Count} warning(s))",
             MxcProbe.DescribeUiFacts(result.UiFacts),
-            RuntimeInformation.OSDescription);
+            DescribeOs(RuntimeInformation.OSDescription, OperatingSystem.IsWindows() ? ReadUpdateBuildRevision() : null));
 
         return containment;
+    }
+
+    /// <summary>The probe line's OS text: the description plus the Update Build Revision the MXC floor is defined by, when known.</summary>
+    internal static string DescribeOs(string description, int? updateBuildRevision) =>
+        updateBuildRevision is { } revision ? $"{description} (UBR {revision})" : description;
+
+    // OSDescription stops at the build number; the registry's UBR is the OS revision. Any failure leaves the plain description.
+    [SupportedOSPlatform("windows")]
+    private static int? ReadUpdateBuildRevision()
+    {
+        try
+        {
+            return Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion", "UBR", null) as int?;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     /// <summary>The unavailable reason for a host MXC warned is missing its one-time admin preparation, naming the exact commands.</summary>

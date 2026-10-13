@@ -215,6 +215,8 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
         menu.Items.Add(_trayQuit);
         _tray.Menu = menu;
         _tray.Clicked += (_, _) => ShowWindow();
+        // Avalonia 12.1.4 creates the platform icon (and NativeMenuExporter) only when the icon is attached to the application.
+        TrayIcon.SetIcons(this, new TrayIcons { _tray });
     }
 
     private void ShowWindow()

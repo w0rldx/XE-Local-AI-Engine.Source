@@ -304,6 +304,23 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   external connection. It now writes through the same atomic temp-file-and-rename path as the other credential stores.
 - The playbook "Approve" button never showed why it was disabled; the tooltip's wrapper was missing.
 - The German playbook behaviour placeholder used the informal form.
+- Windows tester round on `1.0.0-rc.2.dev.20261013.107` (sandbox-only):
+  - Every volume root (`/`, `C:\`, `D:\`, …) is now refused as a Sandboxed MCP server's command or working folder,
+    judged on the resolved name so a `subst` drive is its target; before, only the current drive's root was refused,
+    and a working directory of `D:\` granted the whole drive read-only (N-49). An existing folder that resolves to a
+    network share, or whose real name cannot be read, is refused by name instead of being dropped silently (N-50).
+    The refusal now names the relation: inside a protected store, holding the home directory, or holding N protected
+    folders, instead of the first root matched in list order (N-52).
+  - Sandboxed MCP servers connect in parallel again: the connection manager's refresh gate now covers only slug
+    assignment, registration and the stale-revoke pass, so one server's hanging handshake no longer delays the start
+    of every other server by up to the handshake timeout (N-51).
+  - The desktop shell's tray icon is attached again. Avalonia 12.1.4 creates the platform icon only when it is
+    attached to the application, so since the dependency round no tray icon appeared and the stored "Minimize to
+    tray" preference was silently downgraded to a disabled option in the close dialog (N-53).
+  - The `Sandbox containment probe (Windows)` log line now carries the Update Build Revision (`OS … (UBR n)`), the
+    number the MXC floor is defined by.
+  - The redacted command tail keeps bare `--` flag names and the common PowerShell host switches visible
+    (`--no-warnings`, `-NoProfile`); values, glued values (`-pSecret`, `--token=…`) and bare file names stay redacted.
 - Windows tester round on `1.0.0-rc.2.dev.20261011.106`:
   - A Sandboxed MCP server's command or working folder is now refused when it lies inside a protected root as well as
     when it is or contains one, so subfolders of the browser and Windows credential stores (a Firefox profile,
@@ -311,7 +328,7 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
     `Local` and `/` are still refused as roots, `AppData\Roaming\npm` still binds, and the Store app alias folder
     `AppData\Local\Microsoft\WindowsApps` is allowed. An account whose home directory lies under `/root` or `/var` (for example the engine run as root) has every Sandboxed-tier server refused; use a regular user account or the Privileged host tier.
     The Windows stores of Thunderbird, BraveSoftware, Opera Software, Vivaldi, gnupg, GitHub CLI and gcloud and the Linux stores `.mozilla`, `.thunderbird`, `.local/share/keyrings`, `.password-store`, `.pki` and redirected AppData
-    profile folders are now covered too, and non-drive-letter Windows spellings are handled precisely: a `\\?\`, `\\.\`, volume-GUID, stream or `subst` spelling of an existing folder is resolved to its real drive-letter name and then judged by the denylist, so a `subst` drive into a store is refused as the store. A spelling that resolves to a network share, or whose real name cannot be read, is never granted: the folder is dropped and the server's start failure carries the "folder the sandbox cannot read" hint. A non-existent non-drive-letter spelling is refused by name.
+    profile folders are now covered too, and non-drive-letter Windows spellings are handled precisely: a `\\?\`, `\\.\`, volume-GUID, stream or `subst` spelling of an existing folder is resolved to its real drive-letter name and then judged by the denylist, so a `subst` drive into a store is refused as the store. An existing folder that resolves to a network share, or whose real name cannot be read, is never granted: it is refused by name (round 6; round 5 dropped it silently). A non-existent non-drive-letter spelling is refused by name.
   - node.js servers whose script sits under the user profile now start: the Windows sandbox sets `NODE_OPTIONS` to
     `--preserve-symlinks --preserve-symlinks-main` unless the registration sets its own; the default can break pnpm or
     linked installs, and setting `NODE_OPTIONS` in the registration replaces it (a harmless value such as `--no-warnings` is enough) (N-41).
