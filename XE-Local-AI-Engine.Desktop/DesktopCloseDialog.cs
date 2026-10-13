@@ -7,12 +7,20 @@ using Avalonia.Media;
 
 internal sealed class DesktopCloseDialog : Window
 {
-    internal DesktopCloseDialog(bool trayAvailable, bool ownsEngine, bool settings, bool quitting = false)
+    internal DesktopCloseDialog(bool trayAvailable, bool ownsEngine, bool settings, bool quitting = false,
+        DesktopCloseAction current = DesktopCloseAction.Ask)
     {
-        Title = DesktopText.Settings;
+        Title = quitting ? DesktopText.Quit : DesktopText.CloseTitle;
+        if (settings)
+        {
+            Title = DesktopText.Settings;
+        }
+
         Width = 490;
         SizeToContent = SizeToContent.Height;
         CanResize = false;
+        CanMinimize = false;
+        CanMaximize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var remember = new CheckBox
         {
@@ -44,16 +52,25 @@ internal sealed class DesktopCloseDialog : Window
             });
         }
 
+        if (settings)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = DesktopText.Current(Label(current)),
+                TextWrapping = TextWrapping.Wrap
+            });
+        }
+
         panel.Children.Add(remember);
         if (!quitting)
         {
-            AddChoice(panel, DesktopText.KeepInTray, DesktopCloseAction.Tray, trayAvailable, () => settings || remember.IsChecked == true);
+            AddChoice(panel, DesktopCloseAction.Tray, settings && current == DesktopCloseAction.Tray, trayAvailable, () => settings || remember.IsChecked == true);
         }
 
-        AddChoice(panel, DesktopText.Quit, DesktopCloseAction.Quit, true, () => settings || remember.IsChecked == true);
+        AddChoice(panel, DesktopCloseAction.Quit, settings && current == DesktopCloseAction.Quit, true, () => settings || remember.IsChecked == true);
         if (settings)
         {
-            AddChoice(panel, DesktopText.Ask, DesktopCloseAction.Ask, true, () => true);
+            AddChoice(panel, DesktopCloseAction.Ask, current == DesktopCloseAction.Ask, true, () => true);
         }
 
         var cancel = new Button
@@ -67,11 +84,20 @@ internal sealed class DesktopCloseDialog : Window
         Content = panel;
     }
 
-    private void AddChoice(StackPanel panel, string text, DesktopCloseAction action, bool enabled, Func<bool> remember)
+    private static string Label(DesktopCloseAction action) =>
+        action switch
+        {
+            DesktopCloseAction.Tray => DesktopText.KeepInTray,
+            DesktopCloseAction.Quit => DesktopText.Quit,
+            _ => DesktopText.Ask
+        };
+
+    private void AddChoice(StackPanel panel, DesktopCloseAction action, bool isDefault, bool enabled, Func<bool> remember)
     {
         var button = new Button
         {
-            Content = text,
+            Content = Label(action),
+            IsDefault = isDefault,
             IsEnabled = enabled,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };

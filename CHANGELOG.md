@@ -304,6 +304,17 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
   external connection. It now writes through the same atomic temp-file-and-rename path as the other credential stores.
 - The playbook "Approve" button never showed why it was disabled; the tooltip's wrapper was missing.
 - The German playbook behaviour placeholder used the informal form.
+- Windows tester round on `1.0.0-rc.2.dev.20261013.108` (sandbox + tray):
+  - The vault unlock page now notices an unlock performed elsewhere (another browser, the REST API) and moves on by
+    itself: while idle it polls the auth status every 5 s for a minute, then every 15 s. Before, the desktop window sat
+    on "Unlock this node" until a reload (N-56).
+  - The desktop close dialog is titled by its purpose ("Close XE", "Quit XE", "Desktop settings") instead of always
+    "Desktop settings", the settings variant names the stored choice and marks it as the default button, and the dialogs
+    no longer offer minimize or maximize (N-55).
+  - The tray uses its own high-contrast icon (white glyph with a thin dark stroke) instead of the coloured favicon,
+    which was nearly invisible on a dark taskbar; the window icon is unchanged (N-54).
+  - Docs: a Windows volume mounted inside a folder resolves to its own drive-letter root and is refused as a volume
+    root (proven live); only Linux mount points remain the known residue.
 - Windows tester round on `1.0.0-rc.2.dev.20261013.107` (sandbox-only):
   - Every volume root (`/`, `C:\`, `D:\`, …) is now refused as a Sandboxed MCP server's command or working folder,
     judged on the resolved name so a `subst` drive is its target; before, only the current drive's root was refused,

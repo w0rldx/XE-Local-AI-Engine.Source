@@ -194,9 +194,11 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
 
         var icon = new WindowIcon(iconStream);
         _window!.Icon = icon;
+        // A white glyph with a dark stroke reads on light and dark trays; the window keeps the coloured favicon.
+        await using var trayStream = typeof(DesktopApplication).Assembly.GetManifestResourceStream("TrayIcon.png");
         _tray = new TrayIcon
         {
-            Icon = icon,
+            Icon = trayStream is null ? icon : new WindowIcon(trayStream),
             ToolTipText = DesktopText.Title,
             IsVisible = true
         };
@@ -272,7 +274,7 @@ internal sealed class DesktopApplication : Application, IAsyncDisposable
             var action = DesktopPreferences.Resolve(_preference, TrayAvailable);
             if (settings || action == DesktopCloseAction.Ask)
             {
-                _dialog = new DesktopCloseDialog(TrayAvailable, _engine.OwnsEngine, settings);
+                _dialog = new DesktopCloseDialog(TrayAvailable, _engine.OwnsEngine, settings, current: _preference);
                 var choice = await _dialog.ShowDialog<DesktopCloseChoice?>(_window);
                 _dialog = null;
                 if (choice is null || _exiting)

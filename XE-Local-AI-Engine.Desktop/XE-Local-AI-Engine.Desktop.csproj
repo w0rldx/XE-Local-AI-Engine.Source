@@ -19,6 +19,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Linux/DownloadBridge.js" LogicalName="DesktopDownloadBridge.js" />
     <EmbeddedResource Include="../XE-Local-AI-Engine.Client.React/public/favicon.png" LogicalName="DesktopIcon.png" />
+    <EmbeddedResource Include="Assets/TrayIcon.png" LogicalName="TrayIcon.png" />
     <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
   </ItemGroup>
 

@@ -104,6 +104,35 @@ public sealed class NativeDesktopContractTests
     }
 
     [Test]
+    public void TrayIcon_UsesTheHighContrastAsset_WhileTheWindowKeepsTheFavicon()
+    {
+        // The favicon's dark outline vanished on a dark taskbar; the tray takes a white glyph with a dark stroke.
+        var project = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "XE-Local-AI-Engine.Desktop.csproj"));
+        var source = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "DesktopApplication.cs"));
+
+        AssertEx.Contains(project, "<EmbeddedResource Include=\"Assets/TrayIcon.png\" LogicalName=\"TrayIcon.png\" />");
+        AssertEx.True(File.Exists(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "Assets", "TrayIcon.png")));
+        AssertEx.Contains(source, "GetManifestResourceStream(\"TrayIcon.png\")");
+        AssertEx.Contains(source, "Icon = trayStream is null ? icon : new WindowIcon(trayStream),");
+        AssertEx.Contains(source, "_window!.Icon = icon;");
+    }
+
+    [Test]
+    public void CloseDialog_IsTitledByItsPurpose_AndOffersNoMinimizeOrMaximize()
+    {
+        var source = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop", "DesktopCloseDialog.cs"));
+
+        AssertEx.Contains(source, "Title = quitting ? DesktopText.Quit : DesktopText.CloseTitle;");
+        AssertEx.Contains(source, "Title = DesktopText.Settings;");
+        AssertEx.Contains(source, "CanMinimize = false;");
+        AssertEx.Contains(source, "CanMaximize = false;");
+        AssertEx.Equal(3, new[] { DesktopText.Settings, DesktopText.Quit, DesktopText.CloseTitle }.Distinct(StringComparer.Ordinal).Count());
+        AssertEx.Contains(source, "Text = DesktopText.Current(Label(current)),");
+        AssertEx.Contains(source, "IsDefault = isDefault,");
+        AssertEx.Contains(DesktopText.Current("Keep running in the tray"), "Keep running in the tray");
+    }
+
+    [Test]
     public void ShellWindows_UseOneProductTitle()
     {
         var desktop = RepositoryPaths.Combine("XE-Local-AI-Engine.Desktop");

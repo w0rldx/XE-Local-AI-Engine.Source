@@ -42,6 +42,8 @@ internal static class DesktopText
     internal static string Open => German ? "XE öffnen" : "Open XE";
     internal static string Settings => German ? "Desktop-Einstellungen" : "Desktop settings";
     internal static string Quit => German ? "XE beenden" : "Quit XE";
+    internal static string CloseTitle => German ? "XE schließen" : "Close XE";
+    internal static string Current(string choice) => German ? $"Aktuell: {choice}" : $"Current: {choice}";
     internal static string OpenLogs => German ? "Protokollordner öffnen" : "Open logs folder";
     internal static string QuitQuestion => German ? "XE beenden und laufende Arbeit unterbrechen?" : "Quit XE and interrupt running work?";
     internal static string Cancel => German ? "Abbrechen" : "Cancel";
