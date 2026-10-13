@@ -360,6 +360,49 @@ public sealed class DesktopBootstrapTests : IDisposable
     }
 
     [Test]
+    [UnsupportedOSPlatform("windows")]
+    public void EnsureDirectory_CreatesTheDataDirectoryOwnerOnly()
+    {
+        Skip.When(OperatingSystem.IsWindows(), "Windows protects the data folder with the per-user profile ACL, not a Unix mode.");
+        using var temp = new TempDirectory();
+
+        AssertEx.Null(DesktopBootstrap.EnsureDirectory(temp.DataDirectory), "a directory created owner-only was not narrowed.");
+
+        AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(temp.DataDirectory));
+    }
+
+    [Test]
+    [UnsupportedOSPlatform("windows")]
+    public void EnsureDirectory_NarrowsAWiderExistingDirectoryAndReportsItsPreviousMode()
+    {
+        Skip.When(OperatingSystem.IsWindows(), "Windows protects the data folder with the per-user profile ACL, not a Unix mode.");
+        using var temp = new TempDirectory();
+        const UnixFileMode wide = (UnixFileMode)0b111_101_101; // 0755, what a default umask left
+        Directory.CreateDirectory(temp.DataDirectory, wide);
+        File.SetUnixFileMode(temp.DataDirectory, wide);
+
+        AssertEx.Equal(wide, DesktopBootstrap.EnsureDirectory(temp.DataDirectory));
+
+        AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(temp.DataDirectory));
+        AssertEx.Null(DesktopBootstrap.EnsureDirectory(temp.DataDirectory), "a second start finds nothing to narrow.");
+    }
+
+    [Test]
+    [UnsupportedOSPlatform("windows")]
+    public void EnsureDirectory_NeverWidensTheOwnerBits()
+    {
+        Skip.When(OperatingSystem.IsWindows(), "Windows protects the data folder with the per-user profile ACL, not a Unix mode.");
+        using var temp = new TempDirectory();
+        const UnixFileMode ownerReadExecute = UnixFileMode.UserRead | UnixFileMode.UserExecute;
+        Directory.CreateDirectory(temp.DataDirectory);
+        File.SetUnixFileMode(temp.DataDirectory, ownerReadExecute | UnixFileMode.GroupRead);
+
+        AssertEx.Equal(ownerReadExecute | UnixFileMode.GroupRead, DesktopBootstrap.EnsureDirectory(temp.DataDirectory));
+
+        AssertEx.Equal(ownerReadExecute, File.GetUnixFileMode(temp.DataDirectory));
+    }
+
+    [Test]
     public void EnsureLocalDataConfiguration_WhenConnectionStringAlreadySupplied_LeavesItUnchanged()
     {
         using var temp = new TempDirectory();

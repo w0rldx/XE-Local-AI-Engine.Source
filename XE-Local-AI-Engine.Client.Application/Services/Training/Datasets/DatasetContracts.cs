@@ -247,15 +247,6 @@ public sealed class DatasetDefinitionDraft
     public required DatasetDefinitionBodyV1 Body { get; init; }
 }
 
-public sealed class ToolMockDraft
-{
-    public required string ToolName { get; init; }
-
-    public required ToolMockBodyV1 Body { get; init; }
-
-    public required bool Enabled { get; init; }
-}
-
 public sealed class ToolMockVerifyResult
 {
     public required ToolMockRecord Mock { get; init; }

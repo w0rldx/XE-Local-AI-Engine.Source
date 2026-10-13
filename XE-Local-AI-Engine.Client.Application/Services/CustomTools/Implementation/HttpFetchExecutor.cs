@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -81,7 +82,7 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
 
             var client = _httpClientFactory.CreateClient(HttpClientName);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedSource.Token);
-            return await FormatResponseAsync(response, redactor, linkedSource.Token);
+            return await FormatResponseAsync(tool.Name, response, redactor, linkedSource.Token);
         }
         catch (CustomToolExecutionException exception)
         {
@@ -211,7 +212,8 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
         return urlTemplate.AsSpan(authorityStart, authorityEnd - authorityStart).Contains('{');
     }
 
-    private static async Task<string> FormatResponseAsync(HttpResponseMessage response,
+    internal static async Task<string> FormatResponseAsync(string toolName,
+        HttpResponseMessage response,
         SecretValueRedactor redactor,
         CancellationToken cancellationToken)
     {
@@ -226,9 +228,9 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
         builder.Append('\n');
         builder.Append(body);
 
-        // Final value-scrub of the whole model-facing string: any secret header value or URL userinfo that leaked into
-        // the response (an echo/redirect header, an error body) is masked before the model ever sees it.
-        return redactor.Redact(builder.ToString());
+        // Value-scrub the whole response (an echoed secret header or URL userinfo is masked), then fence it: every byte of it is
+        // server data the model must read as data.
+        return UntrustedContentFraming.WrapDocument(redactor.Redact(builder.ToString()), [new("tool", toolName), new("kind", "http_fetch")]);
     }
 
     private static void AppendSafeHeaders(StringBuilder builder, HttpHeaders headers)

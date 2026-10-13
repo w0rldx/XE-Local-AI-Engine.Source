@@ -136,8 +136,10 @@ name rather than always taking an `Add*` prefix (for example, `NodeChatOriginMig
 `Testing/MigrationSchemaProbe.cs` rather than hand-rolled `PRAGMA` SQL per file. The AEAD cipher (`INodeAeadCipher` → `AesGcmNodeAeadCipher`)
 and persistence encryption are tested directly. The `NegativeFence/` folder is a separate **compile-only** project
 (`XE-Local-AI-Engine.Client.Persistence.NegativeFence`) whose `Program.cs` constructs a `NodeMessage`;
-it guards a compile-time visibility/constructibility contract rather than runtime behavior. See
-[Data & Persistence](08-data-and-persistence.md).
+it guards a compile-time visibility/constructibility contract rather than runtime behavior. Its build is meant to
+FAIL: `PersistenceEncryptionTests.NegativeFenceProbe_WhenBuilt_FailsBecausePersistenceEntitiesAreInternal` builds it
+and asserts the failure, so it stays out of `XE-Local-AI-Engine.slnx` (a solution build would go red) and needs no gate
+enrolment of its own. See [Data & Persistence](08-data-and-persistence.md).
 
 ### `XE-Local-AI-Engine.Tests.E2ETests` — Playwright
 

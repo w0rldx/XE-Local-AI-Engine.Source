@@ -515,27 +515,6 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
         return ToRecord(entity);
     }
 
-    public async Task<ToolMockRecord> UpdateMockAsync(Guid mockId, long expectedVersion, ToolMockInput input, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(input);
-        EnsureName(input.ToolName);
-
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        var entity = await RequireMockAsync(mockId, cancellationToken);
-        EnsureVersion(entity.Version, expectedVersion);
-        entity.ToolName = input.ToolName.Trim();
-        entity.MockJson = input.MockJson.ToArray();
-        entity.Enabled = input.Enabled;
-        // An edited body invalidates the previous verdict: verification is over the body, so it must be re-run.
-        entity.VerificationState = ToolMockVerificationState.Unverified;
-        entity.VerificationJson = null;
-        entity.Version++;
-        entity.UpdatedAtUtc = Now();
-        await SaveAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return ToRecord(entity);
-    }
-
     public async Task<ToolMockRecord?> GetMockAsync(Guid mockId, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.ToolMockDefinitions.AsNoTracking()
@@ -562,14 +541,6 @@ public sealed class TrainingDatasetStore : ITrainingDatasetStore
                                        .OrderBy(item => item.CreatedAtUtc)
                                        .ToListAsync(cancellationToken);
         return entities.Select(ToRecord).ToArray();
-    }
-
-    public async Task DeleteMockAsync(Guid mockId, long expectedVersion, CancellationToken cancellationToken = default)
-    {
-        var entity = await RequireMockAsync(mockId, cancellationToken);
-        EnsureVersion(entity.Version, expectedVersion);
-        _ = _dbContext.ToolMockDefinitions.Remove(entity);
-        await SaveAsync(cancellationToken);
     }
 
     public async Task<ToolMockRecord> SetMockVerificationAsync(Guid mockId,

@@ -1,5 +1,5 @@
 import { Button, Group, Text } from "@mantine/core";
-import { IconArrowLeft, IconX } from "@tabler/icons-react";
+import { IconArrowLeft, IconTrash, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -13,7 +13,7 @@ import {
 	isTerminalGraphWorkflowRunStatus,
 	narrowGraphWorkflowRunStatus,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
-import { useCancelGraphWorkflowRun } from "@/features/graphWorkflows/queries/useGraphWorkflows";
+import { useCancelGraphWorkflowRun, useDeleteGraphWorkflowRun } from "@/features/graphWorkflows/queries/useGraphWorkflows";
 
 export interface GraphWorkflowRunToolbarProps {
 	readonly run: GraphWorkflowRunSummaryResponse;
@@ -30,11 +30,14 @@ export function GraphWorkflowRunToolbar({ run, onBackToEditor }: GraphWorkflowRu
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 	const cancel = useCancelGraphWorkflowRun();
+	const remove = useDeleteGraphWorkflowRun();
 
 	const status = narrowGraphWorkflowRunStatus(run.status);
+	const terminal = isTerminalGraphWorkflowRunStatus(status);
 	// `Cancelling` is the drain: the command was accepted and the live nodes are winding down, so offering Cancel
 	// again would invite a second command that changes nothing.
-	const canCancel = !isTerminalGraphWorkflowRunStatus(status) && status !== "Cancelling";
+	const canCancel = !terminal && status !== "Cancelling";
+	const busy = cancel.isPending || remove.isPending;
 
 	const requestCancel = async (): Promise<void> => {
 		const confirmed = await confirm({
@@ -51,6 +54,29 @@ export function GraphWorkflowRunToolbar({ run, onBackToEditor }: GraphWorkflowRu
 		}
 		cancel.mutate({ path: { runId: run.id ?? "" } });
 	};
+
+	// Only a finished run is deletable (the server 409s a live one); the selection is cleared once it is gone.
+	const requestDelete = async (): Promise<void> => {
+		const confirmed = await confirm({
+			title: t("pages.graphWorkflows.toolbar.deleteConfirmTitle", "Delete this run?"),
+			description: t(
+				"pages.graphWorkflows.toolbar.deleteConfirmBody",
+				"The run, its node results and its event log are removed for good. The workflow itself is kept.",
+			),
+			confirmationText: t("pages.graphWorkflows.toolbar.delete", "Delete run"),
+			cancellationText: t("common.close", "Close"),
+		});
+		if (!confirmed) {
+			return;
+		}
+		remove.mutate({ path: { runId: run.id ?? "" } }, { onSuccess: onBackToEditor });
+	};
+
+	const failure = cancel.error
+		? apiErrorMessage(cancel.error, t("pages.graphWorkflows.toolbar.cancelFailed", "The run could not be cancelled."))
+		: remove.error
+			? apiErrorMessage(remove.error, t("pages.graphWorkflows.toolbar.deleteFailed", "The run could not be deleted."))
+			: null;
 
 	return (
 		<Group gap="xs" wrap="wrap" data-testid="graph-workflow-run-toolbar">
@@ -85,7 +111,7 @@ export function GraphWorkflowRunToolbar({ run, onBackToEditor }: GraphWorkflowRu
 					color="red"
 					leftSection={<IconX size={14} />}
 					loading={cancel.isPending}
-					disabled={!canCancel || cancel.isPending}
+					disabled={!canCancel || busy}
 					onClick={() => {
 						requestCancel().catch(() => undefined);
 					}}
@@ -93,19 +119,29 @@ export function GraphWorkflowRunToolbar({ run, onBackToEditor }: GraphWorkflowRu
 				>
 					{t("pages.graphWorkflows.toolbar.cancel", "Cancel run")}
 				</Button>
+				<Button
+					size="xs"
+					variant="light"
+					color="red"
+					leftSection={<IconTrash size={14} />}
+					loading={remove.isPending}
+					disabled={!terminal || busy}
+					onClick={() => {
+						requestDelete().catch(() => undefined);
+					}}
+					data-testid="graph-workflow-run-toolbar-delete"
+				>
+					{t("pages.graphWorkflows.toolbar.delete", "Delete run")}
+				</Button>
 			</Group>
 
-			{cancel.error ? (
+			{failure ? (
 				<InlineErrorAlert
 					variant="light"
 					p="xs"
 					w="100%"
 					data-testid="graph-workflow-run-toolbar-error"
-					message={
-						<Text size="xs">
-							{apiErrorMessage(cancel.error, t("pages.graphWorkflows.toolbar.cancelFailed", "The run could not be cancelled."))}
-						</Text>
-					}
+					message={<Text size="xs">{failure}</Text>}
 				/>
 			) : null}
 		</Group>

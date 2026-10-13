@@ -26,7 +26,6 @@ public sealed class TrainingExportEndpointTests
     [Test]
     [Arguments("POST", "/runs/00000000-0000-0000-0000-0000000000e1/exports")]
     [Arguments("GET", "/runs/00000000-0000-0000-0000-0000000000e1/artifacts")]
-    [Arguments("GET", "/artifacts/00000000-0000-0000-0000-0000000000e2")]
     [Arguments("DELETE", "/artifacts/00000000-0000-0000-0000-0000000000e2")]
     [Arguments("POST", "/artifacts/00000000-0000-0000-0000-0000000000e2/smoke")]
     [Arguments("POST", "/artifacts/00000000-0000-0000-0000-0000000000e2/promote")]

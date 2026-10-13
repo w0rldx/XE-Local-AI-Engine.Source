@@ -721,7 +721,9 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
             }
         }
 
-        prompt = $"{config.Prompt}\n\nNamed input data:\n```json\n{JsonSerializer.Serialize(bound, JsonOptions)}\n```";
+        // Bound values carry run input, upstream outputs and run.previous, so they are fenced as data, never instructions.
+        var data = UntrustedContentFraming.WrapDocument($"```json\n{JsonSerializer.Serialize(bound, JsonOptions)}\n```", [new("source", "input bindings")]);
+        prompt = $"{config.Prompt}\n\nNamed input data:\n{data}";
         if (Encoding.UTF8.GetByteCount(prompt) > maxBytes)
         {
             error = $"has a rendered prompt larger than the {maxBytes}-byte limit.";
@@ -1031,7 +1033,9 @@ internal sealed class GraphWorkflowInvocationExecutor : IGraphWorkflowNodeExecut
         }
 
         var rendered = TruncateUtf8(upstream.GetRawText(), _options.MaxRunInputBytes);
-        return $"{prompt}\n\nThe nodes before this one produced:\n\n```json\n{rendered}\n```";
+        // Upstream text may come from tools or fetched pages, and this node can call tools: fence it as data.
+        var data = UntrustedContentFraming.WrapDocument($"```json\n{rendered}\n```", [new("source", "upstream")]);
+        return $"{prompt}\n\nThe nodes before this one produced:\n\n{data}";
     }
 
     /// <summary>

@@ -1019,7 +1019,7 @@ Every route is Operator-gated.
 | `graph-workflows/tools` | The Tool node picker's feed (§4.3). |
 | `graph-workflows/definitions/{definitionId}/runs` | POST start → 202 with the run id; `requestId` is the idempotency key. |
 | `graph-workflows/runs` | The run list, newest first, `?status=&limit=` with `limit` required and capped at 200. |
-| `graph-workflows/runs/{runId}` | One run, its node-run **summaries**, the run's own resolved `output`, and the **graph this run pinned at start**. No node-run documents — those are a per-node read. |
+| `graph-workflows/runs/{runId}` | One run, its node-run **summaries**, the run's own resolved `output`, and the **graph this run pinned at start**. No node-run documents — those are a per-node read. DELETE removes a finished run with its node runs and events (`GraphWorkflowPurge`), 204; a live run is 409 `GraphWorkflowRunConflict`, so cancel it first. Nothing else deletes runs: history is kept until the operator deletes it. |
 | `graph-workflows/runs/{runId}/cancel` | 202. Live node runs drain first, so the run reads `Cancelling`. A repeat cancel is an idempotent 202. |
 | `graph-workflows/runs/{runId}/nodes/{nodeKey}` | One node run in full, input and output documents included. |
 | `graph-workflows/runs/{runId}/nodes/{nodeKey}/decide` | Answers a pause (§4.6) or a chat input (§4.8). |

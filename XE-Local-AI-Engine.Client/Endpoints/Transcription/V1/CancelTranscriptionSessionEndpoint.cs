@@ -29,7 +29,7 @@ public sealed class CancelTranscriptionSessionEndpoint : Endpoint<TranscriptionS
                                .Accepts<TranscriptionSessionRouteRequest>()
                                .Produces(StatusCodes.Status204NoContent)
                                .Produces(StatusCodes.Status404NotFound)
-                               .ProducesProblemFE(StatusCodes.Status409Conflict));
+                               .ProducesProblemDetails(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(TranscriptionSessionRouteRequest req, CancellationToken ct)

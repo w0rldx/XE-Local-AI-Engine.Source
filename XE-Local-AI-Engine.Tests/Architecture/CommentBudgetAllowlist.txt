@@ -1506,7 +1506,6 @@ XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperModelCatalogTests.cs|summar
 XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperModelRecommendationTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerArgumentBuilderTests.cs|run|1
 XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerArgumentBuilderTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerReadinessProbeTests.cs|run|1
 XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerReadinessProbeTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerRuntimeOverrideOptionsTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Providers/WhisperCpp/WhisperServerSupervisorTests.cs|run|4
@@ -1615,7 +1614,6 @@ XE-Local-AI-Engine.Tests/Testing/TestBudgets.cs|remarks|1
 XE-Local-AI-Engine.Tests/Training/DatasetGenerationCancelTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Training/DatasetGenerationExecutorTests.cs|run|1
 XE-Local-AI-Engine.Tests/Training/DatasetGenerationExecutorTests.cs|summary|1
-XE-Local-AI-Engine.Tests/Training/Evaluation/ComparisonBenchmarkHandoffServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Training/Evaluation/EvaluationRunExecutorTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Training/Evaluation/EvaluationRunServiceTests.cs|summary|1
 XE-Local-AI-Engine.Tests/Training/Export/ArtifactPromotionServiceTests.cs|summary|1

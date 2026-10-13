@@ -8,20 +8,6 @@ import * as z from "zod";
 export const zFastEndpointsEmptyRequest = z.record(z.string(), z.never());
 
 /**
- * the dto used to send an error response to the client
- */
-export const zFastEndpointsErrorResponse = z.object({
-	statusCode: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional()
-		.default(400),
-	message: z.string().optional().default("One or more errors occurred!"),
-	errors: z.record(z.string(), z.array(z.string())).optional(),
-});
-
-/**
  * the error details object
  */
 export const zFastEndpointsProblemDetailsError = z.object({
@@ -877,40 +863,6 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleSta
 	samples: z.array(z.number()).optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse = z.object({
-	id: z.guid().optional(),
-	sequence: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	kind: z.string(),
-	status: z.string(),
-	perplexityMean: z.number().nullish(),
-	perplexityStdErr: z.number().nullish(),
-	perplexityChunks: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	perplexityContextTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	corpusId: z.string().nullish(),
-	kldMean: z.number().nullish(),
-	kldP99: z.number().nullish(),
-	topTokenAgreement: z.number().nullish(),
-	baseModelName: z.string().nullish(),
-	baseModelContentFingerprint: z.string().nullish(),
-	baseLogitsDigest: z.string().nullish(),
-	errorMessage: z.string().nullish(),
-	enqueuedAtUtc: z.int().optional(),
-	startedAtUtc: z.int().nullish(),
-	completedAtUtc: z.int().nullish(),
-});
-
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse = z.object({
 	status: z.string(),
 	attemptId: z.guid().nullish(),
@@ -1363,31 +1315,6 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsRes
 	pairedDeltas: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse).optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest = z.object({
-	name: z.string().nullish(),
-	coreTask: z.string(),
-	contextTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	agentDefinitionId: z.guid(),
-	kvCacheType: z.string().nullish(),
-	repeatCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	warmup: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse = z.object({
-	projectId: z.guid(),
-	baseModelName: z.string(),
-	tunedModelName: z.string(),
-	baseRunIds: z.array(z.guid()),
-	tunedRunIds: z.array(z.guid()),
-});
-
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkTaskItemRequest =
 	zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest.and(
 		z.object({
@@ -1506,12 +1433,6 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisons
 	referenceExecutionKey: z.string().nullish(),
 	items: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkComparisonResponse).optional(),
 	fit: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairwiseFitResponse.nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkProjectsResponse = z.object({
@@ -5913,10 +5834,6 @@ export const zXeLocalAiEngineClientEndpointsTrainingRuntimeV1StartTrainingRuntim
 
 export const zXeLocalAiEngineClientEndpointsTrainingV1CancelTrainingDatasetRequest = z.record(z.string(), z.never());
 
-export const zXeLocalAiEngineClientEndpointsTrainingV1DeleteToolMockRequest = z.object({
-	expectedVersion: z.int().optional(),
-});
-
 export const zXeLocalAiEngineClientEndpointsTrainingV1DeleteTrainingDatasetRequest = z.object({
 	expectedVersion: z.int().optional(),
 });
@@ -9207,19 +9124,6 @@ export const zXeLocalAiEngineClientServicesTrainingDatasetsToolMockBodyV1 = z.ob
 	defaultResponse: z.string().nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsTrainingV1CreateToolMockRequest = z.object({
-	toolName: z.string().optional(),
-	enabled: z.boolean().optional(),
-	body: zXeLocalAiEngineClientServicesTrainingDatasetsToolMockBodyV1.optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsTrainingV1UpdateToolMockRequest = z.object({
-	expectedVersion: z.int().optional(),
-	toolName: z.string().optional(),
-	enabled: z.boolean().optional(),
-	body: zXeLocalAiEngineClientServicesTrainingDatasetsToolMockBodyV1.optional(),
-});
-
 export const zXeLocalAiEngineClientServicesTrainingDatasetsToolMockVerificationV1 = z.object({
 	schemaVersion: z
 		.int()
@@ -10383,16 +10287,6 @@ export const zStartBenchmarkRunFidelityPath = z.object({
  * No Content
  */
 export const zStartBenchmarkRunFidelityResponse = z.void();
-
-export const zListBenchmarkFidelityAttemptsPath = z.object({
-	runId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zListBenchmarkFidelityAttemptsResponse =
-	zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse;
 
 export const zRejudgeBenchmarkRunBody = zXeLocalAiEngineClientEndpointsBenchmarksV1RejudgeBenchmarkRunRequest;
 
@@ -11657,6 +11551,15 @@ export const zListGraphWorkflowRunsQuery = z.object({
  */
 export const zListGraphWorkflowRunsResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowRunsResponse;
 
+export const zDeleteGraphWorkflowRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteGraphWorkflowRunResponse = z.void();
+
 export const zGetGraphWorkflowRunPath = z.object({
 	runId: z.guid(),
 });
@@ -12892,15 +12795,6 @@ export const zDeleteTrainingArtifactPath = z.object({
  */
 export const zDeleteTrainingArtifactResponse = z.void();
 
-export const zGetTrainingArtifactPath = z.object({
-	artifactId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zGetTrainingArtifactResponse = zXeLocalAiEngineClientEndpointsTrainingExportsV1TrainingArtifactResponse;
-
 export const zPromoteTrainingArtifactBody = zXeLocalAiEngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactRequest;
 
 export const zPromoteTrainingArtifactPath = z.object({
@@ -13056,18 +12950,6 @@ export const zGetComparisonPath = z.object({
  * Success
  */
 export const zGetComparisonResponse = zXeLocalAiEngineClientEndpointsTrainingComparisonsV1ComparisonResponse;
-
-export const zCreateBenchmarkFromComparisonBody = zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest;
-
-export const zCreateBenchmarkFromComparisonPath = z.object({
-	comparisonId: z.guid(),
-});
-
-/**
- * Accepted
- */
-export const zCreateBenchmarkFromComparisonResponse =
-	zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse;
 
 /**
  * Success
@@ -13264,24 +13146,6 @@ export const zResumeEvaluationResponse = zXeLocalAiEngineClientEndpointsTraining
  */
 export const zListToolMocksResponse = zXeLocalAiEngineClientEndpointsTrainingV1ListToolMocksResponse;
 
-export const zCreateToolMockBody = zXeLocalAiEngineClientEndpointsTrainingV1CreateToolMockRequest;
-
-/**
- * Success
- */
-export const zCreateToolMockResponse = zXeLocalAiEngineClientEndpointsTrainingV1ToolMockResponse;
-
-export const zDeleteToolMockBody = zXeLocalAiEngineClientEndpointsTrainingV1DeleteToolMockRequest;
-
-export const zDeleteToolMockPath = z.object({
-	mockId: z.guid(),
-});
-
-/**
- * No Content
- */
-export const zDeleteToolMockResponse = z.void();
-
 export const zGetToolMockPath = z.object({
 	mockId: z.guid(),
 });
@@ -13290,17 +13154,6 @@ export const zGetToolMockPath = z.object({
  * Success
  */
 export const zGetToolMockResponse = zXeLocalAiEngineClientEndpointsTrainingV1ToolMockResponse;
-
-export const zUpdateToolMockBody = zXeLocalAiEngineClientEndpointsTrainingV1UpdateToolMockRequest;
-
-export const zUpdateToolMockPath = z.object({
-	mockId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zUpdateToolMockResponse = zXeLocalAiEngineClientEndpointsTrainingV1ToolMockResponse;
 
 export const zVerifyToolMockBody = zXeLocalAiEngineClientEndpointsTrainingV1VerifyToolMockRequest;
 

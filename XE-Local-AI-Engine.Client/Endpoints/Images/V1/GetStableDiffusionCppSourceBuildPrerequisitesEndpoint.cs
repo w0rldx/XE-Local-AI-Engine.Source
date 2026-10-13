@@ -21,7 +21,7 @@ public sealed class GetStableDiffusionCppSourceBuildPrerequisitesEndpoint : Endp
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<StableDiffusionCppSourceBuildPrerequisitesResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest));
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest));
     }
 
     public override async Task HandleAsync(GetStableDiffusionCppSourceBuildPrerequisitesRequest request, CancellationToken ct)

@@ -83,8 +83,8 @@ After creating your profile, choose **Recommended** or **Offline / Manual**:
 - **Recommended** enables automatic application and llama.cpp update checks, and first-run runtime
   and starter-model downloads.
 - **Offline / Manual** disables those automatic actions. Install or import a model yourself before
-  chatting. This choice is not a firewall: configured integrations and model-catalog lookups can
-  still use the network.
+  chatting. This choice is not a firewall: configured integrations and the model searches and
+  downloads you start can still use the network.
 
 You can change this choice later in **Node Settings**. Automatic provisioning waits for this decision;
 waiting at the account-setup screen will not download a model for you.

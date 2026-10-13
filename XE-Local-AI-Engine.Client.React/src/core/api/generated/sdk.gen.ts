@@ -151,9 +151,6 @@ import type {
 	CreateBaseArtifactData,
 	CreateBaseArtifactErrors,
 	CreateBaseArtifactResponses,
-	CreateBenchmarkFromComparisonData,
-	CreateBenchmarkFromComparisonErrors,
-	CreateBenchmarkFromComparisonResponses,
 	CreateBenchmarkProjectData,
 	CreateBenchmarkProjectErrors,
 	CreateBenchmarkProjectResponses,
@@ -220,9 +217,6 @@ import type {
 	CreateSlashCommandData,
 	CreateSlashCommandErrors,
 	CreateSlashCommandResponses,
-	CreateToolMockData,
-	CreateToolMockErrors,
-	CreateToolMockResponses,
 	CreateTrainingDefinitionData,
 	CreateTrainingDefinitionErrors,
 	CreateTrainingDefinitionResponses,
@@ -292,6 +286,9 @@ import type {
 	DeleteGraphWorkflowDefinitionData,
 	DeleteGraphWorkflowDefinitionErrors,
 	DeleteGraphWorkflowDefinitionResponses,
+	DeleteGraphWorkflowRunData,
+	DeleteGraphWorkflowRunErrors,
+	DeleteGraphWorkflowRunResponses,
 	DeleteImageJobData,
 	DeleteImageJobErrors,
 	DeleteImageJobResponses,
@@ -334,9 +331,6 @@ import type {
 	DeleteSlashCommandData,
 	DeleteSlashCommandErrors,
 	DeleteSlashCommandResponses,
-	DeleteToolMockData,
-	DeleteToolMockErrors,
-	DeleteToolMockResponses,
 	DeleteTrainingArtifactData,
 	DeleteTrainingArtifactErrors,
 	DeleteTrainingArtifactResponses,
@@ -718,9 +712,6 @@ import type {
 	GetToolMockData,
 	GetToolMockErrors,
 	GetToolMockResponses,
-	GetTrainingArtifactData,
-	GetTrainingArtifactErrors,
-	GetTrainingArtifactResponses,
 	GetTrainingDatasetData,
 	GetTrainingDatasetErrors,
 	GetTrainingDatasetResponses,
@@ -814,9 +805,6 @@ import type {
 	ListBenchmarkComparisonsData,
 	ListBenchmarkComparisonsErrors,
 	ListBenchmarkComparisonsResponses,
-	ListBenchmarkFidelityAttemptsData,
-	ListBenchmarkFidelityAttemptsErrors,
-	ListBenchmarkFidelityAttemptsResponses,
 	ListBenchmarkProjectsData,
 	ListBenchmarkProjectsErrors,
 	ListBenchmarkProjectsResponses,
@@ -1384,9 +1372,6 @@ import type {
 	UpdateSuggestedPlaybookActionData,
 	UpdateSuggestedPlaybookActionErrors,
 	UpdateSuggestedPlaybookActionResponses,
-	UpdateToolMockData,
-	UpdateToolMockErrors,
-	UpdateToolMockResponses,
 	UpdateTrainingDefinitionData,
 	UpdateTrainingDefinitionErrors,
 	UpdateTrainingDefinitionResponses,
@@ -1467,7 +1452,6 @@ import {
 	zConfirmDevelopmentContainerRuntimeResponse,
 	zCreateAgentDefinitionResponse,
 	zCreateBaseArtifactResponse,
-	zCreateBenchmarkFromComparisonResponse,
 	zCreateBenchmarkProjectResponse,
 	zCreateBenchmarkTaskItemResponse,
 	zCreateComparisonResponse,
@@ -1490,7 +1474,6 @@ import {
 	zCreateScheduledJobResponse,
 	zCreateSkillResponse,
 	zCreateSlashCommandResponse,
-	zCreateToolMockResponse,
 	zCreateTrainingDefinitionResponse,
 	zCreateTrainingRunResponse,
 	zCreateTranscriptionSessionResponse,
@@ -1514,6 +1497,7 @@ import {
 	zDeleteExternalProviderConnectionResponse,
 	zDeleteGoldenConversationResponse,
 	zDeleteGraphWorkflowDefinitionResponse,
+	zDeleteGraphWorkflowRunResponse,
 	zDeleteImageJobResponse,
 	zDeleteImageModelResponse,
 	zDeleteIntegrationSessionResponse,
@@ -1528,7 +1512,6 @@ import {
 	zDeleteScheduledJobResponse,
 	zDeleteSkillResponse,
 	zDeleteSlashCommandResponse,
-	zDeleteToolMockResponse,
 	zDeleteTrainingArtifactResponse,
 	zDeleteTrainingDatasetResponse,
 	zDeleteTrainingDefinitionResponse,
@@ -1656,7 +1639,6 @@ import {
 	zGetToolCapableModelsResponse,
 	zGetToolCatalogResponse,
 	zGetToolMockResponse,
-	zGetTrainingArtifactResponse,
 	zGetTrainingDatasetResponse,
 	zGetTrainingDefinitionResponse,
 	zGetTrainingRunDefaultsResponse,
@@ -1688,7 +1670,6 @@ import {
 	zListBaseArtifactsResponse,
 	zListBenchmarkCellsResponse,
 	zListBenchmarkComparisonsResponse,
-	zListBenchmarkFidelityAttemptsResponse,
 	zListBenchmarkProjectsResponse,
 	zListBenchmarkRunsResponse,
 	zListBenchmarkTaskItemsResponse,
@@ -1878,7 +1859,6 @@ import {
 	zUpdateSkillResponse,
 	zUpdateSlashCommandResponse,
 	zUpdateSuggestedPlaybookActionResponse,
-	zUpdateToolMockResponse,
 	zUpdateTrainingDefinitionResponse,
 	zUpdateTranscriptSegmentResponse,
 	zUpdateWorkSessionResponse,
@@ -3753,28 +3733,6 @@ export const startBenchmarkRunFidelity = <ThrowOnError extends boolean = false>(
 			},
 		],
 		url: "/api/local/v1/benchmarks/runs/{runId}/fidelity",
-		...options,
-	});
-
-export const listBenchmarkFidelityAttempts = <ThrowOnError extends boolean = false>(
-	options: Options<ListBenchmarkFidelityAttemptsData, ThrowOnError>,
-): RequestResult<ListBenchmarkFidelityAttemptsResponses, ListBenchmarkFidelityAttemptsErrors, ThrowOnError> =>
-	(options.client ?? client).get<ListBenchmarkFidelityAttemptsResponses, ListBenchmarkFidelityAttemptsErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zListBenchmarkFidelityAttemptsResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/benchmarks/runs/{runId}/fidelity/attempts",
 		...options,
 	});
 
@@ -7000,6 +6958,27 @@ export const listGraphWorkflowRuns = <ThrowOnError extends boolean = false>(
 			},
 		],
 		url: "/api/local/v1/graph-workflows/runs",
+		...options,
+	});
+
+export const deleteGraphWorkflowRun = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteGraphWorkflowRunData, ThrowOnError>,
+): RequestResult<DeleteGraphWorkflowRunResponses, DeleteGraphWorkflowRunErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeleteGraphWorkflowRunResponses, DeleteGraphWorkflowRunErrors, ThrowOnError>({
+		responseValidator: async (data) => await zDeleteGraphWorkflowRunResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/runs/{runId}",
 		...options,
 	});
 
@@ -10569,28 +10548,6 @@ export const deleteTrainingArtifact = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getTrainingArtifact = <ThrowOnError extends boolean = false>(
-	options: Options<GetTrainingArtifactData, ThrowOnError>,
-): RequestResult<GetTrainingArtifactResponses, GetTrainingArtifactErrors, ThrowOnError> =>
-	(options.client ?? client).get<GetTrainingArtifactResponses, GetTrainingArtifactErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zGetTrainingArtifactResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/training/artifacts/{artifactId}",
-		...options,
-	});
-
 export const promoteTrainingArtifact = <ThrowOnError extends boolean = false>(
 	options: Options<PromoteTrainingArtifactData, ThrowOnError>,
 ): RequestResult<PromoteTrainingArtifactResponses, PromoteTrainingArtifactErrors, ThrowOnError> =>
@@ -11001,32 +10958,6 @@ export const getComparison = <ThrowOnError extends boolean = false>(
 		],
 		url: "/api/local/v1/training/comparisons/{comparisonId}",
 		...options,
-	});
-
-export const createBenchmarkFromComparison = <ThrowOnError extends boolean = false>(
-	options: Options<CreateBenchmarkFromComparisonData, ThrowOnError>,
-): RequestResult<CreateBenchmarkFromComparisonResponses, CreateBenchmarkFromComparisonErrors, ThrowOnError> =>
-	(options.client ?? client).post<CreateBenchmarkFromComparisonResponses, CreateBenchmarkFromComparisonErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zCreateBenchmarkFromComparisonResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/training/comparisons/{comparisonId}/benchmark",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
 	});
 
 export const listTrainingDatasets = <ThrowOnError extends boolean = false>(
@@ -11496,57 +11427,6 @@ export const listToolMocks = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const createToolMock = <ThrowOnError extends boolean = false>(
-	options: Options<CreateToolMockData, ThrowOnError>,
-): RequestResult<CreateToolMockResponses, CreateToolMockErrors, ThrowOnError> =>
-	(options.client ?? client).post<CreateToolMockResponses, CreateToolMockErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zCreateToolMockResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/training/mocks",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
-export const deleteToolMock = <ThrowOnError extends boolean = false>(
-	options: Options<DeleteToolMockData, ThrowOnError>,
-): RequestResult<DeleteToolMockResponses, DeleteToolMockErrors, ThrowOnError> =>
-	(options.client ?? client).delete<DeleteToolMockResponses, DeleteToolMockErrors, ThrowOnError>({
-		responseValidator: async (data) => await zDeleteToolMockResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/training/mocks/{mockId}",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
 export const getToolMock = <ThrowOnError extends boolean = false>(
 	options: Options<GetToolMockData, ThrowOnError>,
 ): RequestResult<GetToolMockResponses, GetToolMockErrors, ThrowOnError> =>
@@ -11567,32 +11447,6 @@ export const getToolMock = <ThrowOnError extends boolean = false>(
 		],
 		url: "/api/local/v1/training/mocks/{mockId}",
 		...options,
-	});
-
-export const updateToolMock = <ThrowOnError extends boolean = false>(
-	options: Options<UpdateToolMockData, ThrowOnError>,
-): RequestResult<UpdateToolMockResponses, UpdateToolMockErrors, ThrowOnError> =>
-	(options.client ?? client).put<UpdateToolMockResponses, UpdateToolMockErrors, ThrowOnError>({
-		responseType: "json",
-		responseValidator: async (data) => await zUpdateToolMockResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/training/mocks/{mockId}",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
 	});
 
 export const verifyToolMock = <ThrowOnError extends boolean = false>(

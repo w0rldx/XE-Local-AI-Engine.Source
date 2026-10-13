@@ -17,17 +17,22 @@ internal sealed class WhisperServerReadinessProbe : IWhisperServerReadinessProbe
     /// <summary>The readiness route, relative to the server root.</summary>
     internal const string HealthRoute = "health";
 
-    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
+    /// <summary>The pause between two health probes.</summary>
+    internal static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
 
     private readonly HttpClient _httpClient;
     private readonly WhisperRuntimeOptions _options;
+    private readonly TimeProvider _timeProvider;
 
-    public WhisperServerReadinessProbe(HttpClient httpClient, WhisperRuntimeOptions options)
+    /// <summary>Creates the probe; <paramref name="timeProvider" /> drives the poll pause and both deadlines.</summary>
+    public WhisperServerReadinessProbe(HttpClient httpClient, WhisperRuntimeOptions options, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(timeProvider);
         _httpClient = httpClient;
         _options = options;
+        _timeProvider = timeProvider;
     }
 
     /// <inheritdoc />
@@ -37,8 +42,8 @@ internal sealed class WhisperServerReadinessProbe : IWhisperServerReadinessProbe
         ct.ThrowIfCancellationRequested();
 
         var healthUri = new Uri(baseAddress, HealthRoute);
-        using var deadlineCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadlineCts.CancelAfter(readinessTimeout);
+        using var deadline = new CancellationTokenSource(readinessTimeout, _timeProvider);
+        using var deadlineCts = CancellationTokenSource.CreateLinkedTokenSource(ct, deadline.Token);
 
         try
         {
@@ -49,7 +54,7 @@ internal sealed class WhisperServerReadinessProbe : IWhisperServerReadinessProbe
                     return true;
                 }
 
-                await Task.Delay(PollInterval, deadlineCts.Token).ConfigureAwait(false);
+                await Task.Delay(PollInterval, _timeProvider, deadlineCts.Token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -75,8 +80,8 @@ internal sealed class WhisperServerReadinessProbe : IWhisperServerReadinessProbe
     {
         // Each probe owns its own short deadline. The runtime HttpClient carries an infinite timeout on purpose (one client serves requests whose right budgets differ by four orders of magnitude), so
         // without this a daemon that accepts the socket and never answers would hang the poll rather than failing this attempt.
-        using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        probeCts.CancelAfter(_options.HealthProbeTimeout);
+        using var probeDeadline = new CancellationTokenSource(_options.HealthProbeTimeout, _timeProvider);
+        using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(ct, probeDeadline.Token);
 
         try
         {

@@ -273,35 +273,6 @@ public sealed record GetToolMockRequest
     public Guid MockId { get; init; }
 }
 
-public sealed record CreateToolMockRequest
-{
-    public string ToolName { get; init; } = string.Empty;
-
-    public bool Enabled { get; init; }
-
-    public ToolMockBodyV1 Body { get; init; } = new();
-}
-
-public sealed record UpdateToolMockRequest
-{
-    public Guid MockId { get; init; }
-
-    public long ExpectedVersion { get; init; }
-
-    public string ToolName { get; init; } = string.Empty;
-
-    public bool Enabled { get; init; }
-
-    public ToolMockBodyV1 Body { get; init; } = new();
-}
-
-public sealed record DeleteToolMockRequest
-{
-    public Guid MockId { get; init; }
-
-    public long ExpectedVersion { get; init; }
-}
-
 public sealed record VerifyToolMockRequest
 {
     public Guid MockId { get; init; }

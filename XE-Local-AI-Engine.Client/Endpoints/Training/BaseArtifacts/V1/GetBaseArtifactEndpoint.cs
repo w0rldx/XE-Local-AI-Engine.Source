@@ -25,7 +25,7 @@ public sealed class GetBaseArtifactEndpoint : Endpoint<BaseArtifactByIdRequest, 
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<BaseArtifactResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status404NotFound));
+                               .Produces(StatusCodes.Status404NotFound));
     }
 
     public override async Task HandleAsync(BaseArtifactByIdRequest request, CancellationToken ct)

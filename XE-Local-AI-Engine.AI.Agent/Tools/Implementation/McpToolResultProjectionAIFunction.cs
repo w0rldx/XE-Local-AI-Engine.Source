@@ -12,8 +12,8 @@ using Microsoft.Extensions.AI;
 /// <remarks>
 ///     <c>McpClientTool</c> returns <c>AIContent</c>/<c>AIContent[]</c> on the plain path and a <see cref="JsonElement" /> of
 ///     the whole <c>CallToolResult</c> otherwise; the provider boundary serializes either as escaped JSON (images as base64
-///     text). The binary blocks ride <see cref="ToolResultMedia" /> so the chat can still persist and render them. Sits
-///     inside the result budget, so the budget measures the projected text.
+///     text). The binary blocks ride <see cref="ToolResultMedia" /> so the chat can still persist and render them. The text
+///     is server data, so it is fenced by <see cref="UntrustedContentFraming" />; the result budget measures the fenced text.
 /// </remarks>
 internal sealed class McpToolResultProjectionAIFunction : DelegatingAIFunction
 {
@@ -24,19 +24,19 @@ internal sealed class McpToolResultProjectionAIFunction : DelegatingAIFunction
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
-        return Project(await base.InvokeCoreAsync(arguments, cancellationToken).ConfigureAwait(false));
+        return Project(await base.InvokeCoreAsync(arguments, cancellationToken).ConfigureAwait(false), Name);
     }
 
-    internal static object? Project(object? result) =>
+    internal static object? Project(object? result, string toolName) =>
         result switch
         {
-            AIContent content => Build([content], structured: null, isError: false),
-            IEnumerable<AIContent> contents => Build([.. contents], structured: null, isError: false),
-            JsonElement { ValueKind: JsonValueKind.Object } callToolResult => ProjectCallToolResult(callToolResult),
+            AIContent content => Build([content], structured: null, isError: false, toolName),
+            IEnumerable<AIContent> contents => Build([.. contents], structured: null, isError: false, toolName),
+            JsonElement { ValueKind: JsonValueKind.Object } callToolResult => ProjectCallToolResult(callToolResult, toolName),
             _ => result
         };
 
-    private static string ProjectCallToolResult(JsonElement result)
+    private static string ProjectCallToolResult(JsonElement result, string toolName)
     {
         var blocks = new List<AIContent>();
         if (result.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.Array)
@@ -51,7 +51,7 @@ internal sealed class McpToolResultProjectionAIFunction : DelegatingAIFunction
             ? structuredContent.GetRawText()
             : null;
         var isError = result.TryGetProperty("isError", out var error) && error.ValueKind == JsonValueKind.True;
-        return Build(blocks, structured, isError);
+        return Build(blocks, structured, isError, toolName);
     }
 
     // The wire block shapes of the MCP spec: text, image and audio (base64 + mimeType), an embedded text resource.
@@ -79,7 +79,7 @@ internal sealed class McpToolResultProjectionAIFunction : DelegatingAIFunction
         }
     }
 
-    private static string Build(IReadOnlyList<AIContent> blocks, string? structured, bool isError)
+    private static string Build(IReadOnlyList<AIContent> blocks, string? structured, bool isError, string toolName)
     {
         var text = new StringBuilder();
         var media = new List<DataContent>();
@@ -111,7 +111,9 @@ internal sealed class McpToolResultProjectionAIFunction : DelegatingAIFunction
             _ = text.Append(text.Length > 0 ? "\n" : string.Empty).Append(structured);
         }
 
-        var projected = isError ? ToolFailureText.Format(ToolFailureText.ToolReportedCode, text.ToString()) : text.ToString();
+        // The failure prefix stays outside the fence: it is the node's own text, and the chat reads the code from it.
+        var fenced = UntrustedContentFraming.WrapDocument(text.ToString(), [new("source", "mcp"), new("tool", toolName)]);
+        var projected = isError ? ToolFailureText.Format(ToolFailureText.ToolReportedCode, fenced) : fenced;
         ToolResultMedia.Attach(projected, media);
         return projected;
     }

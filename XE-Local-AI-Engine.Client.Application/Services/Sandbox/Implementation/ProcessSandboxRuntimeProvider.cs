@@ -508,6 +508,18 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             }
         }
 
+        // Without a filesystem boundary the jail is the only fence, so the child gets the jail's own home rather than the host
+        // user's (and its ~/.ssh); a boundary-served launch sets its own. ADR 0020; threat model AB1/AB2.
+        if (state.LaunchPolicy.Isolation == SandboxIsolationMode.None)
+        {
+            var home = EnsureJailHome(state.JailRoot);
+            startInfo.Environment["HOME"] = home;
+            if (OperatingSystem.IsWindows())
+            {
+                startInfo.Environment["USERPROFILE"] = home;
+            }
+        }
+
         // The caller is trusted node code composing a fixed command, not the sandboxed child, so its explicit
         // variables may override or add to the allow-list.
         if (request.Environment is not null)
@@ -519,6 +531,22 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         }
 
         return startInfo;
+    }
+
+    /// <summary>The jail's <see cref="SandboxIsolatedPaths.HomeDirectoryName" /> subdirectory, created owner-only where the OS has modes.</summary>
+    private static string EnsureJailHome(string jailRoot)
+    {
+        var home = Path.Combine(jailRoot, SandboxIsolatedPaths.HomeDirectoryName);
+        if (OperatingSystem.IsWindows())
+        {
+            _ = Directory.CreateDirectory(home);
+        }
+        else
+        {
+            _ = Directory.CreateDirectory(home, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        return home;
     }
 
     /// <inheritdoc cref="ISandboxRuntimeProvider.StartInteractiveAsync" />

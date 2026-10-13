@@ -11,6 +11,7 @@ import {
 import type { ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
+import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
 import { AnswerNowButton } from "@/features/chat/components/ChatInputArea/AnswerNowButton";
 import { WebContentAutoAcceptToggle } from "@/features/chat/components/ChatInputArea/WebContentAutoAcceptToggle";
@@ -184,7 +185,9 @@ export function ChatComposerToolbar({
 					<WebContentAutoAcceptToggle conversationId={conversationId} disabled={disabled || isSending} />
 				) : null}
 				{showKnowledgeBaseControls ? (
-					<Tooltip
+					<DisabledReasonTooltip
+						// Only the empty-corpus reason earns a keyboard stop; while sending the control is simply busy.
+						controlDisabled={!knowledgeBaseHasDocuments}
 						label={
 							!knowledgeBaseHasDocuments
 								? t("pages.chat.knowledgeBaseNoDocuments", "No indexed documents to search")
@@ -207,7 +210,7 @@ export function ChatComposerToolbar({
 						>
 							<IconBooks size={15} />
 						</ActionIcon>
-					</Tooltip>
+					</DisabledReasonTooltip>
 				) : null}
 				{agentControlsAvailable ? (
 					<AgentSelectorCard

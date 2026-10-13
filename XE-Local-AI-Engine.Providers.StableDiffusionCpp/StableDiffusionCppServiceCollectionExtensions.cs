@@ -70,7 +70,8 @@ public static class StableDiffusionCppServiceCollectionExtensions
                 activeTag: null,
                 sp.GetRequiredService<StableDiffusionServerRuntimeOverrideOptions>(),
                 sp.GetRequiredService<IStableDiffusionInstalledRuntimeStore>(),
-                sp.GetRequiredService<IStableDiffusionManagedSourceBuildSignal>()));
+                sp.GetRequiredService<IStableDiffusionManagedSourceBuildSignal>(),
+                sp.GetService<ILogger<StableDiffusionCppBinaryManager>>()));
 
         services.TryAddSingleton<IStableDiffusionCppSourceBuildService, StableDiffusionCppSourceBuildService>();
         services.AddHostedService<StableDiffusionCppSourceBuildLifecycle>();

@@ -4,8 +4,8 @@
 > load, GPU detection, ports, the unlock page, resets, SmartScreen and update problems. How to send a report
 > with logs is in [Giving feedback](user-guide/docs/feedback.md).
 
-This page holds what an operator or developer needs beyond that: the data directory layout, logging switches, the
-support bundle, unattended starts and the dev host.
+This page holds what an operator or developer needs beyond that: the data directory layout, unattended starts,
+startup exit codes, a host without a llama.cpp runtime, logging switches, the support bundle and the dev host.
 
 ## Data directory layout
 
@@ -47,6 +47,36 @@ page and `/health/ready`; scheduled jobs do not run, and every other local API r
   `XE_RECOVERY_CODE=` line and retires the old code. On Windows run it through
   `current\XE-Local-AI-Engine.WindowsLauncher.exe`. The user-facing steps are in the
   [FAQ](user-guide/docs/faq.md#i-forgot-my-password).
+
+## Startup exit codes
+
+A node that cannot start safely exits with its own code and, for most of them, a hint on standard error. The constants
+live in `Program.Vault`; the full one-shot list is in the
+[agent install guide](agentic-support/agent-install.md#11-exit-codes-and-troubleshooting), the startup behaviour in
+[Hosting & Deployment §5](wiki/11-hosting-and-deployment.md#5-packaged-local-modes-native-desktop-browser-and-headless),
+and the operator's next step for each code in [Updating](user-guide/docs/updating.md#when-the-node-refuses-to-start).
+
+| Code | Meaning |
+|---|---|
+| `5` | The node key needs a secret and the one supplied is missing or wrong. See the section above. |
+| `7` | The unlock page's port stayed taken after an unlock; free the port and start again. |
+| `8` | The node key does not match the database, or `node.key` is missing next to an existing `node.sqlite`. Delete neither; restore the matching pair. |
+| `9` | The database migration failed, or a staged snapshot restore could not be applied. Follow the printed restore hint. |
+| `10` | The data directory cannot be created or written, or `node-settings.json` is present but unreadable. |
+
+**Going back to an older build:** migrations are forward-only, so back up the whole data directory first and follow
+[Going back to an older version](user-guide/docs/updating.md#going-back-to-an-older-version), including the knowledge
+downgrade preflight.
+
+## No llama.cpp runtime on this host
+
+Chat needs a `llama-server` binary. The engine downloads a hash-pinned prebuilt build on first use, so a host with no
+network and nothing installed yet has no runtime until it can download one. When upstream publishes no prebuilt for
+the host's OS, CPU architecture and GPU backend, acquisition fails with "No prebuilt llama.cpp runtime is available for
+this operating system and CPU architecture", or names the backends that do exist and points at the in-app source
+build. The usual case is Linux with an NVIDIA card: the default there is Vulkan, and CUDA comes from the in-app source
+build or a bring-your-own binary (see [GPU paths for operators](#gpu-paths-for-operators)). Acquisition order and
+messages: [Runtime Binaries and Tuning](wiki/reference/03-runtime-binaries-and-tuning.md#binary-manager--dynamic-updater).
 
 ## Readiness and port discovery
 

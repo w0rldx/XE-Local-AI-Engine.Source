@@ -26,7 +26,7 @@ public sealed class SuggestComparisonEndpoint : Endpoint<SuggestComparisonReques
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<ComparisonSuggestionResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest));
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest));
     }
 
     public override async Task HandleAsync(SuggestComparisonRequest req, CancellationToken ct)

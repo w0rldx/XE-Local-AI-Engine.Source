@@ -69,6 +69,9 @@ internal static class DesktopBootstrap
     internal const string FirstRunModelRepoIdKey = "FirstRunModel:RepoId";
     internal const string FirstRunModelQuantKey = "FirstRunModel:Quant";
 
+    private const UnixFileMode GroupOtherAccess = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
+                                                  | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
+
     /// <summary>
     ///     Ensures the desktop data directory, connection string, operator secret, and models directory are present in
     ///     configuration.
@@ -90,7 +93,7 @@ internal static class DesktopBootstrap
         ArgumentNullException.ThrowIfNull(folderResolver);
 
         var dataDirectory = NormalizeDataDirectoryPath(ResolveDataDirectory(folderResolver));
-        EnsureDirectory(dataDirectory);
+        _ = EnsureDirectory(dataDirectory);
 
         var overrides = new Dictionary<string, string?>(StringComparer.Ordinal);
 
@@ -218,22 +221,6 @@ internal static class DesktopBootstrap
         return EnsureLocalDataConfiguration(configuration, Environment.GetFolderPath);
     }
 
-    /// <summary>
-    ///     Resolves the per-user desktop data directory (creating it when absent) reading from the real process
-    ///     environment.
-    /// </summary>
-    /// <remarks>
-    ///     Used by <c>Program.cs</c> so the desktop branch can locate co-located runtime artifacts, such as the
-    ///     persisted loopback port, before the configuration layer is built. Local-mode-only: only ever called for
-    ///     desktop or MCP-only serving, so the off-mode path is unaffected.
-    /// </remarks>
-    internal static string ResolveDataDirectory()
-    {
-        var dataDirectory = ResolveDataDirectoryPath();
-        EnsureDirectory(dataDirectory);
-        return dataDirectory;
-    }
-
     /// <summary>Resolves and normalizes the effective absolute data-directory path without creating it.</summary>
     internal static string ResolveDataDirectoryPath()
     {
@@ -285,11 +272,38 @@ internal static class DesktopBootstrap
         return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
     }
 
-    private static void EnsureDirectory(string dataDirectory)
+    /// <summary>
+    ///     Creates the data directory, owner-only (0700) on Linux/macOS, and drops group/other access from an existing one;
+    ///     owner bits are never widened. Windows keeps the per-user folder ACL.
+    /// </summary>
+    /// <returns>The previous mode when an existing directory was narrowed, otherwise <see langword="null" />.</returns>
+    internal static UnixFileMode? EnsureDirectory(string dataDirectory)
     {
         try
         {
-            Directory.CreateDirectory(dataDirectory);
+            if (OperatingSystem.IsWindows())
+            {
+                Directory.CreateDirectory(dataDirectory);
+                return null;
+            }
+
+            Directory.CreateDirectory(dataDirectory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            var mode = File.GetUnixFileMode(dataDirectory);
+            if ((mode & GroupOtherAccess) == UnixFileMode.None)
+            {
+                return null;
+            }
+
+            try
+            {
+                File.SetUnixFileMode(dataDirectory, mode & ~GroupOtherAccess);
+                return mode;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // A directory another account owns (a custom XE_DATA_DIR) cannot be narrowed by us; it stays usable as before.
+                return null;
+            }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

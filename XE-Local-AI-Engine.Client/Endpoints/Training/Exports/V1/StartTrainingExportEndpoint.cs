@@ -26,7 +26,7 @@ public sealed class StartTrainingExportEndpoint : Endpoint<StartTrainingExportRe
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<TrainingExportAcceptedResponse>(StatusCodes.Status202Accepted)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                .Produces<TrainingExportBlockedResponse>(StatusCodes.Status409Conflict));
     }
 

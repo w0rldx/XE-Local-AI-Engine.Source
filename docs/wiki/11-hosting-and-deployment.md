@@ -172,7 +172,7 @@ Module-owned workers worth knowing about, registered alongside their feature rat
 
 ### Upgrade backfills and their discriminators
 
-Four hosted services exist only to decide what an UPGRADING node should have been carrying all along. None is desktop-gated: an upgrading node exists on every launch mode.
+Four hosted services exist only to decide what an UPGRADING node should have been carrying all along. None is desktop-gated: an upgrading node exists on every launch mode. Which upgrade sources 1.0 supports, and therefore how long these and the other startup backfills must stay, is in [Data & Persistence](08-data-and-persistence.md#supported-upgrade-sources-for-10).
 
 **`ExternalAccessProfileBackfillService`** stamps `recommended` on a node that carries no external-access member at all. **A null profile alone is NOT the discriminator.** The legacy install this backfill exists for predates every external-access member, so all four are absent; a record whose profile is null but which carries any of the three switches has been touched by an operator or a hand edit, so keying on the profile alone would backfill all three switches to `true` over persisted `false` opt-outs and restart the update checks and the starter-model download the operator had turned off. `IsUntouchedByTheFeature` is what guards that switches-without-profile case, and such a node stays undecided until an operator answers on the Node Settings page. An unrecognised profile (`"Offline"`, say) never reaches the backfill as null: `NodeSettingsStore.NormalizeExternalAccessProfile` loads it as `pending`, a non-null profile the backfill leaves alone by the ordinary rule.
 

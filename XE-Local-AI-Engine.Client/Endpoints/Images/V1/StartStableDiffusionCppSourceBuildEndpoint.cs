@@ -23,7 +23,7 @@ public sealed class StartStableDiffusionCppSourceBuildEndpoint : Endpoint<StartS
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<StartStableDiffusionCppSourceBuildResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                .Produces<ImageRuntimeBlockedResponse>(StatusCodes.Status409Conflict));
     }
 

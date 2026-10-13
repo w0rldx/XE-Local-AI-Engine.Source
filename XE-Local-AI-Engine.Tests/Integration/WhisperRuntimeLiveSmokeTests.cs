@@ -117,7 +117,7 @@ public sealed class WhisperRuntimeLiveSmokeTests
         var binaryManager = new WhisperCppBinaryManager(httpClient, cacheRoot: null, activeTag: null, overrideOptions);
         var launcher = new WhisperServerProcessLauncher(NullLogger<WhisperServerProcessLauncher>.Instance,
             new ChildProcessOutputTailRegistry(TimeProvider.System));
-        var readinessProbe = new WhisperServerReadinessProbe(httpClient, options);
+        var readinessProbe = new WhisperServerReadinessProbe(httpClient, options, TimeProvider.System);
         var backendSelector = new StaticBackendSelector(overrideOptions.Backend);
 
         // The real supervisor over the real launcher: this is the only place in the slice where a whisper-server child

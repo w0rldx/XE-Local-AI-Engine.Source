@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Extensions.Options;
 using TUnit.Core.Exceptions;
@@ -687,6 +688,32 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         {
             Environment.SetEnvironmentVariable(canaryName, value: null);
         }
+    }
+
+    /// <summary>Without a filesystem boundary the child's HOME is the jail's own 0700 home, never the host user's (and its ~/.ssh).</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task ProcessSandboxProvider_Execute_WithoutAFilesystemBoundary_GivesTheChildTheJailHome()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        AssertEx.Equal(SandboxIsolationMode.None, handle.Isolation, "the default request runs without a filesystem boundary.");
+
+        var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "home-1",
+            Executable = "/bin/sh",
+            Arguments = ["-c", "printf '%s\\n%s' \"$HOME\" \"$PWD\""],
+            Timeout = TimeSpan.FromSeconds(15)
+        });
+
+        AssertEx.True(result.Completed, $"the command must complete: {result.StandardError}");
+        var lines = (result.StandardOutput ?? string.Empty).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        AssertEx.Equal(expected: 2, lines.Length, result.StandardOutput);
+        AssertEx.Equal(Path.Combine(lines[1], SandboxIsolatedPaths.HomeDirectoryName), lines[0]);
+        AssertEx.NotEqual(Environment.GetEnvironmentVariable("HOME"), lines[0]);
+        AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(lines[0]));
     }
 
     /// <summary>

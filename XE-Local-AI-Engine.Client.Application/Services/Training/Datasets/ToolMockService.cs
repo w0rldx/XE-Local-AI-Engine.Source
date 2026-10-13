@@ -13,13 +13,6 @@ public interface IToolMockService
     /// <summary>The tool mock, or <c>null</c> when no mock carries that id.</summary>
     Task<ToolMockRecord?> GetAsync(Guid mockId, CancellationToken cancellationToken = default);
 
-    /// <summary>Deletes the tool mock.</summary>
-    Task DeleteAsync(Guid mockId, long expectedVersion, CancellationToken cancellationToken = default);
-
-    Task<ToolMockRecord> CreateAsync(ToolMockDraft draft, CancellationToken cancellationToken = default);
-
-    Task<ToolMockRecord> UpdateAsync(Guid mockId, long expectedVersion, ToolMockDraft draft, CancellationToken cancellationToken = default);
-
     /// <summary>Statically verifies the stored body against the tool's live parameter schema and records the verdict.</summary>
     Task<ToolMockVerifyResult> VerifyAsync(Guid mockId, long expectedVersion, CancellationToken cancellationToken = default);
 }
@@ -49,15 +42,6 @@ public sealed class ToolMockService : IToolMockService
     public Task<ToolMockRecord?> GetAsync(Guid mockId, CancellationToken cancellationToken = default) =>
         _store.GetMockAsync(mockId, cancellationToken);
 
-    public Task DeleteAsync(Guid mockId, long expectedVersion, CancellationToken cancellationToken = default) =>
-        _store.DeleteMockAsync(mockId, expectedVersion, cancellationToken);
-
-    public Task<ToolMockRecord> CreateAsync(ToolMockDraft draft, CancellationToken cancellationToken = default) =>
-        _store.CreateMockAsync(ToInput(draft), cancellationToken);
-
-    public Task<ToolMockRecord> UpdateAsync(Guid mockId, long expectedVersion, ToolMockDraft draft, CancellationToken cancellationToken = default) =>
-        _store.UpdateMockAsync(mockId, expectedVersion, ToInput(draft), cancellationToken);
-
     public async Task<ToolMockVerifyResult> VerifyAsync(Guid mockId, long expectedVersion, CancellationToken cancellationToken = default)
     {
         var mock = await _store.GetMockAsync(mockId, cancellationToken)
@@ -84,26 +68,5 @@ public sealed class ToolMockService : IToolMockService
         // offered the tool, so nothing here should be capability-gated away.
         var offered = await _offerProvider.GetOfferedToolsForProfileAsync(activeModelId: null, isCloudModel: false, cancellationToken: cancellationToken);
         return offered.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal))?.ParameterSchema;
-    }
-
-    private static ToolMockInput ToInput(ToolMockDraft draft)
-    {
-        ArgumentNullException.ThrowIfNull(draft);
-        if (draft.Body is null)
-        {
-            throw new TrainingValidationException("A tool mock requires a body.");
-        }
-
-        if (string.IsNullOrWhiteSpace(draft.ToolName))
-        {
-            throw new TrainingValidationException("A tool mock requires the tool name it stands in for.");
-        }
-
-        return new ToolMockInput
-        {
-            ToolName = draft.ToolName,
-            MockJson = JsonSerializer.SerializeToUtf8Bytes(draft.Body, TrainingJson.Options),
-            Enabled = draft.Enabled
-        };
     }
 }

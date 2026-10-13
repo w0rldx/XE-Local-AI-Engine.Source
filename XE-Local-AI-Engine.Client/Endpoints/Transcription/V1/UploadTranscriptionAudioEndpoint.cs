@@ -58,7 +58,7 @@ public sealed class UploadTranscriptionAudioEndpoint : Endpoint<UploadTranscript
                                // its own: no file, an unusable file name, a body past the size cap, and a file with no audio.
                                .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                .Produces(StatusCodes.Status404NotFound)
-                               .ProducesProblemFE(StatusCodes.Status409Conflict)
+                               .ProducesProblemDetails(StatusCodes.Status409Conflict)
                                .Produces<TranscriptionUnsupportedContainerResponse>(StatusCodes.Status415UnsupportedMediaType));
     }
 

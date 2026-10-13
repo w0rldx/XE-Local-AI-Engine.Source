@@ -113,11 +113,11 @@ public sealed class WhisperRuntimeHttpTimeoutTests
         {
             Timeout = Timeout.InfiniteTimeSpan
         };
-        var probe = new WhisperServerReadinessProbe(httpClient, options);
+        var probe = new WhisperServerReadinessProbe(httpClient, options, TimeProvider.System);
 
         var stopwatch = Stopwatch.StartNew();
-        // real-timer: the assertion IS elapsed wall-clock time against a real socket that never answers. The probe
-        // takes no TimeProvider — its budget is a CancelAfter on the real clock — so a fake clock cannot express it.
+        // real-timer: the assertion IS elapsed wall-clock time against a real socket that never answers, so the probe
+        // runs its budget on the system clock.
         var responsive = await probe.CheckResponsiveAsync(server.Uri, CancellationToken.None);
         stopwatch.Stop();
 

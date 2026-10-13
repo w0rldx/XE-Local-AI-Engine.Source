@@ -4025,7 +4025,7 @@ public sealed class InvocationRunnerTests
             2,
             3
         }, "image/png");
-        var projected = AssertEx.NotNull(McpToolResultProjectionAIFunction.Project(image) as string);
+        var projected = AssertEx.NotNull(McpToolResultProjectionAIFunction.Project(image, "test-tool") as string);
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var runner = CreateRunner(eventDispatcher: dispatcher, agentUpdates: ToolRoundUpdates(projected, finalText: "done"));
         var package = RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build();
@@ -4034,7 +4034,7 @@ public sealed class InvocationRunnerTests
 
         await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
             payload.Phase == ToolCallLifecyclePhase.Completed
-            && payload.Result == "[image image/png, 1 KB]"
+            && payload.Result == projected
             && !payload.IsError
             && payload.Media.Count == 1
             && ReferenceEquals(payload.Media[0], image)));
@@ -5756,17 +5756,17 @@ public sealed class InvocationRunnerTests
             eventDispatcher: dispatcher,
             providerStreamResilience: NoRetryResilience(),
             timeProvider: clock);
-        var package = RuntimePackageBuilder.Valid().WithAllowedTool("slow-tool").WithTimeout(streamIdleSeconds: 60).Build();
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("slow-tool").WithTimeout(invocationSeconds: IdleOnlyTurnSeconds, streamIdleSeconds: 60).Build();
 
         var run = RunAsync(runner, package);
         await AssertEx.CompletesAsync(prefillStarted.Task, TestBudgets.Contended, "the provider round never started its prefill");
         for (var window = 0; window < 3; window++)
         {
-            await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the idle deadline is armed");
+            await WaitForIdleAndTurnDeadlineAsync(clock, "the idle deadline is armed");
             clock.Advance(TimeSpan.FromSeconds(61));
         }
 
-        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the deadline re-armed during the prefill");
+        await WaitForIdleAndTurnDeadlineAsync(clock, "the deadline re-armed during the prefill");
         prefillDone.SetResult();
         await AssertEx.CompletesAsync(run, TestBudgets.Contended, "the turn did not complete once the round streamed");
 
@@ -5816,11 +5816,11 @@ public sealed class InvocationRunnerTests
         await AssertEx.CompletesAsync(toolStarted.Task, TestBudgets.Contended, "the provider never pulled past the tool call");
         for (var window = 0; window < 3; window++)
         {
-            await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the idle deadline is armed");
+            await WaitForIdleAndTurnDeadlineAsync(clock, "the idle deadline is armed");
             clock.Advance(TimeSpan.FromSeconds(61));
         }
 
-        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the deadline re-armed while the tool ran");
+        await WaitForIdleAndTurnDeadlineAsync(clock, "the deadline re-armed while the tool ran");
         toolDone.SetResult();
         await AssertEx.CompletesAsync(run, TestBudgets.Contended, "the turn did not complete once the tool returned");
 
@@ -5872,7 +5872,7 @@ public sealed class InvocationRunnerTests
 
         var run = RunAsync(runner, package);
         await AssertEx.CompletesAsync(thinking.Task, TestBudgets.Contended, "the provider never pulled past its first text");
-        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the model is thinking");
+        await WaitForIdleAndTurnDeadlineAsync(clock, "the model is thinking");
         clock.Advance(TimeSpan.FromSeconds(50));
         modelDone.SetResult();
         await AssertEx.EventuallyAsync(() => dispatcher.ReceivedCalls().Any(static call => call.GetMethodInfo().Name == nameof(IWorkerEventDispatcher.ReportToolCallLifecycleAsync)),
@@ -5881,11 +5881,11 @@ public sealed class InvocationRunnerTests
         await AssertEx.CompletesAsync(toolStarted.Task, TestBudgets.Contended, "the provider never pulled past the tool call");
         for (var window = 0; window < 2; window++)
         {
-            await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "the tool is running");
+            await WaitForIdleAndTurnDeadlineAsync(clock, "the tool is running");
             clock.Advance(TimeSpan.FromSeconds(61));
         }
 
-        await AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TimeSpan.FromSeconds(10), "still running");
+        await WaitForIdleAndTurnDeadlineAsync(clock, "still running");
         toolDone.SetResult();
         await AssertEx.CompletesAsync(run, TestBudgets.Contended, "the turn did not complete once the tool returned");
 
@@ -5925,6 +5925,13 @@ public sealed class InvocationRunnerTests
 
         await dispatcher.Received(1).ReportInvocationFailedAsync(Arg.Any<Guid>(), Arg.Is<string>(static message => IsStreamIdleMessage(message)), FailureCategory.Timeout);
     }
+
+    /// <summary>
+    ///     Waits until the turn holds its idle and turn deadlines: the idle timer re-arms on a pool thread, so an earlier advance steps past
+    ///     nothing. The budget is a failure deadline.
+    /// </summary>
+    private static Task WaitForIdleAndTurnDeadlineAsync(ManualTimeProvider clock, string message) =>
+        AssertEx.EventuallyAsync(() => clock.ArmedTimerCount == IdleAndTurnDeadline, TestBudgets.Contended, message);
 
     // Steps the clock one idle window at a time until the run completes: the idle timer is armed after the stream's signal, so one advance can miss it.
     // Each miss still walks the turn deadline forward, so a test that wants the idle failure runs with IdleOnlyTurnSeconds, which these steps cannot reach.

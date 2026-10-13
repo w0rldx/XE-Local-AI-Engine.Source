@@ -27,7 +27,7 @@ public sealed class StartLlamaCppSourceBuildEndpoint : Endpoint<StartLlamaCppSou
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<StartLlamaCppSourceBuildResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                .Produces<LlamaCppSourceBuildBlockedResponse>(StatusCodes.Status409Conflict));
     }
 

@@ -26,7 +26,7 @@ public sealed class GetWhisperCppSourceBuildPrerequisitesEndpoint : Endpoint<Get
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<WhisperCppSourceBuildPrerequisitesResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest));
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest));
     }
 
     public override async Task HandleAsync(GetWhisperCppSourceBuildPrerequisitesRequest request, CancellationToken ct)

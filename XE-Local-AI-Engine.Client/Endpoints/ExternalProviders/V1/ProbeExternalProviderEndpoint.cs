@@ -32,7 +32,7 @@ public sealed class ProbeExternalProviderEndpoint : Endpoint<ExternalProviderPro
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<ExternalProviderProbeResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status404NotFound));
+                               .ProducesProblemDetails(StatusCodes.Status404NotFound));
     }
 
     public override async Task HandleAsync(ExternalProviderProbeRequest req, CancellationToken ct)

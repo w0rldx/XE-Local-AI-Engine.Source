@@ -23,7 +23,7 @@ public sealed class CreateComparisonEndpoint : Endpoint<CreateComparisonRequest,
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<ComparisonResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                .Produces<TrainingErrorResponse>(StatusCodes.Status409Conflict));
     }
 

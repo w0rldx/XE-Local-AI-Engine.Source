@@ -34,10 +34,7 @@ public sealed class TrainingEndpointTests
     [Arguments("GET", "/datasets/00000000-0000-0000-0000-0000000000d2/export")]
     [Arguments("POST", "/datasets/00000000-0000-0000-0000-0000000000d2/cancel")]
     [Arguments("GET", "/mocks")]
-    [Arguments("POST", "/mocks")]
     [Arguments("GET", "/mocks/00000000-0000-0000-0000-0000000000d3")]
-    [Arguments("PUT", "/mocks/00000000-0000-0000-0000-0000000000d3")]
-    [Arguments("DELETE", "/mocks/00000000-0000-0000-0000-0000000000d3")]
     [Arguments("POST", "/mocks/00000000-0000-0000-0000-0000000000d3/verify")]
     public async Task EveryTrainingRoute_WithoutOperatorToken_ReturnsUnauthorized(string method, string path)
     {

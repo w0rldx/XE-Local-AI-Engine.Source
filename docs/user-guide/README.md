@@ -30,6 +30,8 @@ under Apache-2.0. This page is the user guide: how to download, install and use 
 | **Fix a problem** | [FAQ & troubleshooting](docs/faq.md) |
 | **Understand a word I don't know** | [Glossary](docs/glossary.md) |
 | **Know what leaves my computer** | [Privacy & your data](docs/privacy-and-data.md) |
+| **Connect a cloud or remote model** | [Cloud providers](docs/cloud-providers.md) |
+| **Install curated apps that run beside it** | [External Apps](docs/external-apps.md) |
 | **Update to a newer build** | [Updating](docs/updating.md) |
 | **Send feedback or report a bug** | [Giving feedback](docs/feedback.md) |
 | **Download the latest build** | [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases) |

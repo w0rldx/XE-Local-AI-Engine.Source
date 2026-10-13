@@ -69,8 +69,6 @@ public interface ITrainingDatasetStore
 
     Task<ToolMockRecord> CreateMockAsync(ToolMockInput input, CancellationToken cancellationToken = default);
 
-    Task<ToolMockRecord> UpdateMockAsync(Guid mockId, long expectedVersion, ToolMockInput input, CancellationToken cancellationToken = default);
-
     Task<ToolMockRecord?> GetMockAsync(Guid mockId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<ToolMockRecord>> ListMocksAsync(CancellationToken cancellationToken = default);
@@ -78,7 +76,6 @@ public interface ITrainingDatasetStore
     /// <summary>Only <see cref="ToolMockVerificationState.Verified" /> AND enabled mocks — the engine has no fallthrough.</summary>
     Task<IReadOnlyList<ToolMockRecord>> ListUsableMocksAsync(string toolName, CancellationToken cancellationToken = default);
 
-    Task DeleteMockAsync(Guid mockId, long expectedVersion, CancellationToken cancellationToken = default);
 
     Task<ToolMockRecord> SetMockVerificationAsync(Guid mockId,
         long expectedVersion,

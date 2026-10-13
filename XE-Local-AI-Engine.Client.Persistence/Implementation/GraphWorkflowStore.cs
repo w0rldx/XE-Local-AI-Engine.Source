@@ -380,6 +380,24 @@ public sealed class GraphWorkflowStore : IGraphWorkflowStore
         RunSnapshot(await _dbContext.GraphWorkflowRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken)
                     ?? throw new GraphWorkflowNotFoundException($"Graph workflow run '{runId}' was not found."));
 
+    public async Task DeleteRunAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        // BEGIN IMMEDIATE: the status read and the delete see one state, and a terminal run never turns live again.
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var status = await _dbContext.GraphWorkflowRuns.AsNoTracking()
+                                     .Where(entity => entity.Id == runId)
+                                     .Select(static entity => (GraphWorkflowRunStatus?)entity.Status)
+                                     .SingleOrDefaultAsync(cancellationToken)
+                     ?? throw new GraphWorkflowNotFoundException($"Graph workflow run '{runId}' was not found.");
+        if (LiveRunStatuses.Contains(status))
+        {
+            throw new GraphWorkflowInvalidTransitionException($"Graph workflow run '{runId}' is still {status}; cancel it before deleting it.");
+        }
+
+        await GraphWorkflowPurge.DeleteRunAsync(_dbContext, runId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null,
         int limit = 50,
         CancellationToken cancellationToken = default)

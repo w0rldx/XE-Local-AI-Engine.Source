@@ -1,10 +1,11 @@
-import { Button, Group, Stack, Text, Tooltip } from "@mantine/core";
+import { Button, Group, Stack, Text } from "@mantine/core";
 import { IconTrash } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
 import { toast } from "@/core/ui/notifications/Toast";
 import type { BenchmarkProjectDetail, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import { isRunActive, useDeleteBenchmarkProject } from "@/features/benchmarks/queries/useBenchmarks";
@@ -45,7 +46,7 @@ export function BenchmarkProjectDeleteButton({ project, taskItemCount, runs }: B
 
 	return (
 		<>
-			<Tooltip
+			<DisabledReasonTooltip
 				label={
 					blocked
 						? t(
@@ -56,20 +57,19 @@ export function BenchmarkProjectDeleteButton({ project, taskItemCount, runs }: B
 				}
 				multiline={true}
 				w={280}
+				controlDisabled={blocked}
 			>
-				<span>
-					<Button
-						variant="default"
-						color="red"
-						leftSection={<IconTrash size={16} />}
-						disabled={blocked}
-						onClick={() => setConfirmOpen(true)}
-						data-testid="benchmark-project-delete"
-					>
-						{t("common.delete", "Delete")}
-					</Button>
-				</span>
-			</Tooltip>
+				<Button
+					variant="default"
+					color="red"
+					leftSection={<IconTrash size={16} />}
+					disabled={blocked}
+					onClick={() => setConfirmOpen(true)}
+					data-testid="benchmark-project-delete"
+				>
+					{t("common.delete", "Delete")}
+				</Button>
+			</DisabledReasonTooltip>
 
 			<DialogShell
 				opened={confirmOpen}

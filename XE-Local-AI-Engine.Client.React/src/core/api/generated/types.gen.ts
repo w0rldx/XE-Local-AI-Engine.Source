@@ -12,26 +12,6 @@ export type FastEndpointsEmptyRequest = {
 };
 
 /**
- * the dto used to send an error response to the client
- */
-export type FastEndpointsErrorResponse = {
-	/**
-	 * the http status code sent to the client. default is 400.
-	 */
-	statusCode?: number;
-	/**
-	 * the message for the error response
-	 */
-	message?: string;
-	/**
-	 * the collection of errors for the current context
-	 */
-	errors?: {
-		[key: string]: Array<string>;
-	};
-};
-
-/**
  * RFC9457 compatible problem details/ error response class. this can be used by configuring startup like so:
  * app.UseFastEndpoints(c => c.Errors.UseProblemDetails())
  */
@@ -870,28 +850,6 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStati
 	samples?: Array<number>;
 };
 
-export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse = {
-	id?: string;
-	sequence?: number;
-	kind: string;
-	status: string;
-	perplexityMean?: number | null;
-	perplexityStdErr?: number | null;
-	perplexityChunks?: number | null;
-	perplexityContextTokens?: number | null;
-	corpusId?: string | null;
-	kldMean?: number | null;
-	kldP99?: number | null;
-	topTokenAgreement?: number | null;
-	baseModelName?: string | null;
-	baseModelContentFingerprint?: string | null;
-	baseLogitsDigest?: string | null;
-	errorMessage?: string | null;
-	enqueuedAtUtc?: number;
-	startedAtUtc?: number | null;
-	completedAtUtc?: number | null;
-};
-
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse = {
 	status: string;
 	attemptId?: string | null;
@@ -1218,24 +1176,6 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsRespo
 	pairedDeltas?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse>;
 };
 
-export type XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest = {
-	name?: string | null;
-	coreTask: string;
-	contextTokens: number;
-	agentDefinitionId: string;
-	kvCacheType?: string | null;
-	repeatCount?: number;
-	warmup?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse = {
-	projectId: string;
-	baseModelName: string;
-	tunedModelName: string;
-	baseRunIds: Array<string>;
-	tunedRunIds: Array<string>;
-};
-
 export type XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkTaskItemRequest =
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest & {
 		expectedProjectVersion?: number;
@@ -1325,14 +1265,6 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsRe
 	referenceExecutionKey?: string | null;
 	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkComparisonResponse>;
 	fit?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairwiseFitResponse | null;
-};
-
-export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse = {
-	items: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkProjectsResponse = {
@@ -6202,19 +6134,9 @@ export type XeLocalAiEngineClientEndpointsTrainingV1CancelTrainingDatasetRequest
 	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsTrainingV1CreateToolMockRequest = {
-	toolName?: string;
-	enabled?: boolean;
-	body?: XeLocalAiEngineClientServicesTrainingDatasetsToolMockBodyV1;
-};
-
 export type XeLocalAiEngineClientEndpointsTrainingV1CreateTrainingDefinitionRequest = {
 	name?: string;
 	body?: XeLocalAiEngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1;
-};
-
-export type XeLocalAiEngineClientEndpointsTrainingV1DeleteToolMockRequest = {
-	expectedVersion?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsTrainingV1DeleteTrainingDatasetRequest = {
@@ -6352,13 +6274,6 @@ export type XeLocalAiEngineClientEndpointsTrainingV1TrainingSampleResponse = {
 	validation?: XeLocalAiEngineClientServicesTrainingDatasetsTrainingSampleValidationV1 | null;
 	createdAtUtc: number;
 	updatedAtUtc: number;
-};
-
-export type XeLocalAiEngineClientEndpointsTrainingV1UpdateToolMockRequest = {
-	expectedVersion?: number;
-	toolName?: string;
-	enabled?: boolean;
-	body?: XeLocalAiEngineClientServicesTrainingDatasetsToolMockBodyV1;
 };
 
 export type XeLocalAiEngineClientEndpointsTrainingV1UpdateTrainingDefinitionRequest = {
@@ -8291,7 +8206,7 @@ export type ApplyAppUpdateErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -9903,42 +9818,6 @@ export type StartBenchmarkRunFidelityResponses = {
 };
 
 export type StartBenchmarkRunFidelityResponse = StartBenchmarkRunFidelityResponses[keyof StartBenchmarkRunFidelityResponses];
-
-export type ListBenchmarkFidelityAttemptsData = {
-	body?: never;
-	path: {
-		runId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/benchmarks/runs/{runId}/fidelity/attempts";
-};
-
-export type ListBenchmarkFidelityAttemptsErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	/**
-	 * Not Found
-	 */
-	404: MicrosoftAspNetCoreMvcProblemDetails;
-};
-
-export type ListBenchmarkFidelityAttemptsError = ListBenchmarkFidelityAttemptsErrors[keyof ListBenchmarkFidelityAttemptsErrors];
-
-export type ListBenchmarkFidelityAttemptsResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse;
-};
-
-export type ListBenchmarkFidelityAttemptsResponse =
-	ListBenchmarkFidelityAttemptsResponses[keyof ListBenchmarkFidelityAttemptsResponses];
 
 export type RejudgeBenchmarkRunData = {
 	body: XeLocalAiEngineClientEndpointsBenchmarksV1RejudgeBenchmarkRunRequest;
@@ -13950,7 +13829,7 @@ export type GetExternalProviderConnectionErrors = {
 	/**
 	 * Not Found
 	 */
-	404: FastEndpointsErrorResponse;
+	404: FastEndpointsProblemDetails;
 };
 
 export type GetExternalProviderConnectionError = GetExternalProviderConnectionErrors[keyof GetExternalProviderConnectionErrors];
@@ -14026,7 +13905,7 @@ export type ProbeExternalProviderErrors = {
 	/**
 	 * Not Found
 	 */
-	404: FastEndpointsErrorResponse;
+	404: FastEndpointsProblemDetails;
 };
 
 export type ProbeExternalProviderError = ProbeExternalProviderErrors[keyof ProbeExternalProviderErrors];
@@ -14509,6 +14388,42 @@ export type ListGraphWorkflowRunsResponses = {
 
 export type ListGraphWorkflowRunsResponse = ListGraphWorkflowRunsResponses[keyof ListGraphWorkflowRunsResponses];
 
+export type DeleteGraphWorkflowRunData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/graph-workflows/runs/{runId}";
+};
+
+export type DeleteGraphWorkflowRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type DeleteGraphWorkflowRunError = DeleteGraphWorkflowRunErrors[keyof DeleteGraphWorkflowRunErrors];
+
+export type DeleteGraphWorkflowRunResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteGraphWorkflowRunResponse = DeleteGraphWorkflowRunResponses[keyof DeleteGraphWorkflowRunResponses];
+
 export type GetGraphWorkflowRunData = {
 	body?: never;
 	path: {
@@ -14816,7 +14731,7 @@ export type CreateImageJobErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -15280,7 +15195,7 @@ export type StartStableDiffusionCppSourceBuildErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -15346,7 +15261,7 @@ export type GetStableDiffusionCppSourceBuildPrerequisitesErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -17248,7 +17163,7 @@ export type StartLlamaCppSourceBuildErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -17311,7 +17226,7 @@ export type GetLlamaCppSourceBuildPrerequisitesErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -17404,7 +17319,7 @@ export type UpdateLlamaCppRuntimeErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -17438,7 +17353,7 @@ export type EnsureLlamaCppBinaryErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -18260,7 +18175,7 @@ export type RestoreNodeBackupErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -18975,7 +18890,7 @@ export type GetSkillImportPreviewResourceErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -18987,7 +18902,7 @@ export type GetSkillImportPreviewResourceErrors = {
 	/**
 	 * Not Found
 	 */
-	404: FastEndpointsErrorResponse;
+	404: FastEndpointsProblemDetails;
 };
 
 export type GetSkillImportPreviewResourceError = GetSkillImportPreviewResourceErrors[keyof GetSkillImportPreviewResourceErrors];
@@ -19211,35 +19126,6 @@ export type DeleteTrainingArtifactResponses = {
 
 export type DeleteTrainingArtifactResponse = DeleteTrainingArtifactResponses[keyof DeleteTrainingArtifactResponses];
 
-export type GetTrainingArtifactData = {
-	body?: never;
-	path: {
-		artifactId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/training/artifacts/{artifactId}";
-};
-
-export type GetTrainingArtifactErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetTrainingArtifactResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsTrainingExportsV1TrainingArtifactResponse;
-};
-
-export type GetTrainingArtifactResponse = GetTrainingArtifactResponses[keyof GetTrainingArtifactResponses];
-
 export type PromoteTrainingArtifactData = {
 	body: XeLocalAiEngineClientEndpointsTrainingExportsV1PromoteTrainingArtifactRequest;
 	path: {
@@ -19253,7 +19139,7 @@ export type PromoteTrainingArtifactErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -19455,7 +19341,7 @@ export type RunTrainingArtifactSmokeErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -19515,7 +19401,7 @@ export type CreateBaseArtifactErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -19559,7 +19445,7 @@ export type DeleteBaseArtifactErrors = {
 	/**
 	 * Not Found
 	 */
-	404: FastEndpointsErrorResponse;
+	404: unknown;
 	409: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactBlockedResponse;
 };
 
@@ -19595,10 +19481,8 @@ export type GetBaseArtifactErrors = {
 	/**
 	 * Not Found
 	 */
-	404: FastEndpointsErrorResponse;
+	404: unknown;
 };
-
-export type GetBaseArtifactError = GetBaseArtifactErrors[keyof GetBaseArtifactErrors];
 
 export type GetBaseArtifactResponses = {
 	/**
@@ -19630,7 +19514,7 @@ export type CancelBaseArtifactErrors = {
 	/**
 	 * Not Found
 	 */
-	404: FastEndpointsErrorResponse;
+	404: unknown;
 	409: XeLocalAiEngineClientEndpointsTrainingBaseArtifactsV1BaseArtifactBlockedResponse;
 };
 
@@ -19666,10 +19550,8 @@ export type GetBaseArtifactLicenseErrors = {
 	/**
 	 * Not Found
 	 */
-	404: FastEndpointsErrorResponse;
+	404: unknown;
 };
-
-export type GetBaseArtifactLicenseError = GetBaseArtifactLicenseErrors[keyof GetBaseArtifactLicenseErrors];
 
 export type GetBaseArtifactLicenseResponses = {
 	/**
@@ -19718,7 +19600,7 @@ export type CreateComparisonErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -19754,7 +19636,7 @@ export type SuggestComparisonErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -19836,48 +19718,6 @@ export type GetComparisonResponses = {
 };
 
 export type GetComparisonResponse = GetComparisonResponses[keyof GetComparisonResponses];
-
-export type CreateBenchmarkFromComparisonData = {
-	body: XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest;
-	path: {
-		comparisonId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/training/comparisons/{comparisonId}/benchmark";
-};
-
-export type CreateBenchmarkFromComparisonErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: MicrosoftAspNetCoreMvcProblemDetails;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	/**
-	 * Not Found
-	 */
-	404: MicrosoftAspNetCoreMvcProblemDetails;
-	409: MicrosoftAspNetCoreMvcProblemDetails;
-	422: MicrosoftAspNetCoreMvcProblemDetails;
-};
-
-export type CreateBenchmarkFromComparisonError = CreateBenchmarkFromComparisonErrors[keyof CreateBenchmarkFromComparisonErrors];
-
-export type CreateBenchmarkFromComparisonResponses = {
-	/**
-	 * Accepted
-	 */
-	202: XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse;
-};
-
-export type CreateBenchmarkFromComparisonResponse =
-	CreateBenchmarkFromComparisonResponses[keyof CreateBenchmarkFromComparisonResponses];
 
 export type ListTrainingDatasetsData = {
 	body?: never;
@@ -20299,7 +20139,7 @@ export type CreateEvaluationErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -20467,62 +20307,6 @@ export type ListToolMocksResponses = {
 
 export type ListToolMocksResponse = ListToolMocksResponses[keyof ListToolMocksResponses];
 
-export type CreateToolMockData = {
-	body: XeLocalAiEngineClientEndpointsTrainingV1CreateToolMockRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/training/mocks";
-};
-
-export type CreateToolMockErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type CreateToolMockResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsTrainingV1ToolMockResponse;
-};
-
-export type CreateToolMockResponse = CreateToolMockResponses[keyof CreateToolMockResponses];
-
-export type DeleteToolMockData = {
-	body: XeLocalAiEngineClientEndpointsTrainingV1DeleteToolMockRequest;
-	path: {
-		mockId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/training/mocks/{mockId}";
-};
-
-export type DeleteToolMockErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type DeleteToolMockResponses = {
-	/**
-	 * No Content
-	 */
-	204: void;
-};
-
-export type DeleteToolMockResponse = DeleteToolMockResponses[keyof DeleteToolMockResponses];
-
 export type GetToolMockData = {
 	body?: never;
 	path: {
@@ -20551,35 +20335,6 @@ export type GetToolMockResponses = {
 };
 
 export type GetToolMockResponse = GetToolMockResponses[keyof GetToolMockResponses];
-
-export type UpdateToolMockData = {
-	body: XeLocalAiEngineClientEndpointsTrainingV1UpdateToolMockRequest;
-	path: {
-		mockId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/training/mocks/{mockId}";
-};
-
-export type UpdateToolMockErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type UpdateToolMockResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsTrainingV1ToolMockResponse;
-};
-
-export type UpdateToolMockResponse = UpdateToolMockResponses[keyof UpdateToolMockResponses];
 
 export type VerifyToolMockData = {
 	body: XeLocalAiEngineClientEndpointsTrainingV1VerifyToolMockRequest;
@@ -20652,7 +20407,7 @@ export type CreateTrainingRunErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -20689,7 +20444,7 @@ export type GetTrainingRunDefaultsErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -20811,7 +20566,7 @@ export type StartTrainingExportErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -21204,7 +20959,7 @@ export type StartWhisperCppSourceBuildErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -21268,7 +21023,7 @@ export type GetWhisperCppSourceBuildPrerequisitesErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -21508,7 +21263,7 @@ export type CancelTranscriptionSessionErrors = {
 	 * Not Found
 	 */
 	404: unknown;
-	409: FastEndpointsErrorResponse;
+	409: FastEndpointsProblemDetails;
 };
 
 export type CancelTranscriptionSessionError = CancelTranscriptionSessionErrors[keyof CancelTranscriptionSessionErrors];
@@ -21617,7 +21372,7 @@ export type UploadTranscriptionAudioErrors = {
 	 * Not Found
 	 */
 	404: unknown;
-	409: FastEndpointsErrorResponse;
+	409: FastEndpointsProblemDetails;
 	415: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionUnsupportedContainerResponse;
 };
 
@@ -21645,7 +21400,7 @@ export type StartLiveTranscriptionSessionErrors = {
 	/**
 	 * Bad Request
 	 */
-	400: FastEndpointsErrorResponse;
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */

@@ -34,7 +34,7 @@ public sealed class CreateImageJobEndpoint : Endpoint<CreateImageJobRequest, Ima
         Description(builder => builder
                                .Accepts<CreateImageJobRequest>("application/json")
                                .Produces<ImageJobResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                .Produces<ImageRuntimeBlockedResponse>(StatusCodes.Status409Conflict));
     }
 

@@ -44,9 +44,14 @@ public sealed class ResponseSecurityHeaderTests
         AssertDenyAntiFramingHeader(response);
     }
 
+    // Every response the anti-framing header reaches also carries the no-sniff and referrer headers.
     private static void AssertDenyAntiFramingHeader(HttpResponseMessage response)
     {
         AssertEx.True(response.Headers.TryGetValues(AntiFramingHeaderName, out var values));
         AssertEx.Equal("DENY", AssertEx.NotNull(values).Single());
+        AssertEx.True(response.Headers.TryGetValues("X-Content-Type-Options", out var sniff), "nosniff must be sent.");
+        AssertEx.Equal("nosniff", AssertEx.NotNull(sniff).Single());
+        AssertEx.True(response.Headers.TryGetValues("Referrer-Policy", out var referrer), "Referrer-Policy must be sent.");
+        AssertEx.Equal("same-origin", AssertEx.NotNull(referrer).Single());
     }
 }

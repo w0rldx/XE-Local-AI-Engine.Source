@@ -269,8 +269,6 @@ public static class LocalApiRoutes
         public const string ProjectFidelityCache = "benchmarks/projects/{projectId}/fidelity/cache";
         public const string RunFidelity = "benchmarks/runs/{runId}/fidelity";
 
-        public const string RunFidelityAttempts = "benchmarks/runs/{runId}/fidelity/attempts";
-
         // The verdict matrix and the fit it produced are ONE question: a score shown beside a verdict set that did
         // not produce it is undetectable from the client, so they are never split across two routes.
         public const string ProjectComparisons = "benchmarks/projects/{projectId}/comparisons";
@@ -811,12 +809,6 @@ public static class LocalApiRoutes
 
         /// <summary>Lineage auto-suggest: the two model names and evaluations one training run implies.</summary>
         public const string ComparisonSuggest = "training/comparisons/suggest";
-
-        /// <summary>
-        ///     Hand-off into the benchmark module: creates (or reuses) the benchmark project for one comparison and
-        ///     enqueues its paired base/tuned runs. The existing deep link only SELECTS runs that already exist.
-        /// </summary>
-        public const string ComparisonBenchmark = "training/comparisons/{comparisonId}/benchmark";
 
         // Exports. Starting one and listing what a run produced are run-scoped; every action ON an artifact addresses it by its own id, because an artifact outlives the
         // export that produced it and is acted on without the run in hand.

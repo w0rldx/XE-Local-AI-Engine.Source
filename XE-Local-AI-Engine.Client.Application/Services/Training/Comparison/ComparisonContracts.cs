@@ -96,44 +96,6 @@ public sealed record TrainingComparisonDeltasV1
     public ComparisonBenchmarkDeltaV1? Benchmark { get; init; }
 }
 
-/// <summary>
-///     What the operator asked to benchmark. The <see cref="CoreTask" /> is REQUIRED and comes from the operator:
-///     a comparison's evaluation prompt is a scoring-harness input, not a benchmark task, and silently reusing it would
-///     produce a benchmark of the wrong thing.
-/// </summary>
-public sealed record CreateBenchmarkFromComparisonCommand
-{
-    public required Guid ComparisonId { get; init; }
-
-    public required string CoreTask { get; init; }
-
-    public required int ContextTokens { get; init; }
-
-    public required Guid AgentDefinitionId { get; init; }
-
-    public string? Name { get; init; }
-
-    public string? KvCacheType { get; init; }
-
-    public int RepeatCount { get; init; } = 1;
-
-    public bool Warmup { get; init; }
-}
-
-public sealed class ComparisonBenchmarkHandoff
-{
-    public required Guid ProjectId { get; init; }
-
-    public required string BaseModelName { get; init; }
-
-    public required string TunedModelName { get; init; }
-
-    /// <summary>The base model's runs, in the order they were enqueued. The tuned group follows them.</summary>
-    public required IReadOnlyList<Guid> BaseRunIds { get; init; }
-
-    public required IReadOnlyList<Guid> TunedRunIds { get; init; }
-}
-
 /// <summary>What the operator asked to compare. The benchmark ids are optional and validated to exist before binding.</summary>
 public sealed class CreateComparisonCommand
 {

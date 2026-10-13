@@ -5,7 +5,9 @@
 - **Scope:** A node-wide choice between two sandbox security profiles, `low` and `high`. It decides whether a containment
   axis a workload PREFERS (egress denial, a stable filesystem boundary, resource ceilings) is merely requested, as
   today, or becomes a precondition that is refused fail-closed where the host cannot serve it. It changes no workload
-  declaration, no floor, no selector ranking and no mechanism, and under `low` it changes no behaviour.
+  declaration, no floor, no selector ranking and no mechanism, and under `low` it changes no behaviour. (Amended
+  2026-10-13: independent of the profile, a launch that has no filesystem boundary now gets the jail's own home
+  directory as `HOME`, see `ProcessSandboxRuntimeProvider`; `low` otherwise still means today's behaviour.)
 - **Authority:** Operator decisions of 2026-10-08 (full proposal chosen over parking it or shipping switches only, with
   the pre-1.0 feature freeze lifted for this round; O1 `high` promotes only declared preferences; O2 the chooser sits
   after external access and before the interface mode; O3 the execution-previews switch moves into the new Sandbox &
@@ -112,7 +114,9 @@ asked a question it already answered. The external-access preset is the template
 
 ## Consequences
 
-- Under `low` no behaviour changes; the existing egress, ceiling and refusal tests pass unchanged.
+- Under `low` the profile changes no behaviour; the existing egress, ceiling and refusal tests pass unchanged. The one
+  later change that touches `low` launches (the jail home as `HOME` where no filesystem boundary exists, 2026-10-13)
+  is keyed on the missing boundary, not on the profile.
 - The configuration-only ruling now has one documented exception, and the stale-belief table in the sandbox knowledge
   file says so.
 - The rule is enumerated by an architecture test over `SandboxWorkloads`: the policy promotes exactly the declared

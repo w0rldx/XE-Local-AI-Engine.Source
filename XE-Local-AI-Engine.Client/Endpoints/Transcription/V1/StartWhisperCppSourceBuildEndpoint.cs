@@ -32,7 +32,7 @@ public sealed class StartWhisperCppSourceBuildEndpoint : Endpoint<StartWhisperCp
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<StartWhisperCppSourceBuildResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                .Produces<TranscriptionRuntimeBlockedResponse>(StatusCodes.Status409Conflict));
     }
 

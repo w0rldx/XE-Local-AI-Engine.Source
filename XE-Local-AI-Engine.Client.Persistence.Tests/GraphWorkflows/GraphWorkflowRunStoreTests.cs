@@ -418,6 +418,59 @@ public sealed class GraphWorkflowRunStoreTests
         _ = await AssertEx.ThrowsAsync<GraphWorkflowDefinitionConflictException>(() => store.DeleteDefinitionAsync(definition.Id));
     }
 
+    /// <summary>A finished run goes with its node runs and events; its definition and every other run stay.</summary>
+    [Test]
+    public async Task DeleteRun_OfAFinishedRun_TakesItsFootprintAndNothingElse()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync();
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+        var definition = await GraphWorkflowTestFixture.SeedDefinitionAsync(store);
+        var kept = await store.StartRunAsync(StartCommand(definition, Guid.NewGuid()));
+        var finished = await store.StartRunAsync(StartCommand(definition, Guid.NewGuid()));
+        _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+        {
+            RunId = finished.Id,
+            ExpectedVersion = finished.Version,
+            TargetStatus = GraphWorkflowRunStatus.Completed
+        });
+
+        await store.DeleteRunAsync(finished.Id);
+
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowNotFoundException>(() => store.GetRunAsync(finished.Id));
+        AssertEx.Empty(await store.ListNodeRunsAsync(finished.Id), "the node runs go with their run.");
+        AssertEx.Equal((await store.ListEventsAsync(kept.Id)).Count, await fixture.RawTableCountAsync("graph_workflow_run_events"),
+            "only the kept run's events remain.");
+        AssertEx.Equal(kept.Id, (await store.GetRunAsync(kept.Id)).Id);
+        AssertEx.Equal(expected: 2, (await store.ListNodeRunsAsync(kept.Id)).Count, "another run's node runs are untouched.");
+        AssertEx.Equal(definition.Id, (await store.GetDefinitionAsync(definition.Id)).Id);
+    }
+
+    /// <summary>A live run is refused with the run-conflict shape and keeps every row: cancel it first.</summary>
+    [Test]
+    public async Task DeleteRun_WhileTheRunIsLive_IsRefusedAndWritesNothing()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync();
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+        var run = await StartAsync(store);
+
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowInvalidTransitionException>(() => store.DeleteRunAsync(run.Id));
+
+        AssertEx.Equal(GraphWorkflowRunStatus.Pending, (await store.GetRunAsync(run.Id)).Status);
+        AssertEx.Equal(expected: 2, (await store.ListNodeRunsAsync(run.Id)).Count);
+    }
+
+    [Test]
+    public async Task DeleteRun_OfAnUnknownRun_AnswersNotFound()
+    {
+        using var fixture = new GraphWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync();
+        var store = GraphWorkflowTestFixture.StoreFor(context);
+
+        _ = await AssertEx.ThrowsAsync<GraphWorkflowNotFoundException>(() => store.DeleteRunAsync(Guid.NewGuid()));
+    }
+
     /// <summary>
     ///     The request id is the idempotency key and nothing else: the index does not know what definition a start
     ///     named, so the second start comes back with the FIRST run whatever it was of. Documented here because it is

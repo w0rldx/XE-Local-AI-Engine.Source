@@ -1902,7 +1902,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -4762,61 +4762,6 @@
           },
           "409": {
             "description": "",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/benchmarks/runs/{runId}/fidelity/attempts": {
-      "get": {
-        "tags": [
-          "Benchmarks"
-        ],
-        "operationId": "listBenchmarkFidelityAttempts",
-        "parameters": [
-          {
-            "name": "runId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "guid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -11722,7 +11667,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -11864,7 +11809,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -12694,6 +12639,55 @@
       }
     },
     "/api/local/v1/graph-workflows/runs/{runId}": {
+      "delete": {
+        "tags": [
+          "Graph-Workflows"
+        ],
+        "operationId": "deleteGraphWorkflowRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
       "get": {
         "tags": [
           "Graph-Workflows"
@@ -13250,7 +13244,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -14008,7 +14002,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -14123,7 +14117,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -17159,7 +17153,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -17261,7 +17255,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -17396,7 +17390,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -17463,7 +17457,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -18761,7 +18755,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -19879,7 +19873,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -19895,7 +19889,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -20247,49 +20241,6 @@
             "Bearer": []
           }
         ]
-      },
-      "get": {
-        "tags": [
-          "Training"
-        ],
-        "operationId": "getTrainingArtifact",
-        "parameters": [
-          {
-            "name": "artifactId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "guid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingExportsV1TrainingArtifactResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
       }
     },
     "/api/local/v1/training/artifacts/{artifactId}/promote": {
@@ -20338,7 +20289,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -20717,7 +20668,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -20806,7 +20757,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -20866,14 +20817,7 @@
             "description": "Forbidden"
           },
           "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
-                }
-              }
-            }
+            "description": "Not Found"
           },
           "409": {
             "description": "",
@@ -20929,14 +20873,7 @@
             "description": "Forbidden"
           },
           "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
-                }
-              }
-            }
+            "description": "Not Found"
           }
         },
         "security": [
@@ -20984,14 +20921,7 @@
             "description": "Forbidden"
           },
           "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
-                }
-              }
-            }
+            "description": "Not Found"
           },
           "409": {
             "description": "",
@@ -21049,14 +20979,7 @@
             "description": "Forbidden"
           },
           "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
-                }
-              }
-            }
+            "description": "Not Found"
           }
         },
         "security": [
@@ -21136,7 +21059,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -21201,7 +21124,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -21320,104 +21243,6 @@
           },
           "403": {
             "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/training/comparisons/{comparisonId}/benchmark": {
-      "post": {
-        "tags": [
-          "Training"
-        ],
-        "operationId": "createBenchmarkFromComparison",
-        "parameters": [
-          {
-            "name": "comparisonId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "guid"
-            }
-          }
-        ],
-        "requestBody": {
-          "x-name": "CreateBenchmarkFromComparisonRequest",
-          "description": "",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-position": 1
-        },
-        "responses": {
-          "202": {
-            "description": "Accepted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
-                }
-              }
-            }
           }
         },
         "security": [
@@ -22190,7 +22015,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -22436,108 +22261,9 @@
             "Bearer": []
           }
         ]
-      },
-      "post": {
-        "tags": [
-          "Training"
-        ],
-        "operationId": "createToolMock",
-        "requestBody": {
-          "x-name": "CreateToolMockRequest",
-          "description": "",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1CreateToolMockRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-position": 1
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ToolMockResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
       }
     },
     "/api/local/v1/training/mocks/{mockId}": {
-      "delete": {
-        "tags": [
-          "Training"
-        ],
-        "operationId": "deleteToolMock",
-        "parameters": [
-          {
-            "name": "mockId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "guid"
-            }
-          }
-        ],
-        "requestBody": {
-          "x-name": "DeleteToolMockRequest",
-          "description": "",
-          "content": {
-            "*/*": {
-              "schema": {
-                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1DeleteToolMockRequest"
-              }
-            },
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1DeleteToolMockRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-position": 1
-        },
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      },
       "get": {
         "tags": [
           "Training"
@@ -22554,62 +22280,6 @@
             }
           }
         ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1ToolMockResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      },
-      "put": {
-        "tags": [
-          "Training"
-        ],
-        "operationId": "updateToolMock",
-        "parameters": [
-          {
-            "name": "mockId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "guid"
-            }
-          }
-        ],
-        "requestBody": {
-          "x-name": "UpdateToolMockRequest",
-          "description": "",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1UpdateToolMockRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-position": 1
-        },
         "responses": {
           "200": {
             "description": "Success",
@@ -22792,7 +22462,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -22866,7 +22536,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -23062,7 +22732,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -23649,7 +23319,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -23764,7 +23434,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -24118,7 +23788,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -24316,7 +23986,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -24375,7 +24045,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -25808,34 +25478,6 @@
         "type": "object",
         "description": "a request dto that doesn't have any properties",
         "additionalProperties": false
-      },
-      "FastEndpointsErrorResponse": {
-        "type": "object",
-        "description": "the dto used to send an error response to the client",
-        "additionalProperties": false,
-        "properties": {
-          "statusCode": {
-            "type": "integer",
-            "description": "the http status code sent to the client. default is 400.",
-            "format": "int32",
-            "default": 400
-          },
-          "message": {
-            "type": "string",
-            "description": "the message for the error response",
-            "default": "One or more errors occurred!"
-          },
-          "errors": {
-            "type": "object",
-            "description": "the collection of errors for the current context",
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          }
-        }
       },
       "FastEndpointsProblemDetails": {
         "type": "object",
@@ -28735,96 +28377,6 @@
           }
         }
       },
-      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "kind",
-          "status"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "guid"
-          },
-          "sequence": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "perplexityMean": {
-            "type": "number",
-            "format": "double",
-            "nullable": true
-          },
-          "perplexityStdErr": {
-            "type": "number",
-            "format": "double",
-            "nullable": true
-          },
-          "perplexityChunks": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "perplexityContextTokens": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "corpusId": {
-            "type": "string",
-            "nullable": true
-          },
-          "kldMean": {
-            "type": "number",
-            "format": "double",
-            "nullable": true
-          },
-          "kldP99": {
-            "type": "number",
-            "format": "double",
-            "nullable": true
-          },
-          "topTokenAgreement": {
-            "type": "number",
-            "format": "double",
-            "nullable": true
-          },
-          "baseModelName": {
-            "type": "string",
-            "nullable": true
-          },
-          "baseModelContentFingerprint": {
-            "type": "string",
-            "nullable": true
-          },
-          "baseLogitsDigest": {
-            "type": "string",
-            "nullable": true
-          },
-          "errorMessage": {
-            "type": "string",
-            "nullable": true
-          },
-          "enqueuedAtUtc": {
-            "type": "integer"
-          },
-          "startedAtUtc": {
-            "type": "integer",
-            "nullable": true
-          },
-          "completedAtUtc": {
-            "type": "integer",
-            "nullable": true
-          }
-        }
-      },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -30024,80 +29576,6 @@
           }
         }
       },
-      "XE_Local_AI_EngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "coreTask",
-          "contextTokens",
-          "agentDefinitionId"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "nullable": true
-          },
-          "coreTask": {
-            "type": "string"
-          },
-          "contextTokens": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "agentDefinitionId": {
-            "type": "string",
-            "format": "guid"
-          },
-          "kvCacheType": {
-            "type": "string",
-            "nullable": true
-          },
-          "repeatCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "warmup": {
-            "type": "boolean"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "projectId",
-          "baseModelName",
-          "tunedModelName",
-          "baseRunIds",
-          "tunedRunIds"
-        ],
-        "properties": {
-          "projectId": {
-            "type": "string",
-            "format": "guid"
-          },
-          "baseModelName": {
-            "type": "string"
-          },
-          "tunedModelName": {
-            "type": "string"
-          },
-          "baseRunIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "guid"
-            }
-          },
-          "tunedRunIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "guid"
-            }
-          }
-        }
-      },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1CreateBenchmarkTaskItemRequest": {
         "allOf": [
           {
@@ -30343,25 +29821,6 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkPairwiseFitResponse"
               }
             ]
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsRequest": {
-        "type": "object",
-        "additionalProperties": false
-      },
-      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "items"
-        ],
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse"
-            }
           }
         }
       },
@@ -48297,21 +47756,6 @@
         "type": "object",
         "additionalProperties": false
       },
-      "XE_Local_AI_EngineClientEndpointsTrainingV1CreateToolMockRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "toolName": {
-            "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "body": {
-            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsToolMockBodyV1"
-          }
-        }
-      },
       "XE_Local_AI_EngineClientEndpointsTrainingV1CreateTrainingDefinitionRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -48321,15 +47765,6 @@
           },
           "body": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsTrainingV1DeleteToolMockRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "expectedVersion": {
-            "type": "integer"
           }
         }
       },
@@ -48779,24 +48214,6 @@
           },
           "updatedAtUtc": {
             "type": "integer"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsTrainingV1UpdateToolMockRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "expectedVersion": {
-            "type": "integer"
-          },
-          "toolName": {
-            "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "body": {
-            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesTrainingDatasetsToolMockBodyV1"
           }
         }
       },

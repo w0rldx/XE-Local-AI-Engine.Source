@@ -191,13 +191,6 @@ public sealed class TrainingExportService : ITrainingExportService
         return await store.ListArtifactsAsync(runId, cancellationToken);
     }
 
-    public async Task<TrainingArtifactRecord?> GetArtifactAsync(Guid artifactId, CancellationToken cancellationToken = default)
-    {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<ITrainingRunStore>();
-        return await store.GetArtifactAsync(artifactId, cancellationToken);
-    }
-
     public async Task<TrainedModelSmokeResult> RunSmokeAsync(Guid artifactId, CancellationToken cancellationToken = default)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();

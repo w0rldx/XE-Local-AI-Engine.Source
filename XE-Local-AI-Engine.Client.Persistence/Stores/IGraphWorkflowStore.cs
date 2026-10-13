@@ -584,6 +584,12 @@ public interface IGraphWorkflowStore
 
     Task<GraphWorkflowRunSnapshot> GetRunAsync(Guid runId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     A hard delete of a finished run and its whole footprint (<c>GraphWorkflowPurge</c>), refused
+    ///     with <see cref="GraphWorkflowInvalidTransitionException" /> while the run is still live — checked INSIDE the transaction.
+    /// </summary>
+    Task DeleteRunAsync(Guid runId, CancellationToken cancellationToken = default);
+
     /// <summary>Newest first, optionally filtered by status.</summary>
     Task<IReadOnlyList<GraphWorkflowRunSnapshot>> ListRunsAsync(GraphWorkflowRunStatus? status = null, int limit = 50, CancellationToken cancellationToken = default);
 

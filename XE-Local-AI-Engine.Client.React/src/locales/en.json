@@ -1010,28 +1010,6 @@
 				"descriptionWithoutName": "Release this node from your active session? The node will stay online.",
 				"confirm": "Release"
 			},
-			"nodeInfo": {
-				"button": "View node information",
-				"title": "Node information",
-				"empty": "No online nodes available.",
-				"emptyTitle": "No nodes available",
-				"emptyDescription": "Online client nodes will appear here. Make sure a node is connected and online.",
-				"searchPlaceholder": "Search nodes…",
-				"nodeList": "Nodes",
-				"noMatch": "No matching nodes",
-				"selectPrompt": "Select a node to view details",
-				"statusOnline": "Online",
-				"statusBusy": "Busy",
-				"statusError": "Error",
-				"statusOffline": "Offline",
-				"tabOverview": "Overview",
-				"tabHardware": "Hardware",
-				"tabModels": "Models",
-				"selectNode": "Select this node",
-				"currentNode": "Current node",
-				"copyInfo": "Copy info",
-				"copied": "Copied"
-			},
 			"followUpTitle": "Suggested follow-ups",
 			"toolApproval": {
 				"title": "Tool approval required",
@@ -1052,127 +1030,6 @@
 					"enableEncryptedTitle": "Enable encrypted sync?",
 					"standardDescription": "This will allow this TrustedLocal conversation to sync to the platform. Continue only if you want this conversation uploaded from this device.",
 					"encryptedDescription": "This will convert this TrustedLocal conversation to encrypted sync. You must confirm this change before any encrypted upload can happen."
-				}
-			},
-			"encryptedSync": {
-				"unlock": {
-					"title": "Unlock encrypted sync",
-					"description": "Enter your dedicated sync password to unlock your encrypted conversations on this device.",
-					"passwordDescription": "This is separate from your account password.",
-					"passwordLabel": "Sync password",
-					"passwordPlaceholder": "Enter your encrypted sync password",
-					"recoveryAction": "Forgot password? Use recovery key",
-					"submit": "Unlock",
-					"errors": {
-						"notConfigured": "Encrypted sync is not configured for this account yet.",
-						"incorrectPassword": "Incorrect sync password"
-					},
-					"unlockingTitle": "Unlocking encrypted chat",
-					"unlockingSubtitle": "Verifying your encrypted chat password.",
-					"preparingTitle": "Preparing encrypted chat",
-					"preparingSubtitle": "Loading encrypted history.",
-					"errorTitle": "Encrypted chat unavailable",
-					"errorSubtitle": "Could not finish preparing encrypted chat."
-				},
-				"setup": {
-					"title": "Set up encrypted sync",
-					"description": "This is a separate password from your account password. The platform cannot read your encrypted chats.",
-					"ssoPasswordDescription": "This is a separate password from your account login.",
-					"passwordDescription": "Use a dedicated sync password with at least {{count}} characters.",
-					"passwordLabel": "Sync password",
-					"passwordPlaceholder": "Create your encrypted sync password",
-					"passwordStrength": "Password strength",
-					"strength": {
-						"empty": "Add a dedicated sync password",
-						"weak": "Weak",
-						"reasonable": "Reasonable",
-						"strong": "Strong"
-					},
-					"recoveryKeyTitle": "Recovery key",
-					"recoveryKeyHint": "Save this key now. It cannot be shown again.",
-					"copy": "Copy",
-					"copySuccess": "Recovery key copied to clipboard.",
-					"acknowledgement": "I have written down or saved my recovery key securely. I understand it cannot be shown again.",
-					"submit": "Generate recovery key",
-					"complete": "I have saved the recovery key",
-					"ready": "Encrypted sync is ready.",
-					"errors": {
-						"shortPassword": "Your sync password must be at least {{count}} characters long.",
-						"setupFailed": "Encrypted sync setup failed. Please try again."
-					}
-				},
-				"recovery": {
-					"title": "Recover encrypted sync",
-					"description": "Use your one-time recovery key to set a new sync password without re-encrypting your stored chats.",
-					"recoveryKeyDescription": "Spaces and dashes are ignored automatically.",
-					"recoveryKeyLabel": "Recovery key",
-					"recoveryKeyPlaceholder": "ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z1234-56789",
-					"newPasswordDescription": "Use a new dedicated sync password with at least {{count}} characters.",
-					"newPasswordLabel": "New sync password",
-					"newPasswordPlaceholder": "Create a new encrypted sync password",
-					"confirmPasswordLabel": "Confirm new sync password",
-					"confirmPasswordPlaceholder": "Confirm your new encrypted sync password",
-					"submit": "Reset sync password",
-					"resetSuccess": "Your sync password has been reset.",
-					"newRecoveryKeyTitle": "Your new recovery key",
-					"newRecoveryKeyHint": "Save this key now. It cannot be shown again.",
-					"acknowledgement": "I have written down or saved my new recovery key securely.",
-					"complete": "I have saved the recovery key",
-					"validation": {
-						"tooShort": "Recovery key is too short.",
-						"invalidCharacters": "Recovery key contains invalid characters.",
-						"missingCheckCharacter": "Recovery key is missing a check character.",
-						"invalidCheckDigit": "Recovery key check digit is invalid.",
-						"invalidLength": "Recovery key has an invalid length.",
-						"invalid": "Recovery key is invalid."
-					},
-					"errors": {
-						"shortPassword": "Your new sync password must be at least {{count}} characters long.",
-						"passwordMismatch": "Your new passwords do not match.",
-						"notConfigured": "Encrypted sync is not configured for this account yet.",
-						"recoveryKeyIncorrect": "Recovery key is incorrect.",
-						"recoveryFailed": "Recovery failed. Please check your recovery key and try again."
-					}
-				},
-				"reset": {
-					"trigger": "Lost password and recovery code? Delete encrypted data",
-					"title": "Delete encrypted data?",
-					"description": "This permanently deletes your encrypted chat data and ALL conversations on every device. There is no way to recover them. You will need to set up encrypted chat again.",
-					"confirm": "Delete everything",
-					"success": "Encrypted data deleted. Set up encrypted chat again to continue.",
-					"errors": {
-						"apiFailed": "Could not delete encrypted data on the server.",
-						"wrongPassword": "Incorrect account password."
-					},
-					"passwordLabel": "Account password",
-					"passwordDescription": "Enter your account password to authorise this deletion.",
-					"passwordPlaceholder": "Your account password"
-				},
-				"changePassword": {
-					"title": "Change sync password",
-					"description": "Change your encrypted sync password. Your stored chats will remain accessible.",
-					"button": "Change sync password",
-					"newPasswordDescription": "Use a dedicated sync password with at least {{count}} characters.",
-					"newPasswordLabel": "New sync password",
-					"newPasswordPlaceholder": "Enter your new sync password",
-					"passwordStrength": "Password strength",
-					"strength": {
-						"empty": "Add a new sync password",
-						"weak": "Weak",
-						"reasonable": "Reasonable",
-						"strong": "Strong"
-					},
-					"confirmPasswordDescription": "Re-enter your new sync password to confirm.",
-					"confirmPasswordLabel": "Confirm new sync password",
-					"confirmPasswordPlaceholder": "Confirm your new sync password",
-					"submit": "Change password",
-					"success": "Sync password changed successfully.",
-					"errors": {
-						"shortPassword": "Your sync password must be at least {{count}} characters long.",
-						"passwordMismatch": "Your new passwords do not match.",
-						"notConfigured": "Encrypted sync is not configured for this account yet.",
-						"changeFailed": "Password change failed. Please try again."
-					}
 				}
 			},
 			"actions": {
@@ -1513,280 +1370,6 @@
 				"confirm": "Enable auto-accept"
 			},
 			"stoppedWhileThinking": "Stopped while thinking"
-		},
-		"clientNodes": {
-			"fields": {
-				"hardware": "Hardware",
-				"systemScore": "System score",
-				"capabilities": "Capabilities",
-				"models": "Installed models"
-			},
-			"settings": {
-				"title": "Node Settings",
-				"provider": "AI Provider",
-				"providerNone": "Local (Ollama)",
-				"azureEndpoint": "Azure Endpoint",
-				"azureApiKey": "Azure API Key",
-				"azureDeploymentName": "Deployment Name"
-			},
-			"none": "None reported"
-		},
-		"admin": {
-			"agentDefinitions": {
-				"title": "Agent Definitions",
-				"note": "Configure agent display metadata, AI model selection, reasoning effort, tools, and policies.",
-				"create": "Create agent definition",
-				"edit": "Edit",
-				"save": "Save",
-				"setDefault": "Set default",
-				"created": "Agent definition created successfully",
-				"updated": "Agent definition updated successfully",
-				"deleted": "Agent definition deleted successfully",
-				"defaultSet": "Default agent definition updated successfully",
-				"invalidPolicies": "Policies must be valid JSON.",
-				"loadDetailsError": "Failed to load agent definition details.",
-				"loadAiModelsError": "Failed to load AI models.",
-				"loadToolsError": "Failed to load tool definitions.",
-				"nameLabel": "Name",
-				"displayNameLabel": "Display Name",
-				"descriptionLabel": "Description",
-				"systemPromptLabel": "System Prompt",
-				"aiModelLabel": "AI Model",
-				"aiModelPlaceholder": "Select an AI model",
-				"reasoningEffortLabel": "Reasoning effort",
-				"reasoningEffortPlaceholder": "Select reasoning effort",
-				"workflowTypeLabel": "Workflow Type",
-				"workflowTypePlaceholder": "e.g. default, research, coding",
-				"defaultModelProfileLabel": "Model Profile",
-				"defaultModelProfilePlaceholder": "e.g. llama3:8b",
-				"allowedToolsLabel": "Allowed Tools",
-				"policiesLabel": "Policies (JSON)",
-				"policiesPlaceholder": "{\n  \"approvalMode\": \"manual\"\n}",
-				"reasoningEffortOptions": {
-					"low": "Low",
-					"medium": "Medium",
-					"high": "High"
-				},
-				"defaultBadge": "Default",
-				"createDialogTitle": "Create agent definition",
-				"editDialogTitle": "Edit agent definition",
-				"deleteDialogTitle": "Delete agent definition",
-				"deleteDialogText": "Do you really want to delete '{{name}}'?",
-				"columns": {
-					"name": "Name",
-					"description": "Description",
-					"version": "Version",
-					"default": "Default",
-					"actions": "Actions"
-				}
-			},
-			"toolDefinitions": {
-				"title": "Tool Definitions",
-				"note": "Edit is deferred until the backend exposes full tool-definition details including endpoint/handler.",
-				"create": "Create tool definition",
-				"created": "Tool definition created successfully",
-				"deleted": "Tool definition deleted successfully",
-				"nameLabel": "Name",
-				"descriptionLabel": "Description",
-				"locationLabel": "Location",
-				"endpointOrHandlerLabel": "Endpoint or Handler",
-				"parameterSchemaLabel": "Parameter Schema",
-				"requiresApprovalLabel": "Requires approval",
-				"createDialogTitle": "Create tool definition",
-				"deleteDialogTitle": "Delete tool definition",
-				"deleteDialogText": "Do you really want to delete '{{name}}'?",
-				"apiSide": "API Side",
-				"clientLocal": "Client Local",
-				"columns": {
-					"name": "Name",
-					"description": "Description",
-					"location": "Location",
-					"approval": "Approval",
-					"actions": "Actions"
-				}
-			},
-			"clientNodes": {
-				"title": "Client Nodes",
-				"deleted": "Client node deleted successfully",
-				"deleteDialogTitle": "Delete client node",
-				"deleteDialogText": "Do you really want to delete '{{name}}'?",
-				"columns": {
-					"name": "Name",
-					"userId": "User ID",
-					"status": "Status",
-					"systemScore": "System Score",
-					"lastSeen": "Last Seen",
-					"actions": "Actions"
-				},
-				"status": {
-					"offline": "Offline",
-					"online": "Online",
-					"disconnecting": "Disconnecting",
-					"error": "Error"
-				}
-			},
-			"aiModels": {
-				"title": "AI Models",
-				"create": "Create AI model",
-				"save": "Save",
-				"edit": "Edit",
-				"created": "AI model created successfully",
-				"updated": "AI model updated successfully",
-				"deleted": "AI model deleted successfully",
-				"modelIdLabel": "Model ID",
-				"displayNameLabel": "Display Name",
-				"descriptionLabel": "Description",
-				"typeLabel": "Model type",
-				"typeOptions": {
-					"llm": "LLM",
-					"embedding": "Embedding"
-				},
-				"isReasoningModelLabel": "Reasoning model",
-				"supportsToolCallingLabel": "Supports tool calling",
-				"isPublicLabel": "Public for chat users",
-				"reasoningEffortNamesLabel": "Allowed reasoning efforts",
-				"defaultReasoningEffortNameLabel": "Default reasoning effort",
-				"createDialogTitle": "Create AI model",
-				"editDialogTitle": "Edit AI model",
-				"deleteDialogTitle": "Delete AI model",
-				"deleteDialogText": "Do you really want to delete '{{name}}'?",
-				"activeBadge": "Active",
-				"publicBadge": "Public",
-				"reasoningBadge": "Reasoning",
-				"toolCallingBadge": "Tools",
-				"columns": {
-					"modelId": "Model ID",
-					"displayName": "Display Name",
-					"type": "Type",
-					"reasoning": "Reasoning",
-					"tools": "Tools",
-					"public": "Public",
-					"active": "Active",
-					"actions": "Actions"
-				}
-			},
-			"feedback": {
-				"title": "Feedback",
-				"all": "All",
-				"solved": "Solved",
-				"unsolved": "Unsolved",
-				"markSolved": "Mark solved",
-				"solvedSuccess": "Feedback marked as solved",
-				"solveDialogTitle": "Mark feedback as solved",
-				"solveNoteLabel": "Solved note",
-				"columns": {
-					"conversation": "Conversation",
-					"message": "Message Preview",
-					"sentiment": "Sentiment",
-					"status": "Status",
-					"createdAt": "Created",
-					"actions": "Actions"
-				},
-				"positive": "Positive",
-				"negative": "Negative",
-				"open": "Open",
-				"resolved": "Resolved"
-			},
-			"pairingTokens": {
-				"title": "Pairing Tokens",
-				"legacyNotice": "Pairing tokens are deprecated for normal worker onboarding. Use device-code node binding by default; create tokens only for temporary legacy compatibility.",
-				"labelLabel": "Label",
-				"labelPlaceholder": "e.g. Office workstation",
-				"create": "Create pairing token",
-				"created": "Pairing token created successfully",
-				"rotated": "Pairing token rotated successfully",
-				"revoked": "Pairing token revoked successfully",
-				"revokeDialogTitle": "Revoke pairing token",
-				"revokeDialogText": "Do you really want to revoke '{{name}}'?",
-				"rotate": "Rotate",
-				"rotateConfirmTitle": "Rotate pairing token?",
-				"rotateConfirmDescription": "This issues a new pairing secret for this token. The old secret will stop working immediately. Existing paired clients keep their sessions — the new secret only matters for the next pairing or login. This cannot be undone.",
-				"rotateConfirmLabel": "Rotate",
-				"secretModalTitle": "Store this pairing token now",
-				"secretWarning": "The pairing token is shown only once. Save it in a secure location.",
-				"tokenLabel": "Pairing Token",
-				"copyToken": "Copy token",
-				"tokenCopied": "Pairing token copied to clipboard",
-				"expirationOption_one": "{{count}} day",
-				"expirationOption_other": "{{count}} days",
-				"durationBadge_one": "Valid for {{count}} day",
-				"durationBadge_other": "Valid for {{count}} days",
-				"statusOpen": "Open",
-				"statusUsed": "Used",
-				"statusExpired": "Expired",
-				"columns": {
-					"label": "Label",
-					"duration": "Duration",
-					"status": "Status",
-					"assignedTo": "Assigned to",
-					"usedBy": "Used by client",
-					"createdAt": "Created",
-					"expiresAt": "Expires",
-					"actions": "Actions"
-				}
-			},
-			"appKeys": {
-				"title": "App Keys",
-				"nameLabel": "Name",
-				"namePlaceholder": "e.g. API client production",
-				"appsLabel": "Apps",
-				"create": "Create App Key",
-				"created": "App key created successfully",
-				"deleted": "App key deleted successfully",
-				"enabled": "App key enabled",
-				"disabled": "App key disabled",
-				"validation": "Name and at least one app are required",
-				"deleteDialogTitle": "Delete app key",
-				"deleteDialogText": "Do you really want to delete '{{name}}'? This action cannot be undone.",
-				"secretModalTitle": "Store this secret now",
-				"secretWarning": "The client secret is shown only once. Save it in a secure location.",
-				"copySecret": "Copy secret",
-				"secretCopied": "Secret copied to clipboard",
-				"clientSecretLabel": "Client Secret",
-				"columns": {
-					"name": "Name",
-					"clientId": "Client ID",
-					"apps": "Apps",
-					"createdAt": "Created",
-					"lastUsedAt": "Last used",
-					"enabled": "Enabled",
-					"actions": "Actions"
-				}
-			},
-			"permissions": {
-				"title": "Permissions",
-				"tablePermissions": "Permissions",
-				"permissionUpdated": "Permission updated successfully",
-				"noRolesAvailable": "No roles available"
-			},
-			"roles": {
-				"title": "Roles",
-				"deleteDialogTitle": "Delete Role",
-				"deleteDialogText": "Are you sure you want to delete this role?",
-				"tableTooltipEdit": "Edit role",
-				"tableTooltipDelete": "Delete role",
-				"protectedAdminRoleTooltip": "Administrator role cannot be renamed or deleted.",
-				"protectedDefaultRoleTooltip": "Default account role cannot be renamed or deleted.",
-				"administratorBadge": "Administrator",
-				"defaultAccountRoleBadge": "Default account role",
-				"createRole": "Create Role",
-				"roleDeleted": "Role deleted successfully"
-			},
-			"users": {
-				"title": "Users",
-				"tableHeaders": {
-					"username": "Username",
-					"firstName": "First Name",
-					"lastName": "Last Name"
-				},
-				"deleteDialogTitle": "Delete User",
-				"deleteDialogText": "Are you sure you want to delete this user?",
-				"tableTooltipEdit": "Edit user",
-				"tableTooltipView": "View",
-				"tableTooltipDelete": "Delete user",
-				"deleteSuccess": "User deleted successfully",
-				"createUser": "Create User"
-			}
 		},
 		"home": {
 			"title": {
@@ -5041,22 +4624,6 @@
 			"subtitleNotFound": "Unfortunately, this is only a 404 page. You may have mistyped the address, or the page has been moved to another URL.",
 			"backToHomeText": "Take me back to home page"
 		},
-		"userSettings": {
-			"title": "User Settings",
-			"changePassword": "Change Password",
-			"accountInformation": "Account Information",
-			"passwordAndSecurity": "Password and Security",
-			"deviceSessions": "Device Sessions",
-			"editProfile": "Edit Profile",
-			"saveEdit": "Save",
-			"cancelEdit": "Cancel",
-			"profileInformationUpdated": "Profile information updated successfully",
-			"labels": {
-				"firstName": "First Name",
-				"lastName": "Last Name",
-				"email": "Email"
-			}
-		},
 		"commands": {
 			"title": "Commands",
 			"subtitle": "Create node-wide slash commands that send a configured prompt in the current chat. Commands can only be invoked by the user.",
@@ -7206,7 +6773,11 @@
 				"cancel": "Cancel run",
 				"cancelConfirmTitle": "Cancel this run?",
 				"cancelConfirmBody": "The nodes that are already running wind down first, and nothing new is dispatched.",
-				"cancelFailed": "The run could not be cancelled."
+				"cancelFailed": "The run could not be cancelled.",
+				"delete": "Delete run",
+				"deleteConfirmTitle": "Delete this run?",
+				"deleteConfirmBody": "The run, its node results and its event log are removed for good. The workflow itself is kept.",
+				"deleteFailed": "The run could not be deleted."
 			},
 			"page": {
 				"backToEditor": "Back to the editor",
@@ -8131,108 +7702,6 @@
 			"addHeader": "Add header",
 			"removeHeader": "Remove header"
 		},
-		"loginCard": {
-			"signIn": "Sign In",
-			"noAccount": "Don't have an account? Register",
-			"labels": {
-				"email": "Email",
-				"password": "Password"
-			}
-		},
-		"roleCreateModal": {
-			"createRole": "Create Role",
-			"roleName": "Role Name",
-			"roleNamePlaceholder": "Enter role name",
-			"roleCreated": "Role created successfully",
-			"create": "Create",
-			"cancel": "Cancel"
-		},
-		"roleEditModal": {
-			"editRole": "Edit Role",
-			"roleName": "Role Name",
-			"roleNamePlaceholder": "Enter role name",
-			"protectedRoleHint": "Protected roles cannot be renamed.",
-			"protectedRoleSubmitError": "Protected roles cannot be renamed.",
-			"roleUpdated": "Role updated successfully",
-			"save": "Save",
-			"cancel": "Cancel"
-		},
-		"userCreateModal": {
-			"createUser": "Create User",
-			"username": "Username",
-			"usernamePlaceholder": "Enter username",
-			"firstName": "First Name",
-			"firstNamePlaceholder": "Enter first name",
-			"lastName": "Last Name",
-			"lastNamePlaceholder": "Enter last name",
-			"email": "Email",
-			"emailPlaceholder": "Enter email",
-			"password": "Password",
-			"passwordPlaceholder": "Enter password",
-			"roles": "Roles",
-			"create": "Create",
-			"cancel": "Cancel",
-			"createSuccess": "User created successfully"
-		},
-		"userEditModal": {
-			"editUser": "Edit User",
-			"username": "Username",
-			"usernamePlaceholder": "Enter username",
-			"firstName": "First Name",
-			"firstNamePlaceholder": "Enter first name",
-			"lastName": "Last Name",
-			"lastNamePlaceholder": "Enter last name",
-			"email": "Email",
-			"emailPlaceholder": "Enter email",
-			"password": "Password",
-			"passwordPlaceholder": "Enter password",
-			"passwordHelperText": "Leave blank to keep the same",
-			"loginOverExternalProvider": "Sign in over {{provider}} provider",
-			"disabled": "Disabled",
-			"roles": "Roles",
-			"save": "Save",
-			"cancel": "Cancel",
-			"userUpdated": "User updated successfully"
-		},
-		"userViewModal": {
-			"viewUser": "View User",
-			"username": "Username",
-			"firstName": "First Name",
-			"lastName": "Last Name",
-			"email": "Email",
-			"roles": "Roles",
-			"loginOverExternalProvider": "Sign in over {{provider}} provider",
-			"ok": "Ok"
-		},
-		"userChangePasswordDialog": {
-			"changePassword": "Change Password",
-			"oldPassword": "Old Password",
-			"oldPasswordPlaceholder": "Enter old password",
-			"currentPassword": "Current Password",
-			"currentPasswordPlaceholder": "Enter current password",
-			"newPassword": "New Password",
-			"newPasswordPlaceholder": "Enter new password",
-			"confirmPassword": "Confirm Password",
-			"confirmPasswordPlaceholder": "Confirm new password",
-			"passwordChanged": "Password changed successfully",
-			"change": "Change",
-			"cancel": "Cancel"
-		},
-		"registerCard": {
-			"title": "Register",
-			"email": "Email",
-			"emailPlaceholder": "Enter email",
-			"password": "Password",
-			"passwordPlaceholder": "Enter password",
-			"confirmPassword": "Confirm Password",
-			"confirmPasswordPlaceholder": "Confirm password",
-			"register": "Register",
-			"alreadyHaveAccount": "Already have an account? Sign in",
-			"labels": {
-				"email": "Email",
-				"password": "Password"
-			}
-		},
 		"sideNavigationBar": {
 			"tooltip": {
 				"collapse": "Collapse",
@@ -8253,11 +7722,6 @@
 		"headerBar": {
 			"logout": "Logout",
 			"openDrawer": "Open navigation"
-		},
-		"tables": {
-			"button": {
-				"resetFilters": "Reset Filters"
-			}
 		},
 		"dialogTextTitleBar": {
 			"tooltip": {
@@ -8281,21 +7745,6 @@
 			"edit": "Edit",
 			"preview": "Preview"
 		},
-		"userDeviceSessions": {
-			"deviceSessions": "Device Sessions",
-			"activeSessions": "Active Sessions",
-			"terminateSession": "Terminate Session",
-			"terminateSessionConfirmation": "Are you sure you want to terminate this session? You will be signed out from this device.",
-			"terminateAllSessions": "Terminate All",
-			"terminateOtherSessions": "Terminate Other",
-			"terminateAllSessionsConfirmation": "Are you sure you want to terminate all other sessions? You will be signed out from all other devices.",
-			"currentSession": "Current Session",
-			"lastLogin": "Last Login",
-			"firstLogin": "First Login",
-			"loginProvider": "Sign in Provider",
-			"manageDeviceSessions": "Manage Device Sessions",
-			"cannotLogoutCurrentDevice": "You cannot logout from this device because it is your current session."
-		},
 		"mobileNavigation": {
 			"languageTitle": "Language",
 			"userAvatarMenu": {
@@ -8305,14 +7754,7 @@
 				"logout": "Logout"
 			}
 		},
-		"desktopNavigation": {
-			"userAvatarMenu": {
-				"title": "User",
-				"signedInAs": "Signed in as",
-				"userSettings": "User Settings",
-				"logout": "Logout"
-			}
-		},
+		"desktopNavigation": {},
 		"languageMenu": {
 			"tooltip": "Change language"
 		},

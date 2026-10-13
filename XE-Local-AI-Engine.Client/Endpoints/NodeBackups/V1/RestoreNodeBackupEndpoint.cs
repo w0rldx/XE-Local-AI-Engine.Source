@@ -40,7 +40,7 @@ public sealed class RestoreNodeBackupEndpoint : Endpoint<RestoreNodeBackupReques
         // Route-only POST: without this the default JSON-only Accepts metadata answers a body-less request 415.
         Description(builder => builder.Accepts<RestoreNodeBackupRequest>()
                                       .Produces<RestoreNodeBackupResponse>(StatusCodes.Status202Accepted)
-                                      .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                                      .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                       .Produces(StatusCodes.Status404NotFound)
                                       .ProducesProblem(StatusCodes.Status409Conflict));
     }

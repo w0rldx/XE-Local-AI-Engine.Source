@@ -68,7 +68,7 @@ public sealed class OpenApiDocumentTests
     private static readonly string[] DeleteOperationsThatReadABody =
     [
         "clearBenchmarkRunScore", "deleteBenchmarkProject", "deleteBenchmarkRun", "deleteBenchmarkTaskItem",
-        "deleteComparison", "deleteEvaluation", "deleteNodeChatConversation", "deleteToolMock",
+        "deleteComparison", "deleteEvaluation", "deleteNodeChatConversation",
         "deleteTrainingArtifact", "deleteTrainingDataset", "deleteTrainingDefinition"
     ];
 
@@ -893,6 +893,33 @@ public sealed class OpenApiDocumentTests
         AssertEx.Contains(conflictSchema, "NodeSettingsConflictResponse", StringComparison.Ordinal);
     }
 
+    /// <summary>
+    ///     The host writes FastEndpoints ProblemDetails (<c>Errors.UseProblemDetails</c>), so no operation may advertise the
+    ///     FastEndpoints <c>ErrorResponse</c> shape; a sample of the routes that once did now names ProblemDetails.
+    /// </summary>
+    [Test]
+    public async Task LocalOpenApiDocument_AdvertisesProblemDetailsNeverErrorResponse()
+    {
+        using var client = Factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json");
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var raw = await response.Content.ReadAsStringAsync();
+        AssertEx.False(raw.Contains("#/components/schemas/FastEndpointsErrorResponse", StringComparison.Ordinal),
+            "An operation advertises FastEndpoints' ErrorResponse, a body this host never writes; declare ProducesProblemDetails.");
+
+        using var document = JsonDocument.Parse(raw);
+        var paths = document.RootElement.GetProperty("paths");
+        AssertProblemDetails(paths, "/api/local/v1/skills/import/preview/{token}/skills/{skillName}/resources/{resourceName}", "get", "404");
+        AssertProblemDetails(paths, "/api/local/v1/model-fit/llamacpp/source-build", "post", "400");
+        AssertProblemDetails(paths, "/api/local/v1/external-providers/connections/{connectionId}", "get", "404");
+        AssertProblemDetails(paths, "/api/local/v1/transcription/sessions/{sessionId}/cancel", "post", "409");
+
+        // Send.NotFoundAsync writes no body, so this 404 declares none.
+        var notFound = paths.GetProperty("/api/local/v1/training/base-artifacts/{artifactId}").GetProperty("get").GetProperty("responses").GetProperty("404");
+        AssertEx.False(notFound.TryGetProperty("content", out _), "GET base-artifacts/{artifactId} answers an empty 404.");
+    }
+
     [Test]
     public async Task Refresh_DeclaresTheUnauthorizedItActuallySends()
     {
@@ -962,6 +989,21 @@ public sealed class OpenApiDocumentTests
         {
             AssertEx.True(responses.TryGetProperty(status, out _), $"Expected {verb.ToUpperInvariant()} {path} to document {status}.");
         }
+    }
+
+    private static void AssertProblemDetails(JsonElement paths, string path, string verb, string status)
+    {
+        if (!(paths.TryGetProperty(path, out var item) && item.TryGetProperty(verb, out var operation)
+                                                       && operation.GetProperty("responses").TryGetProperty(status, out var response)
+                                                       && response.TryGetProperty("content", out var content)
+                                                       && content.TryGetProperty("application/problem+json", out var body)))
+        {
+            throw new InvalidOperationException($"Expected {verb.ToUpperInvariant()} {path} to declare an application/problem+json {status}.");
+        }
+
+        var schema = body.GetProperty("schema");
+        AssertEx.Equal("#/components/schemas/FastEndpointsProblemDetails", schema.GetProperty("$ref").GetString(),
+            $"{verb.ToUpperInvariant()} {path} {status} must advertise the ProblemDetails body the host writes.");
     }
 
     private static JsonElement FindSchema(JsonElement schemas, string schemaSuffix)

@@ -49,6 +49,27 @@ public sealed class ExternalProviderStoreTests : IDisposable
         AssertEx.Equal(ExternalProviderStoreSchema.CurrentVersion, config.SchemaVersion);
     }
 
+    /// <summary>A save replaces the file by rename: a reader holding the previous file keeps its bytes, and no temp file stays behind.</summary>
+    [Test]
+    [RunOn(OS.Linux)]
+    [UnsupportedOSPlatform("windows")]
+    public async Task SaveConnectionAsync_ReplacesTheStoreFileAtomically()
+    {
+        using var store = CreateStore();
+        _ = await SaveAsync(store, Request());
+        var before = await File.ReadAllBytesAsync(StorePath);
+        await using var previous = new FileStream(StorePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+        _ = await SaveAsync(store, Request(id: "second-box", baseUrl: "http://127.0.0.1:18100/v1"));
+
+        var held = new byte[before.Length + 1];
+        var read = await previous.ReadAtLeastAsync(held, held.Length, throwOnEndOfStream: false);
+        AssertEx.True(before.AsSpan().SequenceEqual(held.AsSpan(0, read)), "an in-place rewrite would change the bytes under the open handle.");
+        AssertEx.Equal(expected: 2, (await store.LoadAsync()).Connections.Count);
+        AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(StorePath));
+        AssertEx.Empty(Directory.GetFiles(_contentRootPath, "*.tmp"));
+    }
+
     [Test]
     public async Task SaveConnectionAsync_NormalizesTheBaseUrlExactlyOnce()
     {

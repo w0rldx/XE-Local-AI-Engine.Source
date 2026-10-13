@@ -898,6 +898,9 @@ internal sealed class RacingGraphWorkflowStore : IGraphWorkflowStore
     public Task DeleteDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
         _inner.DeleteDefinitionAsync(definitionId, cancellationToken);
 
+    public Task DeleteRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        _inner.DeleteRunAsync(runId, cancellationToken);
+
     public Task<GraphWorkflowRunSnapshot> StartRunAsync(StartGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
         _inner.StartRunAsync(command, cancellationToken);
 

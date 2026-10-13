@@ -25,7 +25,7 @@ public sealed class RunTrainingArtifactSmokeEndpoint : Endpoint<TrainingArtifact
         Description(builder => builder
                                .Accepts<TrainingArtifactByIdRequest>()
                                .Produces<TrainingArtifactSmokeResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest));
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest));
     }
 
     public override async Task HandleAsync(TrainingArtifactByIdRequest req, CancellationToken ct)

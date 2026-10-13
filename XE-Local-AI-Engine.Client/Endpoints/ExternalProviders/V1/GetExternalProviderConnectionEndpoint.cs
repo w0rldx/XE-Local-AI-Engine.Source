@@ -30,7 +30,7 @@ public sealed class GetExternalProviderConnectionEndpoint : Endpoint<GetExternal
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<ExternalProviderConnectionResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status404NotFound));
+                               .ProducesProblemDetails(StatusCodes.Status404NotFound));
     }
 
     public override async Task HandleAsync(GetExternalProviderConnectionRequest req, CancellationToken ct)

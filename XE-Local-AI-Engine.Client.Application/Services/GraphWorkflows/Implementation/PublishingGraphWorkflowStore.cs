@@ -45,6 +45,10 @@ internal sealed class PublishingGraphWorkflowStore : IGraphWorkflowStore
     public Task DeleteDefinitionAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
         _inner.DeleteDefinitionAsync(definitionId, cancellationToken);
 
+    /// <summary>Only a finished run is deleted, so no pane is following it live; the deleting client refreshes its own list.</summary>
+    public Task DeleteRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        _inner.DeleteRunAsync(runId, cancellationToken);
+
     /// <summary>Nothing is subscribed to a run that does not exist yet, so a start publishes nothing.</summary>
     public Task<GraphWorkflowRunSnapshot> StartRunAsync(StartGraphWorkflowRunCommand command, CancellationToken cancellationToken = default) =>
         _inner.StartRunAsync(command, cancellationToken);

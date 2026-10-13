@@ -9,3 +9,6 @@ contact_links:
   - name: ⬇️ How to download the app
     url: https://github.com/w0rldx/XE-Local-AI-Engine.Source/blob/develop/docs/user-guide/docs/download-from-github.md
     about: The green "Code" button is not the app. Step-by-step download walkthrough.
+  - name: 🙋 Questions and support
+    url: https://github.com/w0rldx/XE-Local-AI-Engine.Source/blob/develop/SUPPORT.md
+    about: Where to ask, what to include, and how to report a security issue privately.

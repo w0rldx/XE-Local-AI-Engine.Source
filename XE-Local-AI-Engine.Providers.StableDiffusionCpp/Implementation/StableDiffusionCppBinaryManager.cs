@@ -1,8 +1,11 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
@@ -32,6 +35,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
     private readonly string _cacheRoot;
     private readonly HttpClient _httpClient;
     private readonly IStableDiffusionInstalledRuntimeStore? _installedRuntimeStore;
+    private readonly ILogger _logger;
     private readonly IStableDiffusionManagedSourceBuildSignal? _managedSourceSignal;
     private readonly OSPlatform _os;
     private readonly StableDiffusionServerRuntimeOverrideOptions? _overrideOptions;
@@ -47,7 +51,8 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         string? activeTag = null,
         StableDiffusionServerRuntimeOverrideOptions? overrideOptions = null,
         IStableDiffusionInstalledRuntimeStore? installedRuntimeStore = null,
-        IStableDiffusionManagedSourceBuildSignal? managedSourceSignal = null)
+        IStableDiffusionManagedSourceBuildSignal? managedSourceSignal = null,
+        ILogger<StableDiffusionCppBinaryManager>? logger = null)
         : this(httpClient,
             cacheRoot ?? RuntimeCacheDirectory.Resolve(),
             activeTag ?? StableDiffusionReleasePins.PinnedTag,
@@ -55,7 +60,8 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
             RuntimeInformation.ProcessArchitecture,
             overrideOptions,
             installedRuntimeStore,
-            managedSourceSignal)
+            managedSourceSignal,
+            logger)
     {
     }
 
@@ -67,8 +73,10 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         Architecture arch,
         StableDiffusionServerRuntimeOverrideOptions? overrideOptions = null,
         IStableDiffusionInstalledRuntimeStore? installedRuntimeStore = null,
-        IStableDiffusionManagedSourceBuildSignal? managedSourceSignal = null)
+        IStableDiffusionManagedSourceBuildSignal? managedSourceSignal = null,
+        ILogger? logger = null)
     {
+        _logger = logger ?? NullLogger.Instance;
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(activeTag);
@@ -137,7 +145,14 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
             };
         }
 
+        // A missing or renamed sd-server lands here too, so the repair is visible rather than a silent wait.
+        _logger.LogInformation("No cached sd-server for stable-diffusion.cpp {Tag} ({Backend}); downloading the pinned runtime.", _activeTag, backend);
+        var startedAt = Stopwatch.GetTimestamp();
         await DownloadVerifyExtractAsync(StableDiffusionReleasePins.DownloadUri(_activeTag, pin.AssetName), pin.AssetName, pin.Sha256, backendDir, ct).ConfigureAwait(false);
+        _logger.LogInformation("Downloaded and verified stable-diffusion.cpp {Tag} ({Backend}) in {ElapsedMs} ms.",
+            _activeTag,
+            backend,
+            (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
 
         var serverPath = ResolveServerPath(backendDir, pin)
                          ?? throw new StableDiffusionRuntimeException("The downloaded stable-diffusion.cpp runtime did not contain the expected server executable.");

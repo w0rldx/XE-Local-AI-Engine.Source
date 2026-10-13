@@ -32,7 +32,7 @@ public sealed class GetTrainingRunDefaultsEndpoint : Endpoint<TrainingRunDefault
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<TrainingRunDefaultsResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest));
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest));
     }
 
     public override async Task HandleAsync(TrainingRunDefaultsRequest req, CancellationToken ct)

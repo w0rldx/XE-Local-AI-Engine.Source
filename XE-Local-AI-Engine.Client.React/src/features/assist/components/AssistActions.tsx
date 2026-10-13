@@ -1,4 +1,4 @@
-import { Box, Button, Group, Tooltip } from "@mantine/core";
+import { Button, Group } from "@mantine/core";
 import { IconSparkles, IconWand } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -6,6 +6,8 @@ import { useTranslation } from "react-i18next";
 
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
+import { GenerationAssistDialog } from "@/features/assist/components/GenerationAssistDialog";
 import {
 	type AssistDraft,
 	type AssistExistingContent,
@@ -13,7 +15,6 @@ import {
 	type AssistSurface,
 	isSameModelName,
 } from "@/features/assist/models/AssistModels";
-import { GenerationAssistDialog } from "@/features/assist/components/GenerationAssistDialog";
 import { isLocalChatModel } from "@/features/chat/pages/ChatModelOptions";
 import { useLoadedModels } from "@/features/loaded-models/queries/useLoadedModels";
 import { useRunningModels } from "@/features/loaded-models/queries/useRunningModels";
@@ -63,46 +64,43 @@ export function AssistActions({ surface, existing, onApply, onDiscard }: AssistA
 	return (
 		<>
 			<Group gap="xs" data-testid="assist-actions">
-				{/* Mantine drops pointer events on a disabled Button, so the tooltip hangs off a wrapper instead. */}
-				<Tooltip
+				<DisabledReasonTooltip
 					label={t("assist.noModelHint", "No local chat model is installed on this node, so nothing can draft yet.")}
 					disabled={hasEligibleModel}
+					controlDisabled={!hasEligibleModel}
 					multiline={true}
 					w={260}
 				>
-					<Box>
-						<Button
-							variant="light"
-							size="compact-sm"
-							leftSection={<IconSparkles size={14} />}
-							disabled={!hasEligibleModel}
-							onClick={() => setMode("Create")}
-							data-testid="assist-open-create"
-						>
-							{surface === "image" ? t("assist.promptButton", "Write prompt with AI") : t("assist.draftButton", "Draft with AI")}
-						</Button>
-					</Box>
-				</Tooltip>
+					<Button
+						variant="light"
+						size="compact-sm"
+						leftSection={<IconSparkles size={14} />}
+						disabled={!hasEligibleModel}
+						onClick={() => setMode("Create")}
+						data-testid="assist-open-create"
+					>
+						{surface === "image" ? t("assist.promptButton", "Write prompt with AI") : t("assist.draftButton", "Draft with AI")}
+					</Button>
+				</DisabledReasonTooltip>
 				{canImprove ? (
-					<Tooltip
+					<DisabledReasonTooltip
 						label={t("assist.noModelHint", "No local chat model is installed on this node, so nothing can draft yet.")}
 						disabled={hasEligibleModel}
+						controlDisabled={!hasEligibleModel}
 						multiline={true}
 						w={260}
 					>
-						<Box>
-							<Button
-								variant="subtle"
-								size="compact-sm"
-								leftSection={<IconWand size={14} />}
-								disabled={!hasEligibleModel}
-								onClick={() => setMode("Improve")}
-								data-testid="assist-open-improve"
-							>
-								{t("assist.improveButton", "Improve with AI")}
-							</Button>
-						</Box>
-					</Tooltip>
+						<Button
+							variant="subtle"
+							size="compact-sm"
+							leftSection={<IconWand size={14} />}
+							disabled={!hasEligibleModel}
+							onClick={() => setMode("Improve")}
+							data-testid="assist-open-improve"
+						>
+							{t("assist.improveButton", "Improve with AI")}
+						</Button>
+					</DisabledReasonTooltip>
 				) : null}
 			</Group>
 			{mode ? (

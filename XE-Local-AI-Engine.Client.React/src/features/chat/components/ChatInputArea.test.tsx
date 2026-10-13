@@ -407,7 +407,10 @@ describe("ChatInputArea knowledge base toggle (30b)", () => {
 		const toggle = screen.getByTestId<HTMLButtonElement>("chat-knowledge-base-toggle");
 		expect(toggle.disabled).toBe(true);
 
-		fireEvent.mouseEnter(toggle);
+		// A disabled button takes no focus or pointer events, so the reason hangs off its focusable wrapper.
+		const wrapper = toggle.parentElement as HTMLElement;
+		expect(wrapper.getAttribute("tabindex")).toBe("0");
+		fireEvent.focus(wrapper);
 		expect(await screen.findByText("No indexed documents to search")).toBeTruthy();
 	});
 

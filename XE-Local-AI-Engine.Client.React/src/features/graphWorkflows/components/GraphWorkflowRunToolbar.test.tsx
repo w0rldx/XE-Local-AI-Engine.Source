@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-// The toolbar owns the one destructive control on the run view, so what is pinned is when it is offered and what it
-// takes to fire it: a confirmation before the request, no second command while the run is already draining or done,
-// and a way back to the editor that changes the selection rather than the run.
+// The toolbar owns the run view's destructive controls (cancel, delete), so what is pinned is when each is offered and
+// what it takes to fire it: a confirmation before the request, no command the run's state cannot take, and a way back
+// to the editor that changes the selection rather than the run.
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
@@ -92,6 +92,38 @@ describe("GraphWorkflowRunToolbar", () => {
 
 		renderToolbar(graphWorkflowRunSummary({ status: "Running" }));
 		expect((screen.getByTestId("graph-workflow-run-toolbar-cancel") as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	it("offers delete only on a finished run", () => {
+		const running = renderToolbar(graphWorkflowRunSummary({ status: "Running" }));
+		expect((screen.getByTestId("graph-workflow-run-toolbar-delete") as HTMLButtonElement).disabled).toBe(true);
+		running.unmount();
+
+		renderToolbar(graphWorkflowRunSummary({ status: "Failed" }));
+		expect((screen.getByTestId("graph-workflow-run-toolbar-delete") as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	it("deletes a finished run only after confirmation, then returns to the editor", async () => {
+		const deletes = { count: 0 };
+		server.use(
+			http.delete(localApiPath(`graph-workflows/runs/${runId}`), () => {
+				deletes.count += 1;
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		const { onBackToEditor } = renderToolbar(graphWorkflowRunSummary({ status: "Completed" }));
+
+		fireEvent.click(screen.getByTestId("graph-workflow-run-toolbar-delete"));
+		expect(await screen.findByText("Delete this run?")).toBeDefined();
+		fireEvent.click(screen.getByTestId("confirm-cancel"));
+		await waitFor(() => expect(screen.queryByText("Delete this run?")).toBeNull());
+		expect(deletes.count).toBe(0);
+
+		fireEvent.click(screen.getByTestId("graph-workflow-run-toolbar-delete"));
+		fireEvent.click(await screen.findByTestId("confirm-accept"));
+
+		await waitFor(() => expect(onBackToEditor).toHaveBeenCalledTimes(1));
+		expect(deletes.count).toBe(1);
 	});
 
 	it("hands the page back to the editor without touching the run", () => {

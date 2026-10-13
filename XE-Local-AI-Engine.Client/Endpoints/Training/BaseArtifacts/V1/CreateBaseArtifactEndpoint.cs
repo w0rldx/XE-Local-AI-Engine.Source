@@ -21,7 +21,7 @@ public sealed class CreateBaseArtifactEndpoint : Endpoint<CreateBaseArtifactRequ
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<BaseArtifactResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                .Produces<BaseArtifactBlockedResponse>(StatusCodes.Status409Conflict));
     }
 

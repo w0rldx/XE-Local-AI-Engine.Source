@@ -44,46 +44,6 @@ public sealed class BenchmarkFidelityResponse
     public string? ErrorMessage { get; init; }
 }
 
-/// <summary>One immutable fidelity measurement, as the attempt history serves it.</summary>
-public sealed class BenchmarkFidelityAttemptResponse
-{
-    public Guid Id { get; init; }
-    public int Sequence { get; init; }
-
-    /// <summary><c>ppl</c> or <c>kld</c>.</summary>
-    public required string Kind { get; init; }
-
-    public required string Status { get; init; }
-    public double? PerplexityMean { get; init; }
-    public double? PerplexityStdErr { get; init; }
-    public int? PerplexityChunks { get; init; }
-    public int? PerplexityContextTokens { get; init; }
-    public string? CorpusId { get; init; }
-    public double? KldMean { get; init; }
-    public double? KldP99 { get; init; }
-    public double? TopTokenAgreement { get; init; }
-    public string? BaseModelName { get; init; }
-    public string? BaseModelContentFingerprint { get; init; }
-
-    /// <summary>The digest this measurement's comparability is judged by.</summary>
-    public string? BaseLogitsDigest { get; init; }
-
-    public string? ErrorMessage { get; init; }
-    public long EnqueuedAtUtc { get; init; }
-    public long? StartedAtUtc { get; init; }
-    public long? CompletedAtUtc { get; init; }
-}
-
-public sealed class ListBenchmarkFidelityAttemptsRequest
-{
-    public Guid RunId { get; init; }
-}
-
-public sealed class ListBenchmarkFidelityAttemptsResponse
-{
-    public required IReadOnlyList<BenchmarkFidelityAttemptResponse> Items { get; init; }
-}
-
 public sealed class StartRunFidelityRequest
 {
     public Guid RunId { get; init; }

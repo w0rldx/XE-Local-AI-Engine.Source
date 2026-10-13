@@ -147,6 +147,9 @@ internal sealed class GraphWorkflowRunService : IGraphWorkflowRunService
         return await SignalAndComposeAsync(run.Id, cancellationToken);
     }
 
+    public Task DeleteAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        _store.DeleteRunAsync(runId, cancellationToken);
+
     public async Task<GraphWorkflowRunDetail> CancelAsync(Guid runId, CancellationToken cancellationToken = default)
     {
         var run = await _store.GetRunAsync(runId, cancellationToken);

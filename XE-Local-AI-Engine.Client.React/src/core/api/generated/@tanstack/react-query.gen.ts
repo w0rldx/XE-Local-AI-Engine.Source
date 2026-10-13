@@ -58,7 +58,6 @@ import {
 	confirmDevelopmentContainerRuntime,
 	createAgentDefinition,
 	createBaseArtifact,
-	createBenchmarkFromComparison,
 	createBenchmarkProject,
 	createBenchmarkTaskItem,
 	createComparison,
@@ -81,7 +80,6 @@ import {
 	createScheduledJob,
 	createSkill,
 	createSlashCommand,
-	createToolMock,
 	createTrainingDefinition,
 	createTrainingRun,
 	createTranscriptionSession,
@@ -105,6 +103,7 @@ import {
 	deleteExternalProviderConnection,
 	deleteGoldenConversation,
 	deleteGraphWorkflowDefinition,
+	deleteGraphWorkflowRun,
 	deleteImageJob,
 	deleteImageModel,
 	deleteIntegrationSession,
@@ -119,7 +118,6 @@ import {
 	deleteScheduledJob,
 	deleteSkill,
 	deleteSlashCommand,
-	deleteToolMock,
 	deleteTrainingArtifact,
 	deleteTrainingDataset,
 	deleteTrainingDefinition,
@@ -247,7 +245,6 @@ import {
 	getToolCapableModels,
 	getToolCatalog,
 	getToolMock,
-	getTrainingArtifact,
 	getTrainingDataset,
 	getTrainingDefinition,
 	getTrainingRun,
@@ -279,7 +276,6 @@ import {
 	listBaseArtifacts,
 	listBenchmarkCells,
 	listBenchmarkComparisons,
-	listBenchmarkFidelityAttempts,
 	listBenchmarkProjects,
 	listBenchmarkRuns,
 	listBenchmarkTaskItems,
@@ -470,7 +466,6 @@ import {
 	updateSkill,
 	updateSlashCommand,
 	updateSuggestedPlaybookAction,
-	updateToolMock,
 	updateTrainingDefinition,
 	updateTranscriptSegment,
 	updateWorkSession,
@@ -600,9 +595,6 @@ import type {
 	CreateBaseArtifactData,
 	CreateBaseArtifactError,
 	CreateBaseArtifactResponse,
-	CreateBenchmarkFromComparisonData,
-	CreateBenchmarkFromComparisonError,
-	CreateBenchmarkFromComparisonResponse,
 	CreateBenchmarkProjectData,
 	CreateBenchmarkProjectError,
 	CreateBenchmarkProjectResponse,
@@ -664,8 +656,6 @@ import type {
 	CreateSlashCommandData,
 	CreateSlashCommandError,
 	CreateSlashCommandResponse,
-	CreateToolMockData,
-	CreateToolMockResponse,
 	CreateTrainingDefinitionData,
 	CreateTrainingDefinitionResponse,
 	CreateTrainingRunData,
@@ -730,6 +720,9 @@ import type {
 	DeleteGraphWorkflowDefinitionData,
 	DeleteGraphWorkflowDefinitionError,
 	DeleteGraphWorkflowDefinitionResponse,
+	DeleteGraphWorkflowRunData,
+	DeleteGraphWorkflowRunError,
+	DeleteGraphWorkflowRunResponse,
 	DeleteImageJobData,
 	DeleteImageJobError,
 	DeleteImageJobResponse,
@@ -764,8 +757,6 @@ import type {
 	DeleteSkillResponse,
 	DeleteSlashCommandData,
 	DeleteSlashCommandResponse,
-	DeleteToolMockData,
-	DeleteToolMockResponse,
 	DeleteTrainingArtifactData,
 	DeleteTrainingArtifactResponse,
 	DeleteTrainingDatasetData,
@@ -867,9 +858,7 @@ import type {
 	GetAppUpdateStatusData,
 	GetAppUpdateStatusResponse,
 	GetBaseArtifactData,
-	GetBaseArtifactError,
 	GetBaseArtifactLicenseData,
-	GetBaseArtifactLicenseError,
 	GetBaseArtifactLicenseResponse,
 	GetBaseArtifactResponse,
 	GetBenchmarkKldDiskEstimateData,
@@ -1057,8 +1046,6 @@ import type {
 	GetToolCatalogResponse,
 	GetToolMockData,
 	GetToolMockResponse,
-	GetTrainingArtifactData,
-	GetTrainingArtifactResponse,
 	GetTrainingDatasetData,
 	GetTrainingDatasetResponse,
 	GetTrainingDefinitionData,
@@ -1131,9 +1118,6 @@ import type {
 	ListBenchmarkComparisonsData,
 	ListBenchmarkComparisonsError,
 	ListBenchmarkComparisonsResponse,
-	ListBenchmarkFidelityAttemptsData,
-	ListBenchmarkFidelityAttemptsError,
-	ListBenchmarkFidelityAttemptsResponse,
 	ListBenchmarkProjectsData,
 	ListBenchmarkProjectsResponse,
 	ListBenchmarkRunsData,
@@ -1622,8 +1606,6 @@ import type {
 	UpdateSlashCommandResponse,
 	UpdateSuggestedPlaybookActionData,
 	UpdateSuggestedPlaybookActionResponse,
-	UpdateToolMockData,
-	UpdateToolMockResponse,
 	UpdateTrainingDefinitionData,
 	UpdateTrainingDefinitionResponse,
 	UpdateTranscriptSegmentData,
@@ -3621,28 +3603,6 @@ export const startBenchmarkRunFidelityMutation = (
 	};
 	return mutationOptions;
 };
-
-export const listBenchmarkFidelityAttemptsQueryKey = (options: Options<ListBenchmarkFidelityAttemptsData>) =>
-	createQueryKey("listBenchmarkFidelityAttempts", options);
-
-export const listBenchmarkFidelityAttemptsOptions = (options: Options<ListBenchmarkFidelityAttemptsData>) =>
-	queryOptions<
-		ListBenchmarkFidelityAttemptsResponse,
-		AxiosError<ListBenchmarkFidelityAttemptsError>,
-		ListBenchmarkFidelityAttemptsResponse,
-		ReturnType<typeof listBenchmarkFidelityAttemptsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listBenchmarkFidelityAttempts({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listBenchmarkFidelityAttemptsQueryKey(options),
-	});
 
 export const rejudgeBenchmarkRunMutation = (
 	options?: Partial<Options<RejudgeBenchmarkRunData>>,
@@ -6592,6 +6552,30 @@ export const listGraphWorkflowRunsOptions = (options: Options<ListGraphWorkflowR
 		},
 		queryKey: listGraphWorkflowRunsQueryKey(options),
 	});
+
+export const deleteGraphWorkflowRunMutation = (
+	options?: Partial<Options<DeleteGraphWorkflowRunData>>,
+): UseMutationOptions<
+	DeleteGraphWorkflowRunResponse,
+	AxiosError<DeleteGraphWorkflowRunError>,
+	Options<DeleteGraphWorkflowRunData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteGraphWorkflowRunResponse,
+		AxiosError<DeleteGraphWorkflowRunError>,
+		Options<DeleteGraphWorkflowRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteGraphWorkflowRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const getGraphWorkflowRunQueryKey = (options: Options<GetGraphWorkflowRunData>) =>
 	createQueryKey("getGraphWorkflowRun", options);
@@ -9945,28 +9929,6 @@ export const deleteTrainingArtifactMutation = (
 	return mutationOptions;
 };
 
-export const getTrainingArtifactQueryKey = (options: Options<GetTrainingArtifactData>) =>
-	createQueryKey("getTrainingArtifact", options);
-
-export const getTrainingArtifactOptions = (options: Options<GetTrainingArtifactData>) =>
-	queryOptions<
-		GetTrainingArtifactResponse,
-		AxiosError<DefaultError>,
-		GetTrainingArtifactResponse,
-		ReturnType<typeof getTrainingArtifactQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getTrainingArtifact({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getTrainingArtifactQueryKey(options),
-	});
-
 export const promoteTrainingArtifactMutation = (
 	options?: Partial<Options<PromoteTrainingArtifactData>>,
 ): UseMutationOptions<
@@ -10178,7 +10140,7 @@ export const getBaseArtifactQueryKey = (options: Options<GetBaseArtifactData>) =
 export const getBaseArtifactOptions = (options: Options<GetBaseArtifactData>) =>
 	queryOptions<
 		GetBaseArtifactResponse,
-		AxiosError<GetBaseArtifactError>,
+		AxiosError<DefaultError>,
 		GetBaseArtifactResponse,
 		ReturnType<typeof getBaseArtifactQueryKey>
 	>({
@@ -10220,7 +10182,7 @@ export const getBaseArtifactLicenseQueryKey = (options: Options<GetBaseArtifactL
 export const getBaseArtifactLicenseOptions = (options: Options<GetBaseArtifactLicenseData>) =>
 	queryOptions<
 		GetBaseArtifactLicenseResponse,
-		AxiosError<GetBaseArtifactLicenseError>,
+		AxiosError<DefaultError>,
 		GetBaseArtifactLicenseResponse,
 		ReturnType<typeof getBaseArtifactLicenseQueryKey>
 	>({
@@ -10334,30 +10296,6 @@ export const getComparisonOptions = (options: Options<GetComparisonData>) =>
 		},
 		queryKey: getComparisonQueryKey(options),
 	});
-
-export const createBenchmarkFromComparisonMutation = (
-	options?: Partial<Options<CreateBenchmarkFromComparisonData>>,
-): UseMutationOptions<
-	CreateBenchmarkFromComparisonResponse,
-	AxiosError<CreateBenchmarkFromComparisonError>,
-	Options<CreateBenchmarkFromComparisonData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		CreateBenchmarkFromComparisonResponse,
-		AxiosError<CreateBenchmarkFromComparisonError>,
-		Options<CreateBenchmarkFromComparisonData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createBenchmarkFromComparison({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
 
 export const listTrainingDatasetsQueryKey = (options?: Options<ListTrainingDatasetsData>) =>
 	createQueryKey("listTrainingDatasets", options);
@@ -10795,38 +10733,6 @@ export const listToolMocksOptions = (options?: Options<ListToolMocksData>) =>
 		queryKey: listToolMocksQueryKey(options),
 	});
 
-export const createToolMockMutation = (
-	options?: Partial<Options<CreateToolMockData>>,
-): UseMutationOptions<CreateToolMockResponse, AxiosError<DefaultError>, Options<CreateToolMockData>> => {
-	const mutationOptions: UseMutationOptions<CreateToolMockResponse, AxiosError<DefaultError>, Options<CreateToolMockData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createToolMock({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const deleteToolMockMutation = (
-	options?: Partial<Options<DeleteToolMockData>>,
-): UseMutationOptions<DeleteToolMockResponse, AxiosError<DefaultError>, Options<DeleteToolMockData>> => {
-	const mutationOptions: UseMutationOptions<DeleteToolMockResponse, AxiosError<DefaultError>, Options<DeleteToolMockData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await deleteToolMock({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
 export const getToolMockQueryKey = (options: Options<GetToolMockData>) => createQueryKey("getToolMock", options);
 
 export const getToolMockOptions = (options: Options<GetToolMockData>) =>
@@ -10842,22 +10748,6 @@ export const getToolMockOptions = (options: Options<GetToolMockData>) =>
 		},
 		queryKey: getToolMockQueryKey(options),
 	});
-
-export const updateToolMockMutation = (
-	options?: Partial<Options<UpdateToolMockData>>,
-): UseMutationOptions<UpdateToolMockResponse, AxiosError<DefaultError>, Options<UpdateToolMockData>> => {
-	const mutationOptions: UseMutationOptions<UpdateToolMockResponse, AxiosError<DefaultError>, Options<UpdateToolMockData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await updateToolMock({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
 
 export const verifyToolMockMutation = (
 	options?: Partial<Options<VerifyToolMockData>>,

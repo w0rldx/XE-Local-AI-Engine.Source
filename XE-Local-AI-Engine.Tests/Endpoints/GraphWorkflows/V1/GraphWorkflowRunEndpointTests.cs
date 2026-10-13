@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.GraphWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The run half of the graph-workflow surface: the six routes a run is started, watched and cancelled through.
+///     The run half of the graph-workflow surface: the seven routes a run is started, watched, cancelled and deleted through.
 ///     <para>
 ///         Driven over a REAL store and a real database rather than a substituted one, because what these routes are
 ///         worth proving is the round trip — a start that answers 202 and a second start with the same request id that
@@ -39,6 +39,7 @@ public sealed class GraphWorkflowRunEndpointTests
     [Arguments("POST", DefinitionRuns)]
     [Arguments("GET", Runs)]
     [Arguments("GET", Run)]
+    [Arguments("DELETE", Run)]
     [Arguments("POST", $"{Run}/cancel")]
     [Arguments("GET", $"{Run}/nodes/analyze")]
     [Arguments("GET", $"{Run}/events")]
@@ -56,6 +57,7 @@ public sealed class GraphWorkflowRunEndpointTests
     [Arguments("POST", DefinitionRuns)]
     [Arguments("GET", Runs)]
     [Arguments("GET", Run)]
+    [Arguments("DELETE", Run)]
     [Arguments("POST", $"{Run}/cancel")]
     [Arguments("GET", $"{Run}/nodes/analyze")]
     [Arguments("GET", $"{Run}/events")]
@@ -78,6 +80,7 @@ public sealed class GraphWorkflowRunEndpointTests
     [Arguments("POST", DefinitionRuns)]
     [Arguments("GET", Runs)]
     [Arguments("GET", Run)]
+    [Arguments("DELETE", Run)]
     [Arguments("POST", $"{Run}/cancel")]
     [Arguments("GET", $"{Run}/nodes/analyze")]
     [Arguments("GET", $"{Run}/events")]
@@ -215,6 +218,54 @@ public sealed class GraphWorkflowRunEndpointTests
         AssertEx.Equal(HttpStatusCode.Accepted, first.StatusCode);
         AssertEx.Equal(HttpStatusCode.Accepted, repeat.StatusCode, "the same ask answered again is not a conflict.");
         AssertEx.Equal("Cancelling", document.RootElement.GetProperty("run").GetProperty("status").GetString());
+    }
+
+    [Test]
+    public async Task DeleteRun_OnAFinishedRun_Answers204AndTheRunIsGone()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
+        await using (var scope = Host.Factory.Services.CreateAsyncScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
+            var run = await store.GetRunAsync(runId);
+            _ = await store.TransitionRunAsync(new TransitionGraphWorkflowRunCommand
+            {
+                RunId = runId,
+                ExpectedVersion = run.Version,
+                TargetStatus = GraphWorkflowRunStatus.Failed,
+                FailureClass = GraphWorkflowFailureClass.NodeFailed
+            });
+        }
+
+        using var deleted = await SendAsync("DELETE", $"{Runs}/{runId}");
+        using var reread = await SendAsync("GET", $"{Runs}/{runId}");
+
+        AssertEx.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        AssertEx.Equal(HttpStatusCode.NotFound, reread.StatusCode, "the deleted run is gone with its footprint.");
+    }
+
+    /// <summary>A live run keeps its rows and answers the run-conflict discriminator a cancel of a finished run answers.</summary>
+    [Test]
+    public async Task DeleteRun_OnALiveRun_Answers409WithTheRunConflictDiscriminator()
+    {
+        var definitionId = await SeedDefinitionAsync(GraphWorkflowGraphs.StartAgentEnd);
+        var runId = await StartRunAsync(definitionId);
+
+        using var response = await SendAsync("DELETE", $"{Runs}/{runId}");
+        using var reread = await SendAsync("GET", $"{Runs}/{runId}");
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Equal("GraphWorkflowRunConflict", await ConflictTypeAsync(response));
+        AssertEx.Equal(HttpStatusCode.OK, reread.StatusCode, "a refused delete writes nothing.");
+    }
+
+    [Test]
+    public async Task DeleteRun_OnAnUnknownRun_Answers404()
+    {
+        using var response = await SendAsync("DELETE", $"{Runs}/{Guid.NewGuid()}");
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     /// <summary>The run view's read: node-run summaries, and deliberately no documents on any of them.</summary>

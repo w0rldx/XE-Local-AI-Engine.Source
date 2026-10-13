@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -78,7 +79,7 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         using var slot = await _concurrencyLimiter.AcquireAsync(cancellationToken);
         // The ceiling is the node's CustomToolMaxTimeoutSeconds, the same value CustomToolService validates a saved timeout against.
         var maxTimeoutSeconds = await _runtimeSettings.GetCustomToolMaxTimeoutSecondsAsync(cancellationToken);
-        return await RunAsync(startInfo, config, maxTimeoutSeconds, redactor, cancellationToken);
+        return await RunAsync(tool.Name, startInfo, config, maxTimeoutSeconds, redactor, cancellationToken);
     }
 
     private static ProcessStartInfo BuildStartInfo(CommandConfig config,
@@ -146,7 +147,8 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         return arguments;
     }
 
-    private static async Task<string> RunAsync(ProcessStartInfo startInfo,
+    private static async Task<string> RunAsync(string toolName,
+        ProcessStartInfo startInfo,
         CommandConfig config,
         int maxTimeoutSeconds,
         SecretValueRedactor redactor,
@@ -186,12 +188,12 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         try
         {
             await process.WaitForExitAsync(linkedSource.Token);
-            return FormatResult(process.ExitCode, standardOutput, standardError, redactor, timedOut: false);
+            return FormatResult(toolName, process.ExitCode, standardOutput, standardError, redactor, timedOut: false);
         }
         catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             TreeKill(process);
-            return FormatResult(exitCode: -1, standardOutput, standardError, redactor, timedOut: true);
+            return FormatResult(toolName, exitCode: -1, standardOutput, standardError, redactor, timedOut: true);
         }
         catch (OperationCanceledException)
         {
@@ -204,7 +206,8 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         }
     }
 
-    private static string FormatResult(int exitCode,
+    private static string FormatResult(string toolName,
+        int exitCode,
         CappedOutput standardOutput,
         CappedOutput standardError,
         SecretValueRedactor redactor,
@@ -217,14 +220,12 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         }
 
         builder.Append(CultureInfo.InvariantCulture, $"exit_code: {exitCode}\n");
-        builder.Append("stdout:\n");
-        builder.Append(standardOutput.ToStringWithMarker());
-        builder.Append("\nstderr:\n");
-        builder.Append(standardError.ToStringWithMarker());
 
-        // Scrub secret environment values from the whole model-facing string: any program the command runs can read its
-        // injected env by design, so echoing a secret back through stdout/stderr is the leak this closes.
-        return redactor.Redact(builder.ToString());
+        // Scrub secret environment values from the program output: any program the command runs can read its injected
+        // env by design, so echoing a secret back through stdout/stderr is the leak this closes. The output is then fenced.
+        var output = string.Concat("stdout:\n", standardOutput.ToStringWithMarker(), "\nstderr:\n", standardError.ToStringWithMarker());
+        builder.Append(UntrustedContentFraming.WrapDocument(redactor.Redact(output), [new("tool", toolName), new("kind", "command")]));
+        return builder.ToString();
     }
 
     private static void TreeKill(Process process)

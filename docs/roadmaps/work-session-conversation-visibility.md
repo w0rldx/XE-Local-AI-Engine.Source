@@ -2,7 +2,7 @@
 
 - **Decision:** none filed — recorded here in place of a standalone issue (operator ruling, External Integrations, 2026-09-03)
 - **Status authority:** this living page
-- **Last verified against the tree:** 2026-09-15
+- **Last verified against the tree:** 2026-10-13
 - **Overall state:** Chat-list leak closed by the S0 `NodeConversation.Kind` discriminator. No other leak surface found; two open questions remain below.
 
 This page carries the External Integrations S0 "R2 — live check and ticket" item (2026-09-03), which was written to
@@ -49,7 +49,7 @@ needed for that part.
   ReadConversationRowAsync`, `TouchConversationAsync`, every by-id command in `NodeChatConversationCommands`),
   retention/purge (deliberately unfiltered, so a closed session's transcript still ages out —
   `NodeRetentionStore.ListExpiredConversationCandidatesAsync`, `ConversationFootprintPurge.DeleteAsync`,
-  `RetentionSweeperService`), and the one-shot `NodeChatTitleEncryptionBackfillService`. As of this verification the
+  `ConversationRetentionPurge`'s by-id eligibility re-check, `RetentionSweeperService`), and the one-shot `NodeChatTitleEncryptionBackfillService`. As of this verification the
   repository has **no conversation export feature and no conversation search feature** — a grep for `FROM
   conversations` outside those already-accounted-for files and the two chat-list queries returns nothing else. If
   either is ever added, it must filter on `Kind` the same way the chat list does, or this leak reopens on that
@@ -58,6 +58,8 @@ needed for that part.
   takes the `'chat'` kind default, on the premise that a platform-mirrored conversation is by definition a chat. It
   is a writer, not a list reader, so it is not itself a leak surface — but nothing enforces that premise, and it
   would need re-checking if platform-side work sessions or integrations ever start mirroring conversations locally.
+  As of 2026-10-13 nothing in production calls it: `NodeChatPersistenceService.EnsureConversationAsync` forwards to it,
+  and only tests call that.
 - **Operator-visible upgrade note.** The migration's automatic backfill (above) means no data is lost or
   misclassified on upgrade. What is not addressed is whether an operator should be told in release notes that some
   conversations that used to appear in their chat list — every pre-upgrade work session — will disappear from it

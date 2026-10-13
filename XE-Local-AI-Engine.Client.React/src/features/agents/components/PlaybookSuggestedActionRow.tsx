@@ -1,8 +1,9 @@
-import { ActionIcon, Badge, Button, Collapse, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Button, Collapse, Group, Paper, Stack, Text } from "@mantine/core";
 import { IconCheck, IconChevronDown, IconChevronUp, IconFlask, IconPencil, IconX } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
 import { memoryScopeColors, memoryScopeFallbacks, sourceFallbacks } from "@/features/agents/components/PlaybookActionDisplay";
 import type { EvalResult, PlaybookAction } from "@/features/agents/models/PlaybookActionModels";
 
@@ -261,11 +262,11 @@ export function SuggestedActionRow({
 						{t("pages.agents.playbook.eval.runButton", "Run eval")}
 					</Button>
 					{/* The Approve/Promote control is eval-gated: disabled until the latest eval passed for the action's
-					    current version. A Tooltip explains why when the gate blocks. Wrap the button so the tooltip still
-					    shows for a disabled control. */}
-					<Tooltip
+					    current version. A Tooltip explains why when the gate blocks. */}
+					<DisabledReasonTooltip
 						label={promoteTooltip ?? ""}
 						disabled={canPromote}
+						controlDisabled={disabled || !canPromote}
 						withArrow={true}
 						data-testid={`playbook-suggested-approve-tooltip-${action.id}`}
 					>
@@ -280,7 +281,7 @@ export function SuggestedActionRow({
 						>
 							{t("pages.agents.playbook.approveButton", "Approve")}
 						</Button>
-					</Tooltip>
+					</DisabledReasonTooltip>
 					<Button
 						size="xs"
 						variant="subtle"

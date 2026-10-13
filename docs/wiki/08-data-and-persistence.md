@@ -331,6 +331,32 @@ Migrations live in `Migrations/` and upgrade the existing SQLite schemas in plac
 - **`ModelProviderMap`** is the canonical example of an **un-encrypted** table — its configuration documents the `NOCASE` collation on the `model_name` primary key so provider routing is case-insensitive without a LINQ comparer (`ModelProviderMapConfiguration.cs`).
 - **Run envelope shares `agent_execution_logs`.** Rather than a new table, the durable per-invocation run envelope (a content-free lifecycle record written when a chat invocation terminalizes) reuses `agent_execution_logs` with a `record_kind` discriminator (`0` = adaptive-memory diagnostics, `1` = envelope, `2` = approval-decision audit, `3` = integration invocation). `AddAgentRunEnvelopeColumns` adds the envelope fields and `AddRunEnvelopeDurabilityColumns` adds usage/timing columns plus the `record_kind = 1`-filtered unique index on `message_id`. The whole row is plaintext structural telemetry (never encrypted, no message content), and it is covered by the conversation footprint purge (see [Security & Privacy](12-security-and-privacy.md)). The read-only `GET agents/run-envelopes` endpoint projects kind-1 rows (see [API & Hubs](09-api-and-hubs.md)). **Every read and aggregate must filter by `record_kind`** because column meanings are overloaded across the four producers. **Durability guarantee:** the envelope is written **atomically inside the terminalize transaction** — the same SQLite transaction that commits the terminal message row — so the two commit or roll back together; and the startup restart-recovery reconcile backfills an envelope for any terminal assistant row lacking one across all four terminal states (completed, failed, cancelled, interrupted), keyed on `message_id` so it can never duplicate.
 
+### Supported upgrade sources for 1.0
+
+**1.0 upgrades in place from any `1.0.0-rc.2` build or later.** An older database may still upgrade, but it is not a
+supported source and is not tested as one. This floor keeps the startup upgrade code below alive until a later
+release raises it:
+
+- **Eight backfill hosted services:** `NodeChatContentEncryptionBackfillService`,
+  `NodeChatTitleEncryptionBackfillService`, `KnowledgeVectorNormalizationBackfillService`,
+  `ExternalAccessProfileBackfillService`, `UiModeBackfillService`, `SandboxSecurityProfileBackfillService`,
+  `OllamaProviderMapBackfillService` and `ToolCapableModelBackfillService`. The settings backfills and their
+  discriminators are in [Hosting & Deployment](11-hosting-and-deployment.md#upgrade-backfills-and-their-discriminators).
+- **The Development profile backfill:** `DevelopmentProfileBackfillService`, run by `DevelopmentStartupReconciler`.
+- **The Open Canvas pre-migration read:** `ReadPendingCanvasWorkflowsAsync` in `Program.Startup` reads
+  `canvas_workflows` before `DropCanvasWorkflows` removes it. An rc.2 database still holds that table.
+
+**No migration baseline squash for 1.0.** A restore validates the snapshot's `__EFMigrationsHistory` tables against
+`NodeDbRestoreStaging.ShippedMigrationIds` in `NodeDbRestoreStaging.CheckSnapshotIntegrityAsync`, and refuses a
+snapshot that names a migration this binary does not ship. A squash would rename the history, so every existing
+pre-migration snapshot and operator backup would read as written by a newer version and be refused. Startup also
+depends on migration identity through the canvas read above.
+
+A later baseline would need all of this together: a raised minimum source that has run every backfill, after which the
+backfills and the canvas read can be deleted; a mapping in `CheckSnapshotIntegrityAsync` from the retired migration ids
+to the baseline, or a documented statement that older snapshots cannot be restored; and a step that records the
+baseline as applied on an existing database, so EF does not try to create a schema that already exists.
+
 ## The persistence test project
 
 `XE-Local-AI-Engine.Client.Persistence.Tests` exercises the schema and crypto against a **real on-disk SQLite file** (round-tripping through a fresh context), not an in-memory provider — so encryption, collation and migrations are genuinely tested:

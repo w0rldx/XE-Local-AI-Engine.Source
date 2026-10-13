@@ -13,8 +13,7 @@ It lists the composition-root registrations, the per-hop pipeline rules, the too
    `OrchestrationAgentOptions`, `AgentToolPipelineOptions`, `ProviderCallBudgetOptions` and
    `ToolRelevanceOptions`, each `Bind` → `ValidateDataAnnotations` → `ValidateOnStart`, plus
    `AgentTelemetryOptions` (`Bind` → `ValidateOnStart`). The first four have a dedicated `IValidateOptions<>`
-   validator (`Configuration/Validation/*Validator.cs`). The root config key is `"Agent"`
-   (`AgentRuntimeOptions.Section`).
+   validator (`Configuration/Validation/*Validator.cs`). The root config key is `"Agent"`.
 2. **Decorates the `IChatClient` pipeline** via `DecorateChatClientPipeline` (see §1.2). The host
    **must** register a base `IChatClient` *before* calling this method — the decorator wraps it. The
    pipeline also registers `ITokenEstimatorCalibrationStore` (`TryAddSingleton`).

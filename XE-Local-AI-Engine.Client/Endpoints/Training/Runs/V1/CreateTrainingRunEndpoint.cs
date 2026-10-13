@@ -27,7 +27,7 @@ public sealed class CreateTrainingRunEndpoint : Endpoint<CreateTrainingRunReques
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<TrainingRunResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                .Produces<TrainingErrorResponse>(StatusCodes.Status409Conflict));
     }
 

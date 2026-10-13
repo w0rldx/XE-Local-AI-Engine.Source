@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.WhisperCpp;
 
 using System.Net;
+using System.Threading.Channels;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -10,10 +11,16 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     it while a model is loading, including for the whole of an in-place model switch, so a 503 has to keep the loop
 ///     polling rather than read as a failure the way any other non-success would.
 /// </summary>
+/// <remarks>
+///     The probe's poll pause and both deadlines run on a <see cref="ManualTimeProvider" />: a test moves the clock past
+///     one poll only after that poll's timer is armed, and moves it past the deadline to end a wait.
+/// </remarks>
 [Category(TestCategories.Unit)]
 public sealed class WhisperServerReadinessProbeTests
 {
     private static readonly Uri BaseAddress = new("http://127.0.0.1:18300/");
+
+    private static readonly TimeSpan ReadinessBudget = TimeSpan.FromMinutes(5);
 
     [Test]
     public async Task WaitForReady_PortRefusedThenHealthy_ReportsReady()
@@ -23,12 +30,15 @@ public sealed class WhisperServerReadinessProbeTests
             ? throw new HttpRequestException("Connection refused.")
             : new HttpResponseMessage(HttpStatusCode.OK));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions());
+        var clock = new PollSignallingClock();
+        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions(), clock);
 
-        var ready = await probe.WaitForReadyAsync(BaseAddress, TimeSpan.FromSeconds(5), CancellationToken.None);
+        var wait = probe.WaitForReadyAsync(BaseAddress, ReadinessBudget, CancellationToken.None);
+        await clock.AdvancePastNextPollAsync();
+        await clock.AdvancePastNextPollAsync();
 
-        AssertEx.True(ready);
-        AssertEx.True(handler.CallCount >= 3, "The probe must retry a refused connection before succeeding.");
+        AssertEx.True(await wait);
+        AssertEx.Equal(expected: 3, handler.CallCount, "The probe must retry a refused connection before succeeding.");
         AssertEx.Equal("/health", handler.LastPath, "Readiness must probe the health route.");
     }
 
@@ -39,15 +49,16 @@ public sealed class WhisperServerReadinessProbeTests
         // out the answer is an honest "not ready" rather than an exception.
         using var handler = new SequenceHandler(static _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions());
+        var clock = new PollSignallingClock();
+        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions(), clock);
 
-        // real-timer: the probe takes no TimeProvider — its poll interval and its deadline are both CancelAfter on the
-        // real clock — so a fake clock cannot drive it. The budget is 400 ms, deliberately the smallest that still
-        // lets at least one poll land.
-        var ready = await probe.WaitForReadyAsync(BaseAddress, TimeSpan.FromMilliseconds(400), CancellationToken.None);
+        var wait = probe.WaitForReadyAsync(BaseAddress, ReadinessBudget, CancellationToken.None);
+        await clock.AdvancePastNextPollAsync();
+        await clock.AdvancePastNextPollAsync();
+        clock.Advance(ReadinessBudget);
 
-        AssertEx.False(ready);
-        AssertEx.True(handler.CallCount >= 1, "A 503 must be polled, not abandoned on the first response.");
+        AssertEx.False(await wait);
+        AssertEx.True(handler.CallCount >= 2, "A 503 must be polled, not abandoned on the first response.");
     }
 
     [Test]
@@ -57,11 +68,14 @@ public sealed class WhisperServerReadinessProbeTests
             ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
             : new HttpResponseMessage(HttpStatusCode.OK));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions());
+        var clock = new PollSignallingClock();
+        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions(), clock);
 
-        var ready = await probe.WaitForReadyAsync(BaseAddress, TimeSpan.FromSeconds(5), CancellationToken.None);
+        var wait = probe.WaitForReadyAsync(BaseAddress, ReadinessBudget, CancellationToken.None);
+        await clock.AdvancePastNextPollAsync();
+        await clock.AdvancePastNextPollAsync();
 
-        AssertEx.True(ready, "A model that finishes loading must be reported ready.");
+        AssertEx.True(await wait, "A model that finishes loading must be reported ready.");
     }
 
     [Test]
@@ -69,13 +83,14 @@ public sealed class WhisperServerReadinessProbeTests
     {
         using var handler = new SequenceHandler(static _ => throw new HttpRequestException("Connection refused."));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions());
+        var clock = new PollSignallingClock();
+        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions(), clock);
 
-        // real-timer: as above — the probe reads the real clock, so the deadline is the only thing that can end this
-        // wait, and expressing it needs a real interval.
-        var ready = await probe.WaitForReadyAsync(BaseAddress, TimeSpan.FromMilliseconds(400), CancellationToken.None);
+        var wait = probe.WaitForReadyAsync(BaseAddress, ReadinessBudget, CancellationToken.None);
+        await clock.AdvancePastNextPollAsync();
+        clock.Advance(ReadinessBudget);
 
-        AssertEx.False(ready);
+        AssertEx.False(await wait);
     }
 
     [Test]
@@ -83,7 +98,7 @@ public sealed class WhisperServerReadinessProbeTests
     {
         using var handler = new SequenceHandler(static _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions());
+        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions(), new ManualTimeProvider());
 
         AssertEx.False(await probe.CheckResponsiveAsync(BaseAddress, CancellationToken.None));
         AssertEx.Equal(expected: 1, handler.CallCount, "The liveness check is one shot, never a poll.");
@@ -94,7 +109,7 @@ public sealed class WhisperServerReadinessProbeTests
     {
         using var handler = new SequenceHandler(static _ => new HttpResponseMessage(HttpStatusCode.OK));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions());
+        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions(), new ManualTimeProvider());
 
         AssertEx.True(await probe.CheckResponsiveAsync(BaseAddress, CancellationToken.None));
     }
@@ -106,31 +121,66 @@ public sealed class WhisperServerReadinessProbeTests
         // as an ordinary not-ready.
         using var handler = new SequenceHandler(static _ => throw new HttpRequestException("Connection refused."));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions());
+        var probe = new WhisperServerReadinessProbe(http, new WhisperRuntimeOptions(), new ManualTimeProvider());
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(() => probe.WaitForReadyAsync(BaseAddress, TimeSpan.FromSeconds(5), cts.Token));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => probe.WaitForReadyAsync(BaseAddress, ReadinessBudget, cts.Token));
+    }
+
+    /// <summary>
+    ///     A <see cref="ManualTimeProvider" /> that counts the poll pauses the probe arms, so a test advances past a
+    ///     poll only once it is actually waiting on one.
+    /// </summary>
+    private sealed class PollSignallingClock : TimeProvider
+    {
+        private readonly ManualTimeProvider _inner = new();
+        private readonly Channel<TimeSpan> _pollsArmed = Channel.CreateUnbounded<TimeSpan>();
+
+        public override long TimestampFrequency => _inner.TimestampFrequency;
+
+        public override DateTimeOffset GetUtcNow() => _inner.GetUtcNow();
+
+        public override long GetTimestamp() => _inner.GetTimestamp();
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = _inner.CreateTimer(callback, state, dueTime, period);
+            if (dueTime == WhisperServerReadinessProbe.PollInterval)
+            {
+                AssertEx.True(_pollsArmed.Writer.TryWrite(dueTime));
+            }
+
+            return timer;
+        }
+
+        public void Advance(TimeSpan delta) => _inner.Advance(delta);
+
+        public async Task AdvancePastNextPollAsync()
+        {
+            var pause = await _pollsArmed.Reader.ReadAsync().AsTask().WaitAsync(TestBudgets.Contended);
+            _inner.Advance(pause);
+        }
     }
 
     private sealed class SequenceHandler : HttpMessageHandler
     {
         private readonly Func<int, HttpResponseMessage> _responder;
+        private int _callCount;
 
         public SequenceHandler(Func<int, HttpResponseMessage> responder)
         {
             _responder = responder;
         }
 
-        public int CallCount { get; private set; }
+        public int CallCount => Volatile.Read(ref _callCount);
 
         public string? LastPath { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             LastPath = request.RequestUri?.AbsolutePath;
-            var index = CallCount;
-            CallCount++;
+            var index = Interlocked.Increment(ref _callCount) - 1;
             return Task.FromResult(_responder(index));
         }
     }

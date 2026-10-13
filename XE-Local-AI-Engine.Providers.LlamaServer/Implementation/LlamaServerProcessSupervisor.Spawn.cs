@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Providers.ProcessSupervision;
 using XE_Local_AI_Engine.Providers.ProcessSupervision.Contracts;
 
 /// <summary>
@@ -544,7 +545,7 @@ public sealed partial class LlamaServerProcessSupervisor
 
                 // The probe-then-bind port race (another node or service took the port in between) is neither the model's fault nor
                 // the optimized config's: throw a RETRYABLE error so the restart loop re-allocates, and the probe skips the taken port.
-                if (automaticCapture is not null && IsPortBindFailure(automaticCapture.Snapshot()))
+                if (automaticCapture is not null && automaticCapture.Snapshot().Any(PortBindFailure.IsReportedIn))
                 {
                     _logger.LogWarning("llama-server for model {ModelName} role {Role} could not bind port {Port}, which another process took; retrying on another port.",
                         key.ModelName, key.Role, port);
@@ -925,11 +926,6 @@ public sealed partial class LlamaServerProcessSupervisor
             throw ReadinessTimedOut("The local model runtime did not become ready in time.");
         }
     }
-
-    /// <summary>Whether startup output reports the listen socket could not be bound (llama.cpp's "couldn't bind HTTP server socket").</summary>
-    internal static bool IsPortBindFailure(IEnumerable<string> lines) =>
-        lines.Any(static line => line.Contains("couldn't bind", StringComparison.OrdinalIgnoreCase)
-                                 || line.Contains("address already in use", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Polls the process's exit flag until it exits or the wait is cancelled (readiness won the race).</summary>
     private async Task WatchForExitAsync(IProcessTreeHandle handle, CancellationToken ct)

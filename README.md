@@ -13,6 +13,15 @@ The current source version is
 Official binaries are portable-only and self-updating: a Velopack `Portable.zip` on Windows and an AppImage on Linux.
 They are unsigned, so verify `CHECKSUMS.sha256` before running them.
 
+| Question | Answer in the User Guide |
+| --- | --- |
+| Will it run on my computer? | [System requirements](docs/user-guide/README.md#step-1--check-your-computer-can-run-it) |
+| How do I install it and what happens on first launch? | [Windows](docs/user-guide/docs/install-windows.md) · [Linux](docs/user-guide/docs/install-linux.md) · [First run](docs/user-guide/docs/first-run.md) |
+| How do updates work? | [Updating and update channels](docs/user-guide/docs/updating.md) |
+| How do I remove it? | [Uninstalling](docs/user-guide/docs/faq.md#how-do-i-uninstall-it) |
+| What leaves my computer? | [Privacy & your data](docs/user-guide/docs/privacy-and-data.md) |
+| Where do I get help? | [SUPPORT.md](SUPPORT.md) · security reports: [SECURITY.md](SECURITY.md) |
+
 > **Installing on behalf of an AI agent?** An external agent can install, set up, start and connect to this engine
 > without a browser. Set `XE_ADMIN_EMAIL` and `XE_ADMIN_PASSWORD` first, and save the one-time `XE_MCP_KEY=` and
 > `XE_RECOVERY_CODE=` values it prints. Details: the [Agentic Support install guide](docs/agentic-support/agent-install.md).

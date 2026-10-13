@@ -701,9 +701,15 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             return;
         }
 
-        throw handle.HasExited
-            ? new WhisperRuntimeException("The transcription runtime exited while loading the model. The model may be incompatible with this runtime or too large for the available memory.")
-            : new WhisperRuntimeException("The transcription runtime did not become ready in time.");
+        if (!handle.HasExited)
+        {
+            throw new WhisperRuntimeException("The transcription runtime did not become ready in time.");
+        }
+
+        // A lost probe-then-bind port race is not the model's fault, and the next attempt allocates a fresh port.
+        throw new WhisperRuntimeException(PortBindFailure.IsReportedIn(handle.StderrTail)
+            ? "The transcription runtime could not bind its local port because another process took it. Try again; the next attempt uses a different port."
+            : "The transcription runtime exited while loading the model. The model may be incompatible with this runtime or too large for the available memory.");
     }
 
     /// <summary>The same race, reporting a bool so the model-switch path can respawn instead of failing the caller.</summary>

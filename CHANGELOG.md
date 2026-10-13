@@ -24,6 +24,14 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Added
 
+- **Delete a finished graph-workflow run** — the run toolbar offers "Delete run" on a finished run; after a
+  confirmation the run, its node results and its event log are removed for good and the workflow itself is kept
+  (`DELETE graph-workflows/runs/{runId}`, 409 while the run is still live).
+- **Support and operating docs** — a `SUPPORT.md` at the repository root, a front-page table on the README that
+  points at requirements, install, updates, uninstall, privacy and support, the startup exit codes 5, 7, 8, 9 and 10
+  and the no-llama.cpp-runtime case in the troubleshooting page, and user-guide pages for External Apps and cloud
+  providers. The persistence wiki records the supported upgrade sources for 1.0 (any `1.0.0-rc.2` build or later) and
+  why migrations are not squashed.
 - **Per-connection cloud permissions** — an external connection declared Cloud can grant its own models any of the five
   cloud permissions (read local data, run unattended, web tools, MCP tools, sub-agents) in a new "Cloud permissions for
   this connection" block of its editor, so a trusted private gateway gets them without opening the node-wide switches
@@ -161,6 +169,23 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Changed
 
+- **Untrusted content is fenced on every path to a model.** Results from outbound MCP tools, custom-tool HTTP bodies
+  and host-program output, the upstream outputs a graph Agent node reads, and the bound inputs of a graph LLM node
+  (including `run.previous`) now arrive inside the same untrusted-content fence that web pages, attachments and
+  knowledge documents already use, so text inside them is read as data, never as instructions.
+- **Linux data directory is owner-only.** The node creates its data directory `0700` and drops group and other
+  access from an existing one at startup (never widening the owner bits; a directory owned by another account is left
+  as is). Responses carry `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin`. Sandboxed commands that
+  run without a filesystem boundary get the jail's own home directory as `HOME` (and `USERPROFILE` on Windows) instead
+  of the host user's.
+- **The OpenAPI document now tells the truth about error bodies.** Thirty-one operations advertised a FastEndpoints
+  `ErrorResponse` body the node never writes; they declare the ProblemDetails body it does write, and the generated
+  client's error types follow.
+- **Transcription runtime port race.** When `whisper-server` loses its local port to another process between the
+  free-port probe and the bind, the error says so and asks for a retry, instead of blaming the model.
+- **Keyboard-reachable disabled-button reasons.** Where a disabled control explains why it is disabled in a tooltip,
+  the reason now opens on keyboard focus as well as hover (seven sites, including the Playbook approve gate whose
+  reason never showed before).
 - The execution-previews confirmation now also says that sandboxed code can read what is on your screen, after the
   Windows round on `1.0.0-rc.2.dev.20261011.106` showed it can (N-39). The operator kept Win32k allowed; ADR 0019 records
   the round-5 evidence.
@@ -251,6 +276,11 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Removed
 
+- **Six API operations nothing called** — tool-mock create, update and delete (`training/mocks`), benchmark from
+  comparison (`training/comparisons/{id}/benchmark`), training artifact by id (`training/artifacts/{id}`) and benchmark
+  fidelity attempts (`benchmarks/runs/{id}/fidelity/attempts`), with the service code only they used. Tool mocks can
+  still be listed, read and verified.
+- 449 unused interface strings per language (old admin, user, role, login and register screens).
 - **Open Canvas (the experimental "Preview → Open Canvas" workflow builder) has been removed**, and Graph Workflows
   replaces it. The backend, the client and the `canvas_workflows` table are all gone.
 - **Your saved Open Canvas workflows are converted into Graph Workflows automatically, on the first start of this
@@ -270,6 +300,10 @@ Work on `develop` since `v1.0.0-rc.2`. Nothing in this section is tagged or publ
 
 ### Fixed
 
+- The external-provider connection store wrote its encrypted file in place; a crash mid-write could lose every
+  external connection. It now writes through the same atomic temp-file-and-rename path as the other credential stores.
+- The playbook "Approve" button never showed why it was disabled; the tooltip's wrapper was missing.
+- The German playbook behaviour placeholder used the informal form.
 - Windows tester round on `1.0.0-rc.2.dev.20261011.106`:
   - A Sandboxed MCP server's command or working folder is now refused when it lies inside a protected root as well as
     when it is or contains one, so subfolders of the browser and Windows credential stores (a Firefox profile,

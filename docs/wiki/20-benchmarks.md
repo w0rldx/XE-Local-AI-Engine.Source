@@ -22,7 +22,7 @@ number is withheld. **Skip to** [§4](#4-ranking--the-cell-is-the-unit) for rank
 - [5. Scoring](#5-scoring)
 - [6. Quant fidelity — perplexity and KL divergence (display only)](#6-quant-fidelity--perplexity-and-kl-divergence-display-only)
 - [7. Lifecycle — the work queue, stop reasons, recovery](#7-lifecycle--the-work-queue-stop-reasons-recovery)
-- [8. Scheduling and hand-off](#8-scheduling-and-hand-off)
+- [8. Scheduling](#8-scheduling)
 - [9. Export](#9-export)
 - [10. The frontend](#10-the-frontend)
 - [11. Traps](#11-traps)
@@ -423,7 +423,7 @@ The event buffer keeps a tombstone per terminal run — an emptied entry still t
 
 ---
 
-## 8. Scheduling and hand-off
+## 8. Scheduling
 
 **`RunBenchmarkBatchHandler`** (template id `run-benchmark-batch`) freezes a whole model × KV-cache matrix against one project on a Quartz schedule, so an overnight matrix is a schedule rather than a foreground wait. Parameters `projectId`, `models` (1..10), `kvCacheTypes` (1..4), `repeatCount` (1..10), `warmup`; the expanded matrix is capped at 50 cells.
 
@@ -433,11 +433,7 @@ The event buffer keeps a tombstone per terminal run — an emptied entry still t
 - **`AllowAgentCreation: false`, deliberately.** An AI agent may schedule a saved-agent run; it may not schedule GPU-hours.
 - **A new template needs no frontend change** — `GET scheduler/templates` is what `ScheduledJobForm` builds itself from, including `defaultParameters`.
 
-**`POST training/comparisons/{comparisonId}/benchmark`** (`ComparisonBenchmarkHandoffService`) turns a finished training comparison into a benchmark project with its paired base/tuned runs, closing the gap the old deep link left — that link could only *select* runs that already existed. Both models are frozen against one project through one `BenchmarkFreezeScope` with the same KV-cache type and repeat count, so they differ in the model and nothing else. The task is **required from the operator**: a comparison's evaluation prompt scores hold-out samples and would benchmark the wrong thing. Both sides resolve to **installed** model names (the tuned side through the artifact's `CommittedModelName`, which only exists after promotion), and both sides resolving to one name is refused.
-
-The project is reused only when **every benchmark-defining field matches** — name, core task, context tokens and agent definition — because names are not unique and a project holds no comparison id; a same-named project holding a different question gets a suffixed sibling (`Nightly tune (2)`) rather than someone else's runs. Both sides are **frozen before either is written**: `IBenchmarkRunFreezeService.FreezeAsync` decides one model's runs without persisting them and `CommitAsync` inserts whole plans in one all-or-nothing `StartRunsAsync`, so a tuned side that fails verification leaves nothing queued and a retry cannot duplicate the base group. The response names each side's runs (`baseRunIds`, `tunedRunIds`) rather than one flat list.
-
-> A bare `KeyNotFoundException` from the freeze escapes as a **500**: `BenchmarkEndpointSupport.Classify` maps it to 404 but `IsHandled` deliberately excludes it, so the global handler never sees it. Every caller of `IBenchmarkRunFreezeService.StartAsync` must catch it at the endpoint (costing an `EndpointExceptionMappingSourceGuardTests` allowlist entry) or translate it in the service — the hand-off does the latter.
+> A bare `KeyNotFoundException` from the freeze escapes as a **500**: `BenchmarkEndpointSupport.Classify` maps it to 404 but `IsHandled` deliberately excludes it, so the global handler never sees it. Every caller of `IBenchmarkRunFreezeService.StartAsync` must catch it at the endpoint (costing an `EndpointExceptionMappingSourceGuardTests` allowlist entry) or translate it in the service.
 
 Full detail: [Scheduler](06-scheduler.md) and [Training](18-training.md).
 
@@ -508,14 +504,13 @@ Rules the UI is built on, all of them consequences of the backend contracts abov
 |---|---|
 | Executors, freeze, planner, fitter, bootstrap, NIAH generator, contracts | `XE-Local-AI-Engine.Client.Application/Services/Benchmarks/` |
 | Scheduled matrix handler | `…Client.Application/Services/Scheduler/Handlers/RunBenchmarkBatchHandler.cs` |
-| Training hand-off | `…Client.Application/Services/Training/Comparison/ComparisonBenchmarkHandoffService.cs` |
-| Endpoints' door onto the store (endpoint-dependency rule) | `XE-Local-AI-Engine.Client.Application/Services/Benchmarks/Implementation/BenchmarkRecordService.cs` — pass-through over the fourteen `IBenchmarkStore` members the project, run, cell and fidelity endpoints read, plus `GetProjectDetailAsync`, the one read every project-detail response is built from; the twenty-three of them inject it, never the store. Domain writes stay on `IBenchmarkProjectService` (projects and the judge policy), `IBenchmarkTaskItemService`, `IBenchmarkRunFreezeService` and `IBenchmarkRunBatchService` (starting and freezing runs), `IBenchmarkCancellationService` and `IBenchmarkExportQuery` (export) — as does every store member only the queue and the executors drive |
+| Endpoints' door onto the store (endpoint-dependency rule) | `XE-Local-AI-Engine.Client.Application/Services/Benchmarks/Implementation/BenchmarkRecordService.cs` — pass-through over the thirteen `IBenchmarkStore` members the project, run, cell and fidelity endpoints read, plus `GetProjectDetailAsync`, the one read every project-detail response is built from; the twenty-two of them inject it, never the store. Domain writes stay on `IBenchmarkProjectService` (projects and the judge policy), `IBenchmarkTaskItemService`, `IBenchmarkRunFreezeService` and `IBenchmarkRunBatchService` (starting and freezing runs), `IBenchmarkCancellationService` and `IBenchmarkExportQuery` (export) — as does every store member only the queue and the executors drive |
 | Comparison read model | `…Client.Application/Services/Benchmarks/Implementation/BenchmarkComparisonService.cs` — the compare endpoint's paired cell deltas and the comparisons listing; the store's ranking (run list, cells), both exports and the listing read a fit's `ScoresJson` through `Client.Persistence/Stores/BenchmarkPairwiseFitScores.cs`, where an unreadable blob is served as no pairwise score, null entries are skipped and the first entry wins for a run named twice, each defect logged once at Warning. Export formatters (`BenchmarkExportCsv`, `BenchmarkExportPairwise`) are pure mappers under `Endpoints/Benchmarks/V1/Mappers/`; `BenchmarkFidelityKldGate` derives `kldState` for the API and both exports |
 | Entities, configurations, hashing, store | `XE-Local-AI-Engine.Client.Persistence/{Entities,Configurations,Implementation,Stores}/` |
 | Endpoints, DTOs, mappers | `XE-Local-AI-Engine.Client/Endpoints/Benchmarks/V1/` |
-| Routes | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (`LocalApiRoutes.Benchmarks`; the hand-off is `LocalApiRoutes.Training.ComparisonBenchmark`) |
+| Routes | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs` (`LocalApiRoutes.Benchmarks`) |
 | Run-progress SignalR hub | `XE-Local-AI-Engine.Client/Hubs/BenchmarkRunHub.cs` (`BenchmarkRunHub`, mapped at `/api/local/v1/benchmarks/hub`) |
 | React feature | `XE-Local-AI-Engine.Client.React/src/features/benchmarks/` |
 | Fidelity + NIAH corpus and licence | `tools/benchmark/corpus/`, `third-party/data/` |
 
-Related pages: [Local Runtime and Providers](03-local-runtime-and-providers.md) for llama.cpp binaries and placement, [Scheduler](06-scheduler.md) for the matrix template, [Model Fit](07-model-fit.md) for eligibility, [Data and Persistence](08-data-and-persistence.md) for the encryption interceptors every new encrypted column needs a row in, [API and Hubs](09-api-and-hubs.md) for the route surface, [Training](18-training.md) for the comparison hand-off, [Compute Tools](19-compute-tools.md) for the sandbox `pythonTests` runs in.
+Related pages: [Local Runtime and Providers](03-local-runtime-and-providers.md) for llama.cpp binaries and placement, [Scheduler](06-scheduler.md) for the matrix template, [Model Fit](07-model-fit.md) for eligibility, [Data and Persistence](08-data-and-persistence.md) for the encryption interceptors every new encrypted column needs a row in, [API and Hubs](09-api-and-hubs.md) for the route surface, [Training](18-training.md) for training comparisons, [Compute Tools](19-compute-tools.md) for the sandbox `pythonTests` runs in.

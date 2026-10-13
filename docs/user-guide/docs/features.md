@@ -465,8 +465,21 @@ agent persona, tools, memory or knowledge-base grounding.
 
 ### Optional cloud providers
 
-Azure AI Foundry and Codex can be connected if you want them. **Entirely optional** — the app is built
-to work without any of them.
+Azure AI Foundry and Codex can be connected if you want them, and so can any OpenAI-compatible endpoint,
+such as a hosted API or a model server on another machine. **Entirely optional** — the app is built
+to work without any of them. → [Connecting a cloud or remote model](cloud-providers.md)
+
+### External Apps
+
+Curated applications the app installs and runs for you in Docker containers, each fenced into its own
+storage and reachable only from this computer. The catalog is empty for now. → [External Apps](external-apps.md)
+
+### Database snapshots
+
+The **Database snapshots** card on the **Diagnostics** page takes a copy of the app's database whenever you
+ask, lists the automatic copy taken before an update changes the database, and restores one at the next
+start. Restoring replaces your current data with the copy and keeps the replaced database beside it, so read
+[Restoring a database snapshot](updating.md#restoring-a-database-snapshot) first.
 
 ### Ollama
 

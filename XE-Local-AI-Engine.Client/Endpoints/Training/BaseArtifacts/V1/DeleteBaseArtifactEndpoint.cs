@@ -20,7 +20,7 @@ public sealed class DeleteBaseArtifactEndpoint : Endpoint<BaseArtifactByIdReques
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces(StatusCodes.Status204NoContent)
-                               .ProducesProblemFE(StatusCodes.Status404NotFound)
+                               .Produces(StatusCodes.Status404NotFound)
                                .Produces<BaseArtifactBlockedResponse>(StatusCodes.Status409Conflict));
     }
 

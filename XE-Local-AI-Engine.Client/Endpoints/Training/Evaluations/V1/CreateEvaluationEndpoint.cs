@@ -26,7 +26,7 @@ public sealed class CreateEvaluationEndpoint : Endpoint<CreateEvaluationRequest,
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<EvaluationResponse>(StatusCodes.Status202Accepted)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest));
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest));
     }
 
     public override async Task HandleAsync(CreateEvaluationRequest req, CancellationToken ct)

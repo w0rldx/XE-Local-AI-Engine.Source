@@ -82,7 +82,8 @@ public static class WhisperCppServiceCollectionExtensions
         services.TryAddSingleton<IWhisperServerProcessLauncher, WhisperServerProcessLauncher>();
         services.TryAddSingleton<IWhisperServerReadinessProbe>(static sp =>
             new WhisperServerReadinessProbe(sp.GetRequiredService<IHttpClientFactory>().CreateClient(RuntimeHttpClientName),
-                sp.GetRequiredService<WhisperRuntimeOptions>()));
+                sp.GetRequiredService<WhisperRuntimeOptions>(),
+                sp.GetRequiredService<TimeProvider>()));
 
         // GPU-load admission floor, so a provider-only host resolves the gate. The composition root overrides it with
         // a plain AddSingleton carrying the real singleton shared with the llama-server and image supervisors.

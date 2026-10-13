@@ -21,7 +21,7 @@ public sealed class GetLlamaCppSourceBuildPrerequisitesEndpoint : Endpoint<GetLl
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<LlamaCppSourceBuildPrerequisitesResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest));
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest));
     }
 
     public override async Task HandleAsync(GetLlamaCppSourceBuildPrerequisitesRequest request, CancellationToken ct)

@@ -122,7 +122,8 @@ That closes the gap properly, and is good practice regardless.
 > ### On Linux, a data-folder copy does move
 >
 > On Linux the same folder opens on another machine or under another account, once you enter the admin
-> password or the recovery code. The files are also restricted to your user only (`0600`).
+> password or the recovery code. The data folder is restricted to your user only (`0700`), and the key and
+> credential files inside it are too (`0600`).
 >
 > Extracted knowledge-base text is still stored unencrypted on both systems. **If the data matters,
 > turn on full-disk encryption.**
@@ -131,14 +132,17 @@ That closes the gap properly, and is good practice regardless.
 
 ## What connects to the internet
 
-### Automatically
+### Automatically, once you choose Recommended
 
 | Where | Why |
 |---|---|
-| **Hugging Face** | Discovering and downloading AI models |
-| **GitHub** | Downloading engine components, checking for app updates |
+| **Hugging Face** | Downloading the starter model |
+| **GitHub** | Downloading engine components, checking for app and engine updates |
 
-Those are the app-managed connections on a fresh installation. **No conversation, document or usage
+Those are the app-managed connections on a fresh installation. They start only after you pick
+**Recommended** in the [first-run external-access step](first-run.md); with **Offline / Manual** the app
+makes none of them on its own, and you can change the choice later in **Node Settings**. Model searches
+and downloads you start yourself still contact Hugging Face. **No conversation, document or usage
 data is transmitted to them.** Voice output uses the browser/operating-system Web Speech service;
 available voices and whether a selected system voice uses the network are controlled by that
 platform implementation, not this repository.
@@ -194,8 +198,6 @@ search and page fetches.
   yourself in **Settings → Node Settings**. It is unusable until you generate that key, and revoking it
   closes the surface again.
 - **OpenTelemetry export** — only if you deliberately configure an endpoint.
-- **A dormant connection to an older platform this project grew from** — disabled on a fresh install
-  and only active if explicitly enabled.
 
 ### No telemetry, at all
 

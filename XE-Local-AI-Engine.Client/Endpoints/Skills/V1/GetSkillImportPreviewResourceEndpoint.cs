@@ -32,8 +32,8 @@ public sealed class GetSkillImportPreviewResourceEndpoint : Endpoint<GetSkillImp
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<SkillResourceResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
-                               .ProducesProblemFE(StatusCodes.Status404NotFound));
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest)
+                               .ProducesProblemDetails(StatusCodes.Status404NotFound));
     }
 
     public override async Task HandleAsync(GetSkillImportPreviewResourceRequest req, CancellationToken ct)

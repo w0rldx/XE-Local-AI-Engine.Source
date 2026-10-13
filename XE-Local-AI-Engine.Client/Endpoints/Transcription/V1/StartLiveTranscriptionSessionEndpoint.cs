@@ -36,7 +36,7 @@ public sealed class StartLiveTranscriptionSessionEndpoint : Endpoint<Transcripti
         Description(builder => builder
                                .Accepts<TranscriptionSessionRouteRequest>()
                                .Produces<StartLiveTranscriptionSessionResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                .Produces(StatusCodes.Status404NotFound)
                                .Produces<StartLiveTranscriptionSessionResponse>(StatusCodes.Status409Conflict));
     }

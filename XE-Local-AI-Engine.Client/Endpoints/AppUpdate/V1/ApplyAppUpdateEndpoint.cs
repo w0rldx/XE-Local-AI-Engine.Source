@@ -35,7 +35,7 @@ public sealed class ApplyAppUpdateEndpoint : Endpoint<ApplyAppUpdateRequest, App
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<ApplyAppUpdateResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                .Produces<ApplyAppUpdateBlockedResponse>(StatusCodes.Status409Conflict));
     }
 

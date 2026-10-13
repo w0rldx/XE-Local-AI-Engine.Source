@@ -21,7 +21,7 @@ public sealed class CancelBaseArtifactEndpoint : Endpoint<BaseArtifactByIdReques
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<BaseArtifactResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status404NotFound)
+                               .Produces(StatusCodes.Status404NotFound)
                                .Produces<BaseArtifactBlockedResponse>(StatusCodes.Status409Conflict));
     }
 

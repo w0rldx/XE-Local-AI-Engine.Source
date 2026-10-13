@@ -163,6 +163,20 @@ class DependabotGroupContractTests(unittest.TestCase):
         self.assertEqual(1, self.uv_update["open-pull-requests-limit"])
         self.assertNotIn("groups", self.uv_update)
 
+    def test_every_shipped_or_tooling_uv_lock_is_watched_like_the_training_runtime(self) -> None:
+        updates = load_yaml(DEPENDABOT)["updates"]
+        for directory in ("/tools/compute", "/"):
+            with self.subTest(directory=directory):
+                lock = REPO_ROOT / directory.lstrip("/") / "uv.lock"
+                self.assertTrue(lock.is_file(), f"uv directory does not hold a lock: {lock}")
+                matching = [
+                    u for u in updates if u.get("package-ecosystem") == "uv" and u.get("directory") == directory
+                ]
+                self.assertEqual(1, len(matching), f"expected one uv Dependabot entry for {directory}")
+                for key in ("schedule", "target-branch", "open-pull-requests-limit"):
+                    self.assertEqual(self.uv_update[key], matching[0][key], key)
+                self.assertNotIn("groups", matching[0])
+
     def test_release_age_policy_is_compatible_with_dependabot(self) -> None:
         self.assertEqual(10080, self.pnpm_workspace["minimumReleaseAge"])
         self.assertFalse(self.pnpm_workspace["minimumReleaseAgeStrict"])

@@ -19,6 +19,7 @@ import {
 	createGraphWorkflowDefinitionMutation,
 	decideGraphWorkflowNodeRunMutation,
 	deleteGraphWorkflowDefinitionMutation,
+	deleteGraphWorkflowRunMutation,
 	getGraphWorkflowCapabilityOptions,
 	getGraphWorkflowDefinitionOptions,
 	getGraphWorkflowNodeRunOptions,
@@ -480,6 +481,27 @@ export function useCancelGraphWorkflowRun() {
 				await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.run, { runId }) });
 			}
 			await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.runs) });
+		},
+	});
+}
+
+/**
+ * A hard delete of a finished run (a live one answers 409). The run's own entries are dropped rather than refetched,
+ * which would only 404, and the lists that showed it are re-read.
+ */
+export function useDeleteGraphWorkflowRun() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		...withResponseValidation(deleteGraphWorkflowRunMutation()),
+		onSuccess: async (_data, variables) => {
+			const runId = variables.path?.runId;
+			if (runId) {
+				for (const id of [graphWorkflowQueryIds.run, graphWorkflowQueryIds.node, graphWorkflowQueryIds.events]) {
+					queryClient.removeQueries({ queryKey: graphWorkflowInvalidationKey(id, { runId }) });
+				}
+			}
+			await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.runs) });
+			await queryClient.invalidateQueries({ queryKey: graphWorkflowInvalidationKey(graphWorkflowQueryIds.conversationRuns) });
 		},
 	});
 }

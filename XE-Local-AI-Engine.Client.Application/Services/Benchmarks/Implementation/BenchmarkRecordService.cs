@@ -118,12 +118,6 @@ public sealed class BenchmarkRecordService
         return _store.EnqueueFidelityAsync(runId, kind, cancellationToken);
     }
 
-    /// <summary>Every fidelity attempt of a run, newest sequence first — the audit trail behind the projection.</summary>
-    public Task<IReadOnlyList<BenchmarkFidelityAttemptRecord>> ListFidelityAttemptsAsync(Guid runId, CancellationToken cancellationToken = default)
-    {
-        return _store.ListFidelityAttemptsAsync(runId, cancellationToken);
-    }
-
     /// <summary>Whether any fidelity work item is queued or running — the guard on clearing the base cache.</summary>
     public Task<bool> HasLiveFidelityWorkAsync(CancellationToken cancellationToken = default)
     {

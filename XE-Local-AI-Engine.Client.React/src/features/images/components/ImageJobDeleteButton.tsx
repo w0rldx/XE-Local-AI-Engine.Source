@@ -1,10 +1,11 @@
-import { Button, Group, Stack, Text, Tooltip } from "@mantine/core";
+import { Button, Group, Stack, Text } from "@mantine/core";
 import { IconTrash } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
 import { toast } from "@/core/ui/notifications/Toast";
 import { type ImageJobView, isTerminalStatus } from "@/features/images/models/ImageModels";
 import { useDeleteImageJob } from "@/features/images/queries/useImageQueries";
@@ -29,7 +30,7 @@ export function ImageJobDeleteButton({ job }: ImageJobDeleteButtonProps) {
 
 	return (
 		<>
-			<Tooltip
+			<DisabledReasonTooltip
 				label={
 					blocked
 						? t("pages.images.job.deleteBlocked", "This job is still running. Cancel it first, then delete it.")
@@ -37,21 +38,20 @@ export function ImageJobDeleteButton({ job }: ImageJobDeleteButtonProps) {
 				}
 				multiline={true}
 				w={260}
+				controlDisabled={blocked}
 			>
-				<span>
-					<Button
-						size="xs"
-						variant="subtle"
-						color="red"
-						leftSection={<IconTrash size={14} />}
-						disabled={blocked}
-						onClick={() => setConfirmOpen(true)}
-						data-testid="image-job-delete"
-					>
-						{t("common.delete", "Delete")}
-					</Button>
-				</span>
-			</Tooltip>
+				<Button
+					size="xs"
+					variant="subtle"
+					color="red"
+					leftSection={<IconTrash size={14} />}
+					disabled={blocked}
+					onClick={() => setConfirmOpen(true)}
+					data-testid="image-job-delete"
+				>
+					{t("common.delete", "Delete")}
+				</Button>
+			</DisabledReasonTooltip>
 
 			<DialogShell
 				opened={confirmOpen}

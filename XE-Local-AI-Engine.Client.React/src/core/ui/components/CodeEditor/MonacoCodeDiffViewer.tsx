@@ -11,6 +11,7 @@ interface DiffInstance {
 	readonly modified: monaco.editor.ITextModel;
 }
 
+/* eslint-disable react-doctor/exhaustive-deps -- The diff editor and its models are created once on mount; the effects after it apply text, language, layout and theme changes in place, so re-running creation would only recreate the editor. */
 /**
  * The Monaco-backed body of `CodeDiffViewer`. Only ever mounted through `React.lazy` so `./MonacoRuntime` stays in the
  * lazily-fetched editor chunk. Owns one diff editor and its two models for its lifetime; text, language and layout

@@ -1,4 +1,4 @@
-import { Alert, Button, Group, Select, Stack, Text, TextInput, Tooltip } from "@mantine/core";
+import { Alert, Button, Group, Select, Stack, Text, TextInput } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useBenchmarkProjects, useBenchmarkRuns } from "@/features/benchmarks/queries/useBenchmarks";
@@ -430,29 +431,27 @@ function EvaluationSide({ label, modelName, evaluation, pending, onEvaluate, onR
 							{t("training.comparisons.evaluation.cancel", "Cancel evaluation")}
 						</Button>
 					) : (
-						<Tooltip
+						<DisabledReasonTooltip
 							disabled={!bound}
+							controlDisabled={bound || deleteEvaluation.isPending}
 							label={t(
 								"training.comparisons.evaluation.deleteBound",
 								"This evaluation is part of a comparison report. Delete the report first.",
 							)}
 						>
-							{/* Mantine forwards the tooltip's events to this span, so the disabled button still explains itself. */}
-							<span>
-								<Button
-									color="red"
-									disabled={bound || deleteEvaluation.isPending}
-									loading={deleteEvaluation.isPending}
-									onClick={() => {
-										requestDelete().catch(() => undefined);
-									}}
-									size="compact-xs"
-									variant="subtle"
-								>
-									{t("training.comparisons.evaluation.delete", "Delete evaluation")}
-								</Button>
-							</span>
-						</Tooltip>
+							<Button
+								color="red"
+								disabled={bound || deleteEvaluation.isPending}
+								loading={deleteEvaluation.isPending}
+								onClick={() => {
+									requestDelete().catch(() => undefined);
+								}}
+								size="compact-xs"
+								variant="subtle"
+							>
+								{t("training.comparisons.evaluation.delete", "Delete evaluation")}
+							</Button>
+						</DisabledReasonTooltip>
 					)}
 				</Group>
 			)}

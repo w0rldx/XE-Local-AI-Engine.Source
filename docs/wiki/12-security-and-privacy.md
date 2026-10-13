@@ -467,6 +467,14 @@ directive. The BaseScaffold instructs the model to treat everything between the 
 **must** put every attacker-controlled field, body and metadata alike, inside one fence via `WrapDocument`;
 nothing attacker-controlled is emitted outside it.
 
+Tool output is data too, and these model-facing results are fenced with a random nonce: an outbound MCP server's
+projected result (`McpToolResultProjectionAIFunction`, with the `[tool error: …]` prefix left outside so the chat
+still reads the failure code); a custom tool's HTTP response and a command tool's stdout and stderr
+(`HttpFetchExecutor`, `HostProcessExecutor`, after the secret scrub, with the node's own exit line outside); and in
+a graph run, the upstream outputs an Agent node inlines and the bound input data of an LLM node, `run.previous`
+included (`GraphWorkflowInvocationExecutor`). Graph outputs stay unfenced in the run documents themselves; only
+the text handed to the model is wrapped.
+
 The begin and end markers carry a per-wrap **nonce**, 32 lowercase hex characters. Random and derived nonces
 are the same width deliberately, so a budgeter measuring the empty-body wrap overhead measures the length the
 real body's wrap will have. Two factories produce it, and both close a distinct gap:
@@ -519,7 +527,7 @@ Two scope limits a reader must not overrun. **Egress is deny-everything or nothi
 
 Guards a contributor must not weaken:
 
-- **No inherited worker environment.** `ExecuteAsync` clears the child's environment and repopulates it only from `InheritableEnvironmentAllowlist` (PATH/HOME/temp/locale/`DOTNET_*` + Windows essentials), then layers the caller's explicit `request.Environment`. Never widen this to inherit the parent environment — the worker holds secrets that must not reach a sandbox command.
+- **No inherited worker environment.** `ExecuteAsync` clears the child's environment and repopulates it only from `InheritableEnvironmentAllowlist` (PATH/HOME/temp/locale/`DOTNET_*` + Windows essentials), then layers the caller's explicit `request.Environment`. Never widen this to inherit the parent environment — the worker holds secrets that must not reach a sandbox command. A launch without a filesystem boundary gets `HOME` (and `USERPROFILE` on Windows) pointed at the jail's own 0700 `home` directory rather than the user's, so tools stop reaching for `~/.ssh` and the real profile by default; it does not stop a command that names those paths.
 - **Fail-closed capability contract.** Do not soften `CreateOrAttachAsync`'s rejection of unenforceable network/resource guarantees into a silent no-op; a caller must never believe it received isolation the provider does not implement. Equally, do not advertise a capability the startup probe did not measure as active — both halves must keep reading the same `SandboxContainment`.
 - **The user-bus environment strip is load-bearing, not tidiness.** A network namespace does **not** confine UNIX sockets. `systemd-run --user` needs `XDG_RUNTIME_DIR` to reach the per-user systemd bus, and a sandboxed child that inherited it could start a unit **outside** its own scope and namespace — escaping both the resource ceiling and the egress denial. Verified live before the fix. Those variables are injected for the launch **wrapper only** and stripped by an `env -u` layer immediately before the sandboxed executable is exec'd; never let them reach the child.
 

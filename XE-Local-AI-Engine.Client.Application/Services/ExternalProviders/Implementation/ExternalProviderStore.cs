@@ -639,35 +639,9 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         };
 
         var protectedPayload = _protector.Protect(JsonSerializer.SerializeToUtf8Bytes(config, SerializerOptions));
-        await WriteProtectedPayloadAsync(protectedPayload, cancellationToken);
-        SecureFilePermissions.Apply(_storePath);
+        // Temp sibling created 0600, fsynced, renamed over the store: a crash mid-write keeps the previous file whole.
+        await SecureFilePermissions.WriteAllBytesAtomicAsync(_storePath, protectedPayload, cancellationToken);
         return config;
-    }
-
-    /// <summary>
-    ///     Writes the protected blob, creating the file 0600 on *nix in the same syscall that creates it, which closes the
-    ///     umask window; the narrowing pass still runs afterwards for a file an older build left at 0644.
-    /// </summary>
-    private async Task WriteProtectedPayloadAsync(byte[] protectedPayload, CancellationToken cancellationToken)
-    {
-        var options = new FileStreamOptions
-        {
-            Mode = FileMode.Create,
-            Access = FileAccess.Write,
-            Share = FileShare.None,
-            Options = FileOptions.Asynchronous
-        };
-
-        if (!OperatingSystem.IsWindows())
-        {
-            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        }
-
-        var stream = new FileStream(_storePath, options);
-        await using (stream)
-        {
-            await stream.WriteAsync(protectedPayload, cancellationToken);
-        }
     }
 
     private void MoveStoreFileAsideBestEffort()

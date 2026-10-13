@@ -22,7 +22,7 @@ public sealed class EnsureLlamaCppBinaryEndpoint : Endpoint<EnsureLlamaCppBinary
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<LlamaCppVersionResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest)
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest)
                                .Produces<LlamaCppUpdateBlockedResponse>(StatusCodes.Status409Conflict));
     }
 

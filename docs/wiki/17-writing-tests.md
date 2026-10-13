@@ -251,8 +251,11 @@ unrelated failure. See `Providers/LlamaServer/OverrideSelectorAndOptionsTests.cs
 A sleep is either flaky (too short on a loaded box) or slow (too long everywhere). Use:
 
 - a `TaskCompletionSource` the code under test completes;
-- `Microsoft.Extensions.Time.Testing.FakeTimeProvider` to advance time deterministically —
-  `Capabilities/CapabilityReporterTests.cs`, `Interaction/AskUserToolHandlerTests.cs`;
+- the repo's `ManualTimeProvider` (`XE-Local-AI-Engine.Client.Testing/Fakes/ManualTimeProvider.cs`, in scope in
+  the Tests project through a project-wide `Using`) to advance time deterministically with `Advance`; its
+  `ArmedTimerCount` tells a test whether the code under test has registered its timer yet —
+  `Capabilities/CapabilityReporterTests.cs`, `Interaction/AskUserToolHandlerTests.cs`. No project references
+  `Microsoft.Extensions.Time.Testing`;
 - an unbounded `Channel` plus a bounded read, which turns "did the node do X?" into a wait with a real timeout
   and a legible `TimeoutException`.
 

@@ -312,13 +312,15 @@ namespace XE_Local_AI_Engine.Client
             // Resolved in the local-data block below and applied after a locked vault (if any) is unwrapped, so the real host
             // re-binds the origin the unlock page used.
             string? desktopDataDirectory = null;
+            UnixFileMode? dataDirectoryNarrowedFrom = null;
             string? bindUrl = null;
             var vaultState = VaultState.External;
             var stagedRestore = NodeDbRestoreApplyResult.None;
             if (needsLocalData)
             {
-                // Resolve (and create) the per-user data dir up front so both the bind below and the config layer share it.
-                desktopDataDirectory = DesktopBootstrap.ResolveDataDirectory();
+                // Resolve (and create, owner-only) the per-user data dir up front so both the bind below and the config layer share it.
+                desktopDataDirectory = DesktopBootstrap.ResolveDataDirectoryPath();
+                dataDirectoryNarrowedFrom = DesktopBootstrap.EnsureDirectory(desktopDataDirectory);
 
                 // Acquire the exclusive per-data-root lease BEFORE any key/DB initialization, which happens in EnsureLocalDataConfiguration just below: two concurrent instances
                 // sharing this directory would each generate a key and split the DB. Held for the process lifetime and disposed on shutdown; never reached off the desktop flag.
@@ -442,6 +444,13 @@ namespace XE_Local_AI_Engine.Client
 
             Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
             StartupLoggerReady = true;
+            if (dataDirectoryNarrowedFrom is { } previousMode)
+            {
+                Log.Information("Restricted the data directory {DataDirectory} to its owner; its previous mode {PreviousMode} let other users in.",
+                    desktopDataDirectory,
+                    Convert.ToString((int)previousMode, 8));
+            }
+
             if (stagedRestore.Applied)
             {
                 Log.Information("Restored the node database from snapshot {SnapshotName}; the replaced database was kept at {SetAsidePath}.",

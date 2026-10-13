@@ -267,6 +267,7 @@ public sealed class PublishingGraphWorkflowStoreTests
             Name = "renamed"
         }),
         store => store.DeleteDefinitionAsync(Guid.NewGuid()),
+        store => store.DeleteRunAsync(RunId),
         store => store.StartRunAsync(new StartGraphWorkflowRunCommand
         {
             RunId = RunId,

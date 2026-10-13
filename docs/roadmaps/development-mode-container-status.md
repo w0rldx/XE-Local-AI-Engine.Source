@@ -2,7 +2,7 @@
 
 - **Decision:** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)
 - **Status authority:** this living page
-- **Last verified against the tree:** 2026-09-15
+- **Last verified against the tree:** 2026-10-13
 - **Overall state:** Implemented as an opt-in Development Mode provider; Docker is not the default.
 
 This is the living implementation-status companion to ADR 0004. The ADR records the accepted boundary and must not be updated as a progress log. Update this page when the shipped implementation state changes.
@@ -13,7 +13,7 @@ This is the living implementation-status companion to ADR 0004. The ADR records 
 |---|---|
 | Per-feature sandbox roles | `IAgentSandboxRuntimeProvider` and `IDevelopmentSandboxRuntimeProvider`; `SandboxProviderSelector` prevents the Docker provider from being selected for AgentHome/Coder. |
 | Docker provider seam | `DockerSandboxRuntimeProvider` implements only `IDevelopmentSandboxRuntimeProvider`. |
-| Provider registration and selection | `AddNodeContainerSandboxExtensions` registers the provider; `Development:Sandbox:Provider=docker` selects it. An unset Development provider follows the existing AgentHome provider. |
+| Provider registration and selection | `AddNodeContainerSandboxExtensions` registers the provider. `SandboxProviderSelector.ResolveDevelopment` selects it when `Development:Sandbox:Provider=docker` or when `Development:ContainerSandbox:Image` names an image. With neither set, the Development provider follows the AgentHome provider. |
 | Daemon preflight and attestation | `DockerDaemonPreflightService`, `DockerDaemonAttestationStore`, and their tests are present. |
 | Container hardening primitives | `DockerSandboxHardening`, `DockerSandboxPaths`, and provider tests cover the implemented creation boundary. |
 | Standalone managed workspace and mount brokerage | `DevelopmentWorkspaceProvider`, the Development runners, and `DevelopmentMountBrokerTests` use the Development-specific sandbox role. |

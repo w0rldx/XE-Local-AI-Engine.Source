@@ -22,7 +22,7 @@ public sealed class PromoteTrainingArtifactEndpoint : Endpoint<PromoteTrainingAr
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<PromoteTrainingArtifactResponse>(StatusCodes.Status200OK)
-                               .ProducesProblemFE(StatusCodes.Status400BadRequest));
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest));
     }
 
     public override async Task HandleAsync(PromoteTrainingArtifactRequest req, CancellationToken ct)

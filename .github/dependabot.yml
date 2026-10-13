@@ -56,6 +56,28 @@ updates:
     target-branch: develop
     open-pull-requests-limit: 1
 
+  # The shipped run_python environment (ComputePythonEnvironment builds it from this lock).
+  - package-ecosystem: uv
+    directory: /tools/compute
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    target-branch: develop
+    open-pull-requests-limit: 1
+
+  # Repository Python tooling (the root uv.lock).
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    target-branch: develop
+    open-pull-requests-limit: 1
+
   - package-ecosystem: npm
     directory: /XE-Local-AI-Engine.Client.React
     schedule:

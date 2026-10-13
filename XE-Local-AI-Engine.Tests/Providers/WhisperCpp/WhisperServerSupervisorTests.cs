@@ -161,6 +161,27 @@ public sealed class WhisperServerSupervisorTests
     }
 
     [Test]
+    public async Task EnsureRunning_ChildLosesThePortRace_SaysThePortWasTakenNotThatTheModelIsBroken()
+    {
+        // The port is probed free and then handed to the child; a process binding it in between used to be reported as
+        // an incompatible or oversized model.
+        var probe = new FakeWhisperReadinessProbe
+        {
+            ReadinessGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+        await using var harness = new WhisperSupervisorHarness(readinessProbe: probe);
+
+        var ensure = harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
+        await probe.ReadinessReached.Task;
+        harness.Launcher.Handles.Single().SimulateExit(exitCode: 1, stderrTail: "couldn't bind to server socket: hostname=127.0.0.1 port=8090");
+
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => ensure);
+
+        AssertEx.True(exception.Message.StartsWith("The transcription runtime could not bind its local port", StringComparison.Ordinal));
+        AssertEx.False(exception.Message.Contains("incompatible", StringComparison.Ordinal));
+    }
+
+    [Test]
     public async Task EnsureRunning_CpuBackend_NeverTouchesLoadAdmission()
     {
         // Brief test 3. A CPU load does not contend for VRAM, so taking the shared gate would serialize it against

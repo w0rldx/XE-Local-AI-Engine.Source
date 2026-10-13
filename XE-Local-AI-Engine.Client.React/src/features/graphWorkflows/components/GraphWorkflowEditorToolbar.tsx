@@ -1,6 +1,8 @@
-import { Button, Text, Tooltip } from "@mantine/core";
+import { Button, Text } from "@mantine/core";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+
+import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonTooltip/DisabledReasonTooltip";
 
 export interface GraphWorkflowEditorToolbarProps {
 	readonly definitionName: string;
@@ -72,24 +74,22 @@ export function GraphWorkflowEditorToolbar({
 			<Button size="xs" variant="light" disabled={!hasDefinition || isDirty} onClick={onStartRun} data-testid="gw-page-start-run">
 				{t("pages.graphWorkflows.page.startRun", "Start run")}
 			</Button>
-			<Tooltip
+			<DisabledReasonTooltip
 				label={t("pages.graphWorkflows.page.exportSaveFirst", "Save first — an export is the saved workflow, not the canvas.")}
 				disabled={!isDirty}
+				controlDisabled={!hasDefinition || isDirty}
 			>
-				{/* Wrapped: a disabled button fires no pointer events, so the tooltip needs an element that does. */}
-				<span>
-					<Button
-						size="xs"
-						variant="default"
-						loading={isExporting}
-						disabled={!hasDefinition || isDirty}
-						onClick={onExport}
-						data-testid="gw-page-export"
-					>
-						{t("pages.graphWorkflows.page.export", "Export")}
-					</Button>
-				</span>
-			</Tooltip>
+				<Button
+					size="xs"
+					variant="default"
+					loading={isExporting}
+					disabled={!hasDefinition || isDirty}
+					onClick={onExport}
+					data-testid="gw-page-export"
+				>
+					{t("pages.graphWorkflows.page.export", "Export")}
+				</Button>
+			</DisabledReasonTooltip>
 			{isDirty ? (
 				layoutIsUnsaved ? (
 					<Text size="xs" c="dimmed" data-testid="gw-page-unsaved-layout">

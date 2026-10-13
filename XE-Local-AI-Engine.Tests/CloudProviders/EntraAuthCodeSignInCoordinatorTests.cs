@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -26,6 +27,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 [Category(TestCategories.Integration)]
 public sealed class EntraAuthCodeSignInCoordinatorTests
 {
+    /// <summary>HttpListener's in-use codes: EADDRINUSE on Linux (98) and macOS (48), http.sys's 32 and 183 on Windows.</summary>
+    private static readonly int[] AddressInUseErrorCodes = [98, 48, 32, 183];
+
     [Test]
     public async Task StartAsync_WhenNoEntraConnectionIsStored_ThrowsConnectionNotConfigured()
     {
@@ -66,16 +70,15 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
     [Test]
     public async Task StartAsync_WhenCallbackStateDoesNotMatch_SetsStatusToFailed_WithoutRedeeming()
     {
-        var port = GetFreeLoopbackPort();
-        var config = CreateConfig(redirectUri: $"http://127.0.0.1:{port}/signin-oidc");
+        var store = new FakeCloudCredentialStore(config: null);
         var redeemer = new RecordingRedeemer();
-        using var coordinator = CreateCoordinator(new FakeCloudCredentialStore(config), redeemer);
+        using var coordinator = CreateCoordinator(store, redeemer);
 
-        var handle = await coordinator.StartAsync(CancellationToken.None);
-        await SendCallbackAsync(port, code: "some-code", state: "not-the-real-state");
+        var handle = await StartOnFreePortAsync(coordinator, store);
+        await SendCallbackAsync(RedirectPort(store), code: "some-code", state: "not-the-real-state");
 
         await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == EntraAuthCodeSignInState.Failed,
-            TimeSpan.FromSeconds(5),
+            TestBudgets.Contended,
             "sign-in should fail once the callback's state does not match.");
         AssertEx.Equal(0, redeemer.CallCount);
         AssertEx.True(handle.AuthorizeUrl.Contains("code_challenge=", StringComparison.Ordinal));
@@ -84,17 +87,16 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
     [Test]
     public async Task StartAsync_WhenCallbackCarriesAnAadError_SetsStatusToFailed_WithoutRedeeming()
     {
-        var port = GetFreeLoopbackPort();
-        var config = CreateConfig(redirectUri: $"http://127.0.0.1:{port}/signin-oidc");
+        var store = new FakeCloudCredentialStore(config: null);
         var redeemer = new RecordingRedeemer();
-        using var coordinator = CreateCoordinator(new FakeCloudCredentialStore(config), redeemer);
+        using var coordinator = CreateCoordinator(store, redeemer);
 
-        var handle = await coordinator.StartAsync(CancellationToken.None);
+        var handle = await StartOnFreePortAsync(coordinator, store);
         var state = ExtractQueryValue(handle.AuthorizeUrl, "state");
-        await SendCallbackAsync(port, code: null, state: state, error: "access_denied", errorDescription: "The user declined consent.");
+        await SendCallbackAsync(RedirectPort(store), code: null, state: state, error: "access_denied", errorDescription: "The user declined consent.");
 
         await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == EntraAuthCodeSignInState.Failed,
-            TimeSpan.FromSeconds(5),
+            TestBudgets.Contended,
             "sign-in should fail once AAD reports an error.");
         AssertEx.Equal(0, redeemer.CallCount);
     }
@@ -106,21 +108,20 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
     [Test]
     public async Task StartAsync_WhenTheAadErrorCarriesLineTerminators_LogsThemEscaped()
     {
-        var port = GetFreeLoopbackPort();
-        var config = CreateConfig(redirectUri: $"http://127.0.0.1:{port}/signin-oidc");
+        var store = new FakeCloudCredentialStore(config: null);
         var logger = new RecordingLogger<EntraAuthCodeSignInCoordinator>();
-        using var coordinator = CreateCoordinator(new FakeCloudCredentialStore(config), redeemer: null, logger);
+        using var coordinator = CreateCoordinator(store, redeemer: null, logger);
 
-        var handle = await coordinator.StartAsync(CancellationToken.None);
+        var handle = await StartOnFreePortAsync(coordinator, store);
         var state = ExtractQueryValue(handle.AuthorizeUrl, "state");
-        await SendCallbackAsync(port,
+        await SendCallbackAsync(RedirectPort(store),
             code: null,
             state: state,
             error: "access_denied\r\nforged",
             errorDescription: "declined\u2028next\u0085tail");
 
         await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == EntraAuthCodeSignInState.Failed,
-            TimeSpan.FromSeconds(5),
+            TestBudgets.Contended,
             "sign-in should fail once AAD reports an error.");
 
         var message = AssertEx.NotNull(logger.Entries.SingleOrDefault(entry =>
@@ -134,17 +135,16 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
     [Test]
     public async Task StartAsync_WhenCallbackCarriesNoCode_SetsStatusToFailed_WithoutRedeeming()
     {
-        var port = GetFreeLoopbackPort();
-        var config = CreateConfig(redirectUri: $"http://127.0.0.1:{port}/signin-oidc");
+        var store = new FakeCloudCredentialStore(config: null);
         var redeemer = new RecordingRedeemer();
-        using var coordinator = CreateCoordinator(new FakeCloudCredentialStore(config), redeemer);
+        using var coordinator = CreateCoordinator(store, redeemer);
 
-        var handle = await coordinator.StartAsync(CancellationToken.None);
+        var handle = await StartOnFreePortAsync(coordinator, store);
         var state = ExtractQueryValue(handle.AuthorizeUrl, "state");
-        await SendCallbackAsync(port, code: null, state: state);
+        await SendCallbackAsync(RedirectPort(store), code: null, state: state);
 
         await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == EntraAuthCodeSignInState.Failed,
-            TimeSpan.FromSeconds(5),
+            TestBudgets.Contended,
             "sign-in should fail once the callback carries no authorization code.");
         AssertEx.Equal(0, redeemer.CallCount);
     }
@@ -154,17 +154,14 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
     {
         // Exercises the same cancellation path a real 5-minute callback-timeout would take (see this class's
         // remarks for why the timeout itself is not waited out in a test).
-        var firstPort = GetFreeLoopbackPort();
-        var config = CreateConfig(redirectUri: $"http://127.0.0.1:{firstPort}/signin-oidc");
-        var store = new FakeCloudCredentialStore(config);
+        var store = new FakeCloudCredentialStore(config: null);
         using var coordinator = CreateCoordinator(store);
 
-        await coordinator.StartAsync(CancellationToken.None);
+        await StartOnFreePortAsync(coordinator, store);
+        var firstPort = RedirectPort(store);
         AssertEx.Equal(EntraAuthCodeSignInState.Pending, coordinator.GetStatus().State);
 
-        var secondPort = GetFreeLoopbackPort();
-        store.Config = CreateConfig(redirectUri: $"http://127.0.0.1:{secondPort}/signin-oidc");
-        await coordinator.StartAsync(CancellationToken.None);
+        await StartOnFreePortAsync(coordinator, store);
 
         AssertEx.Equal(EntraAuthCodeSignInState.Pending, coordinator.GetStatus().State);
 
@@ -179,21 +176,19 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
     public async Task StartAsync_WhenTheRedirectPortIsAlreadyBound_ThrowsInvalidOperationException_AndCleansUpPendingState()
     {
         // HttpListener.Start() throws HttpListenerException (not InvalidOperationException) when the port is
-        // already bound — occupy it first with a plain TcpListener to force that exact failure.
-        var port = GetFreeLoopbackPort();
-        var config = CreateConfig(redirectUri: $"http://127.0.0.1:{port}/signin-oidc");
-        using var coordinator = CreateCoordinator(new FakeCloudCredentialStore(config));
-        using var blocker = new TcpListener(IPAddress.Loopback, port);
+        // already bound — hold a plain TcpListener on it for the whole test to force that exact failure.
+        using var blocker = new TcpListener(IPAddress.Loopback, port: 0);
         blocker.Start();
+        var port = ((IPEndPoint)blocker.LocalEndpoint).Port;
+        var store = new FakeCloudCredentialStore(CreateConfig(redirectUri: RedirectUriFor(port)));
+        using var coordinator = CreateCoordinator(store);
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.StartAsync(CancellationToken.None));
         AssertEx.Equal(EntraAuthCodeSignInState.None, coordinator.GetStatus().State);
 
-        blocker.Stop();
-
-        // Proves _pendingCts was actually cleared (not left dangling) — a retry against the now-free port must
-        // succeed cleanly and reach Pending, not silently no-op because the failed attempt still "owns" the slot.
-        var handle = await coordinator.StartAsync(CancellationToken.None);
+        // Proves _pendingCts was actually cleared (not left dangling) — a retry on a free port must succeed cleanly
+        // and reach Pending, not silently no-op because the failed attempt still "owns" the slot.
+        var handle = await StartOnFreePortAsync(coordinator, store);
         AssertEx.NotNull(handle);
         AssertEx.Equal(EntraAuthCodeSignInState.Pending, coordinator.GetStatus().State);
     }
@@ -204,17 +199,16 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
         // TrackCallbackAsync runs fire-and-forget — an exception type outside the specific catches (e.g. a
         // CryptographicException from the account store's protector) must still resolve to Failed via the trailing
         // catch-all, not escape as an unobserved task exception while status stays stuck at Pending forever.
-        var port = GetFreeLoopbackPort();
-        var config = CreateConfig(redirectUri: $"http://127.0.0.1:{port}/signin-oidc");
+        var store = new FakeCloudCredentialStore(config: null);
         var redeemer = new ThrowingRedeemer(new CryptographicException("simulated protector failure"));
-        using var coordinator = CreateCoordinator(new FakeCloudCredentialStore(config), redeemer);
+        using var coordinator = CreateCoordinator(store, redeemer);
 
-        var handle = await coordinator.StartAsync(CancellationToken.None);
+        var handle = await StartOnFreePortAsync(coordinator, store);
         var state = ExtractQueryValue(handle.AuthorizeUrl, "state");
-        await SendCallbackAsync(port, code: "some-code", state: state);
+        await SendCallbackAsync(RedirectPort(store), code: "some-code", state: state);
 
         await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == EntraAuthCodeSignInState.Failed,
-            TimeSpan.FromSeconds(5),
+            TestBudgets.Contended,
             "an unexpected exception type during redemption must resolve to Failed, not leave status stuck at Pending.");
     }
 
@@ -266,19 +260,30 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
         };
     }
 
-    private static int GetFreeLoopbackPort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, port: 0);
-        listener.Start();
-        try
+    /// <summary>
+    ///     Points the stored connection at a candidate loopback port and starts a sign-in there, retrying on another
+    ///     candidate only when the listener reports the port already in use (wiki 17, "Independence").
+    /// </summary>
+    private static Task<EntraAuthCodeSignInHandle> StartOnFreePortAsync(EntraAuthCodeSignInCoordinator coordinator, FakeCloudCredentialStore store) =>
+        LoopbackPort.BindWithRetryAsync<EntraAuthCodeSignInHandle>(async port =>
         {
-            return ((IPEndPoint)listener.LocalEndpoint).Port;
-        }
-        finally
-        {
-            listener.Stop();
-        }
-    }
+            store.Config = CreateConfig(redirectUri: RedirectUriFor(port));
+            try
+            {
+                return await coordinator.StartAsync(CancellationToken.None);
+            }
+            catch (InvalidOperationException exception) when (exception.InnerException is HttpListenerException listenerException
+                                                              && AddressInUseErrorCodes.Contains(listenerException.ErrorCode))
+            {
+                return null;
+            }
+        });
+
+    private static string RedirectUriFor(int port) =>
+        string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{port}/signin-oidc");
+
+    private static int RedirectPort(FakeCloudCredentialStore store) =>
+        new Uri(AssertEx.NotNull(store.Config?.AzureFoundry?.EntraAuthCodeRedirectUri)).Port;
 
     private static async Task SendCallbackAsync(int port, string? code, string? state, string? error = null, string? errorDescription = null)
     {
