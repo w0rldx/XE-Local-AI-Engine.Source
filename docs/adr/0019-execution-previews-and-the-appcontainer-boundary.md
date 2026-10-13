@@ -1,7 +1,7 @@
 # ADR 0019: Preview sandbox mechanisms are operator-enabled, and on Windows the AppContainer boundary satisfies the filesystem floor
 
 - **Status:** Accepted (2026-10-07) — drafted with the S2b slice, completed with the MXC integration slice (S3). Windows live
-  evidence on the operator's box is still owed before the branch merges (see "Still owed").
+  evidence: tester rounds 5, 6 and 7 of 2026-10-12/13 (see "Evidence (2026-10-13)"); `run_python` on Windows is still owed.
   Amended 2026-10-11: Win32k is allowed inside the boundary (see "Amendment (2026-10-11)").
 - **Date:** 2026-10-07
 - **Scope:** How a sandbox launch MECHANISM's maturity is recorded, who may enable a Preview mechanism, and what the
@@ -127,11 +127,26 @@ does not do.
 
 - `run_python` on Windows: the boundary serves it, but the compute runtime is still provisioned on Linux only
   (`ComputePythonEnvironment.GetRuntimeAsync`; the uv pin and lockfile resolve for Linux x64). Until that separate gate is
-  lifted, Sandboxed MCP servers are the only Windows workload the boundary actually runs.
+  lifted, Sandboxed MCP servers are the only Windows workload the boundary actually runs, and the `run_python` half of the
+  live round below stays unproven.
 
-- The operator's Windows live round: `run_python` and a Sandboxed MCP server under the boundary with the canary absent and
-  the network denied, the residue sweep after a forced kill, and the capability page reading `PreviewIsolated`.
-- The pinned Windows UBR the round ran on, recorded with that evidence.
+## Evidence (2026-10-13)
+
+The live round this ADR owed ran as the project's Windows tester rounds 5, 6 and 7 (2026-10-12/13) on Windows 11 25H2 build
+26200.9457 (UBR recorded on every round and, since round 7, in the probe line), host preparation applied, tier
+`BaseContainer`; the operator accepted that evidence in place of a round on the operator's own machine. Proven for a Sandboxed
+MCP server under the boundary: the home canary and the profile unreadable, a profile write refused, HTTPS, loopback and LAN
+egress refused, the jail writable, the granted trees read-only including a relative write from the working directory; a
+junction or directory symlink inside a granted tree does not open a credential store; every listed store and its subfolders,
+every spelling of a store (device, volume-GUID, `GLOBALROOT`, NTFS stream, 8.3, `subst`, junction), every volume root
+including a mounted-folder volume, and network shares are refused by `SandboxedMcpStdioTransport.AddBindableTree`. The
+capability page reads `Isolated (preview)` with backend `appcontainer` and withdraws it at once when previews are turned off;
+the consent text is the one in Decision 7. A forced kill of the engine tree with a tool call in flight left no sandbox child
+and no AppContainer ACE on the system or a data drive, and the next start logged exactly one residue sweep
+(`MxcAclResidueSweepService`); a clean stop, a self-exit and a tray quit removed their jails. `Kill()` ends a native child
+blocked on stdin. Node, CPython, PowerShell 7, Windows PowerShell 5.1, .NET 10 and .NET Framework servers start and connect,
+in parallel, under the amended policy (round-5 evidence above). Reports: the plan folder's `REPORT-5.md`, `REPORT-6.md`,
+`REPORT-7.md` (git-ignored, the record of the rounds).
 
 ## Amendment (2026-10-11): Win32k is allowed inside the boundary
 
