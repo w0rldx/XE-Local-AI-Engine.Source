@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
+using XE_Local_AI_Engine.Providers.Python;
 
 public interface IDevelopmentCapabilityService
 {
@@ -59,12 +60,12 @@ internal sealed class DevelopmentCapabilityService : IDevelopmentCapabilityServi
             dockerDaemonPreflight,
             runtimeSettings,
             static () => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            OperatingSystem.IsLinux())
+            ManagedPythonPins.IsCurrentPlatformSupported)
     {
     }
 
     /// <summary>Test seam: <paramref name="homeDirectory" /> stands in for the account's profile directory.</summary>
-    /// <param name="offersRunPython">Whether this host can offer <c>run_python</c> at all: Linux only, as <c>LocalToolOfferProvider</c> decides.</param>
+    /// <param name="offersRunPython">Whether this host can offer <c>run_python</c> at all: Linux x64 and Windows x64, as <c>LocalToolOfferProvider</c> decides.</param>
     internal DevelopmentCapabilityService(IOptions<DevelopmentOptions> options,
         IOptions<SandboxOptions> agentSandboxOptions,
         IOptions<DevelopmentSandboxOptions> developmentSandboxOptions,

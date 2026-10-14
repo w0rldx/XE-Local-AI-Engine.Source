@@ -21,7 +21,8 @@
 `run_python` and Sandboxed stdio MCP servers declare a `Filesystem` isolation floor. On Linux the `process` provider
 serves it with a bubblewrap mount namespace: the host filesystem is absent, the child sees `/work`, `/work/home` and
 `/tmp`, and callers composed `HOME`/`TMPDIR` from those fixed POSIX constants. On Windows nothing served it, so both
-workloads were refused there.
+workloads were refused there. The boundary now serves both floor workloads there (see "Still owed" for the proof state
+of `run_python`).
 
 MXC can run a child in an AppContainer with a DACL-granted jail, a denied user profile, node data directory and engine
 install directory, and no network capability. That is a real boundary, but not the same one: there is no namespace, the
@@ -125,10 +126,10 @@ does not do.
 
 ## Still owed
 
-- `run_python` on Windows: the boundary serves it, but the compute runtime is still provisioned on Linux only
-  (`ComputePythonEnvironment.GetRuntimeAsync`; the uv pin and lockfile resolve for Linux x64). Until that separate gate is
-  lifted, Sandboxed MCP servers are the only Windows workload the boundary actually runs, and the `run_python` half of the
-  live round below stays unproven.
+- `run_python` on Windows (2026-10-14): code complete and CI-proven on the windows-2025 runner by
+  `ComputeSandboxAppContainerWindowsTests` in the `windows-sandbox` job (it provisions the real compute venv and runs a
+  script under the boundary). The live Windows round under the boundary is still owed and gates the merge. No CPU, memory
+  or process ceiling applies there (Q3); the timeout is the only bound.
 
 ## Evidence (2026-10-13)
 

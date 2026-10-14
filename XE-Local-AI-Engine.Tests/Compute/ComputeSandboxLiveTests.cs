@@ -621,7 +621,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     {
         if (!OperatingSystem.IsLinux())
         {
-            Skip("the compute runtime is Linux-only (the uv pin and the process runner both are).");
+            Skip("this suite proves the bubblewrap chain; the Windows boundary has its own class (ComputeSandboxAppContainerWindowsTests).");
         }
 
         if (!string.Equals(Environment.GetEnvironmentVariable(EnabledVariable), "1", StringComparison.Ordinal))

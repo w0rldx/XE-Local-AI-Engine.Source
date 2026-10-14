@@ -28,6 +28,9 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     // An operator's remove waits this long for another host's provision before answering busy.
     private static readonly TimeSpan RemoveLockWait = TimeSpan.FromSeconds(10);
 
+    // The base interpreter a pyvenv.cfg `home` directory holds: python.exe on Windows, python3 or python on Unix.
+    private static readonly string[] BaseInterpreterNames = ["python.exe", "python3", "python"];
+
     private readonly UvBinaryAcquirer _acquirer;
     private readonly ComputeRuntimeDirectory _directory;
     private readonly ILogger<ComputePythonEnvironment> _logger;
@@ -106,11 +109,11 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             return cached;
         }
 
-        // The uv binary pin and the process runner are both Linux-x64 and the lockfile resolves for that platform alone, so
-        // there is nothing to provision elsewhere. Refused with a plain sentence rather than a deeper missing-file error naming a path the model must not see.
-        if (!OperatingSystem.IsLinux())
+        // The uv pin, the process runner and the lockfile cover Linux x64 and Windows x64 only, so nothing provisions elsewhere.
+        // Refused with a plain sentence rather than a deeper missing-file error naming a path the model must not see.
+        if (!ManagedPythonPins.IsCurrentPlatformSupported)
         {
-            throw new ComputeEnvironmentException("The Python compute tool is available on Linux only.");
+            throw new ComputeEnvironmentException("The Python compute tool is available on Linux x64 and Windows x64 only.");
         }
 
         await _provisionGate.WaitAsync(cancellationToken);
@@ -463,22 +466,64 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     }
 
     /// <summary>
-    ///     True when <paramref name="interpreter" /> finally resolves to an existing file under <paramref name="pythonInstallDirectory" />,
-    ///     the tree the jail binds. <c>File.Exists</c> alone answers true for a dangling link.
+    ///     True when the venv <paramref name="interpreter" /> runs on a base interpreter under <paramref name="pythonInstallDirectory" />, the
+    ///     tree the jail binds: by its final link target, or else by the <c>home</c> line of the venv's <c>pyvenv.cfg</c>.
     /// </summary>
-    private static bool RunsOnStore(string interpreter, string pythonInstallDirectory)
+    /// <remarks>
+    ///     Linux venvs link <c>bin/python</c> into the store. uv's Windows <c>Scripts\python.exe</c> is a plain launcher file that reads
+    ///     <c>home</c> instead, so the link route alone never proves a Windows venv. <c>File.Exists</c> alone answers true for a dangling link.
+    /// </remarks>
+    internal static bool RunsOnStore(string interpreter, string pythonInstallDirectory)
     {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var storePrefix = Path.TrimEndingDirectorySeparator(pythonInstallDirectory) + Path.DirectorySeparatorChar;
         try
         {
             var link = new FileInfo(interpreter);
             var target = link.ResolveLinkTarget(returnFinalTarget: true) ?? link;
-            return target.Exists
-                   && target.FullName.StartsWith(Path.TrimEndingDirectorySeparator(pythonInstallDirectory) + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+            if (target.Exists && target.FullName.StartsWith(storePrefix, comparison))
+            {
+                return true;
+            }
+
+            // The venv root is the parent of Scripts (Windows) or bin (Unix).
+            var venvRoot = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetFullPath(interpreter)));
+            var config = venvRoot is null ? null : Path.Combine(venvRoot, "pyvenv.cfg");
+            if (config is null || !File.Exists(config))
+            {
+                return false;
+            }
+
+            if (ReadVenvHome(config) is not { } configured)
+            {
+                return false;
+            }
+
+            var home = Path.GetFullPath(configured);
+            return home.StartsWith(storePrefix, comparison)
+                   && Directory.Exists(home)
+                   && BaseInterpreterNames.Any(name => File.Exists(Path.Combine(home, name)));
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             return false;
         }
+    }
+
+    // The value of the first `home = <dir>` line (key matched exactly after trimming); every other key is ignored.
+    private static string? ReadVenvHome(string config)
+    {
+        foreach (var line in File.ReadLines(config))
+        {
+            var separator = line.IndexOf('=', StringComparison.Ordinal);
+            if (separator > 0 && string.Equals(line[..separator].Trim(), "home", StringComparison.Ordinal))
+            {
+                var value = line[(separator + 1)..].Trim();
+                return value.Length > 0 ? value : null;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

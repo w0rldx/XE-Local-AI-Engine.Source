@@ -20,7 +20,7 @@ the basis of ADR 0006's "nobody to ask" reasoning). Fetched web pages are the mo
 for exfiltration through a model-chosen URL (`docs/security/sandbox-threat-model.md` T5, AB4).
 
 A Python implementation (DDGS + Trafilatura in a uv environment) was considered and rejected: ADR 0005 scopes the uv runtime to
-Training, the `run_python` sandbox has no network, and the Python environments are Linux x86_64 only.
+Training, the `run_python` sandbox has no network, and the compute Python environment is Linux x64 and Windows x64 only (Training: Linux only).
 
 ## Decision
 

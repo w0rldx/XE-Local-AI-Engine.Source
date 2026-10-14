@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.Python;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -243,9 +244,9 @@ public sealed class LocalToolOfferProviderTests
     [Test]
     public void GetOfferedToolsForProfile_WhenModelIsToolCapable_IncludesRunPythonInProfilePool()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!ManagedPythonPins.IsCurrentPlatformSupported)
         {
-            Skip.Test("run_python is offered only on Linux; the off-Linux half is GetOfferedToolsForProfile_OffLinux_NeverOffersRunPython.");
+            Skip.Test("run_python is offered only on Linux x64 and Windows x64; the other half is GetOfferedToolsForProfile_OffThePinnedPlatforms_NeverOffersRunPython.");
         }
 
         var provider = CreateProvider("qwen3:8b");
@@ -257,13 +258,13 @@ public sealed class LocalToolOfferProviderTests
         AssertEx.Equal(ToolCategory.WriteExecute, compute.Category);
     }
 
-    /// <summary>The managed Python runtime exists only on Linux, so elsewhere the tool would fail every call (4.7).</summary>
+    /// <summary>The managed Python runtime exists only on Linux x64 and Windows x64, so elsewhere the tool would fail every call (4.7).</summary>
     [Test]
-    public void GetOfferedToolsForProfile_OffLinux_NeverOffersRunPython()
+    public void GetOfferedToolsForProfile_OffThePinnedPlatforms_NeverOffersRunPython()
     {
-        if (OperatingSystem.IsLinux())
+        if (ManagedPythonPins.IsCurrentPlatformSupported)
         {
-            Skip.Test("This host runs Linux, where run_python is offered; the assertion applies to Windows and macOS nodes.");
+            Skip.Test("This host is Linux x64 or Windows x64, where run_python is offered; the assertion applies to arm64 and macOS nodes.");
         }
 
         var provider = CreateProvider("qwen3:8b");
@@ -425,9 +426,12 @@ public sealed class LocalToolOfferProviderTests
 
         AssertEx.Contains(provider.GetKnownToolNames(), ComputeToolDefinition.ToolName);
         var catalogEntry = provider.GetKnownTools().Single(static entry => entry.Name == ComputeToolDefinition.ToolName);
-        // The picker is the one place an operator learns the tool is unavailable on this node; on Linux no caveat is owed.
-        AssertEx.Equal(!OperatingSystem.IsLinux(), catalogEntry.Description.Contains("Linux only", StringComparison.Ordinal),
-            "The Linux-only caveat is shown exactly where the tool is withheld.");
+        // The picker is the one place an operator learns the tool is unavailable on this node; on a pinned platform no caveat is owed.
+        AssertEx.Equal(!ManagedPythonPins.IsCurrentPlatformSupported,
+            catalogEntry.Description.EndsWith(
+                " (not available on this node's platform: Linux x64 and Windows x64 only; an agent selecting it gets no tool)",
+                StringComparison.Ordinal),
+            "The platform caveat is shown exactly where the tool is withheld.");
     }
 
     [Test]

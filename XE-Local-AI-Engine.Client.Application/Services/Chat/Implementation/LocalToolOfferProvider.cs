@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WebAccess;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.Python;
 
 internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 {
@@ -220,11 +221,12 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             new LocalToolCatalogEntry
             {
                 Name = ComputeToolDefinition.ToolName,
-                // Picker text only; the model never sees this entry, and is offered the tool only where it can run. Off Linux
-                // this suffix is where an operator learns that a profile selecting it gets no tool on this node.
-                Description = OperatingSystem.IsLinux()
+                // Picker text only; the model never sees this entry, and is offered the tool only where it can run. Off the pinned
+                // platforms this suffix is where an operator learns that a profile selecting it gets no tool on this node.
+                Description = ManagedPythonPins.IsCurrentPlatformSupported
                     ? ComputeToolDefinition.Description
-                    : ComputeToolDefinition.Description + " (Linux only: not available on this node, an agent selecting it gets no tool)",
+                    : ComputeToolDefinition.Description
+                      + " (not available on this node's platform: Linux x64 and Windows x64 only; an agent selecting it gets no tool)",
                 RequiresApproval = true,
                 Source = BuiltinSource,
                 // run_python runs commands on the node, the category that drives the picker's danger badge. Listing it
@@ -536,18 +538,18 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     }
 
     /// <summary>
-    ///     <c>run_python</c> for the profile pool, or nothing for a cloud-hosted model or a node off Linux.
+    ///     <c>run_python</c> for the profile pool, or nothing for a cloud-hosted model or a node off Linux x64 and Windows x64.
     /// </summary>
     /// <remarks>
     ///     The gate here is not the content-leak rationale of the knowledge and coder tools: what is withheld is a
     ///     REMOTE model's ability to direct code execution on the operator's machine, the same concern that put bare
     ///     interpreters on <c>HostExecutableGuard</c>'s denylist. It is therefore unconditional rather than behind
     ///     <c>AllowCloudModelAccess</c>, which governs only reading node-local data. The managed Python runtime exists
-    ///     only on Linux, so elsewhere every call would fail at execution; it is not offered there at all.
+    ///     only on the pinned platforms, so elsewhere every call would fail at execution; it is not offered there at all.
     /// </remarks>
     private IReadOnlyList<AllowedToolDto> ComputeOffer(string? activeModelId, bool isCloudModel)
     {
-        return !OperatingSystem.IsLinux() || LeavesNode(activeModelId, isCloudModel) ? [] : [_computeOfferDto];
+        return !ManagedPythonPins.IsCurrentPlatformSupported || LeavesNode(activeModelId, isCloudModel) ? [] : [_computeOfferDto];
     }
 
     /// <summary>

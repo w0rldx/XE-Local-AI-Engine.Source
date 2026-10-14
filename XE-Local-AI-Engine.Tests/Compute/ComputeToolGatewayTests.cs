@@ -694,14 +694,15 @@ public sealed class ComputeToolGatewayTests
     {
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider,
-            environment: new StubEnvironment(new ComputeEnvironmentException("The Python compute tool is available on Linux only.")));
+            environment: new StubEnvironment(
+                new ComputeEnvironmentException("The Python compute tool is available on Linux x64 and Windows x64 only.")));
 
         var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
         {
             Code = "print(1)"
         });
 
-        AssertEx.Contains(rendered, "Linux only");
+        AssertEx.Contains(rendered, "Linux x64 and Windows x64 only");
         AssertEx.Null(provider.CreateRequest, "a failed provision must not create a jail");
     }
 

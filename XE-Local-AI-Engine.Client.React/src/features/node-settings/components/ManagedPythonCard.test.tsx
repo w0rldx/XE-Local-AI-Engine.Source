@@ -146,7 +146,7 @@ describe("ManagedPythonCard", () => {
 					}),
 					environment("compute", {
 						state: "Unsupported",
-						reason: "The Python compute tool is available on Linux x64 only.",
+						reason: "The Python compute tool is available on Linux x64 and Windows x64 only.",
 						installed: false,
 					}),
 					environment("profile-other", { state: "Unsupported", reason: unknown, installed: false }),
@@ -158,7 +158,9 @@ describe("ManagedPythonCard", () => {
 		const training = await screen.findByTestId("managed-python-environment-training");
 		expect(within(training).getByText(copy.unsupportedReasons.trainingLinuxX64Only)).toBeTruthy();
 		expect(
-			within(screen.getByTestId("managed-python-environment-compute")).getByText(copy.unsupportedReasons.computeLinuxX64Only),
+			within(screen.getByTestId("managed-python-environment-compute")).getByText(
+				copy.unsupportedReasons.computePlatformUnsupported,
+			),
 		).toBeTruthy();
 		expect(within(screen.getByTestId("managed-python-environment-profile-other")).getByText(unknown)).toBeTruthy();
 	});

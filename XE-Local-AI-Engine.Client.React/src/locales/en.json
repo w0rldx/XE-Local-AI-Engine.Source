@@ -2464,7 +2464,7 @@
 				"uvUnsupported": "Not available on this platform",
 				"unsupportedReasons": {
 					"trainingLinuxX64Only": "Training is available on Linux x64 only.",
-					"computeLinuxX64Only": "The Python compute tool is available on Linux x64 only."
+					"computePlatformUnsupported": "The Python compute tool is available on Linux x64 and Windows x64 only."
 				},
 				"pythonInstallsTitle": "Installed Python interpreters",
 				"noPythonInstalls": "None installed yet.",

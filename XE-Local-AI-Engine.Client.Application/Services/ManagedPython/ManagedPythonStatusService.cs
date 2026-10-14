@@ -91,10 +91,10 @@ public sealed class ManagedPythonStatusService
     /// <summary>The same three gates <c>ComputeToolGateway</c> and the environment apply before a script can run, in the same order.</summary>
     private async Task<string?> ComputeUnsupportedReasonAsync(CancellationToken cancellationToken)
     {
-        // An unpinned architecture (linux-arm64) must answer here: ManagedPythonPins.Current would throw further in.
-        if (!_isLinux() || !_isPlatformSupported())
+        // An unpinned platform (linux-arm64, win-arm64) must answer here: ManagedPythonPins.Current would throw further in.
+        if (!_isPlatformSupported())
         {
-            return "The Python compute tool is available on Linux x64 only.";
+            return "The Python compute tool is available on Linux x64 and Windows x64 only.";
         }
 
         if (!await _runtimeSettings.GetComputeEnabledAsync(cancellationToken))
@@ -104,7 +104,7 @@ public sealed class ManagedPythonStatusService
 
         return _sandbox.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation)
             ? null
-            : "This node cannot isolate the compute sandbox filesystem; install bubblewrap with user-namespace support.";
+            : $"This node cannot isolate the compute sandbox filesystem. {SandboxBoundaryRemedy.ForThisHost()}.";
     }
 
     private ManagedPythonEnvironmentStatus GetTrainingStatus()

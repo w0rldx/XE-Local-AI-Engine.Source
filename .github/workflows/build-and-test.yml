@@ -383,7 +383,7 @@ jobs:
           RESULTS_DIR: ${{ runner.temp }}/windows-sandbox-results
         run: |
           $ErrorActionPreference = 'Stop'
-          $classes = @('MxcSandboxRuntimeWindowsTests', 'MxcAclResidueSweeperWindowsTests', 'ProcessSandboxAppContainerWindowsTests')
+          $classes = @('MxcSandboxRuntimeWindowsTests', 'MxcAclResidueSweeperWindowsTests', 'ProcessSandboxAppContainerWindowsTests', 'ComputeSandboxAppContainerWindowsTests')
           $trxName = 'windows-sandbox.trx'
           & 'XE-Local-AI-Engine.Tests/bin/Release/net10.0/XE-Local-AI-Engine.Tests.exe' `
             --treenode-filter "/*/*/($($classes -join '|'))/*" `

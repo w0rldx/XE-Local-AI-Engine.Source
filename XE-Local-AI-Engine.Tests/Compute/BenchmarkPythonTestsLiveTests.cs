@@ -335,7 +335,7 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
     {
         if (!OperatingSystem.IsLinux())
         {
-            throw new SkipTestException("the compute runtime is Linux-only, and so is pythonTests.");
+            throw new SkipTestException("this suite proves the bubblewrap chain; the Windows boundary has its own class (ComputeSandboxAppContainerWindowsTests).");
         }
 
         if (!string.Equals(Environment.GetEnvironmentVariable(EnabledVariable), "1", StringComparison.Ordinal))

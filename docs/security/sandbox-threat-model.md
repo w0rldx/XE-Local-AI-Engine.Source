@@ -171,8 +171,7 @@ Stated as what the boundary *is*, not as a rating.
 - **Windows, process jail.** No Job Object and no ceilings: commands run as the signed-in user with the supervision
   guarantees only; `HOME` and `USERPROFILE` point at the jail's own home, which steers tools away from the real profile
   but does not stop a command reading it. AgentHome, Coder, work sessions and Development Mode always run this way, with the full host network.
-- **Windows, MXC AppContainer boundary (Preview, ADR 0019).** Sandboxed MCP servers (and `run_python` once its Linux-only
-  runtime provisioning is lifted), only while the
+- **Windows, MXC AppContainer boundary (Preview, ADR 0019).** Sandboxed MCP servers and `run_python`, only while the
   operator enables execution previews and only where `HostSandboxContainmentProbe` measured MXC 1.0.0's ProcessContainer
   with its host preparation done. An AppContainer with a DACL-granted jail (the `AppContainerDacl` tier on 24H2): no access
   to node data, the engine directory or any ungranted path (a folder with an `ALL APPLICATION PACKAGES` ACE is readable),

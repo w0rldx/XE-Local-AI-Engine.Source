@@ -45,7 +45,7 @@ const knownMismatches = new Set([
 // one a newer node words differently, renders raw.
 const knownUnsupportedReasons: Readonly<Record<string, string>> = {
 	"Training is available on Linux x64 only.": "trainingLinuxX64Only",
-	"The Python compute tool is available on Linux x64 only.": "computeLinuxX64Only",
+	"The Python compute tool is available on Linux x64 and Windows x64 only.": "computePlatformUnsupported",
 };
 
 type ComputeAction = "repair" | "remove";

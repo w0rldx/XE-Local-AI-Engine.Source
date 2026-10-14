@@ -146,16 +146,33 @@ public sealed class ManagedPythonStatusServiceTests : IDisposable
     }
 
     [Test]
-    public async Task BothEnvironments_OffLinux_AreUnsupported_WithoutAskingTheTrainingService()
+    public async Task BothEnvironments_OffLinuxOnAnUnpinnedPlatform_AreUnsupported_WithoutAskingTheTrainingService()
+    {
+        using var compute = CreateCompute();
+        var service = CreateService(compute, isLinux: false, platformSupported: false);
+
+        var status = await service.GetStatusAsync(CancellationToken.None);
+        var computeRow = status.Environments.Single(static row => row.ProfileId == ComputePythonEnvironment.ProfileId);
+
+        AssertEx.True(status.Environments.All(static row => row.State == ManagedPythonEnvironmentState.Unsupported));
+        AssertEx.Equal("The Python compute tool is available on Linux x64 and Windows x64 only.", computeRow.Reason);
+        _ = _training.DidNotReceive().GetStatus();
+    }
+
+    [Test]
+    public async Task Compute_OffLinuxOnAPinnedPlatform_IsNotRefusedForThePlatform_WhileTrainingStaysLinuxOnly()
     {
         using var compute = CreateCompute();
         var service = CreateService(compute, isLinux: false);
 
         var status = await service.GetStatusAsync(CancellationToken.None);
+        var computeRow = status.Environments.Single(static row => row.ProfileId == ComputePythonEnvironment.ProfileId);
+        var trainingRow = status.Environments.Single(static row => row.ProfileId == ManagedPythonStatusService.TrainingProfileId);
 
-        AssertEx.True(status.Environments.All(static row => row.State == ManagedPythonEnvironmentState.Unsupported));
-        AssertEx.True(status.Environments.All(static row => row.Reason?.Contains("Linux", StringComparison.Ordinal) == true));
-        _ = _training.DidNotReceive().GetStatus();
+        AssertEx.Equal(ManagedPythonEnvironmentState.NotProvisioned, computeRow.State);
+        AssertEx.False(computeRow.Reason?.Contains("available on", StringComparison.Ordinal) == true);
+        AssertEx.Equal(ManagedPythonEnvironmentState.Unsupported, trainingRow.State);
+        AssertEx.Contains(trainingRow.Reason, "Training is available on Linux x64 only.");
     }
 
     [Test]

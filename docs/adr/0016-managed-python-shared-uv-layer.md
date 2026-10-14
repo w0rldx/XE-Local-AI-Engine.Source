@@ -149,6 +149,11 @@ registry key. The Windows toolchain layer (per-RID pin matrix, zip extraction, a
 store inherits the per-user `%LOCALAPPDATA%` ACL; no explicit owner-only ACL code is written unless requested. Training
 stays Linux-only by profile; the compute tool on Windows waits on Windows containment.
 
+Note (2026-10-14): the compute tool no longer waits. Its venv closure (`tools/compute`) is locked for Linux x64 and
+Windows x64, and `run_python` is gated on `ManagedPythonPins.IsCurrentPlatformSupported` instead of the OS being Linux.
+On Windows it runs under the MXC AppContainer boundary (Preview, [ADR 0019](0019-execution-previews-and-the-appcontainer-boundary.md)).
+Training stays Linux-only by profile.
+
 As implemented (M4): `ManagedPythonPins` resolves a `ManagedPythonUvAsset` per RID (`linux-x64` tarball, `win-x64` zip
 with a flat `uv.exe` layout, one uv version) and refuses any other platform with a user-safe `ManagedPythonException`;
 `UvBinaryAcquirer` extracts the zip entry by entry and rejects the whole archive if any entry resolves outside its

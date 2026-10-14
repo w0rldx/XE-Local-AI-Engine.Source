@@ -261,6 +261,64 @@ public sealed class ComputePythonEnvironmentTests : IDisposable
     }
 
     [Test]
+    public void RunsOnStore_AWindowsLauncherWhosePyvenvHomeIsInTheStore_IsTrue()
+    {
+        var interpreter = WriteLauncherVenv(StoreInterpreterDirectory());
+
+        AssertEx.True(ComputePythonEnvironment.RunsOnStore(interpreter, Toolchain.PythonInstallDirectory));
+    }
+
+    [Test]
+    public void RunsOnStore_AWindowsLauncherWhosePyvenvHomeIsOutsideTheStore_IsFalse()
+    {
+        var outside = Directory.CreateDirectory(Path.Combine(_root, "elsewhere", "cpython")).FullName;
+        File.WriteAllText(Path.Combine(outside, "python.exe"), string.Empty);
+        var interpreter = WriteLauncherVenv(outside);
+
+        AssertEx.False(ComputePythonEnvironment.RunsOnStore(interpreter, Toolchain.PythonInstallDirectory));
+    }
+
+    [Test]
+    public void RunsOnStore_AWindowsLauncherWithoutAPyvenvCfg_IsFalse()
+    {
+        var interpreter = WriteLauncherVenv(StoreInterpreterDirectory());
+        File.Delete(Path.Combine(VenvRoot, "pyvenv.cfg"));
+
+        AssertEx.False(ComputePythonEnvironment.RunsOnStore(interpreter, Toolchain.PythonInstallDirectory));
+    }
+
+    [Test]
+    [RunOn(OS.Linux)]
+    public void RunsOnStore_AnInterpreterLinkedIntoTheStore_IsTrue_WithoutAPyvenvCfg()
+    {
+        var baseInterpreter = Path.Combine(StoreInterpreterDirectory(), "python3");
+        File.WriteAllText(baseInterpreter, string.Empty);
+        var bin = Directory.CreateDirectory(Path.Combine(VenvRoot, "bin")).FullName;
+        var interpreter = Path.Combine(bin, "python");
+        _ = File.CreateSymbolicLink(interpreter, baseInterpreter);
+
+        AssertEx.True(ComputePythonEnvironment.RunsOnStore(interpreter, Toolchain.PythonInstallDirectory));
+    }
+
+    // A store CPython directory holding python.exe, the directory uv names as `home` in a Windows venv.
+    private string StoreInterpreterDirectory()
+    {
+        var directory = Directory.CreateDirectory(Path.Combine(Toolchain.PythonInstallDirectory, "cpython-3.13.15-windows-x86_64-none")).FullName;
+        File.WriteAllText(Path.Combine(directory, "python.exe"), string.Empty);
+        return directory;
+    }
+
+    // uv's Windows layout: Scripts\python.exe is a plain launcher file, and pyvenv.cfg in the venv root names the base directory.
+    private string WriteLauncherVenv(string home)
+    {
+        var scripts = Directory.CreateDirectory(Path.Combine(VenvRoot, "Scripts")).FullName;
+        var interpreter = Path.Combine(scripts, "python.exe");
+        File.WriteAllText(interpreter, "launcher");
+        File.WriteAllText(Path.Combine(VenvRoot, "pyvenv.cfg"), $"implementation = CPython\nhome = {home}\nversion_info = 3.13.15\n");
+        return interpreter;
+    }
+
+    [Test]
     [RunOn(OS.Linux)]
     [UnsupportedOSPlatform("windows")]
     public async Task Status_WhenTheInterpreterIsGone_IsRepairRequired()
