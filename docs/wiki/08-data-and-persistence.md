@@ -524,7 +524,12 @@ capability here, never revoke it. `ToolCapableModelBackfillService` runs the bac
 critical path, because feeding capability in only at download time would leave every model already on the node
 silently tool-less. It is best-effort by design: the node must start even when the model registry or the settings
 file cannot be read, so a failure is logged and swallowed, and because the work is additive and idempotent a missed
-run corrects itself on the next start or the next download.
+run corrects itself on the next start or the next download. A GGUF that reaches the store any other way while the
+host runs (copied or linked in) is caught at the point of use: the async offer reads in `LocalToolOfferProvider`
+hand an unlisted node-local model to `RegisterIfToolCapableAsync` and re-read the gate. A listed model never pays
+that store listing, and a failed write leaves the turn on the reduced offer. Because the list is additive, an
+operator who deletes a template-capable GGUF's entry sees it re-added on its next tool turn, as the startup backfill
+already did on the next start.
 
 Writes into the list take the same precaution as every other save. `ToolCapableModelRegistrar.AddAsync` does a
 pre-check load and returns early when nothing would change — it runs on every completed download and every startup,

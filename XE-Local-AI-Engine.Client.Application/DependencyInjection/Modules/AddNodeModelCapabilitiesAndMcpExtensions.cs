@@ -42,7 +42,9 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
                 // Answers the three locality gates for an external id, which the threaded per-turn cloud flag cannot see: such an id
                 // falls THROUGH cloud selection by design, so without it a declared-cloud endpoint would be offered workspace, KB and run_python.
                 sp.GetRequiredService<IModelTrustResolver>(),
-                sp.GetRequiredService<ILogger<LocalToolOfferProvider>>()));
+                sp.GetRequiredService<ILogger<LocalToolOfferProvider>>(),
+                // Self-heals an allow-list miss for an installed template-capable GGUF the backfill and download paths never saw.
+                sp.GetRequiredService<IToolCapableModelRegistrar>()));
         // The catalog read composed with the node approval policy, which the provider above deliberately never consults.
         // Singleton, like both seams it composes.
         builder.Services.AddSingleton<ToolCatalogService>();

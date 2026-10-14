@@ -122,8 +122,9 @@ public enum TurnNoticeKind
     /// </summary>
     /// <remarks>
     ///     Unlike <see cref="ToolsFiltered" /> nothing is callable through <c>list_tools</c>: no tool is offered at all.
-    ///     An external model whose tool support is Unknown reads as unsupported here. <see cref="TurnNoticePayload.Detail" />
-    ///     names the effective model.
+    ///     An external model whose tool support is Unknown reads as unsupported here. Also raised, with its own message, when
+    ///     the model declares tool support but is not on the tool-capable model allow-list, so only the basic tools were
+    ///     offered. <see cref="TurnNoticePayload.Detail" /> names the effective model.
     /// </remarks>
     ToolsWithheld = 11,
 

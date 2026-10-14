@@ -68,15 +68,20 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     private readonly IReadOnlyList<AllowedToolDto> _webAccessOfferDtos;
     private readonly ILogger<LocalToolOfferProvider> _logger;
 
+    // Feeds an installed template-capable GGUF into the allow-list at the point of use; null leaves the gate read-only.
+    private readonly IToolCapableModelRegistrar? _toolCapableModelRegistrar;
+
     public LocalToolOfferProvider(IAgentToolRegistry toolRegistry,
         IMcpToolRegistry mcpToolRegistry,
         INodeRuntimeSettings runtimeSettings,
         IServiceScopeFactory scopeFactory,
         IModelTrustResolver modelTrustResolver,
-        ILogger<LocalToolOfferProvider>? logger = null)
+        ILogger<LocalToolOfferProvider>? logger = null,
+        IToolCapableModelRegistrar? toolCapableModelRegistrar = null)
     {
         ArgumentNullException.ThrowIfNull(toolRegistry);
         _logger = logger ?? NullLogger<LocalToolOfferProvider>.Instance;
+        _toolCapableModelRegistrar = toolCapableModelRegistrar;
         _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
@@ -305,6 +310,44 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         return false;
     }
 
+    /// <summary>
+    ///     <see cref="IsToolCapable" />, self-healing a miss: a node-local model absent from the allow-list is handed to
+    ///     <see cref="IToolCapableModelRegistrar.RegisterIfToolCapableAsync" />, which adds it only when an installed GGUF
+    ///     descriptor reports tool capability from its chat template.
+    /// </summary>
+    /// <remarks>
+    ///     Backfill and download miss a GGUF copied or linked into the store while the host runs. The gate stays the
+    ///     operator-visible list: Ollama, cloud and hand-named models still need listing, and the list was already
+    ///     additive (backfill re-adds a removed entry on the next start). A listed model never pays the store listing; a
+    ///     failed write is logged and keeps the reduced offer. See docs/wiki/08-data-and-persistence.md.
+    /// </remarks>
+    private async ValueTask<bool> IsToolCapableHealingAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken)
+    {
+        if (IsToolCapable(activeModelId))
+        {
+            return true;
+        }
+
+        // Only an installed GGUF can be registered, and a GGUF never leaves the node.
+        if (activeModelId is null || _toolCapableModelRegistrar is null || LeavesNode(activeModelId, isCloudModel))
+        {
+            return false;
+        }
+
+        try
+        {
+            // The registrar reports whether IT added the entry; a concurrent backfill or turn may have added it first,
+            // so the gate is re-read regardless of that answer.
+            _ = await _toolCapableModelRegistrar.RegisterIfToolCapableAsync(activeModelId, cancellationToken);
+            return IsToolCapable(activeModelId);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(exception, "Could not add model {ModelName} to the tool-capable model list; it keeps the reduced tool offer for this turn.", activeModelId);
+            return false;
+        }
+    }
+
     public IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId, bool isCloudModel = false, ExternalProviderCloudGrants? cloudGrants = null)
     {
         // High-risk tools (coder, knowledge, ask_user and every MCP tool) go only to a tool-capable model, and a null or
@@ -348,13 +391,13 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     }
 #pragma warning restore MA0045
 
-    public Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsAsync(string? activeModelId, bool isCloudModel, ExternalProviderCloudGrants? cloudGrants = null,
+    public async Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsAsync(string? activeModelId, bool isCloudModel, ExternalProviderCloudGrants? cloudGrants = null,
         CancellationToken cancellationToken = default)
     {
         // Custom and web tools merge ONLY in the tool-capable branch.
-        return IsToolCapable(activeModelId)
-            ? CapableOfferAsync(activeModelId, isCloudModel, ResolveGrants(activeModelId, cloudGrants), cancellationToken)
-            : Task.FromResult(_builtinAllToolsNonCapable);
+        return await IsToolCapableHealingAsync(activeModelId, isCloudModel, cancellationToken)
+            ? await CapableOfferAsync(activeModelId, isCloudModel, ResolveGrants(activeModelId, cloudGrants), cancellationToken)
+            : _builtinAllToolsNonCapable;
     }
 
     // The tool-capable whole offer plus web and custom tools. A model outside the trust boundary gets the web tools and
@@ -454,7 +497,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         CancellationToken cancellationToken = default)
     {
         // Non-capable models get the non-capable variant and NO spawn/custom tools, so the opt-in cannot bypass the gate.
-        if (!IsToolCapable(activeModelId))
+        if (!await IsToolCapableHealingAsync(activeModelId, isCloudModel, cancellationToken))
         {
             return _builtinAllToolsNonCapable;
         }

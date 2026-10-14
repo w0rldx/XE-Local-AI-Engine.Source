@@ -2392,6 +2392,73 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    [Arguments(false, 1)]
+    [Arguments(true, 0)]
+    public async Task SendMessageAsync_WhenATemplateToolCapableModelIsNotAllowListed_SaysTheSettingTrimmedTheOffer(bool allowListed, int expectedNotices)
+    {
+        // The template gate passes, but the allow-list gate (not self-healed) trims the offer to the basic tools. That
+        // used to be silent; it now raises the same ToolsWithheld kind with a message naming the setting.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
+        offerProvider.IsToolCapable(Arg.Any<string?>()).Returns(allowListed);
+        var providerResolver = Substitute.For<ILocalModelProviderResolver>();
+        providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns("llamacpp");
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+                CreateModelCapabilityResolver(providerResolver: providerResolver,
+                    gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: true, SupportsVision: false))),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationMaintenanceDispatcher>(),
+            CreateTurnContextBuilder(),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            Substitute.For<IGraphWorkflowStore>(),
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)))
+        {
+            events.Add(streamEvent);
+        }
+
+        var notices = events.Where(static streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                         && streamEvent.NoticeKind == nameof(TurnNoticeKind.ToolsWithheld))
+                            .ToList();
+        AssertEx.Equal(expectedNotices, notices.Count);
+        AssertEx.NotEmpty(runner.LastAllowedTools);
+        AssertEx.True(notices.TrueForAll(static notice => notice.NoticeMessage?.Contains("Tool-capable models", StringComparison.Ordinal) == true),
+            "the allow-list notice names the setting the operator has to change");
+    }
+
+    [Test]
     [Arguments(true)]
     [Arguments(false)]
     public async Task SendMessageAsync_WhenAToolTurnLostToolsToTheCloudSwitches_SaysSoOnceWithTheSwitchCodes(bool providerReportsWithheld)
@@ -4608,6 +4675,8 @@ public sealed class NodeChatStreamServiceTests
     private static ILocalToolOfferProvider CreateOfferProvider(params AllowedToolDto[] tools)
     {
         var provider = Substitute.For<ILocalToolOfferProvider>();
+        // Allow-listed, so a tool turn raises no allow-list ToolsWithheld notice unless a test opts out.
+        provider.IsToolCapable(Arg.Any<string?>()).Returns(true);
         provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>()).Returns(tools);
         provider.GetOfferedToolsAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(tools);
         provider.GetOfferedToolsForProfileAsync(Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<ExternalProviderCloudGrants?>(), Arg.Any<CancellationToken>()).Returns(tools);

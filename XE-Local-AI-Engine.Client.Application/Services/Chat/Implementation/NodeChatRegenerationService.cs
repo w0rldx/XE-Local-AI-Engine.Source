@@ -249,6 +249,11 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                 await _eventDispatcher.ReportTurnNoticeAsync(resolution.ToolsWithheldNotice(requestId));
             }
 
+            if (offerTools && resolution.IsOfferTrimmedByAllowList(_localToolOfferProvider))
+            {
+                await _eventDispatcher.ReportTurnNoticeAsync(resolution.ToolsNotAllowListedNotice(requestId));
+            }
+
             // A compiled orchestration's participants carry their own tools whatever the client asked.
             if ((offerTools || resolution.Orchestration is not null)
                 && await resolution.CloudToolsWithheldNoticeAsync(requestId, _localToolOfferProvider, cancellationToken) is { } cloudToolsWithheldNotice)

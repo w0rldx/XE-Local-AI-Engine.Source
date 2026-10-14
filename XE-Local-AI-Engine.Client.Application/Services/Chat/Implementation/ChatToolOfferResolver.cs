@@ -38,7 +38,8 @@ internal static class ChatToolOfferResolver
             return new ChatToolOffer
             {
                 OfferTools = true,
-                AllowedTools = resolvedAllowedTools
+                AllowedTools = resolvedAllowedTools,
+                TrimmedByAllowList = resolution.IsOfferTrimmedByAllowList(localToolOfferProvider)
             };
         }
 
@@ -52,7 +53,8 @@ internal static class ChatToolOfferResolver
                 {
                     RequiresApproval = toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
                 })
-            ]
+            ],
+            TrimmedByAllowList = resolution.IsOfferTrimmedByAllowList(localToolOfferProvider)
         };
     }
 }

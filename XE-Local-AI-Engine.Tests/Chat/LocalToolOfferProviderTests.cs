@@ -285,6 +285,100 @@ public sealed class LocalToolOfferProviderTests
     }
 
     [Test]
+    public async Task GetOfferedToolsAsync_WhenAnUnlistedModelIsRegisteredByTheRegistrar_OffersTheCapableTools()
+    {
+        // A GGUF copied into the store while the host runs is missed by the startup backfill and the download path. The
+        // offer heals the miss at the point of use: the registrar adds it from its template facts and the turn is capable.
+        List<string> listed = [];
+        var runtimeSettings = CreateSettingsReadingListLive(listed);
+        var registrar = Substitute.For<IToolCapableModelRegistrar>();
+        registrar.RegisterIfToolCapableAsync("org/model-GGUF:Q4_K_M", Arg.Any<CancellationToken>())
+                 .Returns(_ =>
+                 {
+                     listed.Add("org/model-GGUF:Q4_K_M");
+                     return true;
+                 });
+        var provider = CreateProviderWithRegistrar(runtimeSettings, registrar);
+
+        var offered = await provider.GetOfferedToolsAsync("org/model-GGUF:Q4_K_M", isCloudModel: false);
+        var profileOffered = await provider.GetOfferedToolsForProfileAsync("org/model-GGUF:Q4_K_M", isCloudModel: false);
+
+        AssertEx.Contains(offered, static tool => tool.Name == AskUserTool.ToolName);
+        AssertEx.Contains(profileOffered, static tool => tool.Name == AskUserTool.ToolName);
+        await registrar.Received(1).RegisterIfToolCapableAsync("org/model-GGUF:Q4_K_M", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenAnotherPathListedTheModelMeanwhile_OffersTheCapableToolsAlthoughTheRegistrarAddedNothing()
+    {
+        // The startup backfill or a concurrent turn can list the model between the first gate read and the registrar
+        // call; the registrar then adds nothing and answers false, but the model IS listed, so the turn must be capable.
+        List<string> listed = [];
+        var runtimeSettings = CreateSettingsReadingListLive(listed);
+        var registrar = Substitute.For<IToolCapableModelRegistrar>();
+        registrar.RegisterIfToolCapableAsync("org/model-GGUF:Q4_K_M", Arg.Any<CancellationToken>())
+                 .Returns(_ =>
+                 {
+                     listed.Add("org/model-GGUF:Q4_K_M"); // the other path's write, visible on the next gate read
+                     return false;
+                 });
+        var provider = CreateProviderWithRegistrar(runtimeSettings, registrar);
+
+        var offered = await provider.GetOfferedToolsAsync("org/model-GGUF:Q4_K_M", isCloudModel: false);
+
+        AssertEx.Contains(offered, static tool => tool.Name == AskUserTool.ToolName);
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenTheRegistrarDeclinesTheModel_KeepsTheNonCapableOffer()
+    {
+        // A model whose template facts are not tool-capable (or that is not an installed GGUF) is not added, so the gate
+        // still withholds the capability-gated tools.
+        var runtimeSettings = StubNodeRuntimeSettings.Create().Build();
+        var registrar = Substitute.For<IToolCapableModelRegistrar>();
+        registrar.RegisterIfToolCapableAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        var provider = CreateProviderWithRegistrar(runtimeSettings, registrar);
+
+        var offered = await provider.GetOfferedToolsAsync("org/plain-GGUF:Q4_K_M", isCloudModel: false);
+
+        AssertEx.False(offered.Any(static tool => tool.Name == AskUserTool.ToolName),
+            "a model the registrar declines must keep the non-capable offer");
+        await registrar.Received(1).RegisterIfToolCapableAsync("org/plain-GGUF:Q4_K_M", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetOfferedToolsAsync_WhenTheRegistrarThrows_KeepsTheNonCapableOfferInsteadOfFailingTheTurn()
+    {
+        var runtimeSettings = StubNodeRuntimeSettings.Create().Build();
+        var registrar = Substitute.For<IToolCapableModelRegistrar>();
+        registrar.RegisterIfToolCapableAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromException<bool>(new IOException("settings file locked")));
+        var provider = CreateProviderWithRegistrar(runtimeSettings, registrar);
+
+        var offered = await provider.GetOfferedToolsAsync("org/model-GGUF:Q4_K_M", isCloudModel: false);
+
+        AssertEx.False(offered.Any(static tool => tool.Name == AskUserTool.ToolName),
+            "a failed registration must leave the non-capable offer");
+    }
+
+    [Test]
+    [Arguments(true, false)]
+    [Arguments(false, true)]
+    public async Task GetOfferedToolsAsync_WhenTheModelIsListedOrLeavesTheNode_NeverConsultsTheRegistrar(bool listed, bool isCloudModel)
+    {
+        // A listed model returns on the cached allow-list read, and a model that leaves the node cannot be an installed
+        // GGUF, so neither pays the registrar's store listing.
+        var builder = StubNodeRuntimeSettings.Create();
+        var runtimeSettings = (listed ? builder.WithToolCapableModels("org/model-GGUF:Q4_K_M") : builder).Build();
+        var registrar = Substitute.For<IToolCapableModelRegistrar>();
+        var provider = CreateProviderWithRegistrar(runtimeSettings, registrar);
+
+        _ = await provider.GetOfferedToolsAsync("org/model-GGUF:Q4_K_M", isCloudModel);
+
+        await registrar.DidNotReceiveWithAnyArgs().RegisterIfToolCapableAsync(default!, default);
+    }
+
+    [Test]
     public void GetOfferedTools_FollowsTheKnowledgeToolsAndCloudAccessSwitchesLive()
     {
         // Both node switches are read per offer on the one singleton provider: a flip applies to the next turn, and the
@@ -1182,6 +1276,25 @@ public sealed class LocalToolOfferProviderTests
     private static bool IsWebTool(AllowedToolDto tool) =>
         string.Equals(tool.Name, WebFetchToolDefinition.ToolName, StringComparison.Ordinal)
         || string.Equals(tool.Name, WebSearchToolDefinition.ToolName, StringComparison.Ordinal);
+
+    // The allow-list read follows the given list, so a registrar fake that appends to it is visible to the next gate read.
+    private static INodeRuntimeSettings CreateSettingsReadingListLive(List<string> listed)
+    {
+        var runtimeSettings = StubNodeRuntimeSettings.Create().Build();
+        runtimeSettings.GetToolCapableModels().Returns(_ => listed.ToArray());
+        return runtimeSettings;
+    }
+
+    private static LocalToolOfferProvider CreateProviderWithRegistrar(INodeRuntimeSettings runtimeSettings, IToolCapableModelRegistrar registrar)
+    {
+        return new LocalToolOfferProvider(new FakeAgentToolRegistry([]),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            runtimeSettings,
+            NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
+            NullLogger<LocalToolOfferProvider>.Instance,
+            registrar);
+    }
 
     private static LocalToolOfferProvider CreateProviderWithWebAccess(bool webAccessEnabled)
     {

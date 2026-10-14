@@ -102,6 +102,36 @@ internal sealed class ChatTurnResolution
     }
 
     /// <summary>
+    ///     Whether a turn that offers tools gets only the non-capable offer because the effective model is not on the
+    ///     <c>AgentHome:ToolCapableModels</c> allow-list. Shared by the send and regenerate paths so the two cannot drift.
+    /// </summary>
+    /// <remarks>
+    ///     Read AFTER the offer was built, so a miss the offer provider self-healed (an installed template-capable GGUF)
+    ///     no longer counts. A compiled orchestration already gated its orchestrator on the list and carries its
+    ///     participants' own offers, so it never qualifies.
+    /// </remarks>
+    public bool IsOfferTrimmedByAllowList(ILocalToolOfferProvider localToolOfferProvider)
+    {
+        return Orchestration is null && !localToolOfferProvider.IsToolCapable(EffectiveModel);
+    }
+
+    /// <summary>
+    ///     The ToolsWithheld notice for a turn whose model passes the template gate but is not on the tool-capable model
+    ///     allow-list, so only the basic tools were offered. Same kind as <see cref="ToolsWithheldNotice" />; the message
+    ///     names the setting.
+    /// </summary>
+    public TurnNoticePayload ToolsNotAllowListedNotice(Guid invocationId)
+    {
+        return new TurnNoticePayload
+        {
+            InvocationId = invocationId,
+            Kind = TurnNoticeKind.ToolsWithheld,
+            Message = "Only basic tools were offered because this model is not in the Tool-capable models list. Add it under Node Settings, Chat to offer it the full tool set.",
+            Detail = EffectiveModel
+        };
+    }
+
+    /// <summary>
     ///     The CloudToolsWithheld notice for this turn, or <see langword="null" /> when no cloud-model switch withheld a
     ///     tool. Shared by the send and regenerate paths so the two cannot drift.
     /// </summary>
