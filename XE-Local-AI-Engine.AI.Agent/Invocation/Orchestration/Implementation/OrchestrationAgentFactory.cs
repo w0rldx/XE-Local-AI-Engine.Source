@@ -101,7 +101,7 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
 
     private async Task<AIAgent> BuildAgentAsync(OrchestrationParticipant participant, CancellationToken cancellationToken)
     {
-        var tools = await InvocationToolResolver.ResolveAsync(participant.Tools,
+        var tools = await InvocationToolResolver.ResolveForAgentTurnAsync(participant.Tools,
             _toolRegistry,
             _clientLocalToolRegistry,
             _mcpToolRegistry,

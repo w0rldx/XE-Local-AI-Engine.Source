@@ -5351,6 +5351,7 @@ export type XeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentRespon
 	profileId: string;
 	state: string;
 	reason?: string | null;
+	reasonCode?: string | null;
 	installed?: XeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentIdentityResponse | null;
 	mismatches: Array<string>;
 };

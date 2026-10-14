@@ -27,7 +27,10 @@ public sealed record ChatContextEstimateRequest
     /// <summary>The picked agent; null means the seeded Default Assistant.</summary>
     public Guid? AgentId { get; init; }
 
-    /// <summary>The composer's local-tools toggle: off, no tool or preamble is charged.</summary>
+    /// <summary>
+    ///     The composer's local-tools toggle: off, the node-wide offer is not charged; an agent's own non-empty tool list
+    ///     still is, as the send offers it.
+    /// </summary>
     public bool UseLocalTools { get; init; } = true;
 
     /// <summary>The per-send max output tokens; above the node floor it widens the output reserve. Non-positive is ignored.</summary>

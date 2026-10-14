@@ -41,12 +41,32 @@ const knownMismatches = new Set([
 	"toolchainStore",
 ]);
 
-// The node's English platform reasons (ManagedPythonStatusService) that the card can translate; any other reason, or
-// one a newer node words differently, renders raw.
-const knownUnsupportedReasons: Readonly<Record<string, string>> = {
-	"Training is available on Linux x64 only.": "trainingLinuxX64Only",
-	"The Python compute tool is available on Linux x64 and Windows x64 only.": "computePlatformUnsupported",
-};
+// The node's reason codes (ManagedPythonReasonCode) whose fixed sentence the card translates. The three left out carry
+// detail only the server text has (the isolation cause and remedy, a sanitized provision error), and an unknown code
+// from a newer node, so those render the raw reason.
+const translatedReasonCodes = new Set([
+	"PlatformUnsupported",
+	"ComputeDisabled",
+	"ExecutionPreviewsDisabled",
+	"Provisioning",
+	"Removing",
+	"LockfileMissing",
+	"InterpreterMissing",
+	"RecordUnreadable",
+	"IncompleteProvision",
+	"UpdateRequired",
+	"OlderBuild",
+	"TrainingPlatformUnsupported",
+	"TrainingInstalling",
+	"TrainingRemoving",
+	"TrainingInterpreterMissing",
+	"TrainingOutOfDate",
+]);
+
+const platformUnsupportedCodes = new Set(["PlatformUnsupported", "TrainingPlatformUnsupported"]);
+
+// A removal still reads state Provisioning on the wire; only its reason code tells it apart.
+const removingCodes = new Set(["Removing", "TrainingRemoving"]);
 
 type ComputeAction = "repair" | "remove";
 
@@ -76,20 +96,26 @@ export function ManagedPythonCard() {
 		);
 	};
 
-	const reasonText = (environment: ManagedPythonEnvironment): string => {
-		const reason = environment.reason ?? "";
-		return environment.state === "Unsupported" && Object.hasOwn(knownUnsupportedReasons, reason)
-			? t(`${translationPrefix}.unsupportedReasons.${knownUnsupportedReasons[reason]}`)
-			: reason;
+	const reasonText = (environment: ManagedPythonEnvironment): string =>
+		environment.reasonCode && translatedReasonCodes.has(environment.reasonCode)
+			? t(`${translationPrefix}.reasons.${environment.reasonCode}`)
+			: (environment.reason ?? "");
+
+	const stateLabel = (environment: ManagedPythonEnvironment): string => {
+		if (environment.reasonCode && removingCodes.has(environment.reasonCode)) {
+			return t(`${translationPrefix}.removing`);
+		}
+		return Object.hasOwn(stateColors, environment.state)
+			? t(`${translationPrefix}.states.${environment.state}`)
+			: environment.state;
 	};
 
-	const stateLabel = (state: string): string =>
-		Object.hasOwn(stateColors, state) ? t(`${translationPrefix}.states.${state}`) : state;
-
-	// A host with no supported environment at all (an unsupported OS or architecture) will never download uv; saying
-	// "not downloaded yet" there promises something that cannot happen, and Compute's repair/remove have nothing to act on.
+	// A host whose platform no environment supports will never download uv; saying "not downloaded yet" there promises
+	// something that cannot happen, and Compute's repair/remove have nothing to act on. Compute switched off is not that:
+	// the platform still supports it, so uv stays "not downloaded yet".
 	const environments = status.data?.environments ?? [];
-	const unsupported = environments.length > 0 && environments.every((environment) => environment.state === "Unsupported");
+	const unsupported =
+		environments.length > 0 && environments.every((environment) => platformUnsupportedCodes.has(environment.reasonCode ?? ""));
 
 	const renderEnvironment = (environment: ManagedPythonEnvironment) => {
 		const isCompute = environment.profileId === "compute";
@@ -104,7 +130,7 @@ export function ManagedPythonCard() {
 							: environment.profileId}
 					</Title>
 					<Badge color={Object.hasOwn(stateColors, environment.state) ? stateColors[environment.state] : "gray"}>
-						{stateLabel(environment.state)}
+						{stateLabel(environment)}
 					</Badge>
 				</Group>
 				{environment.reason ? (
@@ -145,16 +171,18 @@ export function ManagedPythonCard() {
 						>
 							{t(`${translationPrefix}.repair`)}
 						</Button>
-						<Button
-							color="red"
-							variant="light"
-							leftSection={<IconTrash size={16} />}
-							disabled={actionsDisabled}
-							loading={remove.isPending}
-							onClick={() => openConfirm("remove")}
-						>
-							{t(`${translationPrefix}.remove`)}
-						</Button>
+						{environment.state === "NotProvisioned" ? null : (
+							<Button
+								color="red"
+								variant="light"
+								leftSection={<IconTrash size={16} />}
+								disabled={actionsDisabled}
+								loading={remove.isPending}
+								onClick={() => openConfirm("remove")}
+							>
+								{t(`${translationPrefix}.remove`)}
+							</Button>
+						)}
 					</Group>
 				) : null}
 			</Stack>

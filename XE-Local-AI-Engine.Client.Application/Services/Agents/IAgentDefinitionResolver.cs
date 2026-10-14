@@ -87,4 +87,8 @@ public sealed record ResolvedAgentRuntime(
     bool PlaybookWithheld = false,
     // The cloud-model switches withheld these tools from this agent's offer; drives the CloudToolsWithheld turn notice.
     [property: JsonIgnore]
-    IReadOnlyList<CloudWithheldTool>? CloudWithheldTools = null);
+    IReadOnlyList<CloudWithheldTool>? CloudWithheldTools = null,
+    // The definition names its own non-empty AllowedToolNames and is not the Default Assistant, so its offer is
+    // configuration the composer's local-tools toggle does not gate. False, the default, keeps the toggle gate.
+    [property: JsonIgnore]
+    bool DeclaresToolList = false);

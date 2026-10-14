@@ -575,6 +575,9 @@ public sealed class BenchmarkPythonTestsVerifierTests
             RequiredResourceLimits = requireResourceLimits;
             return Task.FromResult(_outcome(request.Code!));
         }
+
+        public Task<ComputeExecutionOutcome?> PreflightAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("the verifier never preflights");
     }
 
     /// <summary>
@@ -586,6 +589,9 @@ public sealed class BenchmarkPythonTestsVerifierTests
     {
         public Task<string> ExecuteAsync(ComputeRunToolRequest request, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("the verifier uses the structured projection");
+
+        public Task<ComputeExecutionOutcome?> PreflightAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("the verifier never preflights");
 
         public async Task<ComputeExecutionOutcome> ExecuteDetailedAsync(ComputeRunToolRequest request,
             bool requireResourceLimits,

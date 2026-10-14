@@ -126,7 +126,8 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             customTools,
             definition.DisableToolRelevanceFilter,
             playbookWithheld,
-            cloudWithheldTools);
+            cloudWithheldTools,
+            !AgentDefaults.IsDefaultAssistant(definition) && definition.AllowedToolNames.Count > 0);
     }
 
     // Narrowed to what THIS agent would have been offered: the Default Assistant reproduces plain chat, which never

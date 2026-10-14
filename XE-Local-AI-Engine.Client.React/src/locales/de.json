@@ -2462,9 +2462,24 @@
 				"uvPresent": "Installiert",
 				"uvMissing": "Noch nicht heruntergeladen",
 				"uvUnsupported": "Auf dieser Plattform nicht verfügbar",
-				"unsupportedReasons": {
-					"trainingLinuxX64Only": "Training ist nur unter Linux x64 verfügbar.",
-					"computePlatformUnsupported": "Das Python-Rechen-Tool ist nur unter Linux x64 und Windows x64 verfügbar."
+				"removing": "Wird entfernt",
+				"reasons": {
+					"PlatformUnsupported": "Das Python-Rechen-Tool ist nur unter Linux x64 und Windows x64 verfügbar.",
+					"ComputeDisabled": "Das Python-Rechen-Tool ist auf diesem Node deaktiviert (Compute:Enabled=false).",
+					"ExecutionPreviewsDisabled": "Das Python-Rechen-Tool benötigt eingeschaltete Ausführungs-Vorschauen. Ein Operator kann sie im Abschnitt „Sandbox & Isolation“ der Node-Einstellungen einschalten.",
+					"Provisioning": "Die Compute-Laufzeit wird eingerichtet.",
+					"Removing": "Die Compute-Laufzeit wird entfernt.",
+					"LockfileMissing": "Die festgelegte Lock-Datei der Compute-Laufzeit fehlt in dieser Installation.",
+					"InterpreterMissing": "Der Python-Interpreter der Compute-Laufzeit fehlt.",
+					"RecordUnreadable": "Der Zustandsdatensatz der Compute-Laufzeit ist nicht lesbar.",
+					"IncompleteProvision": "Eine unterbrochene Einrichtung hat eine unvollständige Compute-Laufzeit hinterlassen.",
+					"UpdateRequired": "Die Compute-Laufzeit ist veraltet und wird bei der nächsten Verwendung neu aufgebaut.",
+					"OlderBuild": "Die Compute-Laufzeit wurde von einem älteren Build eingerichtet und wird bei der nächsten Verwendung neu aufgebaut.",
+					"TrainingPlatformUnsupported": "Training ist nur unter Linux x64 verfügbar.",
+					"TrainingInstalling": "Die Trainings-Laufzeit wird installiert.",
+					"TrainingRemoving": "Die Trainings-Laufzeit wird entfernt.",
+					"TrainingInterpreterMissing": "Der Python-Interpreter der Trainings-Laufzeit fehlt. Installieren Sie sie auf der Trainingsseite neu.",
+					"TrainingOutOfDate": "Die Trainings-Laufzeit ist veraltet. Installieren Sie sie auf der Trainingsseite neu."
 				},
 				"pythonInstallsTitle": "Installierte Python-Interpreter",
 				"noPythonInstalls": "Noch keine installiert.",

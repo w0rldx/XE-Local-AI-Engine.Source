@@ -13,4 +13,11 @@ using Microsoft.Extensions.AI;
 internal interface IClientLocalToolRegistry
 {
     bool TryResolve(string toolName, [NotNullWhen(true)] out AITool? tool);
+
+    /// <summary>
+    ///     When the tool's <see cref="IClientLocalToolPreflight" /> refuses right now, a variant WITHOUT the approval wrap whose every
+    ///     call answers with the refusal and never runs the handler; otherwise <see langword="null" />.
+    /// </summary>
+    ValueTask<AITool?> ResolvePreflightRefusalAsync(string toolName, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<AITool?>(null);
 }

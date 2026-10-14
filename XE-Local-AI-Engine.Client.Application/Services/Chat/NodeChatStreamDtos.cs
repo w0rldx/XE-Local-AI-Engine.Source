@@ -88,6 +88,8 @@ public sealed record NodeChatStreamRequest(
     Guid? MessageId = null,
     Guid? RequestId = null,
     string? Model = null,
+    // The composer's local-tools toggle: gates only the node-wide offer, never an agent's own non-empty tool list.
+    // See ChatToolOfferResolver.
     bool UseLocalTools = false,
     string? ReasoningEffort = null,
     IReadOnlyDictionary<Guid, Guid>? SelectedPath = null,

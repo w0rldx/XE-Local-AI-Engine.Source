@@ -182,7 +182,7 @@ Interim text segments. Text the model streams before a tool call ("Let me search
 
 ## MCP & local tools offered during a chat run
 
-Tools are offered to the turn only when **all three** hold (`NodeChatStreamService.cs`): the client asked (`request.UseLocalTools`), the node has the tool engine enabled (`runtimeSettings.GetEnableToolsAsync`), and the active model advertises the `tools` capability (`resolution.SupportsTools`).
+Tools are offered to the turn only when all three hold (`NodeChatStreamService.cs`): the turn asks for tools, the node has the tool engine enabled (`runtimeSettings.GetEnableToolsAsync`), and the active model advertises the `tools` capability (`resolution.SupportsTools`). The turn asks when the client sent `request.UseLocalTools` or when the agent names its own tools: a definition other than the Default Assistant with a non-empty allowed-tools list (`ResolvedAgentRuntime.DeclaresToolList`). So the composer toggle gates only the node-wide offer, while `EnableTools` and the model's tool support still gate both. Regenerate follows the same rule (`NodeChatRegenerationService` uses `ChatToolOfferResolver`), and the "tools withheld" notice is sent for an agent-list turn too.
 
 `LocalToolOfferProvider` (`Services/Chat/Implementation/LocalToolOfferProvider.cs`) builds the offer:
 
@@ -690,7 +690,8 @@ in exactly two places: the REST message response and the terminal `ChatStreamEve
 `ChatContextEstimateService`). A blank model means the node's local default chat model (the composer sends the
 picker's local-default sentinel as no model, as a send does), no agent means the Default Assistant, and
 `useLocalTools` mirrors the composer's "Local tools" toggle (absent means on), so tools are offered only when a
-send would offer them. In developer mode the SPA also sends the sampling preferences' `maxOutputTokens`, which widens the output
+send would offer them. The toggle gates the node-wide offer (Default Assistant and agents without an allowed-tools list);
+an agent's own allowed-tools list is offered whatever the toggle says. In developer mode the SPA also sends the sampling preferences' `maxOutputTokens`, which widens the output
 reserve above the node floor by the send path's `TurnPolicy.ResolveReservedOutputTokens` rule, and `numCtx`, the
 requested window, which a known launched window caps and which is otherwise taken as is (`TurnPolicy.WithEffectiveContext`).
 Non-positive values are ignored. The service reuses the send path's turn resolution and tool offer, so the figures follow what a

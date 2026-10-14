@@ -283,7 +283,7 @@ internal sealed class SandboxLifecycleRegistry
     }
 
     // A measured-but-ineligible boundary is named as such, so the refusal says what the operator can change rather than "no mechanism".
-    private static string FilesystemUnavailableReason(SandboxContainment containment)
+    internal static string FilesystemUnavailableReason(SandboxContainment containment)
     {
         return containment.SupportsAppContainerBoundary
             ? SandboxContainment.ExecutionPreviewsDisabledReason

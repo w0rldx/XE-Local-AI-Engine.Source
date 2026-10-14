@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 ///     <see cref="IComputeToolGateway.ExecuteDetailedAsync" />, which every caller goes through. A copy here would be a
 ///     property of this handler rather than of the sandbox, so a second caller of the gateway would get neither.
 /// </remarks>
-internal sealed class RunPythonToolHandler : IClientLocalToolHandler
+internal sealed class RunPythonToolHandler : IClientLocalToolHandler, IClientLocalToolPreflight
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -48,14 +48,20 @@ internal sealed class RunPythonToolHandler : IClientLocalToolHandler
         }
         catch (JsonException exception)
         {
-            return $"run_python arguments were not valid JSON: {exception.Message}";
+            return ToolFailureText.Format(ToolFailureText.ToolReportedCode, $"run_python arguments were not valid JSON: {exception.Message}");
         }
 
         if (request is null)
         {
-            return "run_python arguments were empty.";
+            return ToolFailureText.Format(ToolFailureText.ToolReportedCode, "run_python arguments were empty.");
         }
 
         return await _gateway.ExecuteAsync(request, cancellationToken);
+    }
+
+    /// <summary>The gateway's node-level gates only; the refusal the model would read, or null when a call could run.</summary>
+    public async ValueTask<string?> PreflightAsync(CancellationToken cancellationToken = default)
+    {
+        return (await _gateway.PreflightAsync(cancellationToken))?.RefusalMessage;
     }
 }

@@ -2266,6 +2266,40 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_WhenLocalToolsDisabled_StillOffersAnAgentsOwnToolList()
+    {
+        // The seeded Mathematician names run_python; with the composer toggle off the model must still get it as a tool,
+        // or it writes the call as text.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var own = CreateLocalToolDto("run_python", "{\"type\":\"object\"}");
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("Persona.", [own], WriteDeclarationModel, null, 1, agentDefinitionId, "Mathematician", DeclaresToolList: true));
+        var service = CreateWriteDeclarationService(persistence, runner, dispatcher, resolver, CreateOfferProvider(own, CreateLocalToolDto("Calculate", "{\"type\":\"object\"}")));
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           Model: WriteDeclarationModel,
+                           UseLocalTools: false,
+                           AgentDefinitionId: agentDefinitionId)))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Equal("run_python", string.Join(",", runner.LastAllowedTools.Select(static tool => tool.Name)));
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenGgufModelIsToolCapable_OffersTools()
     {
         // A llama.cpp (non-Ollama) model whose chat template was detected tool-capable must be offered tools — the GGUF
@@ -2326,15 +2360,24 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
-    [Arguments(true, true, true)]
-    [Arguments(false, true, false)]
-    [Arguments(true, false, false)]
+    [Arguments(true, true, false, true)]
+    [Arguments(false, true, false, false)]
+    [Arguments(true, false, false, false)]
+    [Arguments(false, true, true, true)]
     public async Task SendMessageAsync_WhenGgufModelIsNotToolCapable_OffersNoToolsAndSaysSoOnlyWhenToolsWereAsked(bool useLocalTools,
         bool nodeToolsEnabled,
+        bool agentDeclaresToolList,
         bool expectNotice)
     {
-        // A llama.cpp model whose template carries no tool support stays the safe default — no tools offered — even with
-        // local tools enabled on the request. The ToolsWithheld notice fires only when the client asked AND the node engine is on.
+        // A tool-less llama.cpp template gets no tools. ToolsWithheld fires only when the turn asked (the toggle or an
+        // agent's own list) AND the node engine is on.
+        var agentResolver = CreateAgentDefinitionResolver();
+        if (agentDeclaresToolList)
+        {
+            agentResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                         .Returns(new ResolvedAgentRuntime("Persona.", [], null, null, 1, Guid.NewGuid(), "Mathematician", DeclaresToolList: true));
+        }
+
         var conversationId = Guid.NewGuid();
         var assistantMessageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
@@ -2347,7 +2390,7 @@ public sealed class NodeChatStreamServiceTests
                         .Returns("llamacpp");
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
+            new ChatTurnResolver(agentResolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(),
                 CreateModelCapabilityResolver(providerResolver: providerResolver,
                     gguf: CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false, SupportsVision: false))),
                 NullLogger<ChatTurnResolver>.Instance),

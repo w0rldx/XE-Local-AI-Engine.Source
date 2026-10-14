@@ -67,74 +67,87 @@ public sealed class ManagedPythonStatusService
     /// <summary>Removes the Compute venv and its state; refused while Compute is unsupported or provisioning.</summary>
     public async Task<ManagedPythonActionResult> RemoveComputeAsync(CancellationToken cancellationToken)
     {
-        return await ComputeUnsupportedReasonAsync(cancellationToken) is { } reason ? Unsupported(reason) : await _compute.RemoveAsync(cancellationToken);
+        return await ComputeUnsupportedAsync(cancellationToken) is { } unsupported ? Unsupported(unsupported.Reason!) : await _compute.RemoveAsync(cancellationToken);
     }
 
     /// <summary>Removes the Compute venv and provisions it again in the background; refused while unsupported or provisioning.</summary>
     public async Task<ManagedPythonActionResult> RepairComputeAsync(CancellationToken cancellationToken)
     {
-        return await ComputeUnsupportedReasonAsync(cancellationToken) is { } reason ? Unsupported(reason) : await _compute.RepairAsync(cancellationToken);
+        return await ComputeUnsupportedAsync(cancellationToken) is { } unsupported ? Unsupported(unsupported.Reason!) : await _compute.RepairAsync(cancellationToken);
     }
 
     private async Task<ManagedPythonEnvironmentStatus> GetComputeStatusAsync(CancellationToken cancellationToken)
     {
-        return await ComputeUnsupportedReasonAsync(cancellationToken) is { } reason
-            ? new ManagedPythonEnvironmentStatus
-            {
-                ProfileId = ComputePythonEnvironment.ProfileId,
-                State = ManagedPythonEnvironmentState.Unsupported,
-                Reason = reason
-            }
-            : await _compute.ReadStatusAsync(cancellationToken);
+        return await ComputeUnsupportedAsync(cancellationToken) ?? await _compute.ReadStatusAsync(cancellationToken);
     }
 
     /// <summary>The same three gates <c>ComputeToolGateway</c> and the environment apply before a script can run, in the same order.</summary>
-    private async Task<string?> ComputeUnsupportedReasonAsync(CancellationToken cancellationToken)
+    private async Task<ManagedPythonEnvironmentStatus?> ComputeUnsupportedAsync(CancellationToken cancellationToken)
     {
         // An unpinned platform (linux-arm64, win-arm64) must answer here: ManagedPythonPins.Current would throw further in.
         if (!_isPlatformSupported())
         {
-            return "The Python compute tool is available on Linux x64 and Windows x64 only.";
+            return ComputeUnsupported(ManagedPythonReasonCode.PlatformUnsupported, "The Python compute tool is available on Linux x64 and Windows x64 only.");
         }
 
         if (!await _runtimeSettings.GetComputeEnabledAsync(cancellationToken))
         {
-            return "The Python compute tool is disabled on this node (Compute:Enabled=false).";
+            return ComputeUnsupported(ManagedPythonReasonCode.ComputeDisabled, "The Python compute tool is disabled on this node (Compute:Enabled=false).");
         }
 
-        return _sandbox.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation)
-            ? null
-            : $"This node cannot isolate the compute sandbox filesystem. {SandboxBoundaryRemedy.ForThisHost()}.";
+        if (_sandbox.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation))
+        {
+            return null;
+        }
+
+        // The cause, when the provider knows it, replaces the list of every possible one (N-62).
+        var cause = _sandbox.FilesystemIsolationUnavailableReason;
+        return ComputeUnsupported(
+            SandboxBoundaryRemedy.IsExecutionPreviewsDisabled(cause) ? ManagedPythonReasonCode.ExecutionPreviewsDisabled : ManagedPythonReasonCode.IsolationUnavailable,
+            $"This node cannot isolate the compute sandbox filesystem{(cause is null ? "" : $" ({cause})")}. {SandboxBoundaryRemedy.ForFilesystemIsolationCause(cause)}");
+    }
+
+    private static ManagedPythonEnvironmentStatus ComputeUnsupported(ManagedPythonReasonCode code, string reason)
+    {
+        return new ManagedPythonEnvironmentStatus
+        {
+            ProfileId = ComputePythonEnvironment.ProfileId,
+            State = ManagedPythonEnvironmentState.Unsupported,
+            Reason = reason,
+            ReasonCode = code
+        };
     }
 
     private ManagedPythonEnvironmentStatus GetTrainingStatus()
     {
         if (!_isLinux() || !_isPlatformSupported())
         {
-            return TrainingStatus(ManagedPythonEnvironmentState.Unsupported, "Training is available on Linux x64 only.");
+            return TrainingStatus(ManagedPythonEnvironmentState.Unsupported, ManagedPythonReasonCode.TrainingPlatformUnsupported, "Training is available on Linux x64 only.");
         }
 
         var status = _training.GetStatus();
         if (status.IsRunning)
         {
-            return TrainingStatus(ManagedPythonEnvironmentState.Provisioning,
-                status.Phase == TrainingRuntimePhase.Removing ? "The training runtime is being removed." : "The training runtime is being installed.");
+            return status.Phase == TrainingRuntimePhase.Removing
+                ? TrainingStatus(ManagedPythonEnvironmentState.Provisioning, ManagedPythonReasonCode.TrainingRemoving, "The training runtime is being removed.")
+                : TrainingStatus(ManagedPythonEnvironmentState.Provisioning, ManagedPythonReasonCode.TrainingInstalling, "The training runtime is being installed.");
         }
 
         if (status.Phase == TrainingRuntimePhase.Failed)
         {
-            return TrainingStatus(ManagedPythonEnvironmentState.Failed, status.SanitizedError ?? "The last training runtime install failed.");
+            return TrainingStatus(ManagedPythonEnvironmentState.Failed, ManagedPythonReasonCode.TrainingFailed, status.SanitizedError ?? "The last training runtime install failed.");
         }
 
         if (status.Installed is not { } state)
         {
-            return TrainingStatus(ManagedPythonEnvironmentState.NotProvisioned, reason: null);
+            return TrainingStatus(ManagedPythonEnvironmentState.NotProvisioned, ManagedPythonReasonCode.None, reason: null);
         }
 
         var installed = TrainingIdentity(state.PythonVersion, state.LockfileSha256, state.ContractVersion, state.UvVersion);
         if (_training.ResolveInterpreterPath() is null)
         {
             return TrainingStatus(ManagedPythonEnvironmentState.RepairRequired,
+                ManagedPythonReasonCode.TrainingInterpreterMissing,
                 "The training runtime's Python interpreter is missing. Reinstall it from the Training page.",
                 installed);
         }
@@ -148,13 +161,17 @@ public sealed class ManagedPythonStatusService
         if (mismatches.Count > 0)
         {
             return TrainingStatus(ManagedPythonEnvironmentState.UpdateRequired,
+                ManagedPythonReasonCode.TrainingOutOfDate,
                 "The training runtime is out of date. Reinstall it from the Training page.",
                 installed,
                 mismatches);
         }
 
         // Ready with an error: a reinstall failed and the previous runtime stayed in service.
-        return TrainingStatus(ManagedPythonEnvironmentState.Ready, status.SanitizedError, installed);
+        return TrainingStatus(ManagedPythonEnvironmentState.Ready,
+            status.SanitizedError is null ? ManagedPythonReasonCode.None : ManagedPythonReasonCode.TrainingFailed,
+            status.SanitizedError,
+            installed);
     }
 
     private static ManagedPythonEnvironmentIdentity TrainingIdentity(string pythonVersion, string lockfileSha256, int contractVersion, string uvVersion)
@@ -179,6 +196,7 @@ public sealed class ManagedPythonStatusService
     }
 
     private static ManagedPythonEnvironmentStatus TrainingStatus(ManagedPythonEnvironmentState state,
+        ManagedPythonReasonCode reasonCode,
         string? reason,
         ManagedPythonEnvironmentIdentity? installed = null,
         IReadOnlyList<string>? mismatches = null)
@@ -188,6 +206,7 @@ public sealed class ManagedPythonStatusService
             ProfileId = TrainingProfileId,
             State = state,
             Reason = reason,
+            ReasonCode = reasonCode,
             Installed = installed,
             Mismatches = mismatches ?? []
         };

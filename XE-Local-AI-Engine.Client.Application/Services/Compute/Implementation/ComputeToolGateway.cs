@@ -60,6 +60,31 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     /// </summary>
     private const string TempDirectoryName = SandboxIsolatedPaths.TempDirectoryName;
 
+    /// <summary>
+    ///     Windows only: the <c>-c</c> program that creates the <c>TEMP</c>, <c>TMP</c> and <c>LOCALAPPDATA</c> folders, then runs the
+    ///     script from stdin. It leaves no name of its own in <c>__main__</c>; tracebacks still say <c>&lt;stdin&gt;</c>.
+    /// </summary>
+    /// <remarks>
+    ///     Windows rewrites those three variables for every AppContainer child to <c>LOCALAPPDATA\Packages\{identity}\AC[\Temp]</c>, and
+    ///     the OS mints the identity per spawn, so the engine cannot create the folders before the launch. <c>sys.argv[0]</c> is <c>-c</c>.
+    /// </remarks>
+    internal const string WindowsTempBootstrap =
+        "def _xe_run():\n"
+        + "    import os, sys\n"
+        + "    for name in ('TEMP', 'TMP', 'LOCALAPPDATA'):\n"
+        + "        path = os.environ.get(name)\n"
+        + "        if path:\n"
+        + "            try:\n"
+        + "                os.makedirs(path, exist_ok=True)\n"
+        + "            except OSError:\n"
+        + "                pass\n"
+        + "    main = vars(sys.modules['__main__'])\n"
+        + "    del main['_xe_run']\n"
+        + "    exec(compile(sys.stdin.read(), '<stdin>', 'exec'), main)\n"
+        + "_xe_run()\n";
+
+    private int _realpathWarningLogged;
+
     private readonly IComputePythonEnvironment _environment;
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly ILogger<ComputeToolGateway> _logger;
@@ -96,12 +121,25 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     ///     string a model reads. One execution path, two projections — a second entry point is how a refusal reachable
     ///     one way stops being reachable the other.
     /// </summary>
+    /// <remarks>
+    ///     A refusal and a timed-out run carry the <see cref="ToolFailureText" /> prefix, so tool telemetry and the chat record them as
+    ///     failures rather than successes; a script that ran and exited non-zero is still a result.
+    /// </remarks>
     public async Task<string> ExecuteAsync(ComputeRunToolRequest request, CancellationToken cancellationToken = default)
     {
         var outcome = await ExecuteDetailedAsync(request, requireResourceLimits: false, cancellationToken);
-        return outcome.Result is { } result
-            ? FormatResult(result)
-            : outcome.RefusalMessage ?? "run_python rejected.";
+        if (outcome.Result is not { } result)
+        {
+            return ToolFailureText.Format(ToolFailureText.ToolReportedCode, outcome.RefusalMessage ?? "run_python rejected.");
+        }
+
+        return result.Completed ? FormatResult(result) : ToolFailureText.Format(ToolFailureText.TimeoutCode, FormatResult(result));
+    }
+
+    public async Task<ComputeExecutionOutcome?> PreflightAsync(CancellationToken cancellationToken = default)
+    {
+        return await RefuseUnlessComputeEnabledAsync(cancellationToken)
+               ?? await RefuseUnlessSandboxQualifiesAsync(requireResourceLimits: false, cancellationToken);
     }
 
     public async Task<ComputeExecutionOutcome> ExecuteDetailedAsync(ComputeRunToolRequest request,
@@ -111,12 +149,9 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // The node kill-switch, read HERE and nowhere else: a copy in a handler is a property of one CALLER, so a second
-        // caller reaching this gateway would execute code on a node that never opted in. The sentence is the one the model reads.
-        if (!await _runtimeSettings.GetComputeEnabledAsync(cancellationToken))
+        if (await RefuseUnlessComputeEnabledAsync(cancellationToken) is { } disabled)
         {
-            return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.ComputeDisabled,
-                "The Python compute tool is disabled on this node (Compute:Enabled=false).");
+            return disabled;
         }
 
         // Likewise the request validation, and for the same reason: it is now authoritative for every caller rather
@@ -131,33 +166,10 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         // Non-null by the validation immediately above, which is the only thing that establishes it.
         var code = request.Code!;
 
-        // The boundary is ADVERTISED, so it fails closed HERE — before the interpreter is provisioned, before the node identity is read and
-        // before a jail exists — and it subsumes an egress-capability check. See docs/wiki/19-compute-tools.md, "2.1 Execution flow", step 2.
-        if (!_provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation))
+        if (await RefuseUnlessSandboxQualifiesAsync(requireResourceLimits, cancellationToken) is { } refused)
         {
-            _logger.LogWarning(
-                "run_python refused: the '{Provider}' sandbox provider cannot isolate the compute sandbox filesystem on this host, and that boundary is not optional. {Remedy}, or leave Compute:Enabled off.",
-                _provider.ProviderName,
-                SandboxBoundaryRemedy.ForThisHost());
-            return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.NoIsolation,
-                "run_python rejected: this node cannot isolate the compute sandbox filesystem, and the tool never runs a script that could read or write the rest of the machine.");
-        }
-
-        // The ceilings are CAPABILITY-gated (SandboxResourceCeilings.Resolve returns null when the backend cannot impose them), so on a host
-        // with no working systemd user scope a script runs unbounded. Acceptable for an approved call, not for unattended code or under the `high` profile (ADR 0020).
-        var refusedByProfile = SandboxSecurityProfilePolicy.Refuses(SandboxWorkloads.RunPython,
-            _provider.Capabilities,
-            await _runtimeSettings.GetSandboxSecurityProfileAsync(cancellationToken),
-            configRequiresEgressDenial: false);
-        if ((requireResourceLimits && !_provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits)) || refusedByProfile)
-        {
-            _logger.LogWarning("A compute execution requiring enforceable resource ceilings was refused: the '{Provider}' sandbox provider cannot impose CPU, memory or process limits on this host.",
-                _provider.ProviderName);
-            return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.NoResourceLimits,
-                requireResourceLimits
-                    ? "run_python rejected: this node's sandbox cannot enforce CPU, memory and process ceilings, and unattended execution is not run without them."
-                    : $"run_python rejected: the node's {SandboxSecurityProfilePolicy.ProfileOptionKey} requires CPU, memory and process ceilings, and this node's sandbox cannot enforce them. "
-                      + $"An operator can {SandboxSecurityProfilePolicy.Remedy}.");
+            LogSandboxRefusal(refused);
+            return refused;
         }
 
         // One id for everything this invocation owns: its jail and its execution. Killing the jail discards every byte the script
@@ -183,7 +195,21 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             }
 
             await EnsureScratchAsync(handle, cancellationToken);
-            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(handle, runtime.InterpreterPath, code, invocationId, request.TimeoutSeconds), cancellationToken);
+            var command = BuildCommandRequest(handle, runtime, code, invocationId, request.TimeoutSeconds);
+            var result = await _provider.ExecuteAsync(handle, command, cancellationToken);
+            if (OperatingSystem.IsWindows() && StripRealpathWarning(result.StandardError, command.Executable) is { } stripped)
+            {
+                if (Interlocked.Exchange(ref _realpathWarningLogged, 1) == 0)
+                {
+                    _logger.LogDebug("The sandbox tier cannot resolve the real location of the compute interpreter; CPython's warning about it is dropped from run_python stderr.");
+                }
+
+                result = result with
+                {
+                    StandardError = stripped
+                };
+            }
+
             return ComputeExecutionOutcome.Executed(result);
         }
         catch (ComputeEnvironmentException exception)
@@ -206,6 +232,84 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             {
                 await KillQuietlyAsync(handle);
             }
+        }
+    }
+
+    /// <summary>
+    ///     <paramref name="standardError" /> without the one line <c>Failed to find real location of {interpreter}</c>, or
+    ///     <see langword="null" /> when there is no such line. Every other line is kept.
+    /// </summary>
+    /// <remarks>
+    ///     CPython's <c>getpath</c> prints it when it cannot open the launched interpreter for a final-path lookup, which the AppContainer
+    ///     with DACL tier denies; the interpreter still starts correctly. It is noise about our launch, not output of the script.
+    /// </remarks>
+    internal static string? StripRealpathWarning(string standardError, string interpreter)
+    {
+        var warning = "Failed to find real location of " + interpreter;
+        var lines = standardError.Split('\n');
+        var index = Array.FindIndex(lines, line => string.Equals(line.TrimEnd('\r'), warning, StringComparison.OrdinalIgnoreCase));
+        return index < 0 ? null : string.Join('\n', lines.Where((_, position) => position != index));
+    }
+
+    /// <summary>The node kill-switch, read HERE and nowhere else: a copy in a handler is a property of one CALLER.</summary>
+    private async Task<ComputeExecutionOutcome?> RefuseUnlessComputeEnabledAsync(CancellationToken cancellationToken)
+    {
+        return await _runtimeSettings.GetComputeEnabledAsync(cancellationToken)
+            ? null
+            : ComputeExecutionOutcome.Refused(ComputeRefusalCodes.ComputeDisabled,
+                "The Python compute tool is disabled on this node (Compute:Enabled=false).");
+    }
+
+    /// <summary>
+    ///     The filesystem boundary, then the ceilings. Both depend on the node and never on the request, which is what lets
+    ///     <see cref="PreflightAsync" /> run them before a call exists.
+    /// </summary>
+    /// <remarks>
+    ///     The boundary is ADVERTISED, so it fails closed before provisioning, identity and jail, and subsumes an egress check
+    ///     (docs/wiki/19-compute-tools.md, "2.1 Execution flow", step 2). The ceilings are capability-gated, so a host without a working
+    ///     systemd user scope runs a script unbounded: acceptable for an approved call, not for unattended code or under `high` (ADR 0020).
+    /// </remarks>
+    private async Task<ComputeExecutionOutcome?> RefuseUnlessSandboxQualifiesAsync(bool requireResourceLimits, CancellationToken cancellationToken)
+    {
+        var capabilities = _provider.Capabilities;
+        if (!capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation))
+        {
+            var cause = _provider.FilesystemIsolationUnavailableReason;
+            return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.NoIsolation,
+                $"run_python rejected: this node cannot isolate the compute sandbox filesystem{(cause is null ? "" : $" ({cause})")}; "
+                + $"the tool never runs a script that could read or write the rest of the machine. {SandboxBoundaryRemedy.ForFilesystemIsolationCause(cause)}");
+        }
+
+        var refusedByProfile = SandboxSecurityProfilePolicy.Refuses(SandboxWorkloads.RunPython,
+            capabilities,
+            await _runtimeSettings.GetSandboxSecurityProfileAsync(cancellationToken),
+            configRequiresEgressDenial: false);
+        if ((requireResourceLimits && !capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits)) || refusedByProfile)
+        {
+            return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.NoResourceLimits,
+                requireResourceLimits
+                    ? "run_python rejected: this node's sandbox cannot enforce CPU, memory and process ceilings, and unattended execution is not run without them."
+                    : $"run_python rejected: the node's {SandboxSecurityProfilePolicy.ProfileOptionKey} requires CPU, memory and process ceilings, and this node's sandbox cannot enforce them. "
+                      + $"An operator can {SandboxSecurityProfilePolicy.Remedy}.");
+        }
+
+        return null;
+    }
+
+    /// <summary>The operator's log line for a sandbox refusal of a real call; the per-turn preflight stays silent.</summary>
+    private void LogSandboxRefusal(ComputeExecutionOutcome refused)
+    {
+        if (refused.RefusalCode == ComputeRefusalCodes.NoIsolation)
+        {
+            _logger.LogWarning(
+                "run_python refused: the '{Provider}' sandbox provider cannot isolate the compute sandbox filesystem on this host, and that boundary is not optional. {Remedy}, or leave Compute:Enabled off.",
+                _provider.ProviderName,
+                SandboxBoundaryRemedy.ForThisHost());
+        }
+        else
+        {
+            _logger.LogWarning("A compute execution requiring enforceable resource ceilings was refused: the '{Provider}' sandbox provider cannot impose CPU, memory or process limits on this host.",
+                _provider.ProviderName);
         }
     }
 
@@ -291,22 +395,29 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         };
     }
 
-    private SandboxCommandRequest BuildCommandRequest(SandboxHandle handle, string interpreter, string code, string invocationId, int? requestedTimeoutSeconds)
+    private SandboxCommandRequest BuildCommandRequest(SandboxHandle handle, ComputePythonRuntime runtime, string code, string invocationId, int? requestedTimeoutSeconds)
     {
         var timeoutSeconds = requestedTimeoutSeconds is { } requested && requested > 0 && requested < _options.TimeoutSeconds
             ? requested
             : _options.TimeoutSeconds;
+        var environment = BuildEnvironment(handle);
+        if (runtime.BaseInterpreterPath is not null)
+        {
+            // CPython reads this even under -I and takes it as sys.executable and the venv to start from, so sys.prefix stays the venv.
+            environment["__PYVENV_LAUNCHER__"] = runtime.InterpreterPath;
+        }
+
         return new SandboxCommandRequest
         {
             ExecutionId = "compute-" + invocationId,
-            // The venv's own interpreter at its host path, which resolves inside because the venv is bound read-only AT ITS OWN CANONICAL PATH — also why
-            // the tree list must never bind somewhere tidier. No working directory is named: the sandbox's writable tree IS the working directory.
-            Executable = interpreter,
+            // The venv's interpreter at its host path, which resolves inside because the venv and the store are bound read-only AT THEIR OWN
+            // CANONICAL PATHS. On Windows the store's python.exe instead of uv's trampoline (N-60). The sandbox's writable tree is the working directory.
+            Executable = runtime.BaseInterpreterPath ?? runtime.InterpreterPath,
             // `-I` is isolated mode: no PYTHONPATH, no user site-packages, no script-directory import, so the import surface is the provisioned lockfile
-            // closure and not the working directory or the operator's environment. `-` reads the program from stdin, so it never hits disk or argv.
-            Arguments = ["-I", "-"],
+            // closure and not the working directory or the operator's environment. The program arrives on stdin, so it never hits disk or argv.
+            Arguments = OperatingSystem.IsWindows() ? ["-I", "-c", WindowsTempBootstrap] : ["-I", "-"],
             StandardInput = code,
-            Environment = BuildEnvironment(handle),
+            Environment = environment,
             Timeout = TimeSpan.FromSeconds(timeoutSeconds)
         };
     }
@@ -322,7 +433,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     ///     caching somewhere unmetered. The numeric-library thread pinning is NOT restated: it derives from
     ///     <see cref="SandboxCreateRequest.ThreadLimit" />, and naming it twice would let it and the CPU ceiling drift apart.
     /// </remarks>
-    private static IReadOnlyDictionary<string, string> BuildEnvironment(SandboxHandle handle)
+    private static Dictionary<string, string> BuildEnvironment(SandboxHandle handle)
     {
         // The create request asked for Filesystem fail-closed, so a handle without the boundary is a provider that ignored it: refused,
         // never served with a guessed HOME.

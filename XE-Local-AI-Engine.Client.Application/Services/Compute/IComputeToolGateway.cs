@@ -36,4 +36,13 @@ internal interface IComputeToolGateway
     Task<ComputeExecutionOutcome> ExecuteDetailedAsync(ComputeRunToolRequest request,
         bool requireResourceLimits,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The refusal every <c>run_python</c> call would get right now whatever its arguments, or <see langword="null" />.
+    /// </summary>
+    /// <remarks>
+    ///     Runs only the node-level gates of <see cref="ExecuteDetailedAsync" /> (kill-switch, filesystem boundary, profile), never the
+    ///     request validation, provisioning or a jail. A null answer proves nothing: the call itself still passes every gate.
+    /// </remarks>
+    Task<ComputeExecutionOutcome?> PreflightAsync(CancellationToken cancellationToken = default);
 }

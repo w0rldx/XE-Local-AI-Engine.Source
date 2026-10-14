@@ -252,7 +252,9 @@ capability-gated offer. **Every other definition is intersected** down to its `A
 selected agent's offer is never widened beyond its allowed set, except by `ask_user` on an interactive turn
 and by the four work-session state tools inside a work-session step (§5.4). `spawn_subagent`, `run_python` and
 `run_in_agent_home` are opt-in only (they live in the *profile* pool, not the default offer), and a
-non-tool-capable model gets an **empty** offer before per-name gating. In chat that empty offer is not silent: a turn
+non-tool-capable model gets an **empty** offer before per-name gating. The composer's "Local tools" toggle gates only the
+node-wide offer (the Default Assistant and agents without a list), never an agent's own `AllowedToolNames`; the node-wide
+`EnableTools` setting and the model's tool support still gate everything. In chat that empty offer is not silent: a turn
 that asked for tools gets one `ToolsWithheld` notice naming the model ([Chat](05-chat.md)). `web_search` and `web_fetch` join the
 *default* offer only while the node's Web access setting is on, and for a model outside the trust boundary only while
 the `AllowCloudModelWebTools` Privacy switch is also on (MCP tools follow `AllowCloudModelMcpTools` the same way); a

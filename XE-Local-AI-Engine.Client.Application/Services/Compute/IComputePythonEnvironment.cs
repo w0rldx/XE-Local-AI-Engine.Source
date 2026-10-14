@@ -43,6 +43,16 @@ internal sealed class ComputePythonRuntime
     public required string InterpreterPath { get; init; }
 
     /// <summary>
+    ///     Windows only: the store's <c>python.exe</c> that the venv's <c>pyvenv.cfg</c> <c>home</c> names, or <see langword="null" />.
+    /// </summary>
+    /// <remarks>
+    ///     uv's Windows <see cref="InterpreterPath" /> is a trampoline that spawns this one and warns when it cannot enter a temp directory.
+    ///     The gateway runs this one directly with <c>__PYVENV_LAUNCHER__</c> set to <see cref="InterpreterPath" />, which CPython reads even
+    ///     under <c>-I</c>, so <c>sys.prefix</c> stays the venv. Null on Linux, where the venv's <c>bin/python</c> is a plain link.
+    /// </remarks>
+    public string? BaseInterpreterPath { get; init; }
+
+    /// <summary>
     ///     The trees to bind, at their own canonical paths.
     /// </summary>
     /// <remarks>

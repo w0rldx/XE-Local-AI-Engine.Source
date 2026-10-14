@@ -745,6 +745,10 @@ namespace XE_Local_AI_Engine.Client
             await ReconcileStaleScheduledRunsAsync(app.Services);
             ActivateInvocationResumeRegistry(app.Services);
 
+            // FIRST middleware: once the host is stopping, every new request (hub negotiate and WebSocket upgrade included)
+            // gets 503, or a late hub connection holds the shutdown until HostOptions.ShutdownTimeout.
+            app.UseShutdownRequestGuard(app.Lifetime);
+
             app.UseSerilogRequestLogging(ConfigureRequestLogging);
 
             // Central exception handling preserves each typed family contract: Training handlers write their custom JSON shapes, while Benchmark and other

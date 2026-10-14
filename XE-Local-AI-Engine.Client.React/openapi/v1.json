@@ -44939,6 +44939,10 @@
             "type": "string",
             "nullable": true
           },
+          "reasonCode": {
+            "type": "string",
+            "nullable": true
+          },
           "installed": {
             "nullable": true,
             "oneOf": [

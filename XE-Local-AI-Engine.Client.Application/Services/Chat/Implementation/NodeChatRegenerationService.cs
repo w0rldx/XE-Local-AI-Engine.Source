@@ -204,9 +204,8 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
         // singleton dispatcher; it is disposed only AFTER the drain, or a late terminal would read as interrupted.
         using var eventSubscription = new ChatStreamEventForwarder(_eventDispatcher, correlation, requestId, stateChannel.Writer, eventSink, sequence, parts, _timeProvider);
 
-        // The active model, effective agent and orchestration spec were computed up front by ResolveTurnAsync so the
-        // variant could be stamped with the resolved agent's attribution; they are reused here unchanged.
-        var activeModel = resolution.ActiveModel;
+        // The effective agent and orchestration spec were computed up front by ResolveTurnAsync so the variant could be
+        // stamped with the resolved agent's attribution; they are reused here unchanged.
         var resolved = resolution.Resolved;
         var orchestration = resolution.Orchestration;
 
@@ -217,13 +216,10 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
 
         try
         {
-            // Tools are offered only when the client asked, the node tool engine is enabled and the model advertises
-            // the capability; a bound definition then narrows the offer to its allowed set.
-            var enableTools = await _runtimeSettings.GetEnableToolsAsync(cancellationToken);
-            var offerTools = useLocalTools && enableTools && resolution.SupportsTools;
-            var allowedTools = offerTools
-                ? await ResolveAllowedToolsAsync(activeModel, resolution, cancellationToken)
-                : null;
+            // The send path's offer rule, through the same helper, so a rerun offers what the send offered.
+            var offer = await ChatToolOfferResolver.ResolveAsync(useLocalTools, resolution, _runtimeSettings, _localToolOfferProvider, _toolApprovalPolicy, cancellationToken);
+            var offerTools = offer.OfferTools;
+            var allowedTools = offer.AllowedTools;
 
             // An Orchestrator whose orchestration did not compile reruns as a lone single agent, so emit ONE notice
             // naming the typed reason; a Single-kind agent (NotOrchestrated) has none, so the common path is silent.
@@ -243,8 +239,7 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                 await _eventDispatcher.ReportTurnNoticeAsync(playbookWithheldNotice);
             }
 
-            // The same condition ChatToolOfferResolver flags on the send path.
-            if (useLocalTools && enableTools && !resolution.SupportsTools)
+            if (offer.WithheldForCapability)
             {
                 await _eventDispatcher.ReportTurnNoticeAsync(resolution.ToolsWithheldNotice(requestId));
             }
@@ -432,33 +427,6 @@ public sealed class NodeChatRegenerationService : INodeChatRegenerationService
                       ?? throw new NodeChatMessageNotFoundException(originalMessageId);
 
         return variant.Variant;
-    }
-
-    /// <summary>
-    ///     The tools that travel in the runtime package for a turn that offers them.
-    /// </summary>
-    /// <remarks>
-    ///     A bound definition's AllowedTools already ran through the node approval policy in
-    ///     <see cref="ChatTurnResolver" />, custom tools merged there. The unbound fallback builds the raw offer here
-    ///     and applies the SAME tighten-only policy to avoid a bypass; the Permissive floor is identity, so an
-    ///     unconfigured node stays byte-identical to the raw catalog offer. A custom tool on that agentless path is
-    ///     not session-approvable and re-prompts each time.
-    /// </remarks>
-    private async Task<IReadOnlyList<AllowedToolDto>> ResolveAllowedToolsAsync(string? activeModel, ChatTurnResolution resolution, CancellationToken cancellationToken)
-    {
-        if (resolution.Resolved?.AllowedTools is { } resolvedAllowedTools)
-        {
-            return resolvedAllowedTools;
-        }
-
-        var fallbackOffer = await _localToolOfferProvider.GetOfferedToolsAsync(activeModel, resolution.EffectiveModelIsCloud, resolution.EffectiveModelCloudGrants, cancellationToken);
-        return
-        [
-            .. fallbackOffer.Select(tool => tool with
-            {
-                RequiresApproval = _toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
-            })
-        ];
     }
 
     /// <summary>

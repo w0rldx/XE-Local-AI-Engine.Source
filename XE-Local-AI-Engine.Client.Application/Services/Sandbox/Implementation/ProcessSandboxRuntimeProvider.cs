@@ -129,6 +129,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // worker; the suffix stops two providers colliding. Each sandbox is a subdirectory named from the attach key.
         _jailRoot = Path.Combine(SandboxPaths.ContainerRoot, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_jailRoot);
+        // So a later start can delete this root once this process is gone: a killed engine never runs Dispose (SandboxOrphanReaper).
+        SandboxSessionOwner.ForCurrentProcess().WriteTo(_jailRoot);
 
         // The registry owns the live sandbox set rooted at that container directory; this provider reaches every jail
         // through it rather than keeping a second dictionary.
@@ -212,6 +214,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             return capabilities;
         }
     }
+
+    /// <inheritdoc />
+    public string? FilesystemIsolationUnavailableReason =>
+        Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation)
+            ? null
+            : SandboxLifecycleRegistry.FilesystemUnavailableReason(_launcher.Containment);
 
     public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
     {

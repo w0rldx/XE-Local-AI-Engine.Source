@@ -804,6 +804,33 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
+    [Arguments(false, "GetCurrentTime", true)]
+    [Arguments(false, null, false)]
+    [Arguments(true, "GetCurrentTime", false)]
+    [Arguments(true, null, false)]
+    public async Task ResolveAsync_DeclaresToolList_OnlyForANonDefaultAgentNamingTools(bool defaultAssistant, string? allowedTool, bool expected)
+    {
+        // The flag lets an agent's own list bypass the composer toggle, so the Default Assistant, whose offer is the
+        // node-wide one, must never carry it even when its row names tools; nor may an agent with an empty list.
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), AskUserOffer());
+        var definition = CreateDefinition(allowedTools: allowedTool is null ? [] : [allowedTool]);
+        if (defaultAssistant)
+        {
+            definition = definition with
+            {
+                Source = AgentDefinitionSource.Seeded,
+                SeedSlug = AgentDefaults.DefaultAgentSeedSlug
+            };
+        }
+
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel);
+
+        AssertEx.Equal(expected, AssertEx.NotNull(resolved).DeclaresToolList);
+    }
+
+    [Test]
     public async Task ResolveAsync_WhenBoundAgentAllowsNoTools_StillResolvesAskUser()
     {
         // THE seam test for the bound-agent path. An agent whose AllowedToolNames is empty intersects the offer to

@@ -3,7 +3,10 @@ namespace XE_Local_AI_Engine.AI.Agent.Tests.Tools;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -228,6 +231,117 @@ public sealed class InvocationToolResolverTests
     private static AITool Wrapped(string name)
     {
         return new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string input) => input, name));
+    }
+
+    [Test]
+    public async Task ResolveForAgentTurnAsync_WhenThePreflightRefuses_DropsTheApprovalWrap_AndTheCallAnswersTheRefusalWithoutRunningTheHandler()
+    {
+        var handler = new PreflightedHandler { Refusal = "run_python rejected: compute is off." };
+        var registry = PreflightRegistry(handler);
+
+        var resolved = await ResolveForTurnAsync(registry);
+
+        var function = AssertEx.NotNull(resolved.Single() as AIFunction);
+        AssertEx.False(function is ApprovalRequiredAIFunction, "no approval card for a call the node refuses whatever its arguments");
+        var result = AssertEx.NotNull(await function.InvokeAsync(new AIFunctionArguments { ["code"] = "print(1)" }) as string);
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(result), "the refusal is recorded as a failed call");
+        AssertEx.Contains(result, "compute is off");
+        AssertEx.Equal(expected: 0, handler.Executions, "the approval-free variant never reaches the handler");
+    }
+
+    [Test]
+    public async Task ResolveForAgentTurnAsync_WhenThePreflightPasses_KeepsTheApprovalWrap()
+    {
+        var registry = PreflightRegistry(new PreflightedHandler());
+
+        var resolved = await ResolveForTurnAsync(registry);
+
+        AssertEx.True(resolved.Single() is ApprovalRequiredAIFunction, "a call that could run still needs a person's approval");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WithoutThePerTurnPreflight_KeepsTheApprovalWrap_EvenWhenItWouldRefuse()
+    {
+        var registry = PreflightRegistry(new PreflightedHandler { Refusal = "refused" });
+
+        var resolved = await InvocationToolResolver.ResolveAsync(RunPythonOffer(),
+            new FakeToolRegistry(),
+            registry,
+            new FakeMcpToolRegistry(),
+            new FakeCustomToolCatalog(),
+            NullLogger.Instance);
+
+        AssertEx.True(resolved.Single() is ApprovalRequiredAIFunction, "only an agent turn runs the preflight; every other resolver keeps the wrap");
+    }
+
+    [Test]
+    public async Task ResolveForAgentTurnAsync_EvaluatesThePreflightOnEveryResolution()
+    {
+        var handler = new PreflightedHandler { Refusal = "refused" };
+        var registry = PreflightRegistry(handler);
+
+        var first = await ResolveForTurnAsync(registry);
+        handler.Refusal = null;
+        var second = await ResolveForTurnAsync(registry);
+
+        AssertEx.False(first.Single() is ApprovalRequiredAIFunction);
+        AssertEx.True(second.Single() is ApprovalRequiredAIFunction, "a node that can run the tool again asks for approval on the next turn");
+    }
+
+    [Test]
+    public async Task RefusingVariant_WhenTheNodeCanRunTheToolByCallTime_StillDoesNotRunItUnapproved()
+    {
+        var handler = new PreflightedHandler { Refusal = "refused" };
+        var function = AssertEx.NotNull((await ResolveForTurnAsync(PreflightRegistry(handler))).Single() as AIFunction);
+        handler.Refusal = null;
+
+        var result = AssertEx.NotNull(await function.InvokeAsync(new AIFunctionArguments { ["code"] = "print(1)" }) as string);
+
+        AssertEx.Equal(ToolFailureText.ToolReportedCode, ToolFailureText.TryGetCode(result));
+        AssertEx.Contains(result, "needs approval");
+        AssertEx.Equal(expected: 0, handler.Executions, "the change between resolution and call must not turn into an unapproved run");
+    }
+
+    private static AITool[] RunPythonOffer() =>
+    [
+        InvocationToolBridge.CreateOfferPlaceholder(PreflightedHandler.Name, requiresApproval: true)
+    ];
+
+    private static ClientLocalToolRegistry PreflightRegistry(PreflightedHandler handler) =>
+        new([handler], Options.Create(new AgentToolPipelineOptions()));
+
+    private static Task<IList<AITool>> ResolveForTurnAsync(IClientLocalToolRegistry registry) =>
+        InvocationToolResolver.ResolveForAgentTurnAsync(RunPythonOffer(),
+            new FakeToolRegistry(),
+            registry,
+            new FakeMcpToolRegistry(),
+            new FakeCustomToolCatalog(),
+            NullLogger.Instance);
+
+    /// <summary>An approval-gated handler whose preflight answer a test sets, counting how often the handler itself ran.</summary>
+    private sealed class PreflightedHandler : IClientLocalToolHandler, IClientLocalToolPreflight
+    {
+        public const string Name = "run_python";
+
+        public string? Refusal { get; set; }
+
+        public int Executions { get; private set; }
+
+        public string ToolName => Name;
+
+        public string Description => "Runs Python.";
+
+        public string ParameterSchema => """{"type":"object","properties":{"code":{"type":"string"}},"required":["code"]}""";
+
+        public bool RequiresApproval => true;
+
+        public Task<string> ExecuteAsync(string jsonArguments, CancellationToken cancellationToken = default)
+        {
+            Executions++;
+            return Task.FromResult("ran");
+        }
+
+        public ValueTask<string?> PreflightAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Refusal);
     }
 
     private static IList<AITool> Resolve(IReadOnlyList<AITool> offered,

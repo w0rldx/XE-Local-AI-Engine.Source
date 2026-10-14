@@ -5062,6 +5062,7 @@ export const zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentResp
 	profileId: z.string(),
 	state: z.string(),
 	reason: z.string().nullish(),
+	reasonCode: z.string().nullish(),
 	installed: zXeLocalAiEngineClientEndpointsPythonV1ManagedPythonEnvironmentIdentityResponse.nullish(),
 	mismatches: z.array(z.string()),
 });

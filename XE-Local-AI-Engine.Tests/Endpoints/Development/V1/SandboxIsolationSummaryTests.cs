@@ -429,6 +429,12 @@ public sealed class SandboxIsolationSummaryTests
             AssertEx.Equal("process", summary.Backend);
             AssertEx.Equal(SandboxContainment.ExecutionPreviewsDisabledReason, summary.FilesystemIsolationUnavailableReason);
         }
+
+        // The provider names the same cause to a refusal (N-62), and nothing while it can isolate.
+        AssertEx.True(string.Equals(previewsEnabled ? null : SandboxContainment.ExecutionPreviewsDisabledReason,
+                provider.FilesystemIsolationUnavailableReason,
+                StringComparison.Ordinal),
+            $"unexpected cause: {provider.FilesystemIsolationUnavailableReason}");
     }
 
     /// <summary>

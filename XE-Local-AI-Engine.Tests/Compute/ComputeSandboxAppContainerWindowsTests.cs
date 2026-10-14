@@ -69,14 +69,24 @@ public sealed class ComputeSandboxAppContainerWindowsTests
             // uv's real Windows venv has a launcher, not a link: only the pyvenv.cfg route can prove it, which a failed rebuild relies on.
             AssertEx.True(ComputePythonEnvironment.RunsOnStore(runtime.InterpreterPath, toolchain.PythonInstallDirectory),
                 "the provisioned venv must read as running on the shared store, or a failed rebuild cannot keep it in service");
-            var prefixProbe = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(runtime.InterpreterPath)!)!, "xe-write-probe.txt");
+            var venvRoot = Path.GetDirectoryName(Path.GetDirectoryName(runtime.InterpreterPath)!)!;
+            var prefixProbe = Path.Combine(venvRoot, "xe-write-probe.txt");
+            AssertEx.NotNull(runtime.BaseInterpreterPath, "on Windows the gateway must run the store interpreter, not uv's trampoline (N-60)");
 
             var rendered = await CreateGateway(provider, environment).ExecuteAsync(new ComputeRunToolRequest
             {
-                Code = BuildScript(canary, toolchain.PinnedUvExecutable, port)
+                Code = BuildScript(canary, toolchain.PinnedUvExecutable, port) + BuildTempScript(venvRoot, runtime.InterpreterPath)
             });
 
             AssertEx.True(rendered.StartsWith("exit_code: 0\nstdout:\n", StringComparison.Ordinal), rendered);
+            AssertEx.True(rendered.EndsWith("\nstderr:\n", StringComparison.Ordinal), $"the call must leave stderr empty (N-60): {rendered}");
+            AssertEx.Contains(rendered, "PREFIX-IS-VENV True");
+            AssertEx.Contains(rendered, "EXE-IS-LAUNCHER True");
+            AssertEx.Contains(rendered, "EXISTS TEMP True");
+            AssertEx.Contains(rendered, "EXISTS TMP True");
+            AssertEx.Contains(rendered, "EXISTS LOCALAPPDATA True");
+            AssertEx.Contains(rendered, "TEMP WRITABLE");
+
             AssertEx.Contains(rendered, "INTEGRAL x**2");
             AssertEx.Contains(rendered, "SUM 6");
             AssertEx.Contains(rendered, "QUAD 9.0");
@@ -147,6 +157,25 @@ public sealed class ComputeSandboxAppContainerWindowsTests
               print("LOOPBACK CONNECTED")
           except OSError as error:
               print("LOOPBACK DENIED", type(error).__name__)
+          """;
+
+    // Appended to the boundary script: what N-60 broke (TEMP folders that do not exist, the trampoline's stderr line) and what the
+    // store interpreter with __PYVENV_LAUNCHER__ must keep (the venv prefix, the launcher as sys.executable).
+    private static string BuildTempScript(string venvRoot, string launcher) =>
+        $$"""
+
+          for name in ("TEMP", "TMP", "LOCALAPPDATA"):
+              value = os.environ.get(name)
+              print("EXISTS", name, bool(value) and os.path.isdir(value), value)
+
+          print("PREFIX-IS-VENV", os.path.normcase(sys.prefix) == os.path.normcase({{ToPythonLiteral(venvRoot)}}))
+          print("EXE-IS-LAUNCHER", os.path.normcase(sys.executable) == os.path.normcase({{ToPythonLiteral(launcher)}}))
+          try:
+              with open(os.path.join(os.environ["TEMP"], "xe-temp-probe.txt"), "w") as handle:
+                  handle.write("x")
+              print("TEMP WRITABLE")
+          except (OSError, KeyError) as error:
+              print("TEMP DENIED", type(error).__name__)
           """;
 
     private static ComputeToolGateway CreateGateway(IAgentSandboxRuntimeProvider provider, IComputePythonEnvironment environment) =>

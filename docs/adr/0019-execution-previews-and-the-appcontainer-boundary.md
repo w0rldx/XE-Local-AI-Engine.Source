@@ -1,7 +1,8 @@
 # ADR 0019: Preview sandbox mechanisms are operator-enabled, and on Windows the AppContainer boundary satisfies the filesystem floor
 
 - **Status:** Accepted (2026-10-07) — drafted with the S2b slice, completed with the MXC integration slice (S3). Windows live
-  evidence: tester rounds 5, 6 and 7 of 2026-10-12/13 (see "Evidence (2026-10-13)"); `run_python` on Windows is still owed.
+  evidence: tester rounds 5, 6 and 7 of 2026-10-12/13 (see "Evidence (2026-10-13)") and the `run_python` round of 2026-10-14 (see
+  "Evidence (2026-10-14)").
   Amended 2026-10-11: Win32k is allowed inside the boundary (see "Amendment (2026-10-11)").
 - **Date:** 2026-10-07
 - **Scope:** How a sandbox launch MECHANISM's maturity is recorded, who may enable a Preview mechanism, and what the
@@ -52,7 +53,8 @@ does not do.
 5. **Callers compose paths from the sandbox they were given, not from constants.** `SandboxIsolatedPaths` is a record
    carried on `SandboxHandle.IsolatedPaths`: `Posix` under bubblewrap, the jail's own host paths under the AppContainer
    boundary. `ComputeToolGateway` and `SandboxedMcpStdioTransport` set `HOME`, `TMPDIR`, `TMP`, `TEMP` from it (on
-   Windows also `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, pointed at the jail home). An isolated handle without paths
+   Windows also `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, inside the jail and existing: the engine creates the
+   `TEMP`/`TMP`/`LOCALAPPDATA` folders the OS rewrites them to, see "Evidence (2026-10-14)"). An isolated handle without paths
    is a provider bug and is refused, never guessed.
 6. **A Preview-served role is never reported as `Isolated`.** The capability summary reports `Level = "PreviewIsolated"`,
    `Maturity = "Preview"` and `Backend = "appcontainer"`; with previews off, a measured boundary reports the role
@@ -126,10 +128,8 @@ does not do.
 
 ## Still owed
 
-- `run_python` on Windows (2026-10-14): code complete and CI-proven on the windows-2025 runner by
-  `ComputeSandboxAppContainerWindowsTests` in the `windows-sandbox` job (it provisions the real compute venv and runs a
-  script under the boundary). The live Windows round under the boundary is still owed and gates the merge. No CPU, memory
-  or process ceiling applies there (Q3); the timeout is the only bound.
+Nothing for `run_python` on Windows: the live round ran on 2026-10-14 (see "Evidence (2026-10-14)"). No CPU, memory or
+process ceiling applies there (Q3); the timeout is the only bound.
 
 ## Evidence (2026-10-13)
 
@@ -148,6 +148,26 @@ and no AppContainer ACE on the system or a data drive, and the next start logged
 blocked on stdin. Node, CPython, PowerShell 7, Windows PowerShell 5.1, .NET 10 and .NET Framework servers start and connect,
 in parallel, under the amended policy (round-5 evidence above). Reports: the plan folder's `REPORT-5.md`, `REPORT-6.md`,
 `REPORT-7.md` (git-ignored, the record of the rounds).
+
+## Evidence (2026-10-14): `run_python` under the boundary
+
+The live round that gated `run_python` on Windows ran on build `1.0.0-rc.2.dev.20261014.110` (develop at 2a75d8528), Windows 11
+25H2 build 26200.9711 (UBR 9711), host preparation applied, tier `BaseContainer`, mechanism `mxc-processcontainer`, maturity
+Preview, profile Low, previews on. Proven: the canary, the engine database and the profile listing are denied; `HOME`,
+`USERPROFILE`, `TEMP`, `APPDATA` and `LOCALAPPDATA` lie inside the jail; the venv prefix is read-only; the jail is writable;
+loopback and HTTPS are denied. No AppContainer ACE stayed on the canary and every jail was removed after its call. The first
+call provisioned uv, CPython 3.13.15 and numpy, scipy and sympy in about 47 s; the timeout is 30.0 s and covers execution only. A
+forced engine kill left no python child and no ACE, and the next start logged exactly one residue sweep. Repair, Remove, the
+busy 409, the High-profile refusal and the previews-off refusal behaved as specified. Two chats on one local model queue, and two
+tool calls in one turn run serially.
+
+One deviation: `TEMP`, `TMP` and `LOCALAPPDATA` pointed into the jail but at folders that did not exist, because Windows rewrites
+those three variables for every AppContainer or BaseContainer child to `<LOCALAPPDATA of the block>\Packages\<OS-minted
+identity>\AC[\Temp]`, and uv's venv launcher printed `warning: Failed to set cwd to temp dir` on every result. The fix: on
+Windows the engine launches the store interpreter, at the resolved target of the `pyvenv.cfg` `home=` directory (a linked alias fails CPython's realpath inside the boundary), with `__PYVENV_LAUNCHER__` (what the venv launcher did itself) and a
+Windows-only `-c` bootstrap creates those folders before running the script read from stdin. Tracebacks still say `<stdin>`;
+`sys.argv[0]` is `-c` on Windows, and `-I -` stays on Linux. On the AppContainer-plus-DACL tier (the CI runner, not the BaseContainer tier) CPython's start-up realpath of its own executable is denied whatever launched it, so `ComputeToolGateway.StripRealpathWarning` drops exactly that one stderr line, and the Windows CI class asserts the stderr is empty afterwards. Report: `REPORT-110.md` in the git-ignored plan folder
+`Plans/run-python-windows-2026-10-14/`.
 
 ## Amendment (2026-10-11): Win32k is allowed inside the boundary
 

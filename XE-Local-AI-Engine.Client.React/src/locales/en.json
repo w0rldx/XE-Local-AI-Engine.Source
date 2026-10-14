@@ -2462,9 +2462,24 @@
 				"uvPresent": "Installed",
 				"uvMissing": "Not downloaded yet",
 				"uvUnsupported": "Not available on this platform",
-				"unsupportedReasons": {
-					"trainingLinuxX64Only": "Training is available on Linux x64 only.",
-					"computePlatformUnsupported": "The Python compute tool is available on Linux x64 and Windows x64 only."
+				"removing": "Removing",
+				"reasons": {
+					"PlatformUnsupported": "The Python compute tool is available on Linux x64 and Windows x64 only.",
+					"ComputeDisabled": "The Python compute tool is disabled on this node (Compute:Enabled=false).",
+					"ExecutionPreviewsDisabled": "The Python compute tool needs execution previews turned on. An operator can turn them on in the Sandbox & isolation section of Node settings.",
+					"Provisioning": "The compute runtime is being provisioned.",
+					"Removing": "The compute runtime is being removed.",
+					"LockfileMissing": "The pinned compute runtime lockfile is missing from this installation.",
+					"InterpreterMissing": "The compute runtime's Python interpreter is missing.",
+					"RecordUnreadable": "The compute runtime's state record is unreadable.",
+					"IncompleteProvision": "An interrupted provision left an incomplete compute runtime.",
+					"UpdateRequired": "The compute runtime is out of date and is rebuilt on next use.",
+					"OlderBuild": "The compute runtime was provisioned by an older build and is rebuilt on next use.",
+					"TrainingPlatformUnsupported": "Training is available on Linux x64 only.",
+					"TrainingInstalling": "The training runtime is being installed.",
+					"TrainingRemoving": "The training runtime is being removed.",
+					"TrainingInterpreterMissing": "The training runtime's Python interpreter is missing. Reinstall it from the Training page.",
+					"TrainingOutOfDate": "The training runtime is out of date. Reinstall it from the Training page."
 				},
 				"pythonInstallsTitle": "Installed Python interpreters",
 				"noPythonInstalls": "None installed yet.",

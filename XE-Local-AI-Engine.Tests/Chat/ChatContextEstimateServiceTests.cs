@@ -151,6 +151,74 @@ public sealed class ChatContextEstimateServiceTests
     }
 
     [Test]
+    public async Task Estimate_WithLocalToolsOff_StillChargesAnAgentsOwnToolList()
+    {
+        // An agent naming its own tools is offered them whatever the toggle says, so the estimate charges them too.
+        var agentId = Guid.NewGuid();
+        var own = CreateTool("run_python");
+        var harness = new Harness(own, CreateTool("read_file"));
+        harness.AgentResolver.ResolveAsync(agentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+               .Returns(new ResolvedAgentRuntime("Agent persona.", [own], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Mathematician",
+                   DeclaresToolList: true));
+
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = LocalModel,
+            AgentId = agentId,
+            UseLocalTools = false
+        }));
+
+        AssertEx.Equal("run_python", string.Join(",", estimate.Tools.Select(static tool => tool.Name)));
+        AssertEx.Equal(Preamble, AssertEx.NotNull(estimate.Estimated).ToolTemplatePreambleTokens);
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task Estimate_WithLocalToolsOff_ChargesNoToolsForAnAgentWithoutItsOwnList(bool defaultAssistant)
+    {
+        // The Default Assistant resolves to the node-wide offer and an empty-list agent to ask_user alone; neither declares
+        // a list, so the toggle still gates both.
+        var agentId = Guid.NewGuid();
+        AllowedToolDto[] resolvedTools = defaultAssistant ? [CreateTool("get_time"), CreateTool("read_file")] : [CreateTool("ask_user")];
+        var harness = new Harness(CreateTool("get_time"), CreateTool("read_file"));
+        harness.AgentResolver.ResolveAsync(agentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+               .Returns(new ResolvedAgentRuntime("Agent persona.", resolvedTools, ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Agent"));
+
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = LocalModel,
+            AgentId = agentId,
+            UseLocalTools = false
+        }));
+
+        AssertEx.Empty(estimate.Tools);
+        AssertEx.Equal(0, AssertEx.NotNull(estimate.Estimated).ToolTemplatePreambleTokens);
+    }
+
+    [Test]
+    public async Task Estimate_WithNodeToolsOff_ChargesNoToolsEvenForAnAgentsOwnList()
+    {
+        // The node-wide EnableTools switch outranks an agent's own list.
+        var agentId = Guid.NewGuid();
+        var own = CreateTool("run_python");
+        var harness = new Harness(enableTools: false, own);
+        harness.AgentResolver.ResolveAsync(agentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+               .Returns(new ResolvedAgentRuntime("Agent persona.", [own], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Mathematician",
+                   DeclaresToolList: true));
+
+        var estimate = AssertEx.NotNull(await harness.Service.EstimateAsync(new ChatContextEstimateRequest
+        {
+            ModelName = LocalModel,
+            AgentId = agentId,
+            UseLocalTools = false
+        }));
+
+        AssertEx.Empty(estimate.Tools);
+        AssertEx.Equal(0, AssertEx.NotNull(estimate.Estimated).ToolSchemaTokens);
+    }
+
+    [Test]
     public async Task Estimate_ForACloudModelWithoutLocalDetails_UsesTheNodeDefaultWindow()
     {
         var harness = new Harness(CreateTool("get_time"));
@@ -318,6 +386,11 @@ public sealed class ChatContextEstimateServiceTests
     private sealed class Harness
     {
         public Harness(params AllowedToolDto[] offered)
+            : this(enableTools: true, offered)
+        {
+        }
+
+        public Harness(bool enableTools, params AllowedToolDto[] offered)
         {
             AgentResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                          .Returns((ResolvedAgentRuntime?)null);
@@ -356,7 +429,7 @@ public sealed class ChatContextEstimateServiceTests
                 defaultAgent,
                 nodeSettings,
                 localDefault,
-                StubNodeRuntimeSettings.Create().WithEnableTools(true).WithDefaultContextTokens(NodeDefaultWindow).Build(),
+                StubNodeRuntimeSettings.Create().WithEnableTools(enableTools).WithDefaultContextTokens(NodeDefaultWindow).Build(),
                 offerProvider,
                 new PermissiveToolApprovalPolicy(),
                 Options.Create(new LocalChatAgentOptions()),

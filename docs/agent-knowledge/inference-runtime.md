@@ -34,17 +34,17 @@ replace fails on Windows). Frozen profiles bypass the fallback; capacity estimat
 
 | # | Gate | Meaning |
 |---|---|---|
-| 1 | `request.UseLocalTools` | per-message toggle |
+| 1 | `request.UseLocalTools` | node-wide offer only; agent list bypasses it |
 | 2 | `enableTools` | node setting |
 | 3 | `resolution.SupportsTools` | model template capability; the `TOOLS` chip |
 | 4 | `AgentHome:ToolCapableModels` | operator allow-list |
 | 5 | agent `AllowedToolNames` | offered ∩ allowed; Default Assistant has none |
 
-**Rule:** walk them in order; gate 3 is capability, gate 4 permission. Gate 4 is read live via `CachedNodeSettingsStore`,
-never captured at DI composition; matching is exact-case at the offer. Use a bound agent for positive tests. Note: gate 4
+**Rule:** walk them in order; 3 is capability, 4 permission. Gate 4 is read live via `CachedNodeSettingsStore`,
+never captured at DI composition; matching is exact-case at the offer. Bound agent for positive tests; gate 4
 auto-admits: `ToolCapableModelRegistrar` adds template-capable GGUFs at startup, on download and on an offer miss
-(wiki 08); an unhealed trim raises `ToolsWithheld` naming it. **Prevents:** a partial offer read
-as a model defect. **Authority:** `CachedNodeSettingsStore`, `ToolCapableModelRegistrar`.
+(wiki 08); an unhealed trim raises `ToolsWithheld` naming it. **Prevents:** a partial offer read as a model bug.
+**Authority:** `CachedNodeSettingsStore`, `ToolCapableModelRegistrar`.
 
 ### Passing all five gates is still not enough — llama.cpp must be able to COMPILE the tool schemas
 

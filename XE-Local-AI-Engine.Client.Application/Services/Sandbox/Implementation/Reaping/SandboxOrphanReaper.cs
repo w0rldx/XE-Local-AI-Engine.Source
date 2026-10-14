@@ -33,6 +33,8 @@ public sealed class SandboxOrphanReaper : IHostedService
     private readonly ISandboxScopeUnitKiller? _scopeKillerOverride;
     private readonly ILogger<SandboxOrphanReaper> _logger;
     private readonly ISandboxMarkerStore _markerStore;
+    private readonly string? _containerRootOverride;
+    private readonly Func<int, DateTime, bool> _isOwnerAlive;
 
     public SandboxOrphanReaper(ISandboxMarkerStore markerStore,
         ISandboxProcessGroupKiller killer,
@@ -42,13 +44,15 @@ public sealed class SandboxOrphanReaper : IHostedService
     {
     }
 
-    // The scope killer is injectable so the sweep's DECISIONS can be tested without a systemd user manager: which unit a live worker
-    // claims, which is an orphan, which name this engine did not generate. Signalling a cgroup is irreversible, so they are asserted.
+    // The scope killer, container root and owner liveness are injectable so the sweep's DECISIONS are tested without a systemd user
+    // manager or a dead engine; signalling a cgroup and deleting a folder are irreversible, so they are asserted.
     internal SandboxOrphanReaper(ISandboxMarkerStore markerStore,
         ISandboxProcessGroupKiller killer,
         ILogger<SandboxOrphanReaper> logger,
         ISandboxContainmentProbe? containmentProbe,
-        ISandboxScopeUnitKiller? scopeKiller)
+        ISandboxScopeUnitKiller? scopeKiller,
+        string? containerRoot = null,
+        Func<int, DateTime, bool>? isOwnerAlive = null)
     {
         ArgumentNullException.ThrowIfNull(markerStore);
         ArgumentNullException.ThrowIfNull(killer);
@@ -60,6 +64,8 @@ public sealed class SandboxOrphanReaper : IHostedService
         // systemctl path and bus address the transient-scope sweep needs.
         _containmentProbe = containmentProbe;
         _scopeKillerOverride = scopeKiller;
+        _containerRootOverride = containerRoot;
+        _isOwnerAlive = isOwnerAlive ?? SandboxSessionOwner.IsAlive;
     }
 
     /// <inheritdoc />
@@ -88,13 +94,14 @@ public sealed class SandboxOrphanReaper : IHostedService
         // whose marker was never written, which a worker killed between `systemd-run` and the marker hitting disk leaves behind.
         var markers = _markerStore.ReadAll();
 
-        var containerRoot = Path.GetFullPath(SandboxPaths.ContainerRoot);
+        var containerRoot = Path.GetFullPath(_containerRootOverride ?? SandboxPaths.ContainerRoot);
         var reapedGroups = 0;
         var reapedScopes = 0;
         var deletedJails = 0;
 
         var scopeKiller = _scopeKillerOverride ?? SandboxScopeUnitKiller.TryCreate(_containmentProbe?.Containment.FilesystemIsolation);
         var liveScopeUnits = new HashSet<string>(StringComparer.Ordinal);
+        var liveJailPaths = new List<string>();
 
         foreach (var (markerId, marker) in markers)
         {
@@ -106,6 +113,12 @@ public sealed class SandboxOrphanReaper : IHostedService
                 {
                     // Remember it: the scope sweep below must not touch a unit that belongs to a worker still running.
                     _ = liveScopeUnits.Add(liveUnit);
+                }
+
+                // And its jail: the session sweep below must not delete the folder holding it.
+                if (!string.IsNullOrWhiteSpace(marker.JailPath))
+                {
+                    liveJailPaths.Add(marker.JailPath);
                 }
 
                 continue;
@@ -135,14 +148,63 @@ public sealed class SandboxOrphanReaper : IHostedService
         }
 
         reapedScopes += await SweepUnreferencedScopesAsync(scopeKiller, liveScopeUnits, cancellationToken);
+        var deletedSessionRoots = SweepDeadSessionRoots(containerRoot, liveJailPaths);
 
-        if (reapedGroups > 0 || reapedScopes > 0 || deletedJails > 0)
+        if (reapedGroups > 0 || reapedScopes > 0 || deletedJails > 0 || deletedSessionRoots > 0)
         {
-            _logger.LogInformation("Reaped {Groups} orphaned sandbox process group(s) and {Scopes} transient scope(s), and removed {Jails} stale jail(s) left by a previous run.",
+            _logger.LogInformation("Reaped {Groups} orphaned sandbox process group(s) and {Scopes} transient scope(s), and removed {Jails} stale jail(s) and {SessionRoots} sandbox session folder(s) left by a previous run.",
                 reapedGroups,
                 reapedScopes,
-                deletedJails);
+                deletedJails,
+                deletedSessionRoots);
         }
+    }
+
+    /// <summary>
+    ///     Deletes each session folder directly under the container root whose <see cref="SandboxSessionOwner" /> names a process that is
+    ///     gone.
+    /// </summary>
+    /// <remarks>
+    ///     Only <c>Dispose</c> removes a session root, which a killed engine never runs, and Windows writes no markers (N-64). A root with no
+    ///     owner record, one holding a live marker's jail, the markers folder and links are always left.
+    /// </remarks>
+    private int SweepDeadSessionRoots(string containerRoot, IReadOnlyList<string> liveJailPaths)
+    {
+        if (!Directory.Exists(containerRoot))
+        {
+            return 0;
+        }
+
+        var markersName = Path.GetFileName(SandboxPaths.MarkersRoot);
+        var deleted = 0;
+        foreach (var directory in new DirectoryInfo(containerRoot).EnumerateDirectories())
+        {
+            if (string.Equals(directory.Name, markersName, StringComparison.OrdinalIgnoreCase)
+                || directory.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                continue;
+            }
+
+            // No owner record proves nothing about who uses the folder (an older build may still run beside this one): never deleted.
+            var dead = SandboxSessionOwner.TryReadFrom(directory.FullName) is { } owner
+                       && !_isOwnerAlive(owner.ProcessId, owner.ProcessStartTimeUtc);
+            if (!dead || liveJailPaths.Any(jail => PathContainment.IsUnderRoot(jail, directory.FullName)))
+            {
+                continue;
+            }
+
+            try
+            {
+                directory.Delete(recursive: true);
+                deleted++;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogDebug(exception, "Could not delete the stale sandbox session folder at {SessionRoot}.", directory.FullName);
+            }
+        }
+
+        return deleted;
     }
 
     /// <summary>Kills every transient scope this engine owns that no LIVE worker claims and that is old enough to be one.</summary>

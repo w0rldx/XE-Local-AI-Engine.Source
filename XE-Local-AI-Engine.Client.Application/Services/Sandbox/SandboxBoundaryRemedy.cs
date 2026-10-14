@@ -10,6 +10,20 @@ public static class SandboxBoundaryRemedy
     public static string ForThisHost() =>
         ForHost(OperatingSystem.IsWindows());
 
+    /// <summary>
+    ///     The remedy SENTENCE for a filesystem-isolation refusal whose cause the provider named
+    ///     (<see cref="ISandboxRuntimeProvider.FilesystemIsolationUnavailableReason" />): the previews switch when that is the cause,
+    ///     otherwise <see cref="ForThisHost" />.
+    /// </summary>
+    public static string ForFilesystemIsolationCause(string? cause) =>
+        IsExecutionPreviewsDisabled(cause)
+            ? "An operator can turn on execution previews in the Sandbox & isolation section of Node settings."
+            : ForThisHost() + ".";
+
+    /// <summary>True when <paramref name="cause" /> says only the execution-previews switch is missing.</summary>
+    public static bool IsExecutionPreviewsDisabled(string? cause) =>
+        string.Equals(cause, Implementation.Launch.SandboxContainment.ExecutionPreviewsDisabledReason, StringComparison.Ordinal);
+
     // The platform is a parameter so both wordings are asserted on every host.
     internal static string ForHost(bool windowsHost) =>
         windowsHost

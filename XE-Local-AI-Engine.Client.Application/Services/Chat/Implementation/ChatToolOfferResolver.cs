@@ -7,11 +7,10 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     Resolves whether a send offers tools and, if so, which ones travel in the runtime package.
 /// </summary>
 /// <remarks>
-///     Shared by the send path and the Default Assistant offer read, so the agent form shows the list a turn really
-///     hands the model. Tools are offered only when the client asked, the node tool engine is enabled and the model
-///     advertises the capability. A bound definition narrows the offer to its allowed set (node approval policy already
-///     applied, custom tools merged, in <see cref="ChatTurnResolver" />); the unbound fallback builds the raw offer here
-///     and applies the SAME tighten-only policy, or an unbound turn would bypass a node-wide one.
+///     Shared by send, regenerate, the context estimate and the Default Assistant offer read. Node EnableTools and model
+///     tool support gate every offer; the local-tools toggle gates only the node-wide one, never an agent's own non-empty
+///     list. The unbound fallback applies the same tighten-only approval policy as a bound definition. See
+///     docs/wiki/05-chat.md, "MCP &amp; local tools offered during a chat run".
 /// </remarks>
 internal static class ChatToolOfferResolver
 {
@@ -23,13 +22,14 @@ internal static class ChatToolOfferResolver
         CancellationToken cancellationToken)
     {
         var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken);
-        if (!(useLocalTools && enableTools && resolution.SupportsTools))
+        var toolsRequested = useLocalTools || resolution.Resolved is { DeclaresToolList: true };
+        if (!(toolsRequested && enableTools && resolution.SupportsTools))
         {
             return new ChatToolOffer
             {
                 OfferTools = false,
                 AllowedTools = null,
-                WithheldForCapability = useLocalTools && enableTools && !resolution.SupportsTools
+                WithheldForCapability = toolsRequested && enableTools && !resolution.SupportsTools
             };
         }
 

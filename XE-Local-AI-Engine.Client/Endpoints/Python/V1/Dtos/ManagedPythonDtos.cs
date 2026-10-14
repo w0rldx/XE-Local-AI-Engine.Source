@@ -15,6 +15,10 @@ public sealed class ManagedPythonEnvironmentResponse
     public required string ProfileId { get; init; }
     public required string State { get; init; }
     public string? Reason { get; init; }
+
+    /// <summary>The <c>ManagedPythonReasonCode</c> name of the fixed sentence in <see cref="Reason" />, null when there is no reason; <see cref="Reason" /> stays the fallback text.</summary>
+    public string? ReasonCode { get; init; }
+
     public ManagedPythonEnvironmentIdentityResponse? Installed { get; init; }
     public required IReadOnlyList<string> Mismatches { get; init; }
 }
