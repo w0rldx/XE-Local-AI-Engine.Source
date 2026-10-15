@@ -20,7 +20,11 @@ public sealed record IntegrationTriggerSnapshot
 
     public required IntegrationTargetKind TargetKind { get; init; }
 
-    public required Guid TargetAgentDefinitionId { get; init; }
+    /// <summary>Set exactly when <c>TargetKind</c> is <c>Agent</c>.</summary>
+    public required Guid? TargetAgentDefinitionId { get; init; }
+
+    /// <summary>Set exactly when <c>TargetKind</c> is <c>Graph</c>.</summary>
+    public required Guid? TargetGraphWorkflowDefinitionId { get; init; }
 
     public required IntegrationSessionPolicy SessionPolicy { get; init; }
 
@@ -48,7 +52,11 @@ public sealed class IntegrationTriggerCreateCommand
 
     public required IntegrationTargetKind TargetKind { get; init; }
 
-    public required Guid TargetAgentDefinitionId { get; init; }
+    /// <summary>Set exactly when <c>TargetKind</c> is <c>Agent</c>.</summary>
+    public required Guid? TargetAgentDefinitionId { get; init; }
+
+    /// <summary>Set exactly when <c>TargetKind</c> is <c>Graph</c>.</summary>
+    public required Guid? TargetGraphWorkflowDefinitionId { get; init; }
 
     public required IntegrationSessionPolicy SessionPolicy { get; init; }
 
@@ -71,7 +79,13 @@ public sealed record IntegrationTriggerUpdateCommand
 
     public required bool Enabled { get; init; }
 
-    public required Guid TargetAgentDefinitionId { get; init; }
+    public required IntegrationTargetKind TargetKind { get; init; }
+
+    /// <summary>Set exactly when <c>TargetKind</c> is <c>Agent</c>.</summary>
+    public required Guid? TargetAgentDefinitionId { get; init; }
+
+    /// <summary>Set exactly when <c>TargetKind</c> is <c>Graph</c>.</summary>
+    public required Guid? TargetGraphWorkflowDefinitionId { get; init; }
 
     public required IntegrationSessionPolicy SessionPolicy { get; init; }
 

@@ -21,7 +21,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     gated tool. This is a SINGLETON, because the invocation stack consuming it is, so the scoped, DbContext-backed
 ///     <see cref="ICustomToolStore" /> is read through a fresh scope per call; the executor it captures is itself a singleton.
 /// </remarks>
-internal sealed class CustomToolCatalog : ICustomToolCatalog
+internal sealed class CustomToolCatalog : ICustomToolCatalog, IUnattendedCustomToolCatalog
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly INodeRuntimeSettings _runtimeSettings;
@@ -127,6 +127,38 @@ internal sealed class CustomToolCatalog : ICustomToolCatalog
         return resolved;
     }
 
+    public async Task<IReadOnlyList<UnattendedCustomTool>> ListUnattendedAsync(CancellationToken cancellationToken = default)
+    {
+        if (!await _runtimeSettings.GetCustomToolsEnabledAsync(cancellationToken))
+        {
+            return [];
+        }
+
+        var unattended = new List<UnattendedCustomTool>();
+        var claimed = new HashSet<string>(StringComparer.Ordinal);
+
+        // Fixed is re-checked here although saving refuses the flag on any other mode: a row is what runs, and a
+        // model-shaped argv must never reach an unattended call whatever wrote the row.
+        foreach (var tool in await ListToolsAsync(cancellationToken))
+        {
+            if (!IsOfferable(tool) || !tool.AllowUnattended || tool.Mode != CustomToolMode.Fixed || !claimed.Add(tool.Name)
+                || !_executors.TryGetValue(tool.Kind, out var executor) || !TryBuildSchema(tool, out var schema))
+            {
+                continue;
+            }
+
+            unattended.Add(new UnattendedCustomTool
+            {
+                Record = tool,
+                Executor = executor,
+                ParameterSchema = schema,
+                Category = CategoryFor(tool.Kind)
+            });
+        }
+
+        return unattended;
+    }
+
     // Only an enabled AND server-acknowledged tool is ever offered or resolved — a disabled tool stays authored but dark,
     // and the danger acknowledgement is a hard execution gate, not just an authoring one.
     private static bool IsOfferable(CustomToolRecord tool)
@@ -172,7 +204,7 @@ internal sealed class CustomToolCatalog : ICustomToolCatalog
         AIFunction function = new MetadataToolFunction(tool.Name,
             tool.Description,
             parsedSchema,
-            (jsonArguments, cancellationToken) => executor.ExecuteAsync(tool, jsonArguments, cancellationToken));
+            async (jsonArguments, cancellationToken) => (await executor.ExecuteAsync(tool, jsonArguments, cancellationToken)).Text);
 
         // Strict unknown-property rejection: a custom tool's compiled schema is a closed object that fully enumerates
         // its inputs, so an undeclared key is a hallucination to bounce.

@@ -154,7 +154,7 @@ Module-owned workers worth knowing about, registered alongside their feature rat
 | `DockerSandboxOrphanSweeper` | `AddNodeContainerSandboxExtensions` | remove Development Mode containers orphaned by a previous run of this installation |
 | `ExternalAppStateObserver` | `AddNodeExternalAppsExtensions` | notice that a container the engine believes is running has stopped (see [External Apps](23-external-apps.md)) |
 | `ExternalProviderStartupReconciler` | `AddNodeExternalProvidersExtensions` | one external-provider reconciliation pass at startup, priming the registry snapshot |
-| `IntegrationExecutionCoordinator` | `AddNodeIntegrationsExtensions` | single consumer of the integration accept queue and sole producer of an execution's terminal event |
+| `IntegrationExecutionCoordinator` | `AddNodeIntegrationsExtensions` | single consumer of the integration accept queue and sole producer of an execution's terminal event; runs an agent target itself and, for a graph target, starts the graph run and follows it by polling, cancelling that run whenever the execution ends without it (a fault, a shutdown, or the startup sweep that fails interrupted executions as `restart`) |
 | `ToolCapableModelBackfillService`, `McpServerStartupConnector` | `AddNodeModelCapabilitiesAndMcpExtensions` | back-fill the tool-capable model allow-list from installed models; connect enabled MCP servers once, off the hot path |
 | `TranscriptionSessionLifecycleService` | `AddNodeTranscriptionExtensions` | fail sessions a dead process left `Transcribing`; end live sessions on graceful stop (see [Audio Transcription](24-audio-transcription.md)) |
 | `WhisperCppSourceBuildLifecycle` | `Providers.WhisperCpp` | reconcile managed source-build state before the host is ready; drain an in-flight build on shutdown |
@@ -280,6 +280,27 @@ than hiding a window without a usable restore path. Quit stops only an engine th
 started, never a separately running engine it attached to. The shell's own dialogs and tray menu
 follow the SPA's `i18nextLng` language choice, persisted as `desktop-language.txt` in the data root,
 with the OS UI culture only as the first-run fallback (`DesktopText`).
+
+The **command overlay** (`DesktopCommandWindow`) is a second, small window for typed or dictated
+commands ([ADR 0013](../adr/0013-native-desktop-shell.md), amendment 2026-10-15). It is a
+`DesktopWindow` opened on the SPA's `/command` route, so it shares the main window's origin,
+profile, document policy and navigation guard; it is topmost, borderless (an 8 px strip at the top
+drags it), absent from the taskbar, created on first use and never re-navigated, because the engine
+origin is fixed for the shell's session. Escape, losing focus or a close request hide it; a dialog
+the page itself opens, such as the Linux microphone consent, does not. Every platform opens it from
+the **Command overlay** entry in the main window's menu bar; Windows also lists it in the tray menu.
+On Windows a global hotkey toggles it: `DesktopApplication` registers the chord with `RegisterHotKey`
+on the main window's handle and receives `WM_HOTKEY` through Avalonia's WndProc hook
+(`DesktopWindowsShell.RegisterHotkey`). The native WebView keeps key events from the shell, so while
+the overlay shows Windows also claims a bare Escape the same way and releases it on hide. A chord that
+another program holds is recorded in `desktop.log` and noticed once per start; it never stops the
+shell. Linux registers no hotkey (GNOME on Wayland permits none), and Escape there works only while
+focus is outside the page, so the menu entry and focus loss are its paths. Both preferences sit in the
+data root: `desktop-hotkey.txt` holds the chord (`Ctrl`, `Alt`, `Shift`, `Win` plus `A`–`Z`, `0`–`9`,
+`F1`–`F24` or `Space`; default `Ctrl+Alt+Space`, anything unparsable falls back to it, see
+`DesktopHotkey.Parse`) and `desktop-overlay.txt` holds the last position and size, written on every
+hide (`DesktopOverlayBounds`). A saved position on no current screen falls back to centring. The
+`/command` literal is pinned against the React route tree by `NativeDesktopContractTests`.
 
 For an owned engine, `DesktopParentLifetime` connects before host construction. Parent loss
 requests graceful shutdown with a bounded exit watchdog; `DesktopEngineSession` bounds its

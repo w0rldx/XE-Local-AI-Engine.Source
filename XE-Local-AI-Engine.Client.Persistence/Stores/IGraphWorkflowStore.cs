@@ -19,6 +19,12 @@ public sealed class GraphWorkflowDefinitionSummary
 
     public required GraphWorkflowDefinitionKind Kind { get; init; }
 
+    /// <summary>Whether Tool nodes may run custom tools flagged for unattended use. Defaults to <c>false</c>.</summary>
+    public bool AllowsActions { get; init; }
+
+    /// <summary>Which sources may start a run. Defaults to <c>Manual | Chat</c>.</summary>
+    public GraphWorkflowTriggerSource TriggerSources { get; init; } = GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Chat;
+
     public required int Version { get; init; }
 
     public required long CreatedAtUtc { get; init; }
@@ -47,6 +53,12 @@ public sealed class GraphWorkflowDefinitionSnapshot
     public required int SchemaVersion { get; init; }
 
     public required GraphWorkflowDefinitionKind Kind { get; init; }
+
+    /// <summary>Whether Tool nodes may run custom tools flagged for unattended use. Defaults to <c>false</c>.</summary>
+    public bool AllowsActions { get; init; }
+
+    /// <summary>Which sources may start a run. Defaults to <c>Manual | Chat</c>.</summary>
+    public GraphWorkflowTriggerSource TriggerSources { get; init; } = GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Chat;
 
     public required int Version { get; init; }
 
@@ -192,6 +204,15 @@ public sealed class GraphWorkflowRunSnapshot
 
     /// <summary>The user message that started a chat-bound run.</summary>
     public Guid? TriggerMessageId { get; init; }
+
+    /// <summary>Who started the run. Defaults to <c>Manual</c>, which is what a run from before the column reads as.</summary>
+    public GraphWorkflowTriggerSource TriggerSource { get; init; } = GraphWorkflowTriggerSource.Manual;
+
+    /// <summary>The integration principal that started the run; audit metadata only.</summary>
+    public Guid? PrincipalId { get; init; }
+
+    /// <summary>The prefix of the API key that started the run; audit metadata only.</summary>
+    public string? KeyPrefix { get; init; }
 }
 
 /// <summary>One entry of a run's append-only change log. <see cref="Seq" /> is its order as well as its watermark.</summary>
@@ -284,6 +305,13 @@ public sealed class StartGraphWorkflowRunCommand
     public Guid? ConversationId { get; init; }
 
     public Guid? TriggerMessageId { get; init; }
+
+    /// <summary>Who starts the run. Required, so no start is recorded as Manual by omission.</summary>
+    public required GraphWorkflowTriggerSource TriggerSource { get; init; }
+
+    public Guid? PrincipalId { get; init; }
+
+    public string? KeyPrefix { get; init; }
 }
 
 /// <summary>
@@ -489,6 +517,10 @@ public sealed class CreateGraphWorkflowDefinitionCommand
 
     public GraphWorkflowDefinitionKind Kind { get; init; } = GraphWorkflowDefinitionKind.Standard;
 
+    public bool AllowsActions { get; init; }
+
+    public GraphWorkflowTriggerSource TriggerSources { get; init; } = GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Chat;
+
     public string? Description { get; init; }
 }
 
@@ -521,6 +553,12 @@ public sealed class UpdateGraphWorkflowDefinitionCommand
 
     /// <summary>Derived from the graph like the node count, so it travels with <see cref="GraphJson" />; null leaves the stored kind alone.</summary>
     public GraphWorkflowDefinitionKind? Kind { get; init; }
+
+    /// <summary>An operator setting, independent of the graph; null leaves the stored value alone.</summary>
+    public bool? AllowsActions { get; init; }
+
+    /// <summary>An operator setting, independent of the graph; null leaves the stored value alone.</summary>
+    public GraphWorkflowTriggerSource? TriggerSources { get; init; }
 }
 
 /// <summary>

@@ -3,13 +3,8 @@
  * loud failure when the picked surface came back without an audio track.
  */
 
-import {
-	CaptureError,
-	type CaptureChannel,
-	type CaptureFrame,
-	type CaptureSource,
-} from "@/features/transcription/capture/CaptureSource";
-import { startPcmCapture } from "@/features/transcription/capture/PcmCapture";
+import { CaptureError, type CaptureChannel, type CaptureFrame, type CaptureSource } from "@/core/audio/capture/CaptureSource";
+import { startPcmCapture } from "@/core/audio/capture/PcmCapture";
 
 /**
  * `systemAudio` and `selfBrowserSurface` are Screen Capture options that this TypeScript's `lib.dom` does not

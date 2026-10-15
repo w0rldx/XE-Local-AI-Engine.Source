@@ -9,7 +9,7 @@
 //
 // The Agent and Tool bodies live in `config/` for size alone; every other kind is a handful of controls and stays here.
 
-import { Button, Checkbox, Group, NumberInput, Select, Stack, Switch, Text, Textarea, TextInput } from "@mantine/core";
+import { Button, Checkbox, Group, NumberInput, Select, Stack, Switch, TagsInput, Text, Textarea, TextInput } from "@mantine/core";
 import { IconTrash } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -66,6 +66,8 @@ export interface GraphWorkflowNodeConfigPanelProps {
 	readonly onRename: (to: string) => "ok" | "collision" | "invalid";
 	readonly onRemove: () => void;
 	readonly tools: readonly GraphWorkflowToolResponse[];
+	/** The open definition's `allowsActions`: without it an action tool is offered disabled, with the server's reason. */
+	readonly allowsActions?: boolean;
 	readonly agentOptions: readonly GraphWorkflowAgentOption[];
 	readonly modelOptions: readonly GraphWorkflowModelOption[];
 	readonly llmModelOptions?: readonly GraphWorkflowModelOption[];
@@ -124,6 +126,7 @@ export function GraphWorkflowNodeConfigPanel({
 	onRename,
 	onRemove,
 	tools,
+	allowsActions = false,
 	agentOptions,
 	modelOptions,
 	llmModelOptions = modelOptions,
@@ -220,6 +223,21 @@ export function GraphWorkflowNodeConfigPanel({
 							}}
 							data-testid="gw-node-config-default-input"
 						/>
+						<TagsInput
+							label={t("pages.graphWorkflows.config.aliases", "Aliases")}
+							description={t(
+								"pages.graphWorkflows.config.aliasesHelp",
+								"Phrases that start this workflow from a spoken or typed command, matched ignoring case. Press Enter after each.",
+							)}
+							value={[...node.aliases]}
+							error={errorFor("aliases")}
+							disabled={readOnly}
+							onChange={(next) => {
+								touch("aliases");
+								onChange({ aliases: next });
+							}}
+							data-testid="gw-node-config-aliases"
+						/>
 					</>
 				);
 			case "Agent":
@@ -253,6 +271,7 @@ export function GraphWorkflowNodeConfigPanel({
 						errorFor={errorFor}
 						onTouch={touch}
 						tools={tools}
+						allowsActions={allowsActions}
 						readOnly={readOnly}
 					/>
 				);

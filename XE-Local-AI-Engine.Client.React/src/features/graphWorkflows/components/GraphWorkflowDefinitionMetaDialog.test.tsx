@@ -11,16 +11,30 @@ import { GraphWorkflowDefinitionMetaDialog } from "@/features/graphWorkflows/com
 import en from "@/locales/en.json";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
-type SubmitHandler = (values: { name: string; description: string | null; sampleId: string | null }) => void;
+type SubmitHandler = (values: {
+	name: string;
+	description: string | null;
+	sampleId: string | null;
+	allowsActions: boolean | null;
+	triggerSources: string[] | null;
+}) => void;
 
 const samples = en.pages.graphWorkflows.samples;
 
-function renderDialog(onSubmit: SubmitHandler, initial?: { name: string; description?: string | null }, offerSamples = false) {
+function renderDialog(
+	onSubmit: SubmitHandler,
+	initial?: { name: string; description?: string | null },
+	offerSamples = false,
+	allowsActions?: boolean,
+	triggerSources?: readonly string[],
+) {
 	return renderWithProviders(
 		<GraphWorkflowDefinitionMetaDialog
 			opened={true}
 			initial={initial}
 			offerSamples={offerSamples}
+			allowsActions={allowsActions}
+			triggerSources={triggerSources}
 			title="New workflow"
 			submitLabel="Create"
 			onSubmit={onSubmit}
@@ -54,7 +68,13 @@ describe("GraphWorkflowDefinitionMetaDialog", () => {
 		fireEvent.change(screen.getByTestId("gw-definition-meta-name"), { target: { value: "n".repeat(200) } });
 		fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
 
-		expect(onSubmit).toHaveBeenCalledWith({ name: "n".repeat(200), description: null, sampleId: null });
+		expect(onSubmit).toHaveBeenCalledWith({
+			name: "n".repeat(200),
+			description: null,
+			sampleId: null,
+			allowsActions: null,
+			triggerSources: null,
+		});
 	});
 
 	it("refuses a name past the server's 200-character bound", () => {
@@ -77,7 +97,13 @@ describe("GraphWorkflowDefinitionMetaDialog", () => {
 		fireEvent.change(screen.getByTestId("gw-definition-meta-name"), { target: { value: "  Nightly triage  " } });
 		fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
 
-		expect(onSubmit).toHaveBeenCalledWith({ name: "Nightly triage", description: null, sampleId: null });
+		expect(onSubmit).toHaveBeenCalledWith({
+			name: "Nightly triage",
+			description: null,
+			sampleId: null,
+			allowsActions: null,
+			triggerSources: null,
+		});
 	});
 
 	it("submits the description when one was typed", () => {
@@ -88,7 +114,13 @@ describe("GraphWorkflowDefinitionMetaDialog", () => {
 		fireEvent.change(screen.getByTestId("gw-definition-meta-description"), { target: { value: " Drafts the notes " } });
 		fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
 
-		expect(onSubmit).toHaveBeenCalledWith({ name: "Release notes", description: "Drafts the notes", sampleId: null });
+		expect(onSubmit).toHaveBeenCalledWith({
+			name: "Release notes",
+			description: "Drafts the notes",
+			sampleId: null,
+			allowsActions: null,
+			triggerSources: null,
+		});
 	});
 
 	describe("Start from", () => {
@@ -138,6 +170,8 @@ describe("GraphWorkflowDefinitionMetaDialog", () => {
 				name: samples.triageAndRoute.name,
 				description: samples.triageAndRoute.description,
 				sampleId: "triage-and-route",
+				allowsActions: null,
+				triggerSources: null,
 			});
 		});
 
@@ -165,7 +199,114 @@ describe("GraphWorkflowDefinitionMetaDialog", () => {
 			fireEvent.change(screen.getByTestId("gw-definition-meta-name"), { target: { value: "Mine" } });
 			fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
 
-			expect(onSubmit).toHaveBeenCalledWith({ name: "Mine", description: null, sampleId: null });
+			expect(onSubmit).toHaveBeenCalledWith({
+				name: "Mine",
+				description: null,
+				sampleId: null,
+				allowsActions: null,
+				triggerSources: null,
+			});
+		});
+	});
+
+	describe("Allow actions (ADR 0021)", () => {
+		const definitions = en.pages.graphWorkflows.definitions;
+
+		it("is absent unless the dialog edits a stored definition", () => {
+			renderDialog(vi.fn());
+
+			expect(screen.queryByTestId("gw-definition-meta-allow-actions")).toBeNull();
+		});
+
+		it("warns once switched on and submits the new value", () => {
+			const onSubmit = vi.fn<SubmitHandler>();
+			renderDialog(onSubmit, { name: "Lights" }, false, false);
+
+			expect(screen.queryByTestId("gw-definition-meta-allow-actions-warning")).toBeNull();
+			fireEvent.click(screen.getByTestId("gw-definition-meta-allow-actions"));
+			expect(screen.getByTestId("gw-definition-meta-allow-actions-warning").textContent).toBe(definitions.allowActionsWarning);
+			fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
+
+			expect(onSubmit).toHaveBeenCalledWith({
+				name: "Lights",
+				description: null,
+				sampleId: null,
+				allowsActions: true,
+				triggerSources: null,
+			});
+		});
+
+		it("submits null when the switch was left as stored, so a rename never writes the flag", () => {
+			const onSubmit = vi.fn<SubmitHandler>();
+			renderDialog(onSubmit, { name: "Lights" }, false, true);
+
+			expect((screen.getByTestId("gw-definition-meta-allow-actions") as HTMLInputElement).checked).toBe(true);
+			fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
+
+			expect(onSubmit).toHaveBeenCalledWith({
+				name: "Lights",
+				description: null,
+				sampleId: null,
+				allowsActions: null,
+				triggerSources: null,
+			});
+		});
+	});
+
+	describe("Trigger sources (ADR 0021)", () => {
+		const definitions = en.pages.graphWorkflows.definitions;
+
+		it("is absent unless the dialog edits a stored definition", () => {
+			renderDialog(vi.fn());
+
+			expect(screen.queryByTestId("gw-definition-meta-trigger-sources")).toBeNull();
+		});
+
+		it("checks the stored sources and submits null when they were left alone", () => {
+			const onSubmit = vi.fn<SubmitHandler>();
+			renderDialog(onSubmit, { name: "Lights" }, false, false, ["Manual", "Chat"]);
+
+			expect((screen.getByTestId("gw-definition-meta-trigger-source-Manual") as HTMLInputElement).checked).toBe(true);
+			expect((screen.getByTestId("gw-definition-meta-trigger-source-Chat") as HTMLInputElement).checked).toBe(true);
+			expect((screen.getByTestId("gw-definition-meta-trigger-source-Schedule") as HTMLInputElement).checked).toBe(false);
+			fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
+
+			expect(onSubmit).toHaveBeenCalledWith({
+				name: "Lights",
+				description: null,
+				sampleId: null,
+				allowsActions: null,
+				triggerSources: null,
+			});
+		});
+
+		it("submits a changed set in declaration order", () => {
+			const onSubmit = vi.fn<SubmitHandler>();
+			renderDialog(onSubmit, { name: "Lights" }, false, false, ["Manual", "Chat"]);
+
+			fireEvent.click(screen.getByTestId("gw-definition-meta-trigger-source-Intent"));
+			fireEvent.click(screen.getByTestId("gw-definition-meta-trigger-source-Chat"));
+			fireEvent.click(screen.getByTestId("gw-definition-meta-trigger-source-Schedule"));
+			fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
+
+			expect(onSubmit).toHaveBeenCalledWith({
+				name: "Lights",
+				description: null,
+				sampleId: null,
+				allowsActions: null,
+				triggerSources: ["Manual", "Schedule", "Intent"],
+			});
+		});
+
+		it("refuses an empty set and submits nothing", () => {
+			const onSubmit = vi.fn<SubmitHandler>();
+			renderDialog(onSubmit, { name: "Lights" }, false, false, ["Manual"]);
+
+			fireEvent.click(screen.getByTestId("gw-definition-meta-trigger-source-Manual"));
+			fireEvent.click(screen.getByTestId("gw-definition-meta-submit"));
+
+			expect(screen.getByText(definitions.triggerSourcesRequired)).toBeTruthy();
+			expect(onSubmit).not.toHaveBeenCalled();
 		});
 	});
 });

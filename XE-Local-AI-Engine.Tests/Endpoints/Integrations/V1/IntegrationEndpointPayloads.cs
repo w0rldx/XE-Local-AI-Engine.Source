@@ -48,6 +48,36 @@ internal static class IntegrationEndpointPayloads
             acceptedInputKinds = acceptedInputKinds ?? ["text", "json"]
         };
 
+    /// <summary>A graph-target body; <paramref name="targetAgentDefinitionId" /> is for the both-ids probe.</summary>
+    public static object GraphTriggerBody(string name, Guid? targetGraphWorkflowDefinitionId, Guid? targetAgentDefinitionId = null) =>
+        new
+        {
+            name,
+            displayName = "Lights on",
+            enabled = true,
+            targetKind = "Graph",
+            targetAgentDefinitionId,
+            targetGraphWorkflowDefinitionId,
+            sessionPolicy = "PerInvocation",
+            acceptedInputKinds = new[] { "text" }
+        };
+
+    /// <summary>Seeds a real graph workflow definition, because the trigger service probes it like an agent.</summary>
+    public static async Task<Guid> SeedGraphAsync(TestServerWebAppFactory factory, string name)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+
+        using var scope = factory.Services.CreateScope();
+        var definition = await scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>().CreateDefinitionAsync(new CreateGraphWorkflowDefinitionCommand
+        {
+            DefinitionId = Guid.NewGuid(),
+            Name = $"{name} {Guid.NewGuid():N}",
+            GraphJson = "{}",
+            NodeCount = 0
+        });
+        return definition.Id;
+    }
+
     public static object UpdateBody(Guid targetAgentDefinitionId,
         long expectedVersion,
         string displayName = "Sensor feed",
@@ -184,7 +214,8 @@ internal sealed record IntegrationTriggerBody(
     string? Description,
     bool Enabled,
     string TargetKind,
-    Guid TargetAgentDefinitionId,
+    Guid? TargetAgentDefinitionId,
+    Guid? TargetGraphWorkflowDefinitionId,
     string SessionPolicy,
     IReadOnlyList<string> AcceptedInputKinds,
     long CreatedAtUtc,

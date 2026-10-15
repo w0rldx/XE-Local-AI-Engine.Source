@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows.Decisions;
 
 /// <summary>
@@ -51,6 +52,11 @@ internal sealed class GraphWorkflowGraph
 
     private const int MaxDecisionLabelLength = 64;
 
+    /// <summary>The alias bounds of a <c>Start</c> node.</summary>
+    private const int MaxAliases = 32;
+
+    private const int MaxAliasLength = 120;
+
     /// <summary>The members a graph-level <c>chat</c> block may declare.</summary>
     private static readonly string[] ChatMembers = ["acceptsAttachments", "requireRerunConfirmation"];
 
@@ -61,7 +67,7 @@ internal sealed class GraphWorkflowGraph
     /// </summary>
     private static readonly Dictionary<GraphWorkflowNodeKind, string[]> ConfigMembers = new()
     {
-        [GraphWorkflowNodeKind.Start] = ["inputSchema", "defaultInput"],
+        [GraphWorkflowNodeKind.Start] = ["inputSchema", "defaultInput", "aliases"],
         [GraphWorkflowNodeKind.Agent] = ["agentDefinitionId", "instructions", "model", "reasoningEffort", "responseJsonSchema", "includeUpstreamOutputs", "publishToChat", "includeAttachments"],
         [GraphWorkflowNodeKind.LlmCall] = ["model", "systemPrompt", "prompt", "inputBindings", "reasoningEffort", "responseJsonSchema", "samplingOptions", "publishToChat", "includeAttachments"],
         [GraphWorkflowNodeKind.Tool] = ["toolName", "arguments", "argumentBindings", "allowedUrls"],
@@ -473,18 +479,36 @@ internal sealed class GraphWorkflowGraph
         List<GraphWorkflowValidationError> errors)
     {
         var isWorkNode = kind is GraphWorkflowNodeKind.Agent or GraphWorkflowNodeKind.Tool or GraphWorkflowNodeKind.LlmCall or GraphWorkflowNodeKind.DecisionModel;
+        var label = OptionalString(element, "label") ?? nodeKey;
+        var joinPolicy = Collect(errors, nodeKey, () => OptionalEnum(element, "joinPolicy", nodeKey, GraphWorkflowJoinPolicy.All), GraphWorkflowJoinPolicy.All);
+        var maxAttempts = Collect(errors, nodeKey, () => OptionalPositiveInt(element, "maxAttempts", nodeKey), null) ?? (isWorkNode ? DefaultWorkNodeMaxAttempts : 1);
+        var timeoutSeconds = Collect(errors, nodeKey, () => OptionalPositiveInt(element, "timeoutSeconds", nodeKey), null);
+        var position = Collect(errors, nodeKey, () => ParsePosition(element, nodeKey), null);
+        var config = Collect<GraphWorkflowNodeConfig>(errors, nodeKey, () => ParseConfig(element, nodeKey, kind, graphKind, chat), new GraphWorkflowEmptyConfig());
         return new GraphWorkflowGraphNode
         {
             NodeKey = nodeKey,
             Kind = kind,
-            Label = OptionalString(element, "label") ?? nodeKey,
-            JoinPolicy = Collect(errors, nodeKey, () => OptionalEnum(element, "joinPolicy", nodeKey, GraphWorkflowJoinPolicy.All), GraphWorkflowJoinPolicy.All),
-            MaxAttempts = Collect(errors, nodeKey, () => OptionalPositiveInt(element, "maxAttempts", nodeKey), null) ?? (isWorkNode ? DefaultWorkNodeMaxAttempts : 1),
-            TimeoutSeconds = Collect(errors, nodeKey, () => OptionalPositiveInt(element, "timeoutSeconds", nodeKey), null),
-            Position = Collect(errors, nodeKey, () => ParsePosition(element, nodeKey), null),
-            Config = Collect<GraphWorkflowNodeConfig>(errors, nodeKey, () => ParseConfig(element, nodeKey, kind, graphKind, chat), new GraphWorkflowEmptyConfig())
+            Label = label,
+            JoinPolicy = joinPolicy,
+            MaxAttempts = NamesCustomTool(config) ? 1 : maxAttempts,
+            TimeoutSeconds = timeoutSeconds,
+            Position = position,
+            Config = config
         };
     }
+
+    /// <summary>
+    ///     True for a Tool node naming a custom tool, the only kind of tool that can be an action (ADR 0021): such a node
+    ///     gets ONE attempt whatever it declares, so neither the retry stage nor a restart re-fires a side effect.
+    /// </summary>
+    /// <remarks>
+    ///     Decided from the name, not the catalog, so every reader of a pinned run graph agrees without a store read and a
+    ///     tool re-flagged mid-run cannot change it. Every custom tool name carries the prefix (<c>CustomToolValidation</c>),
+    ///     and a custom tool that is not an action is refused by the tool gate, so one attempt costs it nothing.
+    /// </remarks>
+    private static bool NamesCustomTool(GraphWorkflowNodeConfig config) =>
+        config is GraphWorkflowToolConfig tool && tool.ToolName.StartsWith(CustomToolValidation.ToolNamePrefix, StringComparison.Ordinal);
 
     /// <summary>
     ///     Optional, and shape-checked when present, so a malformed one is refused at save rather than at draw time. A
@@ -540,7 +564,10 @@ internal sealed class GraphWorkflowGraph
         var owner = $"the config on node '{nodeKey}'";
         return kind switch
         {
-            GraphWorkflowNodeKind.Start => new GraphWorkflowStartConfig(OptionalElement(config, "inputSchema"), OptionalElement(config, "defaultInput")),
+            GraphWorkflowNodeKind.Start => new GraphWorkflowStartConfig(OptionalElement(config, "inputSchema"), OptionalElement(config, "defaultInput"))
+            {
+                Aliases = ParseAliases(config, nodeKey)
+            },
             GraphWorkflowNodeKind.Agent => new GraphWorkflowAgentConfig(OptionalGuid(config, "agentDefinitionId", nodeKey),
                 RequiredString(config, "instructions", owner),
                 TrimmedOptionalString(config, "model"),
@@ -612,6 +639,45 @@ internal sealed class GraphWorkflowGraph
         return !include || chat is { AcceptsAttachments: true }
             ? include
             : throw new GraphWorkflowValidationException($"Node '{nodeKey}' sets 'includeAttachments', but the graph does not accept attachments ('chat.acceptsAttachments').");
+    }
+
+    /// <summary>
+    ///     A <c>Start</c> node's intent aliases: absent, or 1 to 32 trimmed strings of 1 to 120 characters, distinct once
+    ///     normalised the way <see cref="GraphWorkflowIntentService.Normalize" /> matches them.
+    /// </summary>
+    private static IReadOnlyList<string> ParseAliases(JsonElement config, string nodeKey)
+    {
+        if (!config.TryGetProperty("aliases", out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return [];
+        }
+
+        if (value.ValueKind != JsonValueKind.Array)
+        {
+            throw new GraphWorkflowValidationException($"The 'aliases' on node '{nodeKey}' must be an array of strings.");
+        }
+
+        var aliases = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in value.EnumerateArray())
+        {
+            var alias = entry.ValueKind == JsonValueKind.String ? entry.GetString()?.Trim() : null;
+            if (string.IsNullOrEmpty(alias) || alias.Length > MaxAliasLength || GraphWorkflowIntentService.Normalize(alias).Length == 0)
+            {
+                throw new GraphWorkflowValidationException($"Node '{nodeKey}' declares an alias that is not a string of 1 to {MaxAliasLength} characters with words in it.");
+            }
+
+            if (!seen.Add(GraphWorkflowIntentService.Normalize(alias)))
+            {
+                throw new GraphWorkflowValidationException($"Node '{nodeKey}' declares the alias '{alias}' twice.");
+            }
+
+            aliases.Add(alias);
+        }
+
+        return aliases.Count is >= 1 and <= MaxAliases
+            ? aliases
+            : throw new GraphWorkflowValidationException($"Node '{nodeKey}' declares {aliases.Count} alias(es); a Start node takes between 1 and {MaxAliases}, or none at all.");
     }
 
     /// <summary>

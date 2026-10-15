@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Integrations;
 
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -10,7 +11,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Trigger CRUD, and the two checks a FluentValidation rule cannot make: the target agent has to exist, and it has
@@ -107,7 +110,9 @@ public sealed class IntegrationTriggerServiceTests
             DisplayName = "Sensor feed",
             Description = null,
             Enabled = true,
+            TargetKind = IntegrationTargetKind.Agent,
             TargetAgentDefinitionId = orchestrator,
+            TargetGraphWorkflowDefinitionId = null,
             SessionPolicy = IntegrationSessionPolicy.PerInvocation,
             AcceptedInputKinds = IntegrationInputKinds.Text
         });
@@ -153,7 +158,9 @@ public sealed class IntegrationTriggerServiceTests
                 DisplayName = "Renamed label",
                 Description = "notes",
                 Enabled = false,
+                TargetKind = IntegrationTargetKind.Agent,
                 TargetAgentDefinitionId = agentId,
+                TargetGraphWorkflowDefinitionId = null,
                 SessionPolicy = IntegrationSessionPolicy.PerInvocation,
                 AcceptedInputKinds = IntegrationInputKinds.Text
             });
@@ -181,7 +188,9 @@ public sealed class IntegrationTriggerServiceTests
                 DisplayName = "Renamed label",
                 Description = null,
                 Enabled = true,
+                TargetKind = IntegrationTargetKind.Agent,
                 TargetAgentDefinitionId = agentId,
+                TargetGraphWorkflowDefinitionId = null,
                 SessionPolicy = IntegrationSessionPolicy.PerInvocation,
                 AcceptedInputKinds = IntegrationInputKinds.Text
             });
@@ -201,7 +210,9 @@ public sealed class IntegrationTriggerServiceTests
                 DisplayName = "Label",
                 Description = null,
                 Enabled = true,
+                TargetKind = IntegrationTargetKind.Agent,
                 TargetAgentDefinitionId = Guid.NewGuid(),
+                TargetGraphWorkflowDefinitionId = null,
                 SessionPolicy = IntegrationSessionPolicy.PerInvocation,
                 AcceptedInputKinds = IntegrationInputKinds.Text
             });
@@ -224,7 +235,9 @@ public sealed class IntegrationTriggerServiceTests
                 DisplayName = "Label",
                 Description = null,
                 Enabled = true,
+                TargetKind = IntegrationTargetKind.Agent,
                 TargetAgentDefinitionId = agentId,
+                TargetGraphWorkflowDefinitionId = null,
                 SessionPolicy = IntegrationSessionPolicy.CallerManaged,
                 AcceptedInputKinds = IntegrationInputKinds.Text
             });
@@ -247,6 +260,87 @@ public sealed class IntegrationTriggerServiceTests
         AssertEx.Null(await harness.Service.GetAsync(created.Id));
     }
 
+    [Test]
+    public async Task CreateAsync_ForAGraphTarget_StoresTheGraphIdAndNoAgent()
+    {
+        var harness = new Harness();
+        var graphId = Guid.NewGuid();
+
+        var result = await harness.Service.CreateAsync(GraphInput("lights-on", graphId));
+
+        AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
+        var row = AssertEx.NotNull(result.Trigger);
+        AssertEx.Equal(IntegrationTargetKind.Graph, row.TargetKind);
+        AssertEx.Equal(graphId, row.TargetGraphWorkflowDefinitionId);
+        AssertEx.Null(row.TargetAgentDefinitionId, "a graph target names no agent.");
+        _ = await harness.Agents.DidNotReceiveWithAnyArgs().GetByIdAsync(Guid.Empty, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task CreateAsync_ForAMissingGraph_IsRejectedLikeAMissingAgentAndWritesNothing()
+    {
+        var harness = new Harness();
+        var graphId = Guid.NewGuid();
+        _ = harness.Graphs.GetDefinitionAsync(graphId, Arg.Any<CancellationToken>()).ThrowsAsync(new GraphWorkflowNotFoundException("gone"));
+
+        var result = await harness.Service.CreateAsync(GraphInput("lights-on", graphId));
+
+        AssertEx.Equal(IntegrationTriggerOutcome.GraphWorkflowMissing, result.Outcome);
+        AssertEx.Empty(harness.Triggers.Rows);
+    }
+
+    [Test]
+    public async Task CreateAsync_ForAGraphTarget_WhileGraphWorkflowsAreOff_IsRejectedAndWritesNothing()
+    {
+        var harness = new Harness(graphWorkflowsEnabled: false);
+
+        var result = await harness.Service.CreateAsync(GraphInput("lights-on", Guid.NewGuid()));
+
+        AssertEx.Equal(IntegrationTriggerOutcome.GraphWorkflowsDisabled, result.Outcome);
+        AssertEx.Empty(harness.Triggers.Rows);
+    }
+
+    [Test]
+    public async Task UpdateAsync_RepointsAnAgentTriggerAtAGraph()
+    {
+        var harness = new Harness();
+        var created = AssertEx.NotNull((await harness.Service.CreateAsync(Input("sensor-feed", harness.SeedAgent()))).Trigger);
+        var graphId = Guid.NewGuid();
+
+        var result = await harness.Service.UpdateAsync(created.Id, new IntegrationTriggerUpdateInput
+        {
+            ExpectedVersion = created.Version,
+            DisplayName = "Sensor feed",
+            Description = null,
+            Enabled = true,
+            TargetKind = IntegrationTargetKind.Graph,
+            TargetAgentDefinitionId = null,
+            TargetGraphWorkflowDefinitionId = graphId,
+            SessionPolicy = IntegrationSessionPolicy.PerInvocation,
+            AcceptedInputKinds = IntegrationInputKinds.Text
+        });
+
+        AssertEx.Equal(IntegrationTriggerOutcome.Saved, result.Outcome);
+        var row = AssertEx.NotNull(result.Trigger);
+        AssertEx.Equal(IntegrationTargetKind.Graph, row.TargetKind);
+        AssertEx.Equal(graphId, row.TargetGraphWorkflowDefinitionId);
+        AssertEx.Null(row.TargetAgentDefinitionId);
+    }
+
+    private static IntegrationTriggerCreateInput GraphInput(string name, Guid graphWorkflowDefinitionId) =>
+        new()
+        {
+            Name = name,
+            DisplayName = "Lights on",
+            Description = null,
+            Enabled = true,
+            TargetKind = IntegrationTargetKind.Graph,
+            TargetAgentDefinitionId = null,
+            TargetGraphWorkflowDefinitionId = graphWorkflowDefinitionId,
+            SessionPolicy = IntegrationSessionPolicy.PerInvocation,
+            AcceptedInputKinds = IntegrationInputKinds.Text | IntegrationInputKinds.Json
+        };
+
     private static IntegrationTriggerCreateInput Input(string name,
         Guid agentDefinitionId,
         string displayName = "Sensor feed",
@@ -260,19 +354,26 @@ public sealed class IntegrationTriggerServiceTests
             Enabled = true,
             TargetKind = IntegrationTargetKind.Agent,
             TargetAgentDefinitionId = agentDefinitionId,
+            TargetGraphWorkflowDefinitionId = null,
             SessionPolicy = sessionPolicy,
             AcceptedInputKinds = IntegrationInputKinds.Text | IntegrationInputKinds.Json
         };
 
     private sealed class Harness
     {
-        public Harness()
+        public Harness(bool graphWorkflowsEnabled = true)
         {
+            RuntimeSettings = StubNodeRuntimeSettings.Create().WithGraphWorkflowsEnabled(graphWorkflowsEnabled).Build();
             Agents = Substitute.For<IAgentDefinitionStore>();
             AgentResolver = Substitute.For<IAgentDefinitionResolver>();
 
-            Service = new IntegrationTriggerService(Triggers, Agents);
+            Service = new IntegrationTriggerService(Triggers, Agents, Graphs, RuntimeSettings);
         }
+
+        /// <summary>Every graph definition id exists unless a test arranges a not-found for it.</summary>
+        public IGraphWorkflowStore Graphs { get; } = Substitute.For<IGraphWorkflowStore>();
+
+        public INodeRuntimeSettings RuntimeSettings { get; }
 
         /// <summary>
         ///     The resolver the service NO LONGER injects. It is kept so a suite can still arrange an offer and assert

@@ -6,9 +6,9 @@ import {
 	type CaptureErrorCode,
 	type CaptureFrame,
 	type CaptureSource,
-} from "@/features/transcription/capture/CaptureSource";
-import { MicrophoneCaptureSource } from "@/features/transcription/capture/MicrophoneCaptureSource";
-import { TARGET_SAMPLE_RATE } from "@/features/transcription/capture/PcmCapture";
+} from "@/core/audio/capture/CaptureSource";
+import { MicrophoneCaptureSource } from "@/core/audio/capture/MicrophoneCaptureSource";
+import { TARGET_SAMPLE_RATE } from "@/core/audio/capture/PcmCapture";
 import { SystemAudioCaptureSource } from "@/features/transcription/capture/SystemAudioCaptureSource";
 import { type TranscriptionSubscribeFailed, useTranscriptionHub } from "@/features/transcription/hooks/useTranscriptionHub";
 import {

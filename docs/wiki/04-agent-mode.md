@@ -144,7 +144,7 @@ This covers the `ToolCategory` values the approval policy reads and what each on
 
 #### Custom Tools execution boundary
 
-This covers the operator-authored `HttpFetch` and `Command` tools: validation, secret masking, schema compilation and execution guards. See [the reference page](reference/04-ai-agent-runtime.md#custom-tools-execution-boundary).
+This covers the operator-authored `HttpFetch` and `Command` tools: validation, secret masking, schema compilation and execution guards, and the two unattended-use fields (`AllowUnattended` on a `Fixed` tool of either kind, the `privateHosts` LAN exception on `HttpFetch`). See [the reference page](reference/04-ai-agent-runtime.md#custom-tools-execution-boundary).
 
 ### 1.4 Single-agent invocation — `InvocationAgentFactory`
 

@@ -207,6 +207,7 @@ public sealed class GraphWorkflowChatBindingStoreTests
             GraphHash = definition.GraphHash,
             GraphJson = definition.GraphJson,
             InputJson = null,
+            TriggerSource = GraphWorkflowTriggerSource.Chat,
             NodeRuns =
             [
                 .. new[]

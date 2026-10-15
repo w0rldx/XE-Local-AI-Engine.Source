@@ -41,6 +41,13 @@ internal static class DesktopText
     internal static string Closing => German ? "XE wird beendet…" : "Stopping XE…";
     internal static string Open => German ? "XE öffnen" : "Open XE";
     internal static string Settings => German ? "Desktop-Einstellungen" : "Desktop settings";
+    internal static string CommandOverlay => German ? "Befehlsfenster" : "Command overlay";
+
+    internal static string HotkeyFailed(string chord) =>
+        German
+            ? $"Die Tastenkombination {chord} für das Befehlsfenster ist bereits belegt. Öffnen Sie es über das Menü oder den Infobereich, oder legen Sie in desktop-hotkey.txt im Datenordner eine andere fest."
+            : $"The command overlay shortcut {chord} is already in use. Open the overlay from the menu or the tray, or set another shortcut in desktop-hotkey.txt in the data folder.";
+
     internal static string Quit => German ? "XE beenden" : "Quit XE";
     internal static string CloseTitle => German ? "XE schließen" : "Close XE";
     internal static string Current(string choice) => German ? $"Aktuell: {choice}" : $"Current: {choice}";

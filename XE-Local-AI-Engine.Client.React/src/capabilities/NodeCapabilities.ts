@@ -226,6 +226,9 @@ export const nodeRoutePaths = {
 	// Graph Workflows editor + run view — gated on nodeCapabilities.graphWorkflows (on by default). One route; the
 	// definition, run, node and tab selections live in its search params.
 	graphWorkflows: "/graph-workflows",
+	// The command page (typed or dictated commands resolved to a workflow, else answered by the default agent). Outside
+	// the layout so the desktop overlay can load it bare; ungated, because its fallthrough to chat needs no workflow.
+	command: "/command",
 	// External Apps — gated on nodeCapabilities.externalApps. The bare /external-apps prefix has no
 	// entry: its index route redirects to the catalog, so a Catalog nav link on /external-apps would stay highlighted
 	// on Installed and on every detail route. The detail route is /external-apps/instances/{instanceId}.

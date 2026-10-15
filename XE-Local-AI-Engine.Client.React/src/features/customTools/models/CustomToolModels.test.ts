@@ -5,6 +5,7 @@ import {
 	buildCustomToolFormSchema,
 	CUSTOM_TOOL_TIMEOUT_MAX_FALLBACK,
 	type CustomToolFormValues,
+	privateHostIssue,
 	toSlug,
 } from "@/features/customTools/models/CustomToolModels";
 
@@ -27,9 +28,17 @@ function values(overrides: Partial<CustomToolFormValues> = {}): CustomToolFormVa
 		mode: "Fixed",
 		enabled: false,
 		acknowledged: true,
+		allowUnattended: false,
 		parameters: [],
-		http: { method: "GET", urlTemplate: "https://example.test/status", headers: [], bodyTemplate: "", allowedHosts: [] },
-		command: { executable: "/usr/bin/env", argsTemplate: [], workingDirectory: "", timeoutSeconds: 0, env: [] },
+		http: {
+			method: "GET",
+			urlTemplate: "https://example.test/status",
+			headers: [],
+			bodyTemplate: "",
+			allowedHosts: [],
+			privateHosts: [],
+		},
+		command: { executable: "/usr/bin/env", argsTemplate: [], workingDirectory: "", timeoutSeconds: 0, env: [], detach: false },
 		...overrides,
 	};
 }
@@ -138,7 +147,7 @@ describe("customToolFormSchema", () => {
 		const httpToolWithBlankCommand = values({ command: { ...values().command, executable: "" } });
 		const commandToolWithBlankUrl = values({
 			kind: "Command",
-			http: { method: "GET", urlTemplate: "", headers: [], bodyTemplate: "", allowedHosts: [] },
+			http: { method: "GET", urlTemplate: "", headers: [], bodyTemplate: "", allowedHosts: [], privateHosts: [] },
 		});
 
 		expect(customToolFormSchema.safeParse(httpToolWithBlankCommand).success).toBe(true);
@@ -150,7 +159,7 @@ describe("customToolFormSchema", () => {
 	it.each([
 		[
 			"HttpFetch",
-			{ http: { method: "GET", urlTemplate: "  ", headers: [], bodyTemplate: "", allowedHosts: [] } },
+			{ http: { method: "GET", urlTemplate: "  ", headers: [], bodyTemplate: "", allowedHosts: [], privateHosts: [] } },
 			"urlRequired",
 			"http.urlTemplate",
 		],
@@ -158,7 +167,7 @@ describe("customToolFormSchema", () => {
 			"Command",
 			{
 				kind: "Command" as const,
-				command: { executable: "  ", argsTemplate: [], workingDirectory: "", timeoutSeconds: 0, env: [] },
+				command: { executable: "  ", argsTemplate: [], workingDirectory: "", timeoutSeconds: 0, env: [], detach: false },
 			},
 			"executableRequired",
 			"command.executable",
@@ -183,5 +192,98 @@ describe("toSlug", () => {
 
 	it("strips only the leading occurrence", () => {
 		expect(toSlug(`${CUSTOM_TOOL_NAME_PREFIX}${CUSTOM_TOOL_NAME_PREFIX}x`)).toBe(`${CUSTOM_TOOL_NAME_PREFIX}x`);
+	});
+});
+
+describe("allowUnattended", () => {
+	it("is accepted on a Fixed tool", () => {
+		expect(customToolFormSchema.safeParse(values({ allowUnattended: true })).success).toBe(true);
+	});
+
+	it("is refused on a Parameterized tool, on the allowUnattended path", () => {
+		const input = values({
+			allowUnattended: true,
+			mode: "Parameterized",
+			parameters: [{ name: "city", type: "string", description: "", required: true }],
+		});
+
+		expect(issues(input)).toContain("unattendedNeedsFixed");
+		expect(issuePaths(input)).toContain("allowUnattended");
+	});
+});
+
+describe("privateHostIssue", () => {
+	it.each(["192.168.1.20", "10.0.0.5", "100.64.0.1", "fd00::20", "homeassistant.lan", "::ffff:192.168.1.20"])(
+		"accepts the listed LAN host %s",
+		(host) => {
+			expect(privateHostIssue(host, [host])).toBeUndefined();
+		},
+	);
+
+	it.each([
+		"http://192.168.1.20",
+		"192.168.1.20:8123",
+		"*.lan",
+		"user@ha.lan",
+		"ha.lan/api",
+		"0300.0250.1.20",
+		"[fd00::20]",
+		"FD00:0::20",
+	])("rejects the malformed entry %s", (host) => {
+		expect(privateHostIssue(host, [host])).toBe("privateHostInvalid");
+	});
+
+	it.each([
+		"127.0.0.1",
+		"169.254.169.254",
+		"0.0.0.0",
+		"224.0.0.1",
+		"::1",
+		"::",
+		"fe80::1",
+		"ff02::1",
+		"::ffff:127.0.0.1",
+		"64:ff9b::c0a8:114",
+	])("rejects the always-denied address %s even when listed", (host) => {
+		expect(privateHostIssue(host, [host])).toBe("privateHostAlwaysDenied");
+	});
+
+	it("requires the entry in allowedHosts", () => {
+		expect(privateHostIssue("192.168.1.20", ["192.168.1.21"])).toBe("privateHostNotAllowed");
+	});
+
+	it("attaches the issue to the private host's row in the schema", () => {
+		const input = values({
+			http: {
+				method: "GET",
+				urlTemplate: "http://192.168.1.20/api",
+				headers: [],
+				bodyTemplate: "",
+				allowedHosts: [],
+				privateHosts: ["192.168.1.20"],
+			},
+		});
+
+		expect(issuePaths(input)).toContain("http.privateHosts.0");
+	});
+
+	it("ignores private hosts while the Command kind is active", () => {
+		const input = values({
+			kind: "Command",
+			http: { method: "GET", urlTemplate: "", headers: [], bodyTemplate: "", allowedHosts: [], privateHosts: ["127.0.0.1"] },
+		});
+
+		expect(issuePaths(input)).not.toContain("http.privateHosts.0");
+	});
+
+	// Mirrors CustomToolService: a detached launch is not waited for, so its timeout must be 0.
+	it("refuses a detached Command launch with a timeout, and accepts it with none", () => {
+		const command = { executable: "/usr/bin/word", argsTemplate: [], workingDirectory: "", env: [], detach: true };
+
+		expect(issues(values({ kind: "Command", command: { ...command, timeoutSeconds: 30 } }))).toContain("detachNeedsNoTimeout");
+		expect(issuePaths(values({ kind: "Command", command: { ...command, timeoutSeconds: 30 } }))).toContain(
+			"command.timeoutSeconds",
+		);
+		expect(issues(values({ kind: "Command", command: { ...command, timeoutSeconds: 0 } }))).toEqual([]);
 	});
 });

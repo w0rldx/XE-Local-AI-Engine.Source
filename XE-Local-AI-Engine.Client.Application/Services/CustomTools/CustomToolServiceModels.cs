@@ -56,6 +56,10 @@ public sealed record HttpFetchDefinition
     public string? BodyTemplate { get; init; }
 
     public IReadOnlyList<string> AllowedHosts { get; init; } = [];
+
+    /// <summary>Hosts inside the private LAN ranges this tool may reach: exact names or canonical IP literals, each also in <see cref="AllowedHosts" />.</summary>
+    /// <remarks>Loopback, link-local, metadata, multicast and unspecified addresses stay denied even when listed (ADR 0021).</remarks>
+    public IReadOnlyList<string> PrivateHosts { get; init; } = [];
 }
 
 /// <summary>Public Command configuration carried on create/update requests and echoed (secrets masked) on responses.</summary>
@@ -70,6 +74,9 @@ public sealed record CommandDefinition
     public int TimeoutSeconds { get; init; }
 
     public IReadOnlyList<CustomToolEnvironmentVariableModel> Env { get; init; } = [];
+
+    /// <summary>Start the program and return once it is running, without capturing output; <see cref="TimeoutSeconds" /> must then be 0.</summary>
+    public bool Detach { get; init; }
 }
 
 /// <summary>
@@ -90,6 +97,9 @@ public sealed record CustomToolDefinition
     public bool Enabled { get; init; } = true;
 
     public bool Acknowledged { get; init; }
+
+    /// <summary>The operator lets a graph workflow run this exact invocation with nobody present; requires <see cref="CustomToolMode.Fixed" />.</summary>
+    public bool AllowUnattended { get; init; }
 
     public IReadOnlyList<CustomToolParameterModel> Parameters { get; init; } = [];
 
@@ -118,6 +128,8 @@ public sealed record CustomToolView
     public required bool Enabled { get; init; }
 
     public required bool Acknowledged { get; init; }
+
+    public required bool AllowUnattended { get; init; }
 
     public required int Version { get; init; }
 

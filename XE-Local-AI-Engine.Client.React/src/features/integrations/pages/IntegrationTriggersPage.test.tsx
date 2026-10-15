@@ -31,7 +31,7 @@ vi.mock("@/core/ui/hooks/useUnsavedChangesGuard", () => ({
 	useUnsavedChangesGuard: () => undefined,
 }));
 
-const { triggerHooksMock, agentHookMock, confirmMock } = vi.hoisted(() => ({
+const { triggerHooksMock, agentHookMock, graphHookMock, confirmMock } = vi.hoisted(() => ({
 	triggerHooksMock: {
 		useIntegrationTriggers: vi.fn(),
 		useCreateIntegrationTrigger: vi.fn(),
@@ -39,11 +39,13 @@ const { triggerHooksMock, agentHookMock, confirmMock } = vi.hoisted(() => ({
 		useDeleteIntegrationTrigger: vi.fn(),
 	},
 	agentHookMock: { useIntegrationAgentOptions: vi.fn() },
+	graphHookMock: { useIntegrationGraphOptions: vi.fn() },
 	confirmMock: vi.fn(),
 }));
 
 vi.mock("@/features/integrations/queries/useIntegrationTriggers", () => triggerHooksMock);
 vi.mock("@/features/integrations/queries/useIntegrationAgentOptions", () => agentHookMock);
+vi.mock("@/features/integrations/queries/useIntegrationGraphOptions", () => graphHookMock);
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmMock }) }));
 
 import { IntegrationTriggersPage } from "@/features/integrations/pages/IntegrationTriggersPage";
@@ -84,7 +86,9 @@ const trigger: IntegrationTrigger = {
 	displayName: "Sensor hub",
 	description: "Ingests sensor payloads",
 	enabled: true,
+	targetKind: "Agent",
 	targetAgentDefinitionId: "agent-read",
+	targetGraphWorkflowDefinitionId: null,
 	sessionPolicy: "PerInvocation",
 	acceptedInputKinds: ["text"],
 	createdAtUtc: 1000,
@@ -185,6 +189,7 @@ describe("IntegrationTriggersPage", () => {
 			toolsByName,
 			isLoading: false,
 		});
+		graphHookMock.useIntegrationGraphOptions.mockReturnValue([{ id: "graph-lights", name: "Lights on" }]);
 	});
 
 	afterEach(() => {
@@ -199,6 +204,55 @@ describe("IntegrationTriggersPage", () => {
 		expect(within(row).getByText("Sensor hub")).toBeTruthy();
 		expect(within(row).getByText("sensor-hub")).toBeTruthy();
 		expect(within(row).getByText("Reader")).toBeTruthy();
+	});
+
+	it("names a graph target in the list and marks its kind", () => {
+		triggerHooksMock.useIntegrationTriggers.mockReturnValue(
+			makeQuery([
+				{ ...trigger, targetKind: "Graph", targetAgentDefinitionId: null, targetGraphWorkflowDefinitionId: "graph-lights" },
+			]),
+		);
+
+		renderPage();
+
+		const row = screen.getByTestId("integration-trigger-row-trigger-1");
+		expect(within(row).getByTestId("integration-trigger-target-trigger-1").textContent).toBe("Lights on");
+		expect(within(row).getByText("Graph workflow")).toBeTruthy();
+	});
+
+	it("creates a graph-target trigger that sends only the graph id", async () => {
+		const createMutation = makeMutation();
+		triggerHooksMock.useCreateIntegrationTrigger.mockReturnValue(createMutation);
+		renderPage();
+		await openCreateEditor();
+
+		fireEvent.change(screen.getByTestId("integration-trigger-form-name"), { target: { value: "lights" } });
+		fireEvent.change(screen.getByTestId("integration-trigger-form-display-name"), { target: { value: "Lights" } });
+		fireEvent.click(screen.getByRole("radio", { name: "Graph workflow" }));
+		expect(screen.queryByTestId("integration-trigger-form-agent")).toBeNull();
+		fireEvent.click(screen.getByTestId("integration-trigger-form-graph"));
+		fireEvent.click(await screen.findByRole("option", { name: "Lights on", hidden: true }));
+		fireEvent.click(screen.getByTestId("integration-trigger-form-submit"));
+
+		expect(createMutation.mutate).toHaveBeenCalledTimes(1);
+		expect(createMutation.mutate.mock.calls[0]?.[0]).toMatchObject({
+			body: { targetKind: "Graph", targetAgentDefinitionId: null, targetGraphWorkflowDefinitionId: "graph-lights" },
+		});
+	});
+
+	it("refuses a graph-target trigger without a graph workflow", async () => {
+		const createMutation = makeMutation();
+		triggerHooksMock.useCreateIntegrationTrigger.mockReturnValue(createMutation);
+		renderPage();
+		await openCreateEditor();
+
+		fireEvent.change(screen.getByTestId("integration-trigger-form-name"), { target: { value: "lights" } });
+		fireEvent.change(screen.getByTestId("integration-trigger-form-display-name"), { target: { value: "Lights" } });
+		fireEvent.click(screen.getByRole("radio", { name: "Graph workflow" }));
+		fireEvent.click(screen.getByTestId("integration-trigger-form-submit"));
+
+		expect(createMutation.mutate).not.toHaveBeenCalled();
+		expect(screen.getByText("A target graph workflow is required.")).toBeTruthy();
 	});
 
 	it("shows the empty state when there are no triggers", () => {
@@ -258,6 +312,7 @@ describe("IntegrationTriggersPage", () => {
 					enabled: true,
 					targetKind: "Agent",
 					targetAgentDefinitionId: "agent-read",
+					targetGraphWorkflowDefinitionId: null,
 					sessionPolicy: "PerInvocation",
 					acceptedInputKinds: ["text"],
 				},
@@ -382,7 +437,9 @@ describe("IntegrationTriggersPage", () => {
 					displayName: "Sensor hub v2",
 					description: "Ingests sensor payloads",
 					enabled: true,
+					targetKind: "Agent",
 					targetAgentDefinitionId: "agent-read",
+					targetGraphWorkflowDefinitionId: null,
 					sessionPolicy: "PerInvocation",
 					acceptedInputKinds: ["text"],
 					expectedVersion: 3,
@@ -406,7 +463,9 @@ describe("IntegrationTriggersPage", () => {
 					displayName: "Sensor hub",
 					description: "Ingests sensor payloads",
 					enabled: false,
+					targetKind: "Agent",
 					targetAgentDefinitionId: "agent-read",
+					targetGraphWorkflowDefinitionId: null,
 					sessionPolicy: "PerInvocation",
 					acceptedInputKinds: ["text"],
 					expectedVersion: 3,

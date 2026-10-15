@@ -7,7 +7,10 @@ import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
-import { GraphWorkflowRunStatusBadge } from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
+import {
+	GraphWorkflowRunOriginBadge,
+	GraphWorkflowRunStatusBadge,
+} from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
 import {
 	type GraphWorkflowRunSummaryResponse,
 	isTerminalGraphWorkflowRunStatus,
@@ -81,6 +84,7 @@ export function GraphWorkflowRunToolbar({ run, onBackToEditor }: GraphWorkflowRu
 	return (
 		<Group gap="xs" wrap="wrap" data-testid="graph-workflow-run-toolbar">
 			<GraphWorkflowRunStatusBadge status={run.status} />
+			<GraphWorkflowRunOriginBadge source={run.triggerSource} data-testid="graph-workflow-run-toolbar-origin" />
 			<Text size="xs" c="dimmed" data-testid="graph-workflow-run-toolbar-version">
 				{t("pages.graphWorkflows.toolbar.version", "definition version {{version}}", { version: run.definitionVersion ?? 1 })}
 			</Text>

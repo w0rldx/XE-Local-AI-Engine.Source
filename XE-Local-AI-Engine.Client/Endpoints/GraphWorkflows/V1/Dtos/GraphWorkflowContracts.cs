@@ -48,6 +48,12 @@ public sealed class UpdateGraphWorkflowDefinitionRequest
     public string? Description { get; init; }
 
     public GraphWorkflowGraph? Graph { get; init; }
+
+    /// <summary>Whether Tool nodes may run action tools (ADR 0021). Null leaves it alone; only this route sets it.</summary>
+    public bool? AllowsActions { get; init; }
+
+    /// <summary>The <c>GraphWorkflowTriggerSource</c> names that may start a run. Null leaves the set alone; only this route sets it.</summary>
+    public IReadOnlyList<string>? TriggerSources { get; init; }
 }
 
 /// <summary>A share file to create a definition from: the export envelope, checked for its format and version first.</summary>
@@ -163,6 +169,12 @@ public sealed class GraphWorkflowDefinitionResponse
     /// <summary>A <c>GraphWorkflowDefinitionKind</c> name: <c>Standard</c> or <c>Chat</c>.</summary>
     public required string Kind { get; init; }
 
+    /// <summary>Whether Tool nodes may run action tools (ADR 0021). Never exported, never set by create or import.</summary>
+    public required bool AllowsActions { get; init; }
+
+    /// <summary>The <c>GraphWorkflowTriggerSource</c> names that may start a run. Never exported, never set by create or import.</summary>
+    public required IReadOnlyList<string> TriggerSources { get; init; }
+
     public required int Version { get; init; }
 
     public required long CreatedAtUtc { get; init; }
@@ -201,6 +213,12 @@ public sealed class GraphWorkflowDefinitionSummaryResponse
 
     /// <summary>A <c>GraphWorkflowDefinitionKind</c> name: <c>Standard</c> or <c>Chat</c>.</summary>
     public required string Kind { get; init; }
+
+    /// <summary>Whether Tool nodes may run action tools (ADR 0021). Never exported, never set by create or import.</summary>
+    public required bool AllowsActions { get; init; }
+
+    /// <summary>The <c>GraphWorkflowTriggerSource</c> names that may start a run. Never exported, never set by create or import.</summary>
+    public required IReadOnlyList<string> TriggerSources { get; init; }
 
     public required int Version { get; init; }
 
@@ -352,6 +370,12 @@ public sealed class GraphWorkflowRunSummaryResponse
     public required string Status { get; init; }
 
     public required string FailureClass { get; init; }
+
+    /// <summary>A <c>GraphWorkflowTriggerSource</c> name: who started the run.</summary>
+    public required string TriggerSource { get; init; }
+
+    /// <summary>The integration principal that started the run; null for every other source. Audit metadata only.</summary>
+    public required Guid? PrincipalId { get; init; }
 
     public required long? CancelRequestedAtUtc { get; init; }
 

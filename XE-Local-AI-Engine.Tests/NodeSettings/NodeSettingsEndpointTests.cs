@@ -592,6 +592,7 @@ public sealed class NodeSettingsEndpointTests
     [Arguments(nameof(SaveNodeSettingsRequest.LlamaIdleTimeToLiveSeconds), 600L)]
     [Arguments(nameof(SaveNodeSettingsRequest.DetachedGraceSeconds), 0L)]
     [Arguments(nameof(SaveNodeSettingsRequest.MaxPendingToolCallAgeMinutes), 30L)]
+    [Arguments(nameof(SaveNodeSettingsRequest.IntentMaxUtteranceAgeSeconds), 45L)]
     [Arguments(nameof(SaveNodeSettingsRequest.SpawnMaxCloud), 0L)]
     [Arguments(nameof(SaveNodeSettingsRequest.AgentHomeMaxPatchBytes), 1024L)]
     [Arguments(nameof(SaveNodeSettingsRequest.BenchmarkKldCacheMaxBytes), StoredNodeSettings.MinBenchmarkKldCacheMaxBytes)]
@@ -643,6 +644,57 @@ public sealed class NodeSettingsEndpointTests
         var cleared = await PutAndGetAsync(RequestWith(StoredNodeSettings.TokenSettingUnset));
         AssertEx.Null(responseProperty.GetValue(cleared));
         AssertEx.Null(typeof(StoredNodeSettings).GetProperty(knob)!.GetValue(saved));
+    }
+
+    /// <summary>The intent router id: a GUID sets it, a null member keeps it, the empty string clears it, anything else is a 400.</summary>
+    [Test]
+    public async Task SaveNodeSettings_IntentRouterDefinitionId_SetsKeepsAndClears()
+    {
+        var routerId = Guid.NewGuid();
+        var saved = new StoredNodeSettings();
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(_ => saved);
+        nodeSettingsStore.UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>())
+                         .Returns(call =>
+                         {
+                             saved = call.Arg<Func<StoredNodeSettings, StoredNodeSettings>>()(saved);
+                             return Task.FromResult(saved);
+                         });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        async Task<HttpResponseMessage> PutAsync(SaveNodeSettingsRequest body)
+        {
+            using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+            putRequest.Content = JsonContent.Create(body);
+            return await client.SendAsync(putRequest);
+        }
+
+        using (var set = await PutAsync(new SaveNodeSettingsRequest { IntentRouterDefinitionId = routerId.ToString() }))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, set.StatusCode, await set.Content.ReadAsStringAsync());
+        }
+
+        AssertEx.Equal(routerId, saved.IntentRouterDefinitionId);
+
+        using (var kept = await PutAsync(new SaveNodeSettingsRequest { WebFetchTimeoutSeconds = 30 }))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, kept.StatusCode);
+        }
+
+        AssertEx.Equal(routerId, saved.IntentRouterDefinitionId);
+
+        using (var refused = await PutAsync(new SaveNodeSettingsRequest { IntentRouterDefinitionId = "not-a-guid" }))
+        {
+            AssertEx.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        }
+
+        using (var cleared = await PutAsync(new SaveNodeSettingsRequest { IntentRouterDefinitionId = "" }))
+        {
+            AssertEx.Equal(HttpStatusCode.OK, cleared.StatusCode);
+        }
+
+        AssertEx.Null(saved.IntentRouterDefinitionId);
     }
 
     /// <summary>

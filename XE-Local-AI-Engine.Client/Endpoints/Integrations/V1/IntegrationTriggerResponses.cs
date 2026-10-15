@@ -36,6 +36,8 @@ internal static class IntegrationTriggerResponses
 
             case IntegrationTriggerOutcome.AgentMissing:
             case IntegrationTriggerOutcome.TargetKindRejected:
+            case IntegrationTriggerOutcome.GraphWorkflowMissing:
+            case IntegrationTriggerOutcome.GraphWorkflowsDisabled:
                 errors.AddError(result.Message ?? "The trigger could not be saved.");
                 return send.ErrorsAsync(cancellation: ct);
 

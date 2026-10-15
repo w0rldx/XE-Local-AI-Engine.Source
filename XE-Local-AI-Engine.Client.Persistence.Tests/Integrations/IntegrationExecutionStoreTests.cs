@@ -372,6 +372,40 @@ public sealed class IntegrationExecutionStoreTests
     }
 
     [Test]
+    public async Task UpdateStatusAsync_StampsTheGraphRunId_AndALaterUpdateWithoutOneKeepsIt()
+    {
+        using var fixture = new IntegrationTestFixture();
+        var seed = await SeedAsync(fixture);
+
+        await using var context = fixture.CreateContext();
+        var store = new IntegrationExecutionStore(context);
+        var accept = NewAccept(seed);
+        AssertEx.True(await store.AcceptAsync(accept, maxActive: 8, maxActivePerPrincipal: 4));
+        AssertEx.Null(AssertEx.NotNull(await store.GetByIdAsync(accept.ExecutionId)).GraphWorkflowRunId, "an admitted row has no run yet.");
+
+        var runId = Guid.NewGuid();
+        AssertEx.True(await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate
+        {
+            ExecutionId = accept.ExecutionId,
+            ExpectedVersion = 0,
+            ExpectedStatuses = Accepted,
+            NewStatus = IntegrationExecutionStatus.Running,
+            GraphWorkflowRunId = runId
+        }));
+        AssertEx.True(await store.UpdateStatusAsync(new IntegrationExecutionStatusUpdate
+        {
+            ExecutionId = accept.ExecutionId,
+            ExpectedVersion = 1,
+            ExpectedStatuses = Running,
+            NewStatus = IntegrationExecutionStatus.Running,
+            StopRequestedAtUtc = 9_000
+        }));
+
+        await using var readContext = fixture.CreateContext();
+        AssertEx.Equal(runId, AssertEx.NotNull(await new IntegrationExecutionStore(readContext).GetByIdAsync(accept.ExecutionId)).GraphWorkflowRunId);
+    }
+
+    [Test]
     public async Task UpdateStatusAsync_AppliesOnlyTheNonNullFieldsAndLeavesAnExistingSummaryIntact()
     {
         using var fixture = new IntegrationTestFixture();
@@ -1300,7 +1334,7 @@ public sealed class IntegrationExecutionStoreTests
         return new SeedState
         {
             TriggerId = trigger.Id,
-            AgentDefinitionId = trigger.TargetAgentDefinitionId,
+            AgentDefinitionId = trigger.TargetAgentDefinitionId.GetValueOrDefault(),
             KeyId = key.Id,
             PrincipalId = key.PrincipalId,
             KeyPrefix = key.KeyPrefix

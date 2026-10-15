@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -32,6 +33,7 @@ public sealed class IntegrationTriggerStore : IIntegrationTriggerStore
             Enabled = command.Enabled,
             TargetKind = command.TargetKind,
             TargetAgentDefinitionId = command.TargetAgentDefinitionId,
+            TargetGraphWorkflowDefinitionId = command.TargetGraphWorkflowDefinitionId,
             SessionPolicy = command.SessionPolicy,
             AcceptedInputKinds = command.AcceptedInputKinds,
             CreatedAtUtc = now,
@@ -44,7 +46,7 @@ public sealed class IntegrationTriggerStore : IIntegrationTriggerStore
         {
             _ = await _dbContext.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException exception)
+        catch (DbUpdateException exception) when (!IsCheckViolation(exception))
         {
             // The service's name pre-check is not atomic with this insert; the unique index on the name decides the race.
             throw new IntegrationTriggerNameConflictException($"Another trigger already uses the name '{command.Name}'.", exception);
@@ -66,7 +68,9 @@ public sealed class IntegrationTriggerStore : IIntegrationTriggerStore
         entity.DisplayName = command.DisplayName;
         entity.Description = command.Description;
         entity.Enabled = command.Enabled;
+        entity.TargetKind = command.TargetKind;
         entity.TargetAgentDefinitionId = command.TargetAgentDefinitionId;
+        entity.TargetGraphWorkflowDefinitionId = command.TargetGraphWorkflowDefinitionId;
         entity.SessionPolicy = command.SessionPolicy;
         entity.AcceptedInputKinds = command.AcceptedInputKinds;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
@@ -112,6 +116,10 @@ public sealed class IntegrationTriggerStore : IIntegrationTriggerStore
         return deleted > 0;
     }
 
+    /// <summary>The one-target CHECK, which is a caller bug rather than a lost name race, so it is not reported as one.</summary>
+    private static bool IsCheckViolation(DbUpdateException exception) =>
+        exception.InnerException is SqliteException { SqliteErrorCode: 19, SqliteExtendedErrorCode: 275 };
+
     private static IntegrationTriggerSnapshot ToSnapshot(IntegrationTrigger entity) =>
         new()
         {
@@ -122,6 +130,7 @@ public sealed class IntegrationTriggerStore : IIntegrationTriggerStore
             Enabled = entity.Enabled,
             TargetKind = entity.TargetKind,
             TargetAgentDefinitionId = entity.TargetAgentDefinitionId,
+            TargetGraphWorkflowDefinitionId = entity.TargetGraphWorkflowDefinitionId,
             SessionPolicy = entity.SessionPolicy,
             AcceptedInputKinds = entity.AcceptedInputKinds,
             CreatedAtUtc = entity.CreatedAtUtc,

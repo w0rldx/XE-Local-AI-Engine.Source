@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LayoutRouteImport } from './routes/_layout'
+import { Route as CommandRouteImport } from './routes/command'
 import { Route as ExternalAccessRouteImport } from './routes/external-access'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SandboxProfileSetupRouteImport } from './routes/sandbox-profile-setup'
@@ -62,6 +63,11 @@ import { Route as LayoutExternalAppsInstancesInstanceIdRouteImport } from './rou
 
 const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommandRoute = CommandRouteImport.update({
+  id: '/command',
+  path: '/command',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExternalAccessRoute = ExternalAccessRouteImport.update({
@@ -325,6 +331,7 @@ const LayoutExternalAppsInstancesInstanceIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
+  '/command': typeof CommandRoute
   '/external-access': typeof ExternalAccessRoute
   '/login': typeof LoginRoute
   '/sandbox-profile-setup': typeof SandboxProfileSetupRoute
@@ -375,6 +382,7 @@ export interface FileRoutesByFullPath {
   '/external-apps/instances/$instanceId': typeof LayoutExternalAppsInstancesInstanceIdRoute
 }
 export interface FileRoutesByTo {
+  '/command': typeof CommandRoute
   '/external-access': typeof ExternalAccessRoute
   '/login': typeof LoginRoute
   '/sandbox-profile-setup': typeof SandboxProfileSetupRoute
@@ -428,6 +436,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_layout': typeof LayoutRouteWithChildren
+  '/command': typeof CommandRoute
   '/external-access': typeof ExternalAccessRoute
   '/login': typeof LoginRoute
   '/sandbox-profile-setup': typeof SandboxProfileSetupRoute
@@ -482,6 +491,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/command'
     | '/external-access'
     | '/login'
     | '/sandbox-profile-setup'
@@ -532,6 +542,7 @@ export interface FileRouteTypes {
     | '/external-apps/instances/$instanceId'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/command'
     | '/external-access'
     | '/login'
     | '/sandbox-profile-setup'
@@ -584,6 +595,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_layout'
+    | '/command'
     | '/external-access'
     | '/login'
     | '/sandbox-profile-setup'
@@ -637,6 +649,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   LayoutRoute: typeof LayoutRouteWithChildren
+  CommandRoute: typeof CommandRoute
   ExternalAccessRoute: typeof ExternalAccessRoute
   LoginRoute: typeof LoginRoute
   SandboxProfileSetupRoute: typeof SandboxProfileSetupRoute
@@ -653,6 +666,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof LayoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/command': {
+      id: '/command'
+      path: '/command'
+      fullPath: '/command'
+      preLoaderRoute: typeof CommandRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/external-access': {
@@ -1098,6 +1118,7 @@ const LayoutRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   LayoutRoute: LayoutRouteWithChildren,
+  CommandRoute: CommandRoute,
   ExternalAccessRoute: ExternalAccessRoute,
   LoginRoute: LoginRoute,
   SandboxProfileSetupRoute: SandboxProfileSetupRoute,

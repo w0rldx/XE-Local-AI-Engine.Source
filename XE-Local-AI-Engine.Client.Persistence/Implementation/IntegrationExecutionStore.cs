@@ -141,6 +141,11 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             entity.InvocationId = invocationId;
         }
 
+        if (command.GraphWorkflowRunId is { } graphWorkflowRunId)
+        {
+            entity.GraphWorkflowRunId = graphWorkflowRunId;
+        }
+
         if (command.StopRequestedAtUtc is { } stopRequestedAtUtc)
         {
             entity.StopRequestedAtUtc = stopRequestedAtUtc;
@@ -444,6 +449,7 @@ public sealed partial class IntegrationExecutionStore : IIntegrationExecutionSto
             RequestFingerprint = entity.RequestFingerprint,
             KeyPrefix = entity.KeyPrefix,
             InvocationId = entity.InvocationId,
+            GraphWorkflowRunId = entity.GraphWorkflowRunId,
             Status = entity.Status,
             ReceivedAtUtc = entity.ReceivedAtUtc,
             StartedAtUtc = entity.StartedAtUtc,

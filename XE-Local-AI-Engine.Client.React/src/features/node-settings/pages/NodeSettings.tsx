@@ -399,6 +399,7 @@ export function NodeSettings({ section, onSectionChange, updateChannelSelector, 
 			autoEffortFastModelOptions={modelOptions.autoEffortFastModelOptions}
 			backgroundModelOptions={modelOptions.backgroundModelOptions}
 			rerankerModelOptions={modelOptions.rerankerModelOptions}
+			intentRouterOptions={modelOptions.intentRouterOptions}
 			onDownloadRecommendedReranker={recommendedDownloads.reranker.start}
 			isDownloadRecommendedRerankerPending={recommendedDownloads.reranker.isPending}
 			isRecommendedRerankerInFlight={recommendedDownloads.reranker.isInFlight}

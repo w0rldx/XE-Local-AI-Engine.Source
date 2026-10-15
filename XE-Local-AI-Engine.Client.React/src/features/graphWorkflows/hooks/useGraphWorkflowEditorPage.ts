@@ -17,9 +17,9 @@ import { graphWorkflowsEqual } from "@/features/graphWorkflows/models/GraphWorkf
 import {
 	GRAPH_WORKFLOW_IMPORT_MAX_BYTES,
 	GRAPH_WORKFLOW_IMPORT_READ_LIMIT_BYTES,
-	graphWorkflowImportRequestBytes,
 	type GraphWorkflowExportEnvelope,
 	graphWorkflowExportFileName,
+	graphWorkflowImportRequestBytes,
 	parseGraphWorkflowExportFile,
 } from "@/features/graphWorkflows/models/GraphWorkflowExportFormat";
 import type { GraphWorkflowGraph, GraphWorkflowSelection } from "@/features/graphWorkflows/models/GraphWorkflowModels";
@@ -244,7 +244,13 @@ export function useGraphWorkflowEditorPage(
 		definitionQuery.refetch().catch(() => undefined);
 	};
 
-	const handleMetaSubmit = (values: { name: string; description: string | null; sampleId: string | null }): void => {
+	const handleMetaSubmit = (values: {
+		name: string;
+		description: string | null;
+		sampleId: string | null;
+		allowsActions: boolean | null;
+		triggerSources: string[] | null;
+	}): void => {
 		const mode = metaDialog;
 		if (mode === undefined) {
 			return;
@@ -278,7 +284,13 @@ export function useGraphWorkflowEditorPage(
 					path: { definitionId: definition.id },
 					// No `graph`: a rename is a metadata write, and Rename is offered only on a clean canvas so the version
 					// bump it causes cannot reload over an edit.
-					body: { version: definition.version ?? 1, name: values.name, description: values.description },
+					body: {
+						version: definition.version ?? 1,
+						name: values.name,
+						description: values.description,
+						...(values.allowsActions === null ? {} : { allowsActions: values.allowsActions }),
+						...(values.triggerSources === null ? {} : { triggerSources: values.triggerSources }),
+					},
 				})
 				.then(done)
 				.catch(failed);

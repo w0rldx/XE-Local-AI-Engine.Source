@@ -28,6 +28,7 @@ import {
 	type IntegrationTriggerFormValues,
 } from "@/features/integrations/models/IntegrationModels";
 import { useIntegrationAgentOptions } from "@/features/integrations/queries/useIntegrationAgentOptions";
+import { useIntegrationGraphOptions } from "@/features/integrations/queries/useIntegrationGraphOptions";
 import {
 	useCreateIntegrationTrigger,
 	useDeleteIntegrationTrigger,
@@ -61,6 +62,7 @@ export function IntegrationTriggersPage() {
 
 	const triggersQuery = useIntegrationTriggers();
 	const { options: agents, toolsByName, isLoading: isCatalogLoading, isError: isCatalogError } = useIntegrationAgentOptions();
+	const graphs = useIntegrationGraphOptions();
 
 	const createMutation = useCreateIntegrationTrigger();
 	const updateMutation = useUpdateIntegrationTrigger();
@@ -262,6 +264,7 @@ export function IntegrationTriggersPage() {
 					key={editorTarget?.mode === "edit" ? editorTarget.id : "create"}
 					initialValues={editingTrigger ? toIntegrationTriggerFormValues(editingTrigger) : emptyIntegrationTriggerFormValues}
 					agents={agents}
+					graphs={graphs}
 					toolsByName={toolsByName}
 					isEditing={editorTarget?.mode === "edit"}
 					submitError={missingTriggerError ?? submitError}
@@ -283,6 +286,7 @@ export function IntegrationTriggersPage() {
 					<IntegrationTriggerList
 						triggers={triggers}
 						agents={agents}
+						graphs={graphs}
 						isMutating={isMutating}
 						onEdit={openEdit}
 						onDelete={handleDelete}

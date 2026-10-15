@@ -40,6 +40,7 @@ describe("navigationLinks", () => {
 			"externalApps",
 			"preview",
 			"graphWorkflows",
+			"command",
 			"benchmarks",
 			"training",
 			"invocations",

@@ -13,7 +13,8 @@ public sealed record IntegrationSessionSnapshot
 
     public required Guid ConversationId { get; init; }
 
-    public required Guid AgentDefinitionId { get; init; }
+    /// <summary>Null when the trigger targets a graph.</summary>
+    public required Guid? AgentDefinitionId { get; init; }
 
     public required IntegrationSessionStatus Status { get; init; }
 
@@ -44,7 +45,8 @@ public sealed record IntegrationSessionCreate
 
     public required Guid ConversationId { get; init; }
 
-    public required Guid AgentDefinitionId { get; init; }
+    /// <summary>Null when the trigger targets a graph.</summary>
+    public required Guid? AgentDefinitionId { get; init; }
 }
 
 /// <summary>

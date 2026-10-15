@@ -34,9 +34,10 @@ const emptyFormValues: CustomToolFormValues = {
 	mode: "Fixed",
 	enabled: false,
 	acknowledged: false,
+	allowUnattended: false,
 	parameters: [],
-	http: { method: "GET", urlTemplate: "", headers: [], bodyTemplate: "", allowedHosts: [] },
-	command: { executable: "", argsTemplate: [], workingDirectory: "", timeoutSeconds: 0, env: [] },
+	http: { method: "GET", urlTemplate: "", headers: [], bodyTemplate: "", allowedHosts: [], privateHosts: [] },
+	command: { executable: "", argsTemplate: [], workingDirectory: "", timeoutSeconds: 0, env: [], detach: false },
 };
 
 export function CustomToolsPage() {

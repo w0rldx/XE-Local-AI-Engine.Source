@@ -57,6 +57,11 @@ const { generatedMock } = vi.hoisted(() => ({
 		saveFn: vi.fn(),
 		// Installed-models query feeding the speculative draft-model picker.
 		listLocalModelsOptions: vi.fn(),
+		// Saved graph workflows feeding the intent-router picker.
+		listGraphWorkflowDefinitionsOptions: vi.fn(() => ({
+			queryKey: fakeQueryKey("listGraphWorkflowDefinitions"),
+			queryFn: async () => ({ definitions: [] }),
+		})),
 		// Local-runtime cards (llama.cpp + HF token) relocated from the model-fit advisor.
 		ensureLlamaCppBinaryMutation: vi.fn(),
 		getHfTokenStatusOptions: vi.fn(),
@@ -104,6 +109,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getNodeSettingsQueryKey: generatedMock.getNodeSettingsQueryKey,
 	saveNodeSettingsMutation: generatedMock.saveNodeSettingsMutation,
 	listLocalModelsOptions: generatedMock.listLocalModelsOptions,
+	listGraphWorkflowDefinitionsOptions: generatedMock.listGraphWorkflowDefinitionsOptions,
 	ensureLlamaCppBinaryMutation: generatedMock.ensureLlamaCppBinaryMutation,
 	getHfTokenStatusOptions: generatedMock.getHfTokenStatusOptions,
 	setHfTokenMutation: generatedMock.setHfTokenMutation,

@@ -30,6 +30,7 @@ public sealed class IntegrationTriggerStoreTests
             Enabled = true,
             TargetKind = IntegrationTargetKind.Agent,
             TargetAgentDefinitionId = agentId,
+            TargetGraphWorkflowDefinitionId = null,
             SessionPolicy = IntegrationSessionPolicy.CallerManaged,
             AcceptedInputKinds = IntegrationInputKinds.Text | IntegrationInputKinds.Json
         });
@@ -70,6 +71,54 @@ public sealed class IntegrationTriggerStoreTests
     }
 
     [Test]
+    public async Task CreateAsync_ForAGraphTarget_RoundTripsTheGraphIdAndNoAgent()
+    {
+        using var fixture = new IntegrationTestFixture();
+        await using var context = await fixture.CreateSchemaAsync();
+        var graphId = Guid.NewGuid();
+
+        var created = await new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow)).CreateAsync(Command("lights-on", IntegrationTargetKind.Graph, agentId: null, graphId));
+
+        await using var readContext = fixture.CreateContext();
+        var read = AssertEx.NotNull(await new IntegrationTriggerStore(readContext, new FixedTimeProvider(FixedNow)).GetByIdAsync(created.Id));
+        AssertEx.Equal(IntegrationTargetKind.Graph, read.TargetKind);
+        AssertEx.Equal(graphId, read.TargetGraphWorkflowDefinitionId);
+        AssertEx.Null(read.TargetAgentDefinitionId);
+    }
+
+    [Test]
+    [Arguments(true, true)]
+    [Arguments(false, false)]
+    public async Task CreateAsync_WithBothOrNeitherTarget_IsRefusedByTheCheckConstraint_NotReportedAsANameConflict(bool withAgent, bool withGraph)
+    {
+        using var fixture = new IntegrationTestFixture();
+        await using var context = await fixture.CreateSchemaAsync();
+        var store = new IntegrationTriggerStore(context, new FixedTimeProvider(FixedNow));
+
+        var refused = await AssertEx.ThrowsAsync<DbUpdateException>(() =>
+            store.CreateAsync(Command("one-target", IntegrationTargetKind.Graph, withAgent ? Guid.NewGuid() : null, withGraph ? Guid.NewGuid() : null)));
+
+        AssertEx.True(refused.InnerException is SqliteException { SqliteExtendedErrorCode: 275 }, "the one-target CHECK is what refuses the row.");
+        await using var readContext = fixture.CreateContext();
+        AssertEx.Empty(await new IntegrationTriggerStore(readContext, new FixedTimeProvider(FixedNow)).ListAsync());
+    }
+
+    private static IntegrationTriggerCreateCommand Command(string name, IntegrationTargetKind kind, Guid? agentId, Guid? graphId) =>
+        new()
+        {
+            TriggerId = Guid.NewGuid(),
+            Name = name,
+            DisplayName = name,
+            Description = null,
+            Enabled = true,
+            TargetKind = kind,
+            TargetAgentDefinitionId = agentId,
+            TargetGraphWorkflowDefinitionId = graphId,
+            SessionPolicy = IntegrationSessionPolicy.PerInvocation,
+            AcceptedInputKinds = IntegrationInputKinds.Text
+        };
+
+    [Test]
     public async Task UpdateAsync_AppliesOnAMatchingVersionAndAnswersFalseOtherwise()
     {
         using var fixture = new IntegrationTestFixture();
@@ -84,7 +133,9 @@ public sealed class IntegrationTriggerStoreTests
             DisplayName = "Renamed label",
             Description = null,
             Enabled = false,
+            TargetKind = IntegrationTargetKind.Agent,
             TargetAgentDefinitionId = created.TargetAgentDefinitionId,
+            TargetGraphWorkflowDefinitionId = null,
             SessionPolicy = IntegrationSessionPolicy.CallerManaged,
             AcceptedInputKinds = IntegrationInputKinds.Text
         };
@@ -136,6 +187,7 @@ public sealed class IntegrationTriggerStoreTests
             Enabled = true,
             TargetKind = IntegrationTargetKind.Agent,
             TargetAgentDefinitionId = Guid.NewGuid(),
+            TargetGraphWorkflowDefinitionId = null,
             SessionPolicy = IntegrationSessionPolicy.PerInvocation,
             AcceptedInputKinds = IntegrationInputKinds.Text
         });

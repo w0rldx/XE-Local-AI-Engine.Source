@@ -98,3 +98,16 @@ document-level control.
   with a running process and no way to reach it.
 - **Electron or a bundled Chromium.** Rejected: it duplicates a browser engine the product already reaches through
   the OS WebView, for a shell whose entire job is to show one loopback origin.
+
+## Amendment 2026-10-15: a command overlay window
+
+The shell gains a second window: a small, always-on-top, borderless window hosting a NativeWebView on the engine's
+`/command` route, for typed or dictated commands
+([ADR 0021](0021-unattended-actions-in-graph-tool-nodes.md)). On Windows a global hotkey registered by the shell,
+stored in its desktop preferences and changeable there, toggles it; a failure to register is reported, not fatal.
+Linux has no global hotkey (GNOME on Wayland permits none), so a menu entry opens the window there; since decision 5
+records no usable tray on Linux, that entry lives in the main window, while Windows also offers it from the tray.
+Escape or loss of focus hides the window. It uses the same origin discovery, session and document policy as the main
+window (decision 6 applies to it on Linux), and adds no engine reference and no bridge (decision 1). The `/command`
+route literal is one more duplicated protocol literal pinned by `NativeDesktopContractTests`. The operator took this
+decision on 2026-10-15; the delivered window still needs the operator's acceptance.

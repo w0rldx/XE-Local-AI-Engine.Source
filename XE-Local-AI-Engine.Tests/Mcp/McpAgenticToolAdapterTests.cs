@@ -20,7 +20,7 @@ public sealed class McpAgenticToolAdapterTests
     public async Task InvokeAsync_AuditsBeforeInvokingInner_ExactlyOnce()
     {
         var events = new List<string>();
-        var audit = Substitute.For<IMcpAgenticApprovalAuditRecorder>();
+        var audit = Substitute.For<IUnattendedApprovalAuditRecorder>();
         audit.RecordAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<ToolCategory>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
              .Returns(_ =>
              {
@@ -38,7 +38,7 @@ public sealed class McpAgenticToolAdapterTests
         await audit.Received(1).RecordAsync(Arg.Any<Guid>(),
             "write_file",
             ToolCategory.WriteExecute,
-            "xemcp_abc123",
+            "mcp-agentic:xemcp_abc123",
             Arg.Any<CancellationToken>());
     }
 
@@ -46,7 +46,7 @@ public sealed class McpAgenticToolAdapterTests
     public async Task InvokeAsync_WhenStrictAuditFails_DoesNotInvokeInner()
     {
         var invoked = 0;
-        var audit = Substitute.For<IMcpAgenticApprovalAuditRecorder>();
+        var audit = Substitute.For<IUnattendedApprovalAuditRecorder>();
         audit.RecordAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<ToolCategory>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
              .Returns<Task>(_ => throw new IOException("audit unavailable"));
         var inner = AIFunctionFactory.Create(() => invoked++, "write_file");
@@ -64,7 +64,7 @@ public sealed class McpAgenticToolAdapterTests
     public async Task FunctionInvocation_RunsAdaptedTool_InsteadOfRequestingApproval()
     {
         var invoked = 0;
-        var audit = Substitute.For<IMcpAgenticApprovalAuditRecorder>();
+        var audit = Substitute.For<IUnattendedApprovalAuditRecorder>();
         var inner = AIFunctionFactory.Create(() =>
         {
             invoked++;
@@ -88,14 +88,14 @@ public sealed class McpAgenticToolAdapterTests
         await audit.Received(1).RecordAsync(Arg.Any<Guid>(),
             "run_python",
             ToolCategory.WriteExecute,
-            "xemcp_abc123",
+            "mcp-agentic:xemcp_abc123",
             Arg.Any<CancellationToken>());
     }
 
     [Test]
     public void GetService_HidesApprovalRequiredMarker()
     {
-        var adapted = new McpAgenticToolAdapter(Substitute.For<IMcpAgenticApprovalAuditRecorder>(), NullLogger<McpAgenticToolAdapter>.Instance)
+        var adapted = new McpAgenticToolAdapter(Substitute.For<IUnattendedApprovalAuditRecorder>(), NullLogger<McpAgenticToolAdapter>.Instance)
             .Adapt(new ApprovalRequiredAIFunction(AIFunctionFactory.Create(() => 0, "run_python")),
                 ToolCategory.WriteExecute,
                 Agentic,

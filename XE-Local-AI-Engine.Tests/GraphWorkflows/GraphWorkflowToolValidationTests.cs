@@ -161,7 +161,7 @@ public sealed class GraphWorkflowToolValidationTests
 
         var refusal = await AssertEx.ThrowsAsync<GraphWorkflowValidationException>(() =>
             scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>()
-                 .StartAsync(definition.Id, requestId, inputJson: null, definitionVersion: null));
+                 .StartAsync(definition.Id, requestId, inputJson: null, definitionVersion: null, GraphWorkflowRunOrigin.Manual));
 
         AssertEx.Equal("lookup,peek",
             string.Join(',', refusal.Result.Errors.Select(static error => error.Key).Order(StringComparer.Ordinal)),

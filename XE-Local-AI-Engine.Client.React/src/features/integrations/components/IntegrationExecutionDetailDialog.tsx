@@ -1,7 +1,9 @@
-import { Code, Divider, Group, Loader, Stack, Text, Tooltip } from "@mantine/core";
+import { Anchor, Code, Divider, Group, Loader, Stack, Text, Tooltip } from "@mantine/core";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
@@ -152,6 +154,20 @@ export function IntegrationExecutionDetailDialog({ executionId, listExecution, o
 						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.detail.outputBytes", "Output bytes")}>
 							<Text size="sm">{detail.outputBytes}</Text>
 						</LabelValueRow>
+						{detail.graphWorkflowRunId === null ? null : (
+							<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.detail.graphRun", "Graph run")}>
+								{/* `Link` directly, not `Anchor component={Link}`: the polymorphic prop erases the router's search typing. */}
+								<Link
+									to={nodeRoutePaths.graphWorkflows}
+									search={{ runId: detail.graphWorkflowRunId }}
+									data-testid="integration-execution-graph-run"
+								>
+									<Anchor component="span" size="sm">
+										{t("pages.integrations.executions.detail.openGraphRun", "Open graph run")}
+									</Anchor>
+								</Link>
+							</LabelValueRow>
+						)}
 					</>
 				)}
 

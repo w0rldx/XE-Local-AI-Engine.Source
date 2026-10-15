@@ -8,7 +8,11 @@ internal sealed class IntegrationTriggerConfiguration : IEntityTypeConfiguration
 {
     public void Configure(EntityTypeBuilder<IntegrationTrigger> builder)
     {
-        builder.ToTable("integration_triggers");
+        // Exactly one target id, and the one the kind names; a database rule, so no writer can store a trigger that runs nothing or two things.
+        builder.ToTable("integration_triggers",
+            table => table.HasCheckConstraint("ck_integration_triggers_one_target",
+                "(target_kind = 'Agent' AND target_agent_definition_id IS NOT NULL AND target_graph_workflow_definition_id IS NULL) "
+                + "OR (target_kind = 'Graph' AND target_graph_workflow_definition_id IS NOT NULL AND target_agent_definition_id IS NULL)"));
         builder.HasKey(entity => entity.Id);
         builder.Property(entity => entity.Id).HasColumnName("id");
 
@@ -20,6 +24,7 @@ internal sealed class IntegrationTriggerConfiguration : IEntityTypeConfiguration
         builder.Property(entity => entity.Enabled).HasColumnName("enabled");
         builder.Property(entity => entity.TargetKind).HasColumnName("target_kind").HasConversion<string>().HasMaxLength(32);
         builder.Property(entity => entity.TargetAgentDefinitionId).HasColumnName("target_agent_definition_id");
+        builder.Property(entity => entity.TargetGraphWorkflowDefinitionId).HasColumnName("target_graph_workflow_definition_id");
         builder.Property(entity => entity.SessionPolicy).HasColumnName("session_policy").HasConversion<string>().HasMaxLength(32);
 
         // A [Flags] combination has no stable, length-bounded string form, so this one enum stays an int column while

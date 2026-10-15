@@ -463,6 +463,12 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         return TimeSpan.FromSeconds(stored.WebFetchTimeoutSeconds ?? StoredNodeSettings.DefaultWebFetchTimeoutSeconds);
     }
 
+    public async Task<Guid?> GetIntentRouterDefinitionIdAsync(CancellationToken cancellationToken = default) =>
+        (await LoadAsync(cancellationToken)).IntentRouterDefinitionId;
+
+    public async Task<TimeSpan> GetIntentMaxUtteranceAgeAsync(CancellationToken cancellationToken = default) =>
+        TimeSpan.FromSeconds((await LoadAsync(cancellationToken)).IntentMaxUtteranceAgeSeconds ?? StoredNodeSettings.DefaultIntentMaxUtteranceAgeSeconds);
+
     public async Task<int> GetWebFetchMaxContentCharsAsync(CancellationToken cancellationToken = default)
     {
         var stored = await LoadAsync(cancellationToken);

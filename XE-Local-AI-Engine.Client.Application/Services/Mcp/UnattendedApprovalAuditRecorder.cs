@@ -4,12 +4,12 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
-/// <summary>Persists agentic auto-approval before execution; unlike the human recorder, failures propagate.</summary>
-internal sealed class McpAgenticApprovalAuditRecorder : IMcpAgenticApprovalAuditRecorder
+/// <summary>Persists a policy approval before execution; unlike the human recorder, failures propagate.</summary>
+internal sealed class UnattendedApprovalAuditRecorder : IUnattendedApprovalAuditRecorder
 {
     private readonly IAgentExecutionLogStore _store;
 
-    public McpAgenticApprovalAuditRecorder(IAgentExecutionLogStore store)
+    public UnattendedApprovalAuditRecorder(IAgentExecutionLogStore store)
     {
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
@@ -18,7 +18,7 @@ internal sealed class McpAgenticApprovalAuditRecorder : IMcpAgenticApprovalAudit
     public async Task RecordAsync(Guid requestId,
         string toolName,
         ToolCategory category,
-        string keyPrefix,
+        string source,
         CancellationToken cancellationToken = default)
     {
         var categoryLabel = category.ToString();
@@ -28,7 +28,7 @@ internal sealed class McpAgenticApprovalAuditRecorder : IMcpAgenticApprovalAudit
                 ToolName = toolName,
                 Category = categoryLabel,
                 Decision = ApprovalDecisions.Approve,
-                Source = $"mcp-agentic:{keyPrefix}",
+                Source = source,
                 LatencyMs = 0
             },
             cancellationToken);

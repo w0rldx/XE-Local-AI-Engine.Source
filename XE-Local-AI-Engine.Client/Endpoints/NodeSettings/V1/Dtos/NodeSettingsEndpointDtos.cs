@@ -354,6 +354,16 @@ public sealed record NodeSettingsResponse
 
     public int MaxAllowedWebFetchTimeoutSeconds { get; init; }
 
+    /// <summary>The graph workflow the intent endpoint asks when no alias matches; null routes on aliases alone. Applies to the next request.</summary>
+    public Guid? IntentRouterDefinitionId { get; init; }
+
+    /// <summary>How old an intent utterance may be, in seconds, before it is refused as a replay. Applies to the next request.</summary>
+    public int? IntentMaxUtteranceAgeSeconds { get; init; }
+
+    public int MinIntentMaxUtteranceAgeSeconds { get; init; }
+
+    public int MaxAllowedIntentMaxUtteranceAgeSeconds { get; init; }
+
     /// <summary>Cap on the readable text one web_fetch returns, in characters. Applies to the next call.</summary>
     public int? WebFetchMaxContentChars { get; init; }
 
@@ -999,6 +1009,12 @@ public sealed record SaveNodeSettingsRequest
 
     /// <summary>Time budget of one web_fetch or web_search call, in seconds; -1 resets to the default. Applies to the next call.</summary>
     public int? WebFetchTimeoutSeconds { get; init; }
+
+    /// <summary>The intent router graph workflow id; the empty string clears it (alias-only routing). Applies to the next request.</summary>
+    public string? IntentRouterDefinitionId { get; init; }
+
+    /// <summary>How old an intent utterance may be, in seconds; -1 resets to the default. Applies to the next request.</summary>
+    public int? IntentMaxUtteranceAgeSeconds { get; init; }
 
     /// <summary>Cap on the readable text one web_fetch returns, in characters; -1 resets to the default. Applies to the next call.</summary>
     public int? WebFetchMaxContentChars { get; init; }

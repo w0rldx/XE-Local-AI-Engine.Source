@@ -44,6 +44,10 @@ internal sealed class CustomToolConfiguration : IEntityTypeConfiguration<CustomT
                .HasColumnName("acknowledged")
                .HasDefaultValue(false);
 
+        builder.Property(entity => entity.AllowUnattended)
+               .HasColumnName("allow_unattended")
+               .HasDefaultValue(false);
+
         builder.Property(entity => entity.Version)
                .HasColumnName("version");
 

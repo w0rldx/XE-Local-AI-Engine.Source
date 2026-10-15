@@ -3169,6 +3169,8 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinit
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	kind: z.string(),
+	allowsActions: z.boolean(),
+	triggerSources: z.array(z.string()),
 	version: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -3249,6 +3251,8 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowDefinit
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	kind: z.string(),
+	allowsActions: z.boolean(),
+	triggerSources: z.array(z.string()),
 	version: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -3316,6 +3320,8 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunSumm
 	graphHash: z.string(),
 	status: z.string(),
 	failureClass: z.string(),
+	triggerSource: z.string(),
+	principalId: z.guid().nullable(),
 	cancelRequestedAtUtc: z.int().nullable(),
 	startedAtUtc: z.int().nullable(),
 	completedAtUtc: z.int().nullable(),
@@ -3327,6 +3333,15 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResp
 	nodeRuns: z.array(zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowNodeRunSummaryResponse),
 	output: z.unknown(),
 	graph: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph,
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowIntentResponse = z.object({
+	status: z.string(),
+	matchedBy: z.string(),
+	definitionId: z.guid().nullable(),
+	definitionName: z.string().nullable(),
+	reason: z.string().nullable(),
+	run: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowRunResponse.nullable(),
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowSteerableNodeResponse = z.object({
@@ -3380,6 +3395,7 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowToolRes
 	description: z.string(),
 	parameterSchema: z.string(),
 	requiresAllowedUrls: z.boolean(),
+	isAction: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowValidationErrorResponse = z.object({
@@ -3396,6 +3412,12 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ImportGraphWorkflowD
 	name: z.string().min(0).max(200),
 	description: z.string().min(0).max(1024).nullish(),
 	graph: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph,
+});
+
+export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1InvokeGraphWorkflowIntentRequest = z.object({
+	utterance: z.string().min(0).max(2000).optional(),
+	requestId: z.guid().min(1),
+	utteredAt: z.iso.datetime({ offset: true }).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ListGraphWorkflowConversationRunsRequest = z.record(
@@ -3461,6 +3483,8 @@ export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1UpdateGraphWorkflowD
 	name: z.string().min(0).max(200).nullish(),
 	description: z.string().min(0).max(1024).nullish(),
 	graph: zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowGraph.nullish(),
+	allowsActions: z.boolean().nullish(),
+	triggerSources: z.array(z.string()).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsGraphWorkflowsV1ValidateGraphWorkflowDefinitionRequest = z.object({
@@ -5924,6 +5948,16 @@ export const zXeLocalAiEngineClientEndpointsTranscriptionV1SelectTranscriptionMo
 	modelId: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1StartDictationSessionRequest = z.object({
+	language: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1StartDictationSessionResponse = z.object({
+	sessionId: z.guid(),
+	startedAtUtc: z.int(),
+	lastSeq: z.int(),
+});
+
 export const zXeLocalAiEngineClientEndpointsTranscriptionV1StartLiveTranscriptionSessionResponse = z.object({
 	sessionId: z.guid(),
 	status: z.string(),
@@ -6629,6 +6663,7 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationExecutionDe
 	keyPrefix: z.string(),
 	requestId: z.guid(),
 	invocationId: z.guid(),
+	graphWorkflowRunId: z.guid().nullish(),
 	outputBytes: z.int(),
 	lastSequence: z.int(),
 	version: z.int(),
@@ -6645,16 +6680,6 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationExecuti
 
 export const zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy = z.enum(["PerInvocation", "CallerManaged"]);
 
-export const zXeLocalAiEngineClientEndpointsIntegrationsV1UpdateIntegrationTriggerRequest = z.object({
-	displayName: z.string(),
-	description: z.string().nullish(),
-	enabled: z.boolean().optional(),
-	targetAgentDefinitionId: z.guid().min(1),
-	sessionPolicy: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy.optional(),
-	acceptedInputKinds: z.array(z.string()),
-	expectedVersion: z.int().gt(0),
-});
-
 export const zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus = z.enum(["Active", "Closed"]);
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResponse = z.object({
@@ -6662,7 +6687,7 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationSessionResp
 	triggerId: z.guid(),
 	triggerName: z.string(),
 	principalId: z.guid(),
-	agentDefinitionId: z.guid(),
+	agentDefinitionId: z.guid().nullish(),
 	status: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionStatus,
 	createdAtUtc: z.int(),
 	lastActivityUtc: z.int(),
@@ -6680,7 +6705,7 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationSession
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-export const zXeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind = z.enum(["Agent"]);
+export const zXeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind = z.enum(["Agent", "Graph"]);
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1CreateIntegrationTriggerRequest = z.object({
 	name: z
@@ -6691,7 +6716,8 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1CreateIntegrationTrigg
 	description: z.string().nullish(),
 	enabled: z.boolean().optional(),
 	targetKind: zXeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind.optional(),
-	targetAgentDefinitionId: z.guid().min(1),
+	targetAgentDefinitionId: z.guid().nullish(),
+	targetGraphWorkflowDefinitionId: z.guid().nullish(),
 	sessionPolicy: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy.optional(),
 	acceptedInputKinds: z.array(z.string()),
 });
@@ -6703,7 +6729,8 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationTriggerView
 	description: z.string().nullish(),
 	enabled: z.boolean(),
 	targetKind: zXeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind,
-	targetAgentDefinitionId: z.guid(),
+	targetAgentDefinitionId: z.guid().nullish(),
+	targetGraphWorkflowDefinitionId: z.guid().nullish(),
 	sessionPolicy: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy,
 	acceptedInputKinds: z.array(z.string()),
 	createdAtUtc: z.int(),
@@ -6713,6 +6740,18 @@ export const zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationTriggerView
 
 export const zXeLocalAiEngineClientEndpointsIntegrationsV1ListIntegrationTriggersResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsIntegrationsV1IntegrationTriggerView),
+});
+
+export const zXeLocalAiEngineClientEndpointsIntegrationsV1UpdateIntegrationTriggerRequest = z.object({
+	displayName: z.string(),
+	description: z.string().nullish(),
+	enabled: z.boolean().optional(),
+	targetKind: zXeLocalAiEngineClientPersistenceEntitiesIntegrationTargetKind.optional(),
+	targetAgentDefinitionId: z.guid().nullish(),
+	targetGraphWorkflowDefinitionId: z.guid().nullish(),
+	sessionPolicy: zXeLocalAiEngineClientPersistenceEntitiesIntegrationSessionPolicy.optional(),
+	acceptedInputKinds: z.array(z.string()),
+	expectedVersion: z.int().gt(0),
 });
 
 export const zXeLocalAiEngineClientPersistenceEntitiesToolMockVerificationState = z.enum(["Unverified", "Verified", "Rejected"]);
@@ -7011,6 +7050,7 @@ export const zXeLocalAiEngineClientServicesCustomToolsCommandDefinition = z.obje
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 	env: z.array(zXeLocalAiEngineClientServicesCustomToolsCustomToolEnvironmentVariableModel).optional(),
+	detach: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientServicesCustomToolsCustomToolHeaderModel = z.object({
@@ -7038,6 +7078,7 @@ export const zXeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition = z.ob
 	headers: z.array(zXeLocalAiEngineClientServicesCustomToolsCustomToolHeaderModel).optional(),
 	bodyTemplate: z.string().nullish(),
 	allowedHosts: z.array(z.string()).optional(),
+	privateHosts: z.array(z.string()).optional(),
 });
 
 export const zXeLocalAiEngineClientServicesCustomToolsCustomToolDefinition = z.object({
@@ -7047,6 +7088,7 @@ export const zXeLocalAiEngineClientServicesCustomToolsCustomToolDefinition = z.o
 	mode: zXeLocalAiEngineClientPersistenceCustomToolMode.optional(),
 	enabled: z.boolean().optional(),
 	acknowledged: z.boolean().optional(),
+	allowUnattended: z.boolean().optional(),
 	parameters: z.array(zXeLocalAiEngineClientServicesCustomToolsCustomToolParameterModel).optional(),
 	http: zXeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition.nullish(),
 	command: zXeLocalAiEngineClientServicesCustomToolsCommandDefinition.nullish(),
@@ -7060,6 +7102,7 @@ export const zXeLocalAiEngineClientServicesCustomToolsCustomToolView = z.object(
 	mode: zXeLocalAiEngineClientPersistenceCustomToolMode,
 	enabled: z.boolean(),
 	acknowledged: z.boolean(),
+	allowUnattended: z.boolean(),
 	version: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -7963,6 +8006,22 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
+	intentRouterDefinitionId: z.guid().nullish(),
+	intentMaxUtteranceAgeSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	minIntentMaxUtteranceAgeSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAllowedIntentMaxUtteranceAgeSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 	webFetchMaxContentChars: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -8746,6 +8805,12 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
 	webFetchTimeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	intentRouterDefinitionId: z.string().nullish(),
+	intentMaxUtteranceAgeSeconds: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
@@ -11539,6 +11604,13 @@ export const zStartGraphWorkflowRunPath = z.object({
  */
 export const zStartGraphWorkflowRunResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1StartGraphWorkflowRunResponse;
 
+export const zInvokeGraphWorkflowIntentBody = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1InvokeGraphWorkflowIntentRequest;
+
+/**
+ * Success
+ */
+export const zInvokeGraphWorkflowIntentResponse = zXeLocalAiEngineClientEndpointsGraphWorkflowsV1GraphWorkflowIntentResponse;
+
 export const zListGraphWorkflowRunsQuery = z.object({
 	status: z.string().nullish(),
 	limit: z
@@ -13265,6 +13337,13 @@ export const zGetTrainingRuntimeStatusResponse = zXeLocalAiEngineClientEndpoints
  * Success
  */
 export const zListCaptureProcessesResponse = zXeLocalAiEngineClientEndpointsTranscriptionV1CaptureProcessListResponse;
+
+export const zStartDictationSessionBody = zXeLocalAiEngineClientEndpointsTranscriptionV1StartDictationSessionRequest;
+
+/**
+ * Success
+ */
+export const zStartDictationSessionResponse = zXeLocalAiEngineClientEndpointsTranscriptionV1StartDictationSessionResponse;
 
 /**
  * Success

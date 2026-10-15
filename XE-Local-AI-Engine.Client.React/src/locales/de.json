@@ -186,6 +186,7 @@
 		"workSessions": "Arbeitssitzungen",
 		"devWorkflows": "Workflow-Läufe",
 		"graphWorkflows": "Graph-Workflows",
+		"command": "Befehl",
 		"integrationsGroup": "Integrationen",
 		"integrationTriggers": "Trigger",
 		"integrationSessions": "Sitzungen",
@@ -2436,6 +2437,15 @@
 				"schedulerEnabled": {
 					"label": "Planer",
 					"description": "Agenten und Jobs nach Zeitplan ausführen."
+				},
+				"intentRouterDefinitionId": {
+					"label": "Workflow für die Befehlszuordnung",
+					"description": "Der Graph-Workflow, der für einen gesprochenen oder getippten Befehl einen Workflow auswählt, wenn kein Alias passt.",
+					"none": "Keiner (nur Aliasse)"
+				},
+				"intentMaxUtteranceAgeSeconds": {
+					"label": "Höchstalter eines Befehls",
+					"description": "Ein älterer Befehl wird als Wiederholung abgelehnt und muss erneut gesagt werden."
 				}
 			},
 			"title": "Node-Einstellungen",
@@ -4687,6 +4697,52 @@
 				}
 			}
 		},
+		"command": {
+			"input": {
+				"label": "Befehl",
+				"placeholder": "Befehl sprechen oder eingeben, dann Enter drücken"
+			},
+			"send": "Befehl senden",
+			"openApp": "App öffnen",
+			"empty": "Geben Sie einen Befehl ein oder diktieren Sie ihn und drücken Sie Enter. Umschalt+Enter beginnt eine neue Zeile.",
+			"mic": {
+				"start": "Diktat starten",
+				"stop": "Diktat beenden",
+				"language": {
+					"label": "Sprache des Diktats",
+					"auto": "Auto",
+					"en": "EN",
+					"de": "DE"
+				},
+				"errors": {
+					"unsupported": "Das Diktat benötigt eine sichere Seite (HTTPS oder localhost).",
+					"permission-denied": "Der Zugriff auf das Mikrofon wurde verweigert. Erlauben Sie ihn im Browser und versuchen Sie es erneut.",
+					"no-device": "Es wurde kein Mikrofon gefunden.",
+					"no-audio-track": "Die gewählte Quelle liefert keinen Ton.",
+					"worklet-failed": "Die Audioverarbeitung konnte nicht starten.",
+					"start-timeout": "Das Mikrofon ist nicht rechtzeitig gestartet. Versuchen Sie es erneut.",
+					"disconnected": "Die Verbindung zum Node wurde getrennt; das Diktat wurde beendet.",
+					"transcription-disabled": "Die Transkription ist auf diesem Node ausgeschaltet.",
+					"runtime": "Das Diktat konnte nicht starten: {{detail}}",
+					"hub": "Das Diktat konnte keine Verbindung zum Node herstellen."
+				}
+			},
+			"run": {
+				"running": "{{name}} läuft",
+				"finished": "{{name}}",
+				"open": "Lauf öffnen"
+			},
+			"reply": {
+				"waiting": "Warten auf den Assistenten…",
+				"failed": "Der Assistent konnte nicht antworten. Öffnen Sie die Unterhaltung, um es erneut zu versuchen.",
+				"openInChat": "Im Chat öffnen"
+			},
+			"refusal": {
+				"expired": "Das hat zu lange gedauert. Bitte sagen Sie es noch einmal.",
+				"unavailable": "Befehle sind nicht verfügbar: Graph-Workflows sind auf diesem Node ausgeschaltet.",
+				"failed": "Der Befehl konnte nicht gesendet werden. Bitte versuchen Sie es erneut."
+			}
+		},
 		"skills": {
 			"title": "Skills",
 			"subtitle": "Erstellen Sie eine Node-weite Bibliothek wiederverwendbarer Skills. Weisen Sie einem Agenten Skills zu, damit sein Modell das passende Fachwissen bei der Arbeit bei Bedarf laden kann.",
@@ -5558,7 +5614,15 @@
 					"addHost": "Host hinzufügen",
 					"allowedHostsHint": "Erforderlich, wenn der URL-Host selbst eine Vorlage ist: Die Anfrage darf nur einen Host aus dieser Liste erreichen.",
 					"hostAria": "Erlaubter Host {{index}}",
-					"removeHost": "Erlaubten Host {{index}} entfernen"
+					"removeHost": "Erlaubten Host {{index}} entfernen",
+					"privateHosts": "Private Hosts",
+					"privateHostsHint": "LAN-Hosts, die dieses Tool trotz der Sperre privater Adressen erreichen darf: ein exakter Hostname oder eine IP-Adresse, jeweils auch unter „Erlaubte Hosts“ eingetragen. Loopback-, Link-Local-, Metadaten- und Multicast-Adressen bleiben gesperrt.",
+					"addPrivateHost": "Privaten Host hinzufügen",
+					"privateHostAria": "Privater Host {{index}}",
+					"removePrivateHost": "Privaten Host {{index}} entfernen",
+					"privateHostInvalid": "Geben Sie einen exakten Hostnamen oder eine IP-Adresse ein, ohne Schema, Port, Pfad, Zugangsdaten oder Platzhalter.",
+					"privateHostAlwaysDenied": "Loopback-, Link-Local-, Metadaten-, Multicast- und unspezifizierte Adressen bleiben auch eingetragen gesperrt.",
+					"privateHostNotAllowed": "Tragen Sie diesen Host auch unter „Erlaubte Hosts“ ein."
 				},
 				"command": {
 					"executable": "Programmdatei",
@@ -5580,7 +5644,12 @@
 					"timeoutHint": "0 verwendet den Standardwert.",
 					"env": "Umgebungsvariablen",
 					"addEnv": "Variable hinzufügen",
-					"noEnv": "Keine Umgebungsvariablen."
+					"noEnv": "Keine Umgebungsvariablen.",
+					"detach": {
+						"label": "Losgelöst starten",
+						"description": "Das Programm wird gestartet, ohne auf sein Ende zu warten; ein Absturz im ersten Moment wird gemeldet."
+					},
+					"detachNeedsNoTimeout": "Auf einen losgelösten Start wird nicht gewartet: Setzen Sie das Zeitlimit auf 0."
 				},
 				"secretRows": {
 					"namePlaceholder": "Name",
@@ -5590,6 +5659,12 @@
 					"valueAria": "Wert von Zeile {{index}}",
 					"secret": "Geheim",
 					"remove": "Zeile {{index}} entfernen"
+				},
+				"allowUnattended": {
+					"label": "Unbeaufsichtigte Nutzung in Workflows erlauben",
+					"commandDanger": "Ein Workflow darf genau diesen Aufruf ausführen, ohne dass jemand anwesend ist: Ein Programm wird auf diesem Rechner gestartet, ohne jemanden zu fragen. Erfordert die Bestätigung oben und den Modus „Fest“.",
+					"httpDanger": "Ein Workflow darf genau diesen Aufruf ausführen, ohne dass jemand anwesend ist: Die Anfrage wird gesendet, ohne jemanden zu fragen. Erfordert die Bestätigung oben und den Modus „Fest“.",
+					"needsFixed": "Unbeaufsichtigte Nutzung erfordert den Modus „Fest“. Wechseln Sie zu „Fest“ oder deaktivieren Sie diese Option."
 				}
 			},
 			"list": {
@@ -6596,6 +6671,11 @@
 				},
 				"labels": {
 					"invalid": "Verwenden Sie 2 bis 32 verschiedene, nicht leere Labels mit höchstens 64 Zeichen."
+				},
+				"aliases": {
+					"tooMany": "Ein Start-Knoten nimmt höchstens 32 Aliasse auf.",
+					"invalid": "Jeder Alias braucht 1 bis 120 Zeichen mit Wörtern darin.",
+					"duplicate": "Ein Alias kommt doppelt vor (Groß- und Kleinschreibung sowie Leerzeichen werden ignoriert)."
 				}
 			},
 			"config": {
@@ -6686,7 +6766,13 @@
 				"includeAttachments": "Chat-Anhänge einbeziehen",
 				"includeAttachmentsDisabled": "Aktivieren Sie zuerst „Nimmt Anhänge an“ in den Workflow-Einstellungen.",
 				"cloudModelHelp": "Cloud-Modelle laufen nur, wenn „Cloud-Modelle unbeaufsichtigt ausführen lassen“ unter Node-Einstellungen → Datenschutz & Updates eingeschaltet ist oder die externe Verbindung des Modells unbeaufsichtigte Läufe erlaubt.",
-				"cloudModelLabel": "{{label}} · {{provider}} (Cloud)"
+				"cloudModelLabel": "{{label}} · {{provider}} (Cloud)",
+				"actionBadge": "Aktion",
+				"actionNote": "Läuft unbeaufsichtigt und genau einmal pro Lauf, da die Aktion eine Nebenwirkung hat und nicht wiederholt wird.",
+				"actionNeedsAllowActions": "Das Tool „{{name}}“ ist eine Aktion mit Nebenwirkung. Dieser Knoten benötigt daher „Aktionen erlauben“ für diesen Workflow.",
+				"actionsDisabledHint": "Aktions-Tools sind ausgegraut: Aktivieren Sie „Aktionen erlauben“ in den Einstellungen dieses Workflows, um sie zu verwenden.",
+				"aliases": "Aliasse",
+				"aliasesHelp": "Formulierungen, die diesen Workflow per gesprochenem oder getipptem Befehl starten; Groß- und Kleinschreibung wird ignoriert. Drücken Sie nach jeder Eingabe die Eingabetaste."
 			},
 			"edge": {
 				"title": "Kante {{key}}",
@@ -6713,7 +6799,14 @@
 				"descriptionPlaceholder": "Wozu dieser Workflow dient.",
 				"meta_one": "{{count}} Knoten · v{{version}} · aktualisiert {{updated}}",
 				"meta_other": "{{count}} Knoten · v{{version}} · aktualisiert {{updated}}",
-				"import": "Importieren…"
+				"import": "Importieren…",
+				"actionsBadge": "Aktionen",
+				"allowActionsLabel": "Aktionen erlauben",
+				"allowActionsDescription": "Tool-Knoten dürfen benutzerdefinierte Tools ausführen, die für den unbeaufsichtigten Einsatz freigegeben sind.",
+				"allowActionsWarning": "Eine Aktion verändert etwas außerhalb dieser App, etwa eine Lampe schalten oder ein Programm starten, ohne vorher jemanden zu fragen. Jede Aktion läuft einmal pro Lauf und wird vor der Ausführung protokolliert. Erlauben Sie dies nur für Workflows, denen Sie vertrauen.",
+				"triggerSourcesLabel": "Wer einen Lauf starten darf",
+				"triggerSourcesDescription": "Jeder Start nennt seine Quelle; eine hier nicht gewählte Quelle wird abgewiesen.",
+				"triggerSourcesRequired": "Wählen Sie mindestens eine Quelle."
 			},
 			"run": {
 				"label": "Graph des Laufs",
@@ -6729,7 +6822,8 @@
 				"version": "Version {{version}}",
 				"createdAt": "Erstellt {{time}}",
 				"startedAt": "Gestartet {{time}}",
-				"completedAt": "Beendet {{time}}"
+				"completedAt": "Beendet {{time}}",
+				"origin": "Gestartet durch: {{source}}"
 			},
 			"nodeTable": {
 				"empty": "Dieser Lauf hat noch keine Knoten.",
@@ -6809,7 +6903,7 @@
 				"nodeTitle": "Knoten",
 				"reload": "Neu laden",
 				"rename": "Umbenennen",
-				"renameTitle": "Diesen Workflow umbenennen",
+				"renameTitle": "Workflow-Einstellungen",
 				"runLoadFailed": "Dieser Lauf konnte nicht geladen werden.",
 				"save": "Speichern",
 				"saveAs": "Speichern unter…",
@@ -6877,6 +6971,13 @@
 				"graphNotObject": "Dieser Workflow-Export enthält keinen Graphen.",
 				"graphMalformed": "Der Graph dieses Workflow-Exports enthält keine Knoten- oder Verbindungsliste.",
 				"fetchesUnder": "Dieser Workflow ruft Seiten unter diesen Adressen ab: {{urls}}"
+			},
+			"triggerSource": {
+				"Manual": "Manuell",
+				"Chat": "Chat",
+				"Schedule": "Zeitplan",
+				"Integration": "Integration",
+				"Intent": "Befehl"
 			}
 		},
 		"integrations": {
@@ -6893,7 +6994,7 @@
 					"columns": {
 						"name": "Name",
 						"displayName": "Anzeigename",
-						"target": "Ziel-Agent",
+						"target": "Ziel",
 						"sessionPolicy": "Sitzungsrichtlinie",
 						"inputs": "Akzeptierte Eingaben",
 						"enabled": "Aktiv",
@@ -6946,6 +7047,18 @@
 					"toolCatalog": {
 						"loading": "Der Tool-Katalog wird geladen. Bis dahin sind die Tool-Angaben unbekannt.",
 						"failed": "Der Tool-Katalog konnte nicht geladen werden. Bis er gelesen werden kann, gilt jedes Tool als freigabepflichtig."
+					},
+					"targetKind": {
+						"label": "Ziel",
+						"options": {
+							"Agent": "Agent",
+							"Graph": "Graph-Workflow"
+						}
+					},
+					"targetGraph": {
+						"label": "Ziel-Graph-Workflow",
+						"description": "Der gespeicherte Graph-Workflow, den dieser Trigger bei jedem Aufruf startet. Er muss in seinen Workflow-Einstellungen die Auslösequelle Integration zulassen.",
+						"placeholder": "Graph-Workflow auswählen"
 					}
 				},
 				"validation": {
@@ -6954,7 +7067,8 @@
 					"displayNameTooLong": "Der Anzeigename überschreitet die Grenze von 128 Zeichen.",
 					"descriptionTooLong": "Die Beschreibung überschreitet die Grenze von 1024 Zeichen.",
 					"targetRequired": "Ein Ziel-Agent ist erforderlich.",
-					"inputKindRequired": "Wählen Sie mindestens eine akzeptierte Eingabeart aus."
+					"inputKindRequired": "Wählen Sie mindestens eine akzeptierte Eingabeart aus.",
+					"graphTargetRequired": "Ein Ziel-Graph-Workflow ist erforderlich."
 				},
 				"approvalWarning": {
 					"title": "Tools mit Freigabepflicht",
@@ -7073,7 +7187,9 @@
 					"toolError": "Fehler",
 					"tokens": "{{count}} Tokens",
 					"showOutput": "Ausgabe-Payload anzeigen",
-					"hideOutput": "Ausgabe-Payload ausblenden"
+					"hideOutput": "Ausgabe-Payload ausblenden",
+					"graphRun": "Graph-Lauf",
+					"openGraphRun": "Graph-Lauf öffnen"
 				},
 				"cancel": {
 					"title": "Ausführung abbrechen",

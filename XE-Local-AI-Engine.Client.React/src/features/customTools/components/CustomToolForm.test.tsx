@@ -20,9 +20,10 @@ function values(overrides: Partial<CustomToolFormValues> = {}): CustomToolFormVa
 		mode: "Fixed",
 		enabled: false,
 		acknowledged: false,
+		allowUnattended: false,
 		parameters: [],
-		http: { method: "GET", urlTemplate: "", headers: [], bodyTemplate: "", allowedHosts: [] },
-		command: { executable: "", argsTemplate: [], workingDirectory: "", timeoutSeconds: 0, env: [] },
+		http: { method: "GET", urlTemplate: "", headers: [], bodyTemplate: "", allowedHosts: [], privateHosts: [] },
+		command: { executable: "", argsTemplate: [], workingDirectory: "", timeoutSeconds: 0, env: [], detach: false },
 		...overrides,
 	};
 }
@@ -77,8 +78,15 @@ describe("CustomToolForm", () => {
 			name: "fetch_status",
 			description: "Fetches a status page.",
 			acknowledged: true,
-			http: { method: "GET", urlTemplate: "https://example.test", headers: [], bodyTemplate: "", allowedHosts: [] },
-			command: { executable: "/usr/bin/env", argsTemplate: [], workingDirectory: "", timeoutSeconds: 0, env: [] },
+			http: {
+				method: "GET",
+				urlTemplate: "https://example.test",
+				headers: [],
+				bodyTemplate: "",
+				allowedHosts: [],
+				privateHosts: [],
+			},
+			command: { executable: "/usr/bin/env", argsTemplate: [], workingDirectory: "", timeoutSeconds: 0, env: [], detach: false },
 		});
 
 		act(() => ref.current?.submit());
@@ -174,6 +182,7 @@ describe("CustomToolForm", () => {
 				headers: [{ name: "Authorization", value: CUSTOM_TOOL_SECRET_SENTINEL, isSecret: true }],
 				bodyTemplate: "",
 				allowedHosts: [],
+				privateHosts: [],
 			},
 		});
 
@@ -208,6 +217,7 @@ describe("CustomToolForm", () => {
 				],
 				bodyTemplate: "",
 				allowedHosts: [],
+				privateHosts: [],
 			},
 		});
 
@@ -222,6 +232,80 @@ describe("CustomToolForm", () => {
 		act(() => ref.current?.submit());
 		expect(onSubmit.mock.calls[0]?.[0].http.headers).toHaveLength(1);
 		expect(onSubmit.mock.calls[0]?.[0].http.headers[0].value).toBe("");
+	});
+});
+
+describe("CustomToolForm unattended use and private hosts", () => {
+	afterEach(cleanup);
+
+	it("keeps the unattended option off until the tool is acknowledged and in Fixed mode", () => {
+		renderForm({ mode: "Parameterized" });
+
+		const checkbox = screen.getByTestId("custom-tool-form-allow-unattended") as HTMLInputElement;
+		expect(checkbox.disabled).toBe(true);
+
+		fireEvent.click(screen.getByTestId("custom-tool-form-acknowledge"));
+		expect(checkbox.disabled).toBe(true);
+
+		fireEvent.click(screen.getByRole("radio", { name: "Fixed" }));
+		expect(checkbox.disabled).toBe(false);
+	});
+
+	it("names a program launch in the Command danger note and a request in the HTTP one", () => {
+		renderForm({ kind: "Command" });
+		expect(screen.getByText(/a program is launched on this machine/)).toBeTruthy();
+		expect(screen.getByText(/A workflow may run this exact invocation with nobody present/)).toBeTruthy();
+		cleanup();
+
+		renderForm();
+		expect(screen.getByText(/the request is sent without asking anyone/)).toBeTruthy();
+	});
+
+	it("submits the flag and a listed private host", () => {
+		const { ref, onSubmit } = renderForm({
+			name: "lights_on",
+			description: "Turns the lights on.",
+			acknowledged: true,
+			http: {
+				method: "POST",
+				urlTemplate: "http://192.168.1.20:8123/api/services/light/turn_on",
+				headers: [],
+				bodyTemplate: "",
+				allowedHosts: ["192.168.1.20"],
+				privateHosts: [],
+			},
+		});
+
+		fireEvent.click(screen.getByTestId("custom-tool-form-allow-unattended"));
+		fireEvent.click(screen.getByTestId("custom-tool-form-http-private-host-add"));
+		fireEvent.change(screen.getByRole("textbox", { name: "Private host 1" }), { target: { value: "192.168.1.20" } });
+		act(() => ref.current?.submit());
+
+		expect(onSubmit).toHaveBeenCalledTimes(1);
+		expect(onSubmit.mock.calls[0]?.[0].allowUnattended).toBe(true);
+		expect(onSubmit.mock.calls[0]?.[0].http.privateHosts).toEqual(["192.168.1.20"]);
+	});
+
+	it("shows an inline error on a private host that is not an allowed host, and an always-denied one", () => {
+		const { ref, onSubmit } = renderForm({
+			name: "lights_on",
+			description: "Turns the lights on.",
+			acknowledged: true,
+			http: {
+				method: "GET",
+				urlTemplate: "https://api.example.com",
+				headers: [],
+				bodyTemplate: "",
+				allowedHosts: ["127.0.0.1"],
+				privateHosts: ["192.168.1.20", "127.0.0.1"],
+			},
+		});
+
+		act(() => ref.current?.submit());
+
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(screen.getByText("Add this host to Allowed hosts as well.")).toBeTruthy();
+		expect(screen.getByText(/stay blocked even when listed/)).toBeTruthy();
 	});
 });
 
@@ -249,6 +333,7 @@ describe("CustomToolForm narrow-width row layout", () => {
 				headers: [{ name: "Authorization", value: "", isSecret: true }],
 				bodyTemplate: "",
 				allowedHosts: [],
+				privateHosts: [],
 			},
 		});
 
@@ -283,6 +368,7 @@ describe("CustomToolForm narrow-width row layout", () => {
 				],
 				bodyTemplate: "",
 				allowedHosts: ["api.example.com", "backup.example.com"],
+				privateHosts: [],
 			},
 		});
 
@@ -320,6 +406,7 @@ describe("CustomToolForm narrow-width row layout", () => {
 					{ name: "TOKEN", value: "", isSecret: false },
 					{ name: "REGION", value: "", isSecret: false },
 				],
+				detach: false,
 			},
 		});
 
@@ -341,5 +428,36 @@ describe("CustomToolForm narrow-width row layout", () => {
 
 		expect(row.style.getPropertyValue("--group-wrap")).not.toBe("nowrap");
 		expect(row.querySelector<HTMLElement>(".mantine-TextInput-root")?.style.flexBasis).toBe("220px");
+	});
+
+	it("zeroes and locks the timeout when the launch is detached, and submits the flag", () => {
+		const { ref, onSubmit } = renderForm({
+			name: "open_word",
+			description: "Opens Word.",
+			acknowledged: true,
+			kind: "Command",
+			command: {
+				executable: "/usr/bin/word",
+				argsTemplate: [],
+				workingDirectory: "",
+				timeoutSeconds: 30,
+				env: [],
+				detach: false,
+			},
+		});
+
+		fireEvent.click(screen.getByTestId("custom-tool-form-command-detach"));
+
+		const timeout = screen.getByTestId("custom-tool-form-command-timeout") as HTMLInputElement;
+		expect(timeout.value).toBe("0");
+		expect(timeout.disabled).toBe(true);
+		expect(
+			screen.getByText("The program is started and not waited for; a crash within the first moment is reported."),
+		).toBeTruthy();
+
+		act(() => ref.current?.submit());
+
+		expect(onSubmit).toHaveBeenCalledTimes(1);
+		expect(onSubmit.mock.calls[0]?.[0].command).toMatchObject({ detach: true, timeoutSeconds: 0 });
 	});
 });

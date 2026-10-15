@@ -232,6 +232,9 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
     }
 
     /// <summary>Records the start call and answers whatever the test set up; it registers nothing.</summary>
+    public Task<DictationSessionStart> StartDictationAsync(string? language, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("The dictation endpoint is tested against the real service.");
+
     public Task<StartLiveResult> StartLiveAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         StartLiveCallCount++;

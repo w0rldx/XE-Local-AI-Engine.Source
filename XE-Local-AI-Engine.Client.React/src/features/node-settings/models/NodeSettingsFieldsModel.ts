@@ -90,6 +90,7 @@ const nodeSettingsFieldBounds = {
 	imageMaxLoadedProcesses: { min: 1, max: 4 },
 	graphWorkflowMaxConcurrentRuns: { min: 1, max: 64 },
 	graphWorkflowDefaultNodeTimeoutSeconds: { min: 30, max: 86400 },
+	intentMaxUtteranceAgeSeconds: { min: 5, max: 600 },
 	workSessionMaxStepsPerRun: { min: 1, max: 1000 },
 	workSessionMaxConcurrentSessions: { min: 1, max: 64 },
 	developmentMaxAttemptDurationSeconds: { min: 60, max: 86400 },
@@ -377,6 +378,10 @@ export interface NodeSettingsFieldsForm {
 	imageTextEncoderOnGpu: boolean;
 	graphWorkflowMaxConcurrentRuns: number | string;
 	graphWorkflowDefaultNodeTimeoutSeconds: number | string;
+	// The intent router graph workflow id; "" routes on aliases alone (the save sends "" to clear it). Read per request.
+	intentRouterDefinitionId: string;
+	// Blank = the node's shipped default (shippedDefaults); the save sends -1 to reset. Read per request.
+	intentMaxUtteranceAgeSeconds: number | string;
 	workSessionMaxStepsPerRun: number | string;
 	workSessionMaxConcurrentSessions: number | string;
 	developmentMaxAttemptDurationSeconds: number | string;
@@ -438,15 +443,17 @@ export const shippedDefaults = {
 	reasoningBudgetMediumTokens: 8192,
 	reasoningBudgetHighTokens: 24576,
 	chatOutputCapMaxTokens: 16384,
+	intentMaxUtteranceAgeSeconds: 30,
 	defaultReasoningEffort: "low",
 	chatOutputCapMode: "cap",
 } as const;
 
-// The request-only value that resets a token field above to its shipped default (StoredNodeSettings.TokenSettingUnset);
+// The request-only value that resets a blank-able field above to its shipped default (StoredNodeSettings.TokenSettingUnset);
 // a select clears with the empty string instead.
 const TOKEN_SETTING_UNSET = -1;
 
-const unsettableTokenFields: ReadonlySet<string> = new Set([
+const unsettableTunableFields: ReadonlySet<string> = new Set([
+	"intentMaxUtteranceAgeSeconds",
 	"reasoningBudgetMinimalTokens",
 	"reasoningBudgetLowTokens",
 	"reasoningBudgetMediumTokens",
@@ -503,6 +510,7 @@ const tunableFields = [
 	"imageMaxLoadedProcesses",
 	"graphWorkflowMaxConcurrentRuns",
 	"graphWorkflowDefaultNodeTimeoutSeconds",
+	"intentMaxUtteranceAgeSeconds",
 	"workSessionMaxStepsPerRun",
 	"workSessionMaxConcurrentSessions",
 	"developmentMaxAttemptDurationSeconds",
@@ -670,6 +678,8 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	imageTextEncoderOnGpu: false,
 	graphWorkflowMaxConcurrentRuns: 4,
 	graphWorkflowDefaultNodeTimeoutSeconds: 600,
+	intentRouterDefinitionId: "",
+	intentMaxUtteranceAgeSeconds: "",
 	workSessionMaxStepsPerRun: 25,
 	workSessionMaxConcurrentSessions: 1,
 	developmentMaxAttemptDurationSeconds: 1800,
@@ -780,6 +790,7 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		huggingFaceDiskMarginBytes: scaledOr(response.huggingFaceDiskMarginBytes, "huggingFaceDiskMarginBytes"),
 		containerRuntimeSelection: response.containerRuntimeSelection ?? nodeSettingsFieldDefaults.containerRuntimeSelection,
 		defaultReasoningEffort: response.defaultReasoningEffort ?? nodeSettingsFieldDefaults.defaultReasoningEffort,
+		intentRouterDefinitionId: response.intentRouterDefinitionId ?? "",
 		chatOutputCapMode: response.chatOutputCapMode ?? nodeSettingsFieldDefaults.chatOutputCapMode,
 		agentHomeMaxRunSeconds: scaledOr(response.agentHomeMaxRunSeconds, "agentHomeMaxRunSeconds"),
 		agentHomeRunRetentionDays: numberOr(response.agentHomeRunRetentionDays, nodeSettingsFieldDefaults.agentHomeRunRetentionDays),
@@ -957,6 +968,7 @@ const responseBoundKeys = {
 	spawnMaxCloud: ["minSpawnMaxCloud", "maxAllowedSpawnMaxCloud"],
 	spawnQueueWaitSeconds: ["minSpawnQueueWaitSeconds", "maxAllowedSpawnQueueWaitSeconds"],
 	knowledgeRetrievalLatencyBudgetMs: ["minKnowledgeRetrievalLatencyBudgetMs", "maxAllowedKnowledgeRetrievalLatencyBudgetMs"],
+	intentMaxUtteranceAgeSeconds: ["minIntentMaxUtteranceAgeSeconds", "maxAllowedIntentMaxUtteranceAgeSeconds"],
 	knowledgeScheduledReindexIntervalMinutes: [
 		"minKnowledgeScheduledReindexIntervalMinutes",
 		"maxAllowedKnowledgeScheduledReindexIntervalMinutes",
@@ -1104,7 +1116,8 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 // computeEnabled / devWorkflowsEnabled (their agent and workflow definitions are seeded at startup).
 // Every other form field is read live on each call and must NOT be listed here: agentHome*, keepModelWarm*,
 // toolCapableModels, enableTools, customToolsEnabled, toolRelevanceEnabled, webAccessEnabled, webSearchSearxngUrl,
-// detachedGraceSeconds, usageRates, uiMode, sandboxSecurityProfile, voiceFeatureEnabled, defaultVoiceProfile, and the message-request timeout.
+// detachedGraceSeconds, usageRates, uiMode, sandboxSecurityProfile, voiceFeatureEnabled, defaultVoiceProfile, the two intent
+// settings (GraphWorkflowIntentService reads both per request), and the message-request timeout.
 export const restartGatedNodeSettingsFields: ReadonlySet<keyof NodeSettingsFieldsForm> = new Set<keyof NodeSettingsFieldsForm>([
 	"defaultModelName",
 	"ollamaEndpoint",
@@ -1517,7 +1530,7 @@ export function buildNodeSettingsRequest(
 	}
 
 	for (const field of tunableFields) {
-		if (unsettableTokenFields.has(field) && String(form[field]).trim() === "") {
+		if (unsettableTunableFields.has(field) && String(form[field]).trim() === "") {
 			if (String(baseline[field]).trim() !== "") {
 				body[field] = TOKEN_SETTING_UNSET;
 			}
@@ -1584,6 +1597,11 @@ export function buildNodeSettingsRequest(
 
 	if (form.defaultReasoningEffort !== baseline.defaultReasoningEffort) {
 		body.defaultReasoningEffort = form.defaultReasoningEffort;
+	}
+
+	// A GUID sets the router, "" clears it (alias-only routing); the picker offers only saved definitions and "none".
+	if (form.intentRouterDefinitionId !== baseline.intentRouterDefinitionId) {
+		body.intentRouterDefinitionId = form.intentRouterDefinitionId;
 	}
 
 	if (form.chatOutputCapMode !== baseline.chatOutputCapMode) {

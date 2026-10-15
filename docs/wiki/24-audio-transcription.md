@@ -46,8 +46,8 @@ the session/segment data model, the **batch file-upload** transcription path wit
 the **live** transcription pipeline (live-start endpoint, `TranscriptionHub` and the segmenter — see
 [Live sessions](#live-sessions)), the **browser capture** that feeds it (see
 [Browser capture and the live UI](#browser-capture-and-the-live-ui)), and **Windows per-application capture**, the one
-server-side capture source (see [Windows per-application capture](#windows-per-application-capture)). Dictation is
-**not built yet** — see [What is not here yet](#what-is-not-here-yet).
+server-side capture source (see [Windows per-application capture](#windows-per-application-capture)), and the
+backend of **dictation**, an ephemeral live session that stores nothing (see [Dictation sessions](#dictation-sessions)).
 
 The decisions behind the feature — browser-first capture, channel attribution instead of diarization, the managed
 Linux CUDA source build, the slice order, and the never-persist-audio rule — are recorded in
@@ -137,7 +137,8 @@ Two entities, both `internal sealed record class`, both mapped in `Configuration
 `ApplicationProcess` from day one, and `TranscriptChannel` carries `Mono`, `You` and `Others`, because both are
 persisted as ints and adding a member later would be a schema change. `File` (batch upload) and the live capture kinds
 `Microphone`, `SystemAudio` and `MicrophoneAndSystem` are creatable from the SPA on every host, and `ApplicationProcess`
-on a Windows host that reports `processCaptureSupported`; only `Dictation` is not creatable from any surface yet.
+on a Windows host that reports `processCaptureSupported`. `Dictation` is never a row: it is the in-memory kind of a
+[dictation session](#dictation-sessions), which has no `TranscriptionSession` behind it.
 `TranscriptionService.LiveChannelsFor` maps `SystemAudio` **and `ApplicationProcess`** to the `Others` lane and
 `MicrophoneAndSystem` to both (`You` and `Others`), which is what lets a Windows per-application capture share the
 browser's system-audio lane rather than inventing one; single-source sessions carry `Mono`.
@@ -265,6 +266,7 @@ Routes under `transcription/*` (`LocalApiRoutes.Transcription`), one endpoint cl
 | `DeleteTranscriptionSessionEndpoint` | `DELETE transcription/sessions/{sessionId}` | Cancels anything in flight, then deletes the session and its segments. |
 | `CancelTranscriptionSessionEndpoint` | `POST transcription/sessions/{sessionId}/cancel` | Signals the in-flight transcription for this session. |
 | `UpdateTranscriptSegmentEndpoint` | `PUT transcription/sessions/{sessionId}/segments/{seq}` | Replaces one row's text. Body `{ text }`, validated 1–8000 characters after trimming (400 otherwise) and stored trimmed. 200 with the updated `TranscriptSegmentResponse`; 404 for an unknown session or row; 409 `session-transcribing` while the row is `Transcribing` **or** the session is still registered in the live registry, which covers the drain after Stop. |
+| `StartDictationSessionEndpoint` | `POST transcription/dictation-sessions` | Starts a persist-free dictation session, optionally pinned to a language; see [Dictation sessions](#dictation-sessions). |
 | `UploadTranscriptionAudioEndpoint` | `POST transcription/sessions/{sessionId}/file` | The streaming multipart upload and the batch transcription it drives. |
 | `ListCaptureProcessesEndpoint` | `GET transcription/capture/processes` | The per-application capture picker: `{ supported, processes: [{ pid, name, hasAudio }] }`, one row per non-expired render session, `hasAudio` telling the operator which of them is playing right now. Only the id and the name — no path, window title or command line. |
 | `StartProcessCaptureEndpoint` | `POST transcription/sessions/{sessionId}/capture/process` | Attaches server-side capture of one process to a session that is already live. 400 `capture-not-supported`, 409 `session-not-live` / `capture-already-running`. |
@@ -308,6 +310,37 @@ up to the supervisor's readiness budget; the SPA holds its starting state for as
 
 The browser awaits a 200 from this endpoint before it forwards a single frame — a frame that arrives before the
 session is armed has nowhere to land.
+
+### Dictation sessions
+
+`POST transcription/dictation-sessions` (`StartDictationSessionEndpoint`, Operator, JSON body `{ language? }`) calls
+`ITranscriptionService.StartDictationAsync`, which resolves the node's effective model, warms whisper-server exactly as
+the live start does, mints the session id and registers a `Dictation` session with `ILiveTranscriptionSessionRegistry`:
+one `Mono` lane, the default window, `LiveSessionOptions.Persist` off, and `LiveSessionOptions.Language` set to the
+body's `language`. It answers `{ sessionId, startedAtUtc,
+lastSeq: 0 }`, or 400 with the sanitized runtime message when the spawn fails, before anything is registered.
+
+**The language.** `language` is a whisper language code checked by the same rule as a session's language override (2 to
+8 characters after trimming, else 400); `{}` or `null` detects the language per window, as before the option existed.
+The option exists because automatic detection flips short English commands to German for some speakers: in a recorded
+round, "Lights on." committed as German text and the command was lost, and the same audio pinned to `en` transcribed
+correctly. The body is required JSON (`{}` at least), because a body-less POST answers 415 like any FastEndpoints
+route with a request type.
+
+From there the session uses the ordinary hub methods. `SubscribeSession` accepts it with an empty replay because it is
+live, `PushAudioFrame` forwards into its lane, commits publish `transcriptionSegmentCommitted` with sequences from 1,
+and `EndSession` ends it and publishes `transcriptionSessionStatusChanged`. **No `TranscriptionSession` or
+`TranscriptSegment` row is ever written**, so the sessions list never shows one, and a reconnect resumes the stream but
+recovers nothing it missed. A tab that never ends its session is reaped by the registry's bounds, the 60 s
+producer-attachment deadline and the abandonment grace. No limit on the number of live sessions exists: a dictation
+session is bounded like any other, by `Transcription:MaxBufferedAudioMb` on its own queued audio.
+
+The SPA consumer is the `/command` page: its microphone button opens a dictation session and appends each committed
+segment to the page's text box; nothing is sent until the operator presses Enter. An Auto / EN / DE control beside the
+button picks the language sent with every start, remembered per browser, defaulting to the UI language when it is
+English or German and to Auto otherwise. The page also listens, with no-op handlers, to the hub pushes it has no use for
+(`transcriptionCatchUpProgress`, `transcriptionAdmissionClosed`, `transcriptionSourceQuiet`), so the SignalR client
+does not warn about unhandled methods.
 
 ### `TranscriptionHub`
 
@@ -411,7 +444,7 @@ calls into it per lane.
   `Persist`, then publishing — crosses one session-wide lock, because the client's watermark depends on publication
   order: with allocation alone serialized, a lane that stalled inside its write would publish sequence two before
   sequence one and the client would discard the first segment permanently. **Persistence is a subscriber of the
-  commit, never its source**: a persist-free dictation session (S6) streams the identical event sequence with no rows
+  commit, never its source**: a persist-free [dictation session](#dictation-sessions) streams the identical event sequence with no rows
   behind it, so nothing may make a publish conditional on a write.
 - **One termination path, `EndAsync(reason)`, with six callers:** the hub's `EndSession` (`Completed`);
   cancel/delete via `TranscriptionService.CancelAsync` (`Cancelled`); the disconnect grace,
@@ -468,7 +501,8 @@ Re-record with the opt-in `WhisperGoldenFixtureRecorder`, which needs a running 
 
 ## Browser capture and the live UI
 
-The browser is the only capture device this feature has today. Everything below lives in
+The browser is the only capture device this feature has today. The microphone source, the shared PCM graph and the
+worklet live in `src/core/audio/capture/` (the `/command` page's dictation uses them too); the rest lives in
 `src/features/transcription/capture/`, `hooks/` and `components/` — see
 [React Client](10-react-client.md) for where each file sits.
 
@@ -1067,8 +1101,8 @@ of 5, and the field stays on the REST contract for API callers.
   fails closed.
 - **Capturing an application *without* its child processes.** Not implementable through `ProcessLoopbackMode`; the
   product captures the process tree and says so.
-- **Dictation into the agent chat** (S6). It appends in place through a toolbar callback and deliberately does not
-  route through the pending-composer store.
+- **Dictation into the agent chat composer.** The backend exists ([Dictation sessions](#dictation-sessions)); the
+  only surface using it is the `/command` page, and the composer's microphone button is deferred.
 - **Diarization.** whisper.cpp clusters no speakers; `You`/`Others` come from transcribing two captured channels
   separately ([ADR 0012](../adr/0012-audio-transcription-runtime-and-capture.md) D2).
 

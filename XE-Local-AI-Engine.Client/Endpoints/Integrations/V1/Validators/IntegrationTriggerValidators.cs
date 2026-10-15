@@ -3,13 +3,15 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Integrations.V1.Validators;
 using FastEndpoints;
 using FluentValidation;
 using XE_Local_AI_Engine.Client.Endpoints.Integrations.V1.Mappers;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     Shape validation only: the name pattern, lengths, enum membership and the input-kind array.
 /// </summary>
 /// <remarks>
-///     The two checks that need a database — the target agent exists, and it is a single agent rather than an
-///     orchestrator — belong to <c>IIntegrationTriggerService</c>, because a probe does not belong in a validator.
+///     The checks that need a database — the target exists, an agent is a single agent rather than an orchestrator,
+///     graph workflows are on for a graph target — belong to <c>IIntegrationTriggerService</c>, because a probe does not
+///     belong in a validator.
 /// </remarks>
 public static class IntegrationTriggerValidationRules
 {
@@ -23,6 +25,36 @@ public static class IntegrationTriggerValidationRules
     public const int MaxDescriptionLength = 1024;
 
     public const string InputKindsMessage = "Select at least one accepted input kind (text, json).";
+
+    public const string AgentTargetMessage = "An agent target names a saved agent and no graph workflow.";
+
+    public const string GraphTargetMessage = "A graph target names a saved graph workflow and no agent.";
+
+    /// <summary>Exactly the id the target kind names, and not the other: the database's one-target constraint, answered as a 400.</summary>
+    internal static void ApplyTarget<T>(AbstractValidator<T> validator,
+        Func<T, IntegrationTargetKind> kind,
+        Func<T, Guid?> agentDefinitionId,
+        Func<T, Guid?> graphWorkflowDefinitionId)
+    {
+        ArgumentNullException.ThrowIfNull(validator);
+        ArgumentNullException.ThrowIfNull(kind);
+        ArgumentNullException.ThrowIfNull(agentDefinitionId);
+        ArgumentNullException.ThrowIfNull(graphWorkflowDefinitionId);
+
+        _ = validator.RuleFor(request => kind(request)).IsInEnum().OverridePropertyName("targetKind");
+
+        validator.When(request => kind(request) == IntegrationTargetKind.Agent,
+            () => _ = validator.RuleFor(request => request)
+                               .Must(request => agentDefinitionId(request) is { } id && id != Guid.Empty && graphWorkflowDefinitionId(request) is null)
+                               .WithMessage(AgentTargetMessage)
+                               .OverridePropertyName("targetAgentDefinitionId"));
+
+        validator.When(request => kind(request) == IntegrationTargetKind.Graph,
+            () => _ = validator.RuleFor(request => request)
+                               .Must(request => graphWorkflowDefinitionId(request) is { } id && id != Guid.Empty && agentDefinitionId(request) is null)
+                               .WithMessage(GraphTargetMessage)
+                               .OverridePropertyName("targetGraphWorkflowDefinitionId"));
+    }
 
     internal static void ApplyInputKinds<T>(AbstractValidator<T> validator, Func<T, IReadOnlyList<string>?> selector)
     {
@@ -69,11 +101,10 @@ public sealed class CreateIntegrationTriggerRequestValidator : Validator<CreateI
             .Matches(IntegrationTriggerValidationRules.NamePattern)
             .WithMessage(IntegrationTriggerValidationRules.NameMessage);
 
-        RuleFor(static request => request.TargetAgentDefinitionId)
-            .NotEmpty()
-            .WithMessage("A trigger needs a target agent.");
-
-        RuleFor(static request => request.TargetKind).IsInEnum();
+        IntegrationTriggerValidationRules.ApplyTarget(this,
+            static request => request.TargetKind,
+            static request => request.TargetAgentDefinitionId,
+            static request => request.TargetGraphWorkflowDefinitionId);
         RuleFor(static request => request.SessionPolicy).IsInEnum();
 
         IntegrationTriggerValidationRules.ApplyDisplayFields(this, static request => request.DisplayName, static request => request.Description);
@@ -85,10 +116,10 @@ public sealed class UpdateIntegrationTriggerRequestValidator : Validator<UpdateI
 {
     public UpdateIntegrationTriggerRequestValidator()
     {
-        RuleFor(static request => request.TargetAgentDefinitionId)
-            .NotEmpty()
-            .WithMessage("A trigger needs a target agent.");
-
+        IntegrationTriggerValidationRules.ApplyTarget(this,
+            static request => request.TargetKind,
+            static request => request.TargetAgentDefinitionId,
+            static request => request.TargetGraphWorkflowDefinitionId);
         RuleFor(static request => request.SessionPolicy).IsInEnum();
 
         RuleFor(static request => request.ExpectedVersion)

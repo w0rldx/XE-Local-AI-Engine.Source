@@ -26,6 +26,9 @@ public sealed record IntegrationExecutionSnapshot
 
     public required Guid InvocationId { get; init; }
 
+    /// <summary>The graph run a <c>Graph</c> target started, or null.</summary>
+    public Guid? GraphWorkflowRunId { get; init; }
+
     public required IntegrationExecutionStatus Status { get; init; }
 
     public required long ReceivedAtUtc { get; init; }
@@ -141,6 +144,8 @@ public sealed class IntegrationExecutionStatusUpdate
     public long? EndedAtUtc { get; init; }
 
     public Guid? InvocationId { get; init; }
+
+    public Guid? GraphWorkflowRunId { get; init; }
 
     public long? StopRequestedAtUtc { get; init; }
 

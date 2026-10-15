@@ -259,6 +259,13 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxWebFetchTimeoutSeconds = 120;
 
+    /// <summary>How old an intent utterance may be when it reaches the intent endpoint, in seconds.</summary>
+    public const int DefaultIntentMaxUtteranceAgeSeconds = 30;
+
+    public const int MinIntentMaxUtteranceAgeSeconds = 5;
+
+    public const int MaxIntentMaxUtteranceAgeSeconds = 600;
+
     /// <summary>Default cap on the text <c>web_fetch</c> returns, in characters (the former <c>WebFetchService.MaxContentChars</c>).</summary>
     public const int DefaultWebFetchMaxContentChars = 12_000;
 
@@ -1244,6 +1251,12 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>Time budget of one <c>web_fetch</c> or <c>web_search</c> call in seconds. Seed: 20. Read per call.</summary>
     public int? WebFetchTimeoutSeconds { get; init; }
+
+    /// <summary>The graph workflow the intent service asks when no alias matches; null routes on aliases alone. Read per request.</summary>
+    public Guid? IntentRouterDefinitionId { get; init; }
+
+    /// <summary>How old an intent utterance may be, in seconds; older ones are refused as replays. Seed: 30. Read per request.</summary>
+    public int? IntentMaxUtteranceAgeSeconds { get; init; }
 
     /// <summary>Cap on the readable text one <c>web_fetch</c> returns, in characters. Seed: 12000. Read per call.</summary>
     public int? WebFetchMaxContentChars { get; init; }

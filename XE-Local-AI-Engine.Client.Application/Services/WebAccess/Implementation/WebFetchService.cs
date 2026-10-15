@@ -76,7 +76,7 @@ internal sealed class WebFetchService
     ///     The open-internet form of the custom-tool guard: no host allow-list, full private-address deny list.
     /// </summary>
     internal static void ValidatePublicUrl(Uri url) =>
-        CustomToolSsrfGuard.ValidateRequestUrl(url, [], hostIsParameterized: false);
+        CustomToolSsrfGuard.ValidateRequestUrl(url, [], hostIsParameterized: false, privateHosts: []);
 
     /// <summary>
     ///     Whether <paramref name="url" /> matches an allow-list entry: same scheme, host and port, and a path under the

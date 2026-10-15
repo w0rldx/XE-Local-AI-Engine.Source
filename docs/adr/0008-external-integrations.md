@@ -489,3 +489,18 @@ in the closed vocabulary with the same meaning for the off case. The operator to
 switch set is described in `docs/wiki/12-security-and-privacy.md`. Since the per-connection cloud grants (2026-10-09)
 an external connection's unattended-runs grant admits the run with the switch off, and the rejection names that grant
 as the alternative.
+
+## Amendment 2026-10-15: a `Graph` integration target
+
+Decision item 2 is widened: `IntegrationTargetKind` gains `Graph` beside `Agent`. A trigger names exactly one target,
+a saved agent or a saved Graph Workflow definition, enforced by a database check constraint, and an execution row
+records the graph run it started. The route family, the `xeint_` keys, loopback-only admission, the admission
+transaction, the queue bounds, `PrincipalId` ownership and request idempotency are the same as for an agent target. The
+coordinator starts the run with origin `Integration` and the caller's `PrincipalId` and `KeyPrefix`
+([ADR 0021](0021-unattended-actions-in-graph-tool-nodes.md) decision 6), and a definition that does not accept that
+origin refuses the start. Graph run events are mapped onto the existing stream types: node start and finish onto
+`tool.started` and `tool.completed`, the End output onto `external.output`, and the run's end onto
+`execution.completed`, `execution.failed` or `execution.cancelled`; no new event type joins the persisted set.
+Decision item 4 stands for agent targets. A graph target runs only what its definition allows: an unattended action
+in it is authorised by the operator's flags on the tool and the definition and audited per ADR 0021, never by the
+integration principal. Decision item 11 (loopback-only) is unchanged. The operator took this decision on 2026-10-15.

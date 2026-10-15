@@ -132,6 +132,10 @@ internal static class NodeSettingsEndpointDtoMapper
             WebFetchTimeoutSeconds = settings.WebFetchTimeoutSeconds,
             MinWebFetchTimeoutSeconds = StoredNodeSettings.MinWebFetchTimeoutSeconds,
             MaxAllowedWebFetchTimeoutSeconds = StoredNodeSettings.MaxWebFetchTimeoutSeconds,
+            IntentRouterDefinitionId = settings.IntentRouterDefinitionId,
+            IntentMaxUtteranceAgeSeconds = settings.IntentMaxUtteranceAgeSeconds,
+            MinIntentMaxUtteranceAgeSeconds = StoredNodeSettings.MinIntentMaxUtteranceAgeSeconds,
+            MaxAllowedIntentMaxUtteranceAgeSeconds = StoredNodeSettings.MaxIntentMaxUtteranceAgeSeconds,
             WebFetchMaxContentChars = settings.WebFetchMaxContentChars,
             MinWebFetchMaxContentChars = StoredNodeSettings.MinWebFetchMaxContentChars,
             MaxAllowedWebFetchMaxContentChars = StoredNodeSettings.MaxWebFetchMaxContentChars,
@@ -427,6 +431,14 @@ internal static class NodeSettingsEndpointDtoMapper
             MaxProviderCallsPerInvocation = KeepOrUnset(request.MaxProviderCallsPerInvocation, currentSettings.MaxProviderCallsPerInvocation),
             CustomToolMaxTimeoutSeconds = KeepOrUnset(request.CustomToolMaxTimeoutSeconds, currentSettings.CustomToolMaxTimeoutSeconds),
             WebFetchTimeoutSeconds = KeepOrUnset(request.WebFetchTimeoutSeconds, currentSettings.WebFetchTimeoutSeconds),
+            // The validator has proven a non-empty value is a GUID; the empty string clears the router.
+            IntentRouterDefinitionId = request.IntentRouterDefinitionId switch
+            {
+                null => currentSettings.IntentRouterDefinitionId,
+                "" => null,
+                { } routerId => Guid.TryParse(routerId, out var parsed) ? parsed : currentSettings.IntentRouterDefinitionId
+            },
+            IntentMaxUtteranceAgeSeconds = KeepOrUnset(request.IntentMaxUtteranceAgeSeconds, currentSettings.IntentMaxUtteranceAgeSeconds),
             WebFetchMaxContentChars = KeepOrUnset(request.WebFetchMaxContentChars, currentSettings.WebFetchMaxContentChars),
             KnowledgeSearchDefaultResults = KeepOrUnset(request.KnowledgeSearchDefaultResults, currentSettings.KnowledgeSearchDefaultResults),
             KnowledgeSearchMaxResults = KeepOrUnset(request.KnowledgeSearchMaxResults, currentSettings.KnowledgeSearchMaxResults),

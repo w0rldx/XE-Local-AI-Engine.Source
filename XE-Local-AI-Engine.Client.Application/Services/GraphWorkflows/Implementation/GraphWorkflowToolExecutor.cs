@@ -69,8 +69,10 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     /// <summary>Admits an eligible Tool node run, and answers how many transitions it wrote.</summary>
     /// <remarks>
     ///     The row goes to <c>Queued</c> first ALWAYS, carrying the input document the bindings resolve against, and
-    ///     moves on to <c>Running</c> in the same tick once the call actually holds a slot. A lane with none free
-    ///     leaves it <c>Queued</c> saying what it waits for, and the next tick asks again.
+    ///     moves on to <c>Running</c> in the same tick once the call holds a slot. The call does not START until that
+    ///     <c>Running</c> write has committed (ADR 0021): a restart collapses a <c>Queued</c> row back to <c>Pending</c>
+    ///     without spending an attempt, so an action fired from one would fire again. A failed write faults the parked
+    ///     call unstarted. A lane with no slot free leaves the row <c>Queued</c> saying what it waits for.
     /// </remarks>
     public async Task<int> DispatchAsync(IGraphWorkflowStore store,
         GraphWorkflowRunSnapshot run,
@@ -147,19 +149,41 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             return written + await FailAsync(store, graph, run, node, nodeRun, GraphWorkflowFailureClass.ValidationFailed, refusal, eventType: null, cancellationToken);
         }
 
+        var admitted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
         // Guid.Empty rather than a minted id: the lane takes one because the agent lane's stop path must hand its runner something, and a tool call has
         // no such handle — an in-process await its token ends. An id minted here would appear on the row as a correlation nothing else in the system carries.
         var flight = await _lane.TryStartAsync(nodeRun.Id,
             nodeRun.Attempt,
             Guid.Empty,
-            (leaseAcquired, token) => InvokeAsync(run.Id, nodeRun.Id, node, config, argumentsJson, leaseAcquired, token),
+            async (leaseAcquired, token) =>
+            {
+                // Opened only once Running has committed; the lane cancelling the token ends the wait too.
+                await admitted.Task.WaitAsync(token);
+                return await InvokeAsync(run.Id, run.DefinitionId, nodeRun.Id, node, config, argumentsJson, leaseAcquired, token);
+            },
             cancellationToken);
 
-        // Queueing, not failure: every slot is held. No event and no failure class — the row's reason says what it is
-        // waiting for, and the next tick asks again.
-        return flight is null
-            ? written
-            : written + await RunningAsync(store, run, nodeRun, cancellationToken);
+        // Queueing, not failure: every slot is held, nothing started, and the gate is dropped. No event and no failure
+        // class — the row's reason says what it waits for, and the next tick asks again.
+        if (flight is null)
+        {
+            return written;
+        }
+
+        try
+        {
+            written += await RunningAsync(store, run, nodeRun, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            // The call never starts: its flight faults, and the poll fails the row through the fault mapping.
+            admitted.SetException(exception);
+            throw;
+        }
+
+        admitted.SetResult();
+        return written;
     }
 
     /// <summary>Settles the row if its tool call has landed, and answers how many transitions that wrote.</summary>
@@ -272,6 +296,7 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
     ///     call without ever rethrowing.
     /// </summary>
     private async Task<ToolInvocationOutcome> InvokeAsync(Guid runId,
+        Guid definitionId,
         Guid nodeRunId,
         GraphWorkflowGraphNode node,
         GraphWorkflowToolConfig config,
@@ -304,7 +329,8 @@ internal sealed class GraphWorkflowToolExecutor : IGraphWorkflowNodeExecutor, IA
             RunId = runId,
             NodeRunId = nodeRunId,
             NodeKey = node.NodeKey,
-            Timeout = timeout
+            Timeout = timeout,
+            DefinitionId = definitionId
         }, cancellationToken);
     }
 

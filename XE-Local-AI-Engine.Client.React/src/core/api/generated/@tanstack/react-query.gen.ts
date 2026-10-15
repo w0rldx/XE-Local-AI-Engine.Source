@@ -268,6 +268,7 @@ import {
 	inspectImageRepository,
 	installExternalApp,
 	invalidateInferenceProfile,
+	invokeGraphWorkflowIntent,
 	listAgentDefinitions,
 	listAgentExecutionLogs,
 	listAgentHomeRuns,
@@ -424,6 +425,7 @@ import {
 	startBenchmarkRunFidelity,
 	startDevelopmentNextAction,
 	startDevWorkflowRun,
+	startDictationSession,
 	startExternalApp,
 	startGgufDownload,
 	startGgufImport,
@@ -1099,6 +1101,9 @@ import type {
 	InstallExternalAppResponse,
 	InvalidateInferenceProfileData,
 	InvalidateInferenceProfileResponse,
+	InvokeGraphWorkflowIntentData,
+	InvokeGraphWorkflowIntentError,
+	InvokeGraphWorkflowIntentResponse,
 	ListAgentDefinitionsData,
 	ListAgentDefinitionsResponse,
 	ListAgentExecutionLogsData,
@@ -1489,6 +1494,9 @@ import type {
 	StartDevWorkflowRunData,
 	StartDevWorkflowRunError,
 	StartDevWorkflowRunResponse,
+	StartDictationSessionData,
+	StartDictationSessionError,
+	StartDictationSessionResponse,
 	StartExternalAppData,
 	StartExternalAppError,
 	StartExternalAppResponse,
@@ -6531,6 +6539,30 @@ export const startGraphWorkflowRunMutation = (
 	return mutationOptions;
 };
 
+export const invokeGraphWorkflowIntentMutation = (
+	options?: Partial<Options<InvokeGraphWorkflowIntentData>>,
+): UseMutationOptions<
+	InvokeGraphWorkflowIntentResponse,
+	AxiosError<InvokeGraphWorkflowIntentError>,
+	Options<InvokeGraphWorkflowIntentData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		InvokeGraphWorkflowIntentResponse,
+		AxiosError<InvokeGraphWorkflowIntentError>,
+		Options<InvokeGraphWorkflowIntentData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await invokeGraphWorkflowIntent({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const listGraphWorkflowRunsQueryKey = (options: Options<ListGraphWorkflowRunsData>) =>
 	createQueryKey("listGraphWorkflowRuns", options);
 
@@ -11063,6 +11095,30 @@ export const listCaptureProcessesOptions = (options?: Options<ListCaptureProcess
 		},
 		queryKey: listCaptureProcessesQueryKey(options),
 	});
+
+export const startDictationSessionMutation = (
+	options?: Partial<Options<StartDictationSessionData>>,
+): UseMutationOptions<
+	StartDictationSessionResponse,
+	AxiosError<StartDictationSessionError>,
+	Options<StartDictationSessionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartDictationSessionResponse,
+		AxiosError<StartDictationSessionError>,
+		Options<StartDictationSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startDictationSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const listTranscriptionModelsQueryKey = (options?: Options<ListTranscriptionModelsData>) =>
 	createQueryKey("listTranscriptionModels", options);

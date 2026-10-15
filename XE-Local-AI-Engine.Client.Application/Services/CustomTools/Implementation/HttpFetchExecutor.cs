@@ -61,7 +61,7 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
 
     public CustomToolKind Kind => CustomToolKind.HttpFetch;
 
-    public async Task<string> ExecuteAsync(CustomToolRecord tool, string jsonArguments, CancellationToken cancellationToken)
+    public async Task<CustomToolExecution> ExecuteAsync(CustomToolRecord tool, string jsonArguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(tool);
 
@@ -82,25 +82,26 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
 
             var client = _httpClientFactory.CreateClient(HttpClientName);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linkedSource.Token);
-            return await FormatResponseAsync(tool.Name, response, redactor, linkedSource.Token);
+            var text = await FormatResponseAsync(tool.Name, response, redactor, linkedSource.Token);
+            return response.IsSuccessStatusCode ? CustomToolExecution.Success(text) : CustomToolExecution.Failure(text);
         }
         catch (CustomToolExecutionException exception)
         {
             // A guard blocked the call (SSRF, bad template, type mismatch). Return a scrubbed, non-throwing result.
-            return $"The custom tool call was blocked: {redactor.Redact(exception.Message)}";
+            return CustomToolExecution.Failure($"The custom tool call was blocked: {redactor.Redact(exception.Message)}");
         }
         catch (CustomToolConfigurationException exception)
         {
             _logger.LogWarning("Custom tool {ToolName} has invalid configuration: {Reason}", tool.Name, exception.Message);
-            return "The custom tool is misconfigured and could not run.";
+            return CustomToolExecution.Failure("The custom tool is misconfigured and could not run.");
         }
         catch (HttpRequestException exception)
         {
-            return $"The custom tool request failed: {redactor.Redact(exception.Message)}";
+            return CustomToolExecution.Failure($"The custom tool request failed: {redactor.Redact(exception.Message)}");
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return "The custom tool request timed out.";
+            return CustomToolExecution.Failure("The custom tool request timed out.");
         }
     }
 
@@ -128,6 +129,14 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
         var request = new HttpRequestMessage(new HttpMethod(config.Method.ToUpperInvariant()), url);
         try
         {
+            if (config.PrivateHosts.Count > 0)
+            {
+                // The pinned connect callback reads the exception from the request. Connection: close keeps a connection opened under it
+                // out of the shared pool, so a later request to the same host without the exception can never ride it.
+                request.Options.Set(CustomToolSsrfGuard.PrivateHostsOption, config.PrivateHosts);
+                request.Headers.ConnectionClose = true;
+            }
+
             // Build the body first so a content-typed header (e.g. Content-Type) routes onto the content that exists.
             if (!string.IsNullOrEmpty(config.BodyTemplate))
             {
@@ -178,7 +187,7 @@ internal sealed class HttpFetchExecutor : ICustomToolExecutor
             throw new CustomToolExecutionException("The assembled request URL is not a valid absolute URL.");
         }
 
-        CustomToolSsrfGuard.ValidateRequestUrl(url, config.AllowedHosts, hostIsParameterized);
+        CustomToolSsrfGuard.ValidateRequestUrl(url, config.AllowedHosts, hostIsParameterized, config.PrivateHosts);
         return url;
     }
 

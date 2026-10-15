@@ -107,6 +107,9 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         AssertEx.Equal("Triage", definition.GetProperty("name").GetString());
         AssertEx.Equal(3, definition.GetProperty("nodeCount").GetInt32());
         AssertEx.False(definition.TryGetProperty("graph", out _), "the list never carries a graph: it would decrypt a blob per row for nothing.");
+        AssertEx.False(definition.GetProperty("allowsActions").GetBoolean(), "the list says whether a definition may run actions (ADR 0021).");
+        AssertEx.Equal("Manual,Chat", string.Join(',', definition.GetProperty("triggerSources").EnumerateArray().Select(static name => name.GetString())),
+            "the list names the accepted sources in declaration order.");
     }
 
     /// <summary>
@@ -295,7 +298,9 @@ public sealed class GraphWorkflowDefinitionEndpointTests
                                                                                                   && command.Name == "renamed"
                                                                                                   && command.Description == "still triage"
                                                                                                   && command.GraphJson == null
-                                                                                                  && command.NodeCount == null),
+                                                                                                  && command.NodeCount == null
+                                                                                                  && command.AllowsActions == null
+                                                                                                  && command.TriggerSources == null),
                        Arg.Any<CancellationToken>());
     }
 
@@ -406,6 +411,106 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         AssertExplicitNullCondition(storedDocument.RootElement, "the stored graph");
         using var document = JsonDocument.Parse(body);
         AssertExplicitNullCondition(document.RootElement.GetProperty("graph"), "the response");
+    }
+
+    /// <summary>The Operator update is the ONE route that sets the action flag (ADR 0021), and the detail reads it back.</summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task UpdateDefinition_WithAllowsActions_SendsTheFlagAndAnswersIt(bool allowsActions)
+    {
+        var store = Store();
+        store.UpdateDefinitionAsync(Arg.Any<UpdateGraphWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call => Snapshot(allowsActions: call.Arg<UpdateGraphWorkflowDefinitionCommand>().AllowsActions ?? false));
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "PUT", Definition, $$"""{"version":4,"allowsActions":{{(allowsActions ? "true" : "false")}}}""");
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, body);
+        await store.Received(1)
+                   .UpdateDefinitionAsync(Arg.Is<UpdateGraphWorkflowDefinitionCommand>(command => command.AllowsActions == allowsActions && command.GraphJson == null),
+                       Arg.Any<CancellationToken>());
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(allowsActions, document.RootElement.GetProperty("allowsActions").GetBoolean());
+    }
+
+    /// <summary>The Operator update is the ONE route that sets the accepted trigger sources, and the detail reads them back.</summary>
+    [Test]
+    public async Task UpdateDefinition_WithTriggerSources_SendsTheSetAndAnswersIt()
+    {
+        var store = Store();
+        store.UpdateDefinitionAsync(Arg.Any<UpdateGraphWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call => Snapshot(triggerSources: call.Arg<UpdateGraphWorkflowDefinitionCommand>().TriggerSources ?? GraphWorkflowTriggerSource.Manual));
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "PUT", Definition, """{"version":4,"triggerSources":["Schedule","Manual"]}""");
+        var body = await response.Content.ReadAsStringAsync();
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode, body);
+        await store.Received(1)
+                   .UpdateDefinitionAsync(Arg.Is<UpdateGraphWorkflowDefinitionCommand>(command => command.TriggerSources == (GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Schedule)
+                                                                                                  && command.AllowsActions == null),
+                       Arg.Any<CancellationToken>());
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal("Manual,Schedule", string.Join(',', document.RootElement.GetProperty("triggerSources").EnumerateArray().Select(static name => name.GetString())));
+    }
+
+    /// <summary>A present set must name at least one source, each by its exact member name; anything else is a 400 before the store.</summary>
+    [Test]
+    [Arguments("[]")]
+    [Arguments("[\"Bogus\"]")]
+    [Arguments("[\"manual\"]")]
+    [Arguments("[\"4\"]")]
+    public async Task UpdateDefinition_WithAnInvalidTriggerSourceSet_Answers400(string triggerSources)
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "PUT", Definition, $$"""{"version":4,"triggerSources":{{triggerSources}}}""");
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode, await response.Content.ReadAsStringAsync());
+        await store.DidNotReceive().UpdateDefinitionAsync(Arg.Any<UpdateGraphWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>Create never takes the trigger sources: a member sent anyway is dropped and the definition gets the default.</summary>
+    [Test]
+    public async Task CreateDefinition_WithTriggerSourcesInTheBody_CreatesWithTheDefault()
+    {
+        var store = Store();
+        CreateGraphWorkflowDefinitionCommand? command = null;
+        store.CreateDefinitionAsync(Arg.Any<CreateGraphWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 command = call.Arg<CreateGraphWorkflowDefinitionCommand>();
+                 return Snapshot(command.GraphJson, command.NodeCount);
+             });
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.StartAgentEnd).Replace("{\"name\"", "{\"triggerSources\":[\"Schedule\"],\"name\"", StringComparison.Ordinal));
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        AssertEx.Equal(GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Chat, AssertEx.NotNull(command).TriggerSources);
+    }
+
+    /// <summary>Create never takes the flag: a member sent anyway is not part of the contract and is dropped.</summary>
+    [Test]
+    public async Task CreateDefinition_WithAllowsActionsInTheBody_CreatesWithoutIt()
+    {
+        var store = Store();
+        CreateGraphWorkflowDefinitionCommand? command = null;
+        store.CreateDefinitionAsync(Arg.Any<CreateGraphWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 command = call.Arg<CreateGraphWorkflowDefinitionCommand>();
+                 return Snapshot(command.GraphJson, command.NodeCount);
+             });
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateBody(GraphWorkflowGraphs.StartAgentEnd).Replace("{\"name\"", "{\"allowsActions\":true,\"name\"", StringComparison.Ordinal));
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        AssertEx.False(AssertEx.NotNull(command).AllowsActions);
     }
 
     /// <summary>
@@ -621,7 +726,10 @@ public sealed class GraphWorkflowDefinitionEndpointTests
         return store;
     }
 
-    private static GraphWorkflowDefinitionSnapshot Snapshot(string? graphJson = null, int nodeCount = 3) =>
+    private static GraphWorkflowDefinitionSnapshot Snapshot(string? graphJson = null,
+        int nodeCount = 3,
+        bool allowsActions = false,
+        GraphWorkflowTriggerSource triggerSources = GraphWorkflowTriggerSource.Manual | GraphWorkflowTriggerSource.Chat) =>
         new()
         {
             Id = DefinitionId,
@@ -632,6 +740,8 @@ public sealed class GraphWorkflowDefinitionEndpointTests
             NodeCount = nodeCount,
             SchemaVersion = 1,
             Kind = GraphWorkflowDefinitionKind.Standard,
+            AllowsActions = allowsActions,
+            TriggerSources = triggerSources,
             Version = 4,
             CreatedAtUtc = 1,
             UpdatedAtUtc = 2

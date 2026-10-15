@@ -277,6 +277,7 @@ public sealed class PublishingGraphWorkflowStoreTests
             GraphHash = "graph-hash",
             GraphJson = "{}",
             InputJson = null,
+            TriggerSource = GraphWorkflowTriggerSource.Manual,
             NodeRuns =
             [
                 new GraphWorkflowNodeRunSeed

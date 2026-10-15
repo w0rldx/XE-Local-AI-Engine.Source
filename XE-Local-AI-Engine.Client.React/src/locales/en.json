@@ -186,6 +186,7 @@
 		"workSessions": "Work Sessions",
 		"devWorkflows": "Workflow Runs",
 		"graphWorkflows": "Graph Workflows",
+		"command": "Command",
 		"integrationsGroup": "Integrations",
 		"integrationTriggers": "Triggers",
 		"integrationSessions": "Sessions",
@@ -2436,6 +2437,15 @@
 				"schedulerEnabled": {
 					"label": "Scheduler",
 					"description": "Run agents and jobs on a schedule."
+				},
+				"intentRouterDefinitionId": {
+					"label": "Intent router workflow",
+					"description": "The graph workflow that picks a workflow for a spoken or typed command when no alias matches.",
+					"none": "None (aliases only)"
+				},
+				"intentMaxUtteranceAgeSeconds": {
+					"label": "Maximum utterance age",
+					"description": "An older command is refused as a replay and has to be said again."
 				}
 			},
 			"title": "Node settings",
@@ -4687,6 +4697,52 @@
 				}
 			}
 		},
+		"command": {
+			"input": {
+				"label": "Command",
+				"placeholder": "Say or type a command, then press Enter"
+			},
+			"send": "Send command",
+			"openApp": "Open the app",
+			"empty": "Type or dictate a command and press Enter. Shift+Enter starts a new line.",
+			"mic": {
+				"start": "Start dictation",
+				"stop": "Stop dictation",
+				"language": {
+					"label": "Dictation language",
+					"auto": "Auto",
+					"en": "EN",
+					"de": "DE"
+				},
+				"errors": {
+					"unsupported": "Dictation needs a secure page (HTTPS or localhost).",
+					"permission-denied": "Microphone access was refused. Allow it in the browser and try again.",
+					"no-device": "No microphone was found.",
+					"no-audio-track": "The selected source has no audio.",
+					"worklet-failed": "The audio processing could not start.",
+					"start-timeout": "The microphone did not start in time. Try again.",
+					"disconnected": "The connection to the node was lost; dictation stopped.",
+					"transcription-disabled": "Transcription is switched off on this node.",
+					"runtime": "Dictation could not start: {{detail}}",
+					"hub": "Dictation could not connect to the node."
+				}
+			},
+			"run": {
+				"running": "Running {{name}}",
+				"finished": "{{name}}",
+				"open": "Open run"
+			},
+			"reply": {
+				"waiting": "Waiting for the assistant…",
+				"failed": "The assistant could not answer. Open the conversation to try again.",
+				"openInChat": "Open in chat"
+			},
+			"refusal": {
+				"expired": "That took too long. Please say it again.",
+				"unavailable": "Commands are not available: Graph Workflows is switched off on this node.",
+				"failed": "The command could not be sent. Please try again."
+			}
+		},
 		"skills": {
 			"title": "Skills",
 			"subtitle": "Author a node-wide library of reusable skills. Assign skills to an agent so its model can load the relevant expertise on demand while it works.",
@@ -5558,7 +5614,15 @@
 					"addHost": "Add host",
 					"allowedHostsHint": "Required when the URL host is itself templated: the request may only reach a host on this list.",
 					"hostAria": "Allowed host {{index}}",
-					"removeHost": "Remove allowed host {{index}}"
+					"removeHost": "Remove allowed host {{index}}",
+					"privateHosts": "Private hosts",
+					"privateHostsHint": "LAN hosts this tool may reach despite the private-address block: an exact host name or IP address, each also listed under Allowed hosts. Loopback, link-local, metadata and multicast addresses stay blocked.",
+					"addPrivateHost": "Add private host",
+					"privateHostAria": "Private host {{index}}",
+					"removePrivateHost": "Remove private host {{index}}",
+					"privateHostInvalid": "Enter an exact host name or IP address, without scheme, port, path, credentials or wildcard.",
+					"privateHostAlwaysDenied": "Loopback, link-local, metadata, multicast and unspecified addresses stay blocked even when listed.",
+					"privateHostNotAllowed": "Add this host to Allowed hosts as well."
 				},
 				"command": {
 					"executable": "Executable",
@@ -5580,7 +5644,12 @@
 					"timeoutHint": "0 uses the default.",
 					"env": "Environment variables",
 					"addEnv": "Add variable",
-					"noEnv": "No environment variables."
+					"noEnv": "No environment variables.",
+					"detach": {
+						"label": "Launch detached",
+						"description": "The program is started and not waited for; a crash within the first moment is reported."
+					},
+					"detachNeedsNoTimeout": "A detached launch is not waited for: set the timeout to 0."
 				},
 				"secretRows": {
 					"namePlaceholder": "Name",
@@ -5590,6 +5659,12 @@
 					"valueAria": "Row {{index}} value",
 					"secret": "Secret",
 					"remove": "Remove row {{index}}"
+				},
+				"allowUnattended": {
+					"label": "Allow unattended use in workflows",
+					"commandDanger": "A workflow may run this exact invocation with nobody present: a program is launched on this machine without asking anyone. Requires the acknowledgement above and Fixed mode.",
+					"httpDanger": "A workflow may run this exact invocation with nobody present: the request is sent without asking anyone. Requires the acknowledgement above and Fixed mode.",
+					"needsFixed": "Unattended use needs Fixed mode. Switch to Fixed or clear this option."
 				}
 			},
 			"list": {
@@ -6596,6 +6671,11 @@
 				},
 				"labels": {
 					"invalid": "Use between 2 and 32 distinct, non-empty labels of at most 64 characters."
+				},
+				"aliases": {
+					"tooMany": "A Start node takes at most 32 aliases.",
+					"invalid": "Each alias needs 1 to 120 characters with words in it.",
+					"duplicate": "An alias appears twice (case and spacing are ignored)."
 				}
 			},
 			"config": {
@@ -6686,7 +6766,13 @@
 				"includeAttachments": "Include the chat attachments",
 				"includeAttachmentsDisabled": "Turn on “Accepts attachments” in the workflow settings first.",
 				"cloudModelHelp": "Cloud models run only when “Let cloud models run unattended” is on in Node Settings → Privacy & updates, or when the model's external connection grants unattended runs.",
-				"cloudModelLabel": "{{label}} · {{provider}} (cloud)"
+				"cloudModelLabel": "{{label}} · {{provider}} (cloud)",
+				"actionBadge": "Action",
+				"actionNote": "Runs unattended and exactly once per run: it has a side effect, and nothing retries it.",
+				"actionNeedsAllowActions": "Tool '{{name}}' is an action with a side effect, so this node needs 'Allow actions' on this definition.",
+				"actionsDisabledHint": "Action tools are greyed out: turn on 'Allow actions' in this workflow's settings to use them.",
+				"aliases": "Aliases",
+				"aliasesHelp": "Phrases that start this workflow from a spoken or typed command, matched ignoring case. Press Enter after each."
 			},
 			"edge": {
 				"title": "Edge {{key}}",
@@ -6713,7 +6799,14 @@
 				"descriptionPlaceholder": "What this workflow is for.",
 				"meta_one": "{{count}} node · v{{version}} · updated {{updated}}",
 				"meta_other": "{{count}} nodes · v{{version}} · updated {{updated}}",
-				"import": "Import…"
+				"import": "Import…",
+				"actionsBadge": "Actions",
+				"allowActionsLabel": "Allow actions",
+				"allowActionsDescription": "Tool nodes may run custom tools flagged for unattended use.",
+				"allowActionsWarning": "An action changes something outside this app, such as switching a light or starting a program, with nobody asked first. Each one runs once per run and is audited before it runs. Only allow this for workflows you trust.",
+				"triggerSourcesLabel": "Who may start a run",
+				"triggerSourcesDescription": "Each start names its source; a source left out here is refused.",
+				"triggerSourcesRequired": "Choose at least one source."
 			},
 			"run": {
 				"label": "Run graph",
@@ -6729,7 +6822,8 @@
 				"version": "Version {{version}}",
 				"createdAt": "Created {{time}}",
 				"startedAt": "Started {{time}}",
-				"completedAt": "Finished {{time}}"
+				"completedAt": "Finished {{time}}",
+				"origin": "Started by: {{source}}"
 			},
 			"nodeTable": {
 				"empty": "This run has no nodes yet.",
@@ -6809,7 +6903,7 @@
 				"nodeTitle": "Node",
 				"reload": "Reload",
 				"rename": "Rename",
-				"renameTitle": "Rename this workflow",
+				"renameTitle": "Workflow settings",
 				"runLoadFailed": "This run could not be loaded.",
 				"save": "Save",
 				"saveAs": "Save as…",
@@ -6877,6 +6971,13 @@
 				"graphNotObject": "This workflow export carries no graph.",
 				"graphMalformed": "This workflow export's graph has no node or edge list.",
 				"fetchesUnder": "This workflow fetches pages under: {{urls}}"
+			},
+			"triggerSource": {
+				"Manual": "Manual",
+				"Chat": "Chat",
+				"Schedule": "Schedule",
+				"Integration": "Integration",
+				"Intent": "Command"
 			}
 		},
 		"integrations": {
@@ -6893,7 +6994,7 @@
 					"columns": {
 						"name": "Name",
 						"displayName": "Display name",
-						"target": "Target agent",
+						"target": "Target",
 						"sessionPolicy": "Session policy",
 						"inputs": "Accepted inputs",
 						"enabled": "Enabled",
@@ -6946,6 +7047,18 @@
 					"toolCatalog": {
 						"loading": "Loading the tool catalog. Tool facts are unknown until it arrives.",
 						"failed": "The tool catalog could not be loaded. Every tool counts as approval-requiring until it can be read."
+					},
+					"targetKind": {
+						"label": "Target",
+						"options": {
+							"Agent": "Agent",
+							"Graph": "Graph workflow"
+						}
+					},
+					"targetGraph": {
+						"label": "Target graph workflow",
+						"description": "The saved graph workflow this trigger starts for every invocation. It must accept the Integration trigger source in its workflow settings.",
+						"placeholder": "Select a graph workflow"
 					}
 				},
 				"validation": {
@@ -6954,7 +7067,8 @@
 					"displayNameTooLong": "The display name is longer than the 128-character limit.",
 					"descriptionTooLong": "The description is longer than the 1024-character limit.",
 					"targetRequired": "A target agent is required.",
-					"inputKindRequired": "Select at least one accepted input kind."
+					"inputKindRequired": "Select at least one accepted input kind.",
+					"graphTargetRequired": "A target graph workflow is required."
 				},
 				"approvalWarning": {
 					"title": "Approval-requiring tools",
@@ -7073,7 +7187,9 @@
 					"toolError": "error",
 					"tokens": "{{count}} tokens",
 					"showOutput": "Show output payload",
-					"hideOutput": "Hide output payload"
+					"hideOutput": "Hide output payload",
+					"graphRun": "Graph run",
+					"openGraphRun": "Open graph run"
 				},
 				"cancel": {
 					"title": "Cancel execution",

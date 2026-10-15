@@ -205,6 +205,59 @@ public sealed class CustomToolStoreTests : IDisposable
     }
 
     [Test]
+    public async Task AllowUnattended_RoundTripsThroughAFreshContext_AndTogglingItDoesNotBumpVersion()
+    {
+        var databasePath = GetDatabasePath("allow-unattended.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var clock = new MutableTimeProvider(1_000);
+        var configJson = """{"executable":"/usr/bin/true","argsTemplate":[]}""";
+
+        Guid toolId;
+        await using (var writeContext = CreateContext(databasePath, keyHolder))
+        {
+            await writeContext.Database.EnsureDeletedAsync();
+            await writeContext.Database.EnsureCreatedAsync();
+            var store = new CustomToolStore(writeContext, clock);
+
+            var added = await store.CreateAsync(new CustomToolInput
+            {
+                Name = Name,
+                Description = Description,
+                Kind = CustomToolKind.Command,
+                Mode = CustomToolMode.Fixed,
+                ConfigJson = configJson,
+                Acknowledged = true
+            });
+            AssertEx.False(added.AllowUnattended, "A tool created without the flag must not be allowed unattended.");
+
+            // The flag is an authoring gate like Acknowledged, not model-facing content, so it must not bump Version.
+            clock.Advance(10);
+            var flagged = AssertEx.NotNull(await store.UpdateAsync(added.Id, new CustomToolInput
+                {
+                    Name = Name,
+                    Description = Description,
+                    Kind = CustomToolKind.Command,
+                    Mode = CustomToolMode.Fixed,
+                    ConfigJson = configJson,
+                    Acknowledged = true,
+                    AllowUnattended = true
+                }),
+                "Update should find the tool.");
+            AssertEx.True(flagged.AllowUnattended, "The flag should be set by the update.");
+            AssertEx.Equal(expected: 1, flagged.Version);
+            AssertEx.True(flagged.UpdatedAtUtc > added.UpdatedAtUtc, "A toggle should still advance UpdatedAtUtc.");
+            toolId = added.Id;
+        }
+
+        await using (var readContext = CreateContext(databasePath, keyHolder))
+        {
+            var reloaded = AssertEx.NotNull(await new CustomToolStore(readContext, clock).GetByIdAsync(toolId), "Tool should be found.");
+            AssertEx.True(reloaded.AllowUnattended, "The flag should round-trip through disk.");
+            AssertEx.Equal(expected: 1, reloaded.Version);
+        }
+    }
+
+    [Test]
     public async Task Name_IsNocaseUnique()
     {
         var databasePath = GetDatabasePath("nocase-unique.sqlite");

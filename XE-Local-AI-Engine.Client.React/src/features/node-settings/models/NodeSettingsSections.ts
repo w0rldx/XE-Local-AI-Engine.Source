@@ -169,6 +169,8 @@ const nodeSettingsFieldSections: Readonly<
 	imageTextEncoderOnGpu: "runtime",
 	graphWorkflowMaxConcurrentRuns: "workspaces",
 	graphWorkflowDefaultNodeTimeoutSeconds: "workspaces",
+	intentRouterDefinitionId: "workspaces",
+	intentMaxUtteranceAgeSeconds: "workspaces",
 	workSessionMaxStepsPerRun: "workspaces",
 	workSessionMaxConcurrentSessions: "workspaces",
 	developmentMaxAttemptDurationSeconds: "workspaces",

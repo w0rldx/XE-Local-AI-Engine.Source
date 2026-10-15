@@ -2,13 +2,8 @@
  * The microphone capture source: `getUserMedia` plus the shared PCM graph.
  */
 
-import {
-	CaptureError,
-	type CaptureChannel,
-	type CaptureFrame,
-	type CaptureSource,
-} from "@/features/transcription/capture/CaptureSource";
-import { startPcmCapture } from "@/features/transcription/capture/PcmCapture";
+import { CaptureError, type CaptureChannel, type CaptureFrame, type CaptureSource } from "@/core/audio/capture/CaptureSource";
+import { startPcmCapture } from "@/core/audio/capture/PcmCapture";
 
 /**
  * One bound for the whole start: the permission prompt, `getUserMedia`, `addModule` and `AudioContext.resume()` can each

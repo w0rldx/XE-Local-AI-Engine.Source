@@ -44,26 +44,31 @@ internal sealed record CustomToolEnvironmentVariable(string Name, string Value, 
 ///     <see cref="UrlTemplate" /> may carry <c>{param}</c> placeholders in path and query positions only; when the host itself is
 ///     parameterized, <see cref="AllowedHosts" /> is mandatory and the SSRF guard enforces membership. Secret header values are carried in the
 ///     clear here, because building the request needs them, and are scrubbed from anything the model or a log sees.
+///     <see cref="PrivateHosts" /> is the operator's per-tool egress exception into the private LAN ranges (ADR 0021); every entry is also in
+///     <see cref="AllowedHosts" />. A row stored before the field existed parses to an empty list.
 /// </remarks>
 internal sealed record HttpFetchConfig(
     string Method,
     string UrlTemplate,
     IReadOnlyList<CustomToolHeader> Headers,
     string? BodyTemplate,
-    IReadOnlyList<string> AllowedHosts);
+    IReadOnlyList<string> AllowedHosts,
+    IReadOnlyList<string> PrivateHosts);
 
 /// <summary>Decrypted, typed <c>Command</c> configuration.</summary>
 /// <remarks>
 ///     <see cref="Executable" /> is a fixed absolute path, never a <c>{param}</c>, validated at execution time.
 ///     <see cref="ArgsTemplate" /> is one argv element per entry, and a <c>{param}</c> always substitutes into a single element, never a shell
 ///     string. Secret <see cref="Environment" /> values are injected through the child's environment, never argv, and scrubbed from its output.
+///     <see cref="Detach" /> launches the program without waiting for it (a GUI program); a stored row without the key reads as false.
 /// </remarks>
 internal sealed record CommandConfig(
     string Executable,
     IReadOnlyList<string> ArgsTemplate,
     string? WorkingDirectory,
     int TimeoutSeconds,
-    IReadOnlyList<CustomToolEnvironmentVariable> Env);
+    IReadOnlyList<CustomToolEnvironmentVariable> Env,
+    bool Detach = false);
 
 /// <summary>Raised when a custom tool's persisted parameter or config JSON cannot be parsed into the typed contracts.</summary>
 /// <remarks>

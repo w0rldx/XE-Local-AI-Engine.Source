@@ -76,6 +76,7 @@ interface RenderOverrides {
 	ollamaRuntimeDisabled?: boolean;
 	autoEffortFastModelOptions?: NodeSettingsFieldsCardProps["autoEffortFastModelOptions"];
 	backgroundModelOptions?: NodeSettingsFieldsCardProps["backgroundModelOptions"];
+	intentRouterOptions?: NodeSettingsFieldsCardProps["intentRouterOptions"];
 }
 
 function renderCard(overrides: RenderOverrides = {}): {
@@ -97,6 +98,7 @@ function renderCard(overrides: RenderOverrides = {}): {
 				onApplyPreset={vi.fn()}
 				showDeveloperFields={false}
 				draftModelOptions={[]}
+				intentRouterOptions={overrides.intentRouterOptions ?? []}
 				keepWarmModelOptions={overrides.keepWarmModelOptions ?? []}
 				autoEffortFastModelOptions={overrides.autoEffortFastModelOptions ?? []}
 				backgroundModelOptions={overrides.backgroundModelOptions ?? []}
@@ -502,6 +504,30 @@ describe("NodeSettingsFieldsCard — section split", () => {
 		// The workflow, session and development limits are not developer settings.
 		expect(screen.getByTestId("node-settings-workspace-limits-card")).toBeTruthy();
 		expect(screen.getByTestId("node-settings-restart-badge-workSessionMaxConcurrentSessions")).toBeTruthy();
+	});
+
+	it("offers the saved graph workflows and none as the intent router, and Use default on a stored utterance age", async () => {
+		// The Select's combobox scrolls its selected option into view; jsdom has no layout.
+		window.HTMLElement.prototype.scrollIntoView = vi.fn();
+		const { onChange } = renderCard({
+			section: "workspaces",
+			form: { ...toNodeSettingsFieldsForm(undefined), intentRouterDefinitionId: "router-1", intentMaxUtteranceAgeSeconds: 90 },
+			intentRouterOptions: [
+				{ value: "router-1", label: "Router" },
+				{ value: "router-2", label: "Other router" },
+			],
+		});
+
+		// Read per request: neither intent setting carries a restart badge.
+		expect(screen.queryByTestId("node-settings-restart-badge-intentRouterDefinitionId")).toBeNull();
+		expect(screen.queryByTestId("node-settings-restart-badge-intentMaxUtteranceAgeSeconds")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("node-settings-intent-router"));
+		fireEvent.click(await screen.findByRole("option", { name: "None (aliases only)", hidden: true }));
+		expect(onChange).toHaveBeenCalledWith("intentRouterDefinitionId", "");
+
+		fireEvent.click(screen.getByTestId("node-settings-intent-max-utterance-age-use-default"));
+		expect(onChange).toHaveBeenCalledWith("intentMaxUtteranceAgeSeconds", "");
 	});
 });
 

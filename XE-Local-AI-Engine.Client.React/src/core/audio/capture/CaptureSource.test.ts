@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { listAudioInputDevices } from "@/features/transcription/capture/CaptureSource";
+import { listAudioInputDevices } from "@/core/audio/capture/CaptureSource";
 
 function installMediaDevices(mediaDevices: unknown): void {
 	Object.defineProperty(navigator, "mediaDevices", { value: mediaDevices, configurable: true, writable: true });

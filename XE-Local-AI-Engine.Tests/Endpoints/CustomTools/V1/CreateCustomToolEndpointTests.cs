@@ -90,4 +90,83 @@ public sealed class CreateCustomToolEndpointTests
         var fetched = AssertEx.NotNull(await followUp.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json));
         AssertEx.Equal(view.Id, fetched.Id);
     }
+
+    [Test]
+    public async Task Create_WithAllowUnattendedAndPrivateHost_RoundTripsBothFields()
+    {
+        using var client = Factory.CreateClient();
+
+        using var response = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Post,
+            CustomToolEndpointPayloads.DefinitionsRoute,
+            CustomToolEndpointPayloads.HttpFetchDefinition("create_lan_action",
+                urlTemplate: "http://192.168.1.20:8123/api/states",
+                allowUnattended: true,
+                privateHosts: ["192.168.1.20"]));
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json));
+
+        using var followUp = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Get,
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{view.Id}");
+        var fetched = AssertEx.NotNull(await followUp.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json));
+        AssertEx.True(fetched.AllowUnattended, "The stored flag must read back.");
+        AssertEx.Equal("192.168.1.20", string.Join(",", AssertEx.NotNull(fetched.Http).PrivateHosts));
+    }
+
+    [Test]
+    public async Task Create_DetachedCommand_RoundTripsTheFlag()
+    {
+        using var client = Factory.CreateClient();
+        var payload = new
+        {
+            name = "create_detached_launch",
+            description = "Endpoint suite fixture tool.",
+            kind = "Command",
+            mode = "Fixed",
+            enabled = true,
+            acknowledged = true,
+            parameters = Array.Empty<object>(),
+            command = new
+            {
+                executable = "/opt/example/bin/word-processor",
+                argsTemplate = Array.Empty<string>(),
+                timeoutSeconds = 0,
+                env = Array.Empty<object>(),
+                detach = true
+            }
+        };
+
+        using var response = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Post,
+            CustomToolEndpointPayloads.DefinitionsRoute,
+            payload);
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        var view = AssertEx.NotNull(await response.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json));
+        using var followUp = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Get,
+            $"{CustomToolEndpointPayloads.DefinitionsRoute}/{view.Id}");
+        var fetched = AssertEx.NotNull(await followUp.Content.ReadFromJsonAsync<CustomToolView>(CustomToolEndpointPayloads.Json));
+        AssertEx.True(AssertEx.NotNull(fetched.Command).Detach, "The stored detach flag must read back.");
+    }
+
+    [Test]
+    public async Task Create_WithUnlistedPrivateLiteral_Returns400()
+    {
+        using var client = Factory.CreateClient();
+
+        using var response = await CustomToolEndpointPayloads.SendAsOperatorAsync(Factory,
+            client,
+            HttpMethod.Post,
+            CustomToolEndpointPayloads.DefinitionsRoute,
+            CustomToolEndpointPayloads.HttpFetchDefinition("create_lan_unlisted", urlTemplate: "http://192.168.1.20:8123/api/states"));
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

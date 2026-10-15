@@ -78,6 +78,9 @@ public static class NodeSchedulerServiceCollectionExtensions
         // the scheduler thread for the runs' duration — the existing single-consumer benchmark queue drains it.
         builder.Services.AddSingleton<IScheduledJobHandler, RunBenchmarkBatchHandler>();
 
+        // Starts a saved graph workflow with origin Schedule per fire and polls the run service until the run ends.
+        builder.Services.AddSingleton<IScheduledJobHandler, RunGraphWorkflowHandler>();
+
         // Default no-op publisher so the dispatcher/management service resolve a publisher in Application-only and test
         // hosts. The Client host registers a hub-backed publisher (ConfigureServices) that supersedes this.
         builder.Services.TryAddSingleton<ISchedulerEventPublisher, NullSchedulerEventPublisher>();

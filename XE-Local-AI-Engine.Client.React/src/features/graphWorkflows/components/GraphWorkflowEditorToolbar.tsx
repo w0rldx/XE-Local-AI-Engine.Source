@@ -1,4 +1,4 @@
-import { Button, Text } from "@mantine/core";
+import { Badge, Button, Text } from "@mantine/core";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -6,6 +6,8 @@ import { DisabledReasonTooltip } from "@/core/ui/components/DisabledReasonToolti
 
 export interface GraphWorkflowEditorToolbarProps {
 	readonly definitionName: string;
+	/** The definition may run action tools (ADR 0021); shown as a badge beside the name. */
+	readonly allowsActions?: boolean;
 	/** No definition open: everything but the list is inert. */
 	readonly hasDefinition: boolean;
 	readonly isDirty: boolean;
@@ -29,6 +31,7 @@ export interface GraphWorkflowEditorToolbarProps {
 /** The canvas's own toolbar: what an operator can do to the open definition, and why a Save is being asked for. */
 export function GraphWorkflowEditorToolbar({
 	definitionName,
+	allowsActions = false,
 	hasDefinition,
 	isDirty,
 	layoutIsUnsaved,
@@ -51,6 +54,11 @@ export function GraphWorkflowEditorToolbar({
 			<Text size="sm" fw={600} data-testid="gw-page-definition-name">
 				{definitionName}
 			</Text>
+			{allowsActions ? (
+				<Badge size="xs" color="orange" variant="light" data-testid="gw-page-actions-badge">
+					{t("pages.graphWorkflows.definitions.actionsBadge", "Actions")}
+				</Badge>
+			) : null}
 			<Button size="xs" variant="default" disabled={!hasDefinition || isDirty} onClick={onRename} data-testid="gw-page-rename">
 				{t("pages.graphWorkflows.page.rename", "Rename")}
 			</Button>

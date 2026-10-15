@@ -8,6 +8,8 @@ import type { TFunction } from "i18next";
 export interface GraphWorkflowSelectOption {
 	readonly value: string;
 	readonly label: string;
+	/** Offered but not pickable, such as an action tool in a definition that does not allow actions. */
+	readonly disabled?: boolean;
 }
 
 /** A model option; `cloudProvider` names where a cloud entry is served and is absent for a node-local model. */
@@ -37,6 +39,6 @@ export function withCurrentValue(
 	options: readonly GraphWorkflowSelectOption[],
 	value: string | null | undefined,
 ): GraphWorkflowSelectOption[] {
-	const list = options.map((option) => ({ value: option.value, label: option.label }));
+	const list = options.map((option) => ({ value: option.value, label: option.label, disabled: option.disabled === true }));
 	return value && !list.some((option) => option.value === value) ? [...list, { value, label: value }] : list;
 }

@@ -3,6 +3,7 @@
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
@@ -49,6 +50,15 @@ vi.mock("@/features/integrations/queries/useIntegrationSessions", () => sessionH
 vi.mock("@/features/integrations/queries/useIntegrationTriggers", () => triggerHooksMock);
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => ({ confirm: confirmMock }) }));
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
+// The graph-run link is a router Link; the router is not this file's subject, the search it carries is.
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@tanstack/react-router")>()),
+	Link: ({ children, to, search, ...props }: { children: ReactNode; to: string; search: Record<string, string> }) => (
+		<a href={`${to}?${new URLSearchParams(search).toString()}`} {...props}>
+			{children}
+		</a>
+	),
+}));
 
 import { IntegrationExecutionsPage } from "@/features/integrations/pages/IntegrationExecutionsPage";
 
@@ -60,6 +70,8 @@ const triggers: IntegrationTrigger[] = [
 		description: "",
 		enabled: true,
 		targetAgentDefinitionId: "agent-1",
+		targetKind: "Agent",
+		targetGraphWorkflowDefinitionId: null,
 		sessionPolicy: "PerInvocation",
 		acceptedInputKinds: ["text"],
 		createdAtUtc: 1000,
@@ -117,6 +129,7 @@ const detail = {
 	keyPrefix: "xeint_ab",
 	requestId: "req-1",
 	invocationId: "inv-1",
+	graphWorkflowRunId: null as string | null,
 	outputBytes: 512,
 	stopRequestedAtUtc: null,
 };
@@ -472,6 +485,24 @@ describe("IntegrationExecutionsPage", () => {
 		expect(executionHooksMock.useIntegrationExecution).toHaveBeenCalledWith("exec-completed", {
 			refetchInterval: undefined,
 		});
+	});
+
+	it("links a graph-target execution to its graph run and shows no link otherwise", async () => {
+		executionHooksMock.useIntegrationExecution.mockReturnValue(makeQuery(detail));
+		const { unmount } = renderPage();
+		fireEvent.click(screen.getByTestId("integration-execution-view-exec-completed"));
+		await waitFor(() => {
+			expect(screen.getByTestId("integration-execution-request-id")).toBeTruthy();
+		});
+		expect(screen.queryByTestId("integration-execution-graph-run")).toBeNull();
+		unmount();
+
+		executionHooksMock.useIntegrationExecution.mockReturnValue(makeQuery({ ...detail, graphWorkflowRunId: "run-7" }));
+		renderPage();
+		fireEvent.click(screen.getByTestId("integration-execution-view-exec-completed"));
+
+		const link = await screen.findByTestId("integration-execution-graph-run");
+		expect(link.getAttribute("href")).toBe("/graph-workflows?runId=run-7");
 	});
 
 	it("keeps the open dialog when the next poll returns a window without its row", async () => {

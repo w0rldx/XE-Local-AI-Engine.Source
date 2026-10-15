@@ -16,6 +16,7 @@ import {
 	IconSchool,
 	IconSettings,
 	IconSitemap,
+	IconTerminal2,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { type ForwardRefExoticComponent, type RefAttributes, useMemo } from "react";
@@ -273,6 +274,14 @@ export const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.graphWorkflows",
 		to: nodeRoutePaths.graphWorkflows,
 		capability: "graphWorkflows",
+		simple: false,
+	},
+	// The command page sits beside the workflows it starts. Ungated: with workflows off it still answers through chat.
+	{
+		id: "command",
+		icon: IconTerminal2,
+		translationKey: "navigation.command",
+		to: nodeRoutePaths.command,
 		simple: false,
 	},
 	{

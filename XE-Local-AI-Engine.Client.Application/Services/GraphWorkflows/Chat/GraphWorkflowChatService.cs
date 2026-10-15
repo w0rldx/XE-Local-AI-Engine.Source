@@ -120,6 +120,7 @@ internal sealed class GraphWorkflowChatService : IGraphWorkflowChatService
                     request.RequestId,
                     input,
                     definitionVersion: null,
+                    GraphWorkflowRunOrigin.Chat,
                     new GraphWorkflowRunBinding
                     {
                         ConversationId = conversationId,

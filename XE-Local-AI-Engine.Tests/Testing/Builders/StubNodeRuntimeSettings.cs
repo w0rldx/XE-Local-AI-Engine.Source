@@ -28,6 +28,8 @@ public sealed class StubNodeRuntimeSettings
     private int _llamaMaxLoadedProcesses = StoredNodeSettings.DefaultLlamaMaxLoadedProcesses;
     private int _maxPendingToolCallAgeMinutes = StoredNodeSettings.DefaultMaxPendingToolCallAgeMinutes;
     private int _detachedGraceSeconds = StoredNodeSettings.DefaultDetachedGraceSeconds;
+    private Guid? _intentRouterDefinitionId;
+    private TimeSpan _intentMaxUtteranceAge = TimeSpan.FromSeconds(StoredNodeSettings.DefaultIntentMaxUtteranceAgeSeconds);
     private int _maxResponseSizeMb = StoredNodeSettings.DefaultMaxResponseSizeMb;
     private int _orchestrationIdleTimeoutSeconds = StoredNodeSettings.DefaultOrchestrationIdleTimeoutSeconds;
     private IReadOnlyList<string> _toolCapableModels = ["qwen3:8b"];
@@ -240,6 +242,18 @@ public sealed class StubNodeRuntimeSettings
     public StubNodeRuntimeSettings WithMaxPendingToolCallAgeMinutes(int maxPendingToolCallAgeMinutes)
     {
         _maxPendingToolCallAgeMinutes = maxPendingToolCallAgeMinutes;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithIntentRouter(Guid? definitionId)
+    {
+        _intentRouterDefinitionId = definitionId;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithIntentMaxUtteranceAge(TimeSpan maxAge)
+    {
+        _intentMaxUtteranceAge = maxAge;
         return this;
     }
 
@@ -793,6 +807,8 @@ public sealed class StubNodeRuntimeSettings
         settings.GetCustomToolMaxTimeoutSecondsAsync(Arg.Any<CancellationToken>()).Returns(StoredNodeSettings.DefaultCustomToolMaxTimeoutSeconds);
         settings.GetWebFetchTimeoutAsync(Arg.Any<CancellationToken>()).Returns(TimeSpan.FromSeconds(StoredNodeSettings.DefaultWebFetchTimeoutSeconds));
         settings.GetWebFetchMaxContentCharsAsync(Arg.Any<CancellationToken>()).Returns(_webFetchMaxContentChars);
+        settings.GetIntentRouterDefinitionIdAsync(Arg.Any<CancellationToken>()).Returns(_intentRouterDefinitionId);
+        settings.GetIntentMaxUtteranceAgeAsync(Arg.Any<CancellationToken>()).Returns(_intentMaxUtteranceAge);
         settings.GetKnowledgeSearchDefaultResultsAsync(Arg.Any<CancellationToken>()).Returns(StoredNodeSettings.DefaultKnowledgeSearchDefaultResults);
         settings.GetKnowledgeSearchMaxResultsAsync(Arg.Any<CancellationToken>()).Returns(StoredNodeSettings.DefaultKnowledgeSearchMaxResults);
         settings.GetReasoningBudgetsAsync(Arg.Any<CancellationToken>()).Returns(_reasoningBudgets);

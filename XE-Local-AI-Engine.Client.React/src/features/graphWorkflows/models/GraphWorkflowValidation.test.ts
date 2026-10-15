@@ -557,7 +557,7 @@ describe("every rule has an English message", () => {
 
 describe("config form schemas", () => {
 	it("accepts the eight-node graph's own config shapes", () => {
-		expect(startConfigSchema.safeParse({ inputSchema: null, defaultInput: null }).success).toBe(true);
+		expect(startConfigSchema.safeParse({ inputSchema: null, defaultInput: null, aliases: [] }).success).toBe(true);
 		expect(
 			agentConfigSchema.safeParse({
 				agentDefinitionId: null,
@@ -614,8 +614,41 @@ describe("config form schemas", () => {
 			[nodeCommonSchema, { key: "not a key", label: "" }, "pages.graphWorkflows.form.key.invalid"],
 			[nodeCommonSchema, { key: "a", label: "", maxAttempts: 101 }, "pages.graphWorkflows.form.maxAttempts.range"],
 			[nodeCommonSchema, { key: "a", label: "", timeoutSeconds: 0 }, "pages.graphWorkflows.form.timeoutSeconds.min"],
-			[startConfigSchema, { inputSchema: "[1]", defaultInput: null }, "pages.graphWorkflows.form.inputSchema.notObject"],
-			[startConfigSchema, { inputSchema: null, defaultInput: "{ half" }, "pages.graphWorkflows.form.defaultInput.invalidJson"],
+			[
+				startConfigSchema,
+				{ inputSchema: "[1]", defaultInput: null, aliases: [] },
+				"pages.graphWorkflows.form.inputSchema.notObject",
+			],
+			[
+				startConfigSchema,
+				{ inputSchema: null, defaultInput: "{ half", aliases: [] },
+				"pages.graphWorkflows.form.defaultInput.invalidJson",
+			],
+			[
+				startConfigSchema,
+				{ inputSchema: null, defaultInput: null, aliases: Array.from({ length: 33 }, (_, index) => `alias ${index}`) },
+				"pages.graphWorkflows.form.aliases.tooMany",
+			],
+			[
+				startConfigSchema,
+				{ inputSchema: null, defaultInput: null, aliases: ["   "] },
+				"pages.graphWorkflows.form.aliases.invalid",
+			],
+			[
+				startConfigSchema,
+				{ inputSchema: null, defaultInput: null, aliases: ["?!"] },
+				"pages.graphWorkflows.form.aliases.invalid",
+			],
+			[
+				startConfigSchema,
+				{ inputSchema: null, defaultInput: null, aliases: ["x".repeat(121)] },
+				"pages.graphWorkflows.form.aliases.invalid",
+			],
+			[
+				startConfigSchema,
+				{ inputSchema: null, defaultInput: null, aliases: ["Lights on", "lights   ON!"] },
+				"pages.graphWorkflows.form.aliases.duplicate",
+			],
 			[
 				agentConfigSchema,
 				{

@@ -17,7 +17,7 @@ import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { type AudioInputDevice, listAudioInputDevices } from "@/features/transcription/capture/CaptureSource";
+import { type AudioInputDevice, listAudioInputDevices } from "@/core/audio/capture/CaptureSource";
 import {
 	type TranscriptionLanguageMode,
 	type TranscriptionSourceKind,

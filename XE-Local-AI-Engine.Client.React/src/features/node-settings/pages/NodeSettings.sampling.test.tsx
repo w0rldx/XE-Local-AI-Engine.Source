@@ -63,6 +63,11 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 		queryKey: ["local-models"],
 		queryFn: () => Promise.resolve({ items: [], isAvailable: false }),
 	}),
+	// Saved graph workflows feeding the intent-router picker.
+	listGraphWorkflowDefinitionsOptions: () => ({
+		queryKey: ["graph-workflow-definitions"],
+		queryFn: () => Promise.resolve({ definitions: [] }),
+	}),
 	listWorkspacesOptions: () => ({ queryKey: ["mcp-workspaces"], queryFn: () => Promise.resolve({ items: [] }) }),
 	listWorkspacesQueryKey: () => ["mcp-workspaces"],
 	createWorkspaceMutation: () => ({ mutationFn: vi.fn() }),

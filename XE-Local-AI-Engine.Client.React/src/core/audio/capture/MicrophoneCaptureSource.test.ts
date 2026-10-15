@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CaptureError, type CaptureFrame } from "@/features/transcription/capture/CaptureSource";
-import { MICROPHONE_START_TIMEOUT_MS, MicrophoneCaptureSource } from "@/features/transcription/capture/MicrophoneCaptureSource";
+import { CaptureError, type CaptureFrame } from "@/core/audio/capture/CaptureSource";
+import { MICROPHONE_START_TIMEOUT_MS, MicrophoneCaptureSource } from "@/core/audio/capture/MicrophoneCaptureSource";
 
 /**
  * jsdom has neither `navigator.mediaDevices` nor `AudioContext` (`installJsdomEnvironmentMocks` stubs neither), so

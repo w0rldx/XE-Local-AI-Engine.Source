@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Group, NumberInput, Stack, Text, TextInput } from "@mantine/core";
+import { ActionIcon, Button, Checkbox, Group, NumberInput, Stack, Text, TextInput } from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
@@ -9,7 +9,7 @@ import { CustomToolProgramLaunchSelector } from "@/features/customTools/componen
 import { CustomToolSecretRows } from "@/features/customTools/components/CustomToolSecretRows";
 import type { CustomToolEnvVar, CustomToolFormValues } from "@/features/customTools/models/CustomToolModels";
 
-// Command editor: executable (with a ProgramLaunch probe), args template, working directory, timeout, env.
+// Command editor: executable (with a ProgramLaunch probe), args template, working directory, timeout, detach, env.
 export function CommandEditor({
 	values,
 	errors,
@@ -121,10 +121,34 @@ export function CommandEditor({
 					value={command.timeoutSeconds}
 					min={0}
 					max={maxTimeoutSeconds}
+					// A detached launch is not waited for, so the backend requires timeout 0 (CustomToolService).
+					disabled={command.detach && command.timeoutSeconds === 0}
+					error={
+						command.detach && fieldError(errors, "command.timeoutSeconds")
+							? t(
+									"pages.customTools.form.command.detachNeedsNoTimeout",
+									"A detached launch is not waited for: set the timeout to 0.",
+								)
+							: undefined
+					}
 					onChange={(value) => patchCommand({ timeoutSeconds: typeof value === "number" ? value : 0 })}
 					data-testid="custom-tool-form-command-timeout"
 				/>
 			</Group>
+
+			<Checkbox
+				label={t("pages.customTools.form.command.detach.label", "Launch detached")}
+				description={t(
+					"pages.customTools.form.command.detach.description",
+					"The program is started and not waited for; a crash within the first moment is reported.",
+				)}
+				checked={command.detach}
+				onChange={(event) => {
+					const detach = event.currentTarget.checked;
+					patchCommand(detach ? { detach, timeoutSeconds: 0 } : { detach });
+				}}
+				data-testid="custom-tool-form-command-detach"
+			/>
 
 			<CustomToolSecretRows
 				title={t("pages.customTools.form.command.env", "Environment variables")}

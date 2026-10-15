@@ -56,7 +56,7 @@ internal static class AddNodeCapacityExtensions
         builder.Services.AddSingleton<ISpawnSerializer, SpawnSerializer>();
         builder.Services.AddScoped<IMcpWorkspaceExecutionSessionFactory, McpWorkspaceExecutionSessionFactory>();
         builder.Services.AddScoped<IMcpExecutionBindingResolver, McpExecutionBindingResolver>();
-        builder.Services.AddScoped<IMcpAgenticApprovalAuditRecorder, McpAgenticApprovalAuditRecorder>();
+        builder.Services.AddScoped<IUnattendedApprovalAuditRecorder, UnattendedApprovalAuditRecorder>();
         builder.Services.AddScoped<IMcpAgenticToolAdapter, McpAgenticToolAdapter>();
         builder.Services.AddScoped<SubAgentSpawnService>();
         builder.Services.AddScoped<ISubAgentSpawnService>(static services => services.GetRequiredService<SubAgentSpawnService>());

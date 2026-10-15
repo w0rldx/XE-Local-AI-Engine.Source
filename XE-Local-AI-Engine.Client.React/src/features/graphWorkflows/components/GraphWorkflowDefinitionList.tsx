@@ -134,6 +134,17 @@ export function GraphWorkflowDefinitionList({
 													{t("pages.graphWorkflows.settings.kindOption.Chat", "Chat")}
 												</Badge>
 											) : null}
+											{definition.allowsActions ? (
+												<Badge
+													size="xs"
+													color="orange"
+													variant="light"
+													style={{ flexShrink: 0 }}
+													data-testid={`gw-definition-actions-badge-${id}`}
+												>
+													{t("pages.graphWorkflows.definitions.actionsBadge", "Actions")}
+												</Badge>
+											) : null}
 										</Group>
 										{definition.description ? (
 											<Text size="xs" c="dimmed" truncate="end" title={definition.description}>

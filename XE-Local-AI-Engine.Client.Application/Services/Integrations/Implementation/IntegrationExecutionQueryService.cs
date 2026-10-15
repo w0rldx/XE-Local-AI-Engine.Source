@@ -178,7 +178,7 @@ public sealed class IntegrationExecutionQueryService
             RequestId = execution.RequestId,
             TriggerName = trigger?.Name ?? execution.TriggerId.ToString("D"),
             KeyPrefix = execution.KeyPrefix,
-            TargetAgentDefinitionId = trigger?.TargetAgentDefinitionId ?? Guid.Empty,
+            TargetAgentDefinitionId = trigger?.TargetAgentDefinitionId ?? trigger?.TargetGraphWorkflowDefinitionId ?? Guid.Empty,
             TerminalStatus = NodeChatMessageStatusValues.Cancelled,
             TraceId = Activity.Current?.TraceId.ToString(),
             LatencyMs = Math.Max(val1: 0L, nowUnixMs - execution.ReceivedAtUtc)

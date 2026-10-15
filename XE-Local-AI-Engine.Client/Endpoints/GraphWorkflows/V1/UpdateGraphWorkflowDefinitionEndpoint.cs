@@ -48,7 +48,8 @@ public sealed class UpdateGraphWorkflowDefinitionEndpoint : Endpoint<UpdateGraph
 
         try
         {
-            var updated = await _definitions.UpdateAsync(req.DefinitionId, req.Version, req.Name, req.Description, graphJson, ct);
+            var updated = await _definitions.UpdateAsync(req.DefinitionId, req.Version, req.Name, req.Description, graphJson, req.AllowsActions,
+                GraphWorkflowContractMapper.FromWireTriggerSources(req.TriggerSources), ct);
             await Send.OkAsync(updated.ToResponse(), ct);
         }
         catch (GraphWorkflowValidationException exception)

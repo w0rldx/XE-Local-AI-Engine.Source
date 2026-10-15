@@ -101,6 +101,8 @@ export type GraphWorkflowCanvasNodeData =
 			readonly kind: "Start";
 			readonly inputSchema: string | null;
 			readonly defaultInput: string | null;
+			/** The phrases the intent router matches this workflow on (authoring metadata, never authority). */
+			readonly aliases: readonly string[];
 	  })
 	| (GraphWorkflowNodeBase & {
 			readonly kind: "LlmCall";
@@ -317,6 +319,9 @@ function nodeDataFromWire(node: GraphWorkflowGraphNode): GraphWorkflowCanvasNode
 				kind: "Start",
 				inputSchema: jsonText(config["inputSchema"]),
 				defaultInput: jsonText(config["defaultInput"]),
+				aliases: Array.isArray(config["aliases"])
+					? config["aliases"].filter((entry): entry is string => typeof entry === "string")
+					: [],
 			};
 		case "Agent":
 			return {
@@ -603,6 +608,8 @@ function configToWire(data: GraphWorkflowCanvasNodeData, issues: GraphWorkflowGr
 			return {
 				inputSchema: parseJsonField(data.inputSchema, data.key, issues, true),
 				defaultInput: parseJsonField(data.defaultInput, data.key, issues, false),
+				// Absent rather than empty: the server takes 1 to 32 aliases or none at all.
+				...(data.aliases.length > 0 ? { aliases: data.aliases.map((alias) => alias.trim()) } : {}),
 			};
 		case "Agent":
 			return {
@@ -755,7 +762,7 @@ export function defaultNodeData(kind: GraphWorkflowNodeKind, key: string): Graph
 	const base = { key, label: "", joinPolicy: "All" as const, maxAttempts: graphWorkflowDefaultMaxAttempts(kind) };
 	switch (kind) {
 		case "Start":
-			return { ...base, kind, inputSchema: null, defaultInput: null };
+			return { ...base, kind, inputSchema: null, defaultInput: null, aliases: [] };
 		case "Agent":
 			return {
 				...base,

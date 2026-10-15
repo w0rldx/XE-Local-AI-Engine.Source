@@ -66,9 +66,16 @@ internal sealed record class CustomTool
     public bool Acknowledged { get; set; }
 
     /// <summary>
+    ///     The operator's statement that a graph workflow may run this tool with nobody to ask. Plaintext, kind-agnostic.
+    ///     Default <c>false</c>.
+    /// </summary>
+    /// <remarks>An authoring gate like <see cref="Acknowledged" />, not model-facing content, so toggling it does NOT bump <see cref="Version" />.</remarks>
+    public bool AllowUnattended { get; set; }
+
+    /// <summary>
     ///     Bumped on a content-affecting edit (Name, Description, Kind, Mode, parameters or config); drives the runtime
-    ///     config hash so editing a tool invalidates resume and its approval memo. The <see cref="Enabled" /> and
-    ///     <see cref="Acknowledged" /> toggles do not bump it. Default <c>1</c>.
+    ///     config hash so editing a tool invalidates resume and its approval memo. The <see cref="Enabled" />,
+    ///     <see cref="Acknowledged" /> and <see cref="AllowUnattended" /> toggles do not bump it. Default <c>1</c>.
     /// </summary>
     public int Version { get; set; }
 

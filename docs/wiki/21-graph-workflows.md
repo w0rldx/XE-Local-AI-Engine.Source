@@ -24,6 +24,8 @@ Open Canvas import. **Skip to** [§3](#3-run-lifecycle) for how a run advances; 
 - [7. Testing](#7-testing)
 - [8. Limits and options](#8-limits-and-options)
 - [9. The Open Canvas import](#9-the-open-canvas-import)
+- [10. Your first action: a workflow that turns on a light or opens a program](#10-your-first-action-a-workflow-that-turns-on-a-light-or-opens-a-program)
+- [11. Intent routing](#11-intent-routing)
 - [Related pages](#related-pages)
 
 **Graph Workflows** let an operator draw a directed acyclic graph of LLM calls, agent turns, tool calls, conditions and human
@@ -64,8 +66,11 @@ canvases you care about.
 - **Not MAF Workflows.** `Microsoft.Agents.AI.Workflows` is not referenced anywhere in `Client.Application`; the
   routing here is this module's own state machine, and an `Agent` node reaches the model through the same headless
   invocation stack a scheduled saved-agent run uses.
-- **Not a write surface for agents.** A `Tool` node may only run a built-in read-local tool that needs no approval
-  (§4.3). A node runs unattended, so there is nobody to ask.
+- **Not a write surface for agents.** A `Tool` node runs a built-in read-local tool that needs no approval, or an
+  **action**: a custom tool the operator flagged for unattended use, in a definition the operator flagged with
+  `allowsActions` (§4.3, [ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md)). A node runs unattended,
+  so there is nobody to ask: for an action, the two operator flags and an audit row written before the call stand in
+  for the question. No agent and no model ever chooses an action's arguments.
 - **Not Dev Workflows.** [Development Workflows](25-dev-workflows.md) run a fixed template over a code work item with
   gates, interventions and artifacts. Graph Workflows are free-form graphs with no work item and no artifacts, and
   several of their types are deliberate copies trimmed of what has no meaning here — there is no `Blocked` node-run
@@ -372,6 +377,18 @@ Two checks happen again at start rather than being trusted from save time, becau
 graph is re-parsed with the same parser, and every `Tool` node's tool is re-checked against the live catalog (§4.3).
 The run also refuses a graph over `MaxNodeRunsPerRun` and an input over `MaxRunInputBytes`.
 
+**Origin and accepted sources** ([ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md)). Every start names
+who starts it: `StartAsync` takes a required `GraphWorkflowRunOrigin` (`Source`, and the audit-only `PrincipalId` and
+`KeyPrefix` an integration key supplies), so no caller is recorded as `Manual` by omission. The SPA start route passes
+`Manual`, `GraphWorkflowChatService` passes `Chat`, the `run-graph` scheduler template ([Scheduler](06-scheduler.md)) passes `Schedule`, and `GraphWorkflowIntentService` passes `Intent` (§11). The source is one member of the `[Flags]` enum
+`GraphWorkflowTriggerSource` (`Manual`, `Chat`, `Schedule`, `Integration`, `Intent`), stored as the plaintext
+`trigger_source` int on the run row beside `principal_id` and `key_prefix`; a run from before the column reads as
+`Manual`. The definition's plaintext `trigger_sources` int is the set it accepts, default `Manual | Chat`. A start whose
+source is not in that set is refused before anything else about it is checked, with `GraphWorkflowRunConflictException`
+(409 `GraphWorkflowRunConflict`) naming the source and the definition, and writes no run. A replayed request id is
+answered with its run without the check. Only the Operator update route changes the set; create, import and export
+never carry it, so an imported definition accepts the default. The principal and key prefix never authorise anything.
+
 ### 3.2 Run statuses
 
 `Pending → Running → WaitingForApproval → Completed | Failed | Cancelled`, plus `Cancelling`
@@ -487,7 +504,8 @@ The verdicts:
   failure, so neither costs an attempt.
 - A `Running` **`LlmCall`, `Agent`, `DecisionModel` or `Tool`** row is **failed** `Interrupted`. The work was an in-process task with no durable
   handle, so its partial output died with the host. Recovery never re-attempts it; the dispatcher's retry stage does
-  on its first tick, if and only if the node and run budgets allow. The class written is the plain `Interrupted`
+  on its first tick, if and only if the node and run budgets allow. An action node has one attempt (§4.3), so an
+  interrupted action is never re-attempted and fails the run. The class written is the plain `Interrupted`
   rather than anything `GraphWorkflowFailures.Classify` would decide, because recovery deliberately never parses the
   run's graph and so cannot see the node's attempt cap — the retry stage, which does, classifies on that first tick.
 
@@ -651,7 +669,13 @@ is validated for size, not against the schema). `defaultInput` is the run's inpu
 (`GraphWorkflowRunService.StartAsync` applies it before the size cap, so an API or trigger start behaves like the SPA,
 which pre-fills it); an explicit input always wins.
 
-Output: `{ "input": <the run's start payload> }`, handed to everything downstream.
+`aliases` is optional: 1 to 32 strings of 1 to 120 characters, trimmed, distinct once normalised. They are the
+phrases the intent router matches this definition on (§11). Authoring metadata only: they travel inside the graph, so
+export and import carry them, and they grant nothing; a definition is reachable by intent only while its trigger
+sources include `Intent`. A bad list is a validation error keyed by the Start node.
+
+Output: `{ "input": <the run's start payload> }`, handed to everything downstream. Who started the run is run
+metadata (§3.1), not part of this output.
 
 ### 4.2 `Agent`
 
@@ -795,7 +819,8 @@ model. A second LLM Call can consume the first one's `input.output.text` the sam
 
 ### 4.3 `Tool`
 
-One built-in tool call, on its own lane, through `IToolInvocationService` (`GraphWorkflowToolExecutor`).
+One tool call, on its own lane, through `IToolInvocationService` (`GraphWorkflowToolExecutor`): a built-in read tool,
+or an action (below).
 
 | Config member | Meaning |
 |---|---|
@@ -816,6 +841,7 @@ is embedded as JSON, and the tools that do that mean it.
 2. the **composed** approval policy must answer that it needs no approval.
 
 Both are asked of the same catalog at **definition save** and again at **run start**, and the run-start answer wins.
+The one exception besides `web_fetch` is an action (below).
 A tool that was read-only when the graph was saved does not execute after a policy tightened. A tool outside the
 envelope is an **error**, never a warning: a workflow node runs unattended, so a write, execute or approval-gated
 tool has nobody to ask. Errors are keyed by node key, so the editor draws them on the offending node.
@@ -834,10 +860,40 @@ succeeds carrying the tool's `{ "error", "message" }` answer, as `read_file`'s o
 allowed on a Tool node, and **no** Agent node — bound agent or default persona — is offered either web tool: both are
 stripped from the offer by name.
 
+**Actions** ([ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md)). `ToolInvocationService` admits a
+third kind of name: a custom tool of either kind (`HttpFetch` or `Command`) that is enabled, acknowledged, in `Fixed`
+mode and flagged `AllowUnattended`, while custom tools are on for the node (`IUnattendedCustomToolCatalog`). The
+invocable list marks it `IsAction`, and `GraphWorkflowToolGate.ErrorsAsync` refuses a Tool node naming it, keyed by
+node, unless the definition's `allowsActions` is on. Only the Operator update route sets that flag, and export omits it.
+Create never carries it, so a drawn action node is a save error until the flag is on. Import never carries it either,
+but admits the action node (`GraphWorkflowDefinitionService.ImportAsync`): a shared graph arrives unable to act, its start
+refuses the node, and the operator flags the definition through the update to run it. On invocation the service
+needs the node's definition id, writes a metadata-only `ApprovalDecision` row through the strict
+`IUnattendedApprovalAuditRecorder` with source `graph-action:<definitionId>`, and only then calls the kind's executor
+directly, without the approval wrap the chat path uses. A missing definition id or a failed audit write is a
+`NotInvocable` refusal and the executor is never called. `Fixed` mode takes no arguments, so a node's `arguments` and
+`argumentBindings` reach nothing an action reads. `GraphWorkflowGraph` gives every Tool node naming a custom tool
+**one attempt** whatever it declares (`NamesCustomTool`, decided from the `custom__` name prefix rather than the
+catalog, so every reader of a pinned run graph agrees without a store read), so neither the retry stage nor a restart
+re-fires a side effect: an action failed `Timeout`, `Faulted` or `Interrupted` stays failed and fails the run naming
+the node. An action the executor reports as failed (`CustomToolExecution.Succeeded` false: a guard block, a transport
+error or timeout, a non-2xx answer, a command's non-zero exit or failed launch) is `Faulted` with the structural reason
+`action-failed` and the executor's text as the outcome's result. The failed node run records only that reason, as every
+failed Tool node does, and with one attempt it fails the run. The chat path still hands the
+model the text alone. In the editor the Tool picker
+labels an action and shows an "Action" badge with a note that it runs unattended and once
+(`GraphWorkflowToolConfigForm`); while the definition does not allow actions the entry is disabled and the node shows the
+save gate's own refusal. The switch lives in the definition's Workflow settings dialog (`GraphWorkflowDefinitionMetaDialog`, shown
+only over a stored definition, with a danger note) and sends `allowsActions` only when moved; the list and the toolbar
+mark a definition that allows actions.
+
 The lane itself is a `GraphWorkflowInFlightLane`, the same registry the `Agent` lane uses, and the two differ only in
 what they run: dispatch to a queue, settle on the poll, a stop that answers no on a repeat, forget what a retry
 superseded. A tool call passes **one** queue where an agent turn passes two — there is no node-wide invocation lease
-to wait for after the lane slot, so the row reads `Running` the moment the lane hands back an entry. The lane is
+to wait for after the lane slot, so the row reads `Running` the moment the lane hands back an entry. The call itself
+does not start until that `Running` write has committed (`GraphWorkflowToolExecutor.DispatchAsync`): a restart
+collapses a `Queued` row to `Pending` without spending an attempt (§3.5), so a call fired from one would fire an action
+twice; a failed write faults the unstarted call and the poll fails the row. The lane is
 therefore what bounds the fan-out: a tool call has no global bottleneck of its own, and a `Parallel` node feeding two
 hundred `search_knowledge_base` nodes would otherwise fire all of them at once. It is sized on `MaxConcurrentRuns`
 rather than on a knob of its own — the same "how much of this node may be busy at once" question — and is worth a
@@ -853,8 +909,8 @@ thousand characters) and is deliberately **not** retryable, since the same call 
 names the tool beside the node, because "which node" alone does not say what to shrink.
 
 `graph-workflows/tools` is the picker's feed, the same list the save gate checks (`GraphWorkflowToolGate.ListAsync`:
-the invocation envelope, plus `web_fetch` flagged `requiresAllowedUrls` while web access is on), so the picker cannot
-offer a name the run would then refuse. A missing binding path fails the node
+the invocation envelope with actions flagged `isAction`, plus `web_fetch` flagged `requiresAllowedUrls` while web access
+is on), so the picker cannot offer a name the run would then refuse. A missing binding path fails the node
 `ValidationFailed`; the `Queued` write happens before bindings resolve, so a refused row keeps its input document.
 
 ### 4.4 `Condition`
@@ -1026,6 +1082,7 @@ Every route is Operator-gated.
 | `graph-workflows/runs/{runId}/nodes/{nodeKey}/steer` | POST `{ operationId, message }` → 202 with the run detail. Steers the queued or running Agent/LLM Call node of a chat-bound run (§3.7). 400 for the request, 404 for an unknown run or node, 409 `GraphWorkflowSteerLimitReached` at the cap, 409 `GraphWorkflowRunConflict` for the run's state or a reused id. The node-run read carries `steering: [{ operationId, message, atUtc, attempt, applied }]`. |
 | `graph-workflows/runs/{runId}/events` | The event log, paged from an **exclusive** `afterSeq`, capped at `EventReplayLimit` — which the response reports rather than leaving a client to infer it from a full page. |
 | `graph-workflows/conversations/{conversationId}/messages` | POST a chat send into workflow mode → 202 `{ runId, messageId, action }` (§3.6, [Chat](05-chat.md)). 409s: `GraphWorkflowRunBusy`, `GraphWorkflowRerunConfirmationRequired`, `GraphWorkflowAttachmentsNotAccepted`. |
+| `graph-workflows/intents/invoke` | POST `{ utterance, requestId, utteredAt }` → 200 `{ status, matchedBy, definitionId, definitionName, reason, run }` (§11). 400 for an empty utterance or request id and a future `utteredAt`; 409 `GraphWorkflowIntentExpired` for a stale one. |
 | `graph-workflows/conversations/{conversationId}/runs` | GET the conversation's bound runs newest first (`?limit=`, default 20): run summary, `definitionId`, `definitionName` (null once deleted), `triggerMessageId`, `pendingInput`, `steerable`. |
 
 Six routes cap the request body at **1 MiB** (`GraphWorkflowRequestSizeLimit`): create, update and validate, which
@@ -1262,6 +1319,7 @@ node settings (**Node Settings → Workspaces**, applied on restart); their keys
 | `DispatchIntervalMilliseconds` | 5000 | The safety-sweep cadence when nothing wakes the dispatcher; commands, lane landings and run ends wake it at once (§3.4). Floored at 100 ms. |
 | `MaxConcurrentRuns` | 4 | Executing runs at once — a run parked on a person holds no slot (§3.4) — and the size of both the shared Agent/LLM Call/DecisionModel invocation lane and the Tool lane. Runs above the cap **wait**; they are not refused. |
 | `MaxRunInputBytes` | 65 536 | A run-start input document, checked in `GraphWorkflowRunService.StartAsync` (§3.1) rather than at the endpoint, so every caller of the service is held to it. Also the budget for the inlined `upstream` map in an Agent prompt and the complete user prompt with bound JSON data in an LLM Call. |
+| `IntentRouterTimeoutSeconds` | 120 | How long `GraphWorkflowIntentService` waits for the router run (§11) before it cancels the run once and answers `NotMatched`. Range 1 to 3600. |
 | `EventReplayLimit` | 200 | Events one replay may return, hub snapshot and events route alike. Ceiling 1000 — one replay is one response body. |
 | `MaxSteersPerNode` | 5 | Steers one node run may take (§3.7). Each applied steer re-runs the node on the same attempt and restarts its deadline, so the attempt budget does not bound steering; this does. Floored at 1. |
 
@@ -1450,6 +1508,239 @@ Back up the complete data directory, including its key material, before upgradin
 that an earlier version already dropped without importing; those require a pre-upgrade backup. Do not delete or edit
 the recovery table to bypass a startup failure. Resolve the reported underlying fault or restore a complete backup.
 No plaintext export is created.
+
+---
+
+## 10. Your first action: a workflow that turns on a light or opens a program
+
+An action is a custom tool you author and flag, called from a `Tool` node, with nobody asked at run time. The rules are
+in §4.3 and [ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md); this section is the walkthrough.
+
+**Prerequisites.**
+
+- Custom tools are on for the node (Node Settings, "Enable custom tools", `CustomToolsEnabled`). It is off by default.
+- Graph workflows are on (`GraphWorkflowsEnabled`).
+- You are signed in with the Operator role. The custom-tool routes and every graph route require it.
+
+### 10.1 Sample A: Home Assistant `light.turn_on`
+
+`POST custom-tools` (the route family `LocalApiRoutes.CustomTools`) with a `CustomToolDefinition`. Enums travel as
+their names. The tool's name is stored with the `custom__` prefix whether or not you type it.
+
+```json
+{
+  "name": "custom__living_room_light_on",
+  "description": "Turn on the living room light.",
+  "kind": "HttpFetch",
+  "mode": "Fixed",
+  "enabled": true,
+  "acknowledged": true,
+  "allowUnattended": true,
+  "parameters": [],
+  "http": {
+    "method": "POST",
+    "urlTemplate": "http://homeassistant.local:8123/api/services/light/turn_on",
+    "headers": [
+      { "name": "Authorization", "value": "Bearer <long-lived access token>", "isSecret": true },
+      { "name": "Content-Type", "value": "application/json", "isSecret": false }
+    ],
+    "bodyTemplate": "{\"entity_id\":\"light.living_room\"}",
+    "allowedHosts": ["homeassistant.local"],
+    "privateHosts": ["homeassistant.local"]
+  }
+}
+```
+
+- `allowUnattended` is refused unless the tool is `acknowledged` and in `Fixed` mode. A `Fixed` tool declares no
+  parameters and takes no model or node input, so the request is exactly what you wrote here.
+- **Why the host is listed twice.** `allowedHosts` is the ordinary list of hosts the tool may call at all.
+  `privateHosts` is the narrower exception that lets the tool reach a private-range address, and every entry in it must
+  also be in `allowedHosts`. Neither list alone is enough. Both SSRF layers honour it (`CustomToolSsrfGuard`).
+- **What stays denied.** The exception covers the private LAN ranges only (RFC 1918, CGNAT, IPv6 unique-local).
+  Loopback, link-local, cloud-metadata, multicast and unspecified addresses are refused even when listed, and a name
+  that resolves to a listed private address plus any denied one is refused. Any host you did not list stays under the
+  normal rule.
+- The token is a secret header: the read routes return a masking sentinel in its place, and the tool's result text is
+  scrubbed of it.
+- A response outside 2xx, a transport error and the fixed 30 s fetch timeout all count as a failed call (§10.5).
+
+**Optional A2, reading a state.** A second tool of the same shape with `"method": "GET"`, no `bodyTemplate` and
+`urlTemplate` `http://homeassistant.local:8123/api/states/light.living_room` returns the entity state to a later node.
+Its result is the response as one fenced text document (status line, headers, then the body), not a JSON object, so
+a `Condition` over `output.result` can only compare that whole string and cannot test for a substring. Use A2 to hand
+the state to an `Agent` or `LlmCall` node, not to branch on it.
+
+### 10.2 Sample B: open a program
+
+```json
+{
+  "name": "custom__open_notes",
+  "description": "Open the notes document.",
+  "kind": "Command",
+  "mode": "Fixed",
+  "enabled": true,
+  "acknowledged": true,
+  "allowUnattended": true,
+  "parameters": [],
+  "command": {
+    "executable": "<absolute path to the program, for example C:\\Program Files\\Example\\notes.exe or /opt/example/bin/notes>",
+    "argsTemplate": ["<absolute path to the document>"],
+    "workingDirectory": null,
+    "timeoutSeconds": 0,
+    "env": [],
+    "detach": true
+  }
+}
+```
+
+- The executable must be a fixed absolute path to a real file. A shell, an interpreter and a script extension
+  (`.bat`, `.cmd`, `.ps1`, `.vbs`) are refused at save (`HostExecutableGuard`, `CustomToolValidation`). Arguments are
+  separate argv entries; there is no shell and no whitespace splitting.
+- **It launches with a cleared environment.** Only a short allow-list (`PATH`, `HOME`, `TEMP`, `SystemRoot`,
+  `USERPROFILE` and similar) is inherited. Display variables are not in it, so a Linux GUI program needs its display
+  variables supplied through `env`. An `env` entry is operator-fixed and may be marked secret.
+- **`detach: true` starts the program and returns.** The tool does not wait for it and captures no output; the call
+  succeeds as `started <program> (process <id>)` and the program stays open after the node finishes. A program that
+  exits with a non-zero code within the first half second is a failed call carrying that exit code. `timeoutSeconds`
+  must be 0 with `detach`, because nothing waits. Without `detach` the tool waits for the exit and kills the process
+  tree at `timeoutSeconds`, which suits a command that finishes, not a program that stays open.
+- **A window appears only when the engine runs in your interactive session**, as it does when the desktop shell owns
+  the engine. An engine running as a service, or attached from another session, launches the program invisibly or
+  not at all.
+
+### 10.3 The graph
+
+Create a definition without the action node first: `POST graph-workflows/definitions` refuses a node naming an action
+tool, and only the Operator update route (`PUT`, carrying `version`) can set `allowsActions`. Then update it with the
+flag and the graph together.
+
+```json
+{
+  "version": 1,
+  "allowsActions": true,
+  "graph": {
+    "schemaVersion": 1,
+    "nodes": [
+      { "key": "start", "kind": "Start", "label": "Start",
+        "config": { "inputSchema": null, "defaultInput": null } },
+      { "key": "light", "kind": "Tool", "label": "Living room light on",
+        "config": { "toolName": "custom__living_room_light_on" } },
+      { "key": "done", "kind": "End", "label": "Done",
+        "config": { "outcome": "completed", "resultPath": null } }
+    ],
+    "edges": [
+      { "key": "e1", "from": "start", "to": "light" },
+      { "key": "e2", "from": "light", "to": "done" }
+    ]
+  }
+}
+```
+
+In the editor, open the definition's **Workflow settings** and turn on **Allow actions**. The switch carries a warning
+that an action changes something outside the app, runs once per run and is audited first. Until it is on:
+
+- the Tool node's picker lists each action with an "Action" badge but greyed out, with a hint to turn the switch on;
+- a node that already names an action shows the save gate's refusal, keyed to that node;
+- a save, or a start, of such a graph is refused naming the node.
+
+Once it is on, the list and the toolbar mark the definition "Actions".
+
+### 10.4 Run time
+
+1. Before the call, `ToolInvocationService` writes a metadata-only `ApprovalDecision` row through
+   `IUnattendedApprovalAuditRecorder`, source `graph-action:<definitionId>`. If that write fails the call is refused
+   (`NotInvocable`, reason `audit-failed`) and the executor never runs. `GraphWorkflowToolExecutor` maps `NotInvocable` to
+   `ValidationFailed`, which is never retried, so that node fails with the terminal reason `audit-failed` and the
+   run fails naming the node. Nothing was sent.
+   The row is not shown in any view. It is an `ApprovalDecision` record in the agent execution log table, kept apart
+   from the per-agent diagnostics, with the node run id as its invocation id, the tool name, the tool's risk category
+   and the source above. It is also counted in the tool approval decision metric.
+2. It then calls the tool once. A node naming a custom tool gets one attempt whatever `maxAttempts` says, so neither
+   a retry nor a restart repeats it. An action found `Interrupted` after a restart fails the run.
+3. A failed call (a guard block, transport error or timeout, a non-2xx answer, a non-zero exit, a failed launch) is a
+   `Faulted` node with the structural reason `action-failed`, which fails the run naming the node. The tool's own
+   text is the node's result. The run view shows the failed node and its reason, and the run's events record it. To
+   run it again, start a new run.
+
+### 10.5 Sharing
+
+Export omits `allowsActions`. An import stores the definition unflagged, so it arrives unable to act: a start refuses
+the node until you turn **Allow actions** on for it. The custom tools themselves are node-local and are not part of
+the share file. Import runs the same tool gate as create, with actions treated as allowed, so it refuses a Tool node
+whose tool is not a runnable one on this node: a missing tool and a tool that is not enabled, acknowledged, `Fixed`
+and flagged are both refused, keyed by node. The importing node therefore needs a flagged tool of the same name
+before the import, and a start re-checks the tool against the live catalog as well.
+
+### 10.6 Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| The tool is not in the Tool picker | Custom tools are off for the node; or the tool is disabled, not acknowledged, not in `Fixed` mode or not flagged `allowUnattended`; or the definition's Allow actions switch is off (the entry is then present but greyed out). |
+| A save refuses a node by key | The definition does not allow actions, or the tool name no longer resolves to a flagged tool. |
+| The call is blocked for a private host | The host is missing from `allowedHosts` or from `privateHosts`; or the address is loopback, link-local or metadata (never admitted); or the name resolves to a listed address plus a denied one; or the URL uses a literal address that is not listed. |
+| The node failed with `action-failed` | The target answered outside 2xx, the request failed or timed out (30 s for HTTP), the command exited non-zero or could not launch, or a command without `detach` ran past `timeoutSeconds` and was killed. The node's result text says which. |
+| A detached program did not stay open | A detached launch reports `started` once the program is running; a crash within the first moment reports the exit code instead. A program that exits later is not tracked: check its own logs, and its display variables under `env` on Linux. |
+| The node failed with `audit-failed` | The audit row could not be written, so the action did not run and was not retried. Nothing was sent. The run fails naming the node. |
+
+---
+
+## 11. Intent routing
+
+`GraphWorkflowIntentService.ResolveAndStartAsync` turns one confirmed command into one run, behind
+`POST graph-workflows/intents/invoke` (`InvokeGraphWorkflowIntentEndpoint`). It is the backend of the `/command` page:
+the user reads the transcript or text, presses Enter, and the page posts it. No engine is new: a match starts an
+ordinary run with origin `Intent` and the caller's account id as its audit-only `PrincipalId`
+([ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md)).
+
+**The refusals come first.** An empty utterance or request id, or an `utteredAt` more than `ClockSkew` (5 s) ahead of
+the node's clock, is a 400 keyed by the member. An `utteredAt` older than the `IntentMaxUtteranceAgeSeconds` node
+setting (default 30, range 5 to 600; [Security & Privacy](12-security-and-privacy.md)) is
+`GraphWorkflowIntentExpiredException`, 409 `GraphWorkflowIntentExpired`. Enter is the consent; the window only stops a
+captured request being replayed later.
+
+**Candidates.** Only definitions whose trigger sources include `Intent`, minus the router itself. A stale alias on a
+definition the operator never opened to intents routes nowhere.
+
+**Stage 1, alias.** The utterance is normalised (whitespace runs collapsed, trimmed, trailing `.`, `!` and `?`
+stripped; `GraphWorkflowIntentService.Normalize`) and compared, ignoring case, with each candidate's normalised name
+and Start `aliases` (§4.1). One match starts it. Two or more is `NotMatched` with a reason naming them: give
+one a distinct alias. No model runs on this path.
+
+**Stage 2, router.** With no alias match and the `IntentRouterDefinitionId` node setting naming a definition that
+accepts `Intent`, the service starts that definition's run with input
+`{ "utterance": "<the text as typed>", "choices": ["<candidate name>", …] }`. The router is operator-authored, typically
+`Start → DecisionModel → End`: the DecisionModel binds `run.input.utterance` (and may bind `run.input.choices`), its
+labels are the candidate names or aliases plus `unknown`, and the End node sets `resultPath: "input.output"` so the
+run's result is the DecisionModel output `{ "choice": … }`. A result that is a bare string is read as the choice too.
+The router run's request id is `GraphWorkflowIntentService.RouterRequestId`: the first 16 bytes of SHA-256 over a fixed
+salt and the command's `requestId`, stamped as a version-5 GUID. A retried command therefore replays the same router
+run, and the router's id can never collide with the command's own. The service polls the run on the node's clock
+until it ends; after `IntentRouterTimeoutSeconds` (§8) it cancels the run once. A dropped request does not cancel it,
+so a retry waits on the same run.
+
+**The choice.** `unknown` (any case), a missing choice, a failed, cancelled or timed-out router run, or a choice that
+names no candidate's name or alias is `NotMatched` with a structural reason; the model's text is never repeated. A
+choice naming one candidate starts it. There is no confidence threshold: the provider reports none
+(§4.9), and the alias, the `unknown` label and the user's Enter are the controls.
+
+**Starting.** The matched definition starts with the command's `requestId`, no input (its `defaultInput` applies) and
+origin `Intent`, so a replay answers the same run. A start the run service refuses answers its usual 400 or 409.
+The answer is 200 for both outcomes: `status` is `Started` with `run`, or `NotMatched` with `reason` and no run, and
+the page sends an unmatched sentence to the default agent as a normal chat message. `matchedBy` names the stage that
+decided: `Alias`, `Router`, or `None` when no stage ran.
+
+**The page.** `/command` (`features/command`, [React Client](10-react-client.md)) is the one caller in the product. It
+sits outside the app layout, so the desktop overlay window loads it bare, and has a text box, a mic button and Enter.
+An Auto / EN / DE control beside the mic pins the dictation language, because automatic detection turned short English
+commands into German text for some speakers ([Audio Transcription](24-audio-transcription.md#dictation-sessions)).
+Enter posts `{ utterance, requestId, utteredAt }` with a fresh `crypto.randomUUID()` per command; `utteredAt` is the
+first dictated segment's time (the dictation session's start plus the segment's offset) or, for typed text, the moment
+of Enter. A `Started` answer shows the definition name and follows the run over `graph-workflows/hub`
+(`SubscribeRun`, one REST read per ping, a 5 s poll only while the hub is down) until it is `Completed`, `Failed` or
+`Cancelled`, with a link to the run view. `NotMatched` creates a conversation and sends the same text to the default
+agent over the chat hub's `SendMessage` stream, showing the reply inline with an "Open in chat" link. A 409
+`GraphWorkflowIntentExpired` asks the user to say it again; a 404 (Graph Workflows off) is a short notice. Results live
+in the page's memory only.
 
 ---
 

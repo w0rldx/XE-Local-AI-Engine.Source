@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Tools;
 
@@ -28,6 +29,14 @@ public interface IGraphWorkflowDefinitionService
     /// <summary>Validates and stores. Throws <see cref="GraphWorkflowValidationException" /> before reaching the store.</summary>
     Task<GraphWorkflowDefinitionSnapshot> CreateAsync(string name, string? description, string graphJson, CancellationToken cancellationToken = default);
 
+    /// <summary>Create for a share file: every rule but the action flag, which an import never sets (ADR 0021).</summary>
+    /// <remarks>
+    ///     The definition is stored with <c>AllowsActions</c> false, so an action node arrives unable to act: the start
+    ///     refuses it until the operator flags the definition through the update. Refusing the import instead would leave
+    ///     no definition to flag.
+    /// </remarks>
+    Task<GraphWorkflowDefinitionSnapshot> ImportAsync(string name, string? description, string graphJson, CancellationToken cancellationToken = default);
+
     /// <summary>
     ///     A partial edit under optimistic concurrency: every null member leaves the stored value alone, so a rename
     ///     travels without the caller echoing back a graph it never read.
@@ -36,13 +45,16 @@ public interface IGraphWorkflowDefinitionService
     ///     A non-null graph is validated and its node count written alongside it. <paramref name="description" />
     ///     distinguishes the two absences: null leaves the stored description alone, an EMPTY string clears it.
     ///     Collapsing them would mean an author who deleted the text had no way to say so, or a rename that carried
-    ///     no description silently wiped one.
+    ///     no description silently wiped one. A graph is gated under <paramref name="allowsActions" />, or the stored flag.
+    ///     <paramref name="triggerSources" /> is an operator setting like the flag; null leaves it alone.
     /// </remarks>
     Task<GraphWorkflowDefinitionSnapshot> UpdateAsync(Guid definitionId,
         int expectedVersion,
         string? name,
         string? description,
         string? graphJson,
+        bool? allowsActions = null,
+        GraphWorkflowTriggerSource? triggerSources = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>The picker's feed, exactly as <see cref="IGraphWorkflowStore.ListDefinitionsAsync" /> answers it.</summary>

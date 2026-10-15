@@ -110,7 +110,10 @@ internal sealed class IntegrationInvocationService : IIntegrationInvocationServi
                 return Rejected(IntegrationAcceptOutcome.InputsRejected, inputsMessage);
             }
 
-            var seed = IntegrationSeedComposer.Compose(request.Inputs);
+            // A graph target's seed turn IS its run input document; the coordinator hands it to the run verbatim.
+            var seed = trigger.TargetKind == IntegrationTargetKind.Graph
+                ? IntegrationSeedComposer.ComposeGraphInput(request.Inputs)
+                : IntegrationSeedComposer.Compose(request.Inputs);
             if (IntegrationSeedComposer.Utf8ByteCount(seed) > _options.MaxSeedBytes)
             {
                 return Rejected(IntegrationAcceptOutcome.InputsRejected, "The composed request is larger than this node accepts.");

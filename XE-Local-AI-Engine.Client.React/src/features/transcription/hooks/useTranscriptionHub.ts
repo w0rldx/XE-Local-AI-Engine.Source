@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
-import { type CaptureChannel, CaptureError } from "@/features/transcription/capture/CaptureSource";
+import { type CaptureChannel, CaptureError, encodePcmFrame } from "@/core/audio/capture/CaptureSource";
 import {
 	TRANSCRIPTION_ADMISSION_CLOSED,
 	TRANSCRIPTION_CATCH_UP_PROGRESS,
@@ -165,16 +165,6 @@ export function useLiveTranscript(sessionId: string): LiveTranscriptView | null 
 // and the node's own formatting need not agree on case.
 function isSameSession(left: string, right: string): boolean {
 	return left.toLowerCase() === right.toLowerCase();
-}
-
-/** The frame goes over the JSON protocol, whose `byte[]` binding is base64 — a `Uint8Array` would stringify as an object. */
-function toBase64(pcm: Int16Array): string {
-	const bytes = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
-	let binary = "";
-	for (let index = 0; index < bytes.length; index += 1) {
-		binary += String.fromCharCode(bytes[index] ?? 0);
-	}
-	return btoa(binary);
 }
 
 export function useTranscriptionHub(sessionId: string | null): TranscriptionHubHandle {
@@ -451,7 +441,10 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 				);
 			});
 			try {
-				await Promise.race([connection.invoke("PushAudioFrame", sessionId, channelToWire(channel), toBase64(pcm)), stalled]);
+				await Promise.race([
+					connection.invoke("PushAudioFrame", sessionId, channelToWire(channel), encodePcmFrame(pcm)),
+					stalled,
+				]);
 			} finally {
 				clearTimeout(timer);
 			}

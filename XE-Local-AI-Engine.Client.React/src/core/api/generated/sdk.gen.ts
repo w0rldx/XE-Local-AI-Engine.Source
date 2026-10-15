@@ -781,6 +781,9 @@ import type {
 	InvalidateInferenceProfileData,
 	InvalidateInferenceProfileErrors,
 	InvalidateInferenceProfileResponses,
+	InvokeGraphWorkflowIntentData,
+	InvokeGraphWorkflowIntentErrors,
+	InvokeGraphWorkflowIntentResponses,
 	ListAgentDefinitionsData,
 	ListAgentDefinitionsErrors,
 	ListAgentDefinitionsResponses,
@@ -1246,6 +1249,9 @@ import type {
 	StartDevWorkflowRunData,
 	StartDevWorkflowRunErrors,
 	StartDevWorkflowRunResponses,
+	StartDictationSessionData,
+	StartDictationSessionErrors,
+	StartDictationSessionResponses,
 	StartExternalAppData,
 	StartExternalAppErrors,
 	StartExternalAppResponses,
@@ -1662,6 +1668,7 @@ import {
 	zInspectImageRepositoryResponse,
 	zInstallExternalAppResponse,
 	zInvalidateInferenceProfileResponse,
+	zInvokeGraphWorkflowIntentResponse,
 	zListAgentDefinitionsResponse,
 	zListAgentExecutionLogsResponse,
 	zListAgentHomeRunsResponse,
@@ -1817,6 +1824,7 @@ import {
 	zStartBenchmarkRunResponse,
 	zStartDevelopmentNextActionResponse,
 	zStartDevWorkflowRunResponse,
+	zStartDictationSessionResponse,
 	zStartExternalAppResponse,
 	zStartGgufDownloadResponse,
 	zStartGgufImportResponse,
@@ -6939,6 +6947,32 @@ export const startGraphWorkflowRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
+export const invokeGraphWorkflowIntent = <ThrowOnError extends boolean = false>(
+	options: Options<InvokeGraphWorkflowIntentData, ThrowOnError>,
+): RequestResult<InvokeGraphWorkflowIntentResponses, InvokeGraphWorkflowIntentErrors, ThrowOnError> =>
+	(options.client ?? client).post<InvokeGraphWorkflowIntentResponses, InvokeGraphWorkflowIntentErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zInvokeGraphWorkflowIntentResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/graph-workflows/intents/invoke",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const listGraphWorkflowRuns = <ThrowOnError extends boolean = false>(
 	options: Options<ListGraphWorkflowRunsData, ThrowOnError>,
 ): RequestResult<ListGraphWorkflowRunsResponses, ListGraphWorkflowRunsErrors, ThrowOnError> =>
@@ -11744,6 +11778,32 @@ export const listCaptureProcesses = <ThrowOnError extends boolean = false>(
 		],
 		url: "/api/local/v1/transcription/capture/processes",
 		...options,
+	});
+
+export const startDictationSession = <ThrowOnError extends boolean = false>(
+	options: Options<StartDictationSessionData, ThrowOnError>,
+): RequestResult<StartDictationSessionResponses, StartDictationSessionErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartDictationSessionResponses, StartDictationSessionErrors, ThrowOnError>({
+		responseType: "json",
+		responseValidator: async (data) => await zStartDictationSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/dictation-sessions",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const listTranscriptionModels = <ThrowOnError extends boolean = false>(

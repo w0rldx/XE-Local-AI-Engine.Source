@@ -35,6 +35,9 @@ internal sealed class GraphWorkflowScriptedTool
     public bool Throws { get; init; }
 
     public bool Blocks { get; init; }
+
+    /// <summary>Lists the tool as an action, the way the real service lists a custom tool flagged for unattended use.</summary>
+    public bool IsAction { get; init; }
 }
 
 /// <summary>
@@ -189,12 +192,13 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
     /// <summary>The scripted names, which is all a picker on this host could offer.</summary>
     public Task<IReadOnlyList<InvocableToolDescriptor>> ListInvocableToolsAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<InvocableToolDescriptor>>([
-            .. _scripts.Keys.Order(StringComparer.Ordinal)
-                       .Select(static name => new InvocableToolDescriptor
+            .. _scripts.OrderBy(static entry => entry.Key, StringComparer.Ordinal)
+                       .Select(static entry => new InvocableToolDescriptor
                        {
-                           Name = name,
-                           Description = $"The fake {name}.",
-                           ParameterSchema = """{"type":"object","properties":{}}"""
+                           Name = entry.Key,
+                           Description = $"The fake {entry.Key}.",
+                           ParameterSchema = """{"type":"object","properties":{}}""",
+                           IsAction = entry.Value.IsAction
                        })
         ]);
 

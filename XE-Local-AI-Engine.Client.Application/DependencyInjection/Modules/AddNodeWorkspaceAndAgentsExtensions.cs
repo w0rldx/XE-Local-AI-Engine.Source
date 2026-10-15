@@ -43,18 +43,7 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         builder.Services.AddScoped<ICustomToolStore, CustomToolStore>();
         // Custom-tool executors + catalog: the catalog reads the store live per turn (no cache) and hands the resolver an executable
         // already floored in ApprovalRequiredAIFunction. HttpFetch pins an SSRF-validated address and refuses redirects; Command runs scrubbed, timed, tree-killed, capped and throttled.
-        builder.Services.AddHttpClient(HttpFetchExecutor.HttpClientName)
-               .ConfigurePrimaryHttpMessageHandler(static () => new SocketsHttpHandler
-               {
-                   AllowAutoRedirect = false,
-                   UseCookies = false,
-                   // Never route through an ambient/system HTTP proxy: the ConnectCallback would validate and dial the PROXY endpoint
-                   // while the proxy resolves the hostname, letting a name it maps to a private address bypass the SSRF denylist.
-                   UseProxy = false,
-                   ConnectCallback = CustomToolSsrfGuard.CreatePinnedConnectCallback(),
-                   // Short pooled lifetime so a pinned validated address is not reused indefinitely across DNS changes.
-                   PooledConnectionLifetime = TimeSpan.FromMinutes(1)
-               });
+        builder.Services.AddCustomToolFetchClient();
         // web_fetch (ADR 0017): its own client on the same SSRF pin, redirects followed by hand so each hop is re-validated.
         // Unlike the custom-tool client it decompresses, because the 2 MiB cap is measured on the decompressed stream.
 #pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers is experimental; used deliberately to drop the
@@ -97,7 +86,9 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // captive dependency (ValidateOnBuild fails it); CustomToolCatalog reads its scoped store through a fresh scope per call instead.
         builder.Services.AddSingleton<ICustomToolExecutor, HttpFetchExecutor>();
         builder.Services.AddSingleton<ICustomToolExecutor, HostProcessExecutor>();
-        builder.Services.AddSingleton<ICustomToolCatalog, CustomToolCatalog>();
+        builder.Services.AddSingleton<CustomToolCatalog>();
+        builder.Services.AddSingleton<ICustomToolCatalog>(static provider => provider.GetRequiredService<CustomToolCatalog>());
+        builder.Services.AddSingleton<IUnattendedCustomToolCatalog>(static provider => provider.GetRequiredService<CustomToolCatalog>());
         // Operator-facing CRUD + author-time validation over the store. Reuses the execution-time guards so what it accepts is
         // exactly what the executors will run; masks secret header/env values on the read path.
         builder.Services.AddScoped<ICustomToolService, CustomToolService>();
@@ -202,5 +193,32 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         builder.Services.AddScoped<IFeedbackInsightsService, FeedbackInsightsService>();
 
         return builder;
+    }
+
+    /// <summary>The custom-tool fetch client: SSRF-pinned, redirect-free, proxy-free, and without any resilience pipeline.</summary>
+    /// <remarks>
+    ///     Separate so a test can prove the last point. Aspire's service defaults install the standard resilience handler on
+    ///     every named client; its retries would re-send an operator-authored action (a light toggle, a program launch
+    ///     trigger) up to three more times on a 5xx, and its attempt timeout undercuts the executor's own 30-second budget.
+    ///     One attempt is the contract (ADR 0021); the handler is a no-op outside Aspire.
+    /// </remarks>
+    internal static IServiceCollection AddCustomToolFetchClient(this IServiceCollection services)
+    {
+#pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers is experimental; used deliberately, as for the web_fetch client.
+        services.AddHttpClient(HttpFetchExecutor.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(static () => new SocketsHttpHandler
+                {
+                    AllowAutoRedirect = false,
+                    UseCookies = false,
+                    // Never route through an ambient/system HTTP proxy: the ConnectCallback would validate and dial the PROXY endpoint
+                    // while the proxy resolves the hostname, letting a name it maps to a private address bypass the SSRF denylist.
+                    UseProxy = false,
+                    ConnectCallback = CustomToolSsrfGuard.CreatePinnedConnectCallback(),
+                    // Short pooled lifetime so a pinned validated address is not reused indefinitely across DNS changes.
+                    PooledConnectionLifetime = TimeSpan.FromMinutes(1)
+                })
+                .RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
+        return services;
     }
 }

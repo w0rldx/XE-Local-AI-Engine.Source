@@ -179,12 +179,16 @@ Host or Origin checks, leaving the bearer key as the only control. Keep it insid
 
 See [the reference page](reference/12-admin-api-surface.md#31a-the-inbound-mcp-endpoint-sits-inside-the-gate--deliberately) for the WSL2 topology measurement.
 
-#### Tool invocation writes no approval-audit row
+#### Tool invocation audits only unattended actions
 
-`ToolInvocationService` is the one place a workflow node's tool call is admitted or refused, and it deliberately writes
-no `approve` record. [ADR 0006](../adr/0006-agentic-trust-mcp-key-scopes-and-auto-approval.md)'s strict pre-invocation record exists for
-*adapting* an approval-required function into a non-approval one for an agentic MCP root. This service refuses that
-class twice and adapts nothing, so an `approve` row here would assert a decision nobody made.
+`ToolInvocationService` is the one place a workflow node's tool call is admitted or refused. For a built-in tool it
+deliberately writes no `approve` record: [ADR 0006](../adr/0006-agentic-trust-mcp-key-scopes-and-auto-approval.md)'s strict pre-invocation record exists for
+*adapting* an approval-required function into a non-approval one, and the built-in branch adapts nothing, so an
+`approve` row there would assert a decision nobody made. The action branch ([ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md))
+does adapt one: a custom tool flagged `AllowUnattended` in a definition that allows actions runs without its approval
+wrapper. It therefore writes the strict metadata-only `ApprovalDecision` row through
+`IUnattendedApprovalAuditRecorder`, with source `graph-action:<definitionId>`, BEFORE calling the custom-tool executor.
+A failed write refuses the call and the executor never runs ([Graph Workflows](21-graph-workflows.md) §4.3).
 
 ### 3.2 Authentication & authorization
 
@@ -390,14 +394,23 @@ surface cannot enable host-command authoring unattended.
 values and is encrypted at rest by `NodeEncryptionSaveChangesInterceptor` with the
 `custom_tool_config_json` AAD column name. List/detail DTOs replace each secret with a mask sentinel; an update that
 round-trips that sentinel resolves it against the stored record instead of clearing or disclosing the value. Tool
-descriptions are also encrypted; names, kinds, modes, parameter schemas, enabled/acknowledged flags, and versions are
-structural plaintext. Secret header/env values are scrubbed from model-facing errors and output.
+descriptions are also encrypted; names, kinds, modes, parameter schemas, enabled/acknowledged/allow-unattended flags, and versions are
+structural plaintext; `privateHosts` lives inside the encrypted config. Secret header/env values are scrubbed from model-facing errors and output.
 
 **HTTP fetch controls.** `CustomToolSsrfGuard.ValidateRequestUrl()` accepts only HTTP(S), rejects URL userinfo,
 non-canonical numeric hosts, and private/loopback/link-local/CGNAT/metadata/reserved address ranges. A model-parameterized
 host requires `allowedHosts`. The named client disables redirects and uses
 `CustomToolSsrfGuard.CreatePinnedConnectCallback()` to validate every DNS result and connect to the validated address,
-closing the DNS-rebind re-resolution gap. Requests have a 30-second wall-clock limit, a 64 KiB response-body cap,
+closing the DNS-rebind re-resolution gap. One per-tool exception exists ([ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md)):
+an operator-listed `privateHosts` entry (an exact host name or canonical IP literal, also in `allowedHosts`) may reach
+the private LAN ranges, meaning RFC 1918, CGNAT and IPv6 unique-local (`CustomToolSsrfGuard.IsPrivateLanAddress`).
+Loopback, link-local including the cloud-metadata address, multicast, unspecified, reserved, NAT64 and the
+IPv4-compatible IPv6 form stay denied even when listed (`CustomToolSsrfGuard.IsAlwaysDeniedAddress`). Both layers
+enforce it: `ValidateRequestUrl` admits a listed literal, and the shared, stateless connect callback reads the list from
+the request's `CustomToolSsrfGuard.PrivateHostsOption`, refusing a resolution in which any address is neither public nor
+a listed LAN address. A request without the option, which includes every `web_fetch` request, gets the deny-all rule
+unchanged; a request under the exception sends `Connection: close`, so its pinned connection never returns to the shared
+pool for a request without it. Requests have a 30-second wall-clock limit, a 64 KiB response-body cap,
 credential-bearing response headers are stripped, and the process-wide concurrency limiter defaults to four runs.
 
 **Host program controls and residual risk.** `HostProcessExecutor` does **not** use the AgentHome process jail: host
@@ -413,6 +426,22 @@ small check-to-`execve` TOCTOU window remains — eliminating it would need `ope
 validation and execution share one open file description — and host commands retain the signed-in user's filesystem and network
 rights with no per-process CPU/memory ceiling. Approval, time/output/concurrency bounds, and explicit acknowledgement
 reduce risk; they do not create OS isolation.
+
+### Intent commands: a replay window, not a consent
+
+`POST graph-workflows/intents/invoke` can start a workflow that acts unattended, so two node settings bound it
+(**Node Settings**, read per request; `GraphWorkflowIntentService`, [Graph Workflows](21-graph-workflows.md) §11):
+
+- `IntentMaxUtteranceAgeSeconds` (default 30, range 5 to 600): a command whose `utteredAt` is older is refused with
+  409 `GraphWorkflowIntentExpired`, and one stamped more than 5 s in the future with a 400. The user's Enter is the
+  consent; the window only stops a captured request being replayed later. The `requestId` is the idempotency key, so a
+  replay inside the window answers the run it already started rather than starting a second one.
+- `IntentRouterDefinitionId` (default unset): the graph workflow asked when no alias matches. Unset routes on exact
+  aliases alone and runs no model.
+
+Only definitions whose trigger sources include `Intent` can be reached, router included, and only the Operator
+update route sets trigger sources ([ADR 0021](../adr/0021-unattended-actions-in-graph-tool-nodes.md)). An alias carries
+no authority: import brings it along, but not the `Intent` source.
 
 ### Web access tools: `web_search` and `web_fetch`
 

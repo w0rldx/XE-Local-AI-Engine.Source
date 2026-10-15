@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CustomTools.Implementation;
 
+using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -154,6 +155,18 @@ internal sealed partial class CustomToolService : ICustomToolService
             throw new CustomToolValidationException("The custom-tool danger acknowledgement is required.");
         }
 
+        // Unattended use (ADR 0021) runs the operator's verbatim invocation with nobody to ask, so no model or utterance may fill any
+        // part of it: Fixed mode only. The acknowledgement it also needs is already required for every save above.
+        if (definition.AllowUnattended && definition.Mode != CustomToolMode.Fixed)
+        {
+            throw new CustomToolValidationException("Allow unattended use requires Fixed mode: an unattended tool runs one verbatim invocation and takes no parameters.");
+        }
+
+        if (definition.Kind != CustomToolKind.HttpFetch && definition.Http?.PrivateHosts is { Count: > 0 })
+        {
+            throw new CustomToolValidationException("Private hosts apply only to HttpFetch tools.");
+        }
+
         var parameters = ValidateAndMapParameters(definition);
         var declaredNames = new HashSet<string>(parameters.Select(static parameter => parameter.Name), StringComparer.Ordinal);
 
@@ -188,7 +201,8 @@ internal sealed partial class CustomToolService : ICustomToolService
             ConfigJson = configJson,
             ParametersJson = parametersJson,
             Enabled = definition.Enabled,
-            Acknowledged = definition.Acknowledged
+            Acknowledged = definition.Acknowledged,
+            AllowUnattended = definition.AllowUnattended
         };
     }
 
@@ -312,8 +326,10 @@ internal sealed partial class CustomToolService : ICustomToolService
             throw new CustomToolValidationException("A tool whose URL host is parameterized must declare at least one allowedHost.");
         }
 
-        // Fixed host: pre-validate the assembled URL now, so an author cannot save a tool targeting a private, loopback or metadata address. A
-        // parameterized host cannot be resolved to a concrete literal here, so it is left to the run-time pinned-connect SSRF guard.
+        var privateHosts = ValidatePrivateHosts(http.PrivateHosts ?? [], allowedHosts);
+
+        // Fixed host: pre-validate the assembled URL now, so only a listed private host may target a private address. A parameterized
+        // host cannot be resolved to a concrete literal here, so it is left to the run-time pinned-connect SSRF guard.
         if (!hostIsParameterized)
         {
             var assembled = CustomToolTemplate.Substitute(urlTemplate, dummy, declaredNames, Uri.EscapeDataString);
@@ -324,7 +340,7 @@ internal sealed partial class CustomToolService : ICustomToolService
 
             try
             {
-                CustomToolSsrfGuard.ValidateRequestUrl(probeUrl, allowedHosts, hostIsParameterized: false);
+                CustomToolSsrfGuard.ValidateRequestUrl(probeUrl, allowedHosts, hostIsParameterized: false, privateHosts);
             }
             catch (CustomToolExecutionException exception)
             {
@@ -332,8 +348,47 @@ internal sealed partial class CustomToolService : ICustomToolService
             }
         }
 
-        var config = new HttpFetchConfig(method, urlTemplate, headers, http.BodyTemplate, allowedHosts);
+        var config = new HttpFetchConfig(method, urlTemplate, headers, http.BodyTemplate, allowedHosts, privateHosts);
         return JsonSerializer.Serialize(config, CustomToolJson.Options);
+    }
+
+    // Each private host is an exact DNS name or a canonical IP literal (no scheme, port, path, userinfo or wildcard), is also an allowed host,
+    // and is never an address no exception may reach; the SSRF guard enforces the same rules at run time.
+    private static List<string> ValidatePrivateHosts(IReadOnlyList<string> declared, IReadOnlyList<string> allowedHosts)
+    {
+        var privateHosts = new List<string>(declared.Count);
+        foreach (var entry in declared.Select(static host => (host ?? string.Empty).Trim()).Where(static host => host.Length > 0))
+        {
+            var hostType = Uri.CheckHostName(entry);
+            IPAddress? literal = null;
+            var isCanonicalLiteral = hostType is UriHostNameType.IPv4 or UriHostNameType.IPv6
+                                     && IPAddress.TryParse(entry, out literal)
+                                     && string.Equals(literal.ToString(), entry, StringComparison.OrdinalIgnoreCase);
+            var isDnsName = hostType == UriHostNameType.Dns && !CustomToolSsrfGuard.LooksLikeNumericHostLiteral(entry);
+            if (!isCanonicalLiteral && !isDnsName)
+            {
+                throw new CustomToolValidationException(
+                    $"Private host '{entry}' must be an exact host name or a canonical IP address, without scheme, port, path, credentials or wildcard.");
+            }
+
+            if (literal is not null && isCanonicalLiteral && CustomToolSsrfGuard.IsAlwaysDeniedAddress(literal))
+            {
+                throw new CustomToolValidationException(
+                    $"Private host '{entry}' is a loopback, link-local, metadata, multicast, unspecified or reserved address, which stays denied even when listed.");
+            }
+
+            if (!allowedHosts.Any(allowed => string.Equals(allowed.Trim('[', ']'), entry, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new CustomToolValidationException($"Private host '{entry}' must also be listed in allowedHosts.");
+            }
+
+            if (!privateHosts.Contains(entry, StringComparer.OrdinalIgnoreCase))
+            {
+                privateHosts.Add(entry);
+            }
+        }
+
+        return privateHosts;
     }
 
     private static string BuildCommandConfigJson(CustomToolDefinition definition, IReadOnlySet<string> declaredNames, int maxTimeoutSeconds)
@@ -408,7 +463,12 @@ internal sealed partial class CustomToolService : ICustomToolService
             throw new CustomToolValidationException($"The timeout must be between 0 (default) and {maxTimeoutSeconds} seconds.");
         }
 
-        var config = new CommandConfig(executable, argsTemplate, workingDirectory, command.TimeoutSeconds, env);
+        if (command.Detach && command.TimeoutSeconds != 0)
+        {
+            throw new CustomToolValidationException("A detached launch does not wait for the program, so its timeout must be 0.");
+        }
+
+        var config = new CommandConfig(executable, argsTemplate, workingDirectory, command.TimeoutSeconds, env, command.Detach);
         return JsonSerializer.Serialize(config, CustomToolJson.Options);
     }
 
@@ -590,7 +650,8 @@ internal sealed partial class CustomToolService : ICustomToolService
                     })
                 ],
                 BodyTemplate = config.BodyTemplate,
-                AllowedHosts = config.AllowedHosts
+                AllowedHosts = config.AllowedHosts,
+                PrivateHosts = config.PrivateHosts
             };
         }
         else
@@ -602,6 +663,7 @@ internal sealed partial class CustomToolService : ICustomToolService
                 ArgsTemplate = config.ArgsTemplate,
                 WorkingDirectory = config.WorkingDirectory,
                 TimeoutSeconds = config.TimeoutSeconds,
+                Detach = config.Detach,
                 Env =
                 [
                     .. config.Env.Select(static variable => new CustomToolEnvironmentVariableModel
@@ -623,6 +685,7 @@ internal sealed partial class CustomToolService : ICustomToolService
             Mode = record.Mode,
             Enabled = record.Enabled,
             Acknowledged = record.Acknowledged,
+            AllowUnattended = record.AllowUnattended,
             Version = record.Version,
             CreatedAtUtc = record.CreatedAtUtc,
             UpdatedAtUtc = record.UpdatedAtUtc,

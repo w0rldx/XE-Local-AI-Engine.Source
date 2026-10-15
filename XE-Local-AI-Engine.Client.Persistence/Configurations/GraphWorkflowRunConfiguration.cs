@@ -36,6 +36,12 @@ internal sealed class GraphWorkflowRunConfiguration : IEntityTypeConfiguration<G
         builder.Property(entity => entity.ConversationId).HasColumnName("conversation_id");
         builder.Property(entity => entity.TriggerMessageId).HasColumnName("trigger_message_id");
 
+        // Plaintext origin, an int like every [Flags] enum here; a run saved before the column reads as Manual. The
+        // principal and key prefix are audit metadata, bounded like the integration execution's prefix.
+        builder.Property(entity => entity.TriggerSource).HasColumnName("trigger_source").HasDefaultValue(GraphWorkflowTriggerSource.Manual);
+        builder.Property(entity => entity.PrincipalId).HasColumnName("principal_id");
+        builder.Property(entity => entity.KeyPrefix).HasColumnName("key_prefix").HasMaxLength(32);
+
         // A real foreign key, unlike the definition's: a run bound to a conversation that no longer exists has nobody to
         // answer it, and SET NULL keeps the run as history while the conversation's own purge stays the only delete path.
         builder.HasOne<NodeConversation>().WithMany().HasForeignKey(entity => entity.ConversationId).OnDelete(DeleteBehavior.SetNull);

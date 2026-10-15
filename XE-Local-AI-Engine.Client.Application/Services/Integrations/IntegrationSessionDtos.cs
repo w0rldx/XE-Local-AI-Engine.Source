@@ -24,7 +24,8 @@ public sealed class IntegrationSessionDto
 
     public required Guid PrincipalId { get; init; }
 
-    public required Guid AgentDefinitionId { get; init; }
+    /// <summary>The agent the session runs; null when its trigger targets a graph workflow.</summary>
+    public Guid? AgentDefinitionId { get; init; }
 
     public required IntegrationSessionStatus Status { get; init; }
 

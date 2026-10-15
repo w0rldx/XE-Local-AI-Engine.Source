@@ -43,6 +43,9 @@ internal sealed record class IntegrationExecution
     /// <summary>The runner invocation id, correlating this row with the audit ledger and the cancel path. Plaintext (structural).</summary>
     public Guid InvocationId { get; set; }
 
+    /// <summary>The graph run a <c>Graph</c> target started, stamped with the move to Running; null for an agent target. Plaintext (structural).</summary>
+    public Guid? GraphWorkflowRunId { get; set; }
+
     /// <summary>Where the execution is in <see cref="IntegrationExecutionStatus" />'s transition table. Plaintext (structural).</summary>
     public IntegrationExecutionStatus Status { get; set; }
 

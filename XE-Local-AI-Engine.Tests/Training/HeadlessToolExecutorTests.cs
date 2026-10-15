@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Training;
 
 using System.Text;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -10,6 +11,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
@@ -137,7 +139,7 @@ public sealed class HeadlessToolExecutorTests
             _ = Store.ListUsableMocksAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns<IReadOnlyList<ToolMockRecord>>([]);
 
             var invocation = new ToolInvocationService(offerProvider, Policy, new StubToolRegistry(),
-                new EmptyClientLocalToolRegistry(), NullLogger<ToolInvocationService>.Instance);
+                new EmptyClientLocalToolRegistry(), new NoUnattendedCustomTools(), Substitute.For<IServiceScopeFactory>(), NullLogger<ToolInvocationService>.Instance);
             Executor = new HeadlessToolExecutor(offerProvider, Policy, Store,
                 new ToolMockEngine(), new ToolMockStaticVerifier(), invocation);
         }
@@ -182,5 +184,12 @@ public sealed class HeadlessToolExecutorTests
                 Category = ToolCategory.ReadLocal
             }
         ];
+    }
+
+    /// <summary>No custom tool is flagged for unattended use: the dataset generator never reaches an action, and has no definition to audit one under.</summary>
+    private sealed class NoUnattendedCustomTools : IUnattendedCustomToolCatalog
+    {
+        public Task<IReadOnlyList<UnattendedCustomTool>> ListUnattendedAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<UnattendedCustomTool>>([]);
     }
 }

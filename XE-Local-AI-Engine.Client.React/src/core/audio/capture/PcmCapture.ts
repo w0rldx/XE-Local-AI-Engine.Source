@@ -3,9 +3,9 @@
  * `Pcm16DownsamplerWorklet` on it, and a disposer that takes the whole thing down.
  */
 
-import { CaptureError } from "@/features/transcription/capture/CaptureSource";
+import { CaptureError } from "@/core/audio/capture/CaptureSource";
 
-import workletUrl from "@/features/transcription/capture/Pcm16DownsamplerWorklet.js?url";
+import workletUrl from "@/core/audio/capture/Pcm16DownsamplerWorklet.js?url";
 
 const WORKLET_NAME = "xe-pcm16-downsampler";
 export const TARGET_SAMPLE_RATE = 16_000;

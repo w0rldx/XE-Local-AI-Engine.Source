@@ -268,7 +268,7 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         var runs = scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>();
-        return (await runs.StartAsync(definitionId, Guid.NewGuid(), inputJson, definitionVersion: null)).Run.Id;
+        return (await runs.StartAsync(definitionId, Guid.NewGuid(), inputJson, definitionVersion: null, GraphWorkflowRunOrigin.Manual)).Run.Id;
     }
 
     /// <summary>
@@ -294,6 +294,7 @@ internal sealed class GraphWorkflowHarness : IAsyncDisposable
             GraphHash = definition.GraphHash,
             GraphJson = pinnedGraphJson,
             InputJson = inputJson,
+            TriggerSource = GraphWorkflowTriggerSource.Manual,
             NodeRuns =
             [
                 .. nodeRuns.Select(seed => new GraphWorkflowNodeRunSeed

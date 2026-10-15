@@ -97,6 +97,7 @@ describe("nodeCapabilities", () => {
 			agentRuns: "/agent-runs",
 			skills: "/skills",
 			customTools: "/custom-tools",
+			command: "/command",
 			commands: "/commands",
 			mcp: "/mcp",
 			scheduler: "/scheduler",

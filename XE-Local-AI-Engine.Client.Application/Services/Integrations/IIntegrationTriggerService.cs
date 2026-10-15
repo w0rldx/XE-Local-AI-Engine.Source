@@ -21,7 +21,11 @@ public sealed class IntegrationTriggerCreateInput
 
     public required IntegrationTargetKind TargetKind { get; init; }
 
-    public required Guid TargetAgentDefinitionId { get; init; }
+    /// <summary>Required for an <c>Agent</c> target and absent for a <c>Graph</c> one.</summary>
+    public required Guid? TargetAgentDefinitionId { get; init; }
+
+    /// <summary>Required for a <c>Graph</c> target and absent for an <c>Agent</c> one.</summary>
+    public required Guid? TargetGraphWorkflowDefinitionId { get; init; }
 
     public required IntegrationSessionPolicy SessionPolicy { get; init; }
 
@@ -39,7 +43,11 @@ public sealed class IntegrationTriggerUpdateInput
 
     public required bool Enabled { get; init; }
 
-    public required Guid TargetAgentDefinitionId { get; init; }
+    public required IntegrationTargetKind TargetKind { get; init; }
+
+    public required Guid? TargetAgentDefinitionId { get; init; }
+
+    public required Guid? TargetGraphWorkflowDefinitionId { get; init; }
 
     public required IntegrationSessionPolicy SessionPolicy { get; init; }
 
@@ -64,6 +72,12 @@ public enum IntegrationTriggerOutcome
     /// <summary>The target agent is an orchestrator, and V1 is scoped to a saved single agent. 400.</summary>
     TargetKindRejected,
 
+    /// <summary>The target graph workflow definition does not exist. 400, like a missing agent.</summary>
+    GraphWorkflowMissing,
+
+    /// <summary>A graph target was saved while graph workflows are turned off on this node. 400.</summary>
+    GraphWorkflowsDisabled,
+
     /// <summary>No row with that id. 404.</summary>
     NotFound,
 
@@ -82,8 +96,8 @@ public sealed class IntegrationTriggerResult
 }
 
 /// <summary>
-///     Trigger CRUD with the two checks a validator cannot make because they need the store: the target agent must
-///     exist, and V1 is scoped to a single agent, so an orchestrator is refused.
+///     Trigger CRUD with the checks a validator cannot make because they need the store: an agent target must exist and
+///     be a single agent, and a graph target must exist on a node with graph workflows turned on.
 /// </summary>
 public interface IIntegrationTriggerService
 {

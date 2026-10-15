@@ -115,6 +115,7 @@ public sealed class GraphWorkflowPreviousRunStoreTests
                 GraphJson = definition.GraphJson,
                 InputJson = null,
                 PreviousJson = previousJson,
+                TriggerSource = GraphWorkflowTriggerSource.Manual,
                 NodeRuns = []
             })).Id;
         }

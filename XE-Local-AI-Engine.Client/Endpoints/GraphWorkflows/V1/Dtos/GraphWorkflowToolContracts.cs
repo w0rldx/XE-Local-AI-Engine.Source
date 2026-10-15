@@ -18,6 +18,9 @@ public sealed class GraphWorkflowToolResponse
 
     /// <summary>True for <c>web_fetch</c>: the node must carry a non-empty <c>allowedUrls</c> list (ADR 0017).</summary>
     public required bool RequiresAllowedUrls { get; init; }
+
+    /// <summary>True for a custom tool flagged for unattended use: it needs 'Allow actions' on the definition and runs once (ADR 0021).</summary>
+    public required bool IsAction { get; init; }
 }
 
 /// <summary>

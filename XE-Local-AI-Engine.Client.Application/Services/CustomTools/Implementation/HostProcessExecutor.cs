@@ -32,15 +32,28 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
     private const int MaxCapturedOutputBytes = 64 * 1024;
     private const int MinTimeoutSeconds = 1;
     private const int DefaultTimeoutSeconds = 30;
+    private const string UnixShell = "/bin/sh";
+
+    // "$0" is the operator's executable and "$@" its arguments, both positional: the script text never changes.
+    private const string UnixNullSinkScript = "exec \"$0\" \"$@\" </dev/null >/dev/null 2>&1";
+
+    /// <summary>
+    ///     How long a <see cref="CommandConfig.Detach" /> launch, which keeps every guard but neither captures output nor waits, watches for an
+    ///     immediate crash before reporting the program as started.
+    /// </summary>
+    internal static readonly TimeSpan DetachGrace = TimeSpan.FromMilliseconds(500);
 
     private readonly CustomToolConcurrencyLimiter _concurrencyLimiter;
     private readonly ILogger<HostProcessExecutor> _logger;
     private readonly INodeRuntimeSettings _runtimeSettings;
+    private readonly TimeProvider _timeProvider;
 
     public HostProcessExecutor(CustomToolConcurrencyLimiter concurrencyLimiter,
         INodeRuntimeSettings runtimeSettings,
+        TimeProvider timeProvider,
         ILogger<HostProcessExecutor> logger)
     {
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _concurrencyLimiter = concurrencyLimiter ?? throw new ArgumentNullException(nameof(concurrencyLimiter));
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -48,7 +61,7 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
 
     public CustomToolKind Kind => CustomToolKind.Command;
 
-    public async Task<string> ExecuteAsync(CustomToolRecord tool, string jsonArguments, CancellationToken cancellationToken)
+    public async Task<CustomToolExecution> ExecuteAsync(CustomToolRecord tool, string jsonArguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(tool);
 
@@ -68,15 +81,20 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         }
         catch (CustomToolExecutionException exception)
         {
-            return $"The custom tool call was blocked: {redactor.Redact(exception.Message)}";
+            return CustomToolExecution.Failure($"The custom tool call was blocked: {redactor.Redact(exception.Message)}");
         }
         catch (CustomToolConfigurationException exception)
         {
             _logger.LogWarning("Custom tool {ToolName} has invalid configuration: {Reason}", tool.Name, exception.Message);
-            return "The custom tool is misconfigured and could not run.";
+            return CustomToolExecution.Failure("The custom tool is misconfigured and could not run.");
         }
 
         using var slot = await _concurrencyLimiter.AcquireAsync(cancellationToken);
+        if (config.Detach)
+        {
+            return await LaunchDetachedAsync(startInfo, redactor, cancellationToken);
+        }
+
         // The ceiling is the node's CustomToolMaxTimeoutSeconds, the same value CustomToolService validates a saved timeout against.
         var maxTimeoutSeconds = await _runtimeSettings.GetCustomToolMaxTimeoutSecondsAsync(cancellationToken);
         return await RunAsync(tool.Name, startInfo, config, maxTimeoutSeconds, redactor, cancellationToken);
@@ -147,7 +165,136 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         return arguments;
     }
 
-    private static async Task<string> RunAsync(string toolName,
+    /// <summary>Starts the program and reports started, or the exit code it died with inside the grace; never waits for it.</summary>
+    /// <remarks>
+    ///     The program outlives this call and the engine, so its output is not ours to read, yet it must not inherit the
+    ///     engine's streams either: a program echoing an injected secret would write it past the redactor into the engine's
+    ///     console. On Unix the OS null device takes both streams, so the program survives an engine restart; on Windows the
+    ///     streams are pipes drained to nothing for as long as the program runs. A GUI program keeps its window.
+    /// </remarks>
+    private async Task<CustomToolExecution> LaunchDetachedAsync(ProcessStartInfo startInfo,
+        SecretValueRedactor redactor,
+        CancellationToken cancellationToken)
+    {
+        var launch = NullSinkLaunch(startInfo) ?? startInfo;
+        var drained = launch.RedirectStandardOutput;
+
+        var process = new Process
+        {
+            StartInfo = launch
+        };
+
+        try
+        {
+            process.Start();
+        }
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+        {
+            process.Dispose();
+            return CustomToolExecution.Failure("The custom tool executable could not be launched.");
+        }
+
+#pragma warning disable CA2025 // The release task below owns the Process; nothing disposes it before the drain ends.
+        var drain = drained ? DiscardOutputAsync(process) : Task.CompletedTask;
+#pragma warning restore CA2025
+        try
+        {
+            var name = Path.GetFileName(startInfo.FileName);
+            var processId = process.Id;
+            using var graceSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var exited = process.WaitForExitAsync(graceSource.Token);
+            var first = await Task.WhenAny(exited, Task.Delay(DetachGrace, _timeProvider, graceSource.Token));
+            await graceSource.CancelAsync();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (first == exited && process.ExitCode != 0)
+            {
+                return CustomToolExecution.Failure(redactor.Redact(
+                    string.Create(CultureInfo.InvariantCulture, $"{name} (process {processId}) exited at launch.\nexit_code: {process.ExitCode}\n")));
+            }
+
+            return CustomToolExecution.Success(redactor.Redact(string.Create(CultureInfo.InvariantCulture, $"started {name} (process {processId})\n")));
+        }
+        finally
+        {
+            // The handle is released once the launch check AND the drain are done; the program itself is never killed.
+#pragma warning disable CA2025 // The release task owns the Process from here on.
+            _ = ReleaseWhenDrainedAsync(process, drain);
+#pragma warning restore CA2025
+        }
+    }
+
+    /// <summary>
+    ///     On Unix, the launch that hands the program the OS null device: the system shell replaces itself with the
+    ///     program (<c>exec</c>) after pointing all three standard streams at it, so no pipe ties the program to the engine.
+    /// </summary>
+    /// <remarks>
+    ///     The operator's executable and every argument travel as positional parameters, never inside the fixed script, so
+    ///     nothing is re-parsed; the cleared environment is copied over unchanged. Null on Windows or without the shell.
+    /// </remarks>
+    private static ProcessStartInfo? NullSinkLaunch(ProcessStartInfo startInfo)
+    {
+        if (OperatingSystem.IsWindows() || !File.Exists(UnixShell))
+        {
+            startInfo.RedirectStandardOutput = true;
+            startInfo.RedirectStandardError = true;
+            startInfo.CreateNoWindow = false;
+            return null;
+        }
+
+        var launch = new ProcessStartInfo(UnixShell)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = false,
+            RedirectStandardOutput = false,
+            RedirectStandardError = false,
+            RedirectStandardInput = false,
+            WorkingDirectory = startInfo.WorkingDirectory
+        };
+        launch.ArgumentList.Add("-c");
+        launch.ArgumentList.Add(UnixNullSinkScript);
+        launch.ArgumentList.Add(startInfo.FileName);
+        foreach (var argument in startInfo.ArgumentList)
+        {
+            launch.ArgumentList.Add(argument);
+        }
+
+        launch.Environment.Clear();
+        foreach (var variable in startInfo.Environment)
+        {
+            launch.Environment[variable.Key] = variable.Value;
+        }
+
+        return launch;
+    }
+
+    /// <summary>Drains a detached program's pipes to nothing so a full pipe never blocks it (the Windows path).</summary>
+    private static async Task DiscardOutputAsync(Process process)
+    {
+        try
+        {
+            await Task.WhenAll(process.StandardOutput.BaseStream.CopyToAsync(Stream.Null, CancellationToken.None),
+                process.StandardError.BaseStream.CopyToAsync(Stream.Null, CancellationToken.None));
+        }
+        catch (IOException)
+        {
+            // The program closed its end; nothing to keep.
+        }
+    }
+
+    private static async Task ReleaseWhenDrainedAsync(Process process, Task drain)
+    {
+        try
+        {
+            await drain;
+        }
+        finally
+        {
+            process.Dispose();
+        }
+    }
+
+    private static async Task<CustomToolExecution> RunAsync(string toolName,
         ProcessStartInfo startInfo,
         CommandConfig config,
         int maxTimeoutSeconds,
@@ -174,7 +321,7 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
         {
             process.Dispose();
-            return "The custom tool executable could not be launched.";
+            return CustomToolExecution.Failure("The custom tool executable could not be launched.");
         }
 
         var timeoutSeconds = Math.Clamp(config.TimeoutSeconds <= 0 ? DefaultTimeoutSeconds : config.TimeoutSeconds,
@@ -188,12 +335,14 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         try
         {
             await process.WaitForExitAsync(linkedSource.Token);
-            return FormatResult(toolName, process.ExitCode, standardOutput, standardError, redactor, timedOut: false);
+            var exitCode = process.ExitCode;
+            var text = FormatResult(toolName, exitCode, standardOutput, standardError, redactor, timedOut: false);
+            return exitCode == 0 ? CustomToolExecution.Success(text) : CustomToolExecution.Failure(text);
         }
         catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             TreeKill(process);
-            return FormatResult(toolName, exitCode: -1, standardOutput, standardError, redactor, timedOut: true);
+            return CustomToolExecution.Failure(FormatResult(toolName, exitCode: -1, standardOutput, standardError, redactor, timedOut: true));
         }
         catch (OperationCanceledException)
         {

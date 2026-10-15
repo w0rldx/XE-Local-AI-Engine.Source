@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
@@ -345,6 +346,12 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
                 continue;
             }
 
+            // The graph reconciler and dispatcher started first and may have resumed this run's nodes; Cancelling still stops every node not yet running.
+            if (row.GraphWorkflowRunId is { } graphRunId)
+            {
+                await CancelGraphRunAsync(scope.ServiceProvider.GetRequiredService<IGraphWorkflowRunService>(), graphRunId);
+            }
+
             // ADR 0008 R3-1: seed the ring from the highest sequence this execution can PROVE — its watermark, or a persisted event above it — so the sweep's terminal
             // event continues its OWN numbering; seeding below a lost-race event collides with an existing (execution_id, sequence) row on every restart.
             var seedSequence = await HighestPersistedSequenceAsync(store, row, cancellationToken);
@@ -427,9 +434,17 @@ internal sealed partial class IntegrationExecutionCoordinator : BackgroundServic
             return;
         }
 
-        context.Describe(trigger.Name, trigger.TargetAgentDefinitionId);
+        // The branch point (ADR 0008, amendment 2026-10-15): a graph target skips every agent step below — model, locality, kind, lease, capacity.
+        if (trigger.TargetKind == IntegrationTargetKind.Graph)
+        {
+            await ExecuteGraphAsync(services, context, execution, session, trigger, runToken, cancelToken, stoppingToken);
+            return;
+        }
 
-        var definition = await services.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(trigger.TargetAgentDefinitionId, runToken);
+        var agentDefinitionId = trigger.TargetAgentDefinitionId.GetValueOrDefault();
+        context.Describe(trigger.Name, agentDefinitionId);
+
+        var definition = await services.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId, runToken);
         if (definition is null)
         {
             await TerminalizeBeforeRunAsync(context, IntegrationFailureCategories.TriggerUnavailable, "The trigger's target agent no longer exists.");

@@ -5,7 +5,7 @@ import { http, HttpResponse } from "msw";
 import { createElement, type ReactNode, StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CaptureError, type CaptureChannel } from "@/features/transcription/capture/CaptureSource";
+import { CaptureError, type CaptureChannel } from "@/core/audio/capture/CaptureSource";
 import { FakeCaptureSource } from "@/features/transcription/capture/FakeCaptureSource";
 import {
 	type CaptureSourceFactory,

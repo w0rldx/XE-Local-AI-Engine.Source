@@ -18,7 +18,11 @@ internal sealed class GraphWorkflowPosition
 /// </summary>
 internal abstract record GraphWorkflowNodeConfig;
 
-internal sealed record GraphWorkflowStartConfig(JsonElement? InputSchema, JsonElement? DefaultInput) : GraphWorkflowNodeConfig;
+/// <summary><see cref="Aliases" /> are the phrases the intent router matches this definition on: authoring metadata, never authority.</summary>
+internal sealed record GraphWorkflowStartConfig(JsonElement? InputSchema, JsonElement? DefaultInput) : GraphWorkflowNodeConfig
+{
+    public IReadOnlyList<string> Aliases { get; init; } = [];
+}
 
 /// <summary><see cref="Model" /> and <see cref="ReasoningEffort" /> are the two dispatch pins.</summary>
 /// <remarks>

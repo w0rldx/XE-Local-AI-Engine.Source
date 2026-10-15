@@ -71,3 +71,16 @@ export async function listAudioInputDevices(): Promise<readonly AudioInputDevice
 		.filter((device) => device.kind === "audioinput")
 		.map((device) => ({ deviceId: device.deviceId, label: device.label }));
 }
+
+/**
+ * A frame as `PushAudioFrame` takes it. The hub speaks the JSON protocol, whose `byte[]` binding is base64 — a
+ * `Uint8Array` would stringify as an object.
+ */
+export function encodePcmFrame(pcm: Int16Array): string {
+	const bytes = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+	let binary = "";
+	for (let index = 0; index < bytes.length; index += 1) {
+		binary += String.fromCharCode(bytes[index] ?? 0);
+	}
+	return btoa(binary);
+}

@@ -40,7 +40,9 @@ public sealed class UpdateIntegrationTriggerEndpoint : Endpoint<UpdateIntegratio
                 DisplayName = req.DisplayName,
                 Description = req.Description,
                 Enabled = req.Enabled,
+                TargetKind = req.TargetKind,
                 TargetAgentDefinitionId = req.TargetAgentDefinitionId,
+                TargetGraphWorkflowDefinitionId = req.TargetGraphWorkflowDefinitionId,
                 SessionPolicy = req.SessionPolicy,
                 AcceptedInputKinds = acceptedInputKinds
             },

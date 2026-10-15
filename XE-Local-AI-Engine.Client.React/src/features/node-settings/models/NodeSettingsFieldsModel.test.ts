@@ -1791,3 +1791,58 @@ describe("feature switches", () => {
 		expect(errors).toEqual({ toolCapableModels: "requiresToolCapableModels" });
 	});
 });
+
+describe("intent settings", () => {
+	const bounds = toNodeSettingsFieldBounds({
+		minIntentMaxUtteranceAgeSeconds: 5,
+		maxAllowedIntentMaxUtteranceAgeSeconds: 600,
+	} as NodeSettingsResponse);
+	const routerId = "11111111-1111-4111-8111-111111111111";
+
+	it("reads the router and the age off the response, blank when the node stores neither", () => {
+		const stored = toNodeSettingsFieldsForm({
+			intentRouterDefinitionId: routerId,
+			intentMaxUtteranceAgeSeconds: 45,
+		} as NodeSettingsResponse);
+		expect(stored.intentRouterDefinitionId).toBe(routerId);
+		expect(stored.intentMaxUtteranceAgeSeconds).toBe(45);
+
+		const unset = toNodeSettingsFieldsForm({} as NodeSettingsResponse);
+		expect(unset.intentRouterDefinitionId).toBe("");
+		expect(unset.intentMaxUtteranceAgeSeconds).toBe("");
+		expect(shippedDefaults.intentMaxUtteranceAgeSeconds).toBe(30);
+	});
+
+	it("sends the router id, and the empty string to clear it", () => {
+		const baseline = toNodeSettingsFieldsForm(undefined);
+		expect(buildNodeSettingsRequest({ ...baseline, intentRouterDefinitionId: routerId }, baseline, bounds, false).body).toEqual({
+			intentRouterDefinitionId: routerId,
+		});
+
+		const stored = { ...baseline, intentRouterDefinitionId: routerId };
+		expect(buildNodeSettingsRequest({ ...stored, intentRouterDefinitionId: "" }, stored, bounds, false).body).toEqual({
+			intentRouterDefinitionId: "",
+		});
+	});
+
+	it("sends a bounded age, -1 to reset a stored one, and refuses one out of range", () => {
+		const baseline = toNodeSettingsFieldsForm(undefined);
+		expect(buildNodeSettingsRequest({ ...baseline, intentMaxUtteranceAgeSeconds: 120 }, baseline, bounds, false).body).toEqual({
+			intentMaxUtteranceAgeSeconds: 120,
+		});
+
+		const stored = { ...baseline, intentMaxUtteranceAgeSeconds: 120 };
+		expect(buildNodeSettingsRequest({ ...stored, intentMaxUtteranceAgeSeconds: "" }, stored, bounds, false).body).toEqual({
+			intentMaxUtteranceAgeSeconds: -1,
+		});
+
+		const tooLong = buildNodeSettingsRequest({ ...baseline, intentMaxUtteranceAgeSeconds: 601 }, baseline, bounds, false);
+		expect(tooLong.body).toEqual({});
+		expect(tooLong.errors).toEqual({ intentMaxUtteranceAgeSeconds: "range" });
+	});
+
+	it("applies both without a restart", () => {
+		expect(restartGatedNodeSettingsFields.has("intentRouterDefinitionId")).toBe(false);
+		expect(restartGatedNodeSettingsFields.has("intentMaxUtteranceAgeSeconds")).toBe(false);
+	});
+});

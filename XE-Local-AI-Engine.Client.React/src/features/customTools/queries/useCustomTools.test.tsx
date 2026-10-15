@@ -36,6 +36,7 @@ function toolRow(overrides: Record<string, unknown> = {}) {
 		mode: "Fixed",
 		enabled: true,
 		acknowledged: true,
+		allowUnattended: false,
 		version: 3,
 		createdAtUtc: 1,
 		updatedAtUtc: 2,

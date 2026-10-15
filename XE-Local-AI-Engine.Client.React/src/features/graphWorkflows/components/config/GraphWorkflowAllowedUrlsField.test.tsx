@@ -28,12 +28,14 @@ const tools: readonly GraphWorkflowToolResponse[] = [
 		description: "Reads a text file.",
 		parameterSchema: '{"type":"object","properties":{"path":{"type":"string"}}}',
 		requiresAllowedUrls: false,
+		isAction: false,
 	},
 	{
 		name: "web_fetch",
 		description: "Download one public web page.",
 		parameterSchema: '{"type":"object","properties":{"url":{"type":"string"}}}',
 		requiresAllowedUrls: true,
+		isAction: false,
 	},
 ];
 

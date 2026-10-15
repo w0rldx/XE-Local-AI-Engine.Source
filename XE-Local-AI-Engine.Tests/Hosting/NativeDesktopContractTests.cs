@@ -53,6 +53,16 @@ public sealed class NativeDesktopContractTests
         AssertEx.Equal(WindowsLauncherApplication.DebugArgument, DesktopStartupOptions.DebugArgument);
 
     [Test]
+    public void CommandOverlayRoute_IsARouteTheSpaServes()
+    {
+        // The SPA, not the engine, owns page routes: the generated route tree is the other side of this literal.
+        var routeTree = File.ReadAllText(RepositoryPaths.Combine("XE-Local-AI-Engine.Client.React", "src", "routeTree.gen.ts"));
+
+        AssertEx.Equal("/command", DesktopCommandWindow.Route);
+        AssertEx.Contains(routeTree, $"fullPath: '{DesktopCommandWindow.Route}'");
+    }
+
+    [Test]
     public void LogLevelVariable_IsTheEnvironmentFormOfTheKeyTheEngineLevelSwitchReads()
     {
         // The environment-variable configuration provider maps "__" to the ":" key delimiter.

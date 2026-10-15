@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { GraphWorkflowDefinitionList } from "@/features/graphWorkflows/components/GraphWorkflowDefinitionList";
 import { graphWorkflowDefinitionSummary } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
+import en from "@/locales/en.json";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const first = graphWorkflowDefinitionSummary({ id: "def-1", name: "Nightly triage", nodeCount: 8, version: 3 });
@@ -46,6 +47,24 @@ describe("GraphWorkflowDefinitionList", () => {
 
 		expect(screen.getByTestId("gw-definition-chat-badge-def-3").textContent).toBe("Chat");
 		expect(screen.queryByTestId("gw-definition-chat-badge-def-1")).toBeNull();
+	});
+
+	it("marks a definition that allows actions and leaves the others unmarked", () => {
+		const acting = graphWorkflowDefinitionSummary({ id: "def-4", name: "Lights", allowsActions: true });
+		renderWithProviders(
+			<GraphWorkflowDefinitionList
+				definitions={[first, acting]}
+				onSelect={vi.fn()}
+				onCreate={vi.fn()}
+				onImportFile={vi.fn()}
+				onDelete={vi.fn()}
+			/>,
+		);
+
+		expect(screen.getByTestId("gw-definition-actions-badge-def-4").textContent).toBe(
+			en.pages.graphWorkflows.definitions.actionsBadge,
+		);
+		expect(screen.queryByTestId("gw-definition-actions-badge-def-1")).toBeNull();
 	});
 
 	it("summarises nodes, version and update time on one meta line, the name carrying its full text as a title", () => {

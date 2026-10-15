@@ -3,11 +3,16 @@ import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import type { IntegrationAgentOption, IntegrationTrigger } from "@/features/integrations/models/IntegrationModels";
+import type {
+	IntegrationAgentOption,
+	IntegrationGraphOption,
+	IntegrationTrigger,
+} from "@/features/integrations/models/IntegrationModels";
 
 interface IntegrationTriggerListProps {
 	triggers: readonly IntegrationTrigger[];
 	agents: readonly IntegrationAgentOption[];
+	graphs: readonly IntegrationGraphOption[];
 	isMutating: boolean;
 	onEdit: (id: string) => void;
 	onDelete: (trigger: IntegrationTrigger) => void;
@@ -19,12 +24,21 @@ interface IntegrationTriggerListProps {
 export function IntegrationTriggerList({
 	triggers,
 	agents,
+	graphs,
 	isMutating,
 	onEdit,
 	onDelete,
 	onToggleEnabled,
 }: IntegrationTriggerListProps) {
 	const { t } = useTranslation();
+
+	// The target's name for either kind; the raw id when the target has since been deleted.
+	const targetName = (trigger: IntegrationTrigger): string =>
+		trigger.targetKind === "Graph"
+			? (graphs.find((graph) => graph.id === trigger.targetGraphWorkflowDefinitionId)?.name ??
+				trigger.targetGraphWorkflowDefinitionId ??
+				"")
+			: (agents.find((agent) => agent.id === trigger.targetAgentDefinitionId)?.name ?? trigger.targetAgentDefinitionId ?? "");
 
 	if (triggers.length === 0) {
 		return (
@@ -42,7 +56,7 @@ export function IntegrationTriggerList({
 					<Table.Tr>
 						<Table.Th>{t("pages.integrations.triggers.list.columns.name", "Name")}</Table.Th>
 						<Table.Th>{t("pages.integrations.triggers.list.columns.displayName", "Display name")}</Table.Th>
-						<Table.Th>{t("pages.integrations.triggers.list.columns.target", "Target agent")}</Table.Th>
+						<Table.Th>{t("pages.integrations.triggers.list.columns.target", "Target")}</Table.Th>
 						<Table.Th>{t("pages.integrations.triggers.list.columns.sessionPolicy", "Session policy")}</Table.Th>
 						<Table.Th>{t("pages.integrations.triggers.list.columns.inputs", "Accepted inputs")}</Table.Th>
 						<Table.Th>{t("pages.integrations.triggers.list.columns.enabled", "Enabled")}</Table.Th>
@@ -66,9 +80,17 @@ export function IntegrationTriggerList({
 								) : null}
 							</Table.Td>
 							<Table.Td>
-								<Text size="sm">
-									{agents.find((agent) => agent.id === trigger.targetAgentDefinitionId)?.name ?? trigger.targetAgentDefinitionId}
-								</Text>
+								<Group gap={6} wrap="nowrap">
+									<Badge variant="light" color={trigger.targetKind === "Graph" ? "teal" : "gray"} size="sm">
+										{t(
+											`pages.integrations.triggers.form.targetKind.options.${trigger.targetKind}`,
+											trigger.targetKind === "Graph" ? "Graph workflow" : "Agent",
+										)}
+									</Badge>
+									<Text size="sm" data-testid={`integration-trigger-target-${trigger.id}`}>
+										{targetName(trigger)}
+									</Text>
+								</Group>
 							</Table.Td>
 							<Table.Td>
 								<Badge variant="light" color="blue">

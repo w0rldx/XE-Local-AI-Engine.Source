@@ -104,7 +104,7 @@ flashes, stuck 401s, fields that look right live and persist null. **Authority:*
 
 **Rule:** beyond wiki 24: verify on the emitted asset, since tsc, biome and `vite build` stay green and no gate
 instantiates a worklet: `grep -c "import" dist/assets/*Worklet*.js` must be 0, so the file's own comments avoid that
-word. **Authority:** `capture/Pcm16DownsamplerWorklet.js`; `capture/Downsample.test.ts`.
+word. **Authority:** `core/audio/capture/Pcm16DownsamplerWorklet.js`; `core/audio/capture/Downsample.test.ts`.
 
 ## OpenAPI and the generated client
 

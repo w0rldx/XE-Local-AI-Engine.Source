@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { downsampleToInt16 } from "@/features/transcription/capture/Pcm16DownsamplerWorklet.js";
+import { downsampleToInt16 } from "@/core/audio/capture/Pcm16DownsamplerWorklet.js";
 
 /**
  * This imports the worklet FILE, not a copy of its arithmetic, so it exercises the bytes that ship. The import is

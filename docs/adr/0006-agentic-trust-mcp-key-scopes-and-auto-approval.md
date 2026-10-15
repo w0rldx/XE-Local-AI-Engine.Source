@@ -83,3 +83,15 @@ one conversation into the next. Inbound MCP runs, agentic ones included, never s
 shared session; this amendment grants them nothing. A per-conversation session idle for 15 minutes is disposed, and a
 stdio server runs at most 4 per-conversation processes; the fifth conversation's call fails typed rather than falling
 back to the shared session. Approval, trust tiers and the tool offer are unchanged.
+
+## Amendment 2026-10-15: the strict recorder serves unattended graph actions too
+
+[ADR 0021](0021-unattended-actions-in-graph-tool-nodes.md) lets a graph Tool node run an operator-flagged custom tool
+with nobody to ask. It reuses decision item 6's mechanism rather than adding a second one: the scoped strict recorder
+is generalised from an MCP-agentic recorder into an unattended-approval audit recorder with a second source prefix,
+`graph-action:<definitionId>`, beside `mcp-agentic:<bounded-prefix>`. The principle is unchanged: a metadata-only
+`ApprovalDecision` row is written before the side effect, audit failure blocks the call, and the inner executor runs
+at most once after a successful write. Decision item 5 gains one narrow case: the graph branch calls a flagged tool's
+executor directly instead of adapting an approval-wrapped function, and only for tools and definitions the operator
+flagged. The human approval coordinator, its best-effort recorder, child-agent curation and decision item 8 are
+unchanged. The operator took this decision on 2026-10-15.

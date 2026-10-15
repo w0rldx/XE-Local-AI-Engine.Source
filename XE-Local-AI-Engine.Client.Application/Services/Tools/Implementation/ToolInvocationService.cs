@@ -5,13 +5,15 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CustomTools;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 
 /// <summary>The one place a workflow node's tool call is admitted or refused.</summary>
 /// <remarks>
 ///     Every gate runs here — catalog match, risk class, composed approval, structural approval floor, argument validation, budget — so a caller
 ///     cannot skip one by construction, and <see cref="ListInvocableToolsAsync" /> walks the same gates, so a picker or a save-time validator can
-///     never disagree with what the runtime will actually run. Why the catalog is re-read on every call, and why no approval-audit row is written:
-///     docs/wiki/12-security-and-privacy.md ("Tool invocation writes no approval-audit row").
+///     never disagree with what the runtime will actually run. Why the catalog is re-read on every call, and why a built-in writes no approval-audit
+///     row: docs/wiki/12-security-and-privacy.md ("Tool invocation writes no approval-audit row"). An action writes one first: docs/wiki/21-graph-workflows.md §4.3.
 /// </remarks>
 /// <seealso cref="IToolInvocationService" />
 internal sealed class ToolInvocationService : IToolInvocationService
@@ -30,13 +32,21 @@ internal sealed class ToolInvocationService : IToolInvocationService
     private readonly ILogger<ToolInvocationService> _logger;
     private readonly ILocalToolOfferProvider _offerProvider;
     private readonly IAgentToolRegistry _toolRegistry;
+    private readonly IUnattendedCustomToolCatalog _actions;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     public ToolInvocationService(ILocalToolOfferProvider offerProvider,
         IToolApprovalPolicy approvalPolicy,
         IAgentToolRegistry toolRegistry,
         IClientLocalToolRegistry clientLocalToolRegistry,
+        IUnattendedCustomToolCatalog actions,
+        IServiceScopeFactory scopeFactory,
         ILogger<ToolInvocationService> logger)
     {
+        ArgumentNullException.ThrowIfNull(actions);
+        ArgumentNullException.ThrowIfNull(scopeFactory);
+        _actions = actions;
+        _scopeFactory = scopeFactory;
         ArgumentNullException.ThrowIfNull(approvalPolicy);
         ArgumentNullException.ThrowIfNull(clientLocalToolRegistry);
         ArgumentNullException.ThrowIfNull(logger);
@@ -99,6 +109,12 @@ internal sealed class ToolInvocationService : IToolInvocationService
                                                             && string.Equals(candidate.Source, BuiltinSource, StringComparison.Ordinal));
             if (entry is null)
             {
+                // The third admission branch (ADR 0021): a custom tool flagged for unattended use, audited before it runs.
+                if ((await _actions.ListUnattendedAsync(budget.Token)).FirstOrDefault(action => string.Equals(action.Record.Name, toolName, StringComparison.Ordinal)) is { } action)
+                {
+                    return await InvokeActionAsync(action, argumentsJson, context, budget.Token);
+                }
+
                 return new ToolInvocationOutcome
                 {
                     Kind = ToolInvocationOutcomeKind.UnknownTool,
@@ -236,8 +252,88 @@ internal sealed class ToolInvocationService : IToolInvocationService
             });
         }
 
+        invocable.AddRange((await _actions.ListUnattendedAsync(cancellationToken)).Select(static action => new InvocableToolDescriptor
+        {
+            Name = action.Record.Name,
+            Description = action.Record.Description,
+            ParameterSchema = action.ParameterSchema,
+            IsAction = true
+        }));
         return invocable;
     }
+
+    /// <summary>
+    ///     One action call: arguments checked, the strict audit row written, THEN the kind's executor called unwrapped.
+    ///     A missing definition or a failed audit write is a refusal, and the executor is never reached.
+    /// </summary>
+    /// <remarks>
+    ///     Cancellation and the budget surface through the caller's catch like any tool's. An execution the executor reports
+    ///     as failed (a guard block, a non-2xx answer, a non-zero exit) is <c>Faulted</c>, which an action never retries.
+    /// </remarks>
+    private async Task<ToolInvocationOutcome> InvokeActionAsync(UnattendedCustomTool action,
+        string argumentsJson,
+        ToolInvocationContext context,
+        CancellationToken budget)
+    {
+        if (context.DefinitionId is not { } definitionId || definitionId == Guid.Empty)
+        {
+            return Refused("action-without-definition");
+        }
+
+        if (!TryParseArguments(argumentsJson, out var arguments, out var parseError))
+        {
+            return new ToolInvocationOutcome
+            {
+                Kind = ToolInvocationOutcomeKind.InvalidArguments,
+                Result = null,
+                Reason = parseError
+            };
+        }
+
+        using (var schema = JsonDocument.Parse(action.ParameterSchema))
+        {
+            var validation = ToolArgumentValidator.CoerceAndValidate(schema.RootElement, arguments!, rejectUnknownProperties: true);
+            if (!validation.IsValid)
+            {
+                return new ToolInvocationOutcome
+                {
+                    Kind = ToolInvocationOutcomeKind.InvalidArguments,
+                    Result = null,
+                    Reason = validation.Reason ?? $"The arguments for '{action.Record.Name}' are invalid."
+                };
+            }
+        }
+
+        try
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<IUnattendedApprovalAuditRecorder>()
+                       .RecordAsync(context.NodeRunId, action.Record.Name, action.Category, IUnattendedApprovalAuditRecorder.GraphAction(definitionId), budget);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(exception, "The audit row for action {ToolName} on node run {NodeRunId} could not be written, so it did not run.", action.Record.Name, context.NodeRunId);
+            return Refused("audit-failed");
+        }
+
+        // A refused or failed side effect is the node's failure, not an answer: the text is the result, never the reason,
+        // because the reason stays structural and the text may carry what the target said.
+        var result = await action.Executor.ExecuteAsync(action.Record, string.IsNullOrWhiteSpace(argumentsJson) ? "{}" : argumentsJson, budget);
+        return new ToolInvocationOutcome
+        {
+            Kind = result.Succeeded ? ToolInvocationOutcomeKind.Executed : ToolInvocationOutcomeKind.Faulted,
+            Result = result.Text,
+            Reason = result.Succeeded ? "action" : "action-failed"
+        };
+    }
+
+    private static ToolInvocationOutcome Refused(string reason) =>
+        new()
+        {
+            Kind = ToolInvocationOutcomeKind.NotInvocable,
+            Result = null,
+            Reason = reason
+        };
 
     /// <summary>
     ///     The envelope, applied to one catalog entry. Returns <see langword="null" /> when the tool may run (and hands

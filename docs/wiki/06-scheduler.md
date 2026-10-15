@@ -149,6 +149,26 @@ Runtime invariants:
 - **Content-safe history.** The summary records the project id, cells requested, runs created and
   per-cell failure reasons — never a task prompt or a model answer.
 
+`RunGraphWorkflowHandler` (`Handlers/RunGraphWorkflowHandler.cs`), template id `run-graph`, starts a saved
+[graph workflow](21-graph-workflows.md) and waits for the run to end. It supports Cron, one-shot, simple-interval and
+manual schedules and defaults to Cron. Its parameters are `definitionId`, an optional `inputJson` (a JSON object
+document, capped at `GraphWorkflows:MaxRunInputBytes`) and an optional `timeoutSeconds` (1..86400, default
+`GraphWorkflows:DefaultNodeTimeoutSeconds`).
+
+Runtime invariants:
+
+- **A new run per fire, started as `Schedule`.** Each fire mints its own request id (recorded in the summary) and
+  starts with origin `Schedule` and no principal. A definition that does not accept `Schedule` fails the fire with
+  the definition's name and the hint to add the source in its settings. With graph workflows turned off the fire
+  fails without starting anything.
+- **It polls, on the injected `TimeProvider`.** The run hub has no service-side subscription, so the handler reads
+  `GetRunAsync` once a second until the run is terminal, reporting each status change as progress. At
+  `timeoutSeconds`, or when the job is cancelled or auto-interrupted, it cancels the run. Its descriptor's
+  `DefaultMaxRuntimeSeconds` of 660 keeps the Quartz ceiling above the default timeout; the lower of the two wins.
+- **Structural reasons only.** Success records the End node's declared outcome, never its result. Failure and
+  cancellation report the run's failure class and the failing node's key and class, never a node's output or error text.
+- **`AllowAgentCreation: false`.** A workflow can carry operator-approved side effects; an agent may not schedule one.
+
 ---
 
 ## The execution path

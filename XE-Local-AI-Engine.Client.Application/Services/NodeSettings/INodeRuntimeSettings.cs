@@ -165,6 +165,12 @@ public interface INodeRuntimeSettings
     /// <summary>The time budget of one <c>web_fetch</c> or <c>web_search</c> call (stored &gt; 20 s).</summary>
     Task<TimeSpan> GetWebFetchTimeoutAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>The graph workflow the intent service routes through when no alias matches; null routes on aliases alone.</summary>
+    Task<Guid?> GetIntentRouterDefinitionIdAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>How old an intent utterance may be before it is refused (stored &gt; 30 s).</summary>
+    Task<TimeSpan> GetIntentMaxUtteranceAgeAsync(CancellationToken cancellationToken = default);
+
     /// <summary>The cap on the readable text one <c>web_fetch</c> returns, in characters (stored &gt; 12000).</summary>
     Task<int> GetWebFetchMaxContentCharsAsync(CancellationToken cancellationToken = default);
 

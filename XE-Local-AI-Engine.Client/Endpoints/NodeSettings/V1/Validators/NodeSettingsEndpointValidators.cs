@@ -215,6 +215,14 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
         UnsetOrBetween(RuleFor(static request => request.WebFetchTimeoutSeconds),
             StoredNodeSettings.MinWebFetchTimeoutSeconds, StoredNodeSettings.MaxWebFetchTimeoutSeconds);
 
+        RuleFor(static request => request.IntentRouterDefinitionId)
+            .Must(static id => Guid.TryParse(id, out var parsed) && parsed != Guid.Empty)
+            .When(static request => request.IntentRouterDefinitionId is not (null or ""))
+            .WithMessage("The intent router must be a graph workflow id, or empty to route on aliases alone.");
+
+        UnsetOrBetween(RuleFor(static request => request.IntentMaxUtteranceAgeSeconds),
+            StoredNodeSettings.MinIntentMaxUtteranceAgeSeconds, StoredNodeSettings.MaxIntentMaxUtteranceAgeSeconds);
+
         UnsetOrBetween(RuleFor(static request => request.WebFetchMaxContentChars),
             StoredNodeSettings.MinWebFetchMaxContentChars, StoredNodeSettings.MaxWebFetchMaxContentChars);
 
