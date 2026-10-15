@@ -30,6 +30,9 @@ internal sealed class GraphWorkflowScriptedTool
 
     public string Reason { get; init; } = "read-local";
 
+    /// <summary>The text a non-<c>Executed</c> outcome carries, the way a failed action carries its executor's answer.</summary>
+    public string? FailedResult { get; init; }
+
     public bool Parks { get; init; }
 
     public bool Throws { get; init; }
@@ -184,7 +187,7 @@ internal sealed class FakeGraphWorkflowToolInvocation : IToolInvocationService, 
         return new ToolInvocationOutcome
         {
             Kind = script.Kind,
-            Result = script.Kind == ToolInvocationOutcomeKind.Executed ? script.Result : null,
+            Result = script.Kind == ToolInvocationOutcomeKind.Executed ? script.Result : script.FailedResult,
             Reason = script.Reason
         };
     }

@@ -13,6 +13,8 @@ export interface GraphWorkflowEditorToolbarProps {
 	readonly isDirty: boolean;
 	/** A stored graph that had no layout was laid out on open, so it opens dirty — different words, same state. */
 	readonly layoutIsUnsaved: boolean;
+	/** Rename (a metadata write that bumps the version and reloads the canvas) is safe now. */
+	readonly canEditMeta: boolean;
 	readonly isValidating: boolean;
 	readonly isSaving: boolean;
 	readonly canSave: boolean;
@@ -35,6 +37,7 @@ export function GraphWorkflowEditorToolbar({
 	hasDefinition,
 	isDirty,
 	layoutIsUnsaved,
+	canEditMeta,
 	isValidating,
 	isSaving,
 	canSave,
@@ -59,7 +62,13 @@ export function GraphWorkflowEditorToolbar({
 					{t("pages.graphWorkflows.definitions.actionsBadge", "Actions")}
 				</Badge>
 			) : null}
-			<Button size="xs" variant="default" disabled={!hasDefinition || isDirty} onClick={onRename} data-testid="gw-page-rename">
+			<Button
+				size="xs"
+				variant="default"
+				disabled={!hasDefinition || !canEditMeta}
+				onClick={onRename}
+				data-testid="gw-page-rename"
+			>
 				{t("pages.graphWorkflows.page.rename", "Rename")}
 			</Button>
 			{settings}

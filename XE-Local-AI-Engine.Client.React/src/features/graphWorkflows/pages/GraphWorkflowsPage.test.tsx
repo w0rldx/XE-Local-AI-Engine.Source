@@ -295,6 +295,37 @@ describe("GraphWorkflowsPage", () => {
 		expect(screen.getByTestId("graph-workflow-validation-unkeyed").textContent).toMatch(/no End node/i);
 	});
 
+	it("offers Rename on a graph whose only unsaved change is the layout computed on open, until the content changes", async () => {
+		const noLayoutGraph: GraphWorkflowGraph = {
+			...eightNodeGraph,
+			nodes: eightNodeGraph.nodes?.map(({ position: _position, ...node }) => node),
+		};
+		server.use(...editorRoutes(noLayoutGraph));
+
+		renderPage({ definitionId });
+
+		expect(await screen.findByTestId("gw-page-unsaved-layout")).toBeDefined();
+		expect(screen.getByTestId<HTMLButtonElement>("gw-page-rename").disabled).toBe(false);
+
+		fireEvent.click(screen.getByTestId("graph-workflow-palette-agent"));
+		await waitFor(() => {
+			expect(screen.getByTestId<HTMLButtonElement>("gw-page-rename").disabled).toBe(true);
+		});
+	});
+
+	it("keeps Rename off after a position-only change on a graph with a stored layout", async () => {
+		server.use(...editorRoutes());
+
+		renderPage({ definitionId });
+
+		await waitFor(() => {
+			expect(screen.getByTestId<HTMLButtonElement>("gw-page-rename").disabled).toBe(false);
+		});
+		// Auto-arrange moves nodes and nothing else: the same change a drag makes.
+		await openAndDirty();
+		expect(screen.getByTestId<HTMLButtonElement>("gw-page-rename").disabled).toBe(true);
+	});
+
 	// Live round, HIGH: clicking a card with unsaved edits opened "Discard unsaved changes?", because selecting a node
 	// writes `nodeKey` through the router and the guard blocked every transition. Configuring the node you just added
 	// must not cost you the graph.

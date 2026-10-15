@@ -4730,7 +4730,8 @@
 			"run": {
 				"running": "Running {{name}}",
 				"finished": "{{name}}",
-				"open": "Open run"
+				"open": "Open run",
+				"failure": "{{nodeKey}}: {{reason}}"
 			},
 			"reply": {
 				"waiting": "Waiting for the assistant…",

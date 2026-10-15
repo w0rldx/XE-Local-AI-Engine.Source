@@ -155,6 +155,47 @@ public sealed class GraphWorkflowActionTests
         AssertEx.Equal(GraphWorkflowRunStatus.Failed, (await harness.ReadRunAsync(runId)).Status);
     }
 
+    /// <summary>A failed action keeps what its target answered in the node's output; the node's error stays the structural reason.</summary>
+    [Test]
+    public async Task AFailedAction_KeepsTheExecutorTextInItsOutput_AndTheStructuralReasonAsItsError()
+    {
+        const string tool = "custom__probe_failed_text";
+        const string text = "the lamp answered 503";
+        await using var harness = new GraphWorkflowHarness(Host);
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { IsAction = true, Kind = ToolInvocationOutcomeKind.Faulted, Reason = "action-failed", FailedResult = text });
+        var runId = await harness.StartRunOfAsync(await FlaggedDefinitionAsync(harness, tool));
+
+        await AdvanceUntilRunEndsAsync(harness, runId);
+
+        var act = await harness.ReadNodeRunAsync(runId, "act");
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, act.Status);
+        AssertEx.Equal("action-failed", act.Error, "the reason stays structural; the text never moves into it.");
+        using var document = JsonDocument.Parse(AssertEx.NotNull(act.OutputJson, "a failed action node carries its output document."));
+        AssertEx.Equal(GraphWorkflowNodeOutputStatuses.Failed, document.RootElement.GetProperty("status").GetString());
+        AssertEx.Equal(text, document.RootElement.GetProperty("output").GetProperty("result").GetString());
+    }
+
+    /// <summary>A failed action's text over the document cap falls back to the empty envelope, and the row still fails with its reason.</summary>
+    [Test]
+    public async Task AFailedActionTextOverTheCap_FallsBackToTheEmptyEnvelope_AndStillFails()
+    {
+        const string tool = "custom__probe_failed_long";
+        await using var harness = new GraphWorkflowHarness(Host);
+        var overTheCap = new string('a', harness.CurrentOptions().MaxOutputJsonBytes + 1);
+        harness.Tools.Script(tool, new GraphWorkflowScriptedTool { IsAction = true, Kind = ToolInvocationOutcomeKind.Faulted, Reason = "action-failed", FailedResult = overTheCap });
+        var runId = await harness.StartRunOfAsync(await FlaggedDefinitionAsync(harness, tool));
+
+        await AdvanceUntilRunEndsAsync(harness, runId);
+
+        var act = await harness.ReadNodeRunAsync(runId, "act");
+        AssertEx.Equal(GraphWorkflowNodeRunStatus.Failed, act.Status);
+        AssertEx.Equal("action-failed", act.Error);
+        using var document = JsonDocument.Parse(AssertEx.NotNull(act.OutputJson, "the empty envelope still fits under the cap."));
+        AssertEx.Equal(GraphWorkflowNodeOutputStatuses.Failed, document.RootElement.GetProperty("status").GetString());
+        AssertEx.Equal(JsonValueKind.Object, document.RootElement.GetProperty("output").ValueKind);
+        AssertEx.Empty(document.RootElement.GetProperty("output").EnumerateObject());
+    }
+
     /// <summary>
     ///     An action in flight at a restart may already have reached its target, so it is failed, not re-attempted, and
     ///     the run fails naming the node. A private host: recovery sweeps every in-flight row in the database.

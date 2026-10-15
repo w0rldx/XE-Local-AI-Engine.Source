@@ -14,9 +14,12 @@ import { encodePcmFrame } from "@/core/audio/capture/CaptureSource";
 import { usePendingChatConversationStore } from "@/core/ui/stores/PendingChatConversationStore";
 import { CommandPage } from "@/features/command/pages/CommandPage";
 import {
+	agentNodeRunDetail,
 	graphWorkflowRun,
 	graphWorkflowRunSummary,
+	graphWorkflowTestGuid,
 	graphWorkflowTestIds,
+	makeNodeRun,
 } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 import type { FakeCaptureSource } from "@/features/transcription/capture/FakeCaptureSource";
 import de from "@/locales/de.json";
@@ -192,6 +195,66 @@ describe("CommandPage", () => {
 		act(() => graphHub.emit("graphWorkflowChanged", { runId, seq: 9, kind: "run" }));
 		await waitFor(() => expect(screen.getByTestId("command-run-status").textContent).toBe("Completed"));
 		expect(screen.getByTestId("command-run").textContent).not.toContain("Running Lights on");
+	});
+
+	it("names the first failed node and its reason when the run fails, never the node's output", async () => {
+		const failedRun = graphWorkflowRun({
+			run: graphWorkflowRunSummary({ status: "Failed" }),
+			nodeRuns: [
+				makeNodeRun({ id: graphWorkflowTestGuid(1), nodeKey: "start", kind: "Start", status: "Succeeded" }),
+				// Failed later: the row names the node that failed FIRST.
+				makeNodeRun({
+					id: graphWorkflowTestGuid(3),
+					nodeKey: "notify",
+					kind: "Tool",
+					status: "Failed",
+					failureClass: "Permanent",
+					startedAtUtc: 1_700_000_300_000,
+				}),
+				makeNodeRun({
+					id: graphWorkflowTestGuid(2),
+					nodeKey: "lights",
+					kind: "Tool",
+					status: "Failed",
+					failureClass: "Permanent",
+					startedAtUtc: 1_700_000_200_000,
+				}),
+			],
+		});
+		intentRoute({
+			status: "Started",
+			matchedBy: "Alias",
+			definitionId,
+			definitionName: "Lights on",
+			reason: null,
+			run: failedRun,
+		});
+		const nodeReads: string[] = [];
+		server.use(
+			http.get(localApiPath(`graph-workflows/runs/${runId}`), () => HttpResponse.json(failedRun)),
+			http.get(localApiPath(`graph-workflows/runs/${runId}/nodes/:nodeKey`), ({ params }) => {
+				nodeReads.push(String(params["nodeKey"]));
+				return HttpResponse.json(
+					agentNodeRunDetail({
+						nodeKey: "lights",
+						kind: "Tool",
+						status: "Failed",
+						failureClass: "Permanent",
+						error: "action-failed",
+						output: { status: "failed", attempt: 1, output: { text: "The bridge refused the scene." } },
+					}),
+				);
+			}),
+		);
+		await renderPage();
+
+		type("lights on");
+		pressEnter();
+
+		expect((await screen.findByTestId("command-run-failure")).textContent).toBe("lights: action-failed");
+		expect(screen.getByTestId("command-run-status").textContent).toBe("Failed");
+		expect(screen.getByTestId("command-run").textContent).not.toContain("The bridge refused the scene.");
+		expect(nodeReads).toEqual(["lights"]);
 	});
 
 	it("falls through to the default agent when nothing matched, streams the reply and offers the conversation", async () => {

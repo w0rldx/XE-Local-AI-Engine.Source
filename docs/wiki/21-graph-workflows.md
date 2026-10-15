@@ -878,9 +878,10 @@ catalog, so every reader of a pinned run graph agrees without a store read), so 
 re-fires a side effect: an action failed `Timeout`, `Faulted` or `Interrupted` stays failed and fails the run naming
 the node. An action the executor reports as failed (`CustomToolExecution.Succeeded` false: a guard block, a transport
 error or timeout, a non-2xx answer, a command's non-zero exit or failed launch) is `Faulted` with the structural reason
-`action-failed` and the executor's text as the outcome's result. The failed node run records only that reason, as every
-failed Tool node does, and with one attempt it fails the run. The chat path still hands the
-model the text alone. In the editor the Tool picker
+`action-failed` and the executor's text as the outcome's result. The failed node's error stays that structural reason,
+but its output document carries the executor's text under output status `Failed`, bounded by `MaxOutputJsonBytes`
+(over the cap the envelope is empty). With one attempt it fails the run. The chat path still hands the model the text
+alone. In the editor the Tool picker
 labels an action and shows an "Action" badge with a note that it runs unattended and once
 (`GraphWorkflowToolConfigForm`); while the definition does not allow actions the entry is disabled and the node shows the
 save gate's own refusal. The switch lives in the definition's Workflow settings dialog (`GraphWorkflowDefinitionMetaDialog`, shown
@@ -1705,6 +1706,8 @@ definition the operator never opened to intents routes nowhere.
 stripped; `GraphWorkflowIntentService.Normalize`) and compared, ignoring case, with each candidate's normalised name
 and Start `aliases` (§4.1). One match starts it. Two or more is `NotMatched` with a reason naming them: give
 one a distinct alias. No model runs on this path.
+An alias matches the whole normalised utterance, so a command spoken in two word orders needs both as aliases (for example
+"Öffne meinen Editor" and "Editor öffnen"). The router covers paraphrases; aliases do not.
 
 **Stage 2, router.** With no alias match and the `IntentRouterDefinitionId` node setting naming a definition that
 accepts `Intent`, the service starts that definition's run with input
@@ -1717,6 +1720,13 @@ salt and the command's `requestId`, stamped as a version-5 GUID. A retried comma
 run, and the router's id can never collide with the command's own. The service polls the run on the node's clock
 until it ends; after `IntentRouterTimeoutSeconds` (§8) it cancels the run once. A dropped request does not cancel it,
 so a retry waits on the same run.
+
+**Router model.** The recommended router model, an operator decision of 2026-10-15, is `unsloth/Qwen3.5-9B-GGUF:Q4_K_M`,
+set as the `model` of the router's DecisionModel (§4.9; without it the node's local default answers). Measured on
+2026-10-15 over 30 clips against the 27B default, it made 0 wrong choices, as the 27B did. It answered in a median of
+about 520 ms against about 774 ms and held about 10.4 GB of VRAM resident against 22.6 GB. The trade-off: on three
+garbled transcripts of a lights command it chose the action where the 27B answered `unknown`. An operator who prefers
+`unknown` on garbled input keeps the larger model.
 
 **The choice.** `unknown` (any case), a missing choice, a failed, cancelled or timed-out router run, or a choice that
 names no candidate's name or alias is `NotMatched` with a structural reason; the model's text is never repeated. A

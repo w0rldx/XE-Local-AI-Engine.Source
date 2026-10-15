@@ -13,7 +13,10 @@ import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { graphWorkflowConflictTypes, readGraphWorkflowConflict } from "@/features/graphWorkflows/api/GraphWorkflowConflict";
 import { useGraphWorkflowEditor } from "@/features/graphWorkflows/hooks/useGraphWorkflowEditor";
-import { graphWorkflowsEqual } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+import {
+	graphWorkflowsEqual,
+	graphWorkflowsEqualIgnoringPositions,
+} from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import {
 	GRAPH_WORKFLOW_IMPORT_MAX_BYTES,
 	GRAPH_WORKFLOW_IMPORT_READ_LIMIT_BYTES,
@@ -135,6 +138,9 @@ export function useGraphWorkflowEditorPage(
 	// A stored node with no `position` is laid out on open, and that layout IS an edit — so a graph nobody
 	// has touched opens dirty. Not an error and never auto-saved: the hint just says which kind of unsaved this is.
 	const layoutIsUnsaved = (loadedGraph?.nodes ?? []).some((node) => !node.position);
+	// Rename's version bump reloads the canvas, which re-runs the auto-layout on a graph with no stored layout: so there
+	// a position-only difference may pass (an unsaved drag on such a graph is dropped), while a stored layout keeps the clean-canvas rule.
+	const canEditMeta = !editor.isDirty || (layoutIsUnsaved && graphWorkflowsEqualIgnoringPositions(editor.graph, loadedGraph));
 
 	// CONTENT, not object identity. A successful save invalidates the definition, the refetch answers a new version,
 	// and the load-once effect calls `reset` — which mints a fresh `editor.graph` for a document that did not change,
@@ -438,6 +444,7 @@ export function useGraphWorkflowEditorPage(
 		saveConflict,
 		deleteError,
 		layoutIsUnsaved,
+		canEditMeta,
 		issues,
 		serverWarnings,
 		selectNode,

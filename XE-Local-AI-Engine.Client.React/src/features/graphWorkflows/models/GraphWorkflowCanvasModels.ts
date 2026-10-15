@@ -1050,7 +1050,7 @@ function normalizedConfig(config: unknown): unknown {
 	);
 }
 
-function normalizedGraph(graph: GraphWorkflowGraph | undefined): string {
+function normalizedGraph(graph: GraphWorkflowGraph | undefined, ignorePositions = false): string {
 	const nodes = (graph?.nodes ?? [])
 		.map((node) => ({
 			key: node.key ?? "",
@@ -1058,7 +1058,11 @@ function normalizedGraph(graph: GraphWorkflowGraph | undefined): string {
 			label: node.label ?? "",
 			// A node with NO position is not the same graph as one placed at the origin: the layout makes it dirty, and
 			// the first save is what persists the positions it computed.
-			position: node.position ? { x: Math.round(node.position.x ?? 0), y: Math.round(node.position.y ?? 0) } : null,
+			position: ignorePositions
+				? null
+				: node.position
+					? { x: Math.round(node.position.x ?? 0), y: Math.round(node.position.y ?? 0) }
+					: null,
 			maxAttempts: node.maxAttempts ?? null,
 			timeoutSeconds: node.timeoutSeconds ?? null,
 			joinPolicy: narrowGraphWorkflowJoinPolicy(node.joinPolicy),
@@ -1104,4 +1108,12 @@ function normalizedGraph(graph: GraphWorkflowGraph | undefined): string {
  */
 export function graphWorkflowsEqual(a: GraphWorkflowGraph | undefined, b: GraphWorkflowGraph | undefined): boolean {
 	return normalizedGraph(a) === normalizedGraph(b);
+}
+
+/** {@link graphWorkflowsEqual} with every node position ignored: the two graphs differ at most in their layout. */
+export function graphWorkflowsEqualIgnoringPositions(
+	a: GraphWorkflowGraph | undefined,
+	b: GraphWorkflowGraph | undefined,
+): boolean {
+	return normalizedGraph(a, true) === normalizedGraph(b, true);
 }

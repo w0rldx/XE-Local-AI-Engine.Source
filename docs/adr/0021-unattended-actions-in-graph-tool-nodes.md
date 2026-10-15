@@ -114,3 +114,13 @@ say which.
   confidence; an alias match, a router graph with an explicit `unknown` label and the user's Enter are the controls.
 - **Routing every chat message automatically.** Rejected: a decision-model call per message costs seconds on a large
   model, and chat stays a conversation; commands enter through one intent endpoint and one page.
+
+## Amendment 2026-10-15: the integration reading of ADR 0008, and the failed-action output
+
+1. **Who authorises an action in an integration-started run.** Confirmed by the operator: such an action is authorised
+   only by the operator's `AllowUnattended` flag on the tool and `AllowsActions` on the definition. The integration
+   caller's key authorises starting the run. It is recorded as the run's origin (`TriggerSource`, `PrincipalId`,
+   `KeyPrefix`, decision 6) and grants nothing beyond that.
+2. **A failed action's output document carries the executor's text.** The node's error stays the structural reason
+   `action-failed`; its output document holds the executor's text under output status `Failed`, bounded by
+   `MaxOutputJsonBytes` (over the cap the envelope is empty). The reason never repeats the text.

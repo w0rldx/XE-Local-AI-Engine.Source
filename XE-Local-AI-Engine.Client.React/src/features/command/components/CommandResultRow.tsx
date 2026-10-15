@@ -71,7 +71,7 @@ interface RowStyle {
 
 function RunResultRow({ result, lineClamp, color }: RowStyle & { readonly result: Extract<CommandResult, { kind: "run" }> }) {
 	const { t } = useTranslation();
-	const status = useCommandRunStatus(result.run);
+	const { status, failure } = useCommandRunStatus(result.run);
 	const running = !isTerminalRunStatus(status);
 
 	return (
@@ -83,6 +83,11 @@ function RunResultRow({ result, lineClamp, color }: RowStyle & { readonly result
 			<Text size="sm" fw={600} c={color} data-testid="command-run-status">
 				{t(`pages.graphWorkflows.runStatus.${status}`, status)}
 			</Text>
+			{failure?.reason ? (
+				<Text size="sm" c={color ?? "red"} lineClamp={lineClamp} data-testid="command-run-failure">
+					{t("pages.command.run.failure", { nodeKey: failure.nodeKey, reason: failure.reason })}
+				</Text>
+			) : null}
 			{/* `Link` directly, not `Anchor component={Link}`: the polymorphic prop erases the router's search typing. */}
 			<Link to={nodeRoutePaths.graphWorkflows} search={{ definitionId: result.definitionId, runId: result.run.run.id }}>
 				<Anchor component="span" size="sm">

@@ -55,6 +55,7 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 		saveConflict,
 		deleteError,
 		layoutIsUnsaved,
+		canEditMeta,
 		issues,
 		serverWarnings,
 		selectNode,
@@ -98,6 +99,7 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 			hasDefinition={definition !== undefined}
 			isDirty={editor.isDirty}
 			layoutIsUnsaved={layoutIsUnsaved}
+			canEditMeta={canEditMeta}
 			isValidating={validateMutation.isPending}
 			isSaving={isSaving}
 			canSave={canSave}
